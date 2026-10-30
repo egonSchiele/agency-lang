@@ -143,6 +143,23 @@ describe("checkPolicy", () => {
     ).toEqual({ type: "approve" });
   });
 
+  it("skips rules when the match field is null in the data", () => {
+    const policy = {
+      "std::grep": [
+        { match: { file: "*" }, action: "approve" as const },
+        { action: "reject" as const },
+      ],
+    };
+    expect(
+      checkPolicy(policy, {
+        effect: "std::grep",
+        message: "",
+        data: { dir: "/anywhere", file: null },
+        origin: "",
+      }),
+    ).toEqual({ type: "reject" });
+  });
+
   it("matches on origin (special key)", () => {
     const policy = {
       "std::read": [

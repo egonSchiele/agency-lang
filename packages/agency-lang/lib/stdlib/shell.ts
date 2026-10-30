@@ -4,6 +4,7 @@ import { anyChar, capture, char, many, map, noneOf, or, Parser, sepBy, seqC, str
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
 import type { Host, Root, Entry } from "../host/host.js";
+import { rootPath } from "../host/roots.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -468,11 +469,50 @@ async function walkDir(
   await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(walkRoot, dir) : []);
 }
 
+export type SearchTarget = { dir: string; file: string | null };
+
+/** What `ls`, `grep`, and `glob` were pointed at. `grep` may be pointed at
+ *  one file, which it then searches alone; `ls` and `glob` need a
+ *  directory. The wrappers call this before their interrupt, so a bad
+ *  path fails before anyone is asked to approve a search of it, and the
+ *  message tells the model what to do instead. */
+export async function _searchTarget(
+  given: string,
+  tool: "ls" | "grep" | "glob",
+): Promise<SearchTarget> {
+  const host = currentHost();
+  const resolved = await host.files.root(given);
+  const real = rootPath(resolved);
+  const info = await host.files.stat(resolved, ".");
+  if (info === null) {
+    throw new Error(
+      `No file or directory at "${real}". Check the spelling, or call ls on its parent directory to see what is there.`,
+    );
+  }
+  if (info.kind === "dir") {
+    return { dir: real, file: null };
+  }
+  if (info.kind !== "file") {
+    throw new Error(`"${real}" is not a file or a directory.`);
+  }
+  if (tool === "grep") {
+    return { dir: path.dirname(real), file: path.basename(real) };
+  }
+  throw new Error(`"${real}" is a file, not a directory. ${FILE_INSTEAD[tool]}`);
+}
+
+/** What a tool that needs a directory tells the model to do with a file. */
+const FILE_INSTEAD = {
+  ls: "Call read to see its contents.",
+  glob: "Pass its parent directory and a pattern that matches its name.",
+};
+
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */
 export type GrepResults = GrepMatch[] | string[];
 
-/** Search `dir` under `rootDir`. Returned `file` paths are relative to
- *  `dir` so callers can hand them to `read(file, dir)` directly. */
+/** Search `dir` under `rootDir`, or just `file` under `dir` when one is
+ *  given. Returned `file` paths are relative to `dir` so callers can hand
+ *  them to `read(file, dir)` directly. */
 export async function _grep(
   rootDir: string,
   dir: string,
@@ -480,33 +520,44 @@ export async function _grep(
   maxResults: number,
   allowedPaths?: string[],
   respectGitignore: boolean = true,
+  file: string | null = null,
 ): Promise<GrepResults> {
   const host = currentHost();
-  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
+  const target = file === null ? dir : joinRel(dir, file);
+  const approved = await approvedRoot(host, rootDir, target, allowedPaths);
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
 
-  await walkDir(
-    host,
-    approved,
-    dir,
-    async (rel, entry) => {
-      if (entry.type !== "file") return true;
-      let text: string;
-      try {
-        text = await host.files.readText(approved, rel);
-      } catch {
-        return true;
-      }
-      const file = relativeTo(dir, rel);
-      const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
-      for (const hit of firstMatchingLines(text, plan, perFile)) {
-        matches.push({ file, ...hit });
-      }
-      return matches.length < maxResults;
-    },
-    { respectGitignore },
-  );
+  /** Score one file's lines, reported under `name`. */
+  async function searchFile(rel: string, name: string): Promise<void> {
+    const text = await host.files.readText(approved, rel);
+    const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
+    for (const hit of firstMatchingLines(text, plan, perFile)) {
+      matches.push({ file: name, ...hit });
+    }
+  }
+
+  if (file !== null) {
+    // A file named outright is searched whatever .gitignore says, the way
+    // grep searches a file named on its command line.
+    await searchFile(target, file);
+  } else {
+    await walkDir(
+      host,
+      approved,
+      dir,
+      async (rel, entry) => {
+        if (entry.type !== "file") return true;
+        try {
+          await searchFile(rel, relativeTo(dir, rel));
+        } catch {
+          // An unreadable file during a walk is skipped, as in `_ls`.
+        }
+        return matches.length < maxResults;
+      },
+      { respectGitignore },
+    );
+  }
 
   return plan.filesOnly ? matches.map((match) => match.file) : matches;
 }

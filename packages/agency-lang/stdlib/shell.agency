@@ -10,8 +10,8 @@ import {
   _which,
   _exec,
   _bash,
+  _searchTarget,
  } from "agency-lang/stdlib-lib/shell.js"
-import { _realDir } from "agency-lang/stdlib-lib/fs.js"
 
 
 /** @module
@@ -66,6 +66,7 @@ effect std::ls {
 effect std::grep {
   pattern: string;
   dir: string;
+  file: string | null;
   flags: string;
   maxResults: number;
   ignoreCase: boolean;
@@ -204,7 +205,7 @@ export idempotent def ls(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  List entries in a directory. Each entry has name, path, type ("file", "dir", or "other"; symlinked entries are left out), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read.
+  List entries in a directory. Each entry has name, path, type ("file", "dir", or "other"; symlinked entries are left out), and size. Set recursive to true to walk subdirectories. Fails if the directory is missing, is a file, or cannot be read.
 
   A recursive listing skips heavyweight dirs (node_modules, .git, dist, build, .next, .cache) and stops at maxResults. A non-recursive listing still shows those dirs. If entries look truncated, narrow dir or raise maxResults.
 
@@ -219,17 +220,17 @@ export idempotent def ls(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  const root = try _realDir(dir)
-  if (isFailure(root)) {
-    return root
+  const target = try _searchTarget(dir, "ls")
+  if (isFailure(target)) {
+    return target
   }
   return interrupt std::ls("Are you sure you want to list this directory?", {
-    dir: root.value,
+    dir: target.value.dir,
     recursive: recursive,
     maxResults: maxResults
   })
 
-  return try _ls(root.value, ".", recursive, maxResults, allowedPaths)
+  return try _ls(target.value.dir, ".", recursive, maxResults, allowedPaths)
 }
 
 type GrepMatch = {
@@ -247,7 +248,7 @@ to use, never a RegExp constructor error. The rule table is in
 @capabilities(fileRead)
 export idempotent def grep(
   pattern: string,
-  dir: string = ".",
+  path | dir: string = ".",
   flags: string = "",
   maxResults: number = 200,
   allowedPaths: string[] = [],
@@ -259,32 +260,33 @@ export idempotent def grep(
   respectGitignore: boolean = true,
 ): Result {
   """
-  Search files under a directory for a regular expression, like `grep -rn`. The search is always recursive and every match comes back with its file path, line number, and line text. Skips node_modules, .git, dist, build, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex or the directory cannot be read.
+  Search a directory or a single file for a regular expression, like `grep -rn`. A directory is searched recursively; a file is searched on its own. Every match comes back with its file path, line number, and line text. A directory search skips node_modules, .git, dist, build, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex, or the path is missing or cannot be read.
 
-  Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern. Symlinked entries are left out. Symlinks below dir are never followed.
+  Returned file values are relative to the directory searched, or the file's own name when path is a file. Returns at most maxResults matches; if matches look truncated, narrow the path or refine the pattern. Symlinked entries are left out. Symlinks below the path are never followed.
 
   @param pattern - The regex pattern to search for, in JavaScript regex syntax
-  @param dir - The directory to search in
+  @param path - The directory to search, or one file to search
   @param flags - JavaScript regex flags (i, m, s, u). grep's -r and -n are always on. For -w, -l, and -v use wholeWord, filesOnly, and invert.
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
-  @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
+  @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
   @param ignoreCase - Match regardless of letter case (grep -i)
   @param wholeWord - Match only where the pattern is a whole word (grep -w)
   @param filesOnly - Return just the paths of the files with a match, one entry per file, instead of the matching lines (grep -l)
   @param invert - Return the lines that do NOT match (grep -v)
-  @param respectGitignore - Skip files and directories that the .gitignore files under dir ignore. True by default; pass false to search build output too.
+  @param respectGitignore - Skip files and directories that the .gitignore files under the path ignore. True by default; pass false to search build output too. A file named as the path is always searched.
   """
   if (useAgentCwd) {
-    dir = applyAgentCwd(dir)
+    path = applyAgentCwd(path)
   }
-  const root = try _realDir(dir)
-  if (isFailure(root)) {
-    return root
+  const target = try _searchTarget(path, "grep")
+  if (isFailure(target)) {
+    return target
   }
   return interrupt std::grep("Are you sure you want to search files with grep?", {
     pattern: pattern,
-    dir: root.value,
+    dir: target.value.dir,
+    file: target.value.file,
     flags: flags,
     maxResults: maxResults,
     ignoreCase: ignoreCase,
@@ -301,7 +303,15 @@ export idempotent def grep(
     filesOnly: filesOnly,
     invert: invert
   }
-  return try _grep(root.value, ".", query, maxResults, allowedPaths, respectGitignore)
+  return try _grep(
+    target.value.dir,
+    ".",
+    query,
+    maxResults,
+    allowedPaths,
+    respectGitignore,
+    target.value.file,
+  )
 }
 
 @capabilities(fileRead)
@@ -313,7 +323,7 @@ export idempotent def glob(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read. Symlinked entries are left out. Symlinks below dir are never followed.
+  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax, or the directory is missing, is a file, or cannot be read. Symlinked entries are left out. Symlinks below dir are never followed.
 
   @param pattern - The glob pattern to match
   @param dir - The directory to search in
@@ -324,17 +334,17 @@ export idempotent def glob(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  const root = try _realDir(dir)
-  if (isFailure(root)) {
-    return root
+  const target = try _searchTarget(dir, "glob")
+  if (isFailure(target)) {
+    return target
   }
   return interrupt std::glob("Are you sure you want to glob files?", {
     pattern: pattern,
-    dir: root.value,
+    dir: target.value.dir,
     maxResults: maxResults
   })
 
-  return try _glob(root.value, ".", pattern, maxResults, allowedPaths)
+  return try _glob(target.value.dir, ".", pattern, maxResults, allowedPaths)
 }
 
 type StatInfo = {

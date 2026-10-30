@@ -2,7 +2,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { __internal_exec, __internal_bash, _exists, _glob, _grep, _stat } from "./shell.js";
+import {
+  __internal_exec,
+  __internal_bash,
+  _exists,
+  _glob,
+  _grep,
+  _searchTarget,
+  _stat,
+} from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -414,5 +422,111 @@ describe("_grep stops at maxResults inside one file", () => {
   it("with invert does not report the line after the final newline", async () => {
     const hits = await _grep(root, ".", { ...query, invert: true }, 100);
     expect(hits).toEqual([{ file: "other.txt", line: 2, text: "nothing" }]);
+  });
+});
+
+describe("_searchTarget resolves what a listing or search tool was given", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-search-target-"));
+    fs.writeFileSync(path.join(root, "notes.md"), "needle\nhay\nneedle again\n");
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "b.md"), "needle\n");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("a directory is the root itself, with no file", async () => {
+    expect(await _searchTarget(root, "grep")).toEqual({ dir: root, file: null });
+    expect(await _searchTarget(root, "ls")).toEqual({ dir: root, file: null });
+  });
+
+  it("grep may be given a file: the parent is the root and the name is the file", async () => {
+    expect(await _searchTarget(path.join(root, "notes.md"), "grep")).toEqual({
+      dir: root,
+      file: "notes.md",
+    });
+  });
+
+  it("ls and glob refuse a file, and each says what to do instead", async () => {
+    const file = path.join(root, "notes.md");
+    await expect(_searchTarget(file, "ls")).rejects.toThrow(
+      `"${file}" is a file, not a directory. Call read to see its contents.`,
+    );
+    await expect(_searchTarget(file, "glob")).rejects.toThrow(
+      `"${file}" is a file, not a directory. Pass its parent directory and a pattern that matches its name.`,
+    );
+  });
+
+  it("a missing path is a failure that names the path, for every tool", async () => {
+    const missing = path.join(root, "nope.md");
+    const message = `No file or directory at "${missing}". Check the spelling, or call ls on its parent directory to see what is there.`;
+    await expect(_searchTarget(missing, "grep")).rejects.toThrow(message);
+    await expect(_searchTarget(missing, "ls")).rejects.toThrow(message);
+    await expect(_searchTarget(missing, "glob")).rejects.toThrow(message);
+  });
+});
+
+describe("_grep searches one file when given its name", () => {
+  let root: string;
+  const needle = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: false,
+    invert: false,
+  };
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-grep-file-"));
+    fs.writeFileSync(path.join(root, "notes.md"), "needle\nhay\nneedle again\n");
+    fs.writeFileSync(path.join(root, "other.md"), "needle\n");
+    // An explicit file is searched even when .gitignore ignores it, the
+    // way grep searches a file named on its command line.
+    fs.writeFileSync(path.join(root, ".gitignore"), "notes.md\n");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("reports only that file's lines, named by the file", async () => {
+    const hits = await _grep(root, ".", needle, 10, undefined, true, "notes.md");
+    expect(hits).toEqual([
+      { file: "notes.md", line: 1, text: "needle" },
+      { file: "notes.md", line: 3, text: "needle again" },
+    ]);
+  });
+
+  it("stops at maxResults and honours filesOnly", async () => {
+    const one = await _grep(root, ".", needle, 1, undefined, true, "notes.md");
+    expect(one.length).toBe(1);
+    const files = await _grep(
+      root,
+      ".",
+      { ...needle, filesOnly: true },
+      10,
+      undefined,
+      true,
+      "notes.md",
+    );
+    expect(files).toEqual(["notes.md"]);
+  });
+
+  it("still applies allowedPaths to the file", async () => {
+    await expect(
+      _grep(root, ".", needle, 10, [path.join(root, "elsewhere")], true, "notes.md"),
+    ).rejects.toThrow(/not under any of the allowed paths/);
+  });
+
+  it("resolves the file under dir, and reports it relative to dir", async () => {
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "deep.md"), "needle\n");
+    const hits = await _grep(root, "sub", needle, 10, undefined, true, "deep.md");
+    expect(hits).toEqual([{ file: "deep.md", line: 1, text: "needle" }]);
   });
 });

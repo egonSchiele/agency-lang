@@ -191,7 +191,9 @@ function matchesRule(
       value = interrupt.data?.[key];
     }
 
-    if (value === undefined) return false;
+    // A null field is one the call did not fill in, such as `file` on a
+    // directory search, so a rule that names it does not match.
+    if (value === undefined || value === null) return false;
     if (typeof value !== "string") value = String(value);
 
     // The raw pattern first (relative values match relative patterns as

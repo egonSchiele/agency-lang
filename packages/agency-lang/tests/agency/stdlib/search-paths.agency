@@ -1,0 +1,95 @@
+// What ls, grep, and glob do with the path they are given: a file, a
+// missing path, or a directory. The failures are written for the model
+// that will read them as a tool result.
+import { grep, ls, glob } from "std::shell"
+import { setAgentCwd } from "std::index"
+import { sortBy } from "std::array"
+import { getThread } from "std::thread"
+
+def locations(hits: any[]): string[] {
+  const sorted = sortBy(hits) as hit {
+    return "${hit.file}:${hit.line}"
+  }
+  return ["${hit.file}:${hit.line}" for hit in sorted]
+}
+
+// The failure message, with this directory's absolute path replaced so
+// the expected output is the same on every machine.
+def errorOf(result: any): string {
+  if (result is failure(problem)) {
+    const text = "${problem}"
+    return text.replace(__dirname, "<here>")
+  }
+  return "succeeded"
+}
+
+// A file as the path searches that one file.
+node grepOneFile(): string[] {
+  const hits = grep("hello", __dirname + "/grep-fixtures/one.txt", "i", 100) catch [] with approve
+  return locations(hits)
+}
+
+// The interrupt still names the directory, so a policy rule on dir keeps
+// working, and it names the file beside it.
+node grepFileInterruptNamesDirAndFile(): string {
+  handle {
+    const result = grep("hello", __dirname + "/grep-fixtures/one.txt")
+    return errorOf(result)
+  } with (intr) {
+    const dirIsFixtures = intr.data.dir == __dirname + "/grep-fixtures"
+    return reject("${intr.effect}|${dirIsFixtures}|${intr.data.file}")
+  }
+}
+
+node grepDirectoryInterruptHasNoFile(): string {
+  handle {
+    const result = grep("hello", __dirname + "/grep-fixtures")
+    return errorOf(result)
+  } with (intr) {
+    return reject("${intr.data.file == null}")
+  }
+}
+
+node grepMissingPath(): string {
+  const result = grep("hello", __dirname + "/grep-fixtures/nope.txt") with approve
+  return errorOf(result)
+}
+
+node lsFile(): string {
+  const result = ls(__dirname + "/grep-fixtures/one.txt") with approve
+  return errorOf(result)
+}
+
+node lsMissingPath(): string {
+  const result = ls(__dirname + "/grep-fixtures/nope") with approve
+  return errorOf(result)
+}
+
+node globFile(): string {
+  const result = glob("*.txt", __dirname + "/grep-fixtures/one.txt") with approve
+  return errorOf(result)
+}
+
+node globMissingPath(): string {
+  const result = glob("*.txt", __dirname + "/grep-fixtures/nope") with approve
+  return errorOf(result)
+}
+
+// A model that still says `dir` is forgiven: the call runs and the model
+// sees the match. The tool is bound the way the agent toolkits bind it,
+// with relative paths resolved against the agent working directory.
+node modelMaySayDir(): string {
+  setAgentCwd(__dirname)
+  const reply = llm("search", { tools: [grep.partial(useAgentCwd: true)] }) with approve
+  let collected = ""
+  for (tid in ["t0", "t1", "t2", "t3"]) {
+    const messages = getThread(tid, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        collected = collected + message.content + "\n"
+      }
+    }
+  }
+  const sawMatch = collected.includes("one.txt") && collected.includes("\"line\"")
+  return "${reply}|${sawMatch}"
+}

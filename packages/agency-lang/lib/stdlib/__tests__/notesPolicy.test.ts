@@ -65,15 +65,12 @@ describe("policy rules against an omitted folder", () => {
     });
   });
 
-  it("a null folder FAILS OPEN, which is why payloads must never carry one", () => {
-    // The real matcher does not throw on null; it coerces via String(null)
-    // to the string "null", and a "*" glob matches that. So a null payload
-    // field would let a catch-all folder rule approve a call the empty
-    // string correctly refuses. This is the strongest reason the module
-    // normalizes an omitted folder to "" before it reaches the payload.
-    expect(checkPolicyExplicit(approveWhenFolderMatches("*"), listInterrupt(null))).toEqual({
-      type: "approve",
-    });
+  it("a null folder does not match a folder rule either", () => {
+    // The matcher treats a null field like a missing one, so a catch-all
+    // folder rule does not approve a call that carries `folder: null`. The
+    // module still normalizes an omitted folder to "" before it reaches
+    // the payload, so a person approving the call sees one spelling.
+    expect(checkPolicyExplicit(approveWhenFolderMatches("*"), listInterrupt(null))).toBeNull();
   });
 
   it("a rule with no match key still approves an empty folder", () => {

@@ -520,6 +520,13 @@ describe("_grep searches one file when given its name", () => {
   it("still applies allowedPaths to the file", async () => {
     await expect(
       _grep(root, ".", needle, 10, [path.join(root, "elsewhere")], true, "notes.md"),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/not under any of the allowed paths/);
+  });
+
+  it("resolves the file under dir, and reports it relative to dir", async () => {
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "deep.md"), "needle\n");
+    const hits = await _grep(root, "sub", needle, 10, undefined, true, "deep.md");
+    expect(hits).toEqual([{ file: "deep.md", line: 1, text: "needle" }]);
   });
 });

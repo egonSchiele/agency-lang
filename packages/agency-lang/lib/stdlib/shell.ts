@@ -4,6 +4,7 @@ import { anyChar, capture, char, many, map, noneOf, or, Parser, sepBy, seqC, str
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
 import type { Host, Root, Entry } from "../host/host.js";
+import { rootPath } from "../host/roots.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -468,20 +469,21 @@ async function walkDir(
   await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(walkRoot, dir) : []);
 }
 
+export type SearchTarget = { dir: string; file: string | null };
+
 /** What `ls`, `grep`, and `glob` were pointed at. `grep` may be pointed at
  *  one file, which it then searches alone; `ls` and `glob` need a
  *  directory. The wrappers call this before their interrupt, so a bad
  *  path fails before anyone is asked to approve a search of it, and the
  *  message tells the model what to do instead. */
-export type SearchTarget = { dir: string; file: string | null };
-
 export async function _searchTarget(
   given: string,
   tool: "ls" | "grep" | "glob",
 ): Promise<SearchTarget> {
   const host = currentHost();
-  const real = await host.files.realDir(given);
-  const info = await host.files.stat(await host.files.root(real), ".");
+  const resolved = await host.files.root(given);
+  const real = rootPath(resolved);
+  const info = await host.files.stat(resolved, ".");
   if (info === null) {
     throw new Error(
       `No file or directory at "${real}". Check the spelling, or call ls on its parent directory to see what is there.`,
@@ -508,7 +510,7 @@ const FILE_INSTEAD = {
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */
 export type GrepResults = GrepMatch[] | string[];
 
-/** Search `dir` under `rootDir`, or just `file` under it when one is
+/** Search `dir` under `rootDir`, or just `file` under `dir` when one is
  *  given. Returned `file` paths are relative to `dir` so callers can hand
  *  them to `read(file, dir)` directly. */
 export async function _grep(
@@ -521,7 +523,8 @@ export async function _grep(
   file: string | null = null,
 ): Promise<GrepResults> {
   const host = currentHost();
-  const approved = await approvedRoot(host, rootDir, file ?? dir, allowedPaths);
+  const target = file === null ? dir : joinRel(dir, file);
+  const approved = await approvedRoot(host, rootDir, target, allowedPaths);
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
 
@@ -537,7 +540,7 @@ export async function _grep(
   if (file !== null) {
     // A file named outright is searched whatever .gitignore says, the way
     // grep searches a file named on its command line.
-    await searchFile(file, file);
+    await searchFile(target, file);
   } else {
     await walkDir(
       host,

@@ -42,12 +42,10 @@ always what the caller sent.
 
 ## The path: a directory or one file
 
-`grep` takes `path`, with `dir` as a [parameter alias](../language/parameter-aliases.md)
-so a model that still says `dir` is forgiven. The path may be a directory
-or a single file. A model that thinks `grep pattern file.txt` passes the
-file. When the tool took only a directory, a file path failed with an
-ENOTDIR error, or with `.gitignore` off returned an empty success that the
-model read as "no matches".
+`grep` takes `path`, which may be a directory or a single file. `dir` is a
+[parameter alias](../language/parameter-aliases.md), so a model that says
+`dir` is forgiven. An alias is forgiven only for a model's tool call and a
+served call, so Agency source that names the argument writes `path:`.
 
 `_searchTarget` in `lib/stdlib/shell.ts` is the one place that decides
 what a path is. `ls`, `grep`, and `glob` call it before their interrupt,
@@ -62,12 +60,23 @@ so a bad path fails before anyone is asked to approve a search of it:
 Every failure message is written for the model that reads it as a tool
 result: it names the real path and says what to do instead.
 
+Running the check before the interrupt means the model learns whether a
+path is a file, a directory, or missing before any policy, person, or
+`allowedPaths` sees the call. `ls("~/.ssh/id_rsa")` answers "is a file"
+under a policy that would reject the listing. This is deliberate: `read`
+already reveals whether a directory exists before its interrupt
+(`locateSync` in `lib/host/node/nodeFiles.ts`), and the check is what
+turns a confusing failure into a message the model can act on. What it
+reveals is the kind of a path and nothing of its contents.
+
 For a file, the interrupt payload keeps `dir` as the file's parent
-directory and adds `file`, its name. A policy rule on `dir` then
-matches a file search the same way it matches a search of the directory
-the file is in. For a directory search, `file` is `null`. `_grep` reads
-the file named outright whatever `.gitignore` says, the way `grep`
-searches a file named on its command line.
+directory and adds `file`, its name. A policy rule on `dir` then matches a
+file search the same way it matches a search of the directory the file is
+in. For a directory search, `file` is `null`, and a rule that names `file`
+does not match it: `matchesRule` in `lib/runtime/policy.ts` treats a null
+field like a missing one. `_grep` reads the file named outright whatever
+`.gitignore` says, the way `grep` searches a file named on its command
+line.
 
 ## `.gitignore`
 

@@ -145,15 +145,11 @@ describe("finishHandoff", () => {
   it("survives memory compaction shifting every index", () => {
     const thread = threadAfterBody();
     // Compaction keeps the leading system prefix, replaces a middle run
-    // with one summary, and keeps the tail with its scopes.
+    // with one summary, and keeps the tail, each message with its metadata.
     const original = thread.getMessages();
     const summary = smoltalk.systemMessage("summary of earlier turns");
     const kept = [0, 2, 3, 4];
-    thread.setMessages(
-      [original[0], summary, ...kept.slice(1).map((i) => original[i])],
-      [null, null, null, null, null],
-      [null, null, ...kept.slice(1).map((i) => thread.scopeAt(i))],
-    );
+    thread.setMessages([original[0], summary, ...kept.slice(1).map((i) => original[i])]);
     finishHandoff({ thread, scopeKey, toolName: "explorer", body: "the answer" });
     expect(contents(thread)).toContain("summary of earlier turns");
     expect(contents(thread)).not.toContain("subagent persona");

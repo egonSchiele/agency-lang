@@ -22,21 +22,21 @@ export function redactMessagesForLog(messages: MessageThread): smoltalk.MessageJ
 }
 
 /** A thread's redacted messages for statelog, each carrying its debug
- *  label (from `llm(label:)` / `userMessage(msg, label:)`) when it has
- *  one. Reads the labels off the SAME thread that produced the dump, so
- *  index `i` lines up: `redactMessagesForLog` maps `messages` in order,
- *  and smoltalk's `redactAttachments` is 1:1 over an array. That second
- *  half is someone else's implementation detail, so a test pins the
- *  pairing through the redaction path with a real attachment.
+ *  label (from `llm(label:)` / `userMessage(msg, label:)`) as a top-level
+ *  `label` when it has one. The message's `metadata` is runtime
+ *  bookkeeping and is left out of the dump. `redactAttachments` is 1:1
+ *  over an array, so index `i` is message `i`; a test pins that through
+ *  the redaction path with a real attachment.
  *
- *  Unlabeled messages are emitted unchanged rather than with `label:
- *  null`, so logs for label-free programs stay byte-identical. */
+ *  Unlabeled messages carry no `label` key, so logs for label-free
+ *  programs stay byte-identical. */
 export function withMessageLabels(
   messages: MessageThread,
 ): (smoltalk.MessageJSON & { label?: string })[] {
   return redactMessagesForLog(messages).map((m, i) => {
+    const { metadata: _metadata, ...rest } = m;
     const label = messages.labelAt(i);
-    return label === null ? m : { ...m, label };
+    return label === null ? rest : { ...rest, label };
   });
 }
 

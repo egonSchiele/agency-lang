@@ -1,5 +1,13 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
+import {
+  expiryOf,
+  labelOf,
+  mayExpire,
+  withMetadata,
+  type Expiry,
+  type ExpiresAt,
+} from "./messageMetadata.js";
 
 /** Queue entries are plain JSON-safe data (the QueuedMessage contract), so
  *  a JSON round trip clones them. Deliberately NOT runtime/utils'
@@ -11,6 +19,8 @@ const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] => JSON.parse(JSON.stri
 export type MessageThreadJSON = {
   id?: string;
   messages: smoltalk.MessageJSON[];
+  /** Legacy input only: checkpoints written before labels and handoff tags
+   *  moved into each message's metadata. `toJSON` never writes them. */
   messageLabels?: (string | null)[];
   messageScopes?: (string | null)[];
   parentId?: string | null;
@@ -34,6 +44,11 @@ export type QueuedMessage =
   | { role: "user"; content: string | smoltalk.UserContentInput; label: string | null }
   | { role: "assistant"; content: string; label: string | null };
 
+/** A conversation: smoltalk messages plus thread-level state. What the
+ *  runtime knows about one message (its debug label, and when it expires)
+ *  lives in that message's `metadata`, read and written only through
+ *  messageMetadata.ts, so every edit of the array is a plain array edit.
+ *  See docs/dev/runtime/expiring-messages.md. */
 export class MessageThread {
   messages: smoltalk.Message[] = [];
   id: string;
@@ -74,52 +89,19 @@ export class MessageThread {
    *  Round-tripped through `toJSON`/`fromJSON` so checkpoints record the
    *  generation they captured. */
   repairs: number = 0;
-  /** Per-message debug labels, aligned with `messages` BY INDEX
-   *  (`messageLabels[i]` labels `messages[i]`; the lengths always match).
-   *  Observability only: shown in statelog, never sent to the provider.
-   *  Distinct from the thread-level `label` above (set by `thread(label:)`).
-   *
-   *  The alignment is maintained by keeping the writers to a minimum, and
-   *  by giving every caller an operation that carries the labels along
-   *  instead of a reason to reach past them:
-   *
-   *  - `push` — the only append.
-   *  - `removeAt` and `removeMatching` — the only removals.
-   *  - `replaceAt` — the only in-place swap.
-   *  - `adoptFrom` — take on another thread's messages and labels.
-   *  - the constructor and `setMessages` — the only replacements.
-   *
-   *  Nothing else touches `this.messages`. A desync does not degrade
-   *  gracefully — it shifts every later label onto the wrong message — so
-   *  keep it that way. A rewrite via `setMessages` with no labels drops
-   *  them; summarization passes the labels of the messages it keeps.
-   *  (Thread repair appends via `push`, so it keeps them.) */
-  messageLabels: (string | null)[];
-  /** Which handoff dispatch a system message belongs to, aligned with
-   *  `messages` by index like `messageLabels`, null for every other
-   *  message. Stamped by `push` from `handoffScopes` while a dispatch's
-   *  body is running on this thread, so the body's persona can be
-   *  removed when the body returns without leaving a marker in the
-   *  conversation. Serialized with the thread, kept through compaction,
-   *  never sent to the provider. */
-  messageScopes: (string | null)[];
   /** The dispatches whose bodies are running on this thread right now,
-   *  innermost last. Transient: the prompt loop re-enters a scope when it
-   *  re-runs a dispatch after a resume, so nothing here is serialized. */
+   *  innermost last. A system message pushed while one is open expires with
+   *  it. Transient: the prompt loop re-enters a scope when it re-runs a
+   *  dispatch after a resume, so nothing here is serialized. */
   private handoffScopes: string[] = [];
   /** Messages queued by `queueMessage`, waiting for the thread's next
    *  request-turn. Drained by the turn-boundary machinery in the tool
    *  loop; never sent to the provider directly from here. Serialized
-   *  only when non-empty (same rule as messageLabels). */
+   *  only when non-empty. */
   queuedMessages: QueuedMessage[] = [];
 
   constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
-    // Seed, don't default: `new MessageThread([...])` (e.g. via
-    // newSubthreadChild) must start aligned, or a later push lands its
-    // label on message 0.
-    this.messageLabels = messages.map(() => null);
-    this.messageScopes = messages.map(() => null);
     this.id = nanoid();
   }
 
@@ -136,53 +118,28 @@ export class MessageThread {
     return this.messages;
   }
 
-  /** Wholesale rewrite: take on `messages`, and `labels` with them when
-   *  the caller has them (the restore path). Without `labels` the new
-   *  messages are unlabeled — a rewrite that cannot say what the labels
-   *  are does not get to keep the old ones, which is why summarization
-   *  and `threadRepair` drop them.
-   *
-   *  A `labels` array whose length disagrees with `messages` is refused
-   *  outright rather than padded or sliced: the lengths disagreeing means
-   *  the source is already wrong, and guessing an alignment would put
-   *  real labels on the wrong messages. Unlabeled beats mislabeled. */
-  setMessages(
-    messages: smoltalk.Message[],
-    labels?: (string | null)[],
-    scopes?: (string | null)[],
-  ): void {
+  /** Wholesale rewrite: the restore path and memory compaction. */
+  setMessages(messages: smoltalk.Message[]): void {
     this.messages = messages;
-    this.messageLabels =
-      labels !== undefined && labels.length === messages.length
-        ? [...labels]
-        : messages.map(() => null);
-    this.messageScopes =
-      scopes !== undefined && scopes.length === messages.length
-        ? [...scopes]
-        : messages.map(() => null);
   }
 
-  /** Remove the message at `index`, taking its label with it. For the
-   *  callers that edit one message out of the thread and would otherwise
-   *  reach for `setMessages` and drop every label as collateral. */
   removeAt(index: number): void {
     this.messages.splice(index, 1);
-    this.messageLabels.splice(index, 1);
-    this.messageScopes.splice(index, 1);
   }
 
-  /** Swap the message at `index` for `message`, keeping its label. For an
-   *  edit of ONE message that must not reset the labels of the others. */
+  /** Swap the message at `index` for `message`, keeping the old message's
+   *  label: the callers replace an assistant message with an edited copy
+   *  of it, and the copy is the same turn. */
   replaceAt(index: number, message: smoltalk.Message): void {
     if (index < 0 || index >= this.messages.length) {
       throw new Error(`replaceAt: index ${index} is outside a thread of ${this.messages.length}`);
     }
-    this.messages[index] = message;
+    const label = labelOf(this.messages[index]);
+    this.messages[index] = label === null ? message : withMetadata(message, { label });
   }
 
-  /** Remove every message at or after `fromIndex` that `matches`, taking
-   *  labels with them. Walks backwards so each removal leaves the indexes
-   *  still to visit untouched. */
+  /** Remove every message at or after `fromIndex` that `matches`. Walks
+   *  backwards so each removal leaves the indexes still to visit untouched. */
   removeMatching(fromIndex: number, matches: (message: smoltalk.Message) => boolean): void {
     for (let index = this.messages.length - 1; index >= fromIndex; index--) {
       if (matches(this.messages[index])) {
@@ -191,13 +148,11 @@ export class MessageThread {
     }
   }
 
-  /** Take on `other`'s messages AND labels while keeping this thread's
-   *  identity. The resume path needs the alias preserved, so it cannot
-   *  just swap in the restored object. */
+  /** Take on `other`'s messages while keeping this thread's identity. The
+   *  resume path needs the alias preserved, so it cannot just swap in the
+   *  restored object. */
   adoptFrom(other: MessageThread): void {
     this.messages = [...other.messages];
-    this.messageLabels = [...other.messageLabels];
-    this.messageScopes = [...other.messageScopes];
     // The pending queue rides along: prompt.ts restores a resumed call via
     // adoptFrom (its args.messages alias), and a queue that survived
     // toJSON but not adoptFrom would be dropped exactly on resume.
@@ -219,23 +174,62 @@ export class MessageThread {
     return this.repairs > snapshot.repairs;
   }
 
-  /** The ONLY append. Everything that adds a message goes through here,
-   *  so `messages` and `messageLabels` cannot drift apart. */
-  push(message: smoltalk.Message, label: string | null = null): void {
-    this.messages.push(message);
-    this.messageLabels.push(label);
-    this.messageScopes.push(message.role === "system" ? this.currentHandoffScope() : null);
+  /** The only append. `label` and `expires` are written into the
+   *  message's metadata when given; a null argument leaves whatever the
+   *  message already carries. A system message pushed while a handoff body
+   *  runs, with no expiry of its own, expires with that handoff. */
+  push(
+    message: smoltalk.Message,
+    label: string | null = null,
+    expires: Expiry | null = null,
+  ): void {
+    // Runtime check, not only a type: push is reachable from plain JS.
+    if (expires !== null && !mayExpire(message)) {
+      throw new Error(`push: a ${message.role} message cannot expire`);
+    }
+    const scope = this.currentHandoffScope();
+    const expiry =
+      expires ??
+      (message.role === "system" && scope !== null && expiryOf(message) === null
+        ? { at: "handoff" as const, key: scope }
+        : null);
+    const patch: { label?: string; expires?: Expiry } = {};
+    if (label !== null) patch.label = label;
+    if (expiry !== null) patch.expires = expiry;
+    this.messages.push(Object.keys(patch).length === 0 ? message : withMetadata(message, patch));
   }
 
   /** The label of the message at `index`, or null when unlabeled. */
   labelAt(index: number): string | null {
-    return this.messageLabels[index] ?? null;
+    const message = this.messages[index];
+    return message === undefined ? null : labelOf(message);
   }
 
-  /** The handoff dispatch the system message at `index` belongs to, or
-   *  null for a message outside any dispatch. */
-  scopeAt(index: number): string | null {
-    return this.messageScopes[index] ?? null;
+  /** The expiry of the message at `index`, or null when it stays. */
+  expiryAt(index: number): Expiry | null {
+    const message = this.messages[index];
+    return message === undefined ? null : expiryOf(message);
+  }
+
+  /** Remove every message that expires with this owner. The only removal
+   *  path for expiring messages. */
+  expire(at: ExpiresAt, key: string): void {
+    this.messages = this.messages.filter((message) => {
+      const expiry = expiryOf(message);
+      return expiry === null || expiry.at !== at || expiry.key !== key;
+    });
+  }
+
+  /** Give `key` to every message that expires with this kind of owner but
+   *  names none yet: an `llmCall` message Agency code pushed before the call
+   *  that will own it started. */
+  claimUnkeyed(at: ExpiresAt, key: string): void {
+    this.messages = this.messages.map((message) => {
+      const expiry = expiryOf(message);
+      return expiry !== null && expiry.at === at && expiry.key === null
+        ? withMetadata(message, { expires: { at, key } })
+        : message;
+    });
   }
 
   /** Mark the start of a handoff body on this thread: every system message
@@ -256,17 +250,6 @@ export class MessageThread {
 
   private currentHandoffScope(): string | null {
     return this.handoffScopes[this.handoffScopes.length - 1] ?? null;
-  }
-
-  /** Remove every message that belongs to the dispatch `key`: the
-   *  persona and any other system message its body pushed. Walks
-   *  backwards so each removal leaves the indexes still to visit intact. */
-  removeHandoffScoped(key: string): void {
-    for (let index = this.messages.length - 1; index >= 0; index--) {
-      if (this.messageScopes[index] === key) {
-        this.removeAt(index);
-      }
-    }
   }
 
   /** Queue a message for delivery at this thread's next request-turn:
@@ -338,26 +321,10 @@ export class MessageThread {
       label: this.label,
       summary: this.summary,
     };
-    // Only when something is actually labeled. An all-null array carries
-    // no more information than the absent key (`fromJSON` revives both as
-    // all-null), and emitting it would change the serialized shape of
-    // every thread — checkpoints, statelog, fixtures — for every program
-    // that never labels anything. Same rule as `withMessageLabels`.
-    //
-    // Copy, not the live array: `messages` above is rebuilt, so handing
-    // out the real one would let a consumer mutating the JSON mutate the
-    // thread — the one way to reach `messageLabels` without a writer.
-    if (this.messageLabels.some((l) => l !== null)) {
-      json.messageLabels = [...this.messageLabels];
-    }
-    if (this.messageScopes.some((s) => s !== null)) {
-      json.messageScopes = [...this.messageScopes];
-    }
-    // Same emit-only-when-meaningful rule as messageLabels above. Deep
-    // clone, not an array spread: a spread copies the array but aliases
-    // the entry objects, so a consumer editing the returned JSON could
-    // mutate the live queue (labels are primitives, so spread suffices
-    // there; entries are objects, so it does not).
+    // Only when non-empty, so a thread with no queue serializes as it
+    // always has. Deep clone, not an array spread: a spread copies the
+    // array but aliases the entry objects, so a consumer editing the
+    // returned JSON could mutate the live queue.
     if (this.queuedMessages.length > 0) {
       json.queuedMessages = cloneQueue(this.queuedMessages);
     }
@@ -421,10 +388,7 @@ export class MessageThread {
       smoltalk.messageFromJSON(m),
     );
 
-    // Labels ride along with the messages: legacy JSON has none and
-    // revives unlabeled, and a labels array that disagrees in length is
-    // refused inside setMessages rather than guessed at.
-    thread.setMessages(smoltalkMessages, _messageLabels, _messageScopes);
+    thread.setMessages(foldLegacyArrays(smoltalkMessages, _messageLabels, _messageScopes));
     thread.parentId = _parentId;
     thread.hidden = _hidden;
     thread.label = _label;
@@ -439,4 +403,29 @@ export class MessageThread {
 
     return thread;
   }
+}
+
+/** Write an old checkpoint's index-aligned `messageLabels` and
+ *  `messageScopes` into the messages' metadata. A scope string was the key
+ *  of the handoff dispatch the system message belonged to. Arrays whose
+ *  length disagrees with the messages are ignored: guessing an alignment
+ *  would put labels on the wrong messages. */
+function foldLegacyArrays(
+  messages: smoltalk.Message[],
+  labels: (string | null)[] | undefined,
+  scopes: (string | null)[] | undefined,
+): smoltalk.Message[] {
+  const usable = (values: (string | null)[] | undefined) =>
+    values !== undefined && values.length === messages.length ? values : null;
+  const labelList = usable(labels);
+  const scopeList = usable(scopes);
+  return messages.map((message, index) => {
+    const label = labelList?.[index] ?? null;
+    const scope = scopeList?.[index] ?? null;
+    if (label === null && scope === null) return message;
+    return withMetadata(message, {
+      ...(label === null ? {} : { label }),
+      ...(scope === null ? {} : { expires: { at: "handoff" as const, key: scope } }),
+    });
+  });
 }

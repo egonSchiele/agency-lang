@@ -127,9 +127,9 @@ describe("llm() debug label", () => {
     expect(thread.labelAt(1)).toBe(null);
   });
 
-  it("keeps labels aligned with messages", async () => {
+  it("labels the last message, the completion", async () => {
     const { thread } = await runLabeled("verifier");
-    expect(thread.messageLabels).toHaveLength(thread.getMessages().length);
+    expect(thread.labelAt(thread.getMessages().length - 1)).toBe("verifier");
   });
 });
 
@@ -165,6 +165,14 @@ describe("withMessageLabels (the promptCompletion dump)", () => {
     expect(dumped[1].label).toBe("seed");
     expect(dumped[2].label).toBe("coder");
     expect(dumped[0].role).toBe("system");
+  });
+
+  it("leaves metadata out of the dump and keeps the top-level label", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("warn"), "roundWarning", { at: "llmCall", key: "k1" });
+    const [dumped] = withMessageLabels(t) as any[];
+    expect(dumped.label).toBe("roundWarning");
+    expect("metadata" in dumped).toBe(false);
   });
 
   it("is byte-identical to the plain dump when nothing is labeled", () => {

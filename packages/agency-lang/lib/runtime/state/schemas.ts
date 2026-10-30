@@ -7,6 +7,8 @@ import { z } from "zod";
 export const messageThreadJSONSchema = z.object({
   id: z.string().optional(),
   messages: z.array(z.any()),
+  // Legacy input only: MessageThread.fromJSON folds them into each
+  // message's metadata. toJSON no longer writes them.
   messageLabels: z.array(z.string().nullable()).optional(),
   messageScopes: z.array(z.string().nullable()).optional(),
   parentId: z.string().nullable().optional(),

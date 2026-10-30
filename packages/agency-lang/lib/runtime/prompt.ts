@@ -275,21 +275,16 @@ async function runPostTurnMemory(
     if (plan) {
       // Reassemble the thread from the ORIGINAL smoltalk Message
       // instances so tool_call metadata, ids, and other class-level
-      // fields survive untouched.
-      // Labels and handoff scopes ride along with the kept messages; the
-      // summary has neither.
-      const kept = [...plan.systemPrefixIndices, ...plan.tailIndices];
-      const head = plan.systemPrefixIndices.map((i) => original[i]);
-      const tail = plan.tailIndices.map((i) => original[i]);
+      // fields survive untouched. Expiring messages from the compacted
+      // range stay, after the summary, for their owners to remove.
+      const pick = (indices: number[]) => indices.map((i) => original[i]);
       const summary = smoltalk.systemMessage(plan.summaryMessageContent);
-      const labels = kept.map((i) => messages.labelAt(i));
-      const scopes = kept.map((i) => messages.scopeAt(i));
-      const splitAt = head.length;
-      messages.setMessages(
-        [...head, summary, ...tail],
-        [...labels.slice(0, splitAt), null, ...labels.slice(splitAt)],
-        [...scopes.slice(0, splitAt), null, ...scopes.slice(splitAt)],
-      );
+      messages.setMessages([
+        ...pick(plan.systemPrefixIndices),
+        summary,
+        ...pick(plan.keptIndices),
+        ...pick(plan.tailIndices),
+      ]);
     }
   } catch (err) {
     if (isGuardExceededError(err)) throw err;

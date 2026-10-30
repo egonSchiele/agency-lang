@@ -63,92 +63,78 @@ describe("MessageThread JSON round-trip", () => {
 });
 
 describe("MessageThread per-message labels", () => {
-  it("stores a label alongside a pushed message and reads it back by index", () => {
+  it("stores a label on a pushed message and reads it back by index", () => {
     const t = new MessageThread();
     t.push(smoltalk.userMessage("hi"), "verifier");
     t.push(smoltalk.assistantMessage("ok"));
     expect(t.labelAt(0)).toBe("verifier");
     expect(t.labelAt(1)).toBe(null);
+    expect(t.getMessages()[0].metadata).toEqual({ label: "verifier" });
   });
 
-  it("round-trips labels through toJSON/fromJSON", () => {
+  it("round-trips labels through toJSON/fromJSON in the messages themselves", () => {
     const t = new MessageThread();
-    t.push(smoltalk.userMessage("hi"), "verifier");
-    const revived = MessageThread.fromJSON(t.toJSON());
-    expect(revived.labelAt(0)).toBe("verifier");
-  });
-
-  it("revives legacy JSON without messageLabels as all-null labels", () => {
-    const json = new MessageThread([smoltalk.userMessage("hi")]).toJSON();
-    delete (json as any).messageLabels;
+    t.push(smoltalk.systemMessage("sys"));
+    t.push(smoltalk.userMessage("go"), "coder");
+    const json = JSON.parse(JSON.stringify(t.toJSON()));
+    expect("messageLabels" in json).toBe(false);
     const revived = MessageThread.fromJSON(json);
     expect(revived.labelAt(0)).toBe(null);
-    expect(revived.messageLabels).toHaveLength(1);
+    expect(revived.labelAt(1)).toBe("coder");
   });
 
-  it("setMessages resets labels (summarize/repair drop them)", () => {
+  it("leaves the JSON of an unlabeled thread without metadata", () => {
     const t = new MessageThread();
-    t.push(smoltalk.userMessage("hi"), "verifier");
-    t.setMessages([smoltalk.userMessage("summary")]);
-    expect(t.labelAt(0)).toBe(null);
-    expect(t.messageLabels).toHaveLength(1);
+    t.push(smoltalk.userMessage("a"));
+    t.push(smoltalk.assistantMessage("b"));
+    expect(JSON.stringify(t.toJSON())).not.toContain("metadata");
   });
 
-  // --- the invariant: length always matches, at every writer ---
-
-  it("a constructor-seeded thread stays aligned when pushed to", () => {
-    // Without a constructor seed, messageLabels would be [] against 2
-    // messages, and this push would put "late" at index 0.
-    const t = new MessageThread([smoltalk.userMessage("a"), smoltalk.userMessage("b")]);
-    t.push(smoltalk.userMessage("c"), "late");
-    expect(t.labelAt(0)).toBe(null);
-    expect(t.labelAt(1)).toBe(null);
-    expect(t.labelAt(2)).toBe("late");
-  });
-
-  it("addMessage keeps the arrays aligned (it delegates to push)", () => {
+  it("does not change a message another holder shares", () => {
+    const shared = smoltalk.userMessage("a");
     const t = new MessageThread();
-    t.addMessage(smoltalk.userMessage("a"));
-    t.push(smoltalk.userMessage("b"), "second");
-    expect(t.labelAt(0)).toBe(null);
-    expect(t.labelAt(1)).toBe("second");
+    t.push(shared, "seed");
+    expect(shared.metadata).toBeUndefined();
   });
 
-  it("a subthread child seeded from a parent starts aligned", () => {
+  it("push keeps metadata the message already carries when given no value for it", () => {
+    const t = new MessageThread();
+    t.enterHandoffScope("explorer:c1");
+    t.push(smoltalk.systemMessage("persona", { metadata: { label: "persona" } }));
+    expect(t.labelAt(0)).toBe("persona");
+    expect(t.expiryAt(0)).toEqual({ at: "handoff", key: "explorer:c1" });
+  });
+
+  it("a subthread child starts with its parent's labels", () => {
     const parent = new MessageThread();
     parent.push(smoltalk.userMessage("a"), "seed");
     const child = parent.newSubthreadChild(null);
     child.push(smoltalk.userMessage("b"), "child");
-    // The parent's labels do not travel (cloneMessages copies messages
-    // only); what matters is the child does not mis-attribute.
-    expect(child.labelAt(0)).toBe(null);
+    expect(child.labelAt(0)).toBe("seed");
     expect(child.labelAt(1)).toBe("child");
   });
 });
 
-describe("MessageThread label-preserving edits", () => {
-  it("removeAt drops only that message's label, keeping the rest aligned", () => {
+describe("MessageThread edits keep each message's metadata", () => {
+  it("removeAt removes only that message", () => {
     const t = new MessageThread();
-    t.push(smoltalk.systemMessage("facts"), null);
+    t.push(smoltalk.systemMessage("facts"));
     t.push(smoltalk.userMessage("a"), "seed");
     t.push(smoltalk.userMessage("b"), "coder");
-
     t.removeAt(0);
-
     expect(t.getMessages()).toHaveLength(2);
     expect(t.labelAt(0)).toBe("seed");
     expect(t.labelAt(1)).toBe("coder");
   });
 
-  it("adoptFrom takes the other thread's labels, not just its messages", () => {
+  it("adoptFrom takes the other thread's messages with their metadata", () => {
     const restored = new MessageThread();
-    restored.push(smoltalk.userMessage("a"), "seed");
+    restored.push(smoltalk.userMessage("a"), "seed", { at: "llmCall", key: "k1" });
     const live = new MessageThread();
     const liveId = live.id;
-
     live.adoptFrom(restored);
-
     expect(live.labelAt(0)).toBe("seed");
+    expect(live.expiryAt(0)).toEqual({ at: "llmCall", key: "k1" });
     // The alias survives: same object, same identity.
     expect(live.id).toBe(liveId);
   });
@@ -160,59 +146,16 @@ describe("MessageThread label-preserving edits", () => {
     live.adoptFrom(source);
     live.push(smoltalk.userMessage("b"), "later");
     expect(source.getMessages()).toHaveLength(1);
-    expect(source.messageLabels).toHaveLength(1);
   });
 
-  it("setMessages takes labels when the caller has them", () => {
+  it("setMessages keeps whatever metadata the new messages carry", () => {
     const t = new MessageThread();
-    t.setMessages([smoltalk.userMessage("a"), smoltalk.userMessage("b")], [null, "kept"]);
+    t.push(smoltalk.userMessage("a"), "kept", { at: "llmCall", key: "k1" });
+    const [kept] = t.getMessages();
+    t.setMessages([smoltalk.systemMessage("summary"), kept]);
     expect(t.labelAt(0)).toBe(null);
     expect(t.labelAt(1)).toBe("kept");
-  });
-
-  it("setMessages refuses a labels array of the wrong length", () => {
-    // Unlabeled beats mislabeled: a length disagreement means the source
-    // is already wrong, so do not guess an alignment.
-    const t = new MessageThread();
-    t.setMessages([smoltalk.userMessage("a"), smoltalk.userMessage("b")], ["only-one"]);
-    expect(t.messageLabels).toEqual([null, null]);
-  });
-
-  it("toJSON hands out a copy of the labels, not the live array", () => {
-    const t = new MessageThread();
-    t.push(smoltalk.userMessage("a"), "seed");
-    const json = t.toJSON();
-    (json.messageLabels as (string | null)[])[0] = "mutated";
-    expect(t.labelAt(0)).toBe("seed");
-  });
-
-  it("omits messageLabels entirely when nothing is labeled", () => {
-    // An all-null array says nothing the absent key doesn't, and emitting
-    // it would change the serialized shape of every thread for every
-    // program that never labels. Checkpoints and statelog dumps stay
-    // byte-identical.
-    const t = new MessageThread();
-    t.push(smoltalk.userMessage("a"));
-    t.push(smoltalk.assistantMessage("b"));
-    expect("messageLabels" in t.toJSON()).toBe(false);
-  });
-
-  it("emits messageLabels as soon as one message is labeled", () => {
-    const t = new MessageThread();
-    t.push(smoltalk.userMessage("a"));
-    t.push(smoltalk.assistantMessage("b"), "coder");
-    expect(t.toJSON().messageLabels).toEqual([null, "coder"]);
-  });
-
-  it("revives labels from a full MessageThreadJSON round-trip (the checkpoint shape)", () => {
-    // runPrompt checkpoints the FULL toJSON(); a bare messages array
-    // would revive through the legacy branch with no labels at all.
-    const t = new MessageThread();
-    t.push(smoltalk.systemMessage("sys"));
-    t.push(smoltalk.userMessage("go"), "coder");
-    const revived = MessageThread.fromJSON(JSON.parse(JSON.stringify(t.toJSON())));
-    expect(revived.labelAt(0)).toBe(null);
-    expect(revived.labelAt(1)).toBe("coder");
+    expect(t.expiryAt(1)).toEqual({ at: "llmCall", key: "k1" });
   });
 });
 
@@ -331,7 +274,7 @@ describe("repair generation — markRepaired / isNewerThan", () => {
 });
 
 describe("MessageThread.replaceAt", () => {
-  it("swaps the message and keeps its label", () => {
+  it("swaps the message and keeps the old message's label", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("q"), "ask");
     thread.push(smoltalk.assistantMessage("a"), "answer");
@@ -367,8 +310,21 @@ describe("MessageThread.removeMatching", () => {
   });
 });
 
-describe("MessageThread handoff scopes", () => {
-  it("tags system messages pushed inside a scope, and nothing else", () => {
+describe("MessageThread expiring messages", () => {
+  const contents = (t: MessageThread) => t.getMessages().map((m) => m.content);
+
+  it("push writes the label and expiry into the message's metadata", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("hi"), "first", { at: "llmCall", key: "c1" });
+    expect(t.labelAt(0)).toBe("first");
+    expect(t.expiryAt(0)).toEqual({ at: "llmCall", key: "c1" });
+    expect(t.getMessages()[0].metadata).toEqual({
+      label: "first",
+      expires: { at: "llmCall", key: "c1" },
+    });
+  });
+
+  it("a system message pushed inside a handoff scope expires with it; other roles do not", () => {
     const t = new MessageThread();
     t.push(smoltalk.systemMessage("caller"));
     t.enterHandoffScope("explorer:c1");
@@ -376,7 +332,19 @@ describe("MessageThread handoff scopes", () => {
     t.push(smoltalk.userMessage("brief"));
     t.exitHandoffScope();
     t.push(smoltalk.systemMessage("after"));
-    expect([0, 1, 2, 3].map((i) => t.scopeAt(i))).toEqual([null, "explorer:c1", null, null]);
+    expect([0, 1, 2, 3].map((i) => t.expiryAt(i))).toEqual([
+      null,
+      { at: "handoff", key: "explorer:c1" },
+      null,
+      null,
+    ]);
+  });
+
+  it("an explicit expiry wins over the handoff default", () => {
+    const t = new MessageThread();
+    t.enterHandoffScope("explorer:c1");
+    t.push(smoltalk.systemMessage("hint"), null, { at: "llmCall", key: "k1" });
+    expect(t.expiryAt(0)).toEqual({ at: "llmCall", key: "k1" });
   });
 
   it("nested scopes tag with the innermost key", () => {
@@ -388,40 +356,98 @@ describe("MessageThread handoff scopes", () => {
     t.exitHandoffScope();
     t.push(smoltalk.systemMessage("outer again"));
     t.exitHandoffScope();
-    expect([0, 1, 2].map((i) => t.scopeAt(i))).toEqual(["outer:1", "inner:2", "outer:1"]);
+    expect([0, 1, 2].map((i) => t.expiryAt(i)?.key)).toEqual(["outer:1", "inner:2", "outer:1"]);
   });
 
-  it("removeHandoffScoped removes only that key and keeps the arrays aligned", () => {
+  it("expire removes only messages matching both at and key, and never a tool message", () => {
     const t = new MessageThread();
     t.push(smoltalk.userMessage("hello"), "first");
-    t.enterHandoffScope("explorer:c1");
-    t.push(smoltalk.systemMessage("persona"));
-    t.push(smoltalk.assistantMessage("answer"), "last");
-    t.exitHandoffScope();
-    t.removeHandoffScoped("explorer:c1");
-    expect(t.getMessages().map((m) => m.content)).toEqual(["hello", "answer"]);
-    expect([t.labelAt(0), t.labelAt(1)]).toEqual(["first", "last"]);
-    expect([t.scopeAt(0), t.scopeAt(1)]).toEqual([null, null]);
+    t.push(smoltalk.systemMessage("persona"), null, { at: "handoff", key: "explorer:c1" });
+    t.push(smoltalk.userMessage("warn"), null, { at: "llmCall", key: "k1" });
+    t.push(smoltalk.systemMessage("other"), null, { at: "handoff", key: "oracle:c2" });
+    t.push(
+      smoltalk.messageFromJSON({
+        role: "tool",
+        content: "result",
+        name: "lookup",
+        tool_call_id: "c9",
+        metadata: { expires: { at: "handoff", key: "explorer:c1" } },
+      }),
+    );
+    t.expire("handoff", "explorer:c1");
+    expect(contents(t)).toEqual(["hello", "warn", "other", "result"]);
+    expect(t.labelAt(0)).toBe("first");
   });
 
-  it("round-trips scopes through toJSON/fromJSON and omits the key when unused", () => {
-    const plain = new MessageThread();
-    plain.push(smoltalk.userMessage("hello"));
-    expect("messageScopes" in plain.toJSON()).toBe(false);
+  it("claimUnkeyed keys only the unkeyed messages with that at", () => {
     const t = new MessageThread();
-    t.enterHandoffScope("explorer:c1");
-    t.push(smoltalk.systemMessage("persona"));
-    t.exitHandoffScope();
-    const restored = MessageThread.fromJSON(JSON.parse(JSON.stringify(t.toJSON())));
-    expect(restored.scopeAt(0)).toBe("explorer:c1");
+    t.push(smoltalk.userMessage("a"), null, { at: "llmCall", key: null });
+    t.push(smoltalk.userMessage("b"), null, { at: "llmCall", key: "k0" });
+    t.push(smoltalk.systemMessage("c"), null, { at: "handoff", key: null });
+    t.claimUnkeyed("llmCall", "k1");
+    expect([0, 1, 2].map((i) => t.expiryAt(i))).toEqual([
+      { at: "llmCall", key: "k1" },
+      { at: "llmCall", key: "k0" },
+      { at: "handoff", key: null },
+    ]);
   });
 
-  it("setMessages takes scopes when the caller has them and adoptFrom copies them", () => {
+  it("push refuses an expiry on an assistant, tool, or developer message", () => {
     const t = new MessageThread();
-    t.setMessages([smoltalk.systemMessage("a"), smoltalk.userMessage("b")], undefined, ["k", null]);
-    expect(t.scopeAt(0)).toBe("k");
-    const other = new MessageThread();
-    other.adoptFrom(t);
-    expect(other.scopeAt(0)).toBe("k");
+    const expires = { at: "llmCall" as const, key: "k" };
+    expect(() => t.push(smoltalk.assistantMessage("x"), null, expires)).toThrow(/cannot expire/);
+    expect(() =>
+      t.push(smoltalk.toolMessage("x", { tool_call_id: "c", name: "t" }), null, expires),
+    ).toThrow(/cannot expire/);
+    expect(() => t.push(smoltalk.developerMessage("x"), null, expires)).toThrow(/cannot expire/);
+    expect(t.getMessages()).toHaveLength(0);
+  });
+
+  it("toJSON writes neither messageLabels nor messageScopes", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("a"), "seed");
+    t.enterHandoffScope("explorer:c1");
+    t.push(smoltalk.systemMessage("persona"));
+    const json = t.toJSON();
+    expect("messageLabels" in json).toBe(false);
+    expect("messageScopes" in json).toBe(false);
+    const revived = MessageThread.fromJSON(JSON.parse(JSON.stringify(json)));
+    expect(revived.labelAt(0)).toBe("seed");
+    expect(revived.expiryAt(1)).toEqual({ at: "handoff", key: "explorer:c1" });
+  });
+
+  it("fromJSON folds an old checkpoint's messageLabels and messageScopes into the messages", () => {
+    const json = {
+      messages: [
+        smoltalk.systemMessage("a").toJSON(),
+        smoltalk.userMessage("b").toJSON(),
+        smoltalk.systemMessage("c").toJSON(),
+      ],
+      messageLabels: ["s0", null, "s2"],
+      messageScopes: ["explorer:c1", null, null],
+    };
+    const t = MessageThread.fromJSON(json);
+    expect([0, 1, 2].map((i) => t.labelAt(i))).toEqual(["s0", null, "s2"]);
+    expect(t.expiryAt(0)).toEqual({ at: "handoff", key: "explorer:c1" });
+    expect(t.expiryAt(1)).toBeNull();
+    expect(t.expiryAt(2)).toBeNull();
+    t.expire("handoff", "explorer:c1");
+    expect(contents(t)).toEqual(["b", "c"]);
+  });
+
+  it("fromJSON ignores legacy arrays whose length disagrees with the messages", () => {
+    const json = {
+      messages: [smoltalk.userMessage("a").toJSON(), smoltalk.userMessage("b").toJSON()],
+      messageLabels: ["only-one"],
+    };
+    const t = MessageThread.fromJSON(json);
+    expect([t.labelAt(0), t.labelAt(1)]).toEqual([null, null]);
+  });
+
+  it("a subthread child keeps its parent's expiring messages", () => {
+    const parent = new MessageThread();
+    parent.push(smoltalk.userMessage("warn"), null, { at: "llmCall", key: "k1" });
+    const child = parent.newSubthreadChild(null);
+    expect(child.expiryAt(0)).toEqual({ at: "llmCall", key: "k1" });
   });
 });

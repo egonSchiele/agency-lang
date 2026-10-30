@@ -159,8 +159,7 @@ describe("markThreadCancelled — label preservation (push, not setMessages)", (
     expect(t.labelAt(0)).toBe("the-user-msg");
     expect(t.labelAt(1)).toBe("the-tool-round");
     expect(roles(t)).toEqual(["user", "assistant", "tool", "assistant"]);
-    // The alignment invariant messageThread.ts warns about: lengths match.
-    expect(t.messageLabels.length).toBe(t.getMessages().length);
+    expect(t.labelAt(3)).toBe(null);
   });
 });
 

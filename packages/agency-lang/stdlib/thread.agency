@@ -86,7 +86,7 @@ export type MessageAttachment =
   | { type: "file", source: AttachmentSource, filename?: string }
   | { type: "audio", source: AttachmentSource, filename?: string }
 
-export def systemMessage(msg: string, label: string = "") {
+export def systemMessage(msg: string, label: string = "", expires: "never" | "llmCall" = "never") {
   """
   Add a system message to the current thread's message history.
   The message becomes part of the conversation context for subsequent
@@ -94,11 +94,16 @@ export def systemMessage(msg: string, label: string = "") {
 
   @param msg - The system message content
   @param label - Optional debug label shown in statelog. Never sent to the model.
+  @param expires - "never" (the default) keeps the message on the thread; "llmCall" removes it when the next llm() call on this thread returns.
   """
-  _systemMessage(msg, label)
+  _systemMessage(msg, label, expires)
 }
 
-export def userMessage(msg: string | (string | MessageAttachment)[], label: string = "") {
+export def userMessage(
+  msg: string | (string | MessageAttachment)[],
+  label: string = "",
+  expires: "never" | "llmCall" = "never",
+) {
   """
   Add a user message to the current thread's message history. Use this
   to seed the conversation with prior user context that wasn't actually
@@ -106,8 +111,9 @@ export def userMessage(msg: string | (string | MessageAttachment)[], label: stri
 
   @param msg - The user message content: a string, or an array mixing text strings and attachments.
   @param label - Optional debug label shown in statelog. Never sent to the model.
+  @param expires - "never" (the default) keeps the message on the thread; "llmCall" removes it when the next llm() call on this thread returns.
   """
-  _userMessage(msg, label)
+  _userMessage(msg, label, expires)
 }
 
 export def toolMessage(

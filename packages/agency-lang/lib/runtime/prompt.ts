@@ -862,6 +862,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // replay) re-runs the request body without duplicating the user
     // message.
     await pr.step("pushPrompt", async () => {
+      // Messages Agency code pushed to expire with "the next llm() call"
+      // belong to this one. Inside the step, so a resume does not claim
+      // again.
+      messages.claimUnkeyed("llmCall", self.llmCallKey);
       messages.push(smoltalk.userMessage(prompt), callLabel);
       self.messagesJSON = snapshotThread();
     });
@@ -1997,7 +2001,14 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // endSpan is a no-op when no span is open.
     run.log.endSpan(llmSpanId);
     ctx.beforeCheckpoint = ctx.beforeCheckpoint.filter((refresh) => refresh !== refreshMessages);
-    if (shouldPop) stateStack.pop();
+    // Every exit but a pause ends the call: a return, an endTurn, a cancel,
+    // a failure. A paused call is resumed later and still needs its
+    // messages, so they expire only here. The frame is popped, so nothing
+    // replays this.
+    if (shouldPop) {
+      messages.expire("llmCall", self.llmCallKey);
+      stateStack.pop();
+    }
   }
 
   const responseMessage = messages.getMessages().at(-1);

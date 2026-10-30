@@ -40,6 +40,11 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
   - a race-loser cancellation inside a handoff removes the body's persona and leaves the marker (`cancelledHandoff`)
   - every request in every scenario is checked for provider-valid shape: tool calls paired with tool results, never ending on an assistant message
 - A handoff function called from code runs on the caller's thread: tests/agency/agents/oracleExplorer.agency (`twoOracleCallsShareTheCallerThread`, `explorerFromCodeLandsOnTheCallerThread`)
+
+- Expiring messages (docs/dev/runtime/expiring-messages.md):
+  - a message pushed with `expires: "llmCall"` is in the next `llm()` call's request and gone from the thread for the call after it: tests/agency/threads/expires-llm-call.agency
+  - an unkeyed `llmCall` message is claimed by the next call and removed when it returns, after an `endTurn`, and after a cancel, and kept while the call is paused on an interrupt: lib/runtime/prompt.toolRounds.test.ts (`llmCall expiry`)
+  - recalled memory facts reach the request and are gone from the thread afterwards: tests/agency/memory/llm-injection.agency
 - If I do want to transfer message history to another node, how would I do that?
 
 - We also need to test messages being returned from an agent to JavaScript

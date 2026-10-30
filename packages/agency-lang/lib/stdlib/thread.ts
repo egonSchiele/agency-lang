@@ -29,6 +29,7 @@ import type { UsageEntry, UsageKind } from "../runtime/invocationUsage.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack, TurnScope } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
+import type { Expiry } from "../runtime/state/messageMetadata.js";
 
 /**
  * std::thread TS implementations for the context-injected builtins
@@ -61,12 +62,26 @@ export async function __internal_systemMessage(
   threads.getOrCreateActive().push(smoltalk.systemMessage(msg));
 }
 
+/** When a message pushed from Agency code is removed: "never", or when
+ *  the next llm() call on the thread returns. */
+export type MessageExpiry = "never" | "llmCall";
+
+/** "llmCall" becomes an expiry with no key yet: the next llm() call on the
+ *  thread claims it. See docs/dev/runtime/expiring-messages.md. */
+function expiryFor(expires: MessageExpiry): Expiry | null {
+  return expires === "llmCall" ? { at: "llmCall", key: null } : null;
+}
+
 /** ALS-reading replacement for `__internal_systemMessage`. `label` is an
  *  observability-only debug tag shown in statelog; "" means unlabeled and
  *  is normalized to null. Never sent to the provider. */
-export async function _systemMessage(msg: string, label: string = ""): Promise<void> {
+export async function _systemMessage(
+  msg: string,
+  label: string = "",
+  expires: MessageExpiry = "never",
+): Promise<void> {
   const { threads } = currentRun();
-  threads.getOrCreateActive().push(smoltalk.systemMessage(msg), label || null);
+  threads.getOrCreateActive().push(smoltalk.systemMessage(msg), label || null, expiryFor(expires));
 }
 
 export async function __internal_userMessage(
@@ -84,9 +99,10 @@ export async function __internal_userMessage(
 export async function _userMessage(
   msg: smoltalk.UserContentInput,
   label: string = "",
+  expires: MessageExpiry = "never",
 ): Promise<void> {
   const { threads } = currentRun();
-  threads.getOrCreateActive().push(smoltalk.userMessage(msg), label || null);
+  threads.getOrCreateActive().push(smoltalk.userMessage(msg), label || null, expiryFor(expires));
 }
 
 /** Seed a synthetic tool call and its result onto the active thread, as if

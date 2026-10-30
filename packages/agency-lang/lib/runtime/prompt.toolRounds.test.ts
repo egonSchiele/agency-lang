@@ -10,6 +10,10 @@ import { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { _setLlmOptions } from "../stdlib/llm.js";
+import { _endTurn } from "../stdlib/thread.js";
+import * as smoltalk from "smoltalk";
+import { AgencyCancelledError } from "./errors.js";
+import { interrupt } from "./interrupts.js";
 
 /** The round cap, `maxToolCallRounds`: where its value comes from, and
  *  what happens at the cap. See "The round cap" in
@@ -34,6 +38,8 @@ function makeCtx(): RuntimeContext<any> {
 class RecordingClient implements LLMClient {
   readonly offered: string[][] = [];
   readonly hosted: string[][] = [];
+  /** The messages each request carried, copied when it was sent. */
+  readonly requests: smoltalk.Message[][] = [];
   private readonly inner: DeterministicClient;
 
   constructor(mocks: LLMMock[]) {
@@ -43,6 +49,7 @@ class RecordingClient implements LLMClient {
   private record(config: PromptConfig): void {
     this.offered.push((config.tools ?? []).map((tool) => tool.name));
     this.hosted.push(config.hostedTools ?? []);
+    this.requests.push([...config.messages]);
   }
 
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
@@ -212,5 +219,83 @@ describe("the round cap", () => {
     );
     expect(s.runs()).toBe(4);
     expect(refusals(thread)).toHaveLength(0);
+  });
+});
+
+/** A tool named `name` that runs `fn`, for the ways a call can end. */
+function endingTool(name: string, fn: () => unknown): AgencyFunction {
+  return new AgencyFunction({
+    name,
+    module: "test.agency",
+    fn,
+    params: [],
+    toolDefinition: { name, description: `The ${name} tool.`, schema: z.object({}) },
+  });
+}
+
+describe("llmCall expiry", () => {
+  const HINT = "just for this call";
+  const contents = (messages: smoltalk.Message[]) => messages.map((m) => m.content);
+
+  /** A thread holding one unkeyed llmCall message, and one llm() call on
+   *  it that offers `tools`. */
+  function runWithHint(mocks: LLMMock[], tools: AgencyFunction[]) {
+    const s = setup(mocks);
+    // A pause takes a checkpoint, which names the node it was taken in.
+    s.ctx.stateStack.nodesTraversed = ["main"];
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage(HINT), null, { at: "llmCall", key: null });
+    const result = runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
+      runPrompt(run, {
+        prompt: "go",
+        messages: thread,
+        clientConfig: { tools } as any,
+        maxToolCallRounds: 10,
+      }),
+    );
+    return { s, thread, result };
+  }
+
+  it("an unkeyed llmCall message is claimed by the next call and gone when it returns", async () => {
+    const { s, thread, result } = runWithHint([{ return: "done" }], []);
+    expect(await result).toBe("done");
+    expect(contents(s.client.requests[0])).toContain(HINT);
+    expect(contents(thread.getMessages())).not.toContain(HINT);
+  });
+
+  it("is gone after a call that ends through endTurn", async () => {
+    const finish = endingTool("finish", () => {
+      _endTurn("llm");
+      return "finished";
+    });
+    const { s, thread, result } = runWithHint(
+      [{ toolCall: { name: "finish", args: {} } }],
+      [finish],
+    );
+    await result;
+    expect(s.client.requests).toHaveLength(1);
+    expect(contents(thread.getMessages())).not.toContain(HINT);
+  });
+
+  it("is gone after a call that throws", async () => {
+    const boom = endingTool("boom", () => {
+      throw new AgencyCancelledError("cancelled fixture");
+    });
+    const { thread, result } = runWithHint([{ toolCall: { name: "boom", args: {} } }], [boom]);
+    await expect(result).rejects.toBeInstanceOf(AgencyCancelledError);
+    expect(contents(thread.getMessages())).not.toContain(HINT);
+  });
+
+  it("stays on the thread while the call is paused on an interrupt", async () => {
+    const pauseMe = endingTool("pauseMe", () => [
+      interrupt({ effect: "test::pause", message: "pause", data: {}, origin: "test", runId: "r1" }),
+    ]);
+    const { thread, result } = runWithHint(
+      [{ toolCall: { name: "pauseMe", args: {} } }],
+      [pauseMe],
+    );
+    const paused = await result;
+    expect(Array.isArray(paused)).toBe(true);
+    expect(contents(thread.getMessages())).toContain(HINT);
   });
 });

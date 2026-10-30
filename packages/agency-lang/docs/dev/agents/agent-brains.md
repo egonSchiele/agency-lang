@@ -125,9 +125,13 @@ brain, and Agency initializes the whole import closure at startup
 (`docs/dev/compiler/init-topsort.md`), so every registered brain's top-level statics
 run whether or not that brain was selected. Two consequences:
 
-1. Brain statics must do nothing effectful, with one exception: bundled
-   file reads (the coordinator's system prompts, the code subagent's skill
-   files) stay `static const ... with approve`, exactly as before the split.
+1. Brain statics must do nothing effectful, with two exceptions, both
+   `static const ... with approve`: bundled file reads (the coordinator's
+   system prompts, the code subagent's skill files), and the scans of the
+   user's own skill and command folders (`.claude/commands` in
+   `lib/commandPalette.agency`, and the Claude Code skill folders in
+   `lib/claudeSkills.agency`). These run before the agent policy exists, so
+   nothing in it can stop them; see `docs/dev/agents/claude-skills.md`.
 2. Those reads must *not* move into `init`. `init` runs inside the policy
    handler, and an inner `with approve` cannot get past an outer policy, so
    a read there would prompt the user under `--policy minimal` (which has no

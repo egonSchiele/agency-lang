@@ -95,7 +95,7 @@ const RETRIEVAL_TOOLS = [
 ];
 
 /** A retrieval tool called twice with the same arguments, anywhere in the
- *  run (the grounding reviewer's calls included), fails. The comparison is
+ *  run, fails. The comparison is
  *  the record's argument preview, so two URLs that differ only after its
  *  200th character count as one call, and one URL spelled two ways (with
  *  and without a trailing slash, through `fetch` and `fetchMarkdown`)

@@ -1,25 +1,16 @@
 ---
 name: "researcher"
-description: "Answers a question from web and Wikipedia sources and synthesizes"
+description: "Answers a question from web and Wikipedia sources and returns a"
 ---
 
 # researcher
 
-a cited answer, retrying until every claim is grounded.
+cited answer.
 
-  The grounding loop is this agent's own contract: a grounded, cited answer
-  is what it produces. Checking that answer against a wider task is the
-  caller's job, via reviewAgent.
-
-  Two rules of the loop live here and not in `revise` (`std::strategy`),
-  which other agents use for other work. An empty answer is never
-  reviewed: the model is asked once more, with no tools, to write its
-  answer from what it read, and a second empty reply is a failure naming
-  the cause. And a rejected answer is fixed, not redone: the next attempt
-  gets the answer and the findings, patches the gaps in a subthread under
-  a small round cap, and uses a fact the review already gives with its
-  source instead of looking it up again. See
-  docs/dev/agents/research-loop.md.
+  One research pass answers the question. When that pass ends with no
+  answer, the model is asked once more, with no tools, to write its answer
+  from what it read, and a second empty reply is a failure naming the
+  cause. See docs/dev/agents/research-loop.md.
 
 ## Types
 
@@ -39,7 +30,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L363))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L194))
 
 ## Functions
 
@@ -55,7 +46,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L40))
 
 ### researcherAgent
 
@@ -64,7 +55,6 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 researcherAgent(
   task: string,
   context: string = "",
-  maxAttempts: number = 3,
   maxCost: number = $50.00,
   maxTime: number = 30m,
   model: string = "",
@@ -77,14 +67,12 @@ researcherAgent(
 ```
 
 Answer a research question from web and Wikipedia sources and return a
-  cited answer, retrying while a review finds ungrounded claims.
+  cited answer.
 
   @param task - The research question
   @param context - Extra material folded into the prompt, or ""
   @param history - The conversation before the question, oldest first, so
     the question is read in its context; [] for none
-  @param maxAttempts - Attempts before returning: one research pass, then
-    fix passes that patch the review's findings
   @param maxCost - Hard spend cap
   @param maxTime - Hard wall-clock cap
   @param model - Model override, or "" for the ambient model
@@ -99,7 +87,6 @@ Answer a research question from web and Wikipedia sources and return a
 |---|---|---|
 | task | `string` |  |
 | context | `string` | "" |
-| maxAttempts | `number` | 3 |
 | maxCost | `number` | $50.00 |
 | maxTime | `number` | 30m |
 | model | `string` | "" |
@@ -113,4 +100,4 @@ Answer a research question from web and Wikipedia sources and return a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L133))

@@ -514,7 +514,8 @@ in the skills tool's listing, unless its frontmatter sets
 `disable-model-invocation: true`, and a slash command, unless it sets
 `user-invocable: false`. A command's body starts with `Base directory for
 this skill: <folder>`, and `${CLAUDE_SKILL_DIR}` in it becomes that folder.
-A name Claude Code refuses or reserves is skipped.
+A name Claude Code refuses or reserves is skipped, and a space in a
+name becomes a dash.
 */
 @capabilities(fileRead)
 export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::skills::skillsDir> {
@@ -555,6 +556,9 @@ export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::
     if (_refusedSkillName(name) || _refusedSkillName(folder)) {
       continue
     }
+    // `expandSlash` ends a command name at the first space, so `My Skill`
+    // is `My-Skill` everywhere, for `/My-Skill` to run.
+    name = name.replaceAll(" ", "-")
     names.push(name)
     const description = skillDescription(data, text)
     if (modelInvocable(data)) {

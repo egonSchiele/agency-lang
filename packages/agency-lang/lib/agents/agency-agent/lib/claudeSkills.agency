@@ -2,7 +2,7 @@
   @summary The user's Claude Code skills: `~/.claude/skills`, then
   `.claude/skills` in the launch directory and each parent up to the
   repository root. Each folder is scanned once at startup and offered to
-  the coordinator as a skills tool, and its skills run as slash commands.
+  the coordinator as one `skill` tool, and its skills run as slash commands.
   See docs/dev/agents/claude-skills.md.
 */
 import { exists } from "std::shell"
@@ -78,25 +78,87 @@ export def mergeSkillSources(sources: SkillSource[]): SkillSource[] {
   return merged
 }
 
-/** One skills tool per source that lists any skill: `personal_skills`, then
-  `project_skills`, `project_skills_2`, and so on. */
-export def skillToolsFor(sources: SkillSource[]): any[] {
-  let tools: any[] = []
-  let projectCount = 0
+// The skill lines in the `skill` tool's description may total this many
+// characters, about 1% of a 200,000-token context, as in Claude Code.
+// Past it, descriptions are dropped from the end of the list, so the
+// lowest-precedence skills are listed by name only.
+static const MAX_SKILL_LISTING_CHARS = 8000
+
+static const LISTING_HEADER = "Load one of the user's Claude Code skills by its name, and follow it when a request fits its description. Pass `file` to read another file the skill links to, relative to the skill's folder. Skills:"
+
+static const NAME_ONLY_NOTE = "Skills listed by name only have their descriptions left out to save space; load them the same way."
+
+def skillLine(entry: SkillEntry, withDescription: boolean): string {
+  if (withDescription && entry.description != "") {
+    return "- ${entry.name}: ${entry.description}"
+  }
+  return "- ${entry.name}"
+}
+
+/** The `skill` tool's description: every model-usable skill, in precedence
+  order, one `- name: description` line each. When the lines pass `budget`
+  characters, descriptions are dropped from the end of the list until they
+  fit; every name is always listed. */
+export def skillListing(sources: SkillSource[], budget: number): string {
+  let entries: SkillEntry[] = []
   for (src in sources) {
-    let name = "personal_skills"
-    if (src.label == "project") {
-      projectCount = projectCount + 1
-      name = "project_skills"
-      if (projectCount > 1) {
-        name = "project_skills_${projectCount}"
+    entries = [...entries, ...src.scan.entries]
+  }
+  let described = entries.length
+  let lines = [skillLine(entry, true) for entry in entries]
+  let total = 0
+  for (line in lines) {
+    total = total + line.length + 1
+  }
+  while (total > budget && described > 0) {
+    described = described - 1
+    const shorter = skillLine(entries[described], false)
+    total = total - lines[described].length + shorter.length
+    lines[described] = shorter
+  }
+  let listing = "${LISTING_HEADER}\n${lines.join("\n")}\n"
+  if (described < entries.length) {
+    listing = "${listing}${NAME_ONLY_NOTE}\n"
+  }
+  return listing
+}
+
+/** The one `skill` tool over every folder, or none when no skill is listed. */
+export def skillToolFor(sources: SkillSource[]): any[] {
+  const listed = [src for src in sources if src.scan.entries.length > 0]
+  if (listed.length == 0) {
+    return []
+  }
+  const tool = loadSkill.partial(sources: sources).rename("skill").describe(skillListing(sources, MAX_SKILL_LISTING_CHARS))
+  return [tool]
+}
+
+// The tool body. The read raises std::read for the skill's folder, which the
+// agent policy answers; the recommended policy approves the personal folder
+// and the launch directory's project folder.
+def loadSkill(sources: SkillSource[], name: string, file: string = "SKILL.md"): Result<string> {
+  """
+  Load a skill by name.
+
+  @param name - The skill's name, as listed
+  @param file - A file in the skill's folder; SKILL.md by default
+  """
+  for (src in sources) {
+    for (entry in src.scan.entries) {
+      if (entry.name == name) {
+        const folder = "${src.scan.dir}/${entry.location.replace("/SKILL.md", "")}"
+        const text = read(file, dir: folder)
+        if (text is success(content)) {
+          if (file == "SKILL.md") {
+            return success("Base directory for this skill: ${folder}\n\n${content}")
+          }
+          return success(content)
+        }
+        return text
       }
     }
-    if (src.scan.entries.length > 0) {
-      tools.push(skillsToolFromEntries(src.scan.dir, src.scan.entries, name))
-    }
   }
-  return tools
+  return failure("No skill named '${name}'. Use a name from the list in this tool's description.")
 }
 
 export def skillCommandsFor(sources: SkillSource[]): SkillCommand[] {
@@ -126,7 +188,7 @@ def loadSkillSources(start: string, home: string): SkillSource[] {
 static const SKILL_SOURCES = loadSkillSources(cwd(), os.homedir())
 
 export def claudeSkillTools(): any[] {
-  return skillToolsFor(SKILL_SOURCES)
+  return skillToolFor(SKILL_SOURCES)
 }
 
 export def claudeSkillCommands(): SkillCommand[] {

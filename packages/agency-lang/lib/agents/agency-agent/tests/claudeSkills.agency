@@ -7,13 +7,14 @@ import { find, map } from "std::array"
 import { mkdir, remove } from "std::fs"
 import { ClaudeSkillsScan, SkillCommand } from "std::skills"
 
-import test { loadSkillSources } from "../lib/claudeSkills.agency"
+import test { loadSkill, loadSkillSources } from "../lib/claudeSkills.agency"
 import {
   SkillSource,
   claudeSkillDirs,
   mergeSkillSources,
   projectFolders,
-  skillToolsFor,
+  skillListing,
+  skillToolFor,
  } from "../lib/claudeSkills.agency"
 
 def tree(): string {
@@ -187,20 +188,94 @@ node homeAsProjectIsReadOnce(): boolean {
   return merged.length == 1 && merged[0].label == "personal"
 }
 
-node toolNamesAreStable(): boolean {
-  const tools = skillToolsFor([
-    source("personal", "/h/.claude/skills", ["a"], ["a"], []),
-    source("project", "/p/.claude/skills", ["b"], ["b"], []),
-    source("project", "/q/.claude/skills", ["c"], ["c"], []),
-  ])
-  const names = map(tools, \tool -> "${tool.name}")
-  return JSON.stringify(names) == JSON.stringify(["personal_skills", "project_skills", "project_skills_2"])
+def described(name: string, description: string): any {
+  return {
+    name: name,
+    description: description,
+    location: "${name}/SKILL.md"
+  }
 }
 
-node sourceWithNoEntriesGetsNoTool(): boolean {
-  const tools = skillToolsFor([
-    source("personal", "/h/.claude/skills", ["a"], ["a"], []),
-    source("project", "/p/.claude/skills", ["b"], [], ["b"]),
-  ])
-  return tools.length == 1
+def twoSources(): SkillSource[] {
+  return [
+    {
+      label: "personal",
+      scan: {
+        dir: "/h/.claude/skills",
+        names: ["alpha"],
+        entries: [described("alpha", "the first skill, 20c")],
+        commands: []
+      }
+    },
+    {
+      label: "project",
+      scan: {
+        dir: "/p/.claude/skills",
+        names: ["beta"],
+        entries: [described("beta", "the second skill 20c")],
+        commands: []
+      }
+    },
+  ]
+}
+
+node listingHasEverySkillInOrder(): boolean {
+  const listing = skillListing(twoSources(), 1000)
+  const alpha = listing.indexOf("- alpha: the first skill, 20c")
+  const beta = listing.indexOf("- beta: the second skill 20c")
+  return alpha != -1 && beta > alpha
+}
+
+// The lines are 30 and 29 characters with their newlines. Under a budget
+// of 40 only the first keeps its description.
+node listingDropsTheLastDescriptionsFirst(): boolean {
+  const listing = skillListing(twoSources(), 40)
+  return listing.includes("- alpha: the first skill, 20c") && listing.includes("- beta\n") && !listing.includes("- beta:")
+}
+
+node listingKeepsEveryNameOverBudget(): boolean {
+  const listing = skillListing(twoSources(), 1)
+  return listing.includes("- alpha\n") && listing.includes("- beta\n") && !listing.includes("20c")
+}
+
+node oneToolNamedSkill(): boolean {
+  const tools = skillToolFor(twoSources())
+  return tools.length == 1 && "${tools[0].name}" == "skill"
+}
+
+node noSkillsNoTool(): boolean {
+  const empty: SkillSource[] = [
+    source("personal", "/h/.claude/skills", ["a"], [], ["a"]),
+  ]
+  return skillToolFor(empty).length == 0
+}
+
+node loadsASkillByName(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const sources = loadSkillSources(tree() + "/repo/sub/work", tree() + "/home")
+  const loaded = loadSkill(sources, "mine") with approve
+  clearTree()
+  if (loaded is failure) {
+    return false
+  }
+  return loaded.value.includes("mine body.") && loaded.value.startsWith("Base directory for this skill: ")
+}
+
+node loadsAFileTheSkillLinksTo(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  write("notes.md", "Linked notes.", dir: tree() + "/home/.claude/skills/mine") with approve
+  const sources = loadSkillSources(tree() + "/repo/sub/work", tree() + "/home")
+  const loaded = loadSkill(sources, "mine", "notes.md") with approve
+  const escaped = loadSkill(sources, "mine", "../shared/SKILL.md") with approve
+  clearTree()
+  return loaded is success && loaded.value == "Linked notes." && escaped is failure
+}
+
+node unknownSkillIsAFailure(): boolean {
+  const loaded = loadSkill(twoSources(), "nope") with approve
+  return loaded is failure && loaded.error.includes("nope")
 }

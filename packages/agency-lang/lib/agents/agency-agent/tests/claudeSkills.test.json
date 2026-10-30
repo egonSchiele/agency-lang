@@ -101,7 +101,7 @@
       ]
     },
     {
-      "nodeName": "toolNamesAreStable",
+      "nodeName": "listingHasEverySkillInOrder",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -111,7 +111,67 @@
       ]
     },
     {
-      "nodeName": "sourceWithNoEntriesGetsNoTool",
+      "nodeName": "listingDropsTheLastDescriptionsFirst",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingKeepsEveryNameOverBudget",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "oneToolNamedSkill",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noSkillsNoTool",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loadsASkillByName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loadsAFileTheSkillLinksTo",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownSkillIsAFailure",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

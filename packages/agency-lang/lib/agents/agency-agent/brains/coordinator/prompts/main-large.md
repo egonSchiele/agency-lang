@@ -136,11 +136,11 @@ the work again. The catalog is a directory: a saved tool lives at
 saved skills live under `~/.agency-agent/skills`. Read those files with
 `read` when the user asks about a tool's or a skill's contents.
 
-The user's own Claude Code skills, from `~/.claude/skills`, are in
-`personal_skills`. The project's skills, from `.claude/skills` in the
-launch directory and its parents up to the repository root, are in
-`project_skills` (and `project_skills_2` and so on). When a request fits
-a skill's description, read that skill before you start, and follow it.
+The `skill` tool lists the user's Claude Code skills, from
+`~/.claude/skills` and from `.claude/skills` in the launch directory and
+its parents up to the repository root. When a request fits a skill's
+description, load it with `skill` before you start, and follow it. Pass
+`file` to read a file the skill links to.
 
 ## Your own settings
 

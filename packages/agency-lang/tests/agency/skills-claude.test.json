@@ -139,6 +139,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "spaceInNameBecomesADash",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

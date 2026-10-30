@@ -37,19 +37,19 @@ def commandNamed(scan: any, name: string): any {
 
 node namesAreEverySkill(): boolean {
   const scan = loadScan()
-  const expected = ["2024", "bare", "first-line", "listy", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
+  const expected = ["2024", "My-Skill", "bare", "first-line", "listy", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
   return JSON.stringify([...scan.names].sort()) == JSON.stringify(expected)
 }
 
 node entriesAreModelUsableSkills(): boolean {
   const scan = loadScan()
-  const expected = ["2024", "bare", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
+  const expected = ["2024", "My-Skill", "bare", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
   return sortedNames(scan.entries) == JSON.stringify(expected)
 }
 
 node commandsAreUserRunnableSkills(): boolean {
   const scan = loadScan()
-  const expected = ["2024", "bare", "first-line", "listy", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
+  const expected = ["2024", "My-Skill", "bare", "first-line", "listy", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
   return sortedNames(scan.commands) == JSON.stringify(expected)
 }
 
@@ -124,4 +124,10 @@ node numericNameBuildsATool(): boolean {
   const entry = entryNamed(scan, "2024")
   const tool = skillsToolFromEntries(scan.dir, scan.entries, "claude_fixture")
   return entry != null && entry.name == "2024" && tool.description.includes("<name>2024</name>")
+}
+
+// A space in a name becomes a dash, so `/My-Skill` can be typed.
+node spaceInNameBecomesADash(): boolean {
+  const scan = loadScan()
+  return expandSlash("/My-Skill", scan.commands).endsWith("Spaced body.")
 }

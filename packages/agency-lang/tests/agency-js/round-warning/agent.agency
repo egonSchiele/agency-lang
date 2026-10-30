@@ -1,0 +1,28 @@
+// The round warning across a pause. With a cap of 5 and the default
+// threshold of 3, the first warning goes out after round 1 and the final
+// one after round 3. The run pauses in round 2, between them. After the
+// resume, the boundary after round 2 has 2 rounds left, which would send
+// the first warning again if the record of what was sent had not survived
+// the checkpoint.
+
+def ping(n: number): string {
+  """
+  Returns pong.
+  """
+  return "pong ${n}"
+}
+
+// Raises with no handler in scope, so the run pauses inside the tool.
+def pauseMe(id: string): string {
+  """
+  Pauses for approval.
+  """
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+node main() {
+  const _answer = llm("go", { tools: [ping, pauseMe], maxToolCallRounds: 5 })
+  // A second call on the same thread, to see the thread after the first.
+  return llm("summarize")
+}

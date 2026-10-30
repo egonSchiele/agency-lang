@@ -266,3 +266,14 @@ node guardStopsHandoff() {
   const after = llm("What happened?")
   return "${outcome} / ${after}"
 }
+
+// A cap of 2 makes the body's one tool round its last, so the body's call
+// sends the final round warning. The warning expires with the body's
+// call, before the hand-back reaches the caller.
+handoff def briefedAgent(question: string): string {
+  return llm("brief: ${question}", { tools: [lookup], maxToolCallRounds: 2 })
+}
+
+node warningInsideHandoff() {
+  return llm("Answer with the briefed agent.", { tools: [briefedAgent] })
+}

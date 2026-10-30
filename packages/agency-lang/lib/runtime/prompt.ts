@@ -868,14 +868,17 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // The initial request is a step so it is idempotent on resume
     // (re-entries after a later tool-batch bailout skip it).
     await requestStepWithTripRetry({ first: true }, async () => {
-      let injectedFactsContent: string | null = null;
+      // The recalled facts expire with this one request.
+      const factsKey = `${self.llmCallKey}:${llmCallKey({ first: true })}`;
       const recallManager = ctx.getActiveMemoryManager(run.stack);
       if (memoryOption && recallManager) {
         try {
           const facts = await recallManager.recallForInjection(run, promptText(prompt));
           if (facts) {
-            injectedFactsContent = `Relevant context from memory:\n${facts}`;
-            messages.push(smoltalk.systemMessage(injectedFactsContent));
+            messages.push(smoltalk.systemMessage(`Relevant context from memory:\n${facts}`), null, {
+              at: "request",
+              key: factsKey,
+            });
           }
         } catch (err) {
           // Guard trips are signals, not best-effort failures — let
@@ -905,17 +908,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         lastStopReason = result.stopReason;
         lastUsageKind = result.usageKind;
       } finally {
-        if (injectedFactsContent !== null) {
-          const injectedIndex = messages
-            .getMessages()
-            .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
-          if (injectedIndex !== -1) {
-            // removeAt, not setMessages: this edits ONE message out of
-            // the thread, so it must not reset the labels of all the
-            // others.
-            messages.removeAt(injectedIndex);
-          }
-        }
+        messages.expire("request", factsKey);
       }
       self.messagesJSON = snapshotThread();
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;

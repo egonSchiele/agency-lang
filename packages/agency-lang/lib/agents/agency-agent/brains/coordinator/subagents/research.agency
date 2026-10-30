@@ -38,8 +38,7 @@ export handoff def researchAgent(
   up, summarizing a document, gathering background, or recalling a stored
   fact.
 
-  @param userMsg - the user's message, word for word. The coordinator binds
-    it each turn, so the model choosing this tool never rewrites it.
+  @param userMsg - a message describing what needs to be found out.
   @param agencyTopic - true when the question is about the Agency language
     itself (its syntax, types, stdlib, or CLI), which routes to the agent
     that reads the bundled Agency documentation. Leave it false for every

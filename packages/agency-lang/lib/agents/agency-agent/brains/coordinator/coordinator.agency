@@ -59,6 +59,7 @@ static const coordinatorSkills = skillsDir(
 // prompt keeps it to small changes; anything that needs a build or tests
 // still goes to codeAgent.
 export static const mainAgentTools = [
+  researchAgent,
   codeAgent,
   reviewAgent,
   oracleAgent,
@@ -113,25 +114,22 @@ def coordinatorInit(context: BrainContext) {
 
 // The tools one turn offers. The learned ones are read from the agent
 // home on every turn, not once at startup, so a tool the user saves in
-// this session is callable on the next turn. The research tool is bound to
-// the user's message, so the researcher reads the user's own words and not
-// a brief the coordinator wrote.
-export def turnTools(turnStart: any, userMsg: string): any[] {
+// this session is callable on the next turn.
+export def turnTools(turnStart: any): any[] {
   return [
-    researchAgent.partial(userMsg: userMsg),
     ...mainAgentTools,
     ...getMcpTools(),
     ...learnedExtras(),
     ...getGeneratedTools(),
-    learnTools.partial(turnStart: turnStart, userMsg: userMsg),
+    learnTools.partial(turnStart: turnStart),
     whatIAmDoing,
     question,
     elapsedTime.partial(since: turnStart),
   ]
 }
 
-def mainOptions(turnStart: any, userMsg: string): any {
-  const options: any = { memory: true, tools: turnTools(turnStart, userMsg) }
+def mainOptions(turnStart: any): any {
+  const options: any = { memory: true, tools: turnTools(turnStart) }
   const slowModel = getSlowModel()
   if (slowModel != "") {
     options.model = slowModel
@@ -142,7 +140,6 @@ def mainOptions(turnStart: any, userMsg: string): any {
 
 handoff def learnTools(
   turnStart: any,
-  userMsg: string,
   source: AgencySource,
   names: string[] = [],
   namespace: string = "session",
@@ -159,14 +156,14 @@ handoff def learnTools(
   not saved in the permanent toolbox. Existing names are never replaced;
   choose another namespace if a name is already available.
   """
-  const offeredNames = [tool.name for tool in turnTools(turnStart, userMsg)]
+  const offeredNames = [tool.name for tool in turnTools(turnStart)]
   const learned = learnSessionTools(source, names, namespace, offeredNames)
   if (learned is failure) {
     return learned
   }
   const answer = llm(
     "The tools ${learned.value.join(", ")} are now available for this conversation. Continue the user's request using them as needed.",
-    mainOptions(turnStart, userMsg),
+    mainOptions(turnStart),
   )
   endTurn()
   return success(answer)
@@ -192,7 +189,7 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     // conversation and makes every routing decision, so it gets the
     // strongest model the user configured. High-volume work still runs on
     // the subagents' own slots.
-    const result = llm(prompt, mainOptions(turnStart, promptText(prompt)))
+    const result = llm(prompt, mainOptions(turnStart))
   }
   return result
 }

@@ -127,7 +127,7 @@ node coordinatorTurnOffersLearnedTools(): string {
   _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
   let names: string[] = []
   handle {
-    names = map(turnTools(now(), ""), \tool -> "${tool.name}")
+    names = map(turnTools(now()), \tool -> "${tool.name}")
   } with approve
   if (!names.includes(LEARNED_SKILLS_TOOL)) {
     return "FAIL: no ${LEARNED_SKILLS_TOOL} in ${names.join(", ")}"
@@ -180,30 +180,10 @@ node coordinatorTurnOffersQuestion(): string {
   _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
   let names: string[] = []
   handle {
-    names = map(turnTools(now(), ""), \tool -> "${tool.name}")
+    names = map(turnTools(now()), \tool -> "${tool.name}")
   } with approve
   if (!names.includes("question")) {
     return "FAIL: no question in ${names.join(", ")}"
-  }
-  return "ok"
-}
-
-// The researcher reads the user's own words. The coordinator's research
-// tool has userMsg bound each turn, so the model choosing the tool has no
-// brief to write and cannot rewrite the question.
-node coordinatorResearchToolTakesNoBrief(): string {
-  _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
-  let tools: any[] = []
-  handle {
-    tools = turnTools(now(), "")
-  } with approve
-  const tool = find(tools, \candidate -> candidate.name == "researchAgent")
-  if (tool == null) {
-    return "FAIL: no researchAgent in the turn's tools"
-  }
-  const shape = tool.toolDefinition.schema.toJSONSchema()
-  if (shape.properties.userMsg != null) {
-    return "FAIL: userMsg is in the research tool's schema"
   }
   return "ok"
 }

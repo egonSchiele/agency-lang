@@ -51,6 +51,7 @@ export def repl(
   historyFile: string = "",
   historyMax: number = 1000,
   paletteCommands: any = null,
+  herdrName: string = "",
 ) {
   """
   A line-mode REPL in the terminal's own scrollback.
@@ -70,6 +71,7 @@ export def repl(
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description; null uses the palette from `setSlashPalette`
+  @param herdrName - The name Herdr shows for this program when it runs in a Herdr pane, with its idle, working, and blocked states. Empty (the default) reports nothing to Herdr.
   """
   // Publish the path to the execution-model global so `clearHistory()` can
   // resolve which file to clear from Agency state rather than a TS closure.
@@ -81,6 +83,7 @@ export def repl(
     historyFile,
     historyMax,
     paletteCommands,
+    herdrName,
   )
 }
 

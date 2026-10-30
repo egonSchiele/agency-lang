@@ -401,6 +401,7 @@ export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory:
     prompt: "> ",
     historyFile: historyFile,
     historyMax: 1000,
+    herdrName: "agency",
   )
   print(color.cyan("\nGoodbye!"))
 }

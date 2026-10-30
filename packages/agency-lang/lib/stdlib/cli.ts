@@ -1321,6 +1321,7 @@ export async function _runLineRepl(
   historyFile: string,
   historyMax: number,
   paletteCommands: unknown,
+  herdrName: string,
 ): Promise<void> {
   const run = currentRun();
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
@@ -1385,7 +1386,7 @@ export async function _runLineRepl(
   // override lives and dies with the run that owns the readline.
   const replCtx = run.ctx;
   const prevOverride = replCtx.inputOverride;
-  const herdr = herdrReporter(process.env);
+  const herdr = herdrReporter(process.env, herdrName);
   replCtx.inputOverride = (p: string): Promise<string> => {
     stopActiveSpinner();
     return herdr.whileBlocked(

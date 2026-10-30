@@ -1,9 +1,7 @@
 // Reports a line-mode REPL to Herdr, the terminal workspace manager for
-// coding agents, so its sidebar shows the agent as idle, working, or
-// blocked, and so it can reopen the session after a Herdr restart. Herdr
-// sets HERDR_ENV, HERDR_SOCKET_PATH, and HERDR_PANE_ID in every pane it
-// runs; outside Herdr the reporter does nothing. Each request is one JSON
-// line on the socket. See docs/dev/agents/herdr.md.
+// coding agents. Herdr sets HERDR_ENV, HERDR_SOCKET_PATH, and HERDR_PANE_ID
+// in every pane it runs; each request is one JSON line on that socket. See
+// docs/dev/agents/herdr.md.
 
 import * as net from "net";
 
@@ -26,20 +24,21 @@ export type HerdrReporter = {
   release: () => Promise<void>;
 };
 
-type HerdrRequest = {
-  method: string;
-  params: Record<string, unknown>;
+type StateReport = {
+  kind: "state";
+  state: HerdrState;
+  message?: string;
 };
 
-type LatestOnlySender = {
-  send: (request: HerdrRequest) => void;
-  flush: () => Promise<void>;
+type Report = StateReport | { kind: "release" };
+
+type HerdrError = {
+  code?: string;
 };
 
-// `agent` is the name Herdr shows. `source` names the integration; Herdr's
-// own integrations start theirs with `herdr:`, so ours must not.
-const AGENT_NAME = "agency";
-const SOURCE = "agency";
+type HerdrAnswer = {
+  error?: HerdrError;
+};
 
 // Herdr must never slow the REPL down, so a report with no answer by then is dropped.
 const REPORT_TIMEOUT_MS = 500;
@@ -56,32 +55,71 @@ const NO_HERDR: HerdrReporter = {
   release: async () => {},
 };
 
-export function herdrReporter(env: Record<string, string | undefined>): HerdrReporter {
+/** A reporter that shows this program in Herdr as `name`. It does nothing
+ *  outside Herdr, or when `name` is empty. */
+export function herdrReporter(
+  env: Record<string, string | undefined>,
+  name: string,
+): HerdrReporter {
   const socketPath = env.HERDR_SOCKET_PATH;
   const paneId = env.HERDR_PANE_ID;
-  if (env.HERDR_ENV !== "1" || !socketPath || !paneId) {
+  if (env.HERDR_ENV !== "1" || !socketPath || !paneId || !name) {
     return NO_HERDR;
   }
-  const sender = latestOnlySender(socketPath);
-  const pane = { pane_id: paneId, source: SOURCE, agent: AGENT_NAME };
+  const pane = { pane_id: paneId, source: name, agent: name };
+  const nextSeq = clockSeq();
   let session: HerdrSession | null = null;
   let lastReport = "";
+  let queued: Report | null = null;
+  let draining: Promise<void> | null = null;
 
-  const report = (state: HerdrState, message?: string): void => {
-    const params: Record<string, unknown> = { ...pane, state };
-    if (message) {
-      params.message = message;
+  // Built at send time, so a report queued before `session` was cleared
+  // goes out without it.
+  const requestFor = (report: Report): object => {
+    const seq = nextSeq();
+    const id = `${name}:${seq}`;
+    if (report.kind === "release") {
+      return { id, method: "pane.release_agent", params: { ...pane, seq } };
+    }
+    const params: Record<string, unknown> = { ...pane, state: report.state, seq };
+    if (report.message) {
+      params.message = report.message;
     }
     if (session) {
       params.agent_session_id = session.id;
       params.resume_argv = session.resumeArgv;
     }
-    const key = JSON.stringify(params);
+    return { id, method: "pane.report_agent", params };
+  };
+
+  // One request in flight at a time; a newer report replaces the queued one.
+  const drain = async (): Promise<void> => {
+    while (queued) {
+      const report = queued;
+      queued = null;
+      const answer = await sendLine(socketPath, requestFor(report));
+      // Herdr drops the whole report when it refuses the resume command, so
+      // stop sending the command and send the state again without it.
+      if (answer?.error?.code === "invalid_resume_argv" && session) {
+        session = null;
+        queued ??= report;
+      }
+    }
+    draining = null;
+  };
+
+  const enqueue = (report: Report): void => {
+    queued = report;
+    draining ??= drain();
+  };
+
+  const report = (state: HerdrState, message?: string): void => {
+    const key = JSON.stringify([state, message, session?.id]);
     if (key === lastReport) {
       return;
     }
     lastReport = key;
-    sender.send({ method: "pane.report_agent", params });
+    enqueue({ kind: "state", state, message });
   };
 
   return {
@@ -98,64 +136,44 @@ export function herdrReporter(env: Record<string, string | undefined>): HerdrRep
       session = next;
     },
     release: () => {
-      sender.send({ method: "pane.release_agent", params: pane });
-      return sender.flush();
+      enqueue({ kind: "release" });
+      return draining ?? Promise.resolve();
     },
   };
 }
 
-/** Sends one request at a time. A request queued while another is in
- *  flight replaces whatever was queued before it, so Herdr only ever gets
- *  the latest state. */
-function latestOnlySender(socketPath: string): LatestOnlySender {
+function clockSeq(): () => number {
   let lastSeq = 0;
-  let queued: HerdrRequest | null = null;
-  let draining: Promise<void> | null = null;
-
-  const nextSeq = (): number => {
+  return () => {
     lastSeq = Math.max(lastSeq + 1, Date.now() * SEQ_PER_MS);
     return lastSeq;
   };
-
-  const drain = async (): Promise<void> => {
-    while (queued) {
-      const request = queued;
-      queued = null;
-      const seq = nextSeq();
-      await sendLine(socketPath, {
-        id: `${SOURCE}:${seq}`,
-        method: request.method,
-        params: { ...request.params, seq },
-      });
-    }
-    draining = null;
-  };
-
-  return {
-    send: (request) => {
-      queued = request;
-      draining ??= drain();
-    },
-    flush: () => draining ?? Promise.resolve(),
-  };
 }
 
-/** Write one JSON line to Herdr, then wait for its answer, a close, an
- *  error, or the timeout, whichever comes first. A failure is dropped on
- *  purpose: Herdr is optional, and its trouble must not reach the user's
- *  terminal. */
-function sendLine(socketPath: string, request: object): Promise<void> {
+/** Write one JSON line to Herdr and resolve with its answer, or with null
+ *  on a close, an error, or the timeout. Failures are dropped on purpose:
+ *  Herdr is optional, and its trouble must not reach the user's terminal. */
+function sendLine(socketPath: string, request: object): Promise<HerdrAnswer | null> {
   return new Promise((resolve) => {
     const socket = net.createConnection(socketPath);
-    const done = (): void => {
+    const done = (answer: HerdrAnswer | null): void => {
       clearTimeout(timer);
       socket.destroy();
-      resolve();
+      resolve(answer);
     };
-    const timer = setTimeout(done, REPORT_TIMEOUT_MS);
+    const timer = setTimeout(() => done(null), REPORT_TIMEOUT_MS);
     socket.on("connect", () => socket.write(`${JSON.stringify(request)}\n`));
-    socket.on("data", done);
-    socket.on("error", done);
-    socket.on("close", done);
+    socket.on("data", (chunk) => done(parseAnswer(chunk.toString())));
+    socket.on("error", () => done(null));
+    socket.on("close", () => done(null));
   });
+}
+
+function parseAnswer(text: string): HerdrAnswer | null {
+  try {
+    return JSON.parse(text.split("\n")[0]) as HerdrAnswer;
+  } catch {
+    // Not an answer this reporter can read, so it counts as no answer.
+    return null;
+  }
 }

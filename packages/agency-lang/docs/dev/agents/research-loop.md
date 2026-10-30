@@ -1,110 +1,84 @@
-# The research loop: never review nothing, and fix instead of redo
+# The researcher: one pass, no review
 
-`stdlib/agents/researcher.agency` answers a question from web sources and
-runs the answer through a grounding review (`reviewAgent`) until every
-claim is cited. The loop around that review is what trace wX5GvrUq showed
-going wrong, and this doc records the two rules that fix it (ADI-47,
-ADI-48) and why they live where they do.
+`stdlib/agents/researcher.agency` answers a question from web sources in
+one research pass and returns the model's reply as written. Nothing
+reviews the answer afterwards. This doc records the one rule the pass
+keeps, why the grounding review was removed, and how the agency agent's
+coordinator hands the researcher the question.
 
-## What the trace showed
-
-The first attempt made 30 calls and ended with an empty assistant message:
-no text, no tool calls. `revise` handed that empty string to
-`checkGrounding`, which ran the reviewer for 37 seconds on a work product
-of nothing. The reviewer did the research itself and reported seven gaps.
-The second attempt then got those gaps as its whole brief, on the same
-thread, with the full tool set and thirty rounds: 43 more calls, the same
-pages fetched again, a request of about 600,000 tokens. The reviewer's
-findings already held the facts the final answer was made of, with five
-URLs; the second attempt spent 43 calls re-finding them.
-
-## Rule 1: an empty answer is never reviewed
+## The rule: an empty answer is asked for once more
 
 `answerIsEmpty` is true for `null`, and for a first reply under
 `MIN_ANSWER_CHARS` (20) once trimmed: an empty string, or a few words
-where a cited answer was asked for. When the first attempt's answer is
-empty, the block asks once more on the same thread, with no tools
+where a cited answer was asked for. When the first reply is empty, the
+researcher asks once more on the same thread, with no tools
 (`NO_ANSWER_FOLLOWUP`: "You returned no answer. Write your answer now from
 what you have read, citing sources."). The model has its sources in
-context and nothing else it can do, so it answers. Any non-blank reply is
-the attempt, however short: `Yes (https://x.io).` is 19 characters and a
-real answer, and the review judges it. Only a blank second reply is
-`failure("the model returned no answer twice")`, so the message is true
-about what happened.
+context and nothing else it can do, so it answers.
 
-The failure has to end the loop rather than be reviewed, so
-`checkGrounding` accepts a failure as it stands. `revise` returns it,
-`researchLoop` returns it, and `@guard` reports it to the caller through
-`_budgetOutcome` with its message. The caller sees why there is no answer
-instead of a review of nothing.
+Any non-blank second reply is the answer, however short:
+`Yes (https://x.io).` is 19 characters and a real answer. Only a blank
+second reply is `failure("the model returned no answer twice")`, and
+`@guarded` passes that failure to the caller unchanged, so the caller sees
+why there is no answer.
 
-## Rule 2: a rejected answer is fixed, not redone
+The answer is saved with `saveDraft` before it is returned, so a budget
+that runs out after the pass still has it.
 
-The block keeps the last attempt's answer in `lastAnswer`, a local of
-`researchLoop` that the block assigns; `revise` hands the next attempt
-only the critique. A later attempt sends `fixPrompt(lastAnswer,
-critique)`: the answer, the findings, and the instruction to patch those
-gaps and keep everything else, using a fact the review gives with its
-source as given and fetching only what the review does not give. The
-critique `checkGrounding` writes is the findings alone; it used to end
-with "Retrieve more and fix them", which inside this brief told the model
-the opposite of what the brief says. It runs in a `subthread`, so the
-research thread does not grow by the attempt, under `FIX_ROUNDS` (8) tool
-rounds, where the first attempt has thirty. A fix that comes back empty
-keeps the answer it was given; the check then reviews that same answer
-again, up to two minutes and a dollar for the same findings, because
-`revise` gives the block no way to skip the check. That is accepted for
-now and noted here.
+## Why there is no grounding review
 
-`FIX_ROUNDS` binds only once #1264 is in: before it, a branch default
-from `setLlmOptions` replaced a call's own `maxToolCallRounds`, and under
-`agency agent` that default is 50. With #1264 both are ceilings and the
-smaller wins, so 8 holds.
+The researcher used to run every answer through `reviewAgent` and, when
+the review found an ungrounded claim, send the answer back for a fix pass,
+up to three attempts. An eval of ten real research questions, run on GLM
+5.3 and GPT-6.1 Sol with and without the review, showed the review made
+answers worse, slower, and dearer:
 
-For the review's facts to be usable, a finding can carry where it was
-checked: `Feedback` in `std::agents/lib/feedback` has `source?: string`,
-the reviewer's prompt asks for it, `groundingInstruction` repeats the ask,
-and `renderFeedback` prints it as `(source: <url>)` at the end of the
-line. The field is optional, so every agent that builds findings by hand
-is unchanged.
+- With the review, GLM's fix pass often returned a note about its changes
+  ("Audit complete... corrections made", "the answer above is the final,
+  corrected version") instead of the corrected answer, and that note
+  became the user's reply.
+- On Sol, the review and its fix passes used most of a $2 budget, and
+  most questions ran out before any answer came back.
+- Without the review, every GLM answer came back, with a median time of
+  under two minutes against ten, at about a third of the cost.
 
-`maxAttempts` defaults to 3 instead of 2. With a full redo, two attempts
-meant one redo and that was the limit worth paying for. With a fix pass,
-the round cap per attempt is the real bound, and a third short attempt is
-cheap.
+So the pass's reply is the answer. Guarding against false information
+needs a different mechanism; this one cost more than it caught.
 
-## Why not in `revise`
+## How the coordinator hands over the question
 
-The ticket asked whether the empty-answer rule belongs in `revise`, so
-every loop would get it. It does not: the retry is a model call with a
-prompt and no tools, and `revise` is a strategy over any block, used by
-the Agency coding agent for a writer whose result is code. A
-`retryIfEmpty` in a generic loop would need to know what "empty" means
-for that result and how to ask again. Both rules are the researcher's,
-so they are in the researcher, and the module comment says so.
+In `agency agent`, the coordinator decides which subagent handles a turn.
+`researchAgent` (`lib/agents/agency-agent/brains/coordinator/subagents/research.agency`)
+takes a `userMsg` parameter, and the coordinator used to write it: a
+rewritten brief of what the user asked. Now `mainAgent` in
+`coordinator.agency` passes the user's message for this turn to
+`turnTools`, which offers `researchAgent.partial(userMsg: userMsg)`. A
+bound parameter is not in the tool's schema, so the model
+choosing the tool can set `agencyTopic` and the budgets but cannot rewrite
+the question. `coordinatorResearchToolTakesNoBrief` in
+`brains/coordinator/tests/toolWiring.agency` checks the schema.
+
+`researchAgent` is not in `mainAgentTools`, the static list, because the
+binding changes every turn.
+
+## The research tools carry no `print`
+
+The coordinator gives the researcher its memory and todo tools
+(`researchTools`). It used to add `print` and `highlight`, with an
+instruction to show code through `print(highlight(code))`. Models used
+`print` to write the whole report to the terminal, then replied "the full
+answer is printed above", so the reply itself held no findings. The tools
+and the instruction are gone; the reply is the only place an answer goes.
 
 ## Tests
 
-`tests/agency/agents/researcher.agency`, under scoped mocks (`researcher`
-for the agent's calls, `review` for the check's):
+`tests/agency/agents/researcher.agency`, under a scripted model:
 
-- `emptyFirstAnswerIsAskedAgain`: the first reply is empty, the follow-up
-  is text, and the one review mock sees the text. If the empty answer
-  were reviewed, the researcher's second mock would go to a second
-  attempt and the old loop would report "it returned no answer".
-- `shortFollowUpIsAnAnswer`: the first reply is empty and the follow-up
-  is `Yes (https://x.io).`, under the 20-character floor. It is an
-  answer, not a second empty one, so the review judges it and it comes
-  back.
-- `twoEmptyAnswersAreAFailure`: two empty replies, no review mock at all,
-  so a review of nothing would fail the test for want of a mock.
-- `rejectedAnswerIsFixedNotRedone`: one answer missing a fact, a finding
-  with the fact and its source, and the fix is one call whose reply is the
-  merged answer. The mock counts are exact, so a second research pass
-  would run out of mocks, and the node checks the research thread never
-  saw the fix's brief.
-
-The eval `evals/researcher/thom-yorke-how-he-learned` measures the loop
-against a live model; its baseline notes say a review that cost more
-calls than the research and a second attempt that started over are what
-these two rules should move.
+- `answerIsReturnedAsWritten`: one mock reply, and it comes back as the
+  answer. A second model call would run out of mocks.
+- `emptyFirstAnswerIsAskedAgain`: the first reply is empty, and the
+  follow-up's text is the answer.
+- `shortFollowUpIsAnAnswer`: the follow-up is `Yes (https://x.io).`,
+  under the 20-character floor, and it is the answer.
+- `twoEmptyAnswersAreAFailure`: two blank replies are the failure naming
+  the cause.

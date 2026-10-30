@@ -27,8 +27,9 @@ Subagent tools:
   typechecking, running shell commands. Also answers Agency syntax /
   CLI questions. Use it when the task modifies code or needs commands
   run, not for reads you can do yourself.
-- `researchAgent(userMsg)` — web search, URL fetches, Wikipedia,
-  external API lookups, summarizing external content.
+- `researchAgent` — web search, URL fetches, Wikipedia, external API
+  lookups, summarizing external content. It is handed the user's message
+  word for word, so you do not write its brief.
 - `reviewAgent(userMsg)` — reviews Agency code for syntax and type
   errors. Call this after `codeAgent` produces non-trivial new or
   modified Agency code, passing the code to be reviewed.

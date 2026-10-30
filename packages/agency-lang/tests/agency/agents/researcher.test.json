@@ -1,8 +1,27 @@
 {
   "tests": [
     {
+      "nodeName": "answerIsReturnedAsWritten",
+      "description": "one model call, and its reply is the answer: nothing reviews or rewrites it",
+      "input": "",
+      "expectedOutput": "\"Water boils at 100 C at sea level (https://example.com/boiling).\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "researcher": [
+          {
+            "return": "Water boils at 100 C at sea level (https://example.com/boiling)."
+          }
+        ]
+      }
+    },
+    {
       "nodeName": "emptyFirstAnswerIsAskedAgain",
-      "description": "an empty first answer gets one tool-less follow-up, and the review sees the follow-up's answer",
+      "description": "an empty first answer gets one tool-less follow-up, and the follow-up's answer comes back",
       "input": "",
       "expectedOutput": "\"He studied fine art at Exeter (https://example.com/exeter).\"",
       "evaluationCriteria": [
@@ -19,22 +38,12 @@
           {
             "return": "He studied fine art at Exeter (https://example.com/exeter)."
           }
-        ],
-        "review": [
-          {
-            "return": [
-              {
-                "error": false,
-                "feedback": "grounded and cited"
-              }
-            ]
-          }
         ]
       }
     },
     {
       "nodeName": "twoEmptyAnswersAreAFailure",
-      "description": "two blank answers are a failure naming the cause, and the reviewer is never called",
+      "description": "two blank answers are a failure naming the cause",
       "input": "",
       "expectedOutput": "\"failed: the model returned no answer twice\"",
       "evaluationCriteria": [
@@ -51,13 +60,12 @@
           {
             "return": "   "
           }
-        ],
-        "review": []
+        ]
       }
     },
     {
       "nodeName": "shortFollowUpIsAnAnswer",
-      "description": "a short reply to the follow-up is an answer, not a second empty one: the review judges it",
+      "description": "a short reply to the follow-up is an answer, not a second empty one",
       "input": "",
       "expectedOutput": "\"Yes (https://x.io).\"",
       "evaluationCriteria": [
@@ -74,90 +82,8 @@
           {
             "return": "Yes (https://x.io)."
           }
-        ],
-        "review": [
-          {
-            "return": [
-              {
-                "error": false,
-                "feedback": "grounded and cited"
-              }
-            ]
-          }
         ]
       }
-    },
-    {
-      "nodeName": "rejectedAnswerIsFixedNotRedone",
-      "description": "a rejected answer is patched from the review's own fact and source in one call on a subthread",
-      "input": "",
-      "expectedOutput": "\"He is self-taught and studied fine art at Exeter (https://example.com/exeter).\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": {
-        "researcher": [
-          {
-            "return": "He is self-taught (https://example.com/interview)."
-          },
-          {
-            "return": "He is self-taught and studied fine art at Exeter (https://example.com/exeter)."
-          }
-        ],
-        "review": [
-          {
-            "return": [
-              {
-                "error": true,
-                "feedback": "Missing what he studied: fine art at Exeter",
-                "source": "https://example.com/exeter"
-              }
-            ]
-          },
-          {
-            "return": [
-              {
-                "error": false,
-                "feedback": "grounded and cited"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "nodeName": "retriesUntilGrounded",
-      "description": "an ungrounded answer is retried and the revised answer returned",
-      "input": "",
-      "expectedOutput": "\"Water boils at 100 C at sea level (https://example.com/boiling).\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": "Water boils at 100 C at sea level."
-        },
-        {
-          "return": [
-            {
-              "error": true,
-              "feedback": "no citation"
-            }
-          ]
-        },
-        {
-          "return": "Water boils at 100 C at sea level (https://example.com/boiling)."
-        },
-        {
-          "return": []
-        }
-      ]
     }
   ]
 }

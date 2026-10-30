@@ -68,7 +68,7 @@ and an inner `with approve` cannot get past an outer policy.
 | Tool | What it does | Where the agent really lives |
 |---|---|---|
 | `codeAgent` | Anything that touches code or the file system: reading, writing, editing, running commands, Agency questions. Triages the task; a complex task gets a plan, a brainstorm of directions, a supervised solve, and a verification round. | here (`code.agency`, with `brainstorm.agency` and `supervisor.agency`) |
-| `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. | `std::agents` |
+| `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. It gets the user's message word for word: `turnTools` binds it each turn. | `std::agents` |
 | `oracleAgent` | Deep-reasoning consult on the slow model slot. A handoff: it continues the coordinator's conversation, so repeated consults see each other. | `std::agents/oracle` |
 | `explorerAgent` | Surveys a codebase or topic on the slow model slot. A handoff, like the oracle. | `std::agents/explorer` |
 | `reviewAgent` | Reviews code from a message: Agency code through the Agency reviewer, anything else through the general one. | `std::agents/agency/review`, `std::agents/review` |

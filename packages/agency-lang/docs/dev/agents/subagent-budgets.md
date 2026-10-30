@@ -171,25 +171,15 @@ through unchanged.
 open by default: a review that could not run, including one whose budget
 ran out before the model saved any findings, returns no findings. A check
 that reads "no findings" as "accepted" would then report an unreviewed
-answer as reviewed. So the two loops that act on a review call it with
-`failOpen: false`: the writing rewrite (`docs/dev/agents/writing-rewrite-agent.md`)
-and the researcher's grounding check (`checkGrounding`,
-`stdlib/agents/researcher.agency`), which turns the failure into a
-rejection telling the model its sources were not all confirmed. `revise`
-then runs another attempt, or returns the last one when attempts run out.
+answer as reviewed. So the loop that acts on a review calls it with
+`failOpen: false`: the writing rewrite (`docs/dev/agents/writing-rewrite-agent.md`).
 
 **A review cut short is not a clean pass either.** A reviewer whose budget
 runs out after it saved some findings hands back findings for the points
 it reached, and nothing in them marks the rest as unchecked. So
 `reviewAgent` passes `keepDraft: failOpen` to its guard: with
 `failOpen: false` the trip is a failure naming the budget, with the saved
-findings in its data as `draft`. `checkGrounding` sends the answer back as
-for a review that could not run, and adds the gaps the saved findings name
-(`gapsFoundBeforeStop`), since those are what the fix needs. A draft that
-is not a `Feedback[]` adds nothing.
-
-A reviewer that always runs past its cap now rejects every attempt, and
-`revise` spends all of them before returning the last, still unreviewed.
+findings in its data as `draft`.
 
 **The coordinator's research call fails on a budget trip.** `researchAgent`
 (`lib/agents/agency-agent/brains/coordinator/subagents/research.agency`)

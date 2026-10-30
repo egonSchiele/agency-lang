@@ -59,11 +59,8 @@ to `buildGraders`, and only the no-repeat grader is written by hand:
   as one call, and one URL spelled two ways (a trailing slash, `fetch`
   then `fetchMarkdown`) counts as two; the fetch cache in ADI-45
   normalizes URLs and will catch the second, and this grader is the
-  floor under it. And it counts the grounding reviewer's calls along
-  with the researcher's, on purpose: the reviewer runs in the same run,
-  so a page the researcher fetched and the reviewer fetches again is one
-  wasted fetch, and a fix that has the reviewer verify sources should
-  hand it the pages or hit the cache, not refetch.
+  floor under it. It counts every retrieval in the run, so any agent the
+  researcher calls is counted with it.
 - `citations-resolve`: the shared grader described below. This is the
   one grader that can tell an invented interview on a real outlet's
   domain from a real one; the `sourcing` checklist reads only the text.

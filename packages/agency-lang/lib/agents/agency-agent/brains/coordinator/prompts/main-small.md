@@ -14,7 +14,8 @@ Direct tools (run in your own context):
 
 - `codeAgent(userMsg)` — changes things: write, edit, run, typecheck.
   Also Agency syntax and CLI questions.
-- `researchAgent(userMsg)` — web search, URL fetches, external facts.
+- `researchAgent` — web search, URL fetches, external facts. It gets
+  the user's message word for word; you do not write its brief.
 - `reviewAgent(userMsg)` — check non-trivial new Agency code for
   syntax and type errors; pass the code to review.
 - `oracleAgent(userMsg)` — second opinion before acting on something

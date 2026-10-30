@@ -156,6 +156,16 @@
       ]
     },
     {
+      "nodeName": "coordinatorResearchToolTakesNoBrief",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "composedOracleToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",

@@ -468,11 +468,47 @@ async function walkDir(
   await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(walkRoot, dir) : []);
 }
 
+/** What `ls`, `grep`, and `glob` were pointed at. `grep` may be pointed at
+ *  one file, which it then searches alone; `ls` and `glob` need a
+ *  directory. The wrappers call this before their interrupt, so a bad
+ *  path fails before anyone is asked to approve a search of it, and the
+ *  message tells the model what to do instead. */
+export type SearchTarget = { dir: string; file: string | null };
+
+export async function _searchTarget(
+  given: string,
+  tool: "ls" | "grep" | "glob",
+): Promise<SearchTarget> {
+  const host = currentHost();
+  const real = await host.files.realDir(given);
+  const info = await host.files.stat(await host.files.root(real), ".");
+  if (info === null) {
+    throw new Error(
+      `No file or directory at "${real}". Check the spelling, or call ls on its parent directory to see what is there.`,
+    );
+  }
+  if (info.kind === "dir") {
+    return { dir: real, file: null };
+  }
+  if (info.kind !== "file") {
+    throw new Error(`"${real}" is not a file or a directory.`);
+  }
+  if (tool === "grep") {
+    return { dir: path.dirname(real), file: path.basename(real) };
+  }
+  const instead =
+    tool === "ls"
+      ? "Call read to see its contents."
+      : "Pass its parent directory and a pattern that matches its name.";
+  throw new Error(`"${real}" is a file, not a directory. ${instead}`);
+}
+
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */
 export type GrepResults = GrepMatch[] | string[];
 
-/** Search `dir` under `rootDir`. Returned `file` paths are relative to
- *  `dir` so callers can hand them to `read(file, dir)` directly. */
+/** Search `dir` under `rootDir`, or just `file` under it when one is
+ *  given. Returned `file` paths are relative to `dir` so callers can hand
+ *  them to `read(file, dir)` directly. */
 export async function _grep(
   rootDir: string,
   dir: string,
@@ -480,12 +516,24 @@ export async function _grep(
   maxResults: number,
   allowedPaths?: string[],
   respectGitignore: boolean = true,
+  file: string | null = null,
 ): Promise<GrepResults> {
   const host = currentHost();
-  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
 
+  if (file !== null) {
+    // A file named outright is searched whatever .gitignore says, the way
+    // grep searches a file named on its command line.
+    const approved = await approvedRoot(host, rootDir, file, allowedPaths);
+    const text = await host.files.readText(approved, file);
+    for (const hit of firstMatchingLines(text, plan, plan.filesOnly ? 1 : maxResults)) {
+      matches.push({ file, ...hit });
+    }
+    return plan.filesOnly ? matches.map((match) => match.file) : matches;
+  }
+
+  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
   await walkDir(
     host,
     approved,

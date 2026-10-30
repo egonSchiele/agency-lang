@@ -1,0 +1,72 @@
+{
+  "tests": [
+    {
+      "nodeName": "grepOneFile",
+      "input": "",
+      "expectedOutput": "[\"one.txt:1\",\"one.txt:3\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "a file as the path searches that one file"
+    },
+    {
+      "nodeName": "grepFileInterruptNamesDirAndFile",
+      "input": "",
+      "expectedOutput": "\"std::grep|true|one.txt\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "the interrupt carries the parent directory as dir and the file beside it"
+    },
+    {
+      "nodeName": "grepDirectoryInterruptHasNoFile",
+      "input": "",
+      "expectedOutput": "\"true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "a directory search carries file: null"
+    },
+    {
+      "nodeName": "grepMissingPath",
+      "input": "",
+      "expectedOutput": "\"No file or directory at \\\"<here>/grep-fixtures/nope.txt\\\". Check the spelling, or call ls on its parent directory to see what is there.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "a missing path fails with a message naming it"
+    },
+    {
+      "nodeName": "lsFile",
+      "input": "",
+      "expectedOutput": "\"\\\"<here>/grep-fixtures/one.txt\\\" is a file, not a directory. Call read to see its contents.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "ls on a file says to use read"
+    },
+    {
+      "nodeName": "lsMissingPath",
+      "input": "",
+      "expectedOutput": "\"No file or directory at \\\"<here>/grep-fixtures/nope\\\". Check the spelling, or call ls on its parent directory to see what is there.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "ls on a missing path names it"
+    },
+    {
+      "nodeName": "globFile",
+      "input": "",
+      "expectedOutput": "\"\\\"<here>/grep-fixtures/one.txt\\\" is a file, not a directory. Pass its parent directory and a pattern that matches its name.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "glob on a file says to pass the parent"
+    },
+    {
+      "nodeName": "globMissingPath",
+      "input": "",
+      "expectedOutput": "\"No file or directory at \\\"<here>/grep-fixtures/nope\\\". Check the spelling, or call ls on its parent directory to see what is there.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "glob on a missing path names it"
+    },
+    {
+      "nodeName": "modelMaySayDir",
+      "input": "",
+      "expectedOutput": "\"done|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "grep", "args": { "pattern": "hello", "dir": "grep-fixtures/one.txt", "ignoreCase": true } }] },
+        { "return": "done" }
+      ],
+      "description": "a model that passes dir instead of path is forgiven"
+    }
+  ]
+}

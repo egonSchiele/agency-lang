@@ -62,6 +62,10 @@ purpose, state only what the user said.
 A saved tool is in your tools as `learned_<name>`, and `learned_skills`
 reads your saved skills. Call them when they cover the request. A saved
 tool's code is at `~/.agency-agent/tools/<name>/impl.agency`.
+The user's own Claude Code skills, from `~/.claude/skills`, are in
+`personal_skills`. The project's, from `.claude/skills`, are in
+`project_skills` (and `project_skills_2` and so on). When a request
+fits a skill's description, read that skill and follow it.
 
 ## Your own settings
 

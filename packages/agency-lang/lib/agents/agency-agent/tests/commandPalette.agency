@@ -1,0 +1,31 @@
+/*
+ * The `/` palette and `/name` expansion over a merged command list: a skill
+ * command comes before a `.claude/commands` file of the same name, and the
+ * built-in commands come before both. Fixed lists, no files.
+ */
+import { SkillCommand, expandSlash } from "std::skills"
+
+import { builtinPalette, paletteFrom } from "../lib/commandPalette.agency"
+
+def command(name: string, description: string): SkillCommand {
+  return {
+    name: name,
+    description: description,
+    argHint: "",
+    body: "${description} body"
+  }
+}
+
+node skillHidesCommandFile(): boolean {
+  const palette = paletteFrom([command("deploy", "skill"), command("deploy", "file")])
+  return palette["/deploy"] == "skill"
+}
+
+node builtinHidesSkill(): boolean {
+  const palette = paletteFrom([command("clear", "skill")])
+  return palette["/clear"] == builtinPalette()["/clear"]
+}
+
+node expandUsesFirstMatch(): boolean {
+  return expandSlash("/deploy", [command("deploy", "skill"), command("deploy", "file")]) == "skill body"
+}

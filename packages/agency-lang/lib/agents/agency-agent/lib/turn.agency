@@ -14,7 +14,7 @@ import { pushMessage } from "std::ui/cli"
 import { AgentBrain, BrainContext } from "../brains/brain.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
 import { guardStopHandler } from "./budget.agency"
-import { projectCommands } from "./commandPalette.agency"
+import { slashCommands } from "./commandPalette.agency"
 import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
 import { Settings } from "./settings.agency"
@@ -159,7 +159,7 @@ def dispatchToBrain(target: string, userMsg: string): string {
     throw(NO_BRAIN)
     return ""
   }
-  const expanded = expandSlash(userMsg, projectCommands)
+  const expanded = expandSlash(userMsg, slashCommands())
   if (target != "") {
     return brain.runTurn(target, expanded)
   }

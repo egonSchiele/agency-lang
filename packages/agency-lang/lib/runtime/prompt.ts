@@ -25,6 +25,7 @@ import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
 import { mergeFields, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
+import { roundWarningSettings, type WarnAtRoundsLeft } from "./roundWarning.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
 import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindFor } from "./llmDispatch.js";
 import {
@@ -605,6 +606,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     spillToolResultsOver: callSpillOver,
     maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
     maxToolCallRounds: ccMaxToolCallRounds,
+    warnAtRoundsLeft: ccWarnAtRoundsLeft,
     retries: ccRetries,
     timeout: ccTimeout,
     backoff: ccBackoff,
@@ -622,6 +624,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       spillToolResultsOver?: number;
       maxRepeatedToolCalls?: number;
       maxToolCallRounds?: number;
+      warnAtRoundsLeft?: WarnAtRoundsLeft;
       label?: string;
     };
 
@@ -659,6 +662,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     maxToolResultChars: stackMaxToolResultChars,
     maxToolCallRounds: stackMaxToolCallRounds,
     maxRepeatedToolCalls: stackMaxRepeatedToolCalls,
+    warnAtRoundsLeft: stackWarnAtRoundsLeft,
     ...stackSmolDefaults
   } = stackDefaults;
   const maxRepeatedToolCalls =
@@ -666,6 +670,9 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // maxToolCallRounds is kept out of stackSmolDefaults above: not a
   // smoltalk field. See roundCap for how the three sources combine.
   const roundLimit = roundCap(ccMaxToolCallRounds, stackMaxToolCallRounds, maxToolCallRounds);
+  // Kept out of stackSmolDefaults for the same reason. Field by field,
+  // like the reply limits.
+  const roundWarning = roundWarningSettings(ccWarnAtRoundsLeft, stackWarnAtRoundsLeft);
   // A local model gets the choices a hosted provider makes on its own
   // (the temperature, and how the thinking option reaches the server).
   // The reply limits combine field by field across the branch default and
@@ -793,15 +800,20 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const guardGate = () => raiseGuardTripsUntilClear(run, stateStack);
 
   // Message delivery at turn boundaries (attachments, guard feedback,
-  // queueMessage entries) lives in turnBoundary.ts. Built fresh at each
-  // boundary call: `messages` is reassigned every round, so a captured
-  // reference would go stale after round 1.
-  const boundaryCtx = (): BoundaryContext => ({
+  // queueMessage entries, the round warning) lives in turnBoundary.ts.
+  // Built fresh at each boundary call: `messages` is reassigned every
+  // round, so a captured reference would go stale after round 1. Only a
+  // round boundary passes its round, which is where a warning can be due.
+  const boundaryCtx = (round: number | null = null): BoundaryContext => ({
     step: (key, body) => pr.step(key, body),
     guardGate,
     messages,
     runnerState: self.runnerState,
     stateStack,
+    roundWarning:
+      round === null
+        ? null
+        : { settings: roundWarning, limit: roundLimit, round, callKey: self.llmCallKey },
     snapshot: (thread) => {
       self.messagesJSON = thread.toJSON();
     },
@@ -1840,7 +1852,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         // discipline (idempotent steps, buffer-clear inside the step,
         // messagesJSON refresh) is owned by turnBoundary.ts — see its
         // module header for the resume-safety argument.
-        await runRoundBoundary(round, boundaryCtx());
+        await runRoundBoundary(round, boundaryCtx(round));
         // Next LLM call wrapped in pr.step for resume idempotency. Once
         // marked done, resume re-entries skip the LLM call. The llmCall
         // span stays open across rounds (one span per llm() call), so we

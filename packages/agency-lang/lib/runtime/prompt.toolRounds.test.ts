@@ -14,6 +14,8 @@ import { _endTurn } from "../stdlib/thread.js";
 import * as smoltalk from "smoltalk";
 import { AgencyCancelledError } from "./errors.js";
 import { interrupt } from "./interrupts.js";
+import { DEFAULT_ROUND_WARNING, type WarnAtRoundsLeft } from "./roundWarning.js";
+import { labelOf } from "./state/messageMetadata.js";
 
 /** The round cap, `maxToolCallRounds`: where its value comes from, and
  *  what happens at the cap. See "The round cap" in
@@ -120,7 +122,7 @@ function call(
   run: Run,
   s: Setup,
   thread: MessageThread,
-  opts: { perCall?: number; baked: number },
+  opts: { perCall?: number; baked: number; warnAtRoundsLeft?: WarnAtRoundsLeft },
 ): Promise<any> {
   return runPrompt(run, {
     prompt: "call ping",
@@ -132,6 +134,7 @@ function call(
       hostedTools: ["web_search"],
       maxToolCallRounds: opts.perCall,
       maxRepeatedToolCalls: 0,
+      warnAtRoundsLeft: opts.warnAtRoundsLeft,
     } as any,
     maxToolCallRounds: opts.baked,
   });
@@ -297,5 +300,74 @@ describe("llmCall expiry", () => {
     const paused = await result;
     expect(Array.isArray(paused)).toBe(true);
     expect(contents(thread.getMessages())).toContain(HINT);
+  });
+});
+
+describe("the round warning", () => {
+  const FINAL = DEFAULT_ROUND_WARNING.finalWarningText;
+
+  /** For each request, the round warnings it carried. */
+  const warningsPerRequest = (s: Setup) =>
+    s.client.requests.map((messages) =>
+      messages.filter((m) => labelOf(m) === "roundWarning").map((m) => m.content),
+    );
+
+  /** One call with a cap of `cap` that pings until the cap, then answers. */
+  async function run(cap: number, warnAtRoundsLeft?: WarnAtRoundsLeft) {
+    const s = setup(pingMocks(cap));
+    const thread = new MessageThread();
+    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (r) =>
+      call(r, s, thread, { baked: cap, warnAtRoundsLeft }),
+    );
+    return { s, thread };
+  }
+
+  it("warns at 3 left and on the last round, once each, and the thread holds neither afterwards", async () => {
+    const { s, thread } = await run(5);
+    const warnings = warningsPerRequest(s);
+    expect(warnings[2]).toEqual([
+      "Of the 5 tool rounds for this request, 3 remain. Finish what you can with them and then write your answer.",
+    ]);
+    // The first warning stays in the thread for the rest of the call, so
+    // later requests carry it too; only one new warning is added each time.
+    expect(warnings.map((w) => w.length)).toEqual([0, 0, 1, 1, 2, 2]);
+    expect(warnings[4][1]).toBe(FINAL);
+    expect(thread.getMessages().filter((m) => labelOf(m) === "roundWarning")).toEqual([]);
+  });
+
+  it("remaining: 0 sends only the final warning", async () => {
+    const { s } = await run(5, { remaining: 0 });
+    expect(warningsPerRequest(s).at(-1)).toEqual([FINAL]);
+  });
+
+  it("finalWarning: false sends only the first", async () => {
+    const { s } = await run(5, { finalWarning: false });
+    const last = warningsPerRequest(s).at(-1)!;
+    expect(last).toHaveLength(1);
+    expect(last[0]).toContain("3 remain");
+  });
+
+  it("a cap of 2 sends only the final warning, after round 0", async () => {
+    const { s } = await run(2);
+    expect(warningsPerRequest(s)).toEqual([[], [FINAL], [FINAL]]);
+  });
+
+  it("a custom text without placeholders is sent as given", async () => {
+    const { s } = await run(5, { text: "Wrap up soon." });
+    expect(warningsPerRequest(s)[2]).toEqual(["Wrap up soon."]);
+  });
+
+  it("the call's warnAtRoundsLeft merges field by field over the branch default", async () => {
+    const s = setup(pingMocks(5));
+    const thread = new MessageThread();
+    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, async (r) => {
+      _setLlmOptions({ warnAtRoundsLeft: { remaining: 2 } });
+      await call(r, s, thread, { baked: 5, warnAtRoundsLeft: { text: "custom {remaining}" } });
+    });
+    const warnings = warningsPerRequest(s);
+    // The branch's threshold of 2 holds: nothing after round 1.
+    expect(warnings[2]).toEqual([]);
+    expect(warnings[3]).toEqual(["custom 2"]);
+    expect(warnings[4]).toEqual(["custom 2", FINAL]);
   });
 });

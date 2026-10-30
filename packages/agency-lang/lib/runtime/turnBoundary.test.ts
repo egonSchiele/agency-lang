@@ -4,6 +4,7 @@ import { StateStack } from "./state/stateStack.js";
 import { MessageThread } from "./state/messageThread.js";
 import type { HarvestedReplyAttachment } from "./replyAttachments.js";
 import { PromptBailout } from "./promptRunner.js";
+import { DEFAULT_ROUND_WARNING } from "./roundWarning.js";
 import {
   drainProducer,
   runGateAndFeedback,
@@ -13,6 +14,7 @@ import {
   attachmentsProducer,
   guardFeedbackProducer,
   queuedMessagesProducer,
+  roundWarningProducer,
   type BoundaryContext,
   type TurnMessageProducer,
 } from "./turnBoundary.js";
@@ -30,6 +32,7 @@ function makeBctx(overrides: Partial<BoundaryContext> = {}) {
     messages,
     runnerState: {},
     stateStack: new StateStack(),
+    roundWarning: null,
     snapshot: (thread) => {
       snapshots.push(thread.getMessages().length);
     },
@@ -146,10 +149,52 @@ describe("producers", () => {
   });
 });
 
+describe("roundWarningProducer", () => {
+  const atRound = (round: number) => ({
+    settings: DEFAULT_ROUND_WARNING,
+    limit: 5,
+    round,
+    callKey: "k",
+  });
+
+  it("sends the first warning once, labeled and expiring with the call", () => {
+    const { bctx } = makeBctx({ roundWarning: atRound(1) });
+    const [warning, ...rest] = roundWarningProducer.take(bctx);
+    expect(rest).toEqual([]);
+    expect(warning.message.role).toBe("user");
+    expect(warning.message.content).toContain("5 tool rounds");
+    expect(warning.message.content).toContain("3 remain");
+    expect(warning.label).toBe("roundWarning");
+    expect(warning.expires).toEqual({ at: "llmCall", key: "k" });
+    expect(bctx.runnerState.roundWarnings).toEqual({ first: true, final: false });
+    expect(roundWarningProducer.take(bctx)).toEqual([]);
+  });
+
+  it("sends the final warning at one round left", () => {
+    const { bctx } = makeBctx({ roundWarning: atRound(3) });
+    const [warning] = roundWarningProducer.take(bctx);
+    expect(warning.message.content).toBe(DEFAULT_ROUND_WARNING.finalWarningText);
+    expect(bctx.runnerState.roundWarnings).toEqual({ first: false, final: true });
+  });
+
+  it("sends nothing where no round is given", () => {
+    const { bctx } = makeBctx();
+    expect(roundWarningProducer.take(bctx)).toEqual([]);
+  });
+
+  it("pushes the warning with its expiry", async () => {
+    const { bctx, messages } = makeBctx({ roundWarning: atRound(1) });
+    await runRoundBoundary(1, bctx);
+    expect(messages.expiryAt(0)).toEqual({ at: "llmCall", key: "k" });
+    expect(messages.labelAt(0)).toBe("roundWarning");
+  });
+});
+
 describe("canonical step sequences", () => {
   const roundCanonical = [
     "round.3.attachReplies",
     "round.3.queuedMessages",
+    "round.3.roundWarning",
     "round.3.guardGate",
     "round.3.guardFeedback",
   ];

@@ -4,6 +4,8 @@ import { PromptBailout } from "./promptRunner.js";
 import type { MessageThread } from "./state/messageThread.js";
 import type { StateStack } from "./state/stateStack.js";
 import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAttachments.js";
+import { roundWarningDue, type RoundWarningSettings } from "./roundWarning.js";
+import type { Expiry } from "./state/messageMetadata.js";
 
 /**
  * INTERNAL — consumed by prompt.ts only. The public way to inject a message
@@ -14,7 +16,7 @@ import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAtt
  * every source get pushed with the step-and-snapshot discipline handled
  * once, here, instead of hand-woven per source in prompt.ts.
  *
- * Three sources ("producers") exist, each keeping its own storage and merge
+ * Four sources ("producers") exist, each keeping its own storage and merge
  * rule because those genuinely differ:
  *   - reply attachments: harvested per tool onto runnerState, merged
  *     N-into-1 user message;
@@ -22,7 +24,10 @@ import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAtt
  *     branch-locally on the stack (an approval in a fork branch must follow
  *     THAT branch's next request), joined into one labeled user message;
  *   - queued messages: `queueMessage` entries on the active thread,
- *     delivered FIFO, roles and labels preserved, never collapsed.
+ *     delivered FIFO, roles and labels preserved, never collapsed;
+ *   - the round warning: one user message when few tool rounds are left,
+ *     recorded on runnerState so each warning goes out once, and expiring
+ *     with the llm() call.
  * Adding a producer is a runtime-maintainer decision; features inject by
  * calling queueMessage, not by registering here.
  */
@@ -30,6 +35,19 @@ import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAtt
 export type TurnMessage = {
   message: smoltalk.Message;
   label: string | null;
+  /** When the message is removed; absent for one that stays. */
+  expires?: Expiry | null;
+};
+
+/** What the round-warning producer needs at a round boundary. */
+export type RoundWarningContext = {
+  settings: RoundWarningSettings;
+  /** The call's tool-round cap. */
+  limit: number;
+  /** The round just run, counted from 0. */
+  round: number;
+  /** The llm() call's key; the warning expires with the call. */
+  callKey: string;
 };
 
 export type BoundaryContext = {
@@ -48,6 +66,8 @@ export type BoundaryContext = {
   runnerState: Record<string, unknown>;
   /** The branch's stack; home of the guard-feedback queue. */
   stateStack: StateStack;
+  /** Set only at a round boundary; null wherever no warning can be due. */
+  roundWarning: RoundWarningContext | null;
   /** Serializes the given thread into the frame shadow
    *  (self.messagesJSON). Takes the thread as a parameter so the sync
    *  target is explicit rather than a closure over a mutable local. */
@@ -112,6 +132,28 @@ export const queuedMessagesProducer: TurnMessageProducer = {
     })),
 };
 
+export const roundWarningProducer: TurnMessageProducer = {
+  name: "roundWarning",
+  take: (bctx) => {
+    const context = bctx.roundWarning;
+    if (context === null) return [];
+    const fired = (bctx.runnerState.roundWarnings ??= { first: false, final: false }) as {
+      first: boolean;
+      final: boolean;
+    };
+    const due = roundWarningDue(context.settings, context.round, context.limit, fired);
+    if (due === null) return [];
+    fired[due.kind] = true;
+    return [
+      {
+        message: smoltalk.userMessage(due.text),
+        label: "roundWarning",
+        expires: { at: "llmCall", key: context.callKey },
+      },
+    ];
+  },
+};
+
 /** Deliver one producer's pending messages inside an idempotent step. The
  *  step always opens (uniform emission; cross-version checkpoint
  *  compatibility is not promised); an empty take means the step no-ops —
@@ -125,7 +167,7 @@ export async function drainProducer(
     const msgs = p.take(bctx);
     if (msgs.length === 0) return;
     for (const m of msgs) {
-      bctx.messages.push(m.message, m.label);
+      bctx.messages.push(m.message, m.label, m.expires ?? null);
     }
     bctx.snapshot(bctx.messages);
   });
@@ -171,11 +213,12 @@ export async function runHandoffGate(
 }
 
 /** The full round boundary, in the one canonical order: tool artifacts
- *  first, then queued messages, then the guard machinery gets the last
- *  word before the next request. */
+ *  first, then queued messages, then the round warning, then the guard
+ *  machinery gets the last word before the next request. */
 export async function runRoundBoundary(round: number, bctx: BoundaryContext): Promise<void> {
   await drainProducer(attachmentsProducer, `round.${round}.attachReplies`, bctx);
   await drainProducer(queuedMessagesProducer, `round.${round}.queuedMessages`, bctx);
+  await drainProducer(roundWarningProducer, `round.${round}.roundWarning`, bctx);
   await runGateAndFeedback(`round.${round}.guardGate`, `round.${round}.guardFeedback`, bctx);
 }
 

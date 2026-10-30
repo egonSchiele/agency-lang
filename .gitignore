@@ -91,5 +91,5 @@ packages/whisper-local/build/*
 !**/tests/debugger/waiter.js
 !**/tests/debugger/waiter.d.ts
 # Git worktrees made inside the checkout (see CLAUDE.md). Ignoring them also
-# keeps the agent's grep and glob out of each worktree's copy of the repo.
+# keeps the agent's grep out of each worktree's copy of the repo.
 worktree-*/

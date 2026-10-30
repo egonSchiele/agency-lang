@@ -170,9 +170,6 @@ node subagentsOfferQuestion(): string {
   return "ok"
 }
 
-// The coordinator holds the conversation, so it asks directly rather than
-// through a subagent. Its list is built per turn, so the check has to build
-// one too.
 // Without write, the coordinator passes a whole new file to codeAgent,
 // which writes it out a second time.
 node coordinatorOffersFileWrites(): string {
@@ -185,6 +182,9 @@ node coordinatorOffersFileWrites(): string {
   return "ok"
 }
 
+// The coordinator holds the conversation, so it asks directly rather than
+// through a subagent. Its list is built per turn, so the check has to build
+// one too.
 node coordinatorTurnOffersQuestion(): string {
   // turnTools() scans the agent home for learned tools. Point it at the
   // fixture, as the learned-tools node above does, so this never reads the

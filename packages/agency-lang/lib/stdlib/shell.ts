@@ -496,12 +496,14 @@ export async function _searchTarget(
   if (tool === "grep") {
     return { dir: path.dirname(real), file: path.basename(real) };
   }
-  const instead =
-    tool === "ls"
-      ? "Call read to see its contents."
-      : "Pass its parent directory and a pattern that matches its name.";
-  throw new Error(`"${real}" is a file, not a directory. ${instead}`);
+  throw new Error(`"${real}" is a file, not a directory. ${FILE_INSTEAD[tool]}`);
 }
+
+/** What a tool that needs a directory tells the model to do with a file. */
+const FILE_INSTEAD = {
+  ls: "Call read to see its contents.",
+  glob: "Pass its parent directory and a pattern that matches its name.",
+};
 
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */
 export type GrepResults = GrepMatch[] | string[];
@@ -519,42 +521,40 @@ export async function _grep(
   file: string | null = null,
 ): Promise<GrepResults> {
   const host = currentHost();
+  const approved = await approvedRoot(host, rootDir, file ?? dir, allowedPaths);
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
+
+  /** Score one file's lines, reported under `name`. */
+  async function searchFile(rel: string, name: string): Promise<void> {
+    const text = await host.files.readText(approved, rel);
+    const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
+    for (const hit of firstMatchingLines(text, plan, perFile)) {
+      matches.push({ file: name, ...hit });
+    }
+  }
 
   if (file !== null) {
     // A file named outright is searched whatever .gitignore says, the way
     // grep searches a file named on its command line.
-    const approved = await approvedRoot(host, rootDir, file, allowedPaths);
-    const text = await host.files.readText(approved, file);
-    for (const hit of firstMatchingLines(text, plan, plan.filesOnly ? 1 : maxResults)) {
-      matches.push({ file, ...hit });
-    }
-    return plan.filesOnly ? matches.map((match) => match.file) : matches;
+    await searchFile(file, file);
+  } else {
+    await walkDir(
+      host,
+      approved,
+      dir,
+      async (rel, entry) => {
+        if (entry.type !== "file") return true;
+        try {
+          await searchFile(rel, relativeTo(dir, rel));
+        } catch {
+          // An unreadable file during a walk is skipped, as in `_ls`.
+        }
+        return matches.length < maxResults;
+      },
+      { respectGitignore },
+    );
   }
-
-  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
-  await walkDir(
-    host,
-    approved,
-    dir,
-    async (rel, entry) => {
-      if (entry.type !== "file") return true;
-      let text: string;
-      try {
-        text = await host.files.readText(approved, rel);
-      } catch {
-        return true;
-      }
-      const file = relativeTo(dir, rel);
-      const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
-      for (const hit of firstMatchingLines(text, plan, perFile)) {
-        matches.push({ file, ...hit });
-      }
-      return matches.length < maxResults;
-    },
-    { respectGitignore },
-  );
 
   return plan.filesOnly ? matches.map((match) => match.file) : matches;
 }

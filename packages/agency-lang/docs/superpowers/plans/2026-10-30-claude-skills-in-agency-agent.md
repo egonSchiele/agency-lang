@@ -46,7 +46,7 @@ From Claude Code's skills documentation, fetched 2026-10-30:
 2. **Precedence:** personal first, then project folders nearest first. The winner is decided by name, before either switch applies. If the winning skill is manual-only, the model sees nothing by that name, and a lower folder's same-named skill does not take its place. The same goes the other way for a model-only winner and commands. A skill command hides a `.claude/commands` file of the same name. Built-in commands still hide everything.
 3. **Slash commands:** every skill without `user-invocable: false` becomes a `/name` command. Its body is the `SKILL.md` text without frontmatter, preceded by `Base directory for this skill: <folder>` and a blank line. `$ARGUMENTS` works as it does for `.claude/commands` files, through `expandSlash`.
 4. **Model use:** every skill without `disable-model-invocation: true` is listed in a skills tool. The rule lives in `std::skills`, so `skillsDir` follows it too.
-5. **Approval of the scans:** each folder's scan is approved with `with approve`, the same way `projectCommands` already scans `.claude/commands`. The scans run in a `static const` at startup, before `runSession` installs the agent policy (`docs/dev/agents/agent-brains.md:123-136`). Nothing in the user's agent policy can stop them. This is the owner's decision; the dev doc says it plainly.
+5. **Approval of the scans:** each folder's scan is approved with `with approve`, the same way `projectCommands` already scans `.claude/commands`. The scans run in a `static const`, during global initialization. Since #987 the root run policy is installed before that (`installRunPolicyHandler` in `initFreshExecCtx`, `lib/runtime/node.ts:135-160`), so `agency run --policy ... agent.agency` or `--reject std::skills::skillsDir` can still reject a scan, and the rules of handlers make that rejection win over the inner `with approve`. `agency agent` itself passes no root policy: the launcher hands the child only its budget (`withRootCarriers(process.env, { budget })`, `lib/cli/runBundledAgent.ts:266`), and the user's agent policy is a handler that `runSession` installs around each turn (`lib/turn.agency:127`), after the statics have run. So nothing in `~/.agency-agent/policy.json` or the agent's `--policy` flag can stop these scans. This is the owner's decision; the dev doc says it plainly.
 6. **Approval of the reads:** the recommended policy approves reads under `<home>/.claude/skills` and `./.claude/skills`, the same way it approves the agent home's `skills` folder. That needs a new `<home>` placeholder. Project folders in parent directories are not covered, so reading one of those skills prompts in an interactive session and is rejected in a one-shot run. A user's saved `policy.json` gets the new rule through `/policy`; saved policies are not migrated.
 7. **Who gets the tools:** the coordinator only, beside `learned_skills`. Subagents are unchanged.
 
@@ -56,7 +56,9 @@ From Claude Code's skills documentation, fetched 2026-10-30:
 - Types with `type`, never `interface`. Objects, not `Map`. Arrays, not `Set`. No dynamic imports.
 - No symlink support. Do not add code to follow a symlinked skill folder.
 - Tool names: sanitized and at most 64 characters (`MAX_TOOL_NAME_LEN`).
-- Frontmatter switches: `disable-model-invocation` and `user-invocable` count when the value is the boolean or the string, `true`/`"true"` and `false`/`"false"`. Any other value means the default (model may use it; user may run it).
+- Frontmatter switches: `disable-model-invocation` and `user-invocable` are read the way Claude Code reads its boolean fields: `true`/`false`, `yes`/`no`, `on`/`off`, and `1`/`0`, as YAML booleans or strings, in any letter case. Any other value means the default (model may use it; user may run it).
+- `static const` values are deeply immutable and shared by every run in the process (`docs/site/guide/global-vs-static.md`). Nothing that reads `SKILL_SOURCES` may change it: build new arrays, never sort or push in place.
+- A function that calls a TypeScript helper which touches the file system directly carries `@capabilities(fileRead)` (`docs/site/guide/capabilities.md`). A function that reaches files only through tagged stdlib functions needs no tag.
 - After any change under `stdlib/` or `lib/agents/`, build with `make` before running Agency tests. After a TypeScript-only change, `pnpm run build` is enough.
 - Run every agent test with `HOME=<scratch>/home`, an empty scratch folder. `AGENCY_AGENT_HOME` is redirected by the agent test harness (`lib/config.agency:6-12`), but `HOME` is not, so without this the tests read the developer's own `~/.claude/skills`.
 - Do not hand-edit `docs/site/`. `make` regenerates the stdlib pages from docstrings.
@@ -86,6 +88,7 @@ Each of these has a test or a measurement in the task that owns the code.
   - `model-only`: `description: Model only.`, `user-invocable: false`, body `Model body.`
   - `neither`: both switches set (`true` and `false`), body `Hidden.`
   - `quoted`: `disable-model-invocation: "true"`, body `Quoted.`
+  - `word`: `description: Word flag.`, `user-invocable: No`, body `Word body.`
   - `renamed`: `name: other-name`, `description: Renamed.`, body `Renamed body.`
   - `bare`: no frontmatter, body `Bare body.`
 
@@ -114,9 +117,9 @@ Each of these has a test or a measurement in the task that owns the code.
 - From `lib/stdlib/gitignore.ts`: `export async function _repositoryAncestors(dir: string): Promise<string[] | null>`.
 
 - [ ] **Step 1: Write the fixture and the failing tests.** Each node returns a boolean, and each test.json entry expects `"true"` with `exact`. Load the scan with `scanClaudeSkills(__dirname + "/skills-claude-fixture") with approve`, then unwrap it.
-  - `namesAreEverySkill`: the sorted `names` equal `["bare", "manual-only", "model-only", "neither", "normal", "other-name", "quoted"]`.
-  - `entriesAreModelUsableSkills`: the sorted entry names equal `["bare", "model-only", "normal", "other-name"]`. `manual-only` and `neither` are absent. `quoted` is absent, because the string `"true"` counts.
-  - `commandsAreUserRunnableSkills`: the sorted command names equal `["bare", "manual-only", "normal", "other-name", "quoted"]`. Together with the line above, `neither` appears in neither list (Review Focus 3's single-folder half).
+  - `namesAreEverySkill`: the sorted `names` equal `["bare", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "word"]`.
+  - `entriesAreModelUsableSkills`: the sorted entry names equal `["bare", "model-only", "normal", "other-name", "word"]`. `manual-only` and `neither` are absent. `quoted` is absent, because the string `"true"` counts.
+  - `commandsAreUserRunnableSkills`: the sorted command names equal `["bare", "manual-only", "normal", "other-name", "quoted"]`. `word` is absent, because `No` counts as false in any letter case. Together with the line above, `neither` appears in neither list (Review Focus 3's single-folder half).
   - `commandBodyNamesItsFolder`: the `normal` command's body equals `"Base directory for this skill: " + scan.dir + "/normal\n\nRun on $ARGUMENTS."`.
   - `commandCarriesArgumentHint`: the `normal` command's `argHint` is `"<file>"` and its `description` is `"A normal skill."`. The `bare` command's `description` and `argHint` are both `""`.
   - `commandExpandsWithArguments`: `expandSlash("/normal notes.md", scan.commands)` ends with `"Run on notes.md."`.
@@ -128,13 +131,13 @@ Each of these has a test or a measurement in the task that owns the code.
   Expected: failure, because `scanClaudeSkills` is not defined.
 
 - [ ] **Step 3: Implement.** In `stdlib/skills.agency`:
-  - A private `frontmatterFlag(data: any, key: string, fallback: boolean): boolean`. It returns `true` for `true` or `"true"`, `false` for `false` or `"false"`, and `fallback` otherwise.
+  - A private `frontmatterFlagToBool(data: any, key: string, fallback: boolean): boolean`. It returns `true` for `true`, `yes`, `on`, or `1`, and `false` for `false`, `no`, `off`, or `0`, whether the value is a YAML boolean, a number, or a string in any letter case. Anything else returns `fallback`.
   - The two rules, each as one named private predicate over the parsed frontmatter. Every caller asks these; nothing else reads the two keys.
-    - `modelInvocable(data: any): boolean` is `!frontmatterFlag(data, "disable-model-invocation", false)`.
-    - `userInvocable(data: any): boolean` is `frontmatterFlag(data, "user-invocable", true)`.
+    - `modelInvocable(data: any): boolean` is `!frontmatterFlagToBool(data, "disable-model-invocation", false)`.
+    - `userInvocable(data: any): boolean` is `frontmatterFlagToBool(data, "user-invocable", true)`.
   - `scanEntries` drops a standard-layout entry when `modelInvocable(data)` is false. That makes `skillsDir` follow the rule too.
   - A private `commandRecord(name: string, data: any, body: string): SkillCommand`. It holds the defaults `commandsDir` applies today: `description` and `argHint` (from `argument-hint`) become `""` when missing. Move `commandsDir`'s record building onto it, change `commandsDir`'s return type to `SkillCommand[]`, and change `expandSlash`'s `commands` parameter to `SkillCommand[]`.
-  - `scanClaudeSkills`:
+  - `scanClaudeSkills`, tagged `@capabilities(fileRead)` like `skillsDir`, because it calls `_glob` and `_read` directly:
     1. Resolve `dir` with `_realDir`, returning the failure.
     2. Raise `std::skills::skillsDir` with `{ dir: real, layout: "standard" }` and the same message `skillsDir` uses, so an existing always-rule for a folder covers it.
     3. `_glob` `*/SKILL.md` once, up to `MAX_SKILL_FILES`, and `_read` each file once. Parse its frontmatter with the same tolerance `scanEntries` has (`catch {}`).
@@ -184,8 +187,8 @@ Each of these has a test or a measurement in the task that owns the code.
 The functions, in order:
 
 - `projectFolders(start, ancestors)`: pure. It returns the folders whose `.claude/skills` count, nearest first: `start`, then `ancestors` reversed. With `ancestors == null` (no repository), it returns `[start]`. This is the one place the "no repository, only the start folder" rule lives.
-- `claudeSkillDirs(start, home)`: the candidate folders, labeled, in precedence order. First `{ label: "personal", dir: home + "/.claude/skills" }`, then one `{ label: "project", ... }` for each folder from `projectFolders(start, _repositoryAncestors(start))`, with `/.claude/skills` added. It keeps only folders that exist (`exists` from `std::shell`, which raises no interrupt). The label is set here, where the folder's origin is known; nothing later works it out again.
-- `mergeSkillSources`: pure. It keeps the first source for each `scan.dir`. It then walks the sources in order with the list of names claimed so far. A source keeps only the entries and commands whose name is not yet claimed, then adds all of its own `scan.names` to the claimed list. Claiming by `names`, not by the filtered lists, is what makes a manual-only personal skill hide a plain project skill of the same name from the model (Decision 2).
+- `claudeSkillDirs(start, home)`: the candidate folders, labeled, in precedence order. First `{ label: "personal", dir: home + "/.claude/skills" }`, then one `{ label: "project", ... }` for each folder from `projectFolders(start, _repositoryAncestors(start))`, with `/.claude/skills` added. It keeps only folders that exist (`exists` from `std::shell`, which raises no interrupt). It is tagged `@capabilities(fileRead)`, because it calls the TypeScript helper `_repositoryAncestors` directly. The label is set here, where the folder's origin is known; nothing later works it out again.
+- `mergeSkillSources`: pure, and it builds new sources and lists rather than editing the scans it is given. It keeps the first source for each `scan.dir`. It then walks the sources in order with the list of names claimed so far. A source keeps only the entries and commands whose name is not yet claimed, then adds all of its own `scan.names` to the claimed list. Claiming by `names`, not by the filtered lists, is what makes a manual-only personal skill hide a plain project skill of the same name from the model (Decision 2).
 - `skillToolsFor`: one tool per source that still has entries. The tool is built with `skillsToolFromEntries(scan.dir, entries, name)`. The personal source is named `personal_skills`. The project sources are named `project_skills`, `project_skills_2`, `project_skills_3`, in order.
 - `skillCommandsFor`: every source's commands, in source order.
 - `loadSkillSources(start, home)`: for each `SkillDir`, `scanClaudeSkills(dir) with approve`, keeping the label. It skips a failure and returns `mergeSkillSources` of the rest.
@@ -207,6 +210,7 @@ The functions, in order:
   - `personalWinsOnASharedName`: in `loadSkillSources(repo + "/sub/work", home)`, the entry `shared` appears once, in the personal source.
   - `manualOnlyWinnerHidesTheEntry`: `mergeSkillSources` of a personal source with `names: ["deploy"]`, no entries, and one `deploy` command, then a project source with `names: ["deploy"]`, a `deploy` entry, and a `deploy` command. Expect no `deploy` entry in any source and exactly one `deploy` command, in the personal source. This covers Review Focus 3.
   - `modelOnlyWinnerHidesTheCommand`: the mirror case. A personal source with `names: ["deploy"]`, a `deploy` entry, and no commands, then a project source with a `deploy` entry and a `deploy` command. Expect no `deploy` command anywhere.
+  - `outerRejectStopsTheScans`: `handle { loadSkillSources(repo + "/sub/work", home) } with reject` returns `[]`. The inner `with approve` does not get past an outer handler that rejects, so a root policy that rejects `std::skills::skillsDir` stops the scans.
   - `homeAsProjectIsReadOnce`: `mergeSkillSources` of two sources with the same `scan.dir` returns one. This covers Review Focus 1.
   - `toolNamesAreStable`: `skillToolsFor` over personal plus two project sources returns tools named `personal_skills`, `project_skills`, `project_skills_2`.
   - `sourceWithNoEntriesGetsNoTool`: a project source whose entries were all hidden yields no tool.
@@ -306,6 +310,7 @@ The functions, in order:
   - The tool names, and coordinator only.
   - Approval of the scans: `with approve` in a `static const`, before the agent policy is installed, so nothing in the user's policy can stop them. A `.claude/commands` file does nothing until the user types its name, but a skill's description reaches the model on every call. So a cloned repository's `.claude/skills` reaches the model as soon as the agent starts in it.
   - Approval of the reads: the recommended policy covers `<home>/.claude/skills` and `./.claude/skills`. A skill in a parent project folder prompts on read, and fails in a one-shot run. A saved `policy.json` gets the rule through `/policy`. A manual-only skill's linked files are read with the generic `read` tool and follow the same rules.
+  - Statics are not part of a checkpoint. A session resumed with `--resume` runs in a new process, which scans the folders again, so its tools and commands are the folders as they are now.
   - What is not read: nested folders, plugins, `--add-dir`, `synced/`.
 
 - [ ] **Step 2: Update `agent-brains.md:128-130`.** The rule there allows one kind of effectful brain static, bundled file reads. Add the second kind this work introduces: the scans of the user's skill and command folders (`projectCommands` already did this for `.claude/commands`). Say that these run before the policy exists, and point at `claude-skills.md`.

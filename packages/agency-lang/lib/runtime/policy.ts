@@ -109,6 +109,8 @@ export type PolicyDirs = {
   cwd: string;
   /** What `<agent-home>` means. */
   agentHome: string;
+  /** What `<home>` means: the user's home directory. */
+  home: string;
   /** What `<agency>` means, or null when the install root cannot be found
    *  (a bundled build with no package.json above it). The placeholder then
    *  stays as written, so the rule never matches; nothing throws. */
@@ -170,6 +172,26 @@ export function substituteAgentHome(pattern: string, agentHome: string): string 
   return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeGlob(agentHome));
 }
 
+/** In a `dir` pattern, `<home>` stands for the user's home directory. The
+ *  built-in read scope uses it for `~/.claude/skills` only. */
+export const HOME_PLACEHOLDER = "<home>";
+
+/** Replace `<home>` with the resolved home, escaped the same way. */
+export function substituteHome(pattern: string, home: string): string {
+  if (!pattern.includes(HOME_PLACEHOLDER)) {
+    return pattern;
+  }
+  return pattern.split(HOME_PLACEHOLDER).join(escapeGlob(home));
+}
+
+/** Every directory placeholder in `pattern` replaced by what it means for
+ *  this run. `.` is handled apart, by `substituteDot`. */
+export function substitutePlaceholders(pattern: string, dirs: PolicyDirs): string {
+  const withInstall = substituteInstallDir(pattern, dirs.agencyInstallDir);
+  const withAgentHome = substituteAgentHome(withInstall, dirs.agentHome);
+  return substituteHome(withAgentHome, dirs.home);
+}
+
 function matchesGlob(value: string, pattern: string): boolean {
   return pattern === "" ? value === "" : picomatch.isMatch(value, pattern);
 }
@@ -208,10 +230,7 @@ function matchesRule(
       !raw &&
       !viaDot &&
       key === "dir" &&
-      matchesGlob(
-        stripDotSlash(value),
-        substituteAgentHome(substituteInstallDir(pattern, dirs.agencyInstallDir), dirs.agentHome),
-      );
+      matchesGlob(stripDotSlash(value), substitutePlaceholders(pattern, dirs));
     if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }

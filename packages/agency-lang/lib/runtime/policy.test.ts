@@ -5,10 +5,12 @@ import {
   resolveDotDirPattern,
   expandAgencyInstallDir,
   expandAgentHomeDir,
+  expandHomeDir,
   resolvePolicyDirs,
 } from "./policyDirs.js";
 import { nodeHost } from "../host/node/nodeHost.js";
 import { getStdlibDir } from "../importPaths.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 // The matcher takes the directories a run resolved when it started. These
 // tests resolve them per call, through a nodeHost, so a test that changes
@@ -894,5 +896,54 @@ describe("escapeGlob", () => {
     };
     expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/[x]/sub" })).type).toBe("approve");
     expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/x/sub" })).type).not.toBe("approve");
+  });
+});
+
+describe("<home> dir patterns", () => {
+  const read = (dir: string) => ({
+    effect: "std::read",
+    message: "m",
+    data: { dir, filename: "x" },
+    origin: "std::fs",
+  });
+  const policy = {
+    "std::read": [{ match: { dir: "<home>/.claude/skills/**" }, action: "approve" as const }],
+  };
+
+  function withHome<T>(value: string, body: () => T): T {
+    const previous = process.env.HOME;
+    process.env.HOME = value;
+    try {
+      return body();
+    } finally {
+      if (previous === undefined) delete process.env.HOME;
+      else process.env.HOME = previous;
+    }
+  }
+
+  it("expands to the injected home", () => {
+    expect(expandHomeDir("<home>/.claude/skills/**", () => "/Users/a")).toBe(
+      "/Users/a/.claude/skills/**",
+    );
+  });
+
+  it("escapes glob characters in the resolved home", () => {
+    expect(expandHomeDir("<home>/.claude/skills/**", () => "/opt/v*1")).toBe(
+      "/opt/v\\*1/.claude/skills/**",
+    );
+  });
+
+  it("matches reads under the home's skills folder and nothing else in the home", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-user-home-"));
+    try {
+      const home = realpathSync(base);
+      withHome(home, () => {
+        expect(checkPolicy(policy, read(`${home}/.claude/skills/review-pr`)).type).toBe("approve");
+        expect(checkPolicy(policy, read(`${home}/other`)).type).toBe("propagate");
+        expect(checkPolicy(policy, read(home)).type).toBe("propagate");
+      });
+    } finally {
+      safeDeleteDirectoryWithin(tmpdir(), base);
+    }
   });
 });

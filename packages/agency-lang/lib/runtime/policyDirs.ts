@@ -11,13 +11,14 @@ import { agentHomeDir } from "./agentHome.js";
 import {
   substituteAgentHome,
   substituteDot,
+  substituteHome,
   substituteInstallDir,
   type PolicyDirs,
 } from "./policy.js";
 
 export type { PolicyDirs } from "./policy.js";
 
-/** Resolve the three directories through `host`, each spelled the way file
+/** Resolve the directories through `host`, each spelled the way file
  *  effects spell the paths in their payloads: the real path when the
  *  directory exists, its lexical spelling when it does not, so matching
  *  stays as it was rather than failing every rule. */
@@ -25,6 +26,7 @@ export function resolvePolicyDirs(host: Host): PolicyDirs {
   return {
     cwd: host.system.realDir(host.system.cwd()),
     agentHome: host.system.realDir(agentHomeDir(host)),
+    home: host.system.realDir(host.system.homeDir()),
     agencyInstallDir: host.system.installDir(),
   };
 }
@@ -69,4 +71,16 @@ export function expandAgentHomeDir(
   },
 ): string {
   return substituteAgentHome(pattern, home());
+}
+
+/** `substituteHome` over the real spelling of the user's home. For tests,
+ *  which inject the home. */
+export function expandHomeDir(
+  pattern: string,
+  home: () => string = () => {
+    const host = defaultHost();
+    return host.system.realDir(host.system.homeDir());
+  },
+): string {
+  return substituteHome(pattern, home());
 }

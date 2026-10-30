@@ -1,4 +1,4 @@
-import { scanClaudeSkills, skillsDir, expandSlash } from "std::skills"
+import { scanClaudeSkills, skillsDir, skillsToolFromEntries, expandSlash } from "std::skills"
 
 def fixture(): string {
   return __dirname + "/skills-claude-fixture"
@@ -37,19 +37,19 @@ def commandNamed(scan: any, name: string): any {
 
 node namesAreEverySkill(): boolean {
   const scan = loadScan()
-  const expected = ["bare", "first-line", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
+  const expected = ["2024", "bare", "first-line", "listy", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
   return JSON.stringify([...scan.names].sort()) == JSON.stringify(expected)
 }
 
 node entriesAreModelUsableSkills(): boolean {
   const scan = loadScan()
-  const expected = ["bare", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
+  const expected = ["2024", "bare", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
   return sortedNames(scan.entries) == JSON.stringify(expected)
 }
 
 node commandsAreUserRunnableSkills(): boolean {
   const scan = loadScan()
-  const expected = ["bare", "first-line", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
+  const expected = ["2024", "bare", "first-line", "listy", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
   return sortedNames(scan.commands) == JSON.stringify(expected)
 }
 
@@ -108,4 +108,20 @@ node skillsDirHidesManualOnlySkills(): boolean {
   const tool = skillsDir(fixture(), "standard") with approve
   return !tool.description.includes("<name>manual-only</name>")
       && tool.description.includes("<name>normal</name>")
+}
+
+// A manual-only skill whose frontmatter also has a folded description and a
+// block list: the switch still counts, and the description is the folded text.
+node switchSurvivesMultiLineFrontmatter(): boolean {
+  const scan = loadScan()
+  const cmd = commandNamed(scan, "listy")
+  return entryNamed(scan, "listy") == null && cmd != null && cmd.description == "Ship the app to production."
+}
+
+// A name the YAML would read as a number is a string, so the tool builds.
+node numericNameBuildsATool(): boolean {
+  const scan = loadScan()
+  const entry = entryNamed(scan, "2024")
+  const tool = skillsToolFromEntries(scan.dir, scan.entries, "claude_fixture")
+  return entry != null && entry.name == "2024" && tool.description.includes("<name>2024</name>")
 }

@@ -119,6 +119,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "switchSurvivesMultiLineFrontmatter",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "numericNameBuildsATool",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

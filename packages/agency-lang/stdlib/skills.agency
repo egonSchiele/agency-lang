@@ -22,6 +22,7 @@ import {
   _agentPromptsDir,
   _stringifyFrontmatter,
   _refusedSkillName,
+  _parseSkillFile,
  } from "agency-lang/stdlib-lib/skills.js"
 
 
@@ -543,17 +544,21 @@ export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::
   let commands: SkillCommand[] = []
   for (path in pathsResult.value) {
     const raw = try _read(real.value, path, 0, 0) catch ""
-    const data = frontmatter(raw) catch {}
+    const parsed = _parseSkillFile(raw)
+    const data = parsed.data
+    const text = parsed.body
     const folder = path.replace("/SKILL.md", "")
-    const name = "${data.name ?? folder}"
+    let name = folder
+    if (data.name != null && data.name != "") {
+      name = data.name
+    }
     if (_refusedSkillName(name) || _refusedSkillName(folder)) {
       continue
     }
     names.push(name)
-    const text = stripFm(raw)
     const description = skillDescription(data, text)
     if (modelInvocable(data)) {
-      entries.push({ ...standardEntry(path, data), description: description })
+      entries.push({ ...standardEntry(path, data), name: name, description: description })
     }
     if (userInvocable(data)) {
       const skillFolder = "${real.value}/${folder}"

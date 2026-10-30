@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
-import { _docsDir, _refusedSkillName } from "./skills.js";
+import { _docsDir, _parseSkillFile, _refusedSkillName } from "./skills.js";
 import { _glob } from "./shell.js";
 
 describe("_docsDir", () => {
@@ -65,4 +65,56 @@ describe("_refusedSkillName", () => {
       expect(_refusedSkillName(name)).toBe(false);
     });
   }
+});
+
+describe("_parseSkillFile", () => {
+  it("reads flat keys and strips matching quotes", () => {
+    const parsed = _parseSkillFile(
+      "---\nname: deploy\ndescription: \"Ship it.\"\nhint: 'x'\n---\nBody.\n",
+    );
+    expect(parsed.data).toEqual({ name: "deploy", description: "Ship it.", hint: "x" });
+    expect(parsed.body).toBe("Body.");
+  });
+
+  it("keeps reading top-level keys after a block list, a comment, and a blank line", () => {
+    const raw = [
+      "---",
+      "description: Deploy.",
+      "allowed-tools:",
+      "  - Bash",
+      "# a comment",
+      "",
+      "disable-model-invocation: true",
+      "---",
+      "Body.",
+    ].join("\n");
+    expect(_parseSkillFile(raw).data).toEqual({
+      description: "Deploy.",
+      "allowed-tools": "",
+      "disable-model-invocation": "true",
+    });
+  });
+
+  it("folds a > block and keeps the lines of a | block", () => {
+    const raw = "---\nfolded: >\n  one\n  two\nliteral: |\n  one\n  two\n---\n";
+    expect(_parseSkillFile(raw).data).toEqual({ folded: "one two", literal: "one\ntwo" });
+  });
+
+  it("reads a file with Windows line endings", () => {
+    const parsed = _parseSkillFile("---\r\nname: deploy\r\n---\r\nBody.\r\n");
+    expect(parsed.data).toEqual({ name: "deploy" });
+    expect(parsed.body).toBe("Body.");
+  });
+
+  it("keeps every value a string", () => {
+    expect(_parseSkillFile("---\nname: 2024\nflag: true\n---\n").data).toEqual({
+      name: "2024",
+      flag: "true",
+    });
+  });
+
+  it("treats a file with no frontmatter, or an unclosed fence, as all body", () => {
+    expect(_parseSkillFile("Bare body.\n")).toEqual({ data: {}, body: "Bare body." });
+    expect(_parseSkillFile("---\nname: x\n")).toEqual({ data: {}, body: "---\nname: x" });
+  });
 });

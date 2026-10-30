@@ -95,3 +95,62 @@ export function _refusedSkillName(name: string): boolean {
   }
   return name.startsWith(`${RESERVED_SKILL_PREFIX}:`);
 }
+
+/** A skill file split into its frontmatter and its body. */
+export type SkillFile = {
+  data: Record<string, string>;
+  body: string;
+};
+
+const FENCE = "---";
+const TOP_LEVEL_KEY = /^([A-Za-z0-9_-]+):(.*)$/;
+const BLOCK_SCALAR = /^[>|][+-]?$/;
+
+/** Read a `SKILL.md`: the top-level `key: value` lines of its frontmatter,
+ *  as strings, and the text after it. Indented lines, list items, comments,
+ *  and blank lines are skipped rather than failing the whole block, so a
+ *  frontmatter switch survives a list or a multi-line value beside it. A
+ *  `>` value is folded onto one line and a `|` value keeps its lines.
+ *  With no frontmatter, or an unclosed fence, the whole file is body. */
+export function _parseSkillFile(raw: string): SkillFile {
+  const lines = raw.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+  const end = lines[0] === FENCE ? lines.indexOf(FENCE, 1) : -1;
+  if (end === -1) {
+    return { data: {}, body: lines.join("\n") };
+  }
+  return { data: readTopLevelKeys(lines.slice(1, end)), body: lines.slice(end + 1).join("\n") };
+}
+
+function readTopLevelKeys(lines: string[]): Record<string, string> {
+  // Null prototype, so a key such as `__proto__` is plain data.
+  const data: Record<string, string> = Object.create(null);
+  let index = 0;
+  while (index < lines.length) {
+    const match = TOP_LEVEL_KEY.exec(lines[index]);
+    index++;
+    if (!match) {
+      continue;
+    }
+    const [, key, rest] = match;
+    const value = rest.trim();
+    if (!BLOCK_SCALAR.test(value)) {
+      data[key] = unquote(value);
+      continue;
+    }
+    const block: string[] = [];
+    while (index < lines.length && (lines[index].startsWith(" ") || lines[index] === "")) {
+      block.push(lines[index].trim());
+      index++;
+    }
+    data[key] = value.startsWith(">")
+      ? block.filter((line) => line !== "").join(" ")
+      : block.join("\n").trim();
+  }
+  return data;
+}
+
+function unquote(value: string): string {
+  const quoted =
+    value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.endsWith(value[0]);
+  return quoted ? value.slice(1, -1) : value;
+}

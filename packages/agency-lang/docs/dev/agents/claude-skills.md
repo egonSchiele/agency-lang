@@ -14,7 +14,7 @@
 
 ## What a skill's frontmatter changes
 
-All of this is in `stdlib/skills.agency`.
+All of this is in `stdlib/skills.agency`. Each `SKILL.md` is read by `_parseSkillFile` (`lib/stdlib/skills.ts`), which takes only the top-level `key: value` lines of the frontmatter, as strings, and skips list items, indented lines, comments, and blank lines. `std::markdown`'s `frontmatter` drops the whole block when it meets one of those, which would silently undo a switch. `>` and `|` values are read, and Windows line endings are accepted.
 
 - **`disable-model-invocation: true`** keeps the skill out of the model's list (`modelInvocable`). `skillsDir` follows the same rule.
 - **`user-invocable: false`** keeps it from running as `/name` (`userInvocable`).

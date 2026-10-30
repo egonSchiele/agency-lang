@@ -23,6 +23,7 @@ import {
   cancelledHandoff,
   feedbackBeforeHandoff,
   guardStopsHandoff,
+  warningInsideHandoff,
   respondToInterrupts,
   approve,
   reject,
@@ -702,6 +703,35 @@ const answeringClient = (rules) => ({
     roles: roles(final),
     toolTexts: toolTexts(final),
     toolStarts: state.toolStarts,
+  };
+}
+
+// A round warning sent inside a handoff body lands on the caller's thread,
+// which the body shares, and expires when the body's call returns. The
+// body's last request carries it; the caller's next request does not.
+{
+  __setLLMClient(
+    answeringClient((asked) => {
+      if (asked === "Answer with the briefed agent.") {
+        return dispatch("briefedAgent", { question: "w1" });
+      }
+      if (asked === "brief: w1") {
+        return dispatch("lookup", { key: "w" });
+      }
+      if (asked.startsWith("This is the last tool round")) {
+        return answer("briefed inner");
+      }
+      return answer("briefed done");
+    }),
+  );
+  const { state, callbacks } = makeCapture();
+  const result = await warningInsideHandoff({ callbacks });
+  results.warningInsideHandoff = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    bodySawFinalWarning: count(state.requests[2], "last tool round"),
+    callerSawWarning: count(last(state), "tool round"),
   };
 }
 

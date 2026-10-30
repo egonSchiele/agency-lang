@@ -62,6 +62,24 @@ export type OpenRouterOptions = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L48))
 
+### WarnAtRoundsLeft
+
+When the tool loop warns the model that its tool rounds are running
+ out. See `warnAtRoundsLeft` on `LlmDefaults`.
+
+```ts
+/** When the tool loop warns the model that its tool rounds are running
+ *  out. See `warnAtRoundsLeft` on `LlmDefaults`. */
+export type WarnAtRoundsLeft = {
+  remaining?: number;
+  text?: string;
+  finalWarning?: boolean;
+  finalWarningText?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L54))
+
 ### LlmBaseUrls
 
 The base URL for each provider that takes one. Each field is
@@ -83,7 +101,7 @@ export type LlmBaseUrls = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L64))
 
 ### LlmDefaults
 
@@ -110,6 +128,20 @@ Default options for `llm()` calls. Every field is optional; only the
  to use only one. Other providers ignore it. `rawAttributes` is spread
  into the provider's request body as given, for a request field Agency
  has no option for, such as `{ top_k: 5 }`.
+
+ `warnAtRoundsLeft` warns the model before it runs out of tool rounds
+ (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
+ the call sends `text` as a user message; when one round is left and
+ `finalWarning` is true (the default), it sends `finalWarningText`. In
+ either text, `{remaining}` becomes the number of rounds left and
+ `{limit}` the cap. Each warning is sent once per `llm()` call and is
+ removed from the thread when the call returns. `remaining: 0` turns
+ the first warning off. The default texts are "Of the {limit} tool
+ rounds for this request, {remaining} remain. Finish what you can with
+ them and then write your answer." and "This is the last tool round for
+ this request. The results of the tool calls you make now are the last
+ you will see. After them, write your answer from what you have." A
+ call's own `warnAtRoundsLeft` combines with this one field by field.
 
  `baseUrl` sets the base URLs to use for the providers it names, for
  example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
@@ -146,6 +178,20 @@ Default options for `llm()` calls. Every field is optional; only the
  *  into the provider's request body as given, for a request field Agency
  *  has no option for, such as `{ top_k: 5 }`.
  *
+ *  `warnAtRoundsLeft` warns the model before it runs out of tool rounds
+ *  (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
+ *  the call sends `text` as a user message; when one round is left and
+ *  `finalWarning` is true (the default), it sends `finalWarningText`. In
+ *  either text, `{remaining}` becomes the number of rounds left and
+ *  `{limit}` the cap. Each warning is sent once per `llm()` call and is
+ *  removed from the thread when the call returns. `remaining: 0` turns
+ *  the first warning off. The default texts are "Of the {limit} tool
+ *  rounds for this request, {remaining} remain. Finish what you can with
+ *  them and then write your answer." and "This is the last tool round for
+ *  this request. The results of the tool calls you make now are the last
+ *  you will see. After them, write your answer from what you have." A
+ *  call's own `warnAtRoundsLeft` combines with this one field by field.
+ *
  *  `baseUrl` sets the base URLs to use for the providers it names, for
  *  example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
  *  server on another machine. A later `setLlmOptions` call with `baseUrl`
@@ -166,6 +212,7 @@ export type LlmDefaults = {
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
+  warnAtRoundsLeft?: WarnAtRoundsLeft;
   openRouter?: OpenRouterOptions;
   baseUrl?: LlmBaseUrls;
   rawAttributes?: any;
@@ -175,7 +222,7 @@ export type LlmDefaults = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L121))
 
 ### HostedModelInfo
 
@@ -191,7 +238,7 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L220))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L244))
 
 ## Effects
 
@@ -204,7 +251,7 @@ effect std::llm::registerProvider {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L222))
 
 ### std::read
 
@@ -216,7 +263,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L265))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L289))
 
 ## Functions
 
@@ -237,7 +284,7 @@ Set default options for subsequent llm() calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L141))
 
 ### setModel
 
@@ -255,7 +302,7 @@ Set the default model for subsequent llm() calls.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L151))
 
 ### envVarFor
 
@@ -280,7 +327,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L160))
 
 ### pickProvider
 
@@ -309,7 +356,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L189))
 
 ### registerProviderModule
 
@@ -334,7 +381,7 @@ Load a provider module by path at runtime and register its custom provider
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L225))
 
 ### listHostedModels
 
@@ -347,7 +394,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L254))
 
 ### hostedModelInfo
 
@@ -368,7 +415,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L238))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L262))
 
 ### modelSupportsInput
 
@@ -393,7 +440,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L272))
 
 ### loadModelData
 
@@ -420,4 +467,4 @@ Load model data from a JSON file (the shape `agency models refresh`
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L280))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L304))

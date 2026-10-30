@@ -32,6 +32,7 @@ import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
 import { projectProviderTokenUsage } from "../invocationUsage.js";
 import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
+import { expiryOf } from "../state/messageMetadata.js";
 import { resolveLocalEmbeddingModel } from "#platform";
 
 /**
@@ -193,6 +194,11 @@ export type CompactionPlan = {
   /** Indices in the original messages array to keep at the head, in order.
    *  Excludes any prior summary message — that gets replaced, not stacked. */
   systemPrefixIndices: number[];
+  /** Indices of the expiring messages in the compacted range, in order. They
+   *  stay in the thread right after the summary and are left out of it, so a
+   *  message the runtime will remove later does not live on in the summary.
+   *  See docs/dev/runtime/expiring-messages.md. */
+  keptIndices: number[];
   /** Indices in the original messages array to keep verbatim at the tail,
    *  in order. These are the most recent messages preserved across the split. */
   tailIndices: number[];
@@ -1130,8 +1136,24 @@ export class MemoryManager {
         return null;
       }
 
-      const toCompact = conversation.slice(0, splitInConv);
       const tailStart = systemPrefixEnd + splitInConv;
+      const keptIndices: number[] = [];
+      const toCompact: smoltalk.Message[] = [];
+      for (let i = systemPrefixEnd; i < tailStart; i++) {
+        if (expiryOf(messages[i]) === null) {
+          toCompact.push(messages[i]);
+        } else {
+          keptIndices.push(i);
+        }
+      }
+      if (toCompact.length === 0) {
+        // Every message before the split expires soon. A summary of nothing
+        // would only add a message, so leave the thread alone this turn.
+        this.logger.debug(
+          `[memory] compaction skipped: the ${keptIndices.length} messages before the split all expire`,
+        );
+        return null;
+      }
       const tailIndices: number[] = [];
       for (let i = tailStart; i < messages.length; i++) {
         tailIndices.push(i);
@@ -1171,16 +1193,18 @@ export class MemoryManager {
         `[memory] compaction done: toCompact=${toCompact.length} tail=${tailIndices.length} merged=${merged} summaryChars=${newSummary.length}`,
       );
 
-      // The caller rebuilds the thread as head + summary + tail. Remap
+      // The caller rebuilds the thread as head + summary + kept + tail. Remap
       // the auto-extraction watermark into that new thread so the next
       // onTurn neither re-extracts the kept tail nor skips genuinely
       // new messages (a stale watermark larger than the shrunken thread
       // would clamp to its end and swallow whatever comes next).
       const extracted = Math.min(entry.extractedUpTo, messages.length);
-      entry.extractedUpTo = systemPrefixIndices.length + 1 + Math.max(0, extracted - tailStart);
+      entry.extractedUpTo =
+        systemPrefixIndices.length + 1 + keptIndices.length + Math.max(0, extracted - tailStart);
 
       return {
         systemPrefixIndices,
+        keptIndices,
         tailIndices,
         summaryMessageContent: `${SUMMARY_MESSAGE_PREFIX}${newSummary}`,
       };

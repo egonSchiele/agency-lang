@@ -3,7 +3,9 @@ import { currentHost } from "../runtime/currentHost.js";
 import { currentRunOrNone, getRuntimeContext } from "../runtime/asyncContext.js";
 import { modelProviderOverride, type LlmBaseUrls } from "../runtime/llmConfig.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
-import { LOCAL_PROVIDERS, mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
+import { LOCAL_PROVIDERS, mergeFields } from "../runtime/localDefaults.js";
+import type { ReplyLimits } from "../runtime/localDefaults.js";
+import type { WarnAtRoundsLeft } from "../runtime/roundWarning.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import {
   getAllModels,
@@ -47,6 +49,9 @@ export type LlmDefaults = RetryConfig & {
   maxToolCallRounds?: number;
   /** Refuse a tool call after this many identical runs with the same result; 0 disables. */
   maxRepeatedToolCalls?: number;
+  /** When to warn the model that its tool rounds are running out, and
+   *  what to say. See lib/runtime/roundWarning.ts. */
+  warnAtRoundsLeft?: WarnAtRoundsLeft;
   /** Which companies OpenRouter may send the call to. Other providers ignore it. */
   openRouter?: OpenRouterOptions;
   /** The base URLs to use for the providers it names. A later
@@ -57,6 +62,10 @@ export type LlmDefaults = RetryConfig & {
   /** Spread into the provider's request body as given. */
   rawAttributes?: Record<string, unknown>;
 };
+
+/** The `LlmDefaults` fields a later `setLlmOptions` call merges into,
+ *  field by field, instead of replacing. */
+const MERGED_FIELD_BY_FIELD: string[] = ["replyLimits", "warnAtRoundsLeft"];
 
 /**
  * Merge `opts` into the ACTIVE branch stack's LLM defaults
@@ -89,11 +98,10 @@ export function _setLlmOptions(opts: LlmDefaults): void {
       delete current[key];
       continue;
     }
-    // The limits combine field by field, so setting one keeps the others.
-    current[key] =
-      key === "replyLimits"
-        ? mergedReplyLimits(current.replyLimits as ReplyLimits | undefined, value as ReplyLimits)
-        : value;
+    // These combine field by field, so setting one field keeps the others.
+    current[key] = MERGED_FIELD_BY_FIELD.includes(key)
+      ? mergeFields(current[key] as object | undefined, value as object)
+      : value;
   }
   if (provider !== undefined) {
     current.provider = provider;

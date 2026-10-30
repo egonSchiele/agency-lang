@@ -32,22 +32,22 @@ export type ReplyLimits = {
   limitAnswers?: boolean;
 };
 
-/** Two sets of limits combined field by field, the second winning where
- *  both set a field. A branch default and a call's own limits combine
- *  this way, so a call that sets one field keeps the branch's others. A
- *  `null` counts as absent: Agency has no undefined, and its optional
- *  fields arrive as null. */
-export function mergedReplyLimits(
-  base: ReplyLimits | null | undefined,
-  over: ReplyLimits | null | undefined,
-): ReplyLimits | undefined {
+/** Two option objects combined field by field, the second winning where
+ *  both set a field. A branch default and a call's own value combine this
+ *  way, so a call that sets one field keeps the branch's others. A `null`
+ *  object, and a `null` field, count as absent: Agency has no undefined,
+ *  and its optional fields arrive as null. */
+export function mergeFields<T extends object>(
+  base: T | null | undefined,
+  over: T | null | undefined,
+): T | undefined {
   if (base == null || over == null) {
     return over ?? base ?? undefined;
   }
-  const merged: ReplyLimits = { ...base };
-  for (const key of Object.keys(over) as (keyof ReplyLimits)[]) {
-    if (over[key] !== undefined) {
-      (merged as Record<string, unknown>)[key] = over[key];
+  const merged: T = { ...base };
+  for (const key of Object.keys(over) as (keyof T)[]) {
+    if (over[key] !== undefined && over[key] !== null) {
+      merged[key] = over[key];
     }
   }
   return merged;

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"firstSaw\":true,\"secondSaw\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [{ "return": "Lima" }, { "return": "Santiago" }]
+    }
+  ]
+}

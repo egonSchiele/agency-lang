@@ -45,25 +45,73 @@ provider config unread, so the branch default was the only cap. That is
 how trace wX5GvrUq ran 43 rounds under a researcher that asked for 30:
 43 is under 50 (ADI-46).
 
-At the cap, every call in the round gets the `tooManyRounds` verdict and
-this message:
+The cap allows rounds 0 to cap - 1. The request after the last allowed
+round, and every request after it in the call, offers only the intrinsic
+tools (`toolsOffered` in `toolLoopGuards.ts`) and no provider-hosted
+tools (`configOffered` drops `hostedTools`, which travel in the config).
+With nothing to call or search, the model can only answer. Anthropic
+accepts a request whose history has `tool_use` and `tool_result` blocks
+but no `tools` field, so the empty list is safe there. The decision reads
+the frame's round counter, so a resumed pass offers what the first pass
+offered.
 
-> Error: Maximum number of tool call rounds (30) exceeded. This tool call
-> will not be executed, and no more tools will be offered. Write your
-> answer now from what you have.
+A model that calls a tool it was not offered gets the `tooManyRounds`
+verdict for every call in that round, with this message:
 
-and every request from then on carries only the intrinsic tools
-(`offeredTools` in `prompt.ts`) and no provider-hosted tools
-(`requestConfig` drops `hostedTools`, which travel in the config, not
-the tool list). Refusing alone did not end the loop: a model that kept
-calling tools was refused round after round, each refusal costing a
-request, until a budget stopped it. With nothing to call or search, the
-model can only answer, so the loop ends within one request of the cap.
-Both are derived from the frame's counter, so a resumed pass offers what
-the first pass offered; no test pauses and resumes at the cap yet.
-Anthropic accepts a request whose history has `tool_use` and
-`tool_result` blocks but no `tools` field, so the empty list is safe
-there.
+> Error: This request's budget of 30 tool rounds is used up, so this
+> call was not run. Write your answer now from what you have.
+
+The message is a tool result, so it stays in the thread after the call
+returns. It names "this request" because a later `llm()` call on the
+same thread starts its own count and offers tools again.
+
+## The round warning
+
+```
+llm(question, {
+  tools: [search, fetch],
+  maxToolCallRounds: 20,
+  warnAtRoundsLeft: { remaining: 5, text: "{remaining} of {limit} searches left." }
+})
+```
+
+`warnAtRoundsLeft` sends the model a user message when few tool rounds
+are left. In the example, the model reads "4 of 20 searches left." after
+its fifteenth round.
+
+The loop checks for a warning at the round boundary after every round,
+in `roundWarningProducer` (`lib/runtime/turnBoundary.ts`). At the
+boundary after round r, counted from 0, the model can still get
+`limit - (r + 1)` rounds of tool calls run. There are two warnings:
+
+1. The first warning goes out at the first boundary where that number is
+   at most `remaining` and more than 1. `remaining` defaults to 3, and 0
+   turns this warning off.
+2. The final warning goes out at the boundary where 1 round is left,
+   when `finalWarning` is true, which is the default.
+
+With a cap of 10 and the defaults, the first warning goes out after
+round 6 and the final warning after round 8. A cap of 2 gets only the
+final warning, after round 0. The two texts take the placeholders
+`{remaining}` and `{limit}`, and any other text in braces is left as
+written. The defaults are in `DEFAULT_ROUND_WARNING` in
+`lib/runtime/roundWarning.ts`.
+
+Each warning goes out once per `llm()` call. `runnerState.roundWarnings`
+records which have gone out, and the producer writes it inside its step,
+so a pass resumed after a pause sends neither a second time
+(`tests/agency-js/round-warning`).
+
+The warning is a user message labeled `roundWarning` that expires with
+the `llm()` call (`docs/dev/runtime/expiring-messages.md`), so a later
+call on the same thread never reads a stale count. It is a user message
+and not a tool result because a tool result belongs to the tool: a model
+that quotes tool output would quote the runtime's words as the tool's.
+
+The option is set on the call or with `setLlmOptions`. The two combine
+field by field (`mergeFields` in `lib/runtime/localDefaults.ts`), so a
+call that sets only `text` keeps the branch's threshold. It is not a
+preset field.
 
 ## Repeated calls
 

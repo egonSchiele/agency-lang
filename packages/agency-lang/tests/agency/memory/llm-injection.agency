@@ -1,4 +1,5 @@
 import { setMemoryId, remember } from "std::memory"
+import { getThread, currentThreadId } from "std::thread"
 
 // Stores a fact, then makes an llm() call with memory: true. The
 // memory layer should inject a "Relevant context from memory:" system
@@ -7,6 +8,8 @@ import { setMemoryId, remember } from "std::memory"
 // the injected prefix is actually present — without this, the test
 // would falsely pass even if memory injection was completely removed
 // (the deterministic client returns the next mock for any prompt).
+// After the call, the facts must be gone from the thread: they belong to
+// the one request they were recalled for.
 let injected: boolean = false
 
 callback("onLLMCallStart") as data {
@@ -20,11 +23,24 @@ callback("onLLMCallStart") as data {
   }
 }
 
-node main(): boolean {
+def factsInThread(): boolean {
+  const messages = getThread(currentThreadId(), 0, 200)
+  if (isFailure(messages)) {
+    return true
+  }
+  for (message in messages.value) {
+    if (message.content.includes("Relevant context from memory:")) {
+      return true
+    }
+  }
+  return false
+}
+
+node main(): any {
   setMemoryId("llm-injection-test")
   remember("Mom likes pottery") with approve
   // Use a short query so structuredLookup's substring match matches
   // "Mom" deterministically without needing live embeddings.
   llm("mom", { memory: true })
-  return injected
+  return { injected: injected, removed: !factsInThread() }
 }

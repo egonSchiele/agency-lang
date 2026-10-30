@@ -42,6 +42,15 @@ Messages can be serialized to JSON via `message.toJSON()` and deserialized via `
 - **Message threads** — `MessageThread` (`lib/runtime/state/messageThread.ts`) stores messages and needs to serialize/deserialize them
 - **Interrupts** — when execution pauses, the in-flight message history is saved as `MessageJSON[]` in the interrupt state
 
+Every message class takes an optional `metadata` record in its options and keeps it through `toJSON` and `fromJSON`:
+
+```ts
+const m = smoltalk.userMessage("hi", { metadata: { label: "seed" } });
+smoltalk.messageFromJSON(JSON.parse(JSON.stringify(m))).metadata; // { label: "seed" }
+```
+
+smoltalk never reads `metadata` and never sends it to a provider. Agency keeps a message's debug label and its expiry there, through `lib/runtime/state/messageMetadata.ts` (see `docs/dev/runtime/expiring-messages.md`). A message without metadata serializes exactly as it would without the field.
+
 ### Token tracking
 
 Smoltalk provides `TokenUsage` and `CostEstimate` types for tracking LLM costs. Agency stores cumulative token stats in the `GlobalStore` under the `__internal` module and updates them after each LLM call via `updateTokenStats()` in `lib/runtime/utils.ts`.

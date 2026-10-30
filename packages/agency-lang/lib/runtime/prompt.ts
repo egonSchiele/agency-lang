@@ -24,7 +24,8 @@ import { projectProviderTokenUsage, type ProviderUsageKind } from "./invocationU
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
-import { mergedReplyLimits, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
+import { mergeFields, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
+import { roundWarningSettings, type WarnAtRoundsLeft } from "./roundWarning.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
 import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindFor } from "./llmDispatch.js";
 import {
@@ -275,21 +276,16 @@ async function runPostTurnMemory(
     if (plan) {
       // Reassemble the thread from the ORIGINAL smoltalk Message
       // instances so tool_call metadata, ids, and other class-level
-      // fields survive untouched.
-      // Labels and handoff scopes ride along with the kept messages; the
-      // summary has neither.
-      const kept = [...plan.systemPrefixIndices, ...plan.tailIndices];
-      const head = plan.systemPrefixIndices.map((i) => original[i]);
-      const tail = plan.tailIndices.map((i) => original[i]);
+      // fields survive untouched. Expiring messages from the compacted
+      // range stay, after the summary, for their owners to remove.
+      const pick = (indices: number[]) => indices.map((i) => original[i]);
       const summary = smoltalk.systemMessage(plan.summaryMessageContent);
-      const labels = kept.map((i) => messages.labelAt(i));
-      const scopes = kept.map((i) => messages.scopeAt(i));
-      const splitAt = head.length;
-      messages.setMessages(
-        [...head, summary, ...tail],
-        [...labels.slice(0, splitAt), null, ...labels.slice(splitAt)],
-        [...scopes.slice(0, splitAt), null, ...scopes.slice(splitAt)],
-      );
+      messages.setMessages([
+        ...pick(plan.systemPrefixIndices),
+        summary,
+        ...pick(plan.keptIndices),
+        ...pick(plan.tailIndices),
+      ]);
     }
   } catch (err) {
     if (isGuardExceededError(err)) throw err;
@@ -591,10 +587,11 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   assertUniqueToolNames(tools);
   warnOnOversizedToolSchemas(ctx, run.log, tools);
   let toolFunctions = exposedFunctions;
-  // At the round cap a request offers only the intrinsic tools and no
-  // hosted ones (toolsOffered, configOffered). Both read the frame's
-  // counter, so a resumed pass offers what the first pass offered.
-  const atRoundCap = () => self.toolCallRound >= roundLimit;
+  // True when the round a request's tool calls would run as is past the
+  // cap, which allows rounds 0 to roundLimit - 1; such a request offers no
+  // hosted tools (toolsOffered, configOffered). The first request and a
+  // validation retry lead to round toolCallRound.
+  const atRoundCap = (nextRound: number = self.toolCallRound) => nextRound >= roundLimit;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing
   // to smoltalk. `tools` is consumed above. `memory` is a runtime directive
@@ -610,6 +607,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     spillToolResultsOver: callSpillOver,
     maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
     maxToolCallRounds: ccMaxToolCallRounds,
+    warnAtRoundsLeft: ccWarnAtRoundsLeft,
     retries: ccRetries,
     timeout: ccTimeout,
     backoff: ccBackoff,
@@ -627,6 +625,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       spillToolResultsOver?: number;
       maxRepeatedToolCalls?: number;
       maxToolCallRounds?: number;
+      warnAtRoundsLeft?: WarnAtRoundsLeft;
       label?: string;
     };
 
@@ -664,6 +663,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     maxToolResultChars: stackMaxToolResultChars,
     maxToolCallRounds: stackMaxToolCallRounds,
     maxRepeatedToolCalls: stackMaxRepeatedToolCalls,
+    warnAtRoundsLeft: stackWarnAtRoundsLeft,
     ...stackSmolDefaults
   } = stackDefaults;
   const maxRepeatedToolCalls =
@@ -671,14 +671,14 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // maxToolCallRounds is kept out of stackSmolDefaults above: not a
   // smoltalk field. See roundCap for how the three sources combine.
   const roundLimit = roundCap(ccMaxToolCallRounds, stackMaxToolCallRounds, maxToolCallRounds);
+  // Kept out of stackSmolDefaults for the same reason. Field by field,
+  // like the reply limits.
+  const roundWarning = roundWarningSettings(ccWarnAtRoundsLeft, stackWarnAtRoundsLeft);
   // A local model gets the choices a hosted provider makes on its own
   // (the temperature, and how the thinking option reaches the server).
   // The reply limits combine field by field across the branch default and
   // the call, where every other option is replaced whole.
-  const replyLimits = mergedReplyLimits(
-    stackSmolDefaults.replyLimits,
-    restClientConfig.replyLimits,
-  );
+  const replyLimits = mergeFields(stackSmolDefaults.replyLimits, restClientConfig.replyLimits);
   const merged = ctx.getSmoltalkConfig(stackSmolDefaults, {
     ...restClientConfig,
     ...(replyLimits === undefined ? {} : { replyLimits }),
@@ -801,15 +801,20 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const guardGate = () => raiseGuardTripsUntilClear(run, stateStack);
 
   // Message delivery at turn boundaries (attachments, guard feedback,
-  // queueMessage entries) lives in turnBoundary.ts. Built fresh at each
-  // boundary call: `messages` is reassigned every round, so a captured
-  // reference would go stale after round 1.
-  const boundaryCtx = (): BoundaryContext => ({
+  // queueMessage entries, the round warning) lives in turnBoundary.ts.
+  // Built fresh at each boundary call: `messages` is reassigned every
+  // round, so a captured reference would go stale after round 1. Only a
+  // round boundary passes its round, which is where a warning can be due.
+  const boundaryCtx = (round: number | null = null): BoundaryContext => ({
     step: (key, body) => pr.step(key, body),
     guardGate,
     messages,
     runnerState: self.runnerState,
     stateStack,
+    roundWarning:
+      round === null
+        ? null
+        : { settings: roundWarning, limit: roundLimit, round, callKey: self.llmCallKey },
     snapshot: (thread) => {
       self.messagesJSON = thread.toJSON();
     },
@@ -867,20 +872,27 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // replay) re-runs the request body without duplicating the user
     // message.
     await pr.step("pushPrompt", async () => {
+      // Messages Agency code pushed to expire with "the next llm() call"
+      // belong to this one. Inside the step, so a resume does not claim
+      // again.
+      messages.claimUnkeyed("llmCall", self.llmCallKey);
       messages.push(smoltalk.userMessage(prompt), callLabel);
       self.messagesJSON = snapshotThread();
     });
     // The initial request is a step so it is idempotent on resume
     // (re-entries after a later tool-batch bailout skip it).
     await requestStepWithTripRetry({ first: true }, async () => {
-      let injectedFactsContent: string | null = null;
+      // The recalled facts expire with this one request.
+      const factsKey = `${self.llmCallKey}:${llmCallKey({ first: true })}`;
       const recallManager = ctx.getActiveMemoryManager(run.stack);
       if (memoryOption && recallManager) {
         try {
           const facts = await recallManager.recallForInjection(run, promptText(prompt));
           if (facts) {
-            injectedFactsContent = `Relevant context from memory:\n${facts}`;
-            messages.push(smoltalk.systemMessage(injectedFactsContent));
+            messages.push(smoltalk.systemMessage(`Relevant context from memory:\n${facts}`), null, {
+              at: "request",
+              key: factsKey,
+            });
           }
         } catch (err) {
           // Guard trips are signals, not best-effort failures — let
@@ -910,17 +922,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         lastStopReason = result.stopReason;
         lastUsageKind = result.usageKind;
       } finally {
-        if (injectedFactsContent !== null) {
-          const injectedIndex = messages
-            .getMessages()
-            .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
-          if (injectedIndex !== -1) {
-            // removeAt, not setMessages: this edits ONE message out of
-            // the thread, so it must not reset the labels of all the
-            // others.
-            messages.removeAt(injectedIndex);
-          }
-        }
+        messages.expire("request", factsKey);
       }
       self.messagesJSON = snapshotThread();
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
@@ -1851,7 +1853,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         // discipline (idempotent steps, buffer-clear inside the step,
         // messagesJSON refresh) is owned by turnBoundary.ts — see its
         // module header for the resume-safety argument.
-        await runRoundBoundary(round, boundaryCtx());
+        await runRoundBoundary(round, boundaryCtx(round));
         // Next LLM call wrapped in pr.step for resume idempotency. Once
         // marked done, resume re-entries skip the LLM call. The llmCall
         // span stays open across rounds (one span per llm() call), so we
@@ -1861,10 +1863,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           const nextResult = await _runPrompt({
             run,
             messages,
-            tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
+            tools: toolsOffered(tools, exposedFunctions, atRoundCap(round + 1)),
             prompt,
             responseFormat,
-            clientConfig: configOffered(clientConfig, atRoundCap()),
+            clientConfig: configOffered(clientConfig, atRoundCap(round + 1)),
             stateStack,
             retryPolicy,
             callLabel,
@@ -2009,7 +2011,14 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // endSpan is a no-op when no span is open.
     run.log.endSpan(llmSpanId);
     ctx.beforeCheckpoint = ctx.beforeCheckpoint.filter((refresh) => refresh !== refreshMessages);
-    if (shouldPop) stateStack.pop();
+    // Every exit but a pause ends the call: a return, an endTurn, a cancel,
+    // a failure. A paused call is resumed later and still needs its
+    // messages, so they expire only here. The frame is popped, so nothing
+    // replays this.
+    if (shouldPop) {
+      messages.expire("llmCall", self.llmCallKey);
+      stateStack.pop();
+    }
   }
 
   const responseMessage = messages.getMessages().at(-1);

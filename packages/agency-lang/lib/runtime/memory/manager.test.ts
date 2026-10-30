@@ -1044,6 +1044,46 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     expect(plan!.summaryMessageContent).toContain("Previous conversation summary:");
   });
 
+  it("keeps an expiring message in the thread and out of the summary", async () => {
+    const client = mockLlmClient();
+    const manager = makeManager(client);
+    const [system, user, ...rest] = toolLoopThread();
+    const warning = userMessage("WARNING: three tool rounds remain", {
+      metadata: { expires: { at: "llmCall", key: "k1" } },
+    });
+    const messages = [system, user, warning, ...rest];
+
+    const plan = await manager.compactIfNeeded(testRun(), messages);
+
+    expect(plan).not.toBeNull();
+    expect(plan!.keptIndices).toEqual([2]);
+    expect(plan!.tailIndices).not.toContain(2);
+    const prompts = client.text.mock.calls.map((call) => JSON.stringify(call[0].messages));
+    expect(prompts.join("\n")).not.toContain("three tool rounds remain");
+  });
+
+  it("does not compact when every message before the split expires", async () => {
+    const client = mockLlmClient();
+    const manager = makeManager(client);
+    const expiring = (text: string) =>
+      userMessage(text, { metadata: { expires: { at: "llmCall", key: "k1" } } });
+    // The split lands on the first assistant message, so only the two
+    // expiring messages are before it.
+    const messages = [
+      systemMessage("You are an agent."),
+      expiring("WARNING one"),
+      expiring("WARNING two"),
+      assistantMessage("step one"),
+      assistantMessage("step two"),
+      assistantMessage("all done"),
+    ];
+
+    const plan = await manager.compactIfNeeded(testRun(), messages);
+
+    expect(plan).toBeNull();
+    expect(client.text).not.toHaveBeenCalled();
+  });
+
   it("auto-extraction only sends messages added since the last pass", async () => {
     const client = mockLlmClient();
     const manager = makeManager(client);
@@ -1073,7 +1113,8 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     expect(plan).not.toBeNull();
     const head = plan!.systemPrefixIndices.map((i) => messages[i]);
     const tail = plan!.tailIndices.map((i) => messages[i]);
-    const reshaped = [...head, systemMessage(plan!.summaryMessageContent), ...tail];
+    const kept = plan!.keptIndices.map((i) => messages[i]);
+    const reshaped = [...head, systemMessage(plan!.summaryMessageContent), ...kept, ...tail];
 
     // Next turn adds one genuinely new message.
     const next = [...reshaped, assistantMessage("BRAND NEW FACT")];

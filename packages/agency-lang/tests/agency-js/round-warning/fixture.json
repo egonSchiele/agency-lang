@@ -1,0 +1,8 @@
+{
+  "result": "summary",
+  "requestCount": 6,
+  "allWellFormed": true,
+  "firstWarningsSent": 1,
+  "finalWarningsSent": 1,
+  "secondCallSawWarning": 0
+}

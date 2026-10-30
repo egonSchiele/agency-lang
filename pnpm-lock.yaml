@@ -196,8 +196,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
-        specifier: 0.20.1
-        version: 0.20.1(@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.22.0)
+        specifier: 0.20.2
+        version: 0.20.2(@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.22.0)
       tarsec:
         specifier: 0.5.4
         version: 0.5.4
@@ -3124,8 +3124,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.20.1:
-    resolution: {integrity: sha512-0oOtYYv4fXTZ1Jte5VyqYe/Ig5Gvt6z+ZXyJWG/VBeKNf1JSKNSVQ6XYlUyijyOkrJh162GRieQ0R8nYZ6rCdw==}
+  smoltalk@0.20.2:
+    resolution: {integrity: sha512-q4GbpeVyfWqo3V3Zg3cLGme9XtSU16WeRrjbfwNiHdi/gxCwYJmWyMIZz3IaT5JtOcrENk5O/zPnsxIDRrpqkw==}
     peerDependencies:
       smoltalk-llama-cpp: '>=0.3.0 <1.0.0'
     peerDependenciesMeta:
@@ -6328,7 +6328,7 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.20.1(@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.22.0):
+  smoltalk@0.20.2(@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.22.0):
     dependencies:
       '@anthropic-ai/sdk': 0.109.1(zod@4.4.3)
       '@google/genai': 2.30.0(@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)

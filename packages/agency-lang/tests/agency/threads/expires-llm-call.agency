@@ -1,0 +1,29 @@
+import { userMessage } from "std::thread"
+
+// A user message pushed with expires: "llmCall" is part of the next llm()
+// call's request and is gone from the thread once that call returns, so
+// the second call never sees it.
+let firstSaw: boolean = false
+let secondSaw: boolean = false
+let calls: number = 0
+
+callback("onLLMCallStart") as data {
+  calls = calls + 1
+  for (msg in data.messages) {
+    if (msg.content == "Reply in French for this question only.") {
+      if (calls == 1) {
+        firstSaw = true
+      }
+      if (calls == 2) {
+        secondSaw = true
+      }
+    }
+  }
+}
+
+node main(): any {
+  userMessage("Reply in French for this question only.", expires: "llmCall")
+  const a: string = llm("What is the capital of Peru?")
+  const b: string = llm("And of Chile?")
+  return { firstSaw: firstSaw, secondSaw: secondSaw }
+}

@@ -120,12 +120,11 @@ export function dropHandoffToolCall(
 }
 
 /**
- * Remove the system messages the body pushed: every message tagged with
- * this dispatch's scope key. Tags survive checkpoints and compaction, and
- * a message compaction summarized away is simply not there to remove.
+ * Remove the system messages the body pushed: every message that expires
+ * with this dispatch. See docs/dev/runtime/expiring-messages.md.
  */
 export function stripHandoffSystemMessages(thread: MessageThread, scopeKey: string): void {
-  thread.removeHandoffScoped(scopeKey);
+  thread.expire("handoff", scopeKey);
 }
 
 /**

@@ -367,5 +367,12 @@
     "toolStarts": [
       "lookup"
     ]
+  },
+  "warningInsideHandoff": {
+    "result": "briefed done",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "bodySawFinalWarning": 1,
+    "callerSawWarning": 0
   }
 }

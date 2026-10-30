@@ -10,6 +10,12 @@ import { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { _setLlmOptions } from "../stdlib/llm.js";
+import { _endTurn } from "../stdlib/thread.js";
+import * as smoltalk from "smoltalk";
+import { AgencyCancelledError } from "./errors.js";
+import { interrupt } from "./interrupts.js";
+import { DEFAULT_ROUND_WARNING, type WarnAtRoundsLeft } from "./roundWarning.js";
+import { labelOf } from "./state/messageMetadata.js";
 
 /** The round cap, `maxToolCallRounds`: where its value comes from, and
  *  what happens at the cap. See "The round cap" in
@@ -34,6 +40,8 @@ function makeCtx(): RuntimeContext<any> {
 class RecordingClient implements LLMClient {
   readonly offered: string[][] = [];
   readonly hosted: string[][] = [];
+  /** The messages each request carried, copied when it was sent. */
+  readonly requests: smoltalk.Message[][] = [];
   private readonly inner: DeterministicClient;
 
   constructor(mocks: LLMMock[]) {
@@ -43,6 +51,7 @@ class RecordingClient implements LLMClient {
   private record(config: PromptConfig): void {
     this.offered.push((config.tools ?? []).map((tool) => tool.name));
     this.hosted.push(config.hostedTools ?? []);
+    this.requests.push([...config.messages]);
   }
 
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
@@ -87,7 +96,7 @@ function pingMocks(n: number): LLMMock[] {
   return [...calls, { return: "done" }];
 }
 
-const REFUSAL = /Maximum number of tool call rounds \((\d+)\) exceeded/;
+const REFUSAL = /This request's budget of (\d+) tool rounds is used up/;
 
 type Setup = {
   ctx: RuntimeContext<any>;
@@ -113,7 +122,7 @@ function call(
   run: Run,
   s: Setup,
   thread: MessageThread,
-  opts: { perCall?: number; baked: number },
+  opts: { perCall?: number; baked: number; warnAtRoundsLeft?: WarnAtRoundsLeft },
 ): Promise<any> {
   return runPrompt(run, {
     prompt: "call ping",
@@ -125,6 +134,7 @@ function call(
       hostedTools: ["web_search"],
       maxToolCallRounds: opts.perCall,
       maxRepeatedToolCalls: 0,
+      warnAtRoundsLeft: opts.warnAtRoundsLeft,
     } as any,
     maxToolCallRounds: opts.baked,
   });
@@ -138,7 +148,7 @@ function refusals(thread: MessageThread): string[] {
 }
 
 describe("the round cap", () => {
-  it("refuses the fourth round at a cap of 3, names the cap, and offers no tools after it, hosted ones included", async () => {
+  it("offers no tools after the third round at a cap of 3, refuses a fourth, and names the cap", async () => {
     const s = setup(pingMocks(4));
     const thread = new MessageThread();
     const result = await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
@@ -148,13 +158,14 @@ describe("the round cap", () => {
     expect(s.runs()).toBe(3);
     const refused = refusals(thread);
     expect(refused).toHaveLength(1);
-    expect(refused[0]).toMatch(/\(3\) exceeded/);
+    expect(refused[0]).toMatch(/budget of 3 tool rounds/);
     expect(refused[0]).toMatch(/Write your answer now/);
     // Five requests: the first, one after each of the three rounds that
-    // ran, and one after the refused round. Only the last carries no tools.
-    expect(s.client.offered).toEqual([["ping"], ["ping"], ["ping"], ["ping"], []]);
+    // ran, and one after the refused round. The request after the third
+    // round offers no tools; the mock calls ping anyway, which is refused.
+    expect(s.client.offered).toEqual([["ping"], ["ping"], ["ping"], [], []]);
     const search = ["web_search"];
-    expect(s.client.hosted).toEqual([search, search, search, search, []]);
+    expect(s.client.hosted).toEqual([search, search, search, [], []]);
   });
 
   it("counts rounds per llm() call: a second call in the same frame gets its own cap", async () => {
@@ -180,7 +191,7 @@ describe("the round cap", () => {
       await call(run, lower, lowerThread, { perCall: 3, baked: 10 });
     });
     expect(lower.runs()).toBe(3);
-    expect(refusals(lowerThread)[0]).toMatch(/\(3\) exceeded/);
+    expect(refusals(lowerThread)[0]).toMatch(/budget of 3 tool rounds/);
     // The flag case: --max-tool-call-rounds 2 must bound a call that asks
     // for more.
     const higher = setup(pingMocks(4));
@@ -190,7 +201,7 @@ describe("the round cap", () => {
       await call(run, higher, higherThread, { perCall: 10, baked: 10 });
     });
     expect(higher.runs()).toBe(2);
-    expect(refusals(higherThread)[0]).toMatch(/\(2\) exceeded/);
+    expect(refusals(higherThread)[0]).toMatch(/budget of 2 tool rounds/);
   });
 
   it("a branch default beats the baked value", async () => {
@@ -201,7 +212,7 @@ describe("the round cap", () => {
       await call(run, s, thread, { baked: 10 });
     });
     expect(s.runs()).toBe(2);
-    expect(refusals(thread)[0]).toMatch(/\(2\) exceeded/);
+    expect(refusals(thread)[0]).toMatch(/budget of 2 tool rounds/);
   });
 
   it("the baked value applies when nothing else is set", async () => {
@@ -211,6 +222,166 @@ describe("the round cap", () => {
       call(run, s, thread, { baked: 10 }),
     );
     expect(s.runs()).toBe(4);
+    expect(refusals(thread)).toHaveLength(0);
+  });
+});
+
+/** A tool named `name` that runs `fn`, for the ways a call can end. */
+function endingTool(name: string, fn: () => unknown): AgencyFunction {
+  return new AgencyFunction({
+    name,
+    module: "test.agency",
+    fn,
+    params: [],
+    toolDefinition: { name, description: `The ${name} tool.`, schema: z.object({}) },
+  });
+}
+
+describe("llmCall expiry", () => {
+  const HINT = "just for this call";
+  const contents = (messages: smoltalk.Message[]) => messages.map((m) => m.content);
+
+  /** A thread holding one unkeyed llmCall message, and one llm() call on
+   *  it that offers `tools`. */
+  function runWithHint(mocks: LLMMock[], tools: AgencyFunction[]) {
+    const s = setup(mocks);
+    // A pause takes a checkpoint, which names the node it was taken in.
+    s.ctx.stateStack.nodesTraversed = ["main"];
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage(HINT), null, { at: "llmCall", key: null });
+    const result = runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
+      runPrompt(run, {
+        prompt: "go",
+        messages: thread,
+        clientConfig: { tools } as any,
+        maxToolCallRounds: 10,
+      }),
+    );
+    return { s, thread, result };
+  }
+
+  it("an unkeyed llmCall message is claimed by the next call and gone when it returns", async () => {
+    const { s, thread, result } = runWithHint([{ return: "done" }], []);
+    expect(await result).toBe("done");
+    expect(contents(s.client.requests[0])).toContain(HINT);
+    expect(contents(thread.getMessages())).not.toContain(HINT);
+  });
+
+  it("is gone after a call that ends through endTurn", async () => {
+    const finish = endingTool("finish", () => {
+      _endTurn("llm");
+      return "finished";
+    });
+    const { s, thread, result } = runWithHint(
+      [{ toolCall: { name: "finish", args: {} } }],
+      [finish],
+    );
+    await result;
+    expect(s.client.requests).toHaveLength(1);
+    expect(contents(thread.getMessages())).not.toContain(HINT);
+  });
+
+  it("is gone after a call that throws", async () => {
+    const boom = endingTool("boom", () => {
+      throw new AgencyCancelledError("cancelled fixture");
+    });
+    const { thread, result } = runWithHint([{ toolCall: { name: "boom", args: {} } }], [boom]);
+    await expect(result).rejects.toBeInstanceOf(AgencyCancelledError);
+    expect(contents(thread.getMessages())).not.toContain(HINT);
+  });
+
+  it("stays on the thread while the call is paused on an interrupt", async () => {
+    const pauseMe = endingTool("pauseMe", () => [
+      interrupt({ effect: "test::pause", message: "pause", data: {}, origin: "test", runId: "r1" }),
+    ]);
+    const { thread, result } = runWithHint(
+      [{ toolCall: { name: "pauseMe", args: {} } }],
+      [pauseMe],
+    );
+    const paused = await result;
+    expect(Array.isArray(paused)).toBe(true);
+    expect(contents(thread.getMessages())).toContain(HINT);
+  });
+});
+
+describe("the round warning", () => {
+  const FINAL = DEFAULT_ROUND_WARNING.finalWarningText;
+
+  /** For each request, the round warnings it carried. */
+  const warningsPerRequest = (s: Setup) =>
+    s.client.requests.map((messages) =>
+      messages.filter((m) => labelOf(m) === "roundWarning").map((m) => m.content),
+    );
+
+  /** One call with a cap of `cap` that pings until the cap, then answers. */
+  async function run(cap: number, warnAtRoundsLeft?: WarnAtRoundsLeft) {
+    const s = setup(pingMocks(cap));
+    const thread = new MessageThread();
+    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (r) =>
+      call(r, s, thread, { baked: cap, warnAtRoundsLeft }),
+    );
+    return { s, thread };
+  }
+
+  it("warns at 3 left and on the last round, once each, and the thread holds neither afterwards", async () => {
+    const { s, thread } = await run(5);
+    const warnings = warningsPerRequest(s);
+    expect(warnings[2]).toEqual([
+      "Of the 5 tool rounds for this request, 3 remain. Finish what you can with them and then write your answer.",
+    ]);
+    // The first warning stays in the thread for the rest of the call, so
+    // later requests carry it too; only one new warning is added each time.
+    expect(warnings.map((w) => w.length)).toEqual([0, 0, 1, 1, 2, 2]);
+    expect(warnings[4][1]).toBe(FINAL);
+    expect(thread.getMessages().filter((m) => labelOf(m) === "roundWarning")).toEqual([]);
+  });
+
+  it("remaining: 0 sends only the final warning", async () => {
+    const { s } = await run(5, { remaining: 0 });
+    expect(warningsPerRequest(s).at(-1)).toEqual([FINAL]);
+  });
+
+  it("finalWarning: false sends only the first", async () => {
+    const { s } = await run(5, { finalWarning: false });
+    const last = warningsPerRequest(s).at(-1)!;
+    expect(last).toHaveLength(1);
+    expect(last[0]).toContain("3 remain");
+  });
+
+  it("a cap of 2 sends only the final warning, after round 0", async () => {
+    const { s } = await run(2);
+    expect(warningsPerRequest(s)).toEqual([[], [FINAL], [FINAL]]);
+  });
+
+  it("a custom text without placeholders is sent as given", async () => {
+    const { s } = await run(5, { text: "Wrap up soon." });
+    expect(warningsPerRequest(s)[2]).toEqual(["Wrap up soon."]);
+  });
+
+  it("the call's warnAtRoundsLeft merges field by field over the branch default", async () => {
+    const s = setup(pingMocks(5));
+    const thread = new MessageThread();
+    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, async (r) => {
+      _setLlmOptions({ warnAtRoundsLeft: { remaining: 2 } });
+      await call(r, s, thread, { baked: 5, warnAtRoundsLeft: { text: "custom {remaining}" } });
+    });
+    const warnings = warningsPerRequest(s);
+    // The branch's threshold of 2 holds: nothing after round 1.
+    expect(warnings[2]).toEqual([]);
+    expect(warnings[3]).toEqual(["custom 2"]);
+    expect(warnings[4]).toEqual(["custom 2", FINAL]);
+  });
+});
+
+describe("the request that leads to each round", () => {
+  it("a cap of 1 still offers tools on the first request", async () => {
+    const s = setup(pingMocks(1));
+    const thread = new MessageThread();
+    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
+      call(run, s, thread, { baked: 1 }),
+    );
+    expect(s.runs()).toBe(1);
+    expect(s.client.offered).toEqual([["ping"], []]);
     expect(refusals(thread)).toHaveLength(0);
   });
 });

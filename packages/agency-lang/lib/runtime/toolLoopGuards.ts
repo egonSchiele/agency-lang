@@ -237,7 +237,7 @@ export function refusalMessage(
     case "tooManyHandoffs":
       return tooManyHandoffsMessage(name, call.runnableHandoffs);
     case "tooManyRounds":
-      return `Error: Maximum number of tool call rounds (${state.maxToolCallRounds}) exceeded. This tool call will not be executed, and no more tools will be offered. Write your answer now from what you have.`;
+      return `Error: This request's budget of ${state.maxToolCallRounds} tool rounds is used up, so this call was not run. Write your answer now from what you have.`;
     case "markup":
       // markupArg is non-null whenever the verdict says markup: both
       // derive from the same replay-stable inputs.
@@ -275,13 +275,12 @@ export function roundCap(
   return perCall ?? branch ?? baked;
 }
 
-/** The tools a request may offer. Below the cap, all of them. At the
- *  cap, only the intrinsic tools (saveDraft), which the cap never applied
- *  to: the model has just been told its calls were refused and to answer
- *  now, and with nothing else to call it can only answer, so the cap ends
- *  the loop within one more request instead of refusing round after round
- *  while the model keeps trying. `functions` are the tools' functions, for
- *  telling an intrinsic one. */
+/** The tools a request may offer. Below the cap, all of them. At the cap,
+ *  which is the request after the last allowed round, only the intrinsic
+ *  tools (saveDraft), which the cap never applied to: with nothing else to
+ *  call the model can only answer. The `tooManyRounds` refusal is the
+ *  fallback for a model that calls a tool it was not offered.
+ *  `functions` are the tools' functions, for telling an intrinsic one. */
 export function toolsOffered<T extends { name: string }>(
   tools: T[],
   functions: AgencyFunction[],

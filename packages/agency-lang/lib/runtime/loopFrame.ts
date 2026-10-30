@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { freshRepeatStreak } from "./toolLoopGuards.js";
 
 /** The tool loop's frame-backed locals, set once when `runPrompt` first
@@ -22,4 +23,8 @@ export function initLoopFrame(self: Record<string, any>, args: Record<string, an
   // checkpoint from before the field has none, and any name is accepted.
   const tools: any[] = args.clientConfig?.tools || [];
   self.toolNames ??= tools.map((tool) => tool.name);
+  // Names this llm() call as the owner of the messages that expire with it
+  // (docs/dev/runtime/expiring-messages.md). Kept on the frame, so a resume
+  // reads the same key.
+  self.llmCallKey ??= nanoid();
 }

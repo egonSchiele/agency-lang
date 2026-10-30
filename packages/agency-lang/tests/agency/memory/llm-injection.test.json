@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "true",
+      "expectedOutput": "{\"injected\":true,\"removed\":true}",
       "evaluationCriteria": [{ "type": "exact" }],
       "llmMocks": [
         {

@@ -1,0 +1,8 @@
+[
+  { "toolCall": { "name": "ping", "args": { "n": 1 } } },
+  { "toolCall": { "name": "ping", "args": { "n": 2 } } },
+  { "toolCall": { "name": "pauseMe", "args": { "id": "p1" } } },
+  { "toolCall": { "name": "ping", "args": { "n": 3 } } },
+  { "return": "answer" },
+  { "return": "summary" }
+]

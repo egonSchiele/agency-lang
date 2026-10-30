@@ -587,10 +587,15 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   assertUniqueToolNames(tools);
   warnOnOversizedToolSchemas(ctx, run.log, tools);
   let toolFunctions = exposedFunctions;
-  // At the round cap a request offers only the intrinsic tools and no
-  // hosted ones (toolsOffered, configOffered). Both read the frame's
-  // counter, so a resumed pass offers what the first pass offered.
-  const atRoundCap = () => self.toolCallRound >= roundLimit;
+  // A request whose tool calls could not run, because they would make
+  // round `nextRound` and the cap allows rounds 0 to roundLimit - 1, offers
+  // only the intrinsic tools and no hosted ones (toolsOffered,
+  // configOffered). The request after round r leads to round r + 1; the
+  // first request and a validation retry lead to round toolCallRound,
+  // since the counter goes up only after the request that follows a
+  // round. All read the frame's counter, so a resumed pass offers what the
+  // first pass offered.
+  const atRoundCap = (nextRound: number = self.toolCallRound) => nextRound >= roundLimit;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing
   // to smoltalk. `tools` is consumed above. `memory` is a runtime directive
@@ -1862,10 +1867,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           const nextResult = await _runPrompt({
             run,
             messages,
-            tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
+            tools: toolsOffered(tools, exposedFunctions, atRoundCap(round + 1)),
             prompt,
             responseFormat,
-            clientConfig: configOffered(clientConfig, atRoundCap()),
+            clientConfig: configOffered(clientConfig, atRoundCap(round + 1)),
             stateStack,
             retryPolicy,
             callLabel,

@@ -96,7 +96,7 @@ function pingMocks(n: number): LLMMock[] {
   return [...calls, { return: "done" }];
 }
 
-const REFUSAL = /Maximum number of tool call rounds \((\d+)\) exceeded/;
+const REFUSAL = /This request's budget of (\d+) tool rounds is used up/;
 
 type Setup = {
   ctx: RuntimeContext<any>;
@@ -148,7 +148,7 @@ function refusals(thread: MessageThread): string[] {
 }
 
 describe("the round cap", () => {
-  it("refuses the fourth round at a cap of 3, names the cap, and offers no tools after it, hosted ones included", async () => {
+  it("offers no tools after the third round at a cap of 3, refuses a fourth, and names the cap", async () => {
     const s = setup(pingMocks(4));
     const thread = new MessageThread();
     const result = await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
@@ -158,13 +158,14 @@ describe("the round cap", () => {
     expect(s.runs()).toBe(3);
     const refused = refusals(thread);
     expect(refused).toHaveLength(1);
-    expect(refused[0]).toMatch(/\(3\) exceeded/);
+    expect(refused[0]).toMatch(/budget of 3 tool rounds/);
     expect(refused[0]).toMatch(/Write your answer now/);
     // Five requests: the first, one after each of the three rounds that
-    // ran, and one after the refused round. Only the last carries no tools.
-    expect(s.client.offered).toEqual([["ping"], ["ping"], ["ping"], ["ping"], []]);
+    // ran, and one after the refused round. The request after the third
+    // round offers no tools; the mock calls ping anyway, which is refused.
+    expect(s.client.offered).toEqual([["ping"], ["ping"], ["ping"], [], []]);
     const search = ["web_search"];
-    expect(s.client.hosted).toEqual([search, search, search, search, []]);
+    expect(s.client.hosted).toEqual([search, search, search, [], []]);
   });
 
   it("counts rounds per llm() call: a second call in the same frame gets its own cap", async () => {
@@ -190,7 +191,7 @@ describe("the round cap", () => {
       await call(run, lower, lowerThread, { perCall: 3, baked: 10 });
     });
     expect(lower.runs()).toBe(3);
-    expect(refusals(lowerThread)[0]).toMatch(/\(3\) exceeded/);
+    expect(refusals(lowerThread)[0]).toMatch(/budget of 3 tool rounds/);
     // The flag case: --max-tool-call-rounds 2 must bound a call that asks
     // for more.
     const higher = setup(pingMocks(4));
@@ -200,7 +201,7 @@ describe("the round cap", () => {
       await call(run, higher, higherThread, { perCall: 10, baked: 10 });
     });
     expect(higher.runs()).toBe(2);
-    expect(refusals(higherThread)[0]).toMatch(/\(2\) exceeded/);
+    expect(refusals(higherThread)[0]).toMatch(/budget of 2 tool rounds/);
   });
 
   it("a branch default beats the baked value", async () => {
@@ -211,7 +212,7 @@ describe("the round cap", () => {
       await call(run, s, thread, { baked: 10 });
     });
     expect(s.runs()).toBe(2);
-    expect(refusals(thread)[0]).toMatch(/\(2\) exceeded/);
+    expect(refusals(thread)[0]).toMatch(/budget of 2 tool rounds/);
   });
 
   it("the baked value applies when nothing else is set", async () => {
@@ -369,5 +370,18 @@ describe("the round warning", () => {
     expect(warnings[2]).toEqual([]);
     expect(warnings[3]).toEqual(["custom 2"]);
     expect(warnings[4]).toEqual(["custom 2", FINAL]);
+  });
+});
+
+describe("the request that leads to each round", () => {
+  it("a cap of 1 still offers tools on the first request", async () => {
+    const s = setup(pingMocks(1));
+    const thread = new MessageThread();
+    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
+      call(run, s, thread, { baked: 1 }),
+    );
+    expect(s.runs()).toBe(1);
+    expect(s.client.offered).toEqual([["ping"], []]);
+    expect(refusals(thread)).toHaveLength(0);
   });
 });

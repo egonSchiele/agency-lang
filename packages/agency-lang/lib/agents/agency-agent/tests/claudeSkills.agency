@@ -1,0 +1,206 @@
+/*
+ * Finding and merging the Claude Code skill folders. The folder nodes build
+ * a tree under test-output (git-ignored) and remove it before and after;
+ * the merge nodes use made-up scans and touch no files.
+ */
+import { find, map } from "std::array"
+import { mkdir, remove } from "std::fs"
+import { ClaudeSkillsScan, SkillCommand } from "std::skills"
+
+import test { loadSkillSources } from "../lib/claudeSkills.agency"
+import {
+  SkillSource,
+  claudeSkillDirs,
+  mergeSkillSources,
+  projectFolders,
+  skillToolsFor,
+ } from "../lib/claudeSkills.agency"
+
+def tree(): string {
+  return __dirname + "/test-output/claude-skills"
+}
+
+def clearTree() {
+  remove(tree(), allowedPaths: [__dirname + "/test-output"]) with approve
+}
+
+def addSkill(folder: string, name: string): boolean {
+  mkdir("${folder}/${name}") with approve
+  const written = write("SKILL.md", "---\ndescription: ${name} skill.\n---\n${name} body.\n", dir: "${folder}/${name}") with approve
+  return written is success
+}
+
+// home has `shared` and `mine`; repo has `.git`, `shared`, and `rootonly`;
+// repo/sub has `near`; repo/sub/work has no skills. False when a skill
+// file could not be written, so a node fails instead of testing an empty tree.
+def buildTree(): boolean {
+  clearTree()
+  const home = tree() + "/home/.claude/skills"
+  mkdir(tree() + "/repo/.git") with approve
+  mkdir(tree() + "/repo/sub/work") with approve
+  const written = [
+    addSkill(home, "shared"),
+    addSkill(home, "mine"),
+    addSkill(tree() + "/repo/.claude/skills", "shared"),
+    addSkill(tree() + "/repo/.claude/skills", "rootonly"),
+    addSkill(tree() + "/repo/sub/.claude/skills", "near"),
+  ]
+  return !written.includes(false)
+}
+
+def entry(name: string): any {
+  return {
+    name: name,
+    description: "",
+    location: "${name}/SKILL.md"
+  }
+}
+
+def command(name: string): SkillCommand {
+  return {
+    name: name,
+    description: "",
+    argHint: "",
+    body: ""
+  }
+}
+
+def source(label: "personal" | "project", dir: string, names: string[], entryNames: string[], commandNames: string[]): SkillSource {
+  const scan: ClaudeSkillsScan = {
+    dir: dir,
+    names: names,
+    entries: map(entryNames, \name -> entry(name)),
+    commands: map(commandNames, \name -> command(name))
+  }
+  return {
+    label: label,
+    scan: scan
+  }
+}
+
+def entryCount(sources: SkillSource[], name: string): number {
+  let count = 0
+  for (src in sources) {
+    for (item in src.scan.entries) {
+      if (item.name == name) {
+        count = count + 1
+      }
+    }
+  }
+  return count
+}
+
+def commandCount(sources: SkillSource[], name: string): number {
+  let count = 0
+  for (src in sources) {
+    for (item in src.scan.commands) {
+      if (item.name == name) {
+        count = count + 1
+      }
+    }
+  }
+  return count
+}
+
+node projectFoldersNearestFirst(): boolean {
+  return JSON.stringify(projectFolders("/r/s/w", ["/r", "/r/s"])) == JSON.stringify(["/r/s/w", "/r/s", "/r"])
+}
+
+node outsideARepoReadsOnlyTheStart(): boolean {
+  return JSON.stringify(projectFolders("/a/b", null)) == JSON.stringify(["/a/b"])
+}
+
+node atTheRepoRootReadsOnlyIt(): boolean {
+  return JSON.stringify(projectFolders("/r", [])) == JSON.stringify(["/r"])
+}
+
+node walksUpToTheRepoRoot(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const repo = tree() + "/repo"
+  const dirs = claudeSkillDirs(repo + "/sub/work", tree() + "/home")
+  clearTree()
+  const projectDirs = [d.dir for d in dirs if d.label == "project"]
+  return JSON.stringify(projectDirs) == JSON.stringify([repo + "/sub/.claude/skills", repo + "/.claude/skills"])
+}
+
+node personalFolderComesFirst(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const home = tree() + "/home"
+  const dirs = claudeSkillDirs(tree() + "/repo/sub/work", home)
+  clearTree()
+  return dirs[0].label == "personal" && dirs[0].dir == home + "/.claude/skills"
+}
+
+node personalWinsOnASharedName(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const sources = loadSkillSources(tree() + "/repo/sub/work", tree() + "/home")
+  clearTree()
+  const personal = find(sources, \src -> src.label == "personal")
+  if (personal == null) {
+    return false
+  }
+  const inPersonal = find(personal.scan.entries, \item -> item.name == "shared")
+  return entryCount(sources, "shared") == 1 && inPersonal != null
+}
+
+node manualOnlyWinnerHidesTheEntry(): boolean {
+  const merged = mergeSkillSources([
+    source("personal", "/h/.claude/skills", ["deploy"], [], ["deploy"]),
+    source("project", "/p/.claude/skills", ["deploy"], ["deploy"], ["deploy"]),
+  ])
+  return entryCount(merged, "deploy") == 0
+      && commandCount(merged, "deploy") == 1
+      && commandCount([merged[0]], "deploy") == 1
+}
+
+node modelOnlyWinnerHidesTheCommand(): boolean {
+  const merged = mergeSkillSources([
+    source("personal", "/h/.claude/skills", ["deploy"], ["deploy"], []),
+    source("project", "/p/.claude/skills", ["deploy"], ["deploy"], ["deploy"]),
+  ])
+  return commandCount(merged, "deploy") == 0 && entryCount(merged, "deploy") == 1
+}
+
+node outerRejectStopsTheScans(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  let sources: SkillSource[] = []
+  handle {
+    sources = loadSkillSources(tree() + "/repo/sub/work", tree() + "/home")
+  } with reject
+  clearTree()
+  return sources.length == 0
+}
+
+node homeAsProjectIsReadOnce(): boolean {
+  const merged = mergeSkillSources([
+    source("personal", "/h/.claude/skills", ["a"], ["a"], ["a"]),
+    source("project", "/h/.claude/skills", ["a"], ["a"], ["a"]),
+  ])
+  return merged.length == 1 && merged[0].label == "personal"
+}
+
+node toolNamesAreStable(): boolean {
+  const tools = skillToolsFor([
+    source("personal", "/h/.claude/skills", ["a"], ["a"], []),
+    source("project", "/p/.claude/skills", ["b"], ["b"], []),
+    source("project", "/q/.claude/skills", ["c"], ["c"], []),
+  ])
+  const names = map(tools, \tool -> "${tool.name}")
+  return JSON.stringify(names) == JSON.stringify(["personal_skills", "project_skills", "project_skills_2"])
+}
+
+node sourceWithNoEntriesGetsNoTool(): boolean {
+  const tools = skillToolsFor([
+    source("personal", "/h/.claude/skills", ["a"], ["a"], []),
+    source("project", "/p/.claude/skills", ["b"], [], ["b"]),
+  ])
+  return tools.length == 1
+}

@@ -1,0 +1,134 @@
+/** @module
+  @summary The user's Claude Code skills: `~/.claude/skills`, then
+  `.claude/skills` in the launch directory and each parent up to the
+  repository root. Each folder is scanned once at startup and offered to
+  the coordinator as a skills tool, and its skills run as slash commands.
+  See docs/dev/agents/claude-skills.md.
+*/
+import { exists } from "std::shell"
+import { cwd } from "std::system"
+import { ClaudeSkillsScan, SkillCommand, SkillEntry, scanClaudeSkills, skillsToolFromEntries } from "std::skills"
+import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
+
+export type SkillLabel = "personal" | "project"
+
+export type SkillDir = {
+  label: SkillLabel;
+  dir: string
+}
+
+export type SkillSource = {
+  label: SkillLabel;
+  scan: ClaudeSkillsScan
+}
+
+static const SKILLS_SUBDIR = "/.claude/skills"
+
+/** The folders whose `.claude/skills` count, nearest first. `ancestors` is
+  `_repositoryAncestors(start)`: null means there is no repository, and then
+  only `start` counts. */
+export def projectFolders(start: string, ancestors: string[] | null): string[] {
+  if (ancestors == null) {
+    return [start]
+  }
+  return [start, ...[...ancestors].reverse()]
+}
+
+/** The skill folders that exist, in precedence order: the personal folder,
+  then the project folders nearest first. */
+@capabilities(fileRead)
+export def claudeSkillDirs(start: string, home: string): SkillDir[] {
+  const personal: SkillDir = {
+    label: "personal",
+    dir: home + SKILLS_SUBDIR
+  }
+  const folders = projectFolders(start, _repositoryAncestors(start))
+  const projects: SkillDir[] = [{ label: "project", dir: folder + SKILLS_SUBDIR } for folder in folders]
+  return [candidate for candidate in [personal, ...projects] if exists(candidate.dir)]
+}
+
+/** Claude Code's precedence: an earlier source's skill name hides that name
+  in every later source, for the model's entries and for commands alike.
+  Names are claimed from `scan.names`, before either switch applied, so a
+  manual-only skill still hides a same-named skill further down. A folder
+  seen twice, such as the home folder read as a project, is kept once. */
+export def mergeSkillSources(sources: SkillSource[]): SkillSource[] {
+  let seenDirs: string[] = []
+  let claimed: string[] = []
+  let merged: SkillSource[] = []
+  for (src in sources) {
+    if (seenDirs.includes(src.scan.dir)) {
+      continue
+    }
+    seenDirs.push(src.scan.dir)
+    const taken = claimed
+    const entries: SkillEntry[] = [item for item in src.scan.entries if !taken.includes(item.name)]
+    const commands: SkillCommand[] = [item for item in src.scan.commands if !taken.includes(item.name)]
+    merged.push({
+      label: src.label,
+      scan: {
+        dir: src.scan.dir,
+        names: src.scan.names,
+        entries: entries,
+        commands: commands
+      }
+    })
+    claimed = [...claimed, ...src.scan.names]
+  }
+  return merged
+}
+
+/** One skills tool per source that lists any skill: `personal_skills`, then
+  `project_skills`, `project_skills_2`, and so on. */
+export def skillToolsFor(sources: SkillSource[]): any[] {
+  let tools: any[] = []
+  let projectCount = 0
+  for (src in sources) {
+    let name = "personal_skills"
+    if (src.label == "project") {
+      projectCount = projectCount + 1
+      name = "project_skills"
+      if (projectCount > 1) {
+        name = "project_skills_${projectCount}"
+      }
+    }
+    if (src.scan.entries.length > 0) {
+      tools.push(skillsToolFromEntries(src.scan.dir, src.scan.entries, name))
+    }
+  }
+  return tools
+}
+
+export def skillCommandsFor(sources: SkillSource[]): SkillCommand[] {
+  let commands: SkillCommand[] = []
+  for (src in sources) {
+    commands = [...commands, ...src.scan.commands]
+  }
+  return commands
+}
+
+// Each scan is approved here; an outer handler that rejects still wins, and
+// a rejected or failed scan is left out.
+def loadSkillSources(start: string, home: string): SkillSource[] {
+  let sources: SkillSource[] = []
+  for (candidate in claudeSkillDirs(start, home)) {
+    const scan = scanClaudeSkills(candidate.dir) with approve
+    if (scan is success(value)) {
+      sources.push({
+        label: candidate.label,
+        scan: value
+      })
+    }
+  }
+  return mergeSkillSources(sources)
+}
+
+static const SKILL_SOURCES = loadSkillSources(cwd(), os.homedir())
+
+export def claudeSkillTools(): any[] {
+  return skillToolsFor(SKILL_SOURCES)
+}
+
+export def claudeSkillCommands(): SkillCommand[] {
+  return skillCommandsFor(SKILL_SOURCES)
+}

@@ -174,6 +174,8 @@ describe("herdrReporter", () => {
     reporter.setSession(SESSION);
     reporter.report("idle");
     await waitFor(() => fake.received.length === 2);
+    // The next turn's save sets the same session again.
+    reporter.setSession(SESSION);
     reporter.report("working");
     await reporter.release();
     const states = fake.received.map((request) => [

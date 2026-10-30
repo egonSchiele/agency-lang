@@ -18,7 +18,8 @@ export type HerdrReporter = {
   report: (state: HerdrState, message?: string) => void;
   /** Report blocked while `wait` runs, then working. */
   whileBlocked: <T>(message: string, wait: () => Promise<T>) => Promise<T>;
-  /** The session in the pane. It goes out with every later report. */
+  /** The session in the pane. It goes out with every later report, unless
+   *  Herdr has refused a resume command in this run. */
   setSession: (session: HerdrSession) => void;
   /** Clear the agent from the pane. Resolves once Herdr answers or the report times out. */
   release: () => Promise<void>;
@@ -69,6 +70,9 @@ export function herdrReporter(
   const pane = { pane_id: paneId, source: name, agent: name };
   const nextSeq = clockSeq();
   let session: HerdrSession | null = null;
+  // The resume command has the same shape every turn, so once Herdr refuses
+  // it, every later save would be refused too.
+  let resumeRefused = false;
   let lastReport = "";
   let queued: Report | null = null;
   let draining: Promise<void> | null = null;
@@ -101,6 +105,7 @@ export function herdrReporter(
       // Herdr drops the whole report when it refuses the resume command, so
       // stop sending the command and send the state again without it.
       if (answer?.error?.code === "invalid_resume_argv" && session) {
+        resumeRefused = true;
         session = null;
         queued ??= report;
       }
@@ -133,7 +138,9 @@ export function herdrReporter(
       }
     },
     setSession: (next) => {
-      session = next;
+      if (!resumeRefused) {
+        session = next;
+      }
     },
     release: () => {
       enqueue({ kind: "release" });

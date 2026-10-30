@@ -14,7 +14,7 @@ def describe(r: Result<string>): string {
 //   providerOpenai      — recognized provider whose key is set: selected,
 //                         env auto-detection skipped (anthropic ignored).
 //   providerGoogleNoKey — recognized provider with a missing key: fail.
-//   autoDetect          — no provider flag: detection still prefers anthropic.
+//   autoDetect          — no provider flag: detection prefers openai.
 //   customNoModel       — custom provider with no model to back it: error.
 //   customWithModel     — custom provider alongside an explicit model: ok.
 //   planOpenai          — forced-provider defaults; slow uses the Responses API.

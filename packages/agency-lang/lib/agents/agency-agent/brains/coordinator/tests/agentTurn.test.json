@@ -269,7 +269,7 @@
     {
       "nodeName": "switchPerSlotFromPromotedOpenaiSession",
       "input": "",
-      "expectedOutput": "\"gpt-5.6-sol/claude-opus-4-8\"",
+      "expectedOutput": "\"gpt-6.1-terra/claude-opus-4-8\"",
       "evaluationCriteria": [
         {
           "type": "exact"

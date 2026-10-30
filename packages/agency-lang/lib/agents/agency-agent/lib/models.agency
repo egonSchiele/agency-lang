@@ -37,8 +37,8 @@ type ProviderModels = {
 
 export static const MODELS: Record<string, ProviderModels> = {
   openai: {
-    fast: "gpt-5.6-sol",
-    slow: "gpt-5.6-sol",
+    fast: "gpt-6.1-terra",
+    slow: "gpt-6.1-terra",
     slowProvider: "openai-responses"
   },
   anthropic: {
@@ -185,9 +185,11 @@ export def resolveDetected(
   }
 
   if (needFast || needSlow) {
-    // Env auto-detection. openrouter is last so an explicit big-three key
-    // still wins; it's only picked when it's the only key present.
-    return pickProvider(["anthropic", "google", "openai", "openrouter"])
+    // Env auto-detection. openai comes first, so its default is the
+    // agent's default whenever OPENAI_API_KEY is set. openrouter is last so
+    // an explicit big-three key still wins; it's only picked when it's the
+    // only key present.
+    return pickProvider(["openai", "anthropic", "google", "openrouter"])
   }
   // Everything came from --model; the defaults bucket is never read.
   return success("openai")

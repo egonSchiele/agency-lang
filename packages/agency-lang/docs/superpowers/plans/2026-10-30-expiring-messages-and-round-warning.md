@@ -50,7 +50,7 @@ Inputs the spec implies but no obvious test exercises. Each has its test added t
 - Test: `~/smoltalk/packages/smoltalk/lib/classes/message/metadata.test.ts` (new, modeled on `rawData.test.ts` beside it)
 
 **Interfaces:**
-- Produces: every message class and factory accepts `options.metadata?: Record<string, unknown>`; every message has `get metadata(): Record<string, unknown> | undefined`; `toJSON()` includes `metadata` only when set; `fromJSON` reads it. `MessageJSON` types gain `metadata?: Record<string, unknown>`.
+- Produces: every message class and factory accepts `options.metadata?: Record<string, unknown>`; every message has `get metadata(): Record<string, unknown> | undefined` and `set metadata(value: Record<string, unknown> | undefined)`; `toJSON()` includes `metadata` only when set; `fromJSON` reads it. `MessageJSON` types gain `metadata?: Record<string, unknown>`.
 
 - [ ] **Step 1: Write the failing tests** in `metadata.test.ts`
 
@@ -88,7 +88,7 @@ Expected: FAIL, `metadata` is `undefined` after `fromJSON`.
 
 - [ ] **Step 3: Implement**
 
-In each of the five classes: add `metadata: z.record(z.string(), z.unknown()).optional()` to the zod schema; a `public _metadata?: Record<string, unknown>` field set from `options.metadata` in the constructor; a `get metadata()` getter; write it in `toJSON()` as `metadata: this._metadata` (the existing `JSON.stringify` drops an `undefined` field, which is how `rawData` already stays out when unset); pass `result.data.metadata` through in `fromJSON`. Add `get metadata(): Record<string, unknown> | undefined;` to `MessageClass`. Add `metadata?: Record<string, unknown>` to each factory's `options` type in `index.ts`. In `resolveAttachments.ts:203` pass `metadata: msg.metadata` beside `rawData`.
+In each of the five classes: add `metadata: z.record(z.string(), z.unknown()).optional()` to the zod schema; a `public _metadata?: Record<string, unknown>` field set from `options.metadata` in the constructor; a `get metadata()` getter and a `set metadata()` setter (Agency edits a message's metadata in place, so the thread never has to rebuild and swap instances); write it in `toJSON()` as `metadata: this._metadata` (the existing `JSON.stringify` drops an `undefined` field, which is how `rawData` already stays out when unset); pass `result.data.metadata` through in `fromJSON`. Add `get metadata(): Record<string, unknown> | undefined;` and `set metadata(value: Record<string, unknown> | undefined);` to `MessageClass`. Add `metadata?: Record<string, unknown>` to each factory's `options` type in `index.ts`. In `resolveAttachments.ts:203` pass `metadata: msg.metadata` beside `rawData`.
 
 - [ ] **Step 4: Run the tests and the whole smoltalk suite**
 
@@ -129,20 +129,20 @@ export type MessageMetadata = { label?: string; expires?: Expiry };
 export function labelOf(message: smoltalk.Message): string | null;
 /** The expiry, or null for a message that stays with the thread. */
 export function expiryOf(message: smoltalk.Message): Expiry | null;
-/** A copy of `message` with `patch` merged into its metadata. A null
- *  value in the patch removes that key. Goes through toJSON/fromJSON so
- *  the result is a real message instance of the same class. */
-export function withMetadata(
+/** Merge `patch` into the message's metadata, in place. A null value in
+ *  the patch removes that key. Clears `metadata` entirely when nothing is
+ *  left, so an unlabeled message serializes exactly as before. */
+export function setMetadata(
   message: smoltalk.Message,
   patch: { label?: string | null; expires?: Expiry | null },
-): smoltalk.Message;
+): void;
 /** True when the role may carry an expiry: system or user. */
 export function mayExpire(message: smoltalk.Message): boolean;
 ```
 
-- [ ] **Step 1: Write the failing tests**: `labelOf` and `expiryOf` return null on a bare message; `withMetadata` sets a label and keeps the content and role; `withMetadata` with `expires: null` removes the key and keeps the label; `withMetadata` on a `ToolMessage` keeps `tool_call_id` and `name`; `mayExpire` is true for system and user, false for assistant, tool, and developer.
+- [ ] **Step 1: Write the failing tests**: `labelOf` and `expiryOf` return null on a bare message; `setMetadata` sets a label and leaves content, role, and identity alone (same instance); `setMetadata` with `expires: null` removes the key and keeps the label; `setMetadata` that empties the object leaves `message.metadata` undefined; `mayExpire` is true for system and user, false for assistant, tool, and developer.
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/runtime/state/messageMetadata.test.ts > <scratch>/meta.txt 2>&1`. Expected: FAIL, module not found.
-- [ ] **Step 3: Implement** the five exports. `withMetadata` builds `{ ...message.toJSON(), metadata }` and revives it with `smoltalk.messageFromJSON`, dropping the `metadata` key entirely when the merged object is empty.
+- [ ] **Step 3: Implement** the five exports. `setMetadata` reads `message.metadata ?? {}`, applies the patch, and assigns through the setter from Task 1, or assigns `undefined` when the merged object has no keys.
 - [ ] **Step 4: Run** the test. Expected: PASS.
 - [ ] **Step 5: Commit** "Add messageMetadata: label and expiry readers and writers".
 
@@ -158,7 +158,7 @@ export function mayExpire(message: smoltalk.Message): boolean;
 - Test: `lib/runtime/promptLabels.test.ts` (should pass unchanged; it reads `labelAt` and `withMessageLabels`)
 
 **Interfaces:**
-- Consumes: Task 3.
+- Consumes: Task 3 (`setMetadata`, `labelOf`, `expiryOf`, `mayExpire`).
 - Produces, on `MessageThread`:
 
 ```ts
@@ -222,7 +222,7 @@ it("a label and an expiry ride through removeAt, replaceAt, setMessages, adoptFr
 Delete the existing cases that assert on `messageLabels`/`messageScopes` arrays or on `setMessages(…, labels, scopes)`; keep every case about `labelAt` surviving `removeAt`, `replaceAt`, `removeMatching`, and `adoptFrom`, since `labelAt` stays.
 
 - [ ] **Step 2: Run** the file. Expected: FAIL on `expiryAt`/`expire`/`claimUnkeyed` undefined.
-- [ ] **Step 3: Implement** in `messageThread.ts`: delete `messageLabels`, `messageScopes`, and every line that maintains them; `push` calls `mayExpire` and throws `push: a <role> message cannot expire` when given an expiry on another role, computes the handoff default for a system message with no expiry while `handoffScopes` is non-empty, and appends `withMetadata(message, { label, expires })` (or the message itself when both are null); `expire` and `claimUnkeyed` walk backwards using `expiryOf` and `withMetadata`; `labelAt`/`expiryAt` read via `labelOf`/`expiryOf`; `toJSON` drops the two fields; `fromJSON` reads legacy arrays and applies them with `withMetadata` after reviving, a scope string becoming `{ at: "handoff", key }`; `setMessages(messages)` assigns the array; `adoptFrom` copies messages, queue, and repairs. Rewrite the class comment: one paragraph saying per-message data lives in `metadata` (see `messageMetadata.ts`) and pointing at the dev doc from Task 11.
+- [ ] **Step 3: Implement** in `messageThread.ts`: delete `messageLabels`, `messageScopes`, and every line that maintains them; `push` calls `mayExpire` and throws `push: a <role> message cannot expire` when given an expiry on another role, computes the handoff default for a system message with no expiry while `handoffScopes` is non-empty, calls `setMetadata(message, { label, expires })` when either is set, and appends; `expire` filters the array by `expiryOf`; `claimUnkeyed` calls `setMetadata` on each unkeyed match; `labelAt`/`expiryAt` read via `labelOf`/`expiryOf`; `toJSON` drops the two fields; `fromJSON` reads legacy arrays and applies them with `setMetadata` after reviving, a scope string becoming `{ at: "handoff", key }`; `setMessages(messages)` assigns the array; `adoptFrom` copies messages, queue, and repairs. Rewrite the class comment: one paragraph saying per-message data lives in `metadata` (see `messageMetadata.ts`) and pointing at the dev doc from Task 11.
 - [ ] **Step 4: Update the callers.** `stripHandoffSystemMessages` → `thread.expire("handoff", scopeKey)`. Compaction in `prompt.ts`: drop the `labels`/`scopes` arrays and call `messages.setMessages([...head, summary, ...tail])`; delete the comment about labels riding along. `withMessageLabels` in `promptEvents.ts`: unchanged in behavior; it still calls `labelAt(i)`, so the only edit is the comment, which should no longer talk about index alignment as a hazard. `schemas.ts`: keep both fields, comment them as legacy input.
 - [ ] **Step 5: Run** `pnpm run typecheck`, then `pnpm exec vitest run lib/runtime/state lib/runtime/promptLabels.test.ts lib/runtime/handoff.test.ts > <scratch>/thread.txt 2>&1` (add `lib/runtime/threadRepair.test.ts` and `lib/runtime/memory` if they fail to typecheck). Expected: PASS.
 - [ ] **Step 6: Run the handoff agency-js suite**: `pnpm run agency test js tests/agency-js/handoff > <scratch>/handoff.txt 2>&1`. Expected: PASS with the fixture unchanged (`persona`, `pauseWithPersona`, `nested`, `cancelledHandoff` all still strip).
@@ -329,6 +329,7 @@ and call `await expireLlmCall()` immediately after each `guardGate.final` step (
 - Test: `lib/runtime/roundWarning.test.ts`
 - Modify: `stdlib/llm.agency:98-115` (`LlmDefaults`) and the module doc above it
 - Modify: `lib/stdlib/llm.ts:32-60` (`LlmDefaults`) and `_setLlmOptions` (line ~94, the `replyLimits` merge)
+- Modify: `lib/runtime/localDefaults.ts:40-52` (`mergedReplyLimits` becomes a call to a generic `mergeFields`)
 - Modify: `lib/typeChecker/builtins.ts` (the `llm()` option table, beside `maxRepeatedToolCalls` at line 178)
 
 **Interfaces:**
@@ -343,9 +344,11 @@ export type WarnAtRoundsLeft = {
 };
 export type RoundWarningSettings = Required<WarnAtRoundsLeft>;
 export const DEFAULT_ROUND_WARNING: RoundWarningSettings;   // the Global Constraints texts, remaining 3, finalWarning true
-/** Field-by-field: the call's value over the branch default over DEFAULT_ROUND_WARNING. */
+/** Field-by-field: the call's value over the branch default over DEFAULT_ROUND_WARNING. Uses mergeFields. */
 export function roundWarningSettings(perCall: WarnAtRoundsLeft | undefined, branch: WarnAtRoundsLeft | undefined): RoundWarningSettings;
-/** Replaces {remaining} and {limit}; any other brace text is left as is. */
+/** Replaces {remaining} and {limit}; any other brace text is left as is.
+ *  Not renderMessage from lib/typeChecker/diagnostics.ts: that one throws
+ *  on an unknown placeholder, and this text is the user's. */
 export function fillRoundWarning(template: string, values: { remaining: number; limit: number }): string;
 /** Which warning, if any, is due at the boundary after `round` (0-based)
  *  under `limit`, given which have already fired. */
@@ -359,8 +362,8 @@ export function roundWarningDue(
 
 - [ ] **Step 1: Write the failing tests** in `roundWarning.test.ts`: `roundWarningSettings(undefined, undefined)` equals the default; `{ text: "x" }` over `{ remaining: 5 }` gives remaining 5, text "x", the default final text; `fillRoundWarning` fills both placeholders, and leaves `{foo}` alone (Review Focus 2); `roundWarningDue` with the defaults and limit 50: null after round 40, `first` after round 46 (remaining 3), null after round 47 once `fired.first`, `final` after round 48 (remaining 1), null after round 49; limit 10: `first` after round 6, `final` after round 8; limit 2: `final` after round 0 (remaining is already 1); with `remaining: 1`, only `final` ever fires; with `remaining: 0`, no `first`; with `finalWarning: false`, no `final`; with `remaining: 10` and limit 3: `first` after round 0 with text containing "2 remain" (Review Focus 1).
 - [ ] **Step 2: Run** the file. Expected: FAIL, module not found.
-- [ ] **Step 3: Implement** `roundWarning.ts` to the interfaces. `remaining` for the boundary after `round` is `limit - (round + 1)`; `first` is due when `!fired.first && settings.remaining > 0 && remaining <= settings.remaining && remaining > 1`; `final` when `!fired.final && settings.finalWarning && remaining === 1`. Check `final` before `first`.
-- [ ] **Step 4: Add the option type** in all three places. `stdlib/llm.agency` `LlmDefaults`: `warnAtRoundsLeft?: { remaining?: number, text?: string, finalWarning?: boolean, finalWarningText?: string };` and a paragraph in the module doc, in the style of the `replyLimits` paragraph, saying what each field does, the two placeholders, and the defaults. `lib/stdlib/llm.ts` `LlmDefaults`: `warnAtRoundsLeft?: WarnAtRoundsLeft;` imported from `roundWarning.ts`. `_setLlmOptions`: merge `warnAtRoundsLeft` field by field like `replyLimits` (reuse `roundWarningSettings`'s merge or a small shared `mergeFields` helper; do not write a third merge). `builtins.ts`: an `objectType` entry with the four optional properties, with a one-line comment pointing at `roundWarning.ts`. Run `make`.
+- [ ] **Step 3: Implement.** First, in `localDefaults.ts`, add `export function mergeFields<T extends object>(base: T | null | undefined, over: T | null | undefined): T | undefined` with the body `mergedReplyLimits` has today, and make `mergedReplyLimits` a one-line call to it (or replace its two callers and delete it). Then write `roundWarning.ts` to the interfaces, with `roundWarningSettings` as `mergeFields(mergeFields(DEFAULT_ROUND_WARNING, branch), perCall)`. `remaining` for the boundary after `round` is `limit - (round + 1)`; `first` is due when `!fired.first && settings.remaining > 0 && remaining <= settings.remaining && remaining > 1`; `final` when `!fired.final && settings.finalWarning && remaining === 1`. Check `final` before `first`.
+- [ ] **Step 4: Add the option type** in all three places. `stdlib/llm.agency`: a named, exported `type WarnAtRoundsLeft = { remaining?: number; text?: string; finalWarning?: boolean; finalWarningText?: string }` beside `OpenRouterOptions`, and `warnAtRoundsLeft?: WarnAtRoundsLeft;` in `LlmDefaults`, and a paragraph in the module doc, in the style of the `replyLimits` paragraph, saying what each field does, the two placeholders, and the defaults. `lib/stdlib/llm.ts` `LlmDefaults`: `warnAtRoundsLeft?: WarnAtRoundsLeft;` imported from `roundWarning.ts`. `_setLlmOptions`: replace the `key === "replyLimits" ? … : value` ternary with a list, `const MERGED_FIELD_BY_FIELD = ["replyLimits", "warnAtRoundsLeft"]`, and one `mergeFields` call for any key in it, so the next option that merges this way is one more entry. `builtins.ts`: an `objectType` entry with the four optional properties, with a one-line comment pointing at `roundWarning.ts`. Run `make`.
 - [ ] **Step 5: Run** `pnpm run typecheck`, the new test file, and `pnpm exec vitest run lib/stdlib/llm.test.ts lib/typeChecker` (save output). Expected: PASS.
 - [ ] **Step 6: Commit** "warnAtRoundsLeft option and round-warning helpers".
 

@@ -47,18 +47,12 @@ how trace wX5GvrUq ran 43 rounds under a researcher that asked for 30:
 
 The cap allows rounds 0 to cap - 1. The request after the last allowed
 round, and every request after it in the call, offers only the intrinsic
-tools (`toolsOffered` in `toolLoopGuards.ts`). It offers no
-provider-hosted tools either: `configOffered` drops `hostedTools`, which
-travel in the config. With nothing to call or
-search, the model can only answer. Anthropic accepts a request whose
-history has `tool_use` and `tool_result` blocks but no `tools` field, so
-the empty list is safe there.
-
-`atRoundCap` in `prompt.ts` takes the round that a request's tool calls
-would run as. The request after round r leads to round r + 1. The first
-request and a validation retry lead to round `toolCallRound`, because the
-counter goes up only after the request that follows a round. All of these
-read the frame's counter, so a resumed pass offers what the first pass
+tools (`toolsOffered` in `toolLoopGuards.ts`) and no provider-hosted
+tools (`configOffered` drops `hostedTools`, which travel in the config).
+With nothing to call or search, the model can only answer. Anthropic
+accepts a request whose history has `tool_use` and `tool_result` blocks
+but no `tools` field, so the empty list is safe there. The decision reads
+the frame's round counter, so a resumed pass offers what the first pass
 offered.
 
 A model that calls a tool it was not offered gets the `tooManyRounds`
@@ -109,13 +103,10 @@ so a pass resumed after a pause sends neither a second time
 (`tests/agency-js/round-warning`).
 
 The warning is a user message labeled `roundWarning` that expires with
-the `llm()` call (`docs/dev/runtime/expiring-messages.md`). The warnings
-read "for this request", and once the call returns they are gone, so a
-later call on the same thread never reads a stale count. The warning is
-a user message because a tool result belongs to the tool: a model that
-quotes tool output would quote the runtime's words as the tool's. On the
-Anthropic API, smoltalk merges it into the same user turn as the tool
-results before it.
+the `llm()` call (`docs/dev/runtime/expiring-messages.md`), so a later
+call on the same thread never reads a stale count. It is a user message
+and not a tool result because a tool result belongs to the tool: a model
+that quotes tool output would quote the runtime's words as the tool's.
 
 The option is set on the call or with `setLlmOptions`. The two combine
 field by field (`mergeFields` in `lib/runtime/localDefaults.ts`), so a

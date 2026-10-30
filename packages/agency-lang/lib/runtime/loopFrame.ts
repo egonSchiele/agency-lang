@@ -24,8 +24,7 @@ export function initLoopFrame(self: Record<string, any>, args: Record<string, an
   const tools: any[] = args.clientConfig?.tools || [];
   self.toolNames ??= tools.map((tool) => tool.name);
   // Names this llm() call as the owner of the messages that expire with it
-  // (docs/dev/runtime/expiring-messages.md). Minted once and kept on the
-  // frame, so a resume reads the same key. Outside the first-entry block so
-  // a checkpoint from before the field gets one.
+  // (docs/dev/runtime/expiring-messages.md). Kept on the frame, so a resume
+  // reads the same key.
   self.llmCallKey ??= nanoid();
 }

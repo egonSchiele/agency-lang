@@ -36,8 +36,7 @@ export type ReplyLimits = {
  *  both set a field. A branch default and a call's own value combine this
  *  way, so a call that sets one field keeps the branch's others. A `null`
  *  object, and a `null` field, count as absent: Agency has no undefined,
- *  and its optional fields arrive as null, so `{ text: null }` must not
- *  wipe out the base's text. */
+ *  and its optional fields arrive as null. */
 export function mergeFields<T extends object>(
   base: T | null | undefined,
   over: T | null | undefined,

@@ -587,14 +587,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   assertUniqueToolNames(tools);
   warnOnOversizedToolSchemas(ctx, run.log, tools);
   let toolFunctions = exposedFunctions;
-  // A request whose tool calls could not run, because they would make
-  // round `nextRound` and the cap allows rounds 0 to roundLimit - 1, offers
-  // only the intrinsic tools and no hosted ones (toolsOffered,
-  // configOffered). The request after round r leads to round r + 1; the
-  // first request and a validation retry lead to round toolCallRound,
-  // since the counter goes up only after the request that follows a
-  // round. All read the frame's counter, so a resumed pass offers what the
-  // first pass offered.
+  // True when the round a request's tool calls would run as is past the
+  // cap, which allows rounds 0 to roundLimit - 1; such a request offers no
+  // hosted tools (toolsOffered, configOffered). The first request and a
+  // validation retry lead to round toolCallRound.
   const atRoundCap = (nextRound: number = self.toolCallRound) => nextRound >= roundLimit;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing

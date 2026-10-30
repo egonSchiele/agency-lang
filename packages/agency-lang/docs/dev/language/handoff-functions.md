@@ -40,14 +40,16 @@ the body's messages can land on the caller's thread as valid history.
    case the body's `llm()` calls land on the caller's thread. The view
    has its own active stack, so two prompts running at once cannot
    disturb each other. For the duration of the body the thread holds
-   the dispatch's scope key (`MessageThread.enterHandoffScope`), and
-   every system message pushed meanwhile is tagged with it in
-   `messageScopes`, whichever code pushes it. The key is the tool name,
-   the call id, and the nesting depth; the depth matters because a
+   the dispatch's scope key (`MessageThread.enterHandoffScope`). Every
+   system message pushed meanwhile, whichever code pushes it, expires
+   with the dispatch: its metadata carries
+   `expires: { at: "handoff", key }`. The key is the tool name, the
+   call id, and the nesting depth. The depth matters because a
    provider that sends no call ids leaves a handoff nested inside
    itself with the same name and the same empty id.
-4. When the body returns, `closeHandoff` removes every message tagged
-   with this dispatch's scope key and pushes a user-role
+4. When the body returns, `closeHandoff` calls
+   `expire("handoff", key)`, which removes every message that expires
+   with this dispatch, and pushes a user-role
    `[name finished. <result>]\nContinue with the user's request.`
    The return value is always included, even when it repeats the body's
    last assistant message. A rejection takes the same route with the
@@ -62,13 +64,14 @@ the body's messages can land on the caller's thread as valid history.
    loser) gets no resume message; its system messages are removed on
    the way out.
 
-The strip is keyed on the scope tags, not on a recorded position: memory
-compaction rewrites the thread and shifts every index, and the tags ride
-along with the messages it keeps (`setMessages` takes labels and scopes).
-A tagged message that compaction summarized away is simply not there to
-remove. The tags are serialized with the thread, so they survive a
-checkpoint; the scope stack itself is not, because the `.invoke` step
-re-enters it when a resume re-runs the dispatch.
+The strip finds the persona by its expiry. A recorded position would go
+stale: memory compaction rewrites the thread and shifts every index. It
+keeps expiring messages out of the summary, so the persona is still there
+to remove. The expiry is part of the message's JSON, so it survives a
+checkpoint. The scope stack is not serialized, because the `.invoke`
+step re-enters it when a resume re-runs the dispatch. See
+`docs/dev/runtime/expiring-messages.md` for the mechanism the strip
+shares with the memory facts and the round warning.
 
 The return value still reaches the code that awaited the call, through
 `setResultOnBranch`, unchanged.
@@ -214,8 +217,13 @@ level.
 ## Threads inside the body
 
 `thread {}` still isolates. `subthread {}` inherits the caller's history
-and does not flow back. System messages the body pushes are scoped to
-the dispatch.
+and does not flow back. System messages the body pushes expire with the
+dispatch.
+
+The body's `llm()` calls run on the caller's thread with their own round
+counts. A round warning the caller's call sent is still on the thread
+while the body runs, so the body's model reads it. A round warning the
+body's call sends expires when that call returns, before the hand-back.
 
 The caller's own system messages are live during the body. The body's
 request sends the whole thread, so a subagent sees the caller's system
@@ -239,7 +247,7 @@ it.
 ## Resume
 
 A checkpoint taken inside a handoff holds the caller's thread with the
-body's messages so far, scope tags included. On resume the
+body's messages so far, each with its expiry. On resume the
 `.handoffDropCall` step is skipped (it is in `completedSteps`) and the
 `.invoke` step re-runs to consume the user's response, as for any tool,
 re-entering the scope on the way in. There is no orphaned tool call for
@@ -277,8 +285,8 @@ re-entering the scope on the way in. There is no orphaned tool call for
 - `lib/runtime/prompt.ts` — the gate verdict, the two dispatch
   batches, the `.handoffDropCall` step, `invokeOnThread` (enters and
   exits the scope), and `pushToolReply`.
-- `lib/runtime/state/messageThread.ts` — `messageScopes`,
-  `enterHandoffScope`, `removeHandoffScoped`.
+- `lib/runtime/state/messageThread.ts` — `enterHandoffScope`, the
+  handoff expiry `push` writes, and `expire`.
 - `lib/runtime/state/threadStore.ts` — `viewWithActive`.
 - `tests/agency-js/handoff/` — the end-to-end suite.
 - `tests/agency-js/end-turn/` — the end-to-end suite for `endTurn` and

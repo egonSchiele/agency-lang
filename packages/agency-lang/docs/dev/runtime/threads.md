@@ -26,35 +26,19 @@ extras such as a decision model's answers. smoltalk writes all of them in
 active thread's last assistant message, as a record with nulls for what
 the reply did not carry.
 
-#### Per-message debug labels (`messageLabels`)
+#### Per-message data
 
-`messageLabels` holds an optional debug label per message, from `llm(label:)` / `userMessage(msg, label:)` and friends. It is observability-only: labels surface in statelog (see `docs/dev/hosting/statelog.md`) and are never sent to the provider. It is **not** the same field as the thread-level `label`, which comes from `thread(label: "...")` and names the whole thread.
+Each message carries what the runtime knows about it in its smoltalk `metadata`. There are two keys. `label` is a debug label from `llm(label:)` or `userMessage(msg, label:)`. `expires` says when the runtime removes the message. `lib/runtime/state/messageMetadata.ts` is the only module that reads or writes these keys.
 
-Smoltalk messages have no id, so a label cannot be keyed to the message it describes. `messageLabels` is instead aligned with `messages` **by index** — `messageLabels[i]` labels `messages[i]`, and the lengths always match. An index-aligned array is also what lets labels serialize with the thread (a `WeakMap` keyed by message identity would survive slicing but not `toJSON`).
+A label shows up in statelog (see `docs/dev/hosting/statelog.md`) and is never sent to the provider. It is a different thing from the thread-level `label`, which `thread(label: "...")` sets for the whole thread.
 
-The tradeoff is that nothing in the type system enforces the alignment. It is enforced instead by keeping the writers few, and by giving every caller an operation that carries the labels along — so no caller has a reason to reach past them:
+Because the data is part of the message, it stays with the message through every array edit, checkpoint, and subthread copy. `MessageThread`'s edits are plain array edits, and `newSubthreadChild()` starts the child with the parent's labels and expiries. The runtime never changes a message in place: `withMetadata` returns a copy, because `adoptFrom` and `getMessages` share message objects between holders. `replaceAt` copies the old message's label onto the message that replaces it.
 
-- **`push(message, label?)`** — the only append. `addMessage()` delegates to it.
-- **`removeAt(index)`** — the only removal. Takes the message's label out with it.
-- **`adoptFrom(other)`** — take on another thread's messages *and* labels, keeping this thread's identity (the resume path needs the alias).
-- **the constructor and `setMessages(messages, labels?)`** — the only replacements. Both rebuild `messageLabels` to the new length.
-- **Nothing else touches `this.messages`.**
+`docs/dev/runtime/expiring-messages.md` covers the expiry: who owns an expiring message, when it is removed, and the rule for adding one.
 
-Treat any new direct mutation of `this.messages` as a bug: a desync does not degrade gracefully, it shifts every later label onto the wrong message. Each writer has a test in `messageThread.test.ts` that fails on a desync.
+Anything that snapshots a thread for checkpoint/resume must persist the **full `MessageThreadJSON`**. A bare `.messages` array revives through `fromJSON`'s legacy branch, which has no queue or repair count to read. `fromJSON` still accepts the bare array, so older checkpoints keep working. It also reads the `messageLabels` and `messageScopes` arrays older checkpoints carry and writes them into the messages' metadata.
 
-This matters in practice. Before `removeAt` and `adoptFrom` existed, two callers reached for `setMessages` for jobs that were not rewrites and silently dropped every label: the memory layer removing its injected-facts message (on the **normal** path, so a labeled program lost its labels after the first `llm()` call), and the resume path overwriting the thread with the messages it had just restored.
-
-Things worth knowing:
-- **`setMessages` with no `labels` drops labels.** Wholesale rewrites that cannot say what the labels are — summarization, `threadRepair` — therefore lose them. Intended. Callers that *do* know the labels pass them.
-- **A `labels` array whose length disagrees with `messages` is refused**, not padded or sliced: a disagreement means the source is already wrong, and guessing would put real labels on wrong messages. Unlabeled beats mislabeled.
-- **`newSubthreadChild()` does not carry the parent's labels**: it seeds the child via `cloneMessages()`, which copies messages only, so the child starts correctly aligned with all-null labels.
-- **`toJSON()` hands out a copy** of `messageLabels`, so a consumer mutating the JSON cannot mutate the thread.
-
-Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`; legacy JSON without the field revives as all-null. `ThreadStore` serializes each thread with `thread.toJSON()`, so labels ride along there for free.
-
-Anything that snapshots a thread for checkpoint/resume must persist the **full `MessageThreadJSON`**, not just `.messages` — a bare array revives through `fromJSON`'s legacy branch, which has no labels to read, so the labels would be gone after resume. `fromJSON` still accepts the bare array, so older checkpoints keep working.
-
-Every bailout path in `runPrompt` stores a snapshot into `self.messagesJSON`: the PromptRunner callback, the tool loop, reply-attachment injection, and the validation retries. They all go through one local `snapshotThread()` rather than each calling `toJSON()` themselves. Same reasoning as the writers above, the shape decision is made once, so a path that isn't covered by a test is still correct by construction.
+Every bailout path in `runPrompt` stores a snapshot into `self.messagesJSON`: the PromptRunner callback, the tool loop, reply-attachment injection, and the validation retries. They all go through one local `snapshotThread()` rather than each calling `toJSON()` themselves, so the shape decision is made once, and a path that isn't covered by a test is still correct by construction.
 
 **`ThreadStore`** (`lib/runtime/state/threadStore.ts`):
 - Registry of `MessageThread` objects keyed by auto-incremented string IDs

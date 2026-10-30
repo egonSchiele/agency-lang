@@ -269,6 +269,7 @@ Other process docs:
 - `docs/dev/runtime/simplemachine.md` — The graph execution engine that runs compiled Agency programs.
 - `docs/dev/runtime/subprocess-ipc.md` — How an agent compiles and runs Agency code in a subprocess, and how the parent's handler chain extends across that boundary.
 - `docs/dev/runtime/threads.md` — How LLM conversation history accumulates and flows through thread and subthread blocks.
+- `docs/dev/runtime/expiring-messages.md` — Messages the runtime adds and later removes: the `metadata.expires` record on the message, the three owners (an `llm()` call, a request, a handoff) and where each expires, the claim rule for unkeyed messages, why clones keep them, and the four edits of history that are not expiries.
 - `docs/dev/runtime/trace.md` — Execution traces: a checkpoint per step, written to a file the debugger can replay.
 
 ### Compiler and type checker

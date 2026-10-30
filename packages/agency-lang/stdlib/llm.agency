@@ -49,6 +49,15 @@ export type OpenRouterOptions = {
   provider?: OpenRouterProviderPreferences
 }
 
+/** When the tool loop warns the model that its tool rounds are running
+ *  out. See `warnAtRoundsLeft` on `LlmDefaults`. */
+export type WarnAtRoundsLeft = {
+  remaining?: number;
+  text?: string;
+  finalWarning?: boolean;
+  finalWarningText?: string
+}
+
 /** The base URL for each provider that takes one. Each field is
  *  optional. A provider left out uses the URL from `agency.json`, or its
  *  default. */
@@ -86,6 +95,20 @@ export type LlmBaseUrls = {
  *  into the provider's request body as given, for a request field Agency
  *  has no option for, such as `{ top_k: 5 }`.
  *
+ *  `warnAtRoundsLeft` warns the model before it runs out of tool rounds
+ *  (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
+ *  the call sends `text` as a user message; when one round is left and
+ *  `finalWarning` is true (the default), it sends `finalWarningText`. In
+ *  either text, `{remaining}` becomes the number of rounds left and
+ *  `{limit}` the cap. Each warning is sent once per `llm()` call and is
+ *  removed from the thread when the call returns. `remaining: 0` turns
+ *  the first warning off. The default texts are "Of the {limit} tool
+ *  rounds for this request, {remaining} remain. Finish what you can with
+ *  them and then write your answer." and "This is the last tool round for
+ *  this request. The results of the tool calls you make now are the last
+ *  you will see. After them, write your answer from what you have." A
+ *  call's own `warnAtRoundsLeft` combines with this one field by field.
+ *
  *  `baseUrl` sets the base URLs to use for the providers it names, for
  *  example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
  *  server on another machine. A later `setLlmOptions` call with `baseUrl`
@@ -106,6 +129,7 @@ export type LlmDefaults = {
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
+  warnAtRoundsLeft?: WarnAtRoundsLeft;
   openRouter?: OpenRouterOptions;
   baseUrl?: LlmBaseUrls;
   rawAttributes?: any;

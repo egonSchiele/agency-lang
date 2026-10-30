@@ -24,7 +24,7 @@ import { projectProviderTokenUsage, type ProviderUsageKind } from "./invocationU
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
-import { mergedReplyLimits, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
+import { mergeFields, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
 import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindFor } from "./llmDispatch.js";
 import {
@@ -670,10 +670,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // (the temperature, and how the thinking option reaches the server).
   // The reply limits combine field by field across the branch default and
   // the call, where every other option is replaced whole.
-  const replyLimits = mergedReplyLimits(
-    stackSmolDefaults.replyLimits,
-    restClientConfig.replyLimits,
-  );
+  const replyLimits = mergeFields(stackSmolDefaults.replyLimits, restClientConfig.replyLimits);
   const merged = ctx.getSmoltalkConfig(stackSmolDefaults, {
     ...restClientConfig,
     ...(replyLimits === undefined ? {} : { replyLimits }),

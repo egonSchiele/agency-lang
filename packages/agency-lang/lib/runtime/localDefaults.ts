@@ -32,25 +32,33 @@ export type ReplyLimits = {
   limitAnswers?: boolean;
 };
 
-/** Two sets of limits combined field by field, the second winning where
- *  both set a field. A branch default and a call's own limits combine
- *  this way, so a call that sets one field keeps the branch's others. A
- *  `null` counts as absent: Agency has no undefined, and its optional
+/** Two option objects combined field by field, the second winning where
+ *  both set a field. A branch default and a call's own value combine this
+ *  way, so a call that sets one field keeps the branch's others. A `null`
+ *  object counts as absent: Agency has no undefined, and its optional
  *  fields arrive as null. */
+export function mergeFields<T extends object>(
+  base: T | null | undefined,
+  over: T | null | undefined,
+): T | undefined {
+  if (base == null || over == null) {
+    return over ?? base ?? undefined;
+  }
+  const merged: T = { ...base };
+  for (const key of Object.keys(over) as (keyof T)[]) {
+    if (over[key] !== undefined) {
+      merged[key] = over[key];
+    }
+  }
+  return merged;
+}
+
+/** The reply limits combined field by field; see `mergeFields`. */
 export function mergedReplyLimits(
   base: ReplyLimits | null | undefined,
   over: ReplyLimits | null | undefined,
 ): ReplyLimits | undefined {
-  if (base == null || over == null) {
-    return over ?? base ?? undefined;
-  }
-  const merged: ReplyLimits = { ...base };
-  for (const key of Object.keys(over) as (keyof ReplyLimits)[]) {
-    if (over[key] !== undefined) {
-      (merged as Record<string, unknown>)[key] = over[key];
-    }
-  }
-  return merged;
+  return mergeFields(base, over);
 }
 
 /** The request fields the MLX chat server reads for the limits. */

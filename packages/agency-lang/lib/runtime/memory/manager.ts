@@ -1146,6 +1146,14 @@ export class MemoryManager {
           keptIndices.push(i);
         }
       }
+      if (toCompact.length === 0) {
+        // Every message before the split expires soon. A summary of nothing
+        // would only add a message, so leave the thread alone this turn.
+        this.logger.debug(
+          `[memory] compaction skipped: the ${keptIndices.length} messages before the split all expire`,
+        );
+        return null;
+      }
       const tailIndices: number[] = [];
       for (let i = tailStart; i < messages.length; i++) {
         tailIndices.push(i);

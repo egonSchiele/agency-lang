@@ -27,6 +27,12 @@ describe("roundWarningSettings", () => {
     expect(settings.finalWarning).toBe(true);
     expect(settings.finalWarningText).toBe(DEFAULT_ROUND_WARNING.finalWarningText);
   });
+
+  it("keeps the default text when the call passes a null field, as Agency does for an unset optional", () => {
+    const settings = roundWarningSettings({ remaining: 2, text: null as any }, undefined);
+    expect(settings.remaining).toBe(2);
+    expect(settings.text).toBe(DEFAULT_ROUND_WARNING.text);
+  });
 });
 
 describe("fillRoundWarning", () => {

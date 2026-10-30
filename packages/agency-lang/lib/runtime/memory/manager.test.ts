@@ -1062,6 +1062,28 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     expect(prompts.join("\n")).not.toContain("three tool rounds remain");
   });
 
+  it("does not compact when every message before the split expires", async () => {
+    const client = mockLlmClient();
+    const manager = makeManager(client);
+    const expiring = (text: string) =>
+      userMessage(text, { metadata: { expires: { at: "llmCall", key: "k1" } } });
+    // The split lands on the first assistant message, so only the two
+    // expiring messages are before it.
+    const messages = [
+      systemMessage("You are an agent."),
+      expiring("WARNING one"),
+      expiring("WARNING two"),
+      assistantMessage("step one"),
+      assistantMessage("step two"),
+      assistantMessage("all done"),
+    ];
+
+    const plan = await manager.compactIfNeeded(testRun(), messages);
+
+    expect(plan).toBeNull();
+    expect(client.text).not.toHaveBeenCalled();
+  });
+
   it("auto-extraction only sends messages added since the last pass", async () => {
     const client = mockLlmClient();
     const manager = makeManager(client);

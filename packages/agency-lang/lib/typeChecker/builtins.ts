@@ -88,6 +88,18 @@ const openRouterProviderObject: VariableType = {
   ],
 };
 
+/** `llm()`'s `warnAtRoundsLeft` option. See `WarnAtRoundsLeft` in
+ *  lib/runtime/roundWarning.ts. */
+const warnAtRoundsLeftObject: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "remaining", value: optional(number) },
+    { key: "text", value: optional(string) },
+    { key: "finalWarning", value: optional(boolean) },
+    { key: "finalWarningText", value: optional(string) },
+  ],
+};
+
 /** `llm()`'s `openRouter` option. */
 const openRouterObject: VariableType = {
   type: "objectType",
@@ -180,19 +192,8 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
   // `setLlmOptions` as well, the smaller wins (`roundCap`).
   { key: "maxToolCallRounds", value: optional(number) },
   // When to warn the model that its tool rounds are running out, and what
-  // to say. See `WarnAtRoundsLeft` in lib/runtime/roundWarning.ts.
-  {
-    key: "warnAtRoundsLeft",
-    value: optional({
-      type: "objectType",
-      properties: [
-        { key: "remaining", value: optional(number) },
-        { key: "text", value: optional(string) },
-        { key: "finalWarning", value: optional(boolean) },
-        { key: "finalWarningText", value: optional(string) },
-      ],
-    }),
-  },
+  // to say.
+  { key: "warnAtRoundsLeft", value: optional(warnAtRoundsLeftObject) },
   // Resilience policy. Defaults: retries 2, timeout 10min, backoff 500ms
   // x2 capped at 10s. `retries: 0` / `timeout: 0` disable. `setLlmOptions`
   // sets the same per-branch.

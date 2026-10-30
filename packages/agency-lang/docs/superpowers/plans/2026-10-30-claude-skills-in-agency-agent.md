@@ -73,7 +73,8 @@ Each of these has a test in the task that owns the code.
 ### Task 1: `scanClaudeSkills` and the frontmatter switches in `std::skills`
 
 **Files:**
-- Modify: `stdlib/skills.agency` (new types and function near `scanSkillsSubdirs`; the switch helper used by `scanEntries` at line 283)
+- Modify: `stdlib/skills.agency` (new types and function near `scanSkillsSubdirs`; the switch helpers used by `scanEntries` at line 283; `commandsDir` at line 838 moves onto the shared record helper)
+- Modify: `lib/stdlib/gitignore.ts` (export a run-free wrapper over `repositoryAncestors`)
 - Create: `tests/agency/skills-claude.agency`, `tests/agency/skills-claude.test.json`
 - Create fixture: `tests/agency/skills-claude-fixture/` with these skills, each a folder holding `SKILL.md`:
   - `normal`: `name: normal`, `description: A normal skill.`, `argument-hint: <file>`, body `Run on $ARGUMENTS.`
@@ -102,8 +103,9 @@ Each of these has a test in the task that owns the code.
 
   export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan>
   ```
-  `dir` in the result is the real directory (`_realDir`). `entries` are the model-usable skills in the standard layout; `commands` are the user-runnable ones. A `SkillCommand` has the same fields `commandsDir` records have, so `expandSlash` takes either.
+  `dir` in the result is the real directory (`_realDir`). `entries` are the model-usable skills in the standard layout; `commands` are the user-runnable ones. A `SkillCommand` has the same fields `commandsDir` records have, because both are built by `commandRecord`, so `expandSlash` takes either.
 - `skillsDir(dir, "standard")` stops listing skills with `disable-model-invocation: true`.
+- From `lib/stdlib/gitignore.ts`: `export async function _repositoryAncestors(dir: string): Promise<string[] | null>`.
 
 - [ ] **Step 1: Write the fixture and the failing tests.** Each node returns a boolean, and each test.json entry expects `"true"` with `exact`. Load the scan with `scanClaudeSkills(__dirname + "/skills-claude-fixture") with approve`, then unwrap it.
   - `entriesAreModelUsableSkills`: the sorted entry names equal `["bare", "model-only", "normal", "other-name"]`. `manual-only` and `neither` are absent. `quoted` is absent, because the string `"true"` counts.
@@ -120,19 +122,25 @@ Each of these has a test in the task that owns the code.
 
 - [ ] **Step 3: Implement.** In `stdlib/skills.agency`:
   - A private `frontmatterFlag(data: any, key: string, fallback: boolean): boolean`. It returns `true` for `true` or `"true"`, `false` for `false` or `"false"`, and `fallback` otherwise.
-  - `scanEntries` drops a standard-layout entry when `frontmatterFlag(data, "disable-model-invocation", false)` is true. This is the one place the model-use rule lives.
+  - The two rules, each as one named private predicate over the parsed frontmatter. Every caller asks these; nothing else reads the two keys.
+    - `modelInvocable(data: any): boolean` is `!frontmatterFlag(data, "disable-model-invocation", false)`.
+    - `userInvocable(data: any): boolean` is `frontmatterFlag(data, "user-invocable", true)`.
+  - `scanEntries` drops a standard-layout entry when `modelInvocable(data)` is false. That makes `skillsDir` follow the rule too.
+  - A private `commandRecord(name: string, data: any, body: string): SkillCommand`. It holds the defaults `commandsDir` applies today: `description` and `argHint` (from `argument-hint`) become `""` when missing. Move `commandsDir`'s record building onto it, so the two functions cannot drift apart. `commandsDir` keeps its signature and its output.
   - `scanClaudeSkills`:
     1. Resolve `dir` with `_realDir`, returning the failure.
     2. Raise `std::skills::skillsDir` with `{ dir: real, layout: "standard" }` and the same message `skillsDir` uses, so an existing always-rule for a folder covers it.
-    3. Build `entries` with `scanEntries(real, ".", "standard", false, MAX_SKILL_FILES)`.
-    4. Build `commands` from a `_glob` of `*/SKILL.md` and one `_read` each. Keep a skill unless `frontmatterFlag(data, "user-invocable", true)` is false. The name is frontmatter `name`, or else the folder name. `description` and `argHint` (from `argument-hint`) default to `""`. The body is `"Base directory for this skill: ${real}/${folder}\n\n"` followed by `stripFm(raw)`.
+    3. `_glob` `*/SKILL.md` once, up to `MAX_SKILL_FILES`, and `_read` each file once. Parse its frontmatter with the same tolerance `scanEntries` has (`catch {}`).
+    4. From each file, build at most two things. When `modelInvocable(data)`, add `standardEntry(path, data)` to `entries`. When `userInvocable(data)`, add `commandRecord(name, data, body)` to `commands`. Here `name` is frontmatter `name`, or else the folder name, as in `standardEntry`. `body` is `"Base directory for this skill: ${real}/${folder}\n\n"` followed by `stripFm(raw)`.
   - Write a docstring for `scanClaudeSkills` and both types. They become the stdlib reference page.
 
 - [ ] **Step 4: Run the tests; confirm they pass, and that the existing `skills-dir` and `commands-dir` tests still pass.**
   Run: `make > <scratch>/make.log 2>&1; for t in skills-claude skills-dir commands-dir; do pnpm run agency test tests/agency/$t.agency > <scratch>/$t.log 2>&1; echo $t=$?; done`
-  Expected: all three exit 0.
+  Expected: all three exit 0. `commands-dir` passing unchanged is the check that moving its record building onto `commandRecord` changed nothing.
 
-- [ ] **Step 5: Commit** `stdlib/skills.agency`, the fixture, both test files, and the regenerated `docs/site/stdlib/skills.md`.
+- [ ] **Step 5: Expose the repository walk to Agency code.** `lib/stdlib/gitignore.ts:94` already has `repositoryAncestors(host, dir)`. It returns the folders above `dir` up to the one holding `.git`, outermost first. It returns `[]` when `dir` is itself the repository root, and `null` when there is no repository. Add an exported `_repositoryAncestors(dir: string): Promise<string[] | null>` beside it. On its first line it reads `currentHost()` and passes that to `repositoryAncestors`. Task 2 calls this; do not write a second walk.
+
+- [ ] **Step 6: Commit** `stdlib/skills.agency`, `lib/stdlib/gitignore.ts`, the fixture, both test files, and the regenerated `docs/site/stdlib/skills.md`.
 
 ### Task 2: Find, scan, and merge the skill folders in the agent
 
@@ -141,52 +149,60 @@ Each of these has a test in the task that owns the code.
 - Create: `lib/agents/agency-agent/tests/claudeSkills.agency`, `lib/agents/agency-agent/tests/claudeSkills.test.json`
 
 **Interfaces:**
-- Consumes: `scanClaudeSkills`, `ClaudeSkillsScan`, `SkillCommand`, and `skillsToolFromEntries(dir, entries, name)` from `std::skills`.
+- Consumes: `scanClaudeSkills`, `ClaudeSkillsScan`, `SkillCommand`, and `skillsToolFromEntries(dir, entries, name)` from `std::skills`; `_repositoryAncestors` from `agency-lang/stdlib-lib/gitignore.js` (Task 1).
 - Produces:
   ```
+  export type SkillLabel = "personal" | "project"
+
+  export type SkillDir = {
+    label: SkillLabel;
+    dir: string
+  }
+
   export type SkillSource = {
-    label: "personal" | "project";
+    label: SkillLabel;
     scan: ClaudeSkillsScan
   }
 
-  export def projectSkillDirs(start: string, ceiling: string = "/"): string[]
-  export def claudeSkillDirs(start: string, home: string): string[]
+  export def projectFolders(start: string, ancestors: string[] | null): string[]
+  export def claudeSkillDirs(start: string, home: string): SkillDir[]
   export def mergeSkillSources(sources: SkillSource[]): SkillSource[]
   export def skillToolsFor(sources: SkillSource[]): any[]
   export def skillCommandsFor(sources: SkillSource[]): SkillCommand[]
+  export def loadSkillSources(start: string, home: string): SkillSource[]
   export def claudeSkillTools(): any[]
   export def claudeSkillCommands(): SkillCommand[]
   ```
 
 The functions, in order:
 
-- `projectSkillDirs(start, ceiling)`: the existing `.claude/skills` folders from `start` upward, nearest first. The walk stops at the first directory that has `.git`. It also stops after `ceiling`, or at the filesystem root (where `path.dirname(d) == d`). If no `.git` was found by then, it returns only `start`'s folder, if that exists. Production always passes the default `"/"`. The parameter exists so a test can build a tree with no `.git` above it, even though the test folder itself sits inside this repository. Use `exists` from `std::shell`, which raises no interrupt.
-- `claudeSkillDirs(start, home)`: `<home>/.claude/skills` first if it exists, then `projectSkillDirs(start)`. Duplicates are allowed here; merging removes them.
+- `projectFolders(start, ancestors)`: pure. It returns the folders whose `.claude/skills` count, nearest first: `start`, then `ancestors` reversed. With `ancestors == null` (no repository), it returns `[start]`. This is the one place the "no repository, only the start folder" rule lives.
+- `claudeSkillDirs(start, home)`: the candidate folders, labeled, in precedence order. First `{ label: "personal", dir: home + "/.claude/skills" }`, then one `{ label: "project", ... }` for each folder from `projectFolders(start, _repositoryAncestors(start))`, with `/.claude/skills` added. It keeps only folders that exist (`exists` from `std::shell`, which raises no interrupt). The label is set here, where the folder's origin is known; nothing later works it out again.
 - `mergeSkillSources`: pure. It keeps the first source for each `scan.dir`, drops any entry whose name an earlier source already listed, and drops any command whose name an earlier source already listed.
 - `skillToolsFor`: one tool per source that still has entries. The tool is built with `skillsToolFromEntries(scan.dir, entries, name)`. The personal source is named `personal_skills`. The project sources are named `project_skills`, `project_skills_2`, `project_skills_3`, in order.
 - `skillCommandsFor`: every source's commands, in source order.
-- A private `loadSkillSources(start: string, home: string): SkillSource[]` scans each folder from `claudeSkillDirs` with `scanClaudeSkills(dir) with approve`. It skips a failure. The label is `"personal"` for the home folder, otherwise `"project"`. It returns `mergeSkillSources` of the result.
-- `static const SKILL_SOURCES = loadSkillSources(cwd(), os.homedir())`. `claudeSkillTools()` and `claudeSkillCommands()` read it.
+- `loadSkillSources(start, home)`: for each `SkillDir`, `scanClaudeSkills(dir) with approve`, keeping the label. It skips a failure and returns `mergeSkillSources` of the rest.
+- `static const SKILL_SOURCES = loadSkillSources(cwd(), os.homedir())`. `claudeSkillTools()` returns `skillToolsFor(SKILL_SOURCES)`, and `claudeSkillCommands()` returns `skillCommandsFor(SKILL_SOURCES)`.
 
-- [ ] **Step 1: Write the failing tests.** Build the tree at runtime under `__dirname + "/test-output/claude-skills"`, which `.gitignore` already covers. Git refuses to commit a path named `.git`, so the `.git` marker cannot be a fixture. Remove the tree at the start and the end of each node with `remove(dir) with approve`. In the tree:
+- [ ] **Step 1: Write the failing tests.** Build the tree at runtime under `__dirname + "/test-output/claude-skills"`, which `.gitignore` already covers. Git refuses to commit a path named `.git`, so the `.git` marker cannot be a fixture. Remove the tree at the start and the end of each node with `remove(tree, allowedPaths: [__dirname + "/test-output"]) with approve`, so a wrong path cannot delete anything outside the test folder. In the tree:
   - `home/.claude/skills/shared/SKILL.md` and `home/.claude/skills/mine/SKILL.md`
   - `repo/.git/` (a directory)
   - `repo/.claude/skills/shared/SKILL.md` and `repo/.claude/skills/rootonly/SKILL.md`
   - `repo/sub/.claude/skills/near/SKILL.md`
   - `repo/sub/work/` (no skills)
-  - `loose/.claude/skills/x/SKILL.md` (no `.git` above it inside the tree)
 
   Nodes, each returning a boolean checked against `"true"`:
-  - `walksUpToTheRepoRoot`: `projectSkillDirs(repo + "/sub/work", tree)` equals `[repo + "/sub/.claude/skills", repo + "/.claude/skills"]`, where `tree` is the root of the temporary tree.
-  - `outsideARepoReadsOnlyTheStart`: `projectSkillDirs(loose, tree)` equals `[loose + "/.claude/skills"]`. This covers Review Focus 2. Without the `tree` ceiling, the walk would reach this repository's own `.git`.
-  - `walkStopsAtTheCeiling`: put `tree + "/.claude/skills/above/SKILL.md"` in the tree, and check that `projectSkillDirs(loose, tree)` still does not include `tree + "/.claude/skills"`. With no `.git` found, only the start folder counts.
-  - `personalFolderComesFirst`: `claudeSkillDirs(repo + "/sub/work", home)[0]` equals `home + "/.claude/skills"`.
-  - `personalWinsOnASharedName`: after loading the sources for `repo/sub/work` with `home`, the merged entries hold `shared` once, from the personal source.
+  - `projectFoldersNearestFirst`: `projectFolders("/r/s/w", ["/r", "/r/s"])` equals `["/r/s/w", "/r/s", "/r"]`.
+  - `outsideARepoReadsOnlyTheStart`: `projectFolders("/a/b", null)` equals `["/a/b"]`. This covers Review Focus 2.
+  - `atTheRepoRootReadsOnlyIt`: `projectFolders("/r", [])` equals `["/r"]`.
+  - `walksUpToTheRepoRoot`: the `project` entries of `claudeSkillDirs(repo + "/sub/work", home)` have the dirs `[repo + "/sub/.claude/skills", repo + "/.claude/skills"]`. `repo/sub/work` has no skills folder, so it is left out.
+  - `personalFolderComesFirst`: `claudeSkillDirs(repo + "/sub/work", home)[0]` equals `{ label: "personal", dir: home + "/.claude/skills" }`.
+  - `personalWinsOnASharedName`: in `loadSkillSources(repo + "/sub/work", home)`, the entry `shared` appears once, in the personal source.
   - `homeAsProjectIsReadOnce`: `mergeSkillSources` of two sources with the same `scan.dir` returns one. This covers Review Focus 1.
   - `toolNamesAreStable`: `skillToolsFor` over personal plus two project sources returns tools named `personal_skills`, `project_skills`, `project_skills_2`.
   - `sourceWithNoEntriesGetsNoTool`: a project source whose entries were all hidden yields no tool.
 
-  Make `loadSkillSources` reachable from the test, either by exporting it or through a small exported wrapper, and note which in the PR.
+  The three `projectFolders` nodes and the merge nodes use made-up paths and touch no files.
 
 - [ ] **Step 2: Build and run; confirm they fail.**
   Run: `make > <scratch>/make.log 2>&1; pnpm run agency test lib/agents/agency-agent/tests/claudeSkills.agency > <scratch>/t2.log 2>&1`
@@ -250,4 +266,5 @@ The functions, in order:
 ## Self-review notes
 
 - Every decision maps to a task: folders and the stop rule (Task 2), precedence (Tasks 2 and 3), commands and the base-directory line (Task 1 body, Task 3 wiring), model-use switch (Task 1), approval (Task 2 `with approve`), coordinator only (Task 3).
-- Names used across tasks: `scanClaudeSkills`, `ClaudeSkillsScan`, `SkillCommand` (Task 1); `SkillSource`, `projectSkillDirs`, `claudeSkillDirs`, `mergeSkillSources`, `skillToolsFor`, `skillCommandsFor`, `claudeSkillTools`, `claudeSkillCommands` (Task 2); `slashCommands`, `paletteFrom` (Task 3).
+- Names used across tasks: `scanClaudeSkills`, `ClaudeSkillsScan`, `SkillCommand`, `_repositoryAncestors` (Task 1); `SkillLabel`, `SkillDir`, `SkillSource`, `projectFolders`, `claudeSkillDirs`, `mergeSkillSources`, `skillToolsFor`, `skillCommandsFor`, `loadSkillSources`, `claudeSkillTools`, `claudeSkillCommands` (Task 2); `slashCommands`, `paletteFrom` (Task 3).
+- Where each rule lives, once: the two frontmatter switches in `modelInvocable` and `userInvocable`; command fields and defaults in `commandRecord`; the repository walk in `repositoryAncestors`; "no repository means only the start folder" in `projectFolders`; precedence in `mergeSkillSources` and the order of `slashCommands()`.

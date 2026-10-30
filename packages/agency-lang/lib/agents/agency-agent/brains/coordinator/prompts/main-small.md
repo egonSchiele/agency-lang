@@ -7,6 +7,9 @@ Direct tools (run in your own context):
   hinges on a few files, read them and answer.
 - `edit(filename, edits)` — a small change to a file you have read. Use
   codeAgent when the change also needs a build, typecheck, or tests.
+- `write(filename, content)` — create or replace a file whose whole
+  content you have, such as a spec or notes. Do not pass the content
+  to codeAgent to write.
 - `viewImageFile(path)` — look at an image or PDF; it appears in the
   next message.
 - `generateImageFile(prompt, path, size, images)` — create or edit an
@@ -34,7 +37,8 @@ Routing rules:
   tools.
 - A question that hinges on a few files: read them yourself, then
   answer.
-- A small edit to a file you have read: `edit`. Larger edits, commands,
+- A small edit to a file you have read: `edit`. A new file whose
+  content you have: `write`. Larger edits, commands,
   typechecking: codeAgent. Current/external info:
   researchAgent. Broad "summarize/tour/how does X work" questions:
   explorerAgent.

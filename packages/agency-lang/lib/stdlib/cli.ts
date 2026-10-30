@@ -14,6 +14,7 @@ import { escapedTurnText, hasInterrupts } from "../runtime/interrupts.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
+import { herdrReporter, type HerdrReporter } from "./herdr.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -1275,16 +1276,21 @@ async function printFooter(
  *    a Node object owned by the running readline) plus the collapsed-paste
  *    expansions. The persisted file is cleared separately by `_clearHistory`.
  *  - `__agencyInterruptPrompt` — the sticky interrupt prompt exposed to
- *    std::policy (interruptChoice → _interruptChoice), reusing THIS readline. */
+ *    std::policy (interruptChoice → _interruptChoice), reusing THIS readline.
+ *    Herdr sees the agent as blocked while it is up.
+ *  - `__agencyHerdrSession` — tell Herdr which saved session the pane holds
+ *    and how to reopen it (`_sessionOnSubmit` calls it after each save). */
 function installReplGlobals(
   rl: readline.Interface,
   expansions: Record<string, string>,
   stopActiveSpinner: () => void,
+  herdr: HerdrReporter,
 ): () => void {
   const globalObj = globalThis as any;
   const prevStopSpinner = globalObj.__agencyStopSpinner;
   const prevClearHistory = globalObj.__agencyClearHistory;
   const prevInterruptPrompt = globalObj.__agencyInterruptPrompt;
+  const prevHerdrSession = globalObj.__agencyHerdrSession;
 
   globalObj.__agencyStopSpinner = stopActiveSpinner;
   globalObj.__agencyClearHistory = () => {
@@ -1296,12 +1302,15 @@ function installReplGlobals(
       delete expansions[key];
     }
   };
-  globalObj.__agencyInterruptPrompt = (opts: InterruptOpts) => stickyInterruptPrompt(rl, opts);
+  globalObj.__agencyInterruptPrompt = (opts: InterruptOpts) =>
+    herdr.whileBlocked(opts.title, () => stickyInterruptPrompt(rl, opts));
+  globalObj.__agencyHerdrSession = herdr.setSession;
 
   return () => {
     globalObj.__agencyStopSpinner = prevStopSpinner;
     globalObj.__agencyClearHistory = prevClearHistory;
     globalObj.__agencyInterruptPrompt = prevInterruptPrompt;
+    globalObj.__agencyHerdrSession = prevHerdrSession;
   };
 }
 
@@ -1376,17 +1385,22 @@ export async function _runLineRepl(
   // override lives and dies with the run that owns the readline.
   const replCtx = run.ctx;
   const prevOverride = replCtx.inputOverride;
+  const herdr = herdrReporter(process.env);
   replCtx.inputOverride = (p: string): Promise<string> => {
     stopActiveSpinner();
-    return new Promise<string>((resolve) => {
-      rl.question(p, (answer) => resolve(answer));
-    });
+    return herdr.whileBlocked(
+      p.trim(),
+      () =>
+        new Promise<string>((resolve) => {
+          rl.question(p, (answer) => resolve(answer));
+        }),
+    );
   };
 
   // Install the process-global hooks this REPL exposes while it runs
-  // (spinner-stop, clear-history, sticky interrupt prompt), each bound to
-  // this session's readline. Restored on exit via the returned fn.
-  const restoreReplGlobals = installReplGlobals(rl, expansions, stopActiveSpinner);
+  // (spinner-stop, clear-history, sticky interrupt prompt, Herdr session),
+  // each bound to this session. Restored on exit via the returned fn.
+  const restoreReplGlobals = installReplGlobals(rl, expansions, stopActiveSpinner, herdr);
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal. The
@@ -1400,6 +1414,7 @@ export async function _runLineRepl(
   try {
     while (true) {
       let line: string;
+      herdr.report("idle");
       try {
         line = await askLine(rl, coloredPrompt);
       } catch {
@@ -1476,6 +1491,7 @@ export async function _runLineRepl(
       const turnStartMs = Date.now();
       const tokensBefore = readTokenSnapshot(replCtx);
       activeStopSpinner = startSpinner(useTTY);
+      herdr.report("working");
 
       // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
       // which aborts the active LLM fetch; an AgencyCancelledError then
@@ -1560,6 +1576,7 @@ export async function _runLineRepl(
     const accumulated = (rl as unknown as { history?: string[] }).history ?? [];
     saveHistory(historyFile, accumulated, historyMax, expansions);
     rl.close();
+    await herdr.release();
   }
 }
 

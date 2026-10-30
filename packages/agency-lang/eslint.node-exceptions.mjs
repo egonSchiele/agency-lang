@@ -44,6 +44,7 @@ export const NODE_ONLY = {
   "lib/stdlib/embedding.ts": "local models",
   "lib/stdlib/ffmpeg.ts": "probes for ffmpeg with spawnSync before any interrupt (std::speech)",
   "lib/stdlib/cli.ts": "the terminal UI needs the terminal's size and raw mode",
+  "lib/stdlib/herdr.ts": "reports the REPL's state to Herdr over its Unix socket",
   "lib/stdlib/github/testUtils.ts": "a test helper",
   "lib/stdlib/hubClient.ts": "downloads model files to disk (local models)",
   "lib/stdlib/hubDownload.ts": "downloads model files to disk (local models)",

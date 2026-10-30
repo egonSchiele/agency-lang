@@ -17,6 +17,10 @@ export type Expiry = { at: ExpiresAt; key: string | null };
 
 export type MessageMetadata = { label?: string; expires?: Expiry };
 
+/** A change to a message's metadata: a key left out is kept, and a null
+ *  value removes the key. */
+export type MetadataPatch = { label?: string | null; expires?: Expiry | null };
+
 const EXPIRES_AT: ExpiresAt[] = ["llmCall", "request", "handoff"];
 
 function metadataOf(message: smoltalk.Message): Record<string, unknown> {
@@ -56,14 +60,10 @@ export function expiryOf(message: smoltalk.Message): Expiry | null {
   return { at: expires.at as ExpiresAt, key: expires.key };
 }
 
-/** A copy of `message` with `patch` applied to its metadata. A key the patch
- *  leaves out is kept, and a null value removes the key. The copy is rebuilt
+/** A copy of `message` with `patch` applied to its metadata. The copy is rebuilt
  *  through its JSON, so it is an instance of the same class, and the
  *  original is untouched: `adoptFrom` and `getMessages` share instances. */
-export function withMetadata(
-  message: smoltalk.Message,
-  patch: { label?: string | null; expires?: Expiry | null },
-): smoltalk.Message {
+export function withMetadata(message: smoltalk.Message, patch: MetadataPatch): smoltalk.Message {
   const metadata: Record<string, unknown> = { ...metadataOf(message) };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) {

@@ -4,7 +4,11 @@ import { PromptBailout } from "./promptRunner.js";
 import type { MessageThread } from "./state/messageThread.js";
 import type { StateStack } from "./state/stateStack.js";
 import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAttachments.js";
-import { roundWarningDue, type RoundWarningSettings } from "./roundWarning.js";
+import {
+  roundWarningDue,
+  type RoundWarningSettings,
+  type RoundWarningsSent,
+} from "./roundWarning.js";
 import type { Expiry } from "./state/messageMetadata.js";
 
 /**
@@ -136,13 +140,17 @@ export const roundWarningProducer: TurnMessageProducer = {
   name: "roundWarning",
   take: (bctx) => {
     const context = bctx.roundWarning;
-    if (context === null) return [];
-    const fired = (bctx.runnerState.roundWarnings ??= { first: false, final: false }) as {
-      first: boolean;
-      final: boolean;
-    };
+    if (context === null) {
+      return [];
+    }
+    const fired = (bctx.runnerState.roundWarnings ??= {
+      first: false,
+      final: false,
+    }) as RoundWarningsSent;
     const due = roundWarningDue(context.settings, context.round, context.limit, fired);
-    if (due === null) return [];
+    if (due === null) {
+      return [];
+    }
     fired[due.kind] = true;
     return [
       {

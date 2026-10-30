@@ -7,6 +7,7 @@ import {
   withMetadata,
   type Expiry,
   type ExpiresAt,
+  type MetadataPatch,
 } from "./messageMetadata.js";
 
 /** Queue entries are plain JSON-safe data (the QueuedMessage contract), so
@@ -187,16 +188,26 @@ export class MessageThread {
     if (expires !== null && !mayExpire(message)) {
       throw new Error(`push: a ${message.role} message cannot expire`);
     }
+    const patch: MetadataPatch = {};
+    if (label !== null) {
+      patch.label = label;
+    }
+    const expiry = expires ?? this.handoffExpiry(message);
+    if (expiry !== null) {
+      patch.expires = expiry;
+    }
+    const unchanged = Object.keys(patch).length === 0;
+    this.messages.push(unchanged ? message : withMetadata(message, patch));
+  }
+
+  /** The expiry a system message pushed while a handoff body runs gets,
+   *  unless it already carries one. */
+  private handoffExpiry(message: smoltalk.Message): Expiry | null {
     const scope = this.currentHandoffScope();
-    const expiry =
-      expires ??
-      (message.role === "system" && scope !== null && expiryOf(message) === null
-        ? { at: "handoff" as const, key: scope }
-        : null);
-    const patch: { label?: string; expires?: Expiry } = {};
-    if (label !== null) patch.label = label;
-    if (expiry !== null) patch.expires = expiry;
-    this.messages.push(Object.keys(patch).length === 0 ? message : withMetadata(message, patch));
+    if (message.role !== "system" || scope === null || expiryOf(message) !== null) {
+      return null;
+    }
+    return { at: "handoff", key: scope };
   }
 
   /** The label of the message at `index`, or null when unlabeled. */
@@ -422,10 +433,16 @@ function foldLegacyArrays(
   return messages.map((message, index) => {
     const label = labelList?.[index] ?? null;
     const scope = scopeList?.[index] ?? null;
-    if (label === null && scope === null) return message;
-    return withMetadata(message, {
-      ...(label === null ? {} : { label }),
-      ...(scope === null ? {} : { expires: { at: "handoff" as const, key: scope } }),
-    });
+    const patch: MetadataPatch = {};
+    if (label !== null) {
+      patch.label = label;
+    }
+    if (scope !== null) {
+      patch.expires = { at: "handoff", key: scope };
+    }
+    if (Object.keys(patch).length === 0) {
+      return message;
+    }
+    return withMetadata(message, patch);
   });
 }

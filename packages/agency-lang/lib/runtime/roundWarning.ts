@@ -21,6 +21,12 @@ export type WarnAtRoundsLeft = {
 
 export type RoundWarningSettings = Required<WarnAtRoundsLeft>;
 
+/** Which warnings an `llm()` call has already sent. Kept on runnerState. */
+export type RoundWarningsSent = { first: boolean; final: boolean };
+
+/** A warning that is due, and its text with the placeholders filled. */
+export type DueWarning = { kind: keyof RoundWarningsSent; text: string };
+
 export const DEFAULT_ROUND_WARNING: RoundWarningSettings = {
   remaining: 3,
   text: "Of the {limit} tool rounds for this request, {remaining} remain. Finish what you can with them and then write your answer.",
@@ -61,8 +67,8 @@ export function roundWarningDue(
   settings: RoundWarningSettings,
   round: number,
   limit: number,
-  fired: { first: boolean; final: boolean },
-): { kind: "first" | "final"; text: string } | null {
+  fired: RoundWarningsSent,
+): DueWarning | null {
   const remaining = limit - (round + 1);
   const values = { remaining, limit };
   if (!fired.final && settings.finalWarning && remaining === 1) {

@@ -7,9 +7,8 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { question } from "std::agent"
 import { AgencySource } from "std::agency"
-import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
+import { writableFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
-import { edit } from "std::fs"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
 import { Attachment, endTurn, systemMessage } from "std::thread"
@@ -54,10 +53,10 @@ static const coordinatorSkills = skillsDir(
 // hinges on a few files from its own context, instead of paying for a
 // subagent dispatch. Bigger sweeps still go to the explorer.
 //
-// `edit` is here for the same reason: a small change to a file the
-// coordinator has already read should not cost a codeAgent dispatch. The
-// prompt keeps it to small changes; anything that needs a build or tests
-// still goes to codeAgent.
+// `write` and `edit` are here for the same reason: a file whose content the
+// coordinator already has, or a small change to one it has read, should not
+// cost a codeAgent dispatch. Handing a whole file to codeAgent means writing
+// it out twice. Anything that needs a build or tests still goes to codeAgent.
 export static const mainAgentTools = [
   researchAgent,
   codeAgent,
@@ -76,8 +75,7 @@ export static const mainAgentTools = [
   deletePreset,
   setDefaultPreset,
   useLlmOptions,
-  ...readOnlyFileTools(),
-  edit.partial(useAgentCwd: true),
+  ...writableFileTools(),
 ]
 
 def exitIfBroken(checked: Result<boolean>) {

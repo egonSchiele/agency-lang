@@ -146,6 +146,16 @@
       ]
     },
     {
+      "nodeName": "coordinatorOffersFileWrites",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "coordinatorTurnOffersQuestion",
       "input": "",
       "expectedOutput": "\"ok\"",

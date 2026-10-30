@@ -170,6 +170,18 @@ node subagentsOfferQuestion(): string {
   return "ok"
 }
 
+// Without write, the coordinator passes a whole new file to codeAgent,
+// which writes it out a second time.
+node coordinatorOffersFileWrites(): string {
+  const names = map(mainAgentTools, \tool -> "${tool.name}")
+  for (name in ["write", "edit"]) {
+    if (!names.includes(name)) {
+      return "FAIL: no ${name} in ${names.join(", ")}"
+    }
+  }
+  return "ok"
+}
+
 // The coordinator holds the conversation, so it asks directly rather than
 // through a subagent. Its list is built per turn, so the check has to build
 // one too.

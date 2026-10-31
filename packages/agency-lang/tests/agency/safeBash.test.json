@@ -553,6 +553,23 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "rejectedGrepNamesTheTool",
+      "description": "When a broad command made only of verbs a tool can do is rejected, the model is pointed at that tool. rejectedBroadSaysWhy (an xargs line) gets no such sentence.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: grep does not take `-z`. Call the grep tool instead: a policy can approve its question in advance.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

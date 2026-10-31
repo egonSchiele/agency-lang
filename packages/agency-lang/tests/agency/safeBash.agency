@@ -737,3 +737,11 @@ node grepOutsideTheLaunchDirIsUndecided() {
   const intr = { effect: effect.name, data: effect.payload }
   return checkPolicy(recommendedAutoApprovePolicy, intr).type
 }
+
+node rejectedGrepNamesTheTool() {
+  const result = safeBash("grep -z hello .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}

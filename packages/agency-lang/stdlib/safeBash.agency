@@ -1530,7 +1530,7 @@ export def safeBash(
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return failure("${why}\n${broadExplanation(plan.broadReason)}")
+    return failure("${why}\n${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -1568,6 +1568,35 @@ def broadExplanation(reason: BroadReason): string {
     return "safeBash could not ask a narrower question because ${sentence}."
   }
   return "safeBash could not ask a narrower question because ${sentence}: ${reason.detail}."
+}
+
+/** The tool to suggest when a broad command made only of these verbs is
+ * rejected. ADI-244 adds cat, head, and tail, pointing at read. */
+static const READ_TOOL_FOR_VERB: Record<string, string> = {
+  grep: "grep"
+}
+
+def toolHint(verbs: string[]): string {
+  """
+  A sentence pointing the model at the tool that does what its rejected
+  command did, when every verb in the command has one. safeBash cannot
+  see the policy, so the sentence does not claim the tool needs no
+  approval, only that a policy can approve its question.
+  """
+  let tools: string[] = []
+  for (verb in verbs) {
+    const tool = READ_TOOL_FOR_VERB[verb]
+    if (tool == null) {
+      return ""
+    }
+    if (!tools.includes(tool)) {
+      tools.push(tool)
+    }
+  }
+  if (tools.length == 0) {
+    return ""
+  }
+  return " Call the ${tools.join(" or ")} tool instead: a policy can approve its question in advance."
 }
 
 /** What the debug event says about one plan: the decision and why. */

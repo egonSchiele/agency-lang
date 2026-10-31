@@ -8,6 +8,8 @@ import { failure, success, type ResultFailure, type ResultSuccess } from "../../
 import { wallClockFor } from "./limits.js";
 import { lowerWorkflow } from "./lower.js";
 import { parseWorkflow } from "./parse.js";
+
+export { _workflowNameProblem } from "./parse.js";
 import { problemsFromDiagnostics, type Diagnostic } from "./problems.js";
 import { renderWorkflow } from "./render.js";
 import { resolveWorkflow, signatureKey } from "./resolve.js";

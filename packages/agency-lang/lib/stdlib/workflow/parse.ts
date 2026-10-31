@@ -26,6 +26,12 @@ function nameMessage(label: string, text: string): string | null {
   return isIdentifier(text) ? null : `${label} "${text}" is not an identifier`;
 }
 
+/** Null for a name that may name a saved workflow's folder; otherwise the
+ *  message parse gives for the workflow's `name` field. */
+export function _workflowNameProblem(name: string): string | null {
+  return nameMessage("name", name);
+}
+
 function identifier(label: string) {
   return z.string({ error: `${label} must be a string` }).superRefine((text, ctx) => {
     const message = nameMessage(label, text);

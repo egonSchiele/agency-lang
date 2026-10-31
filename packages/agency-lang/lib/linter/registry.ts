@@ -4,12 +4,14 @@ import type { LintContext, LintFinding, LintRule } from "./types.js";
 import { unusedImportsRule } from "./rules/unusedImports.js";
 import { missingDocstringRule } from "./rules/missingDocstring.js";
 import { redundantPreludeImportRule } from "./rules/redundantPreludeImport.js";
+import { rebuiltFailureRule } from "./rules/rebuiltFailure.js";
 
 /** Every enabled rule. Append a rule here to enable it. */
 export const LINT_RULES: LintRule[] = [
   unusedImportsRule,
   missingDocstringRule,
   redundantPreludeImportRule,
+  rebuiltFailureRule,
 ];
 
 /** Run every rule over the context and concatenate their findings. */

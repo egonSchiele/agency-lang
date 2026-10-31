@@ -28,6 +28,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _addLine } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn } from "agency-lang/stdlib-lib/shell.js"
@@ -229,8 +230,8 @@ def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
     return failure("`${redirect.op}` is not an output redirect")
   }
   const target = literalTarget(redirect.target)
-  if (target is failure(why)) {
-    return failure(why)
+  if (isFailure(target)) {
+    return target
   }
   const resolved = try _resolveRedirectTarget(target.value, cwd, tildeModeFor(redirect.target))
   if (resolved is failure(why)) {
@@ -272,8 +273,8 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   }
   const only = fileRedirects[0]
   const prepared = prepareRedirectWrite(only, cwd, "")
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success([writeEffect(prepared.value)])
 }
@@ -332,8 +333,8 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   }
   const flags = flagNames(command)
   const redirect = redirectEffect(command.redirects, cwd)
-  if (redirect is failure(why)) {
-    return failure(why)
+  if (isFailure(redirect)) {
+    return redirect
   }
 
   // `echo` contributes nothing on its own, whatever its arguments: bash
@@ -346,8 +347,8 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
     "echo" => success(redirect.value)
     "grep" => {
       const grep = grepEffects(command, cwd)
-      if (grep is failure(why)) {
-        return failure(why)
+      if (isFailure(grep)) {
+        return grep
       }
       return success([...grep.value, ...redirect.value])
     }
@@ -516,8 +517,8 @@ def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<Spl
       }
       const next: Word | null = if (index + 1 < args.length) then args[index + 1] else null
       const read = readFlagWord(verb, word, next, spec)
-      if (read is failure(why)) {
-        return failure(why)
+      if (isFailure(read)) {
+        return read
       }
       for (entry in read.value.values) {
         const earlier = [seen for seen in values if seen.flag == entry.flag]
@@ -531,8 +532,8 @@ def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<Spl
       continue
     }
     const dash = refuseQuotedOption(verb, word)
-    if (dash is failure(why)) {
-      return failure(why)
+    if (isFailure(dash)) {
+      return dash
     }
     positionals.push(word)
     index = index + 1
@@ -578,8 +579,8 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
       })
     }
     const value = nextWordValue(verb, letter, next)
-    if (value is failure(why)) {
-      return failure(why)
+    if (isFailure(value)) {
+      return value
     }
     return success({
       plain: found,
@@ -608,8 +609,8 @@ def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   }
   if (word.flagValue == null) {
     const value = nextWordValue(verb, word.flagName, next)
-    if (value is failure(why)) {
-      return failure(why)
+    if (isFailure(value)) {
+      return value
     }
     return success({
       plain: [],
@@ -640,8 +641,8 @@ def nextWordValue(verb: string, flag: string, next: Word | null): Result<string>
     return failure("the value of `${flagDisplay(flag)}` is not literal")
   }
   const dash = refuseQuotedOption(verb, next)
-  if (dash is failure(why)) {
-    return failure(why)
+  if (isFailure(dash)) {
+    return dash
   }
   return success(text.value)
 }
@@ -703,13 +704,13 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCa
   failure, which sends the command to the broad question.
   """
   const split = splitFlags("grep", command, spec)
-  if (split is failure(why)) {
-    return failure(why)
+  if (isFailure(split)) {
+    return split
   }
   const args = split.value
   const words = grepWords(args)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   for (entry in args.values) {
     if (CONTEXT_FLAGS.includes(entry.flag) && !isDigits(entry.value)) {
@@ -729,8 +730,8 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCa
     return failure("the grep path is not literal")
   }
   const target = try _searchTargetIn(text.value, cwd, tildeModeFor(pathWord))
-  if (target is failure(why)) {
-    return failure("${why}")
+  if (isFailure(target)) {
+    return target
   }
   return success({
     split: args,
@@ -747,8 +748,8 @@ def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepCall> 
     return failure("grep with no path reads stdin")
   }
   const here = try _searchTargetIn(".", cwd, "literal")
-  if (here is failure(why)) {
-    return failure("${why}")
+  if (isFailure(here)) {
+    return here
   }
   return success({
     split: args,
@@ -821,8 +822,8 @@ def grepEffects(command: SimpleCommand, cwd: string): Result<Effect[]> {
   ignored files), so it asks std::bash.
   """
   const call = readGrep(command, cwd, GREP_FLAGS)
-  if (call is failure(why)) {
-    return failure(why)
+  if (isFailure(call)) {
+    return call
   }
   if (call.value.target.file == null) {
     return failure("grep through bash would search a directory, and reads files the grep tool skips")
@@ -862,8 +863,8 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
     return failure("not a lone grep")
   }
   const call = readGrep(command, cwd, SHELL_FREE_GREP_FLAGS)
-  if (call is failure(why)) {
-    return failure(why)
+  if (isFailure(call)) {
+    return call
   }
   const letters = call.value.split.plain
   const target = call.value.target
@@ -872,8 +873,8 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
     return failure("grep without -r does not search a directory")
   }
   const syntax = grepSyntax(letters)
-  if (syntax is failure(why)) {
-    return failure(why)
+  if (isFailure(syntax)) {
+    return syntax
   }
   const regex = _grepPatternToRegex(call.value.pattern, syntax.value, letters.includes("w"))
   if (regex == null) {
@@ -1142,8 +1143,8 @@ def echoWords(command: SimpleCommand): Result<string[]> {
   let out: string[] = []
   for (arg in command.args) {
     const text = literalWordText(arg)
-    if (text is failure(why)) {
-      return failure(why)
+    if (isFailure(text)) {
+      return text
     }
     out.push(text.value)
   }
@@ -1197,8 +1198,8 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
     return failure("`echo` with flags prints differently")
   }
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   return success(
     {
@@ -1230,12 +1231,12 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   }
   const only = command.redirects[0]
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   const prepared = prepareRedirectWrite(only, cwd, echoOutput(words.value))
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success(
     {
@@ -1520,15 +1521,18 @@ export def safeBash(
   }
 
   const raised = raiseAll(plan.effects, command, dir)
-  if (raised is failure(why)) {
+  // The rejection is passed on as it came, not rebuilt with `failure()`,
+  // which would drop its `rejected` flag. Without the flag the tool loop
+  // shows the user's reason as a tool error and says to call again.
+  if (isFailure(raised)) {
     if (plan.broadReason == null) {
-      return failure(why)
+      return raised
     }
     // A rejected broad question tells the model why no narrower one was
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return failure("${why}\n${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
+    return _addLine(raised, "${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -1641,8 +1645,8 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   """
   for (effect in effects) {
     const answered = raiseOne(effect, fullCommand, cwd)
-    if (answered is failure(reason)) {
-      return failure(reason)
+    if (isFailure(answered)) {
+      return answered
     }
   }
   return success(null)

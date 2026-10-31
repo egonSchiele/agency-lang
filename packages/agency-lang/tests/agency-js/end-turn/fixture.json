@@ -108,8 +108,8 @@
     "warnings": [
       "rejectedMessenger: handBack ignored; the handoff was rejected and the model must see the rejection"
     ],
-    "result": "follow-up: [rejectedMessenger finished. Tool call rejected: not today. Do not call this tool with the same arguments again; the call will not be executed.]\nContinue with the user's request.",
-    "handBack": "[rejectedMessenger finished. Tool call rejected: not today. Do not call this tool with the same arguments again; the call will not be executed.]\nContinue with the user's request.",
+    "result": "follow-up: [rejectedMessenger finished. Tool call rejected: not today\nDo not call this tool with the same arguments again; the call will not be executed.]\nContinue with the user's request.",
+    "handBack": "[rejectedMessenger finished. Tool call rejected: not today\nDo not call this tool with the same arguments again; the call will not be executed.]\nContinue with the user's request.",
     "customUsed": 0
   },
   "emptyMessageIgnored": {

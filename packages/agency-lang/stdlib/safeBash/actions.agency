@@ -258,8 +258,8 @@ export def runGrep(exec: GrepExec, command: string): Result<string> {
     invert: payload.invert
   }
   const found = try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
-  if (found is failure(why)) {
-    return failure("${why}")
+  if (isFailure(found)) {
+    return found
   }
   const results: any[] = found.value
   const notes = grepNotes(payload, results.length)
@@ -302,8 +302,8 @@ export def runWrite(exec: WriteExec): Result<string> {
   // from the tool it replaces.
   destructive {
     const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
-    if (written is failure(why)) {
-      return failure(why)
+    if (isFailure(written)) {
+      return written
     }
   }
   return success("")

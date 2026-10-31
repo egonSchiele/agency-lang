@@ -1,0 +1,14 @@
+import { cliPolicyHandler } from "std::policy"
+import { safeBash } from "std::safeBash"
+
+// The model calls safeBash, the user rejects it at the prompt and writes a
+// message. The model must read that as a rejection from the user, not as
+// a tool error it may retry.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let reply = ""
+  handle {
+    reply = llm("find out how tv works", { tools: [safeBash] })
+  } with handler
+  return reply
+}

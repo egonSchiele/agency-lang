@@ -366,6 +366,27 @@
       ]
     },
     {
+      "nodeName": "rejectionKeepsFlag",
+      "description": "A rejected narrow question and a rejected broad one both come back marked rejected, so the tool loop shows the reason as a rejection and not as a tool error.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Show git status"
+        },
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "newShapes",
       "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
       "input": "",

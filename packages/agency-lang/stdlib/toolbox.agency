@@ -1783,8 +1783,8 @@ def assembleAndSave(
   settings: DraftSettings,
 ): Result<ToolEntry> {
   const assembled = assembleTool(source, settings)
-  if (assembled is failure(assembleErr)) {
-    return failure(assembleErr)
+  if (isFailure(assembled)) {
+    return assembled
   }
   return gateAndSave(root, name, settings, source, assembled.value.effects)
 }

@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   _grepPatternToRegex,
   _renderGrepOutput,
@@ -171,6 +173,18 @@ describe("_skippedDirsNote", () => {
     const note = _skippedDirsNote();
     for (const name of SKIP_DIRS) {
       expect(note).toContain(name);
+    }
+  });
+});
+
+describe("the grep tool's docstring", () => {
+  it("names every folder the walk skips, so a folder added to SKIP_DIRS fails here until the docstring says so", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../stdlib/shell.agency"), "utf8");
+    const docstring =
+      source.split("Search a directory or a single file for a regular expression")[1] ?? "";
+    const sentence = docstring.split("\n")[0];
+    for (const name of SKIP_DIRS) {
+      expect(sentence).toContain(name);
     }
   });
 });

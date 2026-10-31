@@ -39,9 +39,10 @@ export type Effect =
   | { name: "std::git::status"; payload: { cwd: string } }
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
+  | { name: "std::grep"; payload: GrepPayload }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L27))
 
 ### WritePayload
 
@@ -54,7 +55,28 @@ export type WritePayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L35))
+
+### GrepPayload
+
+The fields the grep tool's own std::grep interrupt carries.
+
+```ts
+/** The fields the grep tool's own std::grep interrupt carries. */
+export type GrepPayload = {
+  pattern: string;
+  dir: string;
+  file?: string;
+  flags: string;
+  maxResults: number;
+  ignoreCase: boolean;
+  wholeWord: boolean;
+  filesOnly: boolean;
+  invert: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L62))
 
 ### GitDiffPayload
 
@@ -68,7 +90,7 @@ export type GitDiffPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L81))
 
 ### Execution
 
@@ -92,9 +114,10 @@ export type Execution =
   | WriteExec
   | AgencyExec
   | RefuseExec
+  | GrepExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L95))
 
 ### BashExec
 
@@ -105,7 +128,7 @@ export type BashExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L97))
 
 ### EchoExec
 
@@ -116,7 +139,7 @@ export type EchoExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L102))
 
 ### AgencyExec
 
@@ -130,7 +153,7 @@ export type AgencyExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L108))
 
 ### WriteExec
 
@@ -144,7 +167,64 @@ export type WriteExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L113))
+
+### GrepFileNames
+
+Whether grep prints file names: `-H` gives "always", `-h` gives
+"never", neither gives "default".
+
+```ts
+/** Whether grep prints file names: `-H` gives "always", `-h` gives
+ * "never", neither gives "default". */
+export type GrepFileNames = "default" | "always" | "never"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L123))
+
+### GrepRender
+
+What a grep command said about printing. The rules that turn this
+into grep's output live in `_renderGrepOutput`
+(lib/stdlib/grepDialect.ts), whose type of the same name must keep
+these fields.
+
+```ts
+/** What a grep command said about printing. The rules that turn this
+ * into grep's output live in `_renderGrepOutput`
+ * (lib/stdlib/grepDialect.ts), whose type of the same name must keep
+ * these fields. */
+export type GrepRender = {
+  /** `-n` was given. */
+  lineNumbers: boolean;
+  fileNames: GrepFileNames;
+  /** The path as bash hands it to grep, or "" when none was written. */
+  argument: string;
+  /** The path names one file, not a directory. */
+  oneFile: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L129))
+
+### GrepExec
+
+A lone grep, run through the grep tool's own search with no shell.
+The search reads only what `payload` says, so the approval means what
+the grep tool's approval means.
+
+```ts
+/** A lone grep, run through the grep tool's own search with no shell.
+ * The search reads only what `payload` says, so the approval means what
+ * the grep tool's approval means. */
+export type GrepExec = {
+  kind: "grep";
+  payload: GrepPayload;
+  render: GrepRender
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L142))
 
 ### RefuseExec
 
@@ -155,7 +235,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L158))
 
 ### BroadReason
 
@@ -179,7 +259,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L167))
 
 ### Plan
 
@@ -198,7 +278,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L173))
 
 ## Functions
 
@@ -219,7 +299,7 @@ Both plan sides derive from one WritePayload, so payload/execution
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L44))
 
 ### writeExecution
 
@@ -235,7 +315,43 @@ writeExecution(write: WritePayload): WriteExec
 
 **Returns:** [WriteExec](#writeexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L51))
+
+### grepEffect
+
+```ts
+grepEffect(payload: GrepPayload): Effect
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| payload | [GrepPayload](#greppayload) |  |
+
+**Returns:** [Effect](#effect)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L74))
+
+### grepExecution
+
+```ts
+grepExecution(payload: GrepPayload, render: GrepRender): GrepExec
+```
+
+Both plan sides derive from one GrepPayload, so the question asked and
+the search run cannot disagree.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| payload | [GrepPayload](#greppayload) |  |
+| render | [GrepRender](#greprender) |  |
+
+**Returns:** [GrepExec](#grepexec)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L150))
 
 ### runBash
 
@@ -267,7 +383,29 @@ Run a command string through bash and return what it printed.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L184))
+
+### runGrep
+
+```ts
+runGrep(exec: GrepExec, command: string): Result<string>
+```
+
+Run a lone grep through the grep tool's own search and print what grep
+  would print. No match is the failure grep's exit code 1 would give.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| exec | [GrepExec](#grepexec) |  |
+| command | `string` |  |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L243))
 
 ### runWrite
 
@@ -292,4 +430,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L290))

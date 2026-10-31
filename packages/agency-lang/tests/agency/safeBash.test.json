@@ -392,6 +392,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "splitGrepFlags",
+      "description": "The grep flag table. Combined letters are checked one by one; a valued letter takes the rest of the word or the next word; unknown flags, -R, a repeated -e, a quoted word starting with a dash, a missing value, ugrep's --filter and --save-config, the file filters, and a flag after the first positional (a file name to BSD grep) are all refused.",
+      "input": "",
+      "expectedOutput": "[[[\"r\",\"n\",\"i\"],[],2],[[],[\"A=3\"],2],[[],[\"A=3\"],2],[[],[\"e=hello\"],1],[[\"--color=never\"],[],2],[[\"n\"],[\"A=3\"],2],\"grep does not take `-z`\",\"grep does not take `-R`\",\"grep takes `-e` only once\",\"a quoted `-R` is still an option to grep\",\"grep's `-A` needs a value\",\"grep does not take `--filter`\",\"grep does not take `--save-config`\",\"grep does not take `--include`\",\"a quoted `-x` is still an option to grep\",\"an option after the first argument is a file name to some versions of grep\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

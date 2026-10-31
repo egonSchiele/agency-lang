@@ -7,7 +7,9 @@ import {
   outcomeOf,
   safeBash,
   resolveCwd,
+  GREP_FLAGS,
  } from "std::safeBash"
+import test { splitFlags } from "std::safeBash"
 import { resolve } from "std::path"
 import { glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
@@ -491,4 +493,39 @@ node pipelineRunsThroughBash() {
     return "FAILED: ${why}"
   }
   return result.value
+}
+
+def split(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const result = splitFlags("grep", parsed.value[0], GREP_FLAGS)
+  if (result is failure(why)) {
+    return why
+  }
+  const args = result.value
+  const values = [entry.flag + "=" + entry.value for entry in args.values]
+  return [args.plain, values, args.positionals.length]
+}
+
+node splitGrepFlags() {
+  return [
+    split("grep -rni hello ."),
+    split("grep -A 3 hello ."),
+    split("grep -A3 hello ."),
+    split("grep -e hello ."),
+    split("grep --color=never hello ."),
+    split("grep -nA3 hello ."),
+    split("grep -z hello ."),
+    split("grep -R hello ."),
+    split("grep -e a -e b ."),
+    split("grep \"-R\" hello"),
+    split("grep -A"),
+    split("grep --filter=x hello ."),
+    split("grep --save-config hello ."),
+    split("grep --include=*.ts -rn hello ."),
+    split("grep -e \"-x\" one.txt"),
+    split("grep -n hello one.txt -s"),
+  ]
 }

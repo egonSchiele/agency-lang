@@ -417,6 +417,241 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
   }
 }
 
+/** Which flags a verb takes. Short letters are listed one per entry, so a
+ * combined `-rn` is checked letter by letter. A long flag that takes no
+ * value is listed as written (`--color=never`). */
+export type FlagSpec = {
+  /** Flags that stand alone. */
+  plain: string[];
+  /** Flags that take a value, from the rest of the word (`-A3`), after
+   * `=` (`--regexp=x`), or from the next word (`-A 3`). Each may appear
+   * once. */
+  valued: string[];
+  /** Every flag must come before the first positional word. True for a
+   * command real grep will run: BSD grep, and GNU grep with
+   * POSIXLY_CORRECT set, read a later `-s` as a file to search. */
+  optionsFirst: boolean
+}
+
+/** One valued flag and its value. `flag` is the letter for a short flag
+ * (`A`) and the whole name for a long one (`--regexp`). */
+export type FlagValue = {
+  flag: string;
+  value: string
+}
+
+/** A command's arguments checked against a FlagSpec. */
+export type SplitArgs = {
+  plain: string[];
+  values: FlagValue[];
+  positionals: Word[]
+}
+
+/** What one flag word contributed, and how many words it used: 2 when
+ * its value was the next word. */
+type FlagRead = {
+  plain: string[];
+  values: FlagValue[];
+  consumed: number
+}
+
+/** The grep flags safeBash can describe exactly. An allowlist: it has to
+ * hold for GNU grep, ugrep, and BSD grep, because the bash path runs
+ * whichever grep the shell finds. Left out on purpose, so a grep using
+ * one asks std::bash:
+ * - `-R` follows every symlink below the path.
+ * - `-f`, `--exclude-from`, `--include-from` read another file.
+ * - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
+ *   carry them out, and the bash path is narrow only for one named file,
+ *   where they change nothing.
+ * - `-m` counts per file, and the payload's maxResults is a total.
+ * - `-P` is missing from BSD grep.
+ * - `-z`, `-d`, `-D` mean different things in different greps.
+ * - ugrep's `--filter` runs a program and `--save-config` writes a file.
+ * - The long spellings of short flags (`--recursive`, `--ignore-case`). */
+export static const GREP_FLAGS: FlagSpec = {
+  plain: ["n", "r", "i", "w", "l", "v", "E", "F", "c", "h", "H", "o", "s", "--color=never"],
+  valued: ["e", "A", "B", "C"],
+  optionsFirst: true
+}
+
+def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<SplitArgs> {
+  """
+  Check a command's arguments against a flag table, and split them into
+  the flags it found, their values, and the remaining positional words.
+
+  Any flag the table does not list is a failure, because a payload that
+  ignored it would describe a different command. Positional words are
+  returned as they are, literal or not; the caller decides what each one
+  must be.
+  """
+  const args = command.args
+  let plain: string[] = []
+  let values: FlagValue[] = []
+  let positionals: Word[] = []
+  let index = 0
+  while (index < args.length) {
+    const word = args[index]
+    if (word is { tag: "flag" }) {
+      // Checked before the table, so a late flag is reported the same way
+      // whether or not the table knows it.
+      if (spec.optionsFirst && positionals.length > 0) {
+        return failure("an option after the first argument is a file name to some versions of ${verb}")
+      }
+      const next: Word | null = if (index + 1 < args.length) then args[index + 1] else null
+      const read = readFlagWord(verb, word, next, spec)
+      if (read is failure(why)) {
+        return failure(why)
+      }
+      for (entry in read.value.values) {
+        const earlier = [seen for seen in values if seen.flag == entry.flag]
+        if (earlier.length > 0) {
+          return failure("${verb} takes `${flagDisplay(entry.flag)}` only once")
+        }
+      }
+      plain = [...plain, ...read.value.plain]
+      values = [...values, ...read.value.values]
+      index = index + read.value.consumed
+      continue
+    }
+    const dash = refuseQuotedOption(verb, word)
+    if (dash is failure(why)) {
+      return failure(why)
+    }
+    positionals.push(word)
+    index = index + 1
+  }
+  return success({
+    plain: plain,
+    values: values,
+    positionals: positionals
+  })
+}
+
+def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
+  """
+  One flag word checked against the table: a long flag whole, or a short
+  one letter by letter. A valued letter takes the rest of the word as its
+  value (`-A3`), or the next word when nothing follows it.
+  """
+  if (word.flagName.startsWith("--")) {
+    return readLongFlag(verb, word, next, spec)
+  }
+  if (word.flagValue != null) {
+    return failure("${verb} does not take `${renderFlag(word)}`")
+  }
+  const letters = word.flagName.slice(1)
+  let found: string[] = []
+  let position = 0
+  while (position < letters.length) {
+    const letter = letters.charAt(position)
+    if (spec.plain.includes(letter)) {
+      found.push(letter)
+      position = position + 1
+      continue
+    }
+    if (!spec.valued.includes(letter)) {
+      return failure("${verb} does not take `-${letter}`")
+    }
+    const rest = letters.slice(position + 1)
+    if (rest != "") {
+      return success({
+        plain: found,
+        values: [{ flag: letter, value: rest }],
+        consumed: 1
+      })
+    }
+    const value = nextWordValue(verb, letter, next)
+    if (value is failure(why)) {
+      return failure(why)
+    }
+    return success({
+      plain: found,
+      values: [{ flag: letter, value: value.value }],
+      consumed: 2
+    })
+  }
+  return success({
+    plain: found,
+    values: [],
+    consumed: 1
+  })
+}
+
+def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
+  const written = renderFlag(word)
+  if (spec.plain.includes(written)) {
+    return success({
+      plain: [written],
+      values: [],
+      consumed: 1
+    })
+  }
+  if (!spec.valued.includes(word.flagName)) {
+    return failure("${verb} does not take `${word.flagName}`")
+  }
+  if (word.flagValue == null) {
+    const value = nextWordValue(verb, word.flagName, next)
+    if (value is failure(why)) {
+      return failure(why)
+    }
+    return success({
+      plain: [],
+      values: [{ flag: word.flagName, value: value.value }],
+      consumed: 2
+    })
+  }
+  if (word.valueIsGlob == true) {
+    return failure("the value of `${word.flagName}` is a glob bash may expand")
+  }
+  return success({
+    plain: [],
+    values: [{ flag: word.flagName, value: word.flagValue }],
+    consumed: 1
+  })
+}
+
+def nextWordValue(verb: string, flag: string, next: Word | null): Result<string> {
+  """
+  A valued flag's value taken from the word after it. It must be literal,
+  and like any other word, a quoted one that starts with `-` is refused.
+  """
+  if (next == null) {
+    return failure("${verb}'s `${flagDisplay(flag)}` needs a value")
+  }
+  const text = literalWordText(next)
+  if (text is failure(why)) {
+    return failure("the value of `${flagDisplay(flag)}` is not literal")
+  }
+  const dash = refuseQuotedOption(verb, next)
+  if (dash is failure(why)) {
+    return failure(why)
+  }
+  return success(text.value)
+}
+
+def refuseQuotedOption(verb: string, word: Word): Result {
+  """
+  A quoted word that starts with `-` is still an option to the program:
+  bash strips the quotes, so `grep "-R" src` runs `grep -R src`.
+  """
+  const text = literalWordText(word)
+  if (text is success(written)) {
+    if (written.startsWith("-")) {
+      return failure("a quoted `${written}` is still an option to ${verb}")
+    }
+  }
+  return success(null)
+}
+
+/** A flag as the model wrote it: `-A` for a letter, `--regexp` as is. */
+def flagDisplay(flag: string): string {
+  if (flag.startsWith("-")) {
+    return flag
+  }
+  return "-${flag}"
+}
+
 static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }

@@ -7,6 +7,12 @@ const todos = [
   { id: "2", text: "Check availability", status: "in_progress" },
   { id: "3", text: "Compare hardware", status: "pending" },
 ];
+const grepPattern = "trace-pattern-" + "segment".repeat(20) + "-query-tail";
+const readFailure = "Read fixture failed: " + "f".repeat(140) + " failure-tail";
+const readRanges = [
+  { offset: 460, limit: 120 },
+  { offset: 580, limit: 80 },
+];
 const calls = [
   ["todoWrite", {}],
   ["todoWrite", { todos }],
@@ -14,6 +20,9 @@ const calls = [
   ["echo", { value: "second result" }],
   ["successful", {}],
   ["failedFixture", {}],
+  ...readRanges.map((range) => ["read", { filename: "fixture.agency", dir: "docs", ...range }]),
+  ["read", { filename: "missing.agency", dir: "docs" }],
+  ["grep", { pattern: grepPattern, path: "src", ignoreCase: true, maxResults: 12 }],
   ["whatIAmDoing", {}],
   ["researchAgent", { userMsg: "Find the original model announcement" }],
   ["web_search_tavily", {}],
@@ -147,6 +156,56 @@ function detailed(output) {
   };
 }
 
+function blocksStartingWith(output, heading) {
+  return output
+    .split("\n\n")
+    .filter((block) => block.split("\n").some((line) => line.startsWith(heading)));
+}
+
+function withoutLayout(text) {
+  return text.replace(/\s|│/g, "");
+}
+
+function compactInspection(output) {
+  const reads = blocksStartingWith(output, "● Reading").map(withoutLayout);
+  const searches = blocksStartingWith(output, "● Searching").map(withoutLayout);
+  return {
+    bothRequestedRanges: readRanges.every(({ offset, limit }) =>
+      reads.some(
+        (block) =>
+          block.includes("docs/fixture.agency") &&
+          block.includes(withoutLayout(`lines ${offset}–${offset + limit - 1}`)),
+      ),
+    ),
+    searchPatternAndScope: searches.some((block) =>
+      block.includes(withoutLayout(`"${grepPattern}" in src`)),
+    ),
+    searchOptionsHidden: searches.every(
+      (block) => !block.includes("ignorecase") && !block.includes("upto12results"),
+    ),
+    noGenericInspectionStarts: !/Tool call  (read|grep)\b/.test(output),
+    noFastSuccessBlocks: !/Tool finished  (read|grep)\b/.test(output),
+    noSuccessfulContents: !/read-content-|grep-content-/.test(output),
+  };
+}
+
+function debugInspection(output) {
+  const starts = blocksStartingWith(output, "● Tool call  grep").map(withoutLayout);
+  const readResults = blocksStartingWith(output, "✓ Tool finished  read").map(withoutLayout);
+  const grepResults = blocksStartingWith(output, "✓ Tool finished  grep").map(withoutLayout);
+  return {
+    fullArgument: starts.some((block) => block.includes(grepPattern)),
+    fullReadResults: readRanges.every(({ offset }) =>
+      readResults.some((block) =>
+        block.includes(`read-content-${offset}-` + "r".repeat(160) + "-read-tail"),
+      ),
+    ),
+    fullGrepResult: grepResults.some((block) =>
+      block.includes("grep-content-" + "g".repeat(160) + "-grep-tail"),
+    ),
+  };
+}
+
 mkdirSync("test-output", { recursive: true });
 writeFileSync("test-output/trace.json", JSON.stringify(outputs, null, 2));
 writeFileSync(
@@ -156,13 +215,22 @@ writeFileSync(
       results,
       interactive: detailed(outputs.interactive),
       quietHasNoTraces:
-        !/Tool call|Tool returned|Tool finished|Tool failed|Tasks updated|Tasks failed|Web search|Searching web|→ Research|Research finished|→ researchAgent:|⏺/.test(
+        !/Tool call|Tool returned|Tool finished|Tool failed|Tasks updated|Tasks failed|Web search|Reading|Searching|→ Research|Research finished|→ researchAgent:|⏺/.test(
           outputs.quiet,
         ),
       verbose: detailed(outputs.verbose),
       debug: detailed(outputs.debug),
       debugDiagnostics: outputs.debug.includes("💬 [test]"),
       interactiveHasNoDiagnostics: !outputs.interactive.includes("💬"),
+      compactInteractive: compactInspection(outputs.interactive),
+      compactVerbose: compactInspection(outputs.verbose),
+      debugInspection: debugInspection(outputs.debug),
+      inspectionFailuresVisible: [outputs.interactive, outputs.verbose, outputs.debug].every(
+        (output) =>
+          blocksStartingWith(output, "✗ Tool failed  read").some((block) =>
+            withoutLayout(block).includes(withoutLayout(readFailure)),
+          ),
+      ),
     },
     null,
     2,

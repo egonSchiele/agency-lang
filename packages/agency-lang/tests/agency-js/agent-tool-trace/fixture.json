@@ -79,5 +79,27 @@
     "noLegacyResearch": true
   },
   "debugDiagnostics": true,
-  "interactiveHasNoDiagnostics": true
+  "interactiveHasNoDiagnostics": true,
+  "compactInteractive": {
+    "bothRequestedRanges": true,
+    "searchPatternAndScope": true,
+    "searchOptionsHidden": true,
+    "noGenericInspectionStarts": true,
+    "noFastSuccessBlocks": true,
+    "noSuccessfulContents": true
+  },
+  "compactVerbose": {
+    "bothRequestedRanges": true,
+    "searchPatternAndScope": true,
+    "searchOptionsHidden": true,
+    "noGenericInspectionStarts": true,
+    "noFastSuccessBlocks": true,
+    "noSuccessfulContents": true
+  },
+  "debugInspection": {
+    "fullArgument": true,
+    "fullReadResults": true,
+    "fullGrepResult": true
+  },
+  "inspectionFailuresVisible": true
 }

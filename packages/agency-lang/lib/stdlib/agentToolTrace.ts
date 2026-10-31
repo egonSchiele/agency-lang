@@ -4,6 +4,21 @@ import { currentHost } from "../runtime/currentHost.js";
 import { stripControlCharacters } from "../utils/controlCharacters.js";
 import { color, plainColor, RESET } from "../utils/termcolors.js";
 import { stripAnsi, visualWidth, wrapText } from "./layout/ansi.js";
+import {
+  readSummary,
+  readSpillSummary,
+  docsSummary,
+  grepSummary,
+  spillSearchSummary,
+  globSummary,
+  listingSummary,
+  writeSummary,
+  editSummary,
+  shellSummary,
+  execSummary,
+  agencyCliSummary,
+  type ToolSummaryFormatter,
+} from "./agentToolSummary.js";
 
 export type TraceOptions = { columns: number; color: boolean };
 export type ToolStartEvent = {
@@ -11,6 +26,7 @@ export type ToolStartEvent = {
   toolName: string;
   args: unknown;
   provider?: string | null;
+  detailed?: boolean;
 };
 export type ToolEndEvent = {
   kind: "toolEnd";
@@ -18,6 +34,8 @@ export type ToolEndEvent = {
   value: unknown;
   outcome: "success" | "failure" | "plain";
   provider?: string | null;
+  detailed?: boolean;
+  timeTaken?: number;
 };
 export type HostedSearchEvent = { kind: "hostedSearch"; result: unknown };
 export type AgentStartEvent = {
@@ -36,7 +54,13 @@ type TraceBlock = { heading: TraceSpan[]; rows: TraceRow[] };
 type ToolEvent = ToolStartEvent | ToolEndEvent;
 type TaskPresentation = { kind: "tasks"; heading: TraceSpan };
 type AgentPresentation = { kind: "agent"; label: string };
-type ToolPresentation = TaskPresentation | AgentPresentation;
+type SummaryPresentation = {
+  kind: "summary";
+  summary: ToolSummaryFormatter;
+  label: string;
+  result: "hide" | "preview" | "command";
+};
+type ToolPresentation = TaskPresentation | AgentPresentation | SummaryPresentation;
 type SearchSource = { url: string; title?: string };
 type SearchPhase = "started" | "completed" | "reported" | "failed";
 type SearchDescription = {
@@ -53,6 +77,7 @@ const ARGUMENT_PREVIEW_LENGTH = 50;
 const RESULT_PREVIEW_LENGTH = 100;
 const SOURCE_PREVIEW_COUNT = 5;
 const TAB_WIDTH = 4;
+const SLOW_TOOL_MS = 1000;
 const BODY_PREFIX = "  │ ";
 const HEADING_CONTINUATION = "  ";
 
@@ -64,6 +89,22 @@ const OUTCOMES: Record<ToolEndEvent["outcome"], TraceSpan> = {
 
 // A custom presentation owns both lifecycle phases, including empty starts.
 const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
+  read: { kind: "summary", summary: readSummary, label: "Reading", result: "hide" },
+  readSpill: { kind: "summary", summary: readSpillSummary, label: "Reading", result: "hide" },
+  grep: { kind: "summary", summary: grepSummary, label: "Searching", result: "hide" },
+  grepSpill: { kind: "summary", summary: spillSearchSummary, label: "Searching", result: "hide" },
+  glob: { kind: "summary", summary: globSummary, label: "Finding files", result: "hide" },
+  ls: { kind: "summary", summary: listingSummary, label: "Listing", result: "hide" },
+  agencyGuide: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyCliDocs: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyDiagnostics: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyStdlib: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyAgent: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  write: { kind: "summary", summary: writeSummary, label: "Writing", result: "preview" },
+  edit: { kind: "summary", summary: editSummary, label: "Editing", result: "preview" },
+  safeBash: { kind: "summary", summary: shellSummary, label: "Running", result: "preview" },
+  exec: { kind: "summary", summary: execSummary, label: "Running", result: "command" },
+  agencyCli: { kind: "summary", summary: agencyCliSummary, label: "Running", result: "command" },
   todoWrite: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
   todoAdd: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
   todoUpdate: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
@@ -111,6 +152,12 @@ export function traceOptionsForHost(host: Host): TraceOptions {
 /** Describe an event first; only the renderer knows about terminal layout. */
 export function formatAgentTrace(event: AgentTraceEvent, options: TraceOptions): string {
   const block = describeEvent(event);
+  if (block !== null && event.kind === "toolEnd" && isSlow(event)) {
+    block.heading.push({
+      text: ` · ${((event.timeTaken ?? 0) / 1000).toFixed(1)}s`,
+      style: "muted",
+    });
+  }
   return block === null ? "" : renderBlock(block, options);
 }
 
@@ -162,6 +209,9 @@ function describeToolEvent(event: ToolEvent): TraceBlock | null {
   if (presentation === undefined) {
     return event.kind === "toolStart" ? describeToolStart(event) : describeToolEnd(event);
   }
+  if (presentation.kind === "summary") {
+    return describeSummaryEvent(event, presentation);
+  }
   if (event.kind === "toolStart") {
     return null;
   }
@@ -178,6 +228,65 @@ function describeToolEvent(event: ToolEvent): TraceBlock | null {
       ? { text: `✗ ${presentation.label} failed`, style: "error" as const }
       : { text: `✓ ${presentation.label} finished`, style: "success" as const };
   return describeToolEnd(event, label);
+}
+
+function isSlow(event: ToolEndEvent): boolean {
+  return (
+    typeof event.timeTaken === "number" &&
+    Number.isFinite(event.timeTaken) &&
+    event.timeTaken >= SLOW_TOOL_MS
+  );
+}
+
+function describeSummaryEvent(
+  event: ToolEvent,
+  presentation: SummaryPresentation,
+): TraceBlock | null {
+  if (event.kind === "toolStart") {
+    if (event.detailed || !isPlainObject(event.args)) {
+      return describeToolStart(event);
+    }
+    const summary = presentation.summary(event.args, event.toolName);
+    if (summary === null) {
+      return describeToolStart(event);
+    }
+    return {
+      heading: [
+        { text: `● ${presentation.label}`, style: "active", bold: true },
+        { text: `  ${summary.text}` },
+      ],
+      rows:
+        summary.details.length === 0
+          ? []
+          : [{ spans: [{ text: summary.details.join(" · "), style: "muted" }] }],
+    };
+  }
+  if (event.outcome === "failure") {
+    return describeToolEnd(event);
+  }
+  if (presentation.result === "command") {
+    return describeCommandEnd(event);
+  }
+  if (event.detailed || presentation.result === "preview") {
+    return describeToolEnd(event);
+  }
+  return isSlow(event)
+    ? { heading: toolHeading(OUTCOMES[event.outcome], event.toolName), rows: [] }
+    : null;
+}
+
+function describeCommandEnd(event: ToolEndEvent): TraceBlock {
+  const value = event.value;
+  if (!isPlainObject(value) || typeof value.exitCode !== "number") {
+    return describeToolEnd(event);
+  }
+  const outcome = value.exitCode === 0 ? event.outcome : "failure";
+  const block = describeToolEnd({ ...event, outcome });
+  block.heading.push({
+    text: ` · exit ${value.exitCode}`,
+    style: outcome === "failure" ? "error" : "muted",
+  });
+  return block;
 }
 
 function isTodoList(value: unknown): value is Todo[] {
@@ -340,10 +449,19 @@ function describeToolStart(event: ToolStartEvent): TraceBlock {
     ? Object.entries(event.args).map(([key, value]) => ({
         spans: [
           { text: key + ": ", style: "muted" },
-          { text: serialize(value), limit: ARGUMENT_PREVIEW_LENGTH },
+          { text: serialize(value), limit: event.detailed ? undefined : ARGUMENT_PREVIEW_LENGTH },
         ],
       }))
-    : [{ spans: [{ text: serialize(event.args), limit: ARGUMENT_PREVIEW_LENGTH }] }];
+    : [
+        {
+          spans: [
+            {
+              text: serialize(event.args),
+              limit: event.detailed ? undefined : ARGUMENT_PREVIEW_LENGTH,
+            },
+          ],
+        },
+      ];
   return {
     heading: toolHeading({ text: "● Tool call", style: "active" }, event.toolName),
     rows,
@@ -359,7 +477,7 @@ function describeToolEnd(
   const span: TraceSpan =
     event.outcome === "failure"
       ? { text, style: "error" }
-      : { text, style: "muted", limit: RESULT_PREVIEW_LENGTH };
+      : { text, style: "muted", limit: event.detailed ? undefined : RESULT_PREVIEW_LENGTH };
   return {
     heading: toolHeading(heading, event.toolName),
     rows: empty ? [] : [{ spans: [span] }],

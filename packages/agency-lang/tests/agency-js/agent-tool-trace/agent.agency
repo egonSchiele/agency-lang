@@ -18,6 +18,38 @@ def failedFixture(): Result<string> {
   return failure("fixture failure")
 }
 
+def read(
+  filename: string,
+  dir: string = ".",
+  offset: number = 0,
+  limit: number = 0,
+  useAgentCwd: boolean = false,
+): Result<string> {
+  if (filename == "missing.agency") {
+    const failureCharacter = "f"
+    return failure("Read fixture failed: " + failureCharacter.repeat(140) + " failure-tail")
+  }
+  const resultCharacter = "r"
+  return success("read-content-${offset}-" + resultCharacter.repeat(160) + "-read-tail")
+}
+
+def grep(
+  pattern: string,
+  path | dir: string = ".",
+  flags: string = "",
+  maxResults: number = 200,
+  allowedPaths: string[] = [],
+  useAgentCwd: boolean = false,
+  ignoreCase: boolean = false,
+  wholeWord: boolean = false,
+  filesOnly: boolean = false,
+  invert: boolean = false,
+  respectGitignore: boolean = true,
+): Result {
+  const resultCharacter = "g"
+  return success([{ file: path, line: 7, text: "grep-content-" + resultCharacter.repeat(160) + "-grep-tail" }])
+}
+
 def whatIAmDoing(): string {
   return "suppressed"
 }
@@ -46,7 +78,7 @@ node main(interactive: boolean, verbose: boolean, debug: boolean) {
   setVerbose(verbose)
   setDebug(debug)
   return llm("trace fixture", {
-    tools: [todoWrite, echo, successful, failedFixture, whatIAmDoing, researchAgent, web_search_tavily, web_search_brave],
+    tools: [todoWrite, echo, successful, failedFixture, read, grep, whatIAmDoing, researchAgent, web_search_tavily, web_search_brave],
     retries: 0
   })
 }

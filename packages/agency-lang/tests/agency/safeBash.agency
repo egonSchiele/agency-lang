@@ -10,6 +10,7 @@ import {
   GREP_FLAGS,
  } from "std::safeBash"
 import test { splitFlags } from "std::safeBash"
+import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
@@ -682,4 +683,57 @@ node shellFreeMatchesRealGrep() {
     parityOf("grep -Hn hello one.txt"),
     parityOf("grep -n hello one.txt -s"),
   ]
+}
+
+node loneGrepAsksOneQuestion() {
+  // One std::grep approval, and no shell: a std::bash prompt would fail
+  // the run, because the test file answers only the grep message.
+  const result = safeBash("grep -rn hello .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return [result.value.includes("./one.txt:1:hello world"), result.value.includes("skips node_modules")]
+}
+
+node bashGrepOfOneFile() {
+  // -c has no tool equivalent, so real grep runs after one std::grep approval.
+  const result = safeBash("grep -c hello one.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+node shellFreeNoMatchFails() {
+  const result = safeBash("grep -rn nothing-matches-this .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return [why.includes("\"exitCode\":1"), why.includes("skips node_modules")]
+  }
+  return "UNEXPECTEDLY MATCHED"
+}
+
+node grepUnderRecommendedNeedsNoPrompt() {
+  // The launch directory is the package directory, so the fixtures are
+  // inside it and recommended approves std::grep there. This test has no
+  // interruptHandlers entry, so an unanswered interrupt fails the run.
+  let found = false
+  handle {
+    const result = safeBash("grep -rn hello " + FIXTURES)
+    if (result is success(text)) {
+      found = text.includes("hello again")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node grepOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("grep -rn root /etc", FIXTURES)
+  const effect = plan.effects[0]
+  const intr = { effect: effect.name, data: effect.payload }
+  return checkPolicy(recommendedAutoApprovePolicy, intr).type
 }

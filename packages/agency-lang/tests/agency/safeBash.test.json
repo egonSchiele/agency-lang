@@ -480,6 +480,79 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "loneGrepAsksOneQuestion",
+      "description": "A lone grep asks one std::grep question and no shell question, prints the lines the way grep does, and says which folders the search skipped.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bashGrepOfOneFile",
+      "description": "A grep of one file with a flag the tool lacks asks std::grep, then real grep runs through bash.",
+      "input": "",
+      "expectedOutput": "\"2\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreeNoMatchFails",
+      "description": "A shell-free grep with no match fails the way grep's exit code 1 does, and still says which folders were skipped, since the miss may be in one.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepUnderRecommendedNeedsNoPrompt",
+      "description": "Under the recommended policy, a grep inside the launch directory is approved with no prompt.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepOutsideTheLaunchDirIsUndecided",
+      "description": "Under the recommended policy, a grep outside the launch directory is left to a person.",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

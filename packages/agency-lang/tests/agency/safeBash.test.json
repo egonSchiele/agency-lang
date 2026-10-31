@@ -280,6 +280,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "planReasons",
+      "description": "A broad plan records why: the parser message, the first unrecognized command, the audit rule, or an unrenderable tree. A narrow or refused plan has no reason.",
+      "input": "",
+      "expectedOutput": "[null,[\"unrecognized\",\"no rule for `xargs`\"],[\"noEffects\",\"\"],[\"unparseable\",\"Unexpected input after commands: \\\"$(date)\\\"\"],null,[\"unrecognized\",\"no rule for `xargs`\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planVerbs",
+      "description": "The plan carries the command word of every simple command it decided over: empty when unparseable, an empty string for an assignment-only command.",
+      "input": "",
+      "expectedOutput": "[[\"git\",\"xargs\"],[],[\"\"],[\"rm\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planOutcomes",
+      "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
+      "input": "",
+      "expectedOutput": "[\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

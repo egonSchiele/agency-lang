@@ -90,7 +90,9 @@ application.
    What is taking so long? Anything that answers none of these is noise.
 2. **Show nouns, not arguments.** Each line names the thing the tool acted
    on: a path, a pattern, a command, a URL, a branch. Flags and options
-   are left out.
+   are left out, with one exception: a flag that changes what a risky
+   call does (`force`, `all`) or what a read returns (`invert`, `staged`)
+   counts as a noun.
 3. **Two consecutive calls must never look identical unless they are.**
    The line includes whatever distinguishes a repeat from a new call: the
    line range of a `read`, the pattern and directory of a `grep`.
@@ -109,8 +111,11 @@ application.
 8. **Elapsed time appears only when it was at least one second**, and only
    on the end line of a two-line tool, in whole seconds.
 9. **A tool nobody has thought about falls back to the generic display.**
-   Full argument dump at start, preview at end. That is allowed, and a
-   reviewer should notice it.
+   Full argument dump at start, preview at end, with the tool name in the
+   heading, since that heading has no other label. That is allowed, and a
+   reviewer should notice it. Tools whose names are not known when the
+   code is written (MCP tools, `learned_*` tools, generated tools, Claude
+   skill tools) use the generic display by design.
 10. **Hand-written display code is the last resort.** A tool gets a custom
     describe function only when its output has a shape the summary table
     cannot express.
@@ -164,48 +169,68 @@ kinds:
 - `silent`: the tool prints nothing. Today this is the `SKIP_TRACING` list
   in `trace.agency`; it moves into the table so there is one place.
 
-The `summary` shape, with the names the builder may adjust:
+The `summary` shape:
 
 ```ts
 type SummaryPresentation = {
   kind: "summary";
   // The verb or noun that starts the line: "Read", "Grep", "git diff".
   label: string;
-  // Which arguments appear after the label, in order. A string is an
-  // argument name shown as its value. An object adds a prefix or a format.
-  show: SummaryArgument[];
+  // The parts shown after the label, built from the call's arguments with
+  // a few shared helpers. A null part is skipped.
+  show: (args: ToolArgs, lookup: SpillLookup) => (string | null)[];
   // true: a start line is printed when the call begins and an end line when
   // it settles. false: one line when it settles.
   twoLines: boolean;
   // How the successful result is summarized on the line.
   result: ResultSummary;
 };
-
-type SummaryArgument =
-  | string
-  | { key: string; prefix?: string; when?: "set" }
-  | { format: string; when?: string };
-
-type ResultSummary =
-  | "none"
-  | "count"        // an array: "12 matches", with a noun from the table
-  | "exitCode"     // an object with exitCode: "exit 0"
-  | "verdict"      // a Result: success prints nothing more, failure prints the message
-  | "preview"      // today's dim text preview, for the few that keep it
-  | { kind: "count"; noun: string }
-  | { kind: "custom"; name: string };   // a named summarizer function
 ```
 
-A `{ format: "lines {offset}–{offset+limit}", when: "offset" }` entry is
-how `read` shows its range only when a range was asked for. The builder
-may replace the tiny format language with a function per tool if that is
-cleaner, but the table must stay readable as data: label, arguments,
-one-or-two lines, result.
+A row reads as data, one or two lines each:
+
+```ts
+read:      { kind: "summary", label: "Read",       twoLines: false, result: "none",
+             show: (a) => [filePath(a), lineRange(a)] },
+gitCommit: { kind: "summary", label: "git commit", twoLines: true,  result: "none",
+             show: (a) => [firstLine(a.message)] },
+```
+
+`show` is a function and not a mini-language because the forms kept
+multiplying (a range, a joined path, a first line, a flag, a spill
+lookup), and each form of a format language is an interpreter feature
+with its own code and tests. The helpers are the vocabulary: `text`
+(a string, number, or string array as one piece), `filePath` (`dir`
+joined to `filename` when `dir` is set and not `.`), `lineRange`,
+`firstLine`, `flag` (a word when a boolean is true), and `spillOutput`
+(`output of <source>` through the lookup, else the raw name). Every
+shown value is cut to its first line with `…` when there was more, so a
+heredoc command prints as one line.
+
+Line ranges follow `sliceLines`: `offset` is the 1-based first line and
+`limit` a count, each 0 when unset. So `offset 460, limit 120` prints
+`lines 460–579`, `offset 0, limit 120` prints `lines 1–120`, `offset 460,
+limit 0` prints `lines 460–end`, and both 0 prints nothing.
+
+`ResultSummary` is `"none"`, `"verdict"`, `"preview"`, `{ count: noun }`,
+`{ exitCode: true }`, or a `custom` function. `exitCode` prints `exit N`,
+turns the mark red when N is not 0, and prints the command's output under
+the line by the rule below. `exec` and `agencyCli` return a plain object,
+not a Result, so this is how a failed command stops looking like a
+success.
 
 `custom` summarizers are small named functions in the same file, for the
-handful of results where a count is not enough: grep (files and lines),
-typecheck (errors and warnings), testFile (passed and failed cases). They
-take the result value and return a short string or null.
+handful of results where a count is not enough: grep (lines and files, or
+files alone when `filesOnly` returned paths), grepSpill (lines summed
+across patterns when `morePatterns` grouped them), typecheck (errors and
+warnings), testFile (passed and failed cases). They take the result value
+and the arguments and return a short string or null, and may say the
+result counts as a failure so the mark turns red.
+
+Command output under a line: show `stderr` when it is not empty, else
+`stdout`. When that text is a spill notice (it starts with `[Output`), show
+only its first line, which carries the size and exit code; the rest is
+written for the model.
 
 ### How a line is built
 
@@ -226,14 +251,14 @@ pair them by eye. End events have no call id, so the renderer does not try
 to pair them in code. This is the existing rule in the dev doc and it
 stays.
 
-The tool's registered name is no longer appended in dim text to every
-heading. The label is enough. In `--debug` mode the name is appended as
-today, which is how a reader finds the tool in the log.
+A summary line does not carry the tool's registered name: the label is
+enough. In `--debug` mode the name is appended in dim text, which is how
+a reader finds the tool in the log. The generic, todo, search, and
+subagent headings keep the name as today.
 
-Arguments are sanitized and cut at the existing argument preview length.
-A command for `safeBash` is cut at the terminal width by the existing
-wrapper, not at 50 characters: the command is the whole point of the
-line, so `show` entries may set `limit: "line"` to mean that.
+Shown values are sanitized by the renderer and wrap at the terminal
+width. They are not cut at the 50-character argument preview: the
+command or path is the whole point of the line.
 
 ### Rejected and failed calls
 
@@ -258,10 +283,11 @@ Change: every saved entry gets a readable `source` beside its name.
 - `storeOutput(run, text)` becomes `storeOutput(run, text, source)`.
 - `keepOutput(text, exitCode)` in `std::spill` gains a `source: string`
   parameter. Its only callers are in `safeBash.agency` and
-  `safeBash/actions.agency`. The shell path passes the command it ran. The
-  `runAgency` path has only `args: string[]`, and passes `agency` plus the
-  args joined with spaces. `exec` never calls `keepOutput`; its output
-  reaches the store only through the tool loop below.
+  `safeBash/actions.agency`. Every path passes the command the user saw on
+  the `safeBash` trace line, so `● Run pnpm run typecheck` is followed
+  later by `✓ Read output of pnpm run typecheck`. `exec` never calls
+  `keepOutput`; its output reaches the store only through the tool loop
+  below.
 - The tool loop's spill in `capToolResultForLlm`
   (`lib/runtime/toolInvocation.ts`, which today receives only a
   `ToolIdentity` and the result) gains the call's named arguments, threaded
@@ -280,10 +306,10 @@ Change: every saved entry gets a readable `source` beside its name.
   changes.
 
 The trace for `readSpill` and `grepSpill` then shows the source in place of
-the name: `✓ Read output of pnpm run typecheck · lines 1–200`. The
-renderer gets the source through a lookup function `trace.agency` passes
-in on the event (it has the run; the renderer does not). When the name is
-not in the store, the line falls back to the raw name.
+the name: `✓ Read output of pnpm run typecheck lines 1–200`. The renderer
+is pure; the Agency bridge `_printAgentTrace` hands it a lookup over the
+current run. When the name is not in the store, the line falls back to the
+raw name.
 
 Checkpoints: the store lives in the run's globals and rides in every
 checkpoint. The checkpoint schema stores globals as an open record
@@ -313,12 +339,12 @@ agent) is listed.
 
 | Tool | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| read | one | `✓ Read docs/dev/llm/mlx.md · lines 460–580` | filename; range only when offset or limit set. End of range is offset+limit, or "to end" when limit is 0 and offset set. | none |
+| read | one | `✓ Read docs/dev/llm/mlx.md lines 460–579` | `dir/filename` (dir dropped when `.`); range only when offset or limit set, by the `sliceLines` rule above | none |
 | ls | one | `✓ List stdlib/agents · 14 entries` | dir; `recursive` when true | count, noun "entries" |
 | glob | one | `✓ Glob **/*.test.ts in lib · 37 files` | pattern; `in <dir>` | count, noun "files" |
-| grep | one | `✓ Grep "registers\|plugin" in docs/dev/llm · 12 lines in 3 files` | pattern; `in <path>`; `files only` when set | custom: lines matched and distinct files among the matches |
-| write | one, but noun shown before the call runs: see note | `✓ Write docs/specs/foo.md · 2.1 KB` | filename; `append` when mode is append | custom: byte size of content |
-| edit | one | `✓ Edit lib/runtime/prompt.ts · 3 edits` | filename | custom: length of edits array |
+| grep | one | `✓ Grep "registers\|plugin" in docs/dev/llm · 12 lines in 3 files` | pattern; `in <path>`; `files only`, `inverted` when set | custom: lines matched and distinct files among the matches; `3 files` when `filesOnly` returned paths |
+| write | one, but noun shown before the call runs: see note | `✓ Write docs/specs/foo.md · 2.1 KB` | `dir/filename`; `append` when mode is append | custom: byte size of content |
+| edit | one | `✓ Edit lib/runtime/prompt.ts · 3 edits` | `dir/filename` | custom: length of edits array |
 
 Note on `write` and `edit`: guideline 7 says a write shows its noun before
 it runs. But these are instant and their interrupt prompt already names
@@ -336,10 +362,10 @@ this reading is my call and the phrasing makes it honest.
 
 | Tool | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| safeBash | two | `● Run pnpm run typecheck` then `✓ Run pnpm run typecheck · 14s` | command, cut at the line | none on success; custom failure summarizer, see below |
-| exec | two | `● Run git log --oneline -5` | command and args joined | exitCode, as safeBash |
-| readSpill | one | `✓ Read output of pnpm run typecheck · lines 1–200` | source looked up from the name; range as `read` | none |
-| grepSpill | one | `✓ Grep "error" in output of pnpm run typecheck · 4 lines` | pattern; source | count, noun "lines" |
+| safeBash | two | `● Run pnpm run typecheck` then `✓ Run pnpm run typecheck · 14s` | command, first line | none on success; custom failure summarizer, see below |
+| exec | two | `● Run git log --oneline -5` then `✗ Run git log … · exit 128` | command and args joined | exitCode: red when not 0, output under the line |
+| readSpill | one | `✓ Read output of pnpm run typecheck lines 1–200` | source looked up from the name; range as `read` | none |
+| grepSpill | one | `✓ Grep "error" in output of pnpm run typecheck · 4 lines` | pattern; source | custom: lines, summed across patterns |
 
 `safeBash` returns a `Result<string>`. A success carries the output or
 the spill notice, with no exit code, so a successful line is
@@ -347,19 +373,20 @@ the spill notice, with no exit code, so a successful line is
 `{command, exitCode, stderr, stdout}` (`stdlib/safeBash/actions.agency`),
 where `stderr` and `stdout` may each be a spill notice. The `safeBash`
 row gets a custom failure summarizer that parses that JSON: the line reads
-`✗ Run <command> · exit 2` and the `stderr` text prints in full under it
-(it is already capped by the spill notice). When the message is not that
-JSON, it prints in full as any other failure does. `exec` and `agencyCli`
-return a plain `ExecResult` with `exitCode` on both success and failure,
-so their `exitCode` summarizer reads it directly. Guideline 6 is read as
-"print the part a human would read", not "print the JSON".
+`✗ Run <command> · exit 2` and the command's output prints under it by
+the rule above (stderr, else stdout; a notice shows its first line). When
+the message is not that JSON, it prints in full as any other failure does.
+`exec` and `agencyCli` return a plain `ExecResult` with `exitCode` on both
+success and failure, so their `exitCode` summarizer reads it directly.
+Guideline 6 is read as "print the part a human would read", not "print
+the JSON".
 
 ### Git: `gitTools`
 
 | Tools | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| gitIsRepo, gitStatus, gitLog, gitDiff, gitShow, gitBlame, gitBranchList, gitRemoteList, gitStashList | one | `✓ git diff lib/runtime` | label is the git subcommand; the path or ref argument when present | none |
-| gitAdd, gitCommit, gitCheckout, gitSwitch, gitBranchCreate, gitBranchDelete, gitStashPush, gitStashPop, gitRestore | two | `● git commit "Add summary tier"` | commit: first line of message. checkout, switch, branch create and delete: the branch. add and restore: the paths. stash: nothing. | none |
+| gitIsRepo, gitStatus, gitLog, gitDiff, gitShow, gitBlame, gitBranchList, gitRemoteList, gitStashList | one | `✓ git diff lib/runtime` | label is the git subcommand; the path or ref argument when present; `--staged` on a staged diff | none |
+| gitAdd, gitCommit, gitCheckout, gitSwitch, gitBranchCreate, gitBranchDelete, gitStashPush, gitStashPop, gitRestore | two | `● git commit Add summary tier` | commit: first line of message. checkout, switch, branch create and delete: the branch, plus `--force` when forced. add: the paths, or `--all`. restore: the paths. stash: nothing. | none |
 
 The builder reads each tool's parameter names from its definition to fill
 `show`. The label for every git tool is `git <subcommand>` in the same
@@ -370,7 +397,7 @@ spelling the command line uses.
 | Tools | Lines | Example | Shows | Result |
 |---|---|---|---|---|
 | ghPrGet, ghPrList, ghPrDiff, ghPrFiles, ghPrReviews, ghPrReviewComments, ghPrChecks, ghIssueGet, ghIssueList, ghIssueComments, ghIssueSearch | two | `● gh pr checks #1310` | the PR or issue number as `#N`; the query for search; nothing for list | none |
-| ghPrReviewComment, ghPrReview, ghPrApprove, ghIssueCreate, ghIssueComment, ghIssueClose, ghIssueLabel | two | `● gh pr review #1310 · request changes` | number; the review verdict, the issue title, or the label | none |
+| ghPrReviewComment, ghPrReview, ghPrApprove, ghIssueCreate, ghIssueComment, ghIssueClose, ghIssueLabel | two | `● gh pr review #1310 REQUEST_CHANGES` | number; the review event as the API spells it, the issue title, or the labels | none |
 
 Network calls, so two lines. Labels are `gh pr <x>` and `gh issue <x>`.
 
@@ -378,7 +405,7 @@ Network calls, so two lines. Labels are `gh pr <x>` and `gh issue <x>`.
 
 | Tool | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| fetchMarkdown | two | `● Fetch https://example.com/docs` then `✓ Fetch https://example.com/docs · 48 KB` | url, with path appended when set | custom: size of the returned text |
+| fetchMarkdown | two | `● Fetch https://example.com/docs` then `✓ Fetch https://example.com/docs · 48 KB` | `baseUrl` (the runtime has already folded the `url` alias into it), with path appended when set | custom: size of the returned text |
 | wikipedia_search, wikipedia_summary, wikipedia_article | two | `● Wikipedia "Hopfield network"` | the query or title | none |
 | web search providers | custom, unchanged | | | |
 
@@ -389,7 +416,7 @@ answered, and adding that is out of scope.
 
 | Tool | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| typecheck | one | `✓ Typecheck foo.agency · clean` or `✗ Typecheck foo.agency · 3 errors, 1 warning` | filename or module | custom from `TypeCheckReport`: "clean", or error and warning counts. Errors make the mark red even on a success Result. |
+| typecheck | one | `✓ Typecheck · clean` or `✗ Typecheck · 3 errors, 1 warning` | nothing: the tool takes source text, not a path | custom from `TypeCheckReport`: "clean", or error and warning counts. Errors make the mark red even on a success Result. |
 | parseAST | one | `✓ Parse · ok` | nothing (source is inline text) | verdict |
 | testFile | two | `● Test review.test.json` then `✓ Test review.test.json · 7 passed` | filename | custom from `TestReport`: passed and failed counts; any failure is red |
 | agencyCli | two | `● agency fmt foo.agency` | args joined | exitCode |
@@ -399,17 +426,17 @@ answered, and adding that is out of scope.
 
 | Tools | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| agencyGuide, agencyCliDocs, agencyDiagnostics, agencyStdlib, agencyAgent (the model-facing names of the doc tools; the brief variants share them) | one | `✓ Docs guide/interrupts.md` | the page path requested; `list` when none | none |
-| skill (Claude skills), coordinator_skills, superpowersSkill, and the code agent's skills tool | one | `✓ Skill brainstorming` | skill name; `list` when none | none |
+| agencyGuide, agencyCliDocs, agencyDiagnostics, agencyStdlib, agencyAgent (the model-facing names of the doc tools; the brief variants share them) | one | `✓ Docs guide/interrupts.md` | `filename`: these tools are `read` partially applied to a docs directory | none |
+| skill (Claude skills), coordinator_skills, superpowersSkill, skills_coding | one | `✓ Skill brainstorming` | the skill's `name`, or `filename` for the `read`-based ones | none |
 
-The builder reads each skill tool's model-facing name from its definition
-(`.rename()` or `skillsDir(...)`) before writing the row.
+The builder reads each skill tool's model-facing name and parameter from
+its definition before writing the row.
 
 ### Memory and planning
 
 | Tool | Lines | Example | Shows | Result |
 |---|---|---|---|---|
-| remember | one | `✓ Remember` | nothing; the content is long and may be personal | none (the tool returns nothing on success) |
+| remember | two | `● Remember` then `✓ Remember · 3s` | nothing; the content is long and may be personal | none (the tool returns nothing on success). Two lines because it makes a model call. |
 | recall | one | `✓ Recall "preferred editor"` | query | none (the result is formatted text, not a list) |
 | todoWrite, todoAdd, todoUpdate, todoList | custom, unchanged | | | |
 | saveDraft | silent | | | |
@@ -420,6 +447,12 @@ The builder reads each skill tool's model-facing name from its definition
 |---|---|---|
 | whatIAmDoing | silent | Prints its own message. Already skipped. |
 | question | silent | The interrupt prompt is the display. Owner's decision. |
+| elapsedTime | one | `✓ Elapsed · 4m 10s`: the result is the point, so it is shown. |
+| learnTools | two | `● Learn tools <module or file>`: dispatches a subprocess. |
+
+A one-line tool that raises an interrupt shows the approval prompt before
+its line, and the prompt names the path. That is enough; no trace line is
+printed before the prompt.
 
 ### Subagents and handoffs
 
@@ -467,8 +500,7 @@ The builder reads each skill tool's model-facing name from its definition
 
 ## Left to the builder
 
-- Exact field names in the presentation table and whether the format
-  mini-language is a string or a function.
+- Exact helper names in the presentation table.
 - Whether the git tools' `show` is filled from a shared helper or listed per
   tool.
 - Row order and any wrapping behaviour already owned by the renderer.

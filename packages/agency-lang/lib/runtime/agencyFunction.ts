@@ -132,6 +132,10 @@ export type AgencyFunctionOpts = {
   capabilities?: Capability[];
   /** Definition and registered executor for a callable built at runtime. */
   created?: CreatedTool;
+  /** The JSON Schema each `.withParamSchema` call gave a parameter, by
+   *  name, kept so a checkpoint can restore it. Never zod: zod does not
+   *  serialize. */
+  paramSchemas?: Record<string, unknown>;
 };
 
 export class AgencyFunction {
@@ -161,6 +165,7 @@ export class AgencyFunction {
    *  `name` for functions never renamed. */
   readonly registeredName: string;
   readonly created?: CreatedTool;
+  readonly paramSchemas: Record<string, unknown>;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
@@ -168,6 +173,7 @@ export class AgencyFunction {
     this.registeredName = opts.registeredName ?? opts.name;
     this._fn = opts.fn;
     this.created = opts.created;
+    this.paramSchemas = opts.paramSchemas ?? {};
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
@@ -221,6 +227,7 @@ export class AgencyFunction {
       registeredName: this.registeredName,
       capabilities: this.capabilities,
       created: this.created,
+      paramSchemas: this.paramSchemas,
     };
   }
 
@@ -394,7 +401,10 @@ export class AgencyFunction {
         }
       : null;
 
-    return this.derive({ params: newParams, toolDefinition: newToolDef });
+    const paramSchemas = Object.fromEntries(
+      Object.entries(this.paramSchemas).filter(([name]) => !boundNames.includes(name)),
+    );
+    return this.derive({ params: newParams, toolDefinition: newToolDef, paramSchemas });
   }
 
   preapprove(): AgencyFunction {
@@ -464,7 +474,10 @@ export class AgencyFunction {
     const shape: Record<string, z.ZodType> = { ...(current?.shape ?? {}) };
     shape[name] = z.fromJSONSchema(jsonSchema as Parameters<typeof z.fromJSONSchema>[0]);
     const base = this.toolDefinition ?? { name: this.name, description: "", schema: null };
-    return this.withToolDefinition({ ...base, schema: z.object(shape) });
+    return this.derive({
+      toolDefinition: { ...base, schema: z.object(shape) },
+      paramSchemas: { ...this.paramSchemas, [name]: jsonSchema },
+    });
   }
 
   rename(newName: string): AgencyFunction {

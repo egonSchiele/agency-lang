@@ -764,6 +764,34 @@ describe("withParamSchema()", () => {
     expect(() => bound.withParamSchema("a", requestSchema)).toThrow(/bound parameter 'a'/);
     expect(() => bound.withParamSchema("zz", requestSchema)).toThrow(/parameter 'zz'/);
   });
+
+  it("records the JSON Schema it was given, by parameter name", () => {
+    const shaped = twoParams().withParamSchema("b", requestSchema);
+    expect(shaped.paramSchemas).toEqual({ b: requestSchema });
+    expect(twoParams().paramSchemas).toEqual({});
+  });
+
+  it("a second schema for the same parameter replaces the first", () => {
+    const other = { type: "string" };
+    const shaped = twoParams().withParamSchema("b", requestSchema).withParamSchema("b", other);
+    expect(shaped.paramSchemas).toEqual({ b: other });
+    expect(jsonSchemaOf(shaped).properties.b).toEqual({ type: "string" });
+  });
+
+  it("partial() drops the record entry of a parameter it binds and keeps the rest", () => {
+    const aSchema = { type: "integer" };
+    const shaped = twoParams().withParamSchema("a", aSchema).withParamSchema("b", requestSchema);
+    const bound = shaped.partial({ a: 1 });
+    expect(bound.paramSchemas).toEqual({ b: requestSchema });
+    expect(jsonSchemaOf(bound).properties.b.properties.n).toEqual({ type: "number" });
+  });
+
+  it("rename(), describe(), and preapprove() carry the record", () => {
+    const shaped = twoParams().withParamSchema("b", requestSchema);
+    expect(shaped.rename("other").paramSchemas).toEqual({ b: requestSchema });
+    expect(shaped.describe("d").paramSchemas).toEqual({ b: requestSchema });
+    expect(shaped.preapprove().paramSchemas).toEqual({ b: requestSchema });
+  });
 });
 
 describe("preapprove handler wiring", () => {

@@ -4,7 +4,21 @@ import { currentHost } from "../runtime/currentHost.js";
 import { stripControlCharacters } from "../utils/controlCharacters.js";
 import { color, plainColor, RESET } from "../utils/termcolors.js";
 import { stripAnsi, visualWidth, wrapText } from "./layout/ansi.js";
-import { summarizeToolCall, type ToolSummaryKind } from "./agentToolSummary.js";
+import {
+  readSummary,
+  readSpillSummary,
+  docsSummary,
+  grepSummary,
+  spillSearchSummary,
+  globSummary,
+  listingSummary,
+  writeSummary,
+  editSummary,
+  shellSummary,
+  execSummary,
+  agencyCliSummary,
+  type ToolSummaryFormatter,
+} from "./agentToolSummary.js";
 
 export type TraceOptions = { columns: number; color: boolean };
 export type ToolStartEvent = {
@@ -42,7 +56,7 @@ type TaskPresentation = { kind: "tasks"; heading: TraceSpan };
 type AgentPresentation = { kind: "agent"; label: string };
 type SummaryPresentation = {
   kind: "summary";
-  summary: ToolSummaryKind;
+  summary: ToolSummaryFormatter;
   label: string;
   result: "hide" | "preview" | "command";
 };
@@ -75,22 +89,22 @@ const OUTCOMES: Record<ToolEndEvent["outcome"], TraceSpan> = {
 
 // A custom presentation owns both lifecycle phases, including empty starts.
 const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
-  read: { kind: "summary", summary: "read", label: "Reading", result: "hide" },
-  readSpill: { kind: "summary", summary: "readSpill", label: "Reading", result: "hide" },
-  grep: { kind: "summary", summary: "grep", label: "Searching", result: "hide" },
-  grepSpill: { kind: "summary", summary: "grepSpill", label: "Searching", result: "hide" },
-  glob: { kind: "summary", summary: "glob", label: "Finding files", result: "hide" },
-  ls: { kind: "summary", summary: "ls", label: "Listing", result: "hide" },
-  agencyGuide: { kind: "summary", summary: "docs", label: "Reading", result: "hide" },
-  agencyCliDocs: { kind: "summary", summary: "docs", label: "Reading", result: "hide" },
-  agencyDiagnostics: { kind: "summary", summary: "docs", label: "Reading", result: "hide" },
-  agencyStdlib: { kind: "summary", summary: "docs", label: "Reading", result: "hide" },
-  agencyAgent: { kind: "summary", summary: "docs", label: "Reading", result: "hide" },
-  write: { kind: "summary", summary: "write", label: "Writing", result: "preview" },
-  edit: { kind: "summary", summary: "edit", label: "Editing", result: "preview" },
-  safeBash: { kind: "summary", summary: "shell", label: "Running", result: "preview" },
-  exec: { kind: "summary", summary: "exec", label: "Running", result: "command" },
-  agencyCli: { kind: "summary", summary: "agencyCli", label: "Running", result: "command" },
+  read: { kind: "summary", summary: readSummary, label: "Reading", result: "hide" },
+  readSpill: { kind: "summary", summary: readSpillSummary, label: "Reading", result: "hide" },
+  grep: { kind: "summary", summary: grepSummary, label: "Searching", result: "hide" },
+  grepSpill: { kind: "summary", summary: spillSearchSummary, label: "Searching", result: "hide" },
+  glob: { kind: "summary", summary: globSummary, label: "Finding files", result: "hide" },
+  ls: { kind: "summary", summary: listingSummary, label: "Listing", result: "hide" },
+  agencyGuide: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyCliDocs: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyDiagnostics: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyStdlib: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  agencyAgent: { kind: "summary", summary: docsSummary, label: "Reading", result: "hide" },
+  write: { kind: "summary", summary: writeSummary, label: "Writing", result: "preview" },
+  edit: { kind: "summary", summary: editSummary, label: "Editing", result: "preview" },
+  safeBash: { kind: "summary", summary: shellSummary, label: "Running", result: "preview" },
+  exec: { kind: "summary", summary: execSummary, label: "Running", result: "command" },
+  agencyCli: { kind: "summary", summary: agencyCliSummary, label: "Running", result: "command" },
   todoWrite: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
   todoAdd: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
   todoUpdate: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
@@ -229,8 +243,11 @@ function describeSummaryEvent(
   presentation: SummaryPresentation,
 ): TraceBlock | null {
   if (event.kind === "toolStart") {
-    const summary = summarizeToolCall(presentation.summary, event.toolName, event.args);
-    if (event.detailed || summary === null) {
+    if (event.detailed || !isPlainObject(event.args)) {
+      return describeToolStart(event);
+    }
+    const summary = presentation.summary(event.args, event.toolName);
+    if (summary === null) {
       return describeToolStart(event);
     }
     return {

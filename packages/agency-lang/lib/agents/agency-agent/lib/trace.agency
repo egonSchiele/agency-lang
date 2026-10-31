@@ -34,6 +34,24 @@ export def isTraceEnabled(): boolean {
   return _isInteractive || VERBOSE || AGENT_DEBUG
 }
 
+type ToolOutcome = {
+  value: any;
+  outcome: "success" | "failure" | "plain"
+}
+
+def toolOutcome(result: any): ToolOutcome {
+  if (result is success(value)) {
+    return { value: value, outcome: "success" }
+  }
+  if (result is failure(error)) {
+    return { value: error, outcome: "failure" }
+  }
+  if (isPlainObject(result) && result.type == "reject") {
+    return { value: result.value ?? "Tool call rejected", outcome: "failure" }
+  }
+  return { value: result, outcome: "plain" }
+}
+
 static const SKIP_TRACING = ["whatIAmDoing"]
 callback("onToolCallStart") as data {
   if (SKIP_TRACING.includes(data.toolName)) {
@@ -41,7 +59,13 @@ callback("onToolCallStart") as data {
   }
 
   if (isTraceEnabled()) {
-    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, detailed: AGENT_DEBUG, provider: searchProviderName(data.toolName) })
+    _printAgentTrace({
+      kind: "toolStart",
+      toolName: data.toolName,
+      args: data.args,
+      detailed: AGENT_DEBUG,
+      provider: searchProviderName(data.toolName)
+    })
   }
 }
 
@@ -51,16 +75,16 @@ callback("onToolCallEnd") as data {
   }
 
   if (isTraceEnabled()) {
-    const provider = searchProviderName(data.toolName)
-    if (data.result is success(_result)) {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _result, outcome: "success", detailed: AGENT_DEBUG, timeTaken: data.timeTaken, provider: provider })
-    } else if (data.result is failure(_error)) {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _error, outcome: "failure", detailed: AGENT_DEBUG, timeTaken: data.timeTaken, provider: provider })
-    } else if (isPlainObject(data.result) && data.result.type == "reject") {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result.value ?? "Tool call rejected", outcome: "failure", detailed: AGENT_DEBUG, timeTaken: data.timeTaken, provider: provider })
-    } else {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result, outcome: "plain", detailed: AGENT_DEBUG, timeTaken: data.timeTaken, provider: provider })
-    }
+    const result = toolOutcome(data.result)
+    _printAgentTrace({
+      kind: "toolEnd",
+      toolName: data.toolName,
+      value: result.value,
+      outcome: result.outcome,
+      detailed: AGENT_DEBUG,
+      timeTaken: data.timeTaken,
+      provider: searchProviderName(data.toolName)
+    })
   }
 }
 

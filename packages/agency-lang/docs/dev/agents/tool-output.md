@@ -79,15 +79,20 @@ its custom block. Compact starts fall back to generic argument rows when
 their arguments cannot be summarized.
 
 ```ts
-read: { kind: "summary", summary: "read", label: "Reading", result: "hide" }
+read: { kind: "summary", summary: readSummary, label: "Reading", result: "hide" }
 ```
 
 Each summary entry chooses an argument formatter, a heading, and a result
 policy. `hide` suppresses fast successful completions. `preview` keeps the
 generic result display. `command` also interprets the command's exit code.
-Every policy shows failures. Reuse an existing summary kind when another
-tool has the same arguments; add a formatter in `agentToolSummary.ts` when
-its arguments need a different description.
+Every policy shows failures. Each entry references its formatter function
+directly. Reuse a formatter when another tool has the same arguments; add
+a function in `agentToolSummary.ts` when it needs a different description.
+There is no separate formatter-name list or dispatch switch to update.
+
+A formatter receives an argument object and the tool name. It returns
+`{ text, details }`, or `null` to use generic argument rows. The shared
+caller handles non-object arguments and debug output before invoking it.
 
 To add a custom display, define both lifecycle phases and validate its input
 before describing rows. A phase may return no block, as todo starts do.

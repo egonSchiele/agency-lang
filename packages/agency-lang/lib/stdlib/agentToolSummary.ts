@@ -1,20 +1,6 @@
-import { isPlainObject } from "../config/paths.js";
-
-export type ToolSummaryKind =
-  | "read"
-  | "readSpill"
-  | "docs"
-  | "grep"
-  | "grepSpill"
-  | "glob"
-  | "ls"
-  | "write"
-  | "edit"
-  | "shell"
-  | "exec"
-  | "agencyCli";
 export type ToolSummary = { text: string; details: string[] };
 type Arguments = Record<string, unknown>;
+export type ToolSummaryFormatter = (args: Arguments, toolName: string) => ToolSummary | null;
 
 function quote(value: string): string {
   return JSON.stringify(value);
@@ -56,14 +42,25 @@ function readRange(args: Arguments): string | null {
   return first > 1 ? ` · lines ${first}–end` : "";
 }
 
-function readSummary(kind: ToolSummaryKind, toolName: string, args: Arguments): ToolSummary | null {
+function fileReadSummary(args: Arguments, prefix: string): ToolSummary | null {
   const range = readRange(args);
   const target = fileTarget(args);
   if (target === null || range === null) {
     return null;
   }
-  const prefixes: Record<string, string> = { readSpill: "saved output ", docs: `${toolName}: ` };
-  return { text: `${prefixes[kind] ?? ""}${target}${range}`, details: [] };
+  return { text: `${prefix}${target}${range}`, details: [] };
+}
+
+export function readSummary(args: Arguments): ToolSummary | null {
+  return fileReadSummary(args, "");
+}
+
+export function readSpillSummary(args: Arguments): ToolSummary | null {
+  return fileReadSummary(args, "saved output ");
+}
+
+export function docsSummary(args: Arguments, toolName: string): ToolSummary | null {
+  return fileReadSummary(args, `${toolName}: `);
 }
 
 const SEARCH_MODES = [
@@ -82,19 +79,27 @@ function grepModes(args: Arguments): string[] {
   ];
 }
 
-function searchSummary(kind: ToolSummaryKind, args: Arguments): ToolSummary | null {
-  const key = kind === "grep" && args.path !== undefined ? "path" : "dir";
+function searchSummary(args: Arguments, key: string, details: string[]): ToolSummary | null {
   const target = scope(args, key);
   if (typeof args.pattern !== "string" || target === null) {
     return null;
   }
   return {
     text: `${quote(args.pattern)} in ${target}`,
-    details: kind === "grep" ? grepModes(args) : [],
+    details,
   };
 }
 
-function spillSearchSummary(args: Arguments): ToolSummary | null {
+export function grepSummary(args: Arguments): ToolSummary | null {
+  const key = args.path !== undefined ? "path" : "dir";
+  return searchSummary(args, key, grepModes(args));
+}
+
+export function globSummary(args: Arguments): ToolSummary | null {
+  return searchSummary(args, "dir", []);
+}
+
+export function spillSearchSummary(args: Arguments): ToolSummary | null {
   if (typeof args.filename !== "string" || typeof args.pattern !== "string") {
     return null;
   }
@@ -108,29 +113,35 @@ function spillSearchSummary(args: Arguments): ToolSummary | null {
   };
 }
 
-function writeSummary(kind: ToolSummaryKind, args: Arguments): ToolSummary | null {
+export function listingSummary(args: Arguments): ToolSummary | null {
+  const target = scope(args, "dir");
+  const details = args.recursive === true ? ["recursive"] : [];
+  return target === null ? null : { text: target, details };
+}
+
+export function writeSummary(args: Arguments): ToolSummary | null {
   const target = fileTarget(args);
   if (target === null) {
     return null;
-  }
-  if (kind === "edit") {
-    if (!Array.isArray(args.edits)) {
-      return null;
-    }
-    const count = args.edits.length;
-    return { text: `${target} · ${count} ${count === 1 ? "edit" : "edits"}`, details: [] };
   }
   const mode = typeof args.mode === "string" ? ` · ${args.mode}` : "";
   return { text: target + mode, details: [] };
 }
 
-function commandSummary(kind: ToolSummaryKind, args: Arguments): ToolSummary | null {
-  const command = kind === "agencyCli" ? "agency" : args.command;
+export function editSummary(args: Arguments): ToolSummary | null {
+  const target = fileTarget(args);
+  if (target === null || !Array.isArray(args.edits)) {
+    return null;
+  }
+  const count = args.edits.length;
+  return { text: `${target} · ${count} ${count === 1 ? "edit" : "edits"}`, details: [] };
+}
+
+function commandSummary(args: Arguments, command: unknown, words: unknown): ToolSummary | null {
   const cwd = scope(args, "cwd");
   if (typeof command !== "string" || cwd === null) {
     return null;
   }
-  const words = kind === "shell" ? [] : (args.args ?? []);
   if (!Array.isArray(words) || !words.every((word) => typeof word === "string")) {
     return null;
   }
@@ -141,36 +152,14 @@ function commandSummary(kind: ToolSummaryKind, args: Arguments): ToolSummary | n
   return { text: [command, ...words.map(quote)].join(" "), details };
 }
 
-/** Describes requested activity. Defaults and bound arguments are not in this event. */
-export function summarizeToolCall(
-  kind: ToolSummaryKind,
-  toolName: string,
-  args: unknown,
-): ToolSummary | null {
-  if (!isPlainObject(args)) {
-    return null;
-  }
-  switch (kind) {
-    case "read":
-    case "readSpill":
-    case "docs":
-      return readSummary(kind, toolName, args);
-    case "grep":
-    case "glob":
-      return searchSummary(kind, args);
-    case "grepSpill":
-      return spillSearchSummary(args);
-    case "ls": {
-      const target = scope(args, "dir");
-      const recursive = args.recursive === true ? ["recursive"] : [];
-      return target === null ? null : { text: target, details: recursive };
-    }
-    case "write":
-    case "edit":
-      return writeSummary(kind, args);
-    case "shell":
-    case "exec":
-    case "agencyCli":
-      return commandSummary(kind, args);
-  }
+export function shellSummary(args: Arguments): ToolSummary | null {
+  return commandSummary(args, args.command, []);
+}
+
+export function execSummary(args: Arguments): ToolSummary | null {
+  return commandSummary(args, args.command, args.args ?? []);
+}
+
+export function agencyCliSummary(args: Arguments): ToolSummary | null {
+  return commandSummary(args, "agency", args.args ?? []);
 }

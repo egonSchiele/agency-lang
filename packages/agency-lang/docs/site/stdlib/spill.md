@@ -36,8 +36,9 @@ A command can print far more than a model should be handed in one tool
   ```agency
   import { keepOutput, readSpill, grepSpill } from "std::spill"
 
-  const shown = keepOutput(hugeBuildLog, 1)
-  // shown is a preview naming an output such as 2026-09-04T01-02-03-000Z-a1b2c3.log
+  const shown = keepOutput(hugeBuildLog, 1, "make")
+  // shown is a preview naming an output such as 2026-09-04T01-02-03-000Z-a1b2c3.log,
+  // and saying it is the output of "make"
   const tail = readSpill("2026-09-04T01-02-03-000Z-a1b2c3.log", offset: 900, limit: 50)
   const errors = grepSpill("error", filename: "2026-09-04T01-02-03-000Z-a1b2c3.log")
   ```
@@ -50,21 +51,23 @@ A command can print far more than a model should be handed in one tool
 export static const MAX_STDOUT_LEN = 2000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L46))
 
 ## Functions
 
 ### keepOutput
 
 ```ts
-keepOutput(text: string, exitCode: number): string
+keepOutput(text: string, exitCode: number, source: string): string
 ```
 
 What the model gets back for a command's output.
 
   Short output comes back exactly as printed. Long output is saved in the
   run and replaced by a preview: the exit code, the first and last lines,
-  and the name it was saved under, with the tools that read it.
+  and the name it was saved under, with the tools that read it. `source`
+  is the command that produced the output, as the user saw it; the preview
+  names it, and so does the agent's trace line when the output is read back.
 
 **Parameters:**
 
@@ -72,10 +75,11 @@ What the model gets back for a command's output.
 |---|---|---|
 | text | `string` |  |
 | exitCode | `number` |  |
+| source | `string` |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L48))
 
 ### readSpill
 
@@ -99,7 +103,7 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L61))
 
 ### grepSpill
 
@@ -130,4 +134,4 @@ Search saved tool output for a regular expression. Each match comes back with it
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L76))

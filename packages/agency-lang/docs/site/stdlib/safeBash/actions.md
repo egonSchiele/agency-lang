@@ -211,7 +211,7 @@ writeExecution(write: WritePayload): WriteExec
 ### runBash
 
 ```ts
-runBash(command: string, cwd: string): Result<string>
+runBash(command: string, cwd: string, source: string = ""): Result<string>
 ```
 
 Run a command string through bash and return what it printed.
@@ -232,6 +232,7 @@ Run a command string through bash and return what it printed.
 |---|---|---|
 | command | `string` |  |
 | cwd | `string` |  |
+| source | `string` | "" |
 
 **Returns:** `Result<string>`
 
@@ -262,4 +263,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L164))

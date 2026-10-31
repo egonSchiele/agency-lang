@@ -8,12 +8,13 @@
 
 **Tech Stack:** pnpm, Agency, Agency execution tests, vitest.
 
-**Spec:** `/Users/adityabhargava/agency-lang/packages/agency-lang/worktree-safebash-reads/packages/agency-lang/docs/superpowers/specs/2026-10-30-safebash-reads-pipes-scripts-design.md`, Part 4 "What changes here". Linear: ADI-241, blocked by ADI-239 and ADI-240 (a released tarsec).
+**Spec:** `/Users/adityabhargava/agency-lang/packages/agency-lang/worktree-safebash-reads/packages/agency-lang/docs/superpowers/specs/2026-10-30-safebash-reads-pipes-scripts-design.md`, Part 4 "What changes here". Linear: ADI-241, blocked by ADI-239 and ADI-240 (a released tarsec) and by ADI-238 (the `broadReason` field and the dev doc this slice extends).
 
 ## Global Constraints
 
 - `tarsec` is in `minimumReleaseAgeExclude` in `/Users/adityabhargava/agency-lang/pnpm-workspace.yaml`, so a fresh release installs without waiting out the cooldown. Bump with `pnpm add tarsec@<version>` from `packages/agency-lang` so the lockfile updates; never hand-edit the lockfile.
-- No question changes in this slice: every string that asked `std::bash` before still asks it, and no string that asked a narrow question asks a different one. The existing `tests/agency/safeBash.test.json` expectations must pass unchanged except where a case was unparseable and is now unrecognized, which produces the same plan.
+- No string that asks a narrow question today asks a different one. The only strings that stop asking `std::bash` are the pipelines whose every stage is already a recognized verb (today: git reads and echoes), such as `git status | git log`, which is the behavior the spec asks for. Two existing expectations change, and both are the intended behavior: the `cat a.txt | grep x` row in `wholeStringPlans` keeps its output (`["bash",["std::bash"]]`) but reaches it as unrecognized rather than unparseable; and `tildeRedirectQuoting` asserted that an unquoted `~` redirect target is broad because the grammar refused it. After ADI-240 the parser accepts `~/x`, `prepareRedirectWrite` resolves it with `tildeModeFor` giving `expand`, and `echo hi > ~/cf-sb-tilde.txt` becomes a recognized `std::write` to the real home directory, which is what the quote-aware tilde rule was written for. Update that row and its comment in Task 1.
+- The Agency `Redirect` type already has `fd?: number`, and a tarsec dup redirect with no fd leaves the key absent, so `>&2` needs no type change.
 - `make` after `.agency` changes; `pnpm run build` after `.ts` changes; `pnpm run typecheck`, `pnpm run lint:structure`, prettier on named files.
 
 ## Review Focus
@@ -39,7 +40,7 @@
 
 - [ ] **Step 1: Bump the pin**
 
-Run: `cd /Users/adityabhargava/agency-lang/packages/agency-lang/<worktree> && pnpm add tarsec@<released version> > /tmp/pin.txt 2>&1; tail -3 /tmp/pin.txt; git diff --stat`
+From this package directory: `pnpm add tarsec@<released version> > /tmp/pin.txt 2>&1; tail -3 /tmp/pin.txt; git diff --stat`
 Expected: `package.json` and the root lockfile changed, nothing else.
 
 - [ ] **Step 2: Extend the round-trip test and watch it fail to build**
@@ -51,18 +52,18 @@ Expected: PASS already, since the test goes straight to tarsec. Then run `make >
 
 - [ ] **Step 3: Mirror the types in `stdlib/safeBash.agency`**
 
-Add `GlobWord` (`tag: "glob"; text: string`) to the `Word` union, `valueIsGlob?: boolean` to `FlagWord`, and `Pipeline` (`tag: "pipeline"; stages: Command[]`) to `Command`, each with the one-sentence comment from the tarsec types. In `flattenOne`, add the arm:
+Add `GlobWord` (`tag: "glob"; text: string`) to the `Word` union, `valueIsGlob?: boolean` to `FlagWord`, `PipelineStage = SimpleCommand | Parens`, and `Pipeline` (`tag: "pipeline"; stages: PipelineStage[]`) to `Command`, each with the one-sentence comment from the tarsec types. In `flattenOne`, add the arm:
 
 ```
-{ tag: "pipeline", stages } => [...[flattenOne(s) for s in stages].flat()]
+{ tag: "pipeline", stages } => flattenCommands(stages)
 ```
 
-or the loop equivalent if comprehension-plus-flat does not typecheck; the result is every simple command in every stage, in order.
+`flattenCommands` is defined directly above and already concatenates `flattenOne` over a list; a `PipelineStage[]` is assignable to its `Command[]` parameter.
 
-- [ ] **Step 4: `make`; run the existing safeBash Agency tests**
+- [ ] **Step 4: `make`; run the existing safeBash Agency tests; update the tilde row**
 
 Run: `make > /tmp/make-parity.txt 2>&1; tail -3 /tmp/make-parity.txt; AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test tests/agency/safeBash.agency > /tmp/parity-t1b.txt 2>&1; tail -5 /tmp/parity-t1b.txt`
-Expected: all pass. The `cat a.txt | grep x` row in `wholeStringPlans` gives the same `["bash",["std::bash"]]` as before, by the unrecognized path instead of the unparseable one.
+Expected: everything passes except `tildeRedirectQuoting`, whose unquoted row now classifies as a `std::write`. Change that row's expectation to `write` and rewrite its comment: an unquoted `~` expands, a quoted one does not, and the payload's `dir` is the real home directory for the first and a literal `~` directory under cwd for the second. Rerun to green.
 
 - [ ] **Step 5: Commit**
 
@@ -98,6 +99,7 @@ node newShapes() {
     planSummary("rm -rf x | cat"),
     planSummary("make 2>&1 | tail -100"),
     planReason("git status | head"),
+    executionCommand("git    status |  git   log"),
   ]
 }
 ```
@@ -105,8 +107,10 @@ node newShapes() {
 `expectedOutput`:
 
 ```
-[["bash",["std::git::status","std::git::log"]],["bash",["std::bash"]],["bash",["std::bash"]],["bash",["std::write"]],["bash",["std::bash"]],["refuse",[]],["bash",["std::bash"]],"unrecognized: no rule for `head`"]
+[["bash",["std::git::status","std::git::log"]],["bash",["std::bash"]],["bash",["std::bash"]],["bash",["std::write"]],["bash",["std::bash"]],["refuse",[]],["bash",["std::bash"]],["unrecognized","no rule for `head`"],"git status | git log"]
 ```
+
+The last row is the one that pins the rebuilt text through a pipe: a recognized pipeline runs the text `astToBash` produced, with normalized spacing, so the stages that run are the stages that were classified. `executionCommand` already exists in the test file (`rebuiltVersusOriginal` uses it), and `planFor` runs nothing, so no git repository is needed.
 
 - [ ] **Step 2: Run to see the dup-redirect cases fail**
 
@@ -115,7 +119,7 @@ Expected: `echo hi 2>&1` and `echo hi 2>&1 > out.txt` fail (today a `>&` op make
 
 - [ ] **Step 3: Skip dup redirects in `redirectEffect`**
 
-At the top of `redirectEffect`, filter `redirects` to those whose `op != ">&"`, with a two-line comment: a dup redirect moves a stream and writes no file, so it contributes no effect; it is the only `>&` form the parser accepts. The rest of the function runs on the filtered list.
+At the top of `redirectEffect`, filter `redirects` to those whose `op != ">&"`, with a comment: a dup redirect moves a stream and writes no file, so it contributes no effect; it is the only `>&` form the parser accepts; and `prepareRedirectWrite` stays strict on purpose, because the shell-free write path computes the bytes it writes and a dup redirect changes which stream `echo`'s output goes to. The rest of the function runs on the filtered list.
 
 - [ ] **Step 4: `make`; run to see all pass**
 
@@ -147,7 +151,7 @@ node pipelineRunsThroughBash() {
 }
 ```
 
-`interruptHandlers`: one approve of `Are you sure you want to run this shell command?`; `expectedOutput`: `"HI\n"`. This pins that the rebuilt text keeps the pipe and bash does the plumbing.
+`interruptHandlers`: one approve of `Are you sure you want to run this shell command?`; `expectedOutput`: `"HI\n"`. `tr` has no rule, so this plan is broad and runs the caller's original text; what the test pins is that a pipe in a broad string reaches bash through `_bash` and produces bash's output. The rebuilt-text path through a pipe is pinned by the `executionCommand` row in Task 2, which needs no git repository.
 
 - [ ] **Step 2: Run, commit**
 

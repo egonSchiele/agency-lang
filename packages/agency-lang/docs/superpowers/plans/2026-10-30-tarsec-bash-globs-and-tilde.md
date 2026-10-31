@@ -4,7 +4,7 @@
 
 **Goal:** The tarsec bash parser accepts an unquoted glob (`*.ts`, `src/*.md`, `--include=*.ts`) as its own `GlobWord` node, and a word starting with `~` as an ordinary literal or path word.
 
-**Architecture:** A `GlobWord` joins the `Word` union. It is a word made of path characters plus `*`, `?`, `[`, `]`, containing at least one of the four, and it is tried before the path and literal word parsers so `*.ts` does not fail as a literal. A flag's value may be a glob, recorded with a `valueIsGlob` boolean. `~` becomes an allowed first character of a literal or path word and nothing else changes about those words.
+**Architecture:** A `GlobWord` joins the `Word` union. It is a word made of path characters plus `*`, `?`, `[`, `]`, and it counts as a glob only when it contains `*`, `?`, or `[` (a lone `]` is ordinary text in bash: `echo a]b` prints `a]b`). It is tried before the path and literal word parsers so `*.ts` does not fail as a literal. A flag's value may be a glob, recorded with a `valueIsGlob` boolean. `~` becomes an allowed first character of a literal or path word. `astToBash.ts` keeps its own copy of the parser's character tables for deciding what can be emitted unquoted, so every character-set change here is made in both files; this plan also moves the two shared strings into one exported place so the next change cannot drift.
 
 **Tech Stack:** tarsec, vitest. Repository `/Users/adityabhargava/tarsec`, files under `lib/parsers/bash/` and `tests/parsers/bash/`.
 
@@ -23,8 +23,9 @@
 - `[` without `]` (`ls [abc`) is still a glob character in bash; the parser accepts it as a glob word and does not try to balance brackets. Pinned in Task 1.
 - `src/**/*.md`: `**` is just two asterisks here; one glob word. Pinned in Task 1.
 - `--include=*.ts` and `--include='*.ts'`: the first has `valueIsGlob: true`, the second has `valueIsGlob` absent and `flagValue` `'*.ts'` kept as written. Check how `flagWordNameAndValueParser` treats a quoted value today and keep that behavior. Pinned in Task 2.
-- `~` alone, `~/x`, and `~user/x`: the first two parse; `~user/x` is the one bash form this plan does not promise, so pin whichever the character sets give and name it in the header. Pinned in Task 3.
-- `echo ~` after Task 3 round-trips to the same text, not an expanded home. Pinned in Task 3.
+- `~` alone, `~/x`, and `~user/x`: all three parse (`user` is bare-word text), and the header says `~user` is accepted and kept as written. Pinned in Task 3.
+- `echo ~` and `cat ~/x` after Task 3 round-trip to the same unquoted text. If `astToBash.ts`'s start-character table is not updated, `~/x` is emitted as `'~/x'`, which bash does not expand, so the rendered command reads a different file. Pinned in Task 3.
+- A hand-built `{ tag: "glob", text: "*; rm -rf /" }` must throw from `astToBash`, not be emitted raw. Pinned in Task 1.
 
 ---
 
@@ -66,28 +67,32 @@ Run: `npx vitest run tests/parsers/bash > /tmp/tarsec-g1.txt 2>&1; tail -8 /tmp/
 In `types.ts`, `GlobWord` with a comment: an unquoted word bash will expand; its own node so a consumer can tell it from quoted text. In `parsers.ts`:
 
 ```ts
-const GLOB_CHARS = "*?[]";
-const globChars: Parser<string> = label("a glob character", oneOf(GLOB_CHARS));
+/** Characters a glob word may contain beyond a path's. */
+export const GLOB_WORD_CHARS = "*?[]";
+/** The ones that make a word a glob. A lone `]` is ordinary text in bash. */
+export const GLOB_TRIGGER_CHARS = "*?[";
+const globChars: Parser<string> = label("a glob character", oneOf(GLOB_WORD_CHARS));
 
 /** A bare or path word containing at least one glob character. Tried
- * before the literal and path words, which would fail on the `*`. */
+ * before the literal and path words, which would fail on the `*`. The
+ * post-check mirrors the one pathWordParser does for `/`. */
 export const globWordParser: Parser<GlobWord> = wholeWord((input: string) => {
   const result = trace("globWordParser", seqC(
     set("tag", "glob"),
     capture(many1WithJoin(or(bareWordChars, char("/"), globChars)), "text"),
   ))(input);
-  if (result.success && !hasGlobChar(result.result.text)) {
+  if (result.success && !isGlobText(result.result.text)) {
     return failure("Not a glob.", input);
   }
   return result;
 });
 ```
 
-`hasGlobChar` is a one-line helper over `GLOB_CHARS`. The leading-`-` rule comes free if the first element is `bareWordStartChars`-or-`/`-or-glob rather than `bareWordChars`; write it that way. `wordParser` today is one `or(...)` over the word alternatives. Name that list once, `const plainWordParsers = [...]` (the alternatives as they stand), and build two parsers from it: `wordParser = or(globWordParser, ...plainWordParsers)` and `redirectTargetParser = or(...plainWordParsers)`. `redirectParser` captures `redirectTargetParser` as its target, so a glob target fails to parse with no check written anywhere. `scriptNameParser` is unchanged, so a glob command word is rejected.
+`export function isGlobText(text: string): boolean` lives in `parsers.ts` and is true when every character is a bare-word character, `/`, or one of `GLOB_WORD_CHARS`, and at least one is in `GLOB_TRIGGER_CHARS`; `astToBash` uses the same function in Step 4. The leading-`-` rule comes free if the first element is `bareWordStartChars`-or-`/`-or-glob rather than `bareWordChars`; write it that way. Add `a]b` → literal (not a glob) to the test rows. `wordParser` today is one `or(...)` over the word alternatives. Name that list once, `const plainWordParsers = [...]` (the alternatives as they stand), and build two parsers from it: `wordParser = or(globWordParser, ...plainWordParsers)` and `redirectTargetParser = or(...plainWordParsers)`. `redirectParser` captures `redirectTargetParser` as its target, so a glob target fails to parse with no check written anywhere. `scriptNameParser` is unchanged, so a glob command word is rejected.
 
 - [ ] **Step 4: Render and document**
 
-`wordToBash` gets `case "glob": return word.text;`. In `index.ts`, move globs to the supported list with the sentence "an unquoted word containing `* ? [ ]`, kept unexpanded as a `glob` word; never a command word or redirect target".
+`wordToBash` gets a `glob` case that throws `AstToBashError` when `!isGlobText(word.text)` and returns `word.text` otherwise. Every other word goes through `quoteIfNeeded` or throws; a glob cannot be quoted without ceasing to be a glob, so the throw is the only safe answer for a hand-built node, and for parser output the check is a no-op, the same relationship `isVariableName` has to `varNameParser`. Add the throw test from the Review Focus to `astToBash.test.ts`. In `index.ts`, move globs to the supported list with the sentence "an unquoted word containing `* ? [`, kept unexpanded as a `glob` word; never a command word or redirect target".
 
 - [ ] **Step 5: Run, commit**
 
@@ -123,7 +128,7 @@ Corpus: `"grep -rn x --include=*.ts src"`.
 
 - [ ] **Step 3: Implement**
 
-The value parser becomes `many1WithJoin(or(wordChars, globChars))`, and the `seqC` result goes through a `map` that sets `flag.valueIsGlob = true` inside an `if (hasGlobChar(flag.flagValue))`, not a conditional spread. The key stays absent otherwise so existing `toEqual` assertions on flags do not change.
+The value parser becomes `many1WithJoin(or(wordChars, globChars))`, and the `seqC` result goes through a `map` that sets `flag.valueIsGlob = true` inside an `if (isGlobText(flag.flagValue))`, not a conditional spread. The key stays absent otherwise so existing `toEqual` assertions on flags do not change.
 
 - [ ] **Step 4: Run, commit**
 
@@ -134,15 +139,16 @@ git commit -F /tmp/msg.txt   # "bash parser: a glob as a flag value"
 
 ---
 
-### Task 3: A leading `~`
+### Task 3: A leading `~`, and one character table for both files
 
 **Files:**
-- Modify: `lib/parsers/bash/parsers.ts` (`bareWordStartChars`, `pathWordParser`)
+- Modify: `lib/parsers/bash/parsers.ts` (`bareWordStartChars`, `pathWordParser`; export the two character strings)
+- Modify: `lib/parsers/bash/astToBash.ts` (`BARE_WORD_CHARS` and `BARE_WORD_START_CHARS` built from the exported strings)
 - Modify: `lib/parsers/bash/index.ts` (header)
 - Test: both test files
 
 **Interfaces:**
-- Produces: `~` parses as `{ tag: "literal", text: "~" }`; `~/x` as `{ tag: "path", text: "~/x" }`; `~/.ssh/config` as a path; `a~b` rejected.
+- Produces: `~` parses as `{ tag: "literal", text: "~" }`; `~/x` as `{ tag: "path", text: "~/x" }`; `~/.ssh/config` and `~user/x` as paths; `a~b` rejected. `parsers.ts` exports `BARE_WORD_CHAR_STRING` and `BARE_WORD_START_CHAR_STRING`, and both the `oneOf` parsers in `parsers.ts` and the two `Set`s in `astToBash.ts` are built from them, so there is one table.
 
 - [ ] **Step 1: Failing tests**
 
@@ -150,18 +156,19 @@ git commit -F /tmp/msg.txt   # "bash parser: a glob as a flag value"
 - `echo ~` → arg literal `~`
 - `cd ~` → literal
 - `ls ~/.ssh` → path
+- `cat ~user/x` → path
 - rejected: `echo a~b`
-- Corpus: `"cat ~/notes.txt"`, `"echo ~"`.
+- Corpus: `"cat ~/notes.txt"`, `"echo ~"`, `"ls ~/.ssh"`. The round trip is the test that catches a stale table in `astToBash.ts`: with `~` missing from its start set, `~/x` is emitted as `'~/x'` and re-parses as a `singleQuoted` word.
 
 - [ ] **Step 2: Run to see them fail**
 
 - [ ] **Step 3: Implement**
 
-`bareWordStartChars` gains `~`. `pathWordParser` is `many1WithJoin(or(bareWordChars, char("/")))` with no distinct start set, so give it one: `seqR(or(bareWordStartChars, char("/")), manyWithJoin(or(bareWordChars, char("/"))))` joined, which admits a leading `~` and `/` and keeps `a~b` out because `~` is not in `bareWordChars`. Confirm the existing path tests (`/`, `src/`, leading slash) still pass; the "paths" describe covers them.
+In `parsers.ts`, export the two strings the `oneOf` parsers are built from (`BARE_WORD_CHAR_STRING = LETTERS + DIGITS + "_-.=:+"`, `BARE_WORD_START_CHAR_STRING = LETTERS + DIGITS + "_.=:+~"`), and build `bareWordChars` and `bareWordStartChars` from them. `pathWordParser` is `many1WithJoin(or(bareWordChars, char("/")))` with no distinct start set, so give it one: `seqR(or(bareWordStartChars, char("/")), manyWithJoin(or(bareWordChars, char("/"))))` joined, which admits a leading `~` and `/` and keeps `a~b` out because `~` is not in `bareWordChars`. In `astToBash.ts`, replace the two literal strings in `BARE_WORD_CHARS` and `BARE_WORD_START_CHARS` with `new Set(BARE_WORD_CHAR_STRING + "/")` and `new Set(BARE_WORD_START_CHAR_STRING + "/")` (the renderer's sets include `/` today; keep that). Confirm the existing path tests (`/`, `src/`, leading slash) still pass; the "paths" describe covers them.
 
 - [ ] **Step 4: Header, run, commit**
 
-`index.ts`: `~` at the start of a word is accepted and kept as written; `~user` is whatever the character sets give, stated plainly.
+`index.ts`: `~` at the start of a word is accepted and kept as written, including `~user/x`.
 
 ```bash
 git add lib/parsers/bash tests/parsers/bash
@@ -172,4 +179,4 @@ git commit -F /tmp/msg.txt   # "bash parser: a leading tilde"
 
 ### Task 4: Whole suite, build, type-check, PR
 
-Same three steps as ADI-239's Task 3. Title: `bash parser: glob words and a leading tilde (ADI-240)`.
+Same three steps as ADI-239's Task 3. In the anti-pattern pass, look for a word rendered without going through `quoteIfNeeded` or a check (the glob case) and for any character literal that appears in both `parsers.ts` and `astToBash.ts`. Title: `bash parser: glob words and a leading tilde (ADI-240)`. This plan and ADI-239 both edit `wordParser`, `index.ts`, and the test lists; whichever lands second rebases.

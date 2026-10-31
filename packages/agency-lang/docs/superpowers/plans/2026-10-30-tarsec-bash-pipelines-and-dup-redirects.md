@@ -4,7 +4,7 @@
 
 **Goal:** The tarsec bash parser accepts `a | b | c` as a flat pipeline that binds tighter than `&&`/`||`, and accepts `2>&1` and `>&2` as dup redirects, with both rendered back by `astToBash`.
 
-**Architecture:** A `Pipeline` node joins the `Command` union. The atom of the existing `buildExpressionParser` call becomes "one or more simple commands separated by `|`", written with `sepBy1`, mapped to a `Pipeline` when there are two or more and to the lone command otherwise. A dup redirect is a third alternative in `redirectParser` whose target is a single digit. Everything else in the parser is untouched.
+**Architecture:** A `Pipeline` node joins the `Command` union. The atom of the existing `buildExpressionParser` call becomes "a stage followed by zero or more committed `| stage` pairs", mapped to a `Pipeline` when there are two or more stages and to the lone stage otherwise. A stage is a simple command or a parenthesized group, so the expression parser's own paren handling is switched off with `fail` (it would otherwise consume `(a && b)` before the atom ran, and `(a && b) | c` could never be a pipeline). The `|` commits: `sepBy` returns past a matched separator when the next element fails, so without the commit `ls |` would parse as `ls`. A dup redirect is a third alternative in `redirectParser` whose target is a single digit. Everything else in the parser is untouched.
 
 **Tech Stack:** tarsec (parser combinators), vitest. Repository `/Users/adityabhargava/tarsec`, files under `lib/parsers/bash/` and `tests/parsers/bash/`.
 
@@ -40,7 +40,7 @@
 - Test: `tests/parsers/bash/parsers.test.ts`, `tests/parsers/bash/astToBash.test.ts`
 
 **Interfaces:**
-- Produces: `export type Pipeline = { tag: "pipeline"; stages: Command[] }` with two or more stages, each a `SimpleCommand` or `Parens`; `Command = SimpleCommand | Pipeline | And | Or | Parens`; `export const pipelineParser: Parser<Command>` which returns the lone stage when there is one and a `Pipeline` otherwise; `astToBash` renders stages joined with ` | `.
+- Produces: `export type PipelineStage = SimpleCommand | Parens`; `export type Pipeline = { tag: "pipeline"; stages: PipelineStage[] }` with two or more stages; `Command = SimpleCommand | Pipeline | And | Or | Parens`; `export const pipelineParser: Parser<Command>` which returns the lone stage when there is one and a `Pipeline` otherwise; `astToBash` renders stages joined with ` | `. ADI-241 mirrors `PipelineStage` and `Pipeline` as written here.
 
 - [ ] **Step 1: Write the failing parser tests**
 
@@ -52,11 +52,12 @@ Append to `tests/parsers/bash/parsers.test.ts` a `describe("pipelines")` with a 
 - `a && b | c` → `and(a, pipeline(b, c))`
 - `(a && b) | c` → `pipeline(parens(and(a, b)), c)`
 - `a && (b | c)` → `and(a, parens(pipeline(b, c)))`
+- `(a && b)` alone → `parens(and(a, b))` (this path now goes through `pipelineParser`'s one-stage case)
 - `a || b` → `or(a, b)`
 - `a|b` → `pipeline(a, b)`
 - `cat f 2> err | wc -l` → first stage carries the redirect `{ fd: 2, op: ">", target: literal "err" }`
 
-In the existing `describe("unsupported syntax is rejected, not mis-parsed")`, replace the `["pipeline", "ls | wc -l"]` row with `["stderr-merging pipe", "ls |& wc -l"]`, `["pipe with no right side", "ls |"]`, and `["pipe with no left side", "| ls"]`.
+In the existing `describe("unsupported syntax is rejected, not mis-parsed")`, replace the `["pipeline", "ls | wc -l"]` row with `["stderr-merging pipe", "ls |& wc -l"]`, `["pipe with no right side", "ls |"]`, `["pipe with no left side", "| ls"]`, and `["pipe with no right side after a chain", "a && b |"]`. For the last one the error will point at `&&` rather than `|`, because the chain's right operand fails with a committed failure and `parseLeft` ends the chain at `a`; the test checks only that it is rejected.
 
 In `describe("error positions")`, the example `echo hi | wc` now parses; change it to `echo hi $(date)` with expected rest `$(date)`.
 
@@ -77,15 +78,20 @@ The doc comment says: each stage's stdout feeds the next; a stage is a simple co
 const pipeOperator: Parser<string> =
   map(seqR(blanks, char("|"), not(oneOf("|&")), blanks), () => "|");
 
-/** One or more stages separated by `|`. One stage is that command; two or
- * more are a flat Pipeline. */
+const pipelineStage: Parser<PipelineStage> = or(lazy(() => parensParser), simpleCommandParser);
+
+/** `a | b | c`, flat. The operator COMMITS: once a `|` is seen, a missing
+ * stage is a parse error, not the end of the pipeline. Without the commit
+ * `sepBy` returns past a matched separator and `ls |` would parse as `ls`. */
 export const pipelineParser: Parser<Command> = trace("pipelineParser", map(
-  sepBy1(pipeOperator, or(lazy(() => parensParser), simpleCommandParser)),
-  (stages) => stages.length === 1 ? stages[0] : { tag: "pipeline", stages },
+  seqR(pipelineStage, many(committed(pipeOperator, pipelineStage))),
+  ([first, rest]) => rest.length === 0 ? first : { tag: "pipeline", stages: [first, ...rest] },
 ));
 ```
 
-`commandParser` keeps its single `&&`/`||` level and passes `pipelineParser` as the atom in place of `simpleCommandParser`. The `parensParser` argument to `buildExpressionParser` stays, so `(a && b) | c` reaches the pipeline through the atom and `a && (b | c)` reaches it through the paren parser. Check `sepBy1`'s behavior when the separator matches but the following element does not (`ls |`): it must fail the whole parse, not succeed with one stage and leave `|` as rest; the `pipe with no right side` test pins this. If `sepBy1` backtracks past a matched separator, wrap the operator and element in `committed` per the tarsec `committed(prefix, rest)` convention.
+`committed(prefix, rest)` is exported from `lib/combinators.ts:246`; `many` and `bashParser`'s outer `sepBy1` both propagate a committed failure (see the `isCommittedFailure` checks in `sepBy`). `pipeOperator` fails at `not(oneOf("|&"))` before committing, so `a || b` commits nothing and stays an `or`.
+
+`commandParser` keeps its single `&&`/`||` level, passes `pipelineParser` as the atom in place of `simpleCommandParser`, and passes `fail("parentheses are parsed as a pipeline stage")` as the third argument. `fail` is exported from `lib/parsers.ts:573` and is `Parser<never>`. The expression parser's `base` tries the paren parser before the atom and returns on success, so with `parensParser` there `(a && b) | c` would be consumed as a lone group and the `| c` left over; parentheses are now a stage inside `pipelineParser` instead. Keep a comment on that argument saying so, or the next reader will put `parensParser` back.
 
 - [ ] **Step 5: Render it in `astToBash.ts` and update the header in `index.ts`**
 
@@ -151,7 +157,7 @@ seqC(
 
 - [ ] **Step 4: Render it in `astToBash.ts`**
 
-Add `">&"` as a third operator class beside the fd and bare sets: it takes an optional fd and renders `${fd}>&${target text}` with no space. The existing check that an fd is only allowed on fd-taking operators must accept it.
+Add `">&"` as a third operator class beside the fd and bare sets: it takes an optional fd and renders `${fd}>&${target text}` with no space. The existing check that an fd is only allowed on fd-taking operators must accept it. The target must be a literal whose text is one digit; anything else throws `AstToBashError`, the way an unsupported operator does, because a hand-built `{ op: ">&", target: literal "out" }` would render as `2>&out`, which bash reads as a redirect to a file named `out`. Add a round-trip-file test that the throw happens.
 
 - [ ] **Step 5: Header, run, commit**
 
@@ -178,3 +184,7 @@ Run `/anti-pattern-check` on the diff (the tarsec repo has its own `anti-pattern
 - [ ] **Step 3: PR**
 
 Body in a file: the two node shapes, the precedence rule, what stays rejected, and the Linear issue. Title: `bash parser: pipelines and dup redirects (ADI-239)`. The owner releases; ADI-241 bumps the pin in agency-lang.
+
+- [ ] **Step 4: After this PR lands, delete the spike**
+
+`git worktree remove /Users/adityabhargava/tarsec/.claude/worktrees/spike-bash-pipeline && git branch -D spike/bash-pipeline`, from the tarsec checkout, so it is not mistaken for the real branch. ADI-240 edits the same files (`wordParser`, `index.ts`, the test lists); whichever of the two lands second rebases.

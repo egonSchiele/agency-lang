@@ -29,6 +29,7 @@ export type Effect =
   | { name: "std::git::status"; payload: { cwd: string } }
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
+  | { name: "std::grep"; payload: GrepPayload }
 
 export type WritePayload = {
   dir: string;
@@ -53,6 +54,26 @@ export def writeExecution(write: WritePayload): WriteExec {
     dir: write.dir,
     content: write.content,
     mode: write.mode
+  }
+}
+
+/** The fields the grep tool's own std::grep interrupt carries. */
+export type GrepPayload = {
+  pattern: string;
+  dir: string;
+  file: string | null;
+  flags: string;
+  maxResults: number;
+  ignoreCase: boolean;
+  wholeWord: boolean;
+  filesOnly: boolean;
+  invert: boolean
+}
+
+export def grepEffect(payload: GrepPayload): Effect {
+  return {
+    name: "std::grep",
+    payload: payload
   }
 }
 

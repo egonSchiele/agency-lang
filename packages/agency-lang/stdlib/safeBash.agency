@@ -1,21 +1,24 @@
 // These imports are NOT unused. Effect declarations come with imports,
-// and without them the `raise std::bash(...)` and `raise std::git::*(...)`
-// sites below compile with their payload contracts UNENFORCED. Measured:
+// and without them the `raise std::bash(...)`, `raise std::grep(...)`, and
+// `raise std::git::*(...)` sites below compile with their payload
+// contracts UNENFORCED. Measured:
 // dropping them makes `raise std::git::status("...", { wrongField: x })`
 // typecheck clean. `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
-import { bash, ExecResult } from "std::shell"
+import { bash, grep, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
   BroadReason,
   Effect,
+  GrepPayload,
   Plan,
   WritePayload,
   WriteExec,
   writeEffect,
   writeExecution,
+  grepEffect,
   runBash,
   runWrite,
  } from "./safeBash/actions.agency"
@@ -23,6 +26,7 @@ import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
+import { _searchTargetIn } from "agency-lang/stdlib-lib/shell.js"
 
 export { MAX_STDOUT_LEN } from "std::spill"
 
@@ -335,6 +339,13 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   // not be demoted by a check that only git needs.
   return match(name.text) {
     "echo" => success(redirect.value)
+    "grep" => {
+      const grep = grepEffects(command, cwd)
+      if (grep is failure(why)) {
+        return failure(why)
+      }
+      return success([...grep.value, ...redirect.value])
+    }
     "git" => {
       // Both links can fail, which is what earns the pipe. Appending the
       // redirect contribution cannot, so it stays inline rather than
@@ -650,6 +661,171 @@ def flagDisplay(flag: string): string {
     return flag
   }
   return "-${flag}"
+}
+
+/** A grep path resolved for safeBash. Mirrors `GrepTarget` in
+ * lib/stdlib/shell.ts: `argument` is the path as bash hands it to grep. */
+type GrepTarget = {
+  dir: string;
+  file: string | null;
+  argument: string
+}
+
+/** A grep command checked against a flag table, with its one path resolved. */
+type GrepCall = {
+  split: SplitArgs;
+  /** The pattern as the command wrote it. */
+  pattern: string;
+  /** The resolved path. Its `argument` is "" when -r searched "." because
+   * no path was written, since grep then prints bare names. */
+  target: GrepTarget
+}
+
+/** The pattern, and the words after it that name paths. */
+type GrepWords = {
+  pattern: string;
+  paths: Word[]
+}
+
+/** grep's context flags, whose values are line counts. */
+static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
+
+static const GREP_DIRECTORY_REFUSAL = "grep through bash would search a directory, and reads files the grep tool skips"
+
+@capabilities(fileRead)
+def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCall> {
+  """
+  A grep command checked against `spec`, with its pattern and its one
+  path resolved the way the grep tool resolves a path. Any doubt is a
+  failure, which sends the command to the broad question.
+  """
+  const split = splitFlags("grep", command, spec)
+  if (split is failure(why)) {
+    return failure(why)
+  }
+  const args = split.value
+  const words = grepWords(args)
+  if (words is failure(why)) {
+    return failure(why)
+  }
+  for (entry in args.values) {
+    if (CONTEXT_FLAGS.includes(entry.flag) && !isDigits(entry.value)) {
+      return failure("the value of `-${entry.flag}` is not a number")
+    }
+  }
+  const paths = words.value.paths
+  if (paths.length > 1) {
+    return failure("grep with more than one path")
+  }
+  if (paths.length == 0) {
+    return searchHere(args, words.value.pattern, cwd)
+  }
+  const pathWord = paths[0]
+  const text = literalWordText(pathWord)
+  if (text is failure(why)) {
+    return failure("the grep path is not literal")
+  }
+  const target = try _searchTargetIn(text.value, cwd, tildeModeFor(pathWord))
+  if (target is failure(why)) {
+    return failure("${why}")
+  }
+  return success({
+    split: args,
+    pattern: words.value.pattern,
+    target: target.value
+  })
+}
+
+/** With no path, `-r` searches the working directory and grep prints bare
+ * names. Without `-r`, grep reads its stdin. */
+@capabilities(fileRead)
+def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepCall> {
+  if (!args.plain.includes("r")) {
+    return failure("grep with no path reads stdin")
+  }
+  const here = try _searchTargetIn(".", cwd, "literal")
+  if (here is failure(why)) {
+    return failure("${why}")
+  }
+  return success({
+    split: args,
+    pattern: pattern,
+    target: {
+      dir: here.value.dir,
+      file: here.value.file,
+      argument: ""
+    }
+  })
+}
+
+def grepWords(args: SplitArgs): Result<GrepWords> {
+  """
+  With `-e`, the pattern is its value and every positional is a path.
+  Otherwise the first positional is the pattern and the rest are paths.
+  """
+  const fromFlag = [entry.value for entry in args.values if entry.flag == "e"]
+  if (fromFlag.length > 0) {
+    return success({
+      pattern: fromFlag[0],
+      paths: args.positionals
+    })
+  }
+  if (args.positionals.length == 0) {
+    return failure("grep with no pattern")
+  }
+  const first = literalWordText(args.positionals[0])
+  if (first is failure(why)) {
+    return failure("the grep pattern is not literal")
+  }
+  return success({
+    pattern: first.value,
+    paths: args.positionals.slice(1)
+  })
+}
+
+static const DIGITS = "0123456789"
+
+def isDigits(text: string): boolean {
+  const others = [char for char in text.split("") if !DIGITS.includes(char)]
+  return text != "" && others.length == 0
+}
+
+def grepPayload(call: GrepCall, pattern: string, maxResults: number): GrepPayload {
+  """
+  The one place a grep command's flags become std::grep's fields. Both
+  paths call it; they differ only in the pattern and the cap they pass.
+  """
+  const letters = call.split.plain
+  return {
+    pattern: pattern,
+    dir: call.target.dir,
+    file: call.target.file,
+    flags: "",
+    maxResults: maxResults,
+    ignoreCase: letters.includes("i"),
+    wholeWord: letters.includes("w"),
+    filesOnly: letters.includes("l"),
+    invert: letters.includes("v")
+  }
+}
+
+@capabilities(fileRead)
+def grepEffects(command: SimpleCommand, cwd: string): Result<Effect[]> {
+  """
+  A grep that runs through bash. It asks std::grep only for one named
+  file, which real grep and the grep tool read the same way. A directory
+  search through bash reads files the tool skips (.git, node_modules,
+  ignored files), so it asks std::bash.
+  """
+  const call = readGrep(command, cwd, GREP_FLAGS)
+  if (call is failure(why)) {
+    return failure(why)
+  }
+  if (call.value.target.file == null) {
+    return failure(GREP_DIRECTORY_REFUSAL)
+  }
+  // 0 means no cap, which is true of grep without -m.
+  return success([grepEffect(grepPayload(call.value, call.value.pattern, 0))])
 }
 
 static const BASH_EFFECT: Effect = {
@@ -1205,7 +1381,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -1379,6 +1555,21 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
         filename: effect.payload.filename,
         content: effect.payload.content,
         mode: effect.payload.mode,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::grep" => {
+      raise std::grep("Are you sure you want to search files with grep?", {
+        pattern: effect.payload.pattern,
+        dir: effect.payload.dir,
+        file: effect.payload.file,
+        flags: effect.payload.flags,
+        maxResults: effect.payload.maxResults,
+        ignoreCase: effect.payload.ignoreCase,
+        wholeWord: effect.payload.wholeWord,
+        filesOnly: effect.payload.filesOnly,
+        invert: effect.payload.invert,
         command: fullCommand
       })
       return success(null)

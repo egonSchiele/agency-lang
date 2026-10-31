@@ -529,3 +529,70 @@ node splitGrepFlags() {
     split("grep -n hello one.txt -s"),
   ]
 }
+
+static const FIXTURES = __dirname + "/stdlib/grep-fixtures"
+
+def grepNames(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  const names = [effect.name for effect in plan.effects]
+  return [names, plan.broadReason]
+}
+
+def grepPayloadOf(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::grep") {
+      return effect.payload
+    }
+  }
+  return "NO GREP EFFECT"
+}
+
+node grepThroughBash() {
+  // Not lone (a pipe or a redirect), or a flag the tool lacks: the
+  // command runs through bash, narrow only for one file.
+  return [
+    grepNames("grep -c hello one.txt"),
+    grepNames("grep -A 1 hello one.txt"),
+    grepNames("grep -n \"a+b\" one.txt"),
+    grepNames("grep -n hello one.txt > out.txt"),
+    grepNames("git status && grep -n hello one.txt"),
+  ]
+}
+
+node grepUnrecognized() {
+  return [
+    grepNames("grep hello"),
+    grepNames("git status | grep hello"),
+    grepNames("grep -z hello ."),
+    grepNames("grep -R hello ."),
+    grepNames("grep \"-R\" hello"),
+    grepNames("grep -e a -e b ."),
+    grepNames("grep --filter=x hello ."),
+    grepNames("grep -rn $PAT ."),
+    grepNames("grep -rn hello *.txt"),
+    grepNames("grep -rn hello one.txt two.txt"),
+    grepNames("grep -rn hello --include='*.txt' ."),
+    grepNames("grep -c hello ."),
+    grepNames("git status && grep -rn hello ."),
+    grepNames("rg hello ."),
+    grepNames("git status && grep -n hello one.txt -s"),
+    grepNames("grep -e \"-x\" one.txt"),
+    grepNames("grep --include=*.txt -rn hello ."),
+  ]
+}
+
+node grepMissingPath() {
+  // The detail names an absolute path, which differs per machine, so
+  // only the kind is pinned.
+  const reason = planFor("grep -rn hello missing-dir", FIXTURES).broadReason
+  if (reason == null) {
+    return null
+  }
+  return reason.kind
+}
+
+node grepBashPayload() {
+  const payload = grepPayloadOf("grep -cin hello one.txt")
+  return [payload.pattern, payload.file, payload.ignoreCase, payload.maxResults, payload.flags]
+}

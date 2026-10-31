@@ -22,6 +22,11 @@ def whatIAmDoing(): string {
   return "suppressed"
 }
 
+// Shaped like the stdlib `read` so it lands on that tool's summary row.
+def read(filename: string, dir: string = ".", offset: number = 0, limit: number = 0): string {
+  return "file text"
+}
+
 def researchAgent(userMsg: string): string {
   announce("researchAgent", userMsg)
   return "Research fixture result"
@@ -46,7 +51,7 @@ node main(interactive: boolean, verbose: boolean, debug: boolean) {
   setVerbose(verbose)
   setDebug(debug)
   return llm("trace fixture", {
-    tools: [todoWrite, echo, successful, failedFixture, whatIAmDoing, researchAgent, web_search_tavily, web_search_brave],
+    tools: [todoWrite, echo, successful, failedFixture, whatIAmDoing, read, researchAgent, web_search_tavily, web_search_brave],
     retries: 0
   })
 }

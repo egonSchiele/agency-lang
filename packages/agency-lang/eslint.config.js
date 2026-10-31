@@ -2,7 +2,8 @@ import { builtinModules } from "module";
 import tseslint from "typescript-eslint";
 import { NODE_ONLY } from "./eslint.node-exceptions.mjs";
 
-const SCREEN_PAINT_MESSAGE = "Screens draw text through lib/tui/paint.ts (segment, paint, paintedLine), which escapes it. A raw line() lets statelog content be read as style tags.";
+const SCREEN_PAINT_MESSAGE =
+  "Screens draw text through lib/tui/paint.ts (segment, paint, paintedLine), which escapes it. A raw line() lets statelog content be read as style tags.";
 
 // Files under lib/stdlib that may import fs directly, each with the reason.
 // Everything else in lib/stdlib reads and writes files through
@@ -60,6 +61,7 @@ export const BROWSER_FILES = [
   "lib/utils/columnWidths.ts",
   "lib/utils/controlCharacters.ts",
   "lib/utils/diff.ts",
+  "lib/utils/formatElapsed.ts",
   "lib/utils/formatType.ts",
   "lib/utils/hash.ts",
   "lib/utils/iteration.ts",
@@ -121,8 +123,7 @@ export default [
         "error",
         {
           selector: "ImportExpression",
-          message:
-            "Dynamic imports are not allowed. Use static import statements.",
+          message: "Dynamic imports are not allowed. Use static import statements.",
         },
         ROOT_REAL_RULE,
       ],
@@ -131,16 +132,10 @@ export default [
       "max-depth": ["error", { max: 5 }],
 
       // Max function length
-      "max-lines-per-function": [
-        "error",
-        { max: 150, skipBlankLines: true, skipComments: true },
-      ],
+      "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true }],
 
       // Max file length
-      "max-lines": [
-        "error",
-        { max: 1250, skipBlankLines: true, skipComments: true },
-      ],
+      "max-lines": ["error", { max: 1250, skipBlankLines: true, skipComments: true }],
     },
   },
   {
@@ -234,11 +229,28 @@ export default [
     files: ["lib/logsViewer/screens/**/*.ts"],
     ignores: ["**/*.test.ts"],
     rules: {
-      "no-restricted-imports": ["error", {paths: [
-        {name:"../../tui/builders.js",importNames:["line","lines","text"],message:SCREEN_PAINT_MESSAGE},
-        {name:"../../tui/styleParser.js",importNames:["escapeStyleTags"],message:SCREEN_PAINT_MESSAGE},
-        {name:"../../tui/index.js",importNames:["line","lines","text","escapeStyleTags"],message:SCREEN_PAINT_MESSAGE},
-      ]}],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "../../tui/builders.js",
+              importNames: ["line", "lines", "text"],
+              message: SCREEN_PAINT_MESSAGE,
+            },
+            {
+              name: "../../tui/styleParser.js",
+              importNames: ["escapeStyleTags"],
+              message: SCREEN_PAINT_MESSAGE,
+            },
+            {
+              name: "../../tui/index.js",
+              importNames: ["line", "lines", "text", "escapeStyleTags"],
+              message: SCREEN_PAINT_MESSAGE,
+            },
+          ],
+        },
+      ],
     },
   },
   {
@@ -275,6 +287,6 @@ export default [
     files: ["lib/backends/agencyGenerator.ts"],
     rules: {
       "max-lines": "off",
-    }
-  }
+    },
+  },
 ];

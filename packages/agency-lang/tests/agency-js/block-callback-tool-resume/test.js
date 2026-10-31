@@ -1,10 +1,4 @@
-import {
-  main,
-  hasInterrupts,
-  approve,
-  respondToInterrupts,
-  __setLLMClient,
-} from "./agent.js";
+import { main, hasInterrupts, approve, respondToInterrupts, __setLLMClient } from "./agent.js";
 import { writeFileSync } from "fs";
 import { ToolCall } from "smoltalk";
 
@@ -110,9 +104,7 @@ const callbacks = {
 const initial = await main({ callbacks });
 const endsAtPause = [...toolEnds];
 if (!hasInterrupts(initial.data)) {
-  throw new Error(
-    `Expected interrupts from interruptTool, got: ${JSON.stringify(initial.data)}`,
-  );
+  throw new Error(`Expected interrupts from interruptTool, got: ${JSON.stringify(initial.data)}`);
 }
 
 const final = await respondToInterrupts(initial.data, [approve()], { metadata: { callbacks } });

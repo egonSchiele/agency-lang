@@ -71,7 +71,11 @@ import {
   type RepeatStreak,
   resultCap,
 } from "./toolLoopGuards.js";
-import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
+import {
+  GuardTripRetry,
+  raiseGuardTripsUntilClear,
+  throwRetryForResumableTrip,
+} from "./guardTripInterrupt.js";
 import { initLoopFrame } from "./loopFrame.js";
 import { failure, isFailure, isSuccess, markDestructiveWork, runtimeFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -168,31 +172,6 @@ export const _internal = {
 /** The runtime's logger for a run: its level, writing to its host. */
 function ctxLogger(ctx: RuntimeContext<any>): Logger {
   return createLogger(ctx.logLevel, ctx.host.settings);
-}
-
-/** A guard-trip cancellation of an in-flight request is RESUMABLE
- *  (resumable-guards PR 3): when the trip belongs to a non-root guard on
- *  THIS stack, terminate the promptStart pair as a normal cancellation
- *  and throw GuardTripRetry to hand control to the request-step's retry
- *  wrapper, which runs a gate step to raise the trip as an interrupt. On
- *  approve the wrapper re-issues the request from the current thread
- *  state — the cancelled generation is honestly gone. Root-budget trips
- *  and foreign-stack causes return without throwing and keep
- *  _runPrompt's hard cancellation path. */
-function throwRetryForResumableTrip(
-  cause: { kind?: string; guardId?: string } | undefined,
-  run: Run,
-  stateStack: StateStack | undefined,
-): void {
-  if (cause?.kind !== "guardTrip") return;
-  const trippedGuard = (stateStack ?? run.ctx.stateStack).guards.find(
-    (g) => g.guardId === cause.guardId,
-  );
-  if (!trippedGuard || trippedGuard.isRootBudget) return;
-  run.log.promptCancelled({
-    threadId: run.threads.activeId() ?? null,
-  });
-  throw new GuardTripRetry(trippedGuard.guardId);
 }
 
 /** Turn a failed dispatch into the error `_runPrompt` should throw, logging

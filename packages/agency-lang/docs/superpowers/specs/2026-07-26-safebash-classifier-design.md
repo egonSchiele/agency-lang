@@ -2,6 +2,11 @@
 
 ## Status
 
+Extended by
+[the 2026-10-30 spec](./2026-10-30-safebash-reads-pipes-scripts-design.md)
+(measurement, pipes, the read family, project scripts). The dev doc is
+`docs/dev/stdlib/safe-bash.md`.
+
 **Implemented.** See
 [the implementation plan](../plans/2026-07-27-safebash-v3-classifier.md).
 Rewritten 2026-07-27 around whole-string execution, after two rounds of

@@ -68,7 +68,7 @@ and an inner `with approve` cannot get past an outer policy.
 
 | Tool | What it does | Where the agent really lives |
 |---|---|---|
-| `codeAgent` | Anything that touches code or the file system: reading, writing, editing, running commands, Agency questions. Triages the task; a complex task gets a plan, a brainstorm of directions, a supervised solve, and a verification round. | here (`code.agency`, with `brainstorm.agency` and `supervisor.agency`) |
+| `codeAgent` | Anything that touches code or the file system: reading, writing, editing, running commands, Agency questions. One coder works the task in the user's thread, and no other model advises or reviews it. The coder can call `escalate` to write and run a planned agent for a big multi-step task. | here (`code.agency`) |
 | `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. | `std::agents` |
 | `oracleAgent` | Deep-reasoning consult on the slow model slot. A handoff: it continues the coordinator's conversation, so repeated consults see each other. | `std::agents/oracle` |
 | `explorerAgent` | Surveys a codebase or topic on the slow model slot. A handoff, like the oracle. | `std::agents/explorer` |
@@ -86,10 +86,16 @@ reads to decide when to call it, `announce`, `setMemoryId`, the model slot
 from `shared.agency`, the session name, the seconds-to-milliseconds line
 (`timeBudget` in `lib/budgets.agency`), and a REPL style text where the
 subagent has one. The code subagent is the exception and carries the most
-machinery: its own tools, its skill files, the one-shot flag, and the
-supervise/verify loop. `brainstorm.agency` and `supervisor.agency` are its
-parts, not wrappers, and `lib/autoReview.agency` is its check on the
-`.agency` files it wrote.
+machinery: its own tools, its skill files, and the one-shot flag.
+`lib/autoReview.agency` is its check on the `.agency` files it wrote: a
+parse and typecheck, with no model call.
+
+The code subagent has no expert, brainstorm, supervisor, or verifier
+around the coder. Each was a second model telling the first what to do,
+and on a weak model each made things worse. Given "write a skill for my
+`tv` command", the expert guessed `tv` was an unrelated program it found on
+the web, and the coder then spent the session working around that guess
+instead of running `tv --help`.
 
 The oracle and the explorer are handoffs, so a `--agent oracle` or
 `--agent explorer` call, which has no conversation to continue, gets a thread
@@ -107,7 +113,7 @@ Run one with `pnpm run agency test lib/agents/agency-agent/brains/coordinator/te
 - `attachmentsTurn` hands the brain a real image attachment and checks it
   reaches the model; detection and modality filtering are tested in the
   harness (`tests/turn.agency`), not here.
-- `brainstorm`, `supervisor`, `toolWiring` test the code subagent's helpers.
+- `toolWiring` checks that each subagent's tool list has no duplicate names.
 - `learn`, `presetTools`, and `bundledSkills` test the skill and tool
   learning tools, the preset tools, and the bundled-skill check.
 

@@ -199,8 +199,8 @@ importers:
         specifier: 0.20.2
         version: 0.20.2(@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.22.0)
       tarsec:
-        specifier: 0.5.4
-        version: 0.5.4
+        specifier: 0.5.6
+        version: 0.5.6
       typestache:
         specifier: ^0.6.0
         version: 0.6.0
@@ -3209,8 +3209,8 @@ packages:
   tarsec@0.2.2:
     resolution: {integrity: sha512-o6C0wNzEq9Mh3lPzWeoyRHTTiY3/j6rURahNHsqsGjcZmdNDelwXbf+7ocN0ojJJuBuKBkerWX8DrIvhpUz6qw==}
 
-  tarsec@0.5.4:
-    resolution: {integrity: sha512-tVEMo16KiG37NFXUo1kkxetH0ZGTXi1R5EdMTH37tKQj4kK7RmzLDiq0jhSvc/nd/pqvELN0WPFIEsi5hGjDNA==}
+  tarsec@0.5.6:
+    resolution: {integrity: sha512-0DAJ8c6KLsT4rybxY+b1NbX1aabFXaWZxor5L+oP1JGptEZG4kW96fGIE058qV/pBQD9/J13TZaIHDkGYhf+wg==}
 
   tesseract.js-core@7.0.0:
     resolution: {integrity: sha512-WnNH518NzmbSq9zgTPeoF8c+xmilS8rFIl1YKbk/ptuuc7p6cLNELNuPAzcmsYw450ca6bLa8j3t0VAtq435Vw==}
@@ -6423,7 +6423,7 @@ snapshots:
 
   tarsec@0.2.2: {}
 
-  tarsec@0.5.4: {}
+  tarsec@0.5.6: {}
 
   tesseract.js-core@7.0.0: {}
 

@@ -221,8 +221,8 @@ def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
     return failure("`${redirect.op}` is not an output redirect")
   }
   const target = literalTarget(redirect.target)
-  if (target is failure(why)) {
-    return failure(why)
+  if (isFailure(target)) {
+    return target
   }
   const resolved = try _resolveRedirectTarget(target.value, cwd, tildeModeFor(redirect.target))
   if (resolved is failure(why)) {
@@ -264,8 +264,8 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   }
   const only = fileRedirects[0]
   const prepared = prepareRedirectWrite(only, cwd, "")
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success([writeEffect(prepared.value)])
 }
@@ -324,8 +324,8 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   }
   const flags = flagNames(command)
   const redirect = redirectEffect(command.redirects, cwd)
-  if (redirect is failure(why)) {
-    return failure(why)
+  if (isFailure(redirect)) {
+    return redirect
   }
 
   // `echo` contributes nothing on its own, whatever its arguments: bash
@@ -636,8 +636,8 @@ def echoWords(command: SimpleCommand): Result<string[]> {
   let out: string[] = []
   for (arg in command.args) {
     const text = literalWordText(arg)
-    if (text is failure(why)) {
-      return failure(why)
+    if (isFailure(text)) {
+      return text
     }
     out.push(text.value)
   }
@@ -691,8 +691,8 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
     return failure("`echo` with flags prints differently")
   }
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   return success(
     {
@@ -724,12 +724,12 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   }
   const only = command.redirects[0]
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   const prepared = prepareRedirectWrite(only, cwd, echoOutput(words.value))
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success(
     {

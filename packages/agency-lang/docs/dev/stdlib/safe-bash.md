@@ -125,7 +125,8 @@ by `_addLine` (`lib/stdlib/builtins.ts`). Rebuilding it with
 reads that flag to show the reason as a rejection. Without it, the user's
 reason reaches the model as `Error: <reason>. The call failed. You may
 call this tool again.`, and the model takes the user's words for a tool
-error.
+error. The lint rule AL0004 reports that rebuild shape anywhere in the
+stdlib (see `docs/dev/agents/tool-loop-guards.md`).
 
 ## Pipelines, dup redirects, and glob words
 

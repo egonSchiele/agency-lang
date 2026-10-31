@@ -203,12 +203,27 @@ A rejection is not a tool error (`recordRejection` in `prompt.ts`):
   and `A rule in the approval policy rejected this call.` for a rule with
   no `rejectMessage`. Without the first one, a user asking "why are you
   running these commands?" reads to the model like a note from the
-  environment.
+  environment. That handler is the only writer that has been given this
+  wording. `agency run --interactive` and the `--approve`/`--reject`
+  flags go through it, so they are covered. A custom handler's bare
+  `reject()` or `with reject` reaches the model as `interrupt rejected`,
+  and a TypeScript host that answers an interrupt itself, with
+  `reject(reason)` from `interruptResponse.ts` or over the hosted
+  `/resume` route, passes the client's text through as written. A host
+  that collects a reason from a person must add the prefix itself.
 - Code between the interrupt and the tool loop must pass the rejection
   failure on as it came. Rebuilding it with `failure(why)` drops the
   `rejected` flag, and the reason then arrives as a tool error that says
   "You may call this tool again". `safeBash` adds its explanation with
-  `_addLine` for this reason (see `docs/dev/stdlib/safe-bash.md`).
+  `_addLine` for this reason (see `docs/dev/stdlib/safe-bash.md`). The
+  lint rule AL0004 (`lib/linter/rules/rebuiltFailure.ts`) finds the
+  rebuild shape, `return failure(why)` inside `if (x is failure(why))`,
+  and its fix returns `x` instead. A lint hint never fails a run, so
+  `lib/linter/agencySourcesClean.test.ts` lints the stdlib and the agents
+  and fails on any AL0004 finding. The rule cannot tell a rejection from
+  any other failure, so it reports every rebuild; returning the failure
+  itself is the right move in every case, because it also keeps the
+  failure's data and checkpoint.
 - An identical retry (same `repeatKey`) is refused before the start
   hook: no invoke, no re-raised interrupt. Checked before the repeat
   guard so the model hears "rejected", not "repeated".

@@ -211,3 +211,4 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AL0001](lint.md#al0001) | '&#123;name&#125;' is imported but never used. |
 | [AL0002](lint.md#al0002) | '&#123;name&#125;' is exported but has no docstring. |
 | [AL0003](lint.md#al0003) | '&#123;name&#125;' is already available without an import. |
+| [AL0004](lint.md#al0004) | failure(&#123;message&#125;) rebuilds '&#123;result&#125;' and drops its flags. Return '&#123;result&#125;' itself. |

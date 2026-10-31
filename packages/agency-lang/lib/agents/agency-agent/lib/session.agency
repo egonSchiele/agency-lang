@@ -120,8 +120,8 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     return success(true)
   }
   const resolved = resolveHostedModels(request, settings)
-  if (resolved is failure(reason)) {
-    return failure(reason)
+  if (isFailure(resolved)) {
+    return resolved
   }
   applyResolved(resolved.value)
   applyRequestOptions(request, settings)
@@ -510,8 +510,8 @@ export def switchPreset(name: string): Result<PresetSwitch> {
   @param name - The preset's name
   """
   const preset = findPreset(name)
-  if (preset is failure(reason)) {
-    return failure(reason)
+  if (isFailure(preset)) {
+    return preset
   }
   const before = getResolvedSlots()
   const request: ModelRequest = {
@@ -520,8 +520,8 @@ export def switchPreset(name: string): Result<PresetSwitch> {
     choices: noModelChoices()
   }
   const applied = applyModelRequest(request, _startupModelSettings)
-  if (applied is failure(reason)) {
-    return failure(reason)
+  if (isFailure(applied)) {
+    return applied
   }
   followLocality(requestIsLocal(request))
   setActivePreset(name)

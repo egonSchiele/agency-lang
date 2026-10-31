@@ -187,8 +187,8 @@ export def runWrite(exec: WriteExec): Result<string> {
   // from the tool it replaces.
   destructive {
     const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
-    if (written is failure(why)) {
-      return failure(why)
+    if (isFailure(written)) {
+      return written
     }
   }
   return success("")

@@ -31,6 +31,12 @@ export const LINT_DIAGNOSTICS = {
     severity: "hint",
     message: "'{name}' is already available without an import.",
   },
+  rebuiltFailure: {
+    code: "AL0004",
+    severity: "hint",
+    message:
+      "failure({message}) rebuilds '{result}' and drops its flags. Return '{result}' itself.",
+  },
 } as const;
 
 export type LintDiagnosticName = keyof typeof LINT_DIAGNOSTICS;

@@ -199,7 +199,7 @@ describe("withParamSchema schemas round-trip (ADI-249)", () => {
     const json = JSON.stringify({ tool }, nativeTypeReplacer);
     const restored = JSON.parse(json, nativeTypeReviver);
 
-    expect(restored.tool.getUnboundParams().map((p: any) => p.name)).toEqual(["b"]);
+    expect(restored.tool.getUnboundParams().map((param: any) => param.name)).toEqual(["b"]);
     expect(jsonSchemaOf(restored.tool).properties.b.required).toEqual(["n"]);
 
     functionRefReviver.registry = null;

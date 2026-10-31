@@ -192,15 +192,19 @@ def briefEntry(entry: SkillEntry): string {
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
   """
   Build a SkillEntry for one skill in the standard SKILL.md layout.
-  The skill name defaults to the skill's directory name when not in
-  frontmatter.
+  The skill name defaults to the skill's directory name when the
+  frontmatter has no name, or an empty one.
 
   @param skillPath - [skill-dir]/SKILL.md relative to the skills root.
   @param parsedFrontmatter - The parsed YAML frontmatter object from SKILL.md.
   """
   const skillDir = skillPath.replace("/SKILL.md", "")
+  let name = skillDir
+  if (parsedFrontmatter.name != null && parsedFrontmatter.name != "") {
+    name = parsedFrontmatter.name
+  }
   return {
-    name: parsedFrontmatter.name ?? skillDir,
+    name: name,
     description: parsedFrontmatter.description ?? "",
     location: skillPath
   }

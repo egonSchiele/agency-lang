@@ -36,6 +36,12 @@ node standardFallsBackToDirNameWhenNameAbsent(): boolean {
       && d.includes("<description>This one is missing its name.</description>")
 }
 
+node standardFallsBackToDirNameWhenNameEmpty(): boolean {
+  const d = stdDesc()
+  return d.includes("<name>empty-name</name>")
+      && d.includes("<description>The name is empty.</description>")
+}
+
 node flatHasNamedSkill(): boolean {
   const d = flatDesc()
   return d.includes("<name>greet</name>")

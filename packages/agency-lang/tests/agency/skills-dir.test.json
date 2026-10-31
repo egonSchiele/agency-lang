@@ -3,6 +3,7 @@
     {"nodeName": "standardHasNamedSkill", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},
     {"nodeName": "standardFallsBackToDirNameWhenNoFrontmatter", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},
     {"nodeName": "standardFallsBackToDirNameWhenNameAbsent", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},
+    {"nodeName": "standardFallsBackToDirNameWhenNameEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},
     {"nodeName": "flatHasNamedSkill", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},
     {"nodeName": "flatFallsBackToTitle", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},
     {"nodeName": "flatFallsBackToFilenameWhenNoFrontmatter", "input": "", "expectedOutput": "true", "evaluationCriteria": [{"type": "exact"}]},

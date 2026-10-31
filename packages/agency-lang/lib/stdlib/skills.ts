@@ -140,7 +140,7 @@ function readTopLevelKeys(lines: string[]): Record<string, string> {
       continuation.push(lines[index].trim());
       index++;
     }
-    data[key] = valueOf(withoutComment(rest.trim()), continuation);
+    data[key] = valueOf(rest.trim(), continuation);
   }
   return data;
 }
@@ -150,29 +150,30 @@ function isContinuation(line: string): boolean {
   return line === "" || line.startsWith(" ") || line.startsWith("\t");
 }
 
-// A `>` or `|` value is its indented lines. A plain value takes any
-// indented lines after it, folded onto one line, but never a list item or a
-// comment, so `allowed-tools:` followed by a list stays empty.
-function valueOf(value: string, continuation: string[]): string {
-  if (BLOCK_SCALAR.test(value)) {
-    return value.startsWith(">")
-      ? continuation.filter((line) => line !== "").join(" ")
-      : continuation.join("\n").trim();
-  }
+// A quoted value runs to its closing quote, even across indented lines. A
+// `>` or `|` value is its indented lines. A plain value takes any indented
+// lines after it, folded onto one line, but never a list item or a comment,
+// so `allowed-tools:` followed by a list stays empty.
+function valueOf(first: string, continuation: string[]): string {
   const folded = continuation.filter(
     (line) => line !== "" && !line.startsWith("- ") && !line.startsWith("#"),
   );
-  return [unquote(value), ...folded].filter((part) => part !== "").join(" ");
+  if (first.startsWith('"') || first.startsWith("'")) {
+    return readQuoted([first, ...folded].join(" "));
+  }
+  const head = withoutComment(first);
+  if (BLOCK_SCALAR.test(head)) {
+    return head.startsWith(">")
+      ? continuation.filter((line) => line !== "").join(" ")
+      : continuation.join("\n").trim();
+  }
+  const parts = [head, ...folded.map(withoutComment)];
+  return parts.filter((part) => part !== "").join(" ");
 }
 
-// YAML starts a comment with a `#` at the start of the value or after a
-// space. After a quoted value, everything past the closing quote is dropped.
+// YAML starts a comment with a `#` at the start of a plain value or after a
+// space.
 function withoutComment(value: string): string {
-  const quote = value[0];
-  if (quote === '"' || quote === "'") {
-    const close = value.indexOf(quote, 1);
-    return close === -1 ? value : value.slice(0, close + 1);
-  }
   if (value.startsWith("#")) {
     return "";
   }
@@ -180,8 +181,31 @@ function withoutComment(value: string): string {
   return comment === -1 ? value : value.slice(0, comment).trimEnd();
 }
 
-function unquote(value: string): string {
-  const quoted =
-    value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.endsWith(value[0]);
-  return quoted ? value.slice(1, -1) : value;
+// The text inside YAML quotes, up to the closing quote; anything after it is
+// a comment. Inside double quotes `\"` is a quote and `\\` a backslash, and
+// other escapes are kept as written. Inside single quotes `''` is a quote.
+function readQuoted(text: string): string {
+  const quote = text[0];
+  let out = "";
+  let index = 1;
+  while (index < text.length) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (quote === '"' && char === "\\" && next !== undefined) {
+      out += next === '"' || next === "\\" ? next : char + next;
+      index += 2;
+      continue;
+    }
+    if (char === quote && quote === "'" && next === "'") {
+      out += "'";
+      index += 2;
+      continue;
+    }
+    if (char === quote) {
+      return out;
+    }
+    out += char;
+    index++;
+  }
+  return out;
 }

@@ -157,6 +157,32 @@ describe("_parseSkillFile, YAML a skill author writes", () => {
     expect(data("allowed-tools:\n  - Bash\nname: d")).toEqual({ "allowed-tools": "", name: "d" });
   });
 
+  it("keeps an escaped double quote inside a double-quoted value", () => {
+    expect(data('description: "Use when the user says \\"ship it\\""')).toEqual({
+      description: 'Use when the user says "ship it"',
+    });
+  });
+
+  it("keeps a doubled single quote inside a single-quoted value", () => {
+    expect(data("description: 'Use when it''s time to deploy'")).toEqual({
+      description: "Use when it's time to deploy",
+    });
+  });
+
+  it("reads an escaped backslash inside a double-quoted value", () => {
+    expect(data('description: "a \\\\ b"')).toEqual({ description: "a \\ b" });
+  });
+
+  it("reads a quoted value wrapped onto a second line", () => {
+    expect(data('description: "Use when\n  the user asks"')).toEqual({
+      description: "Use when the user asks",
+    });
+  });
+
+  it("drops a comment on a folded line", () => {
+    expect(data("description: foo\n  bar # note")).toEqual({ description: "foo bar" });
+  });
+
   it("reads a file that starts with a byte-order mark", () => {
     const parsed = _parseSkillFile("\uFEFF---\nname: d\n---\nBody.");
     expect(parsed.data).toEqual({ name: "d" });

@@ -83,7 +83,7 @@ export const globWordParser: Parser<GlobWord> = wholeWord((input: string) => {
 });
 ```
 
-`hasGlobChar` is a one-line helper over `GLOB_CHARS`. The leading-`-` rule comes free if the first element is `bareWordStartChars`-or-`/`-or-glob rather than `bareWordChars`; write it that way. Add `globWordParser` to the `or` in `wordParser` ahead of `pathWordParser` and `literalWordParser`. `scriptNameParser` is unchanged, so a glob command word is rejected; `redirectParser` captures `wordParser` as its target, so add a check there or narrow the target to a non-glob word; the "glob redirect target" test decides which is simpler. Prefer narrowing: a `redirectTargetParser` that is `wordParser` minus the glob alternative, built from the same list.
+`hasGlobChar` is a one-line helper over `GLOB_CHARS`. The leading-`-` rule comes free if the first element is `bareWordStartChars`-or-`/`-or-glob rather than `bareWordChars`; write it that way. `wordParser` today is one `or(...)` over the word alternatives. Name that list once, `const plainWordParsers = [...]` (the alternatives as they stand), and build two parsers from it: `wordParser = or(globWordParser, ...plainWordParsers)` and `redirectTargetParser = or(...plainWordParsers)`. `redirectParser` captures `redirectTargetParser` as its target, so a glob target fails to parse with no check written anywhere. `scriptNameParser` is unchanged, so a glob command word is rejected.
 
 - [ ] **Step 4: Render and document**
 
@@ -123,7 +123,7 @@ Corpus: `"grep -rn x --include=*.ts src"`.
 
 - [ ] **Step 3: Implement**
 
-The value parser becomes `many1WithJoin(or(wordChars, globChars))`, and the capture is followed by a `map` on the whole `seqC` result that adds `valueIsGlob: true` when `hasGlobChar(flagValue)`. Keep the key absent otherwise so existing `toEqual` assertions on flags do not change.
+The value parser becomes `many1WithJoin(or(wordChars, globChars))`, and the `seqC` result goes through a `map` that sets `flag.valueIsGlob = true` inside an `if (hasGlobChar(flag.flagValue))`, not a conditional spread. The key stays absent otherwise so existing `toEqual` assertions on flags do not change.
 
 - [ ] **Step 4: Run, commit**
 

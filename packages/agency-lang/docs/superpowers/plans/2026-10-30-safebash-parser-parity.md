@@ -80,7 +80,7 @@ git commit -F /tmp/msg.txt   # "safeBash: tarsec <version>, pipelines and glob w
 - Test: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
-- Consumes: `Plan.reason` from ADI-238 (merged first), `planSummary` and `effectNamesFor` helpers already in the test file.
+- Consumes: `BashExec.reason` and the `planReason` test helper from ADI-238 (merged first), and the `planSummary` and `effectNamesFor` helpers already in the test file.
 - Produces: `redirectEffect` ignores redirects with `op == ">&"` before applying its one-redirect rule; `prepareRedirectWrite` is unchanged and still fails on any op other than `>` and `>>`.
 
 - [ ] **Step 1: Write the failing plan tests**

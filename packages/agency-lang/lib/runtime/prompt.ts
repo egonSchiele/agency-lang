@@ -1686,6 +1686,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
                 name: "onToolCallEnd",
                 data: {
                   toolName: handler.name,
+                  args: namedArgs,
                   result: toolResult,
                   timeTaken,
                 },

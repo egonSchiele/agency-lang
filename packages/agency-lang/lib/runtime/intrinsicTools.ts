@@ -136,7 +136,7 @@ export async function runIntrinsicCall(opts: {
     const ack = intrinsic.handle({ toolCall, stateStack, draftSchema });
     await invokeCallbacks(opts.run, {
       name: "onToolCallEnd",
-      data: { toolName: toolCall.name, result: ack, timeTaken: 0 },
+      data: { toolName: toolCall.name, args: callArgs, result: ack, timeTaken: 0 },
       stateStack,
     });
     statelogClient.toolCall({

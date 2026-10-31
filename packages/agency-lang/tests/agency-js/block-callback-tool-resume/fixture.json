@@ -9,5 +9,9 @@
   "toolEnds": [
     "interruptTool",
     "noopTool"
+  ],
+  "toolEndArgs": [
+    { "toolName": "interruptTool", "args": { "name": "FOO" } },
+    { "toolName": "noopTool", "args": {} }
   ]
 }

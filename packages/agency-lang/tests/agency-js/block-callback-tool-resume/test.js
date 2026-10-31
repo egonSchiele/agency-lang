@@ -50,7 +50,7 @@ const llmClient = {
         success: true,
         value: {
           output: null,
-          toolCalls: [new ToolCall("c1", "interruptTool", {})],
+          toolCalls: [new ToolCall("c1", "interruptTool", { name: "FOO" })],
           model: "test",
           usage: SYNTHETIC_USAGE,
           cost: SYNTHETIC_COST,
@@ -97,9 +97,15 @@ __setLLMClient(llmClient);
 
 const toolStarts = [];
 const toolEnds = [];
+// The end hook carries the call's arguments, including after a resume,
+// so a trace line can be built when the call settles.
+const toolEndArgs = [];
 const callbacks = {
   onToolCallStart: ({ toolName }) => toolStarts.push(toolName),
-  onToolCallEnd: ({ toolName }) => toolEnds.push(toolName),
+  onToolCallEnd: ({ toolName, args }) => {
+    toolEnds.push(toolName);
+    toolEndArgs.push({ toolName, args });
+  },
 };
 const initial = await main({ callbacks });
 const endsAtPause = [...toolEnds];
@@ -120,6 +126,7 @@ writeFileSync(
       toolStarts,
       endsAtPause,
       toolEnds,
+      toolEndArgs,
     },
     null,
     2,

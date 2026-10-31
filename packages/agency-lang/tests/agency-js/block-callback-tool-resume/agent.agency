@@ -1,6 +1,6 @@
 import { map } from "std::array"
 
-def interruptTool(): string {
+def interruptTool(name: string): string {
   interrupt("approve")
   return "tool result"
 }

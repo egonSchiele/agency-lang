@@ -21,6 +21,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _addLine } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 
@@ -1009,15 +1010,18 @@ export def safeBash(
   }
 
   const raised = raiseAll(plan.effects, command, dir)
-  if (raised is failure(why)) {
+  // The rejection is passed on as it came, not rebuilt with `failure()`,
+  // which would drop its `rejected` flag. Without the flag the tool loop
+  // shows the user's reason as a tool error and says to call again.
+  if (isFailure(raised)) {
     if (plan.broadReason == null) {
-      return failure(why)
+      return raised
     }
     // A rejected broad question tells the model why no narrower one was
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return failure("${why}\n${broadExplanation(plan.broadReason)}")
+    return _addLine(raised, broadExplanation(plan.broadReason))
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -1099,8 +1103,8 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   """
   for (effect in effects) {
     const answered = raiseOne(effect, fullCommand, cwd)
-    if (answered is failure(reason)) {
-      return failure(reason)
+    if (isFailure(answered)) {
+      return answered
     }
   }
   return success(null)

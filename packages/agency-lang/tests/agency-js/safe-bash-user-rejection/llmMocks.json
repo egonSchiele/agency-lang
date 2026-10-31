@@ -1,0 +1,8 @@
+[
+  {
+    "toolCalls": [
+      { "name": "safeBash", "args": { "command": "xargs echo hi" } }
+    ]
+  },
+  { "return": "sorry" }
+]

@@ -1,0 +1,9 @@
+{
+  "reasons": [
+    "The user rejected this call and wrote you this message:\nuse ls instead",
+    "The user rejected this call and wrote you this message:\nwhy are you doing this?",
+    "The user rejected this call.",
+    "The user rejected this call and all later myapp::d requests."
+  ],
+  "remainingAnswers": 0
+}

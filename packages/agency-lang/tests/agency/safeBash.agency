@@ -467,6 +467,20 @@ node rejectedNarrowIsUnchanged() {
   return "UNEXPECTEDLY RAN"
 }
 
+// The tool loop tells "the user said no" from "the tool broke" by the
+// failure's rejected flag, so safeBash must pass a rejection on with it.
+node rejectionKeepsFlag() {
+  const narrow = safeBash("git status")
+  const broad = safeBash("xargs echo hi")
+  let flags: boolean[] = []
+  for (result in [narrow, broad]) {
+    if (isFailure(result)) {
+      flags = [...flags, result.rejected]
+    }
+  }
+  return flags
+}
+
 node newShapes() {
   return [
     planSummary("git status | git log"),

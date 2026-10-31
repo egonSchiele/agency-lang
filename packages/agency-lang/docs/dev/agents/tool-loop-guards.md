@@ -191,9 +191,24 @@ same path.
 
 A rejection is not a tool error (`recordRejection` in `prompt.ts`):
 
-- The model sees `Tool call rejected: <reason>` with a do-not-retry
-  instruction — the rejecter's reason, not an error message. No
-  `toolErrorCounts` increment, no `toolError` statelog event.
+- The model sees `Tool call rejected: <reason>`, then a do-not-retry
+  instruction on the next line. The reason is the rejecter's text,
+  printed as written with no period added, because it may be a question
+  or run several lines. No `toolErrorCounts` increment, no `toolError`
+  statelog event.
+- The reason says who rejected the call. The tool loop cannot know
+  this, so whoever writes the reason does. `cliPolicyHandler` writes
+  `The user rejected this call and wrote you this message:` above the
+  user's text, `The user rejected this call.` when they gave no reason,
+  and `A rule in the approval policy rejected this call.` for a rule with
+  no `rejectMessage`. Without the first one, a user asking "why are you
+  running these commands?" reads to the model like a note from the
+  environment.
+- Code between the interrupt and the tool loop must pass the rejection
+  failure on as it came. Rebuilding it with `failure(why)` drops the
+  `rejected` flag, and the reason then arrives as a tool error that says
+  "You may call this tool again". `safeBash` adds its explanation with
+  `_addLine` for this reason (see `docs/dev/stdlib/safe-bash.md`).
 - An identical retry (same `repeatKey`) is refused before the start
   hook: no invoke, no re-raised interrupt. Checked before the repeat
   guard so the model hears "rejected", not "repeated".

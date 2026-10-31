@@ -984,7 +984,12 @@ export def safeBash(
 
   const raised = raiseAll(plan.effects, command, dir)
   if (raised is failure(why)) {
-    return failure(why)
+    if (plan.broadReason == null) {
+      return failure(why)
+    }
+    // A rejected broad question tells the model why no narrower one was
+    // available, so its next attempt can take the narrower path.
+    return failure("${why} ${broadExplanation(plan.broadReason)}")
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -1005,6 +1010,22 @@ export def safeBash(
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
+}
+
+/** The sentence the model reads for each reason a plan went broad. */
+static const BROAD_SENTENCES = {
+  unparseable: "the command could not be parsed",
+  unrecognized: "it has no rule for one of the commands",
+  noEffects: "every command was recognized but none needs an approval of its own, so the shell itself had to be approved",
+  unrenderable: "the parsed command could not be rendered back to text"
+}
+
+def broadExplanation(reason: BroadReason): string {
+  const sentence = BROAD_SENTENCES[reason.kind]
+  if (reason.detail == "") {
+    return "safeBash could not ask a narrower question because ${sentence}."
+  }
+  return "safeBash could not ask a narrower question because ${sentence}: ${reason.detail}."
 }
 
 /** What the debug event says about one plan: the decision and why. */

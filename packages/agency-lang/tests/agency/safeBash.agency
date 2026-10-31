@@ -440,3 +440,27 @@ node planOutcomes() {
     planOutcome("echo hi; echo bye"),
   ]
 }
+
+node rejectedBroadSaysWhy() {
+  const result = safeBash("xargs echo hi")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node rejectedAuditSaysWhy() {
+  const result = safeBash("echo hi; echo bye")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node rejectedNarrowIsUnchanged() {
+  const result = safeBash("git status")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}

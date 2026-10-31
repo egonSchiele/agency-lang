@@ -261,7 +261,7 @@
     },
     {
       "nodeName": "tildeRedirectQuoting",
-      "description": "unquoted tilde cannot be narrowed and takes the broad bash question; quoted tilde stays beneath the cwd",
+      "description": "an unquoted tilde expands, so the redirect is a recognized write to the real home directory; a quoted tilde stays a directory named ~ beneath the cwd",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -275,6 +275,118 @@
       "description": "A single `agency <subcommand> <file>` runs in-process (kind agency). Looking the binary up (which/type, or command as the first argument), a variable argument, or a redirect is refused with the functions to call. `command echo agency` and other commands that merely mention agency are ordinary bash.",
       "input": "",
       "expectedOutput": "[\"agency\", \"agency\", \"refuse\", \"refuse\", \"refuse\", \"refuse\", \"bash\", \"refuse\", \"refuse\", \"refuse\", \"bash\", \"bash\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planReasons",
+      "description": "A broad plan records why: the parser message, the first unrecognized command, the audit rule, or an unrenderable tree. A narrow or refused plan has no reason.",
+      "input": "",
+      "expectedOutput": "[null,[\"unrecognized\",\"no rule for `xargs`\"],[\"noEffects\",\"\"],[\"unparseable\",\"Unexpected input after commands: \\\"$(date)\\\"\"],null,[\"unrecognized\",\"no rule for `xargs`\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planVerbs",
+      "description": "The plan carries the command word of every simple command it decided over: empty when unparseable, an empty string for an assignment-only command.",
+      "input": "",
+      "expectedOutput": "[[\"git\",\"xargs\"],[],[\"\"],[\"rm\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planOutcomes",
+      "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
+      "input": "",
+      "expectedOutput": "[\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedBroadSaysWhy",
+      "description": "A rejected broad question tells the model why safeBash could not ask a narrower one: the first command it had no rule for.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: no rule for `xargs`.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedAuditSaysWhy",
+      "description": "The audit-rule case says every command was recognized, so the model is not told a command was unknown.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because every command was recognized but none needs an approval of its own, so the shell itself had to be approved.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedNarrowIsUnchanged",
+      "description": "A rejected narrow question carries no reason, so the failure reads as it always did.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Show git status"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "newShapes",
+      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
+      "input": "",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"unrecognized\",\"no rule for `head`\"],\"git status | git log\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pipelineRunsThroughBash",
+      "description": "A pipe in a broad string reaches bash as one string and produces bash's output.",
+      "input": "",
+      "expectedOutput": "\"HI\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"

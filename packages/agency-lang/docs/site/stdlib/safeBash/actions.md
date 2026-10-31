@@ -157,6 +157,30 @@ export type RefuseExec = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L99))
 
+### BroadReason
+
+Why a plan asks the broad std::bash question. `detail` is the parser
+message for `unparseable`, the first unrecognized command's message for
+`unrecognized`, the render failure for `unrenderable`, and "" for
+`noEffects`.
+
+```ts
+/** Why a plan asks the broad std::bash question. `detail` is the parser
+ * message for `unparseable`, the first unrecognized command's message for
+ * `unrecognized`, the render failure for `unrenderable`, and "" for
+ * `noEffects`. */
+export type BroadReason = {
+  kind:
+  | "unparseable"
+  | "unrecognized"
+  | "noEffects"
+  | "unrenderable";
+  detail: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L108))
+
 ### Plan
 
 The whole decision about one call to safeBash, made before anything runs.
@@ -165,11 +189,16 @@ The whole decision about one call to safeBash, made before anything runs.
 /** The whole decision about one call to safeBash, made before anything runs. */
 export type Plan = {
   effects: Effect[];
-  execution: Execution
+  execution: Execution;
+  /** Why the plan asks the broad std::bash question, or null when it does not. */
+  broadReason?: BroadReason;
+  /** The command word of every simple command planFor decided over, in
+   *  order; "" for an assignment-only command; [] when unparseable. */
+  verbs: string[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L114))
 
 ## Functions
 
@@ -238,7 +267,7 @@ Run a command string through bash and return what it printed.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L125))
 
 ### runWrite
 
@@ -263,4 +292,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L178))

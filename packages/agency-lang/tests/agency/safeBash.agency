@@ -4,6 +4,7 @@ import {
   isRefused,
   effectsFor,
   planFor,
+  outcomeOf,
   safeBash,
   resolveCwd,
  } from "std::safeBash"
@@ -360,19 +361,21 @@ node payloadExecutionParity(): boolean {
   return fieldsAgree && contentAgrees && resolvedRight && gitOk
 }
 
-// Quote-aware tilde. The bash word grammar refuses an unquoted `~`
-// outright, so that spelling can never reach the narrow write path: the
-// whole command falls back to the broad std::bash question, which is
-// strictly safer than expanding it ourselves. Quoted tildes parse and
-// stay a literal name beneath the cwd, exactly as bash treats them.
+// Quote-aware tilde. An unquoted `~` is expanded, so the redirect is a
+// recognized write whose payload names the real home directory, which is
+// the destination the policy should judge. Quoted tildes stay a literal
+// name beneath the cwd, exactly as bash treats them.
 node tildeRedirectQuoting(): boolean {
   const unquoted = writeExecOf("echo hi > ~/cf-sb-tilde.txt", "/repo")
   const single = writeExecOf("echo hi > '~/cf-sb-tilde.txt'", "/repo")
   const double = writeExecOf("echo hi > \"~/cf-sb-tilde.txt\"", "/repo")
-  const unquotedBroad = unquoted.kind == "bash"
+  // An unquoted `~` expands, so the write lands in the real home directory,
+  // wherever that is on this machine; a quoted one is a directory literally
+  // named `~` under the cwd.
+  const unquotedExpanded = unquoted.dir != null && !unquoted.dir.startsWith("/repo") && unquoted.filename == "cf-sb-tilde.txt"
   const singleLiteral = single.dir == "/repo/~" && single.filename == "cf-sb-tilde.txt"
   const doubleLiteral = double.dir == "/repo/~" && double.filename == "cf-sb-tilde.txt"
-  return unquotedBroad && singleLiteral && doubleLiteral
+  return unquotedExpanded && singleLiteral && doubleLiteral
 }
 
 def planKind(source: string): string {
@@ -394,4 +397,98 @@ node agencyCommandLines() {
     planKind("ls agency-lang"),
     planKind("which git"),
   ]
+}
+
+def planReason(source: string): any {
+  const plan = planFor(source, "/repo")
+  if (plan.broadReason == null) {
+    return null
+  }
+  return [plan.broadReason.kind, plan.broadReason.detail]
+}
+
+def planOutcome(source: string): string {
+  return outcomeOf(planFor(source, "/repo"))
+}
+
+node planReasons() {
+  return [
+    planReason("git status"),
+    planReason("xargs rm x"),
+    planReason("echo hi; echo bye"),
+    planReason("echo $(date)"),
+    planReason("rm -rf build"),
+    planReason("git status; xargs rm x"),
+  ]
+}
+
+node planVerbs() {
+  return [
+    planFor("git status; xargs rm x", "/repo").verbs,
+    planFor("echo $(date)", "/repo").verbs,
+    planFor("FOO=bar", "/repo").verbs,
+    planFor("rm -rf build", "/repo").verbs,
+  ]
+}
+
+node planOutcomes() {
+  return [
+    planOutcome("git status"),
+    planOutcome("xargs rm x"),
+    planOutcome("echo hi"),
+    planOutcome("echo hi > out.txt"),
+    planOutcome("rm -rf build"),
+    planOutcome("agency typecheck foo.agency"),
+    planOutcome("echo hi; echo bye"),
+  ]
+}
+
+node rejectedBroadSaysWhy() {
+  const result = safeBash("xargs echo hi")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node rejectedAuditSaysWhy() {
+  const result = safeBash("echo hi; echo bye")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node rejectedNarrowIsUnchanged() {
+  const result = safeBash("git status")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node newShapes() {
+  return [
+    planSummary("git status | git log"),
+    planSummary("git status | head"),
+    planSummary("echo hi 2>&1"),
+    planSummary("echo hi 2>&1 > out.txt"),
+    planSummary("echo *.md"),
+    planSummary("rm -rf x | cat"),
+    planSummary("make 2>&1 | tail -100"),
+    planReason("git status | head"),
+    executionCommand("git    status |  git   log"),
+  ]
+}
+
+node pipelineRunsThroughBash() {
+  // `tr` has no rule, so this plan is broad and runs the original text.
+  // What this pins is that a pipe in a broad string reaches bash through
+  // _bash and produces bash's output. The rebuilt-text path through a
+  // pipe is pinned by the executionCommand row in newShapes.
+  const result = safeBash("echo hi | tr a-z A-Z")
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
 }

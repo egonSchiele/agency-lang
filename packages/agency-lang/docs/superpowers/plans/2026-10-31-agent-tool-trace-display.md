@@ -99,7 +99,7 @@ onToolCallEnd: pass the call's arguments
 - Modify: `lib/runtime/toolOutputStore.ts` (`SavedOutput`, `storeOutput`, new `findOutputSource`, `outputNotice`)
 - Modify: `lib/runtime/toolInvocation.ts:215-245` (`capToolResultForLlm`, `toolResultCapper`, new `spillSource`)
 - Modify: `lib/runtime/prompt.ts:694,962,992,1325` (thread `namedArgs` into `capForLlm`)
-- Modify: `lib/stdlib/spill.ts` (`_keepOutput`, new `_spillSource`)
+- Modify: `lib/stdlib/spill.ts` (`_keepOutput`)
 - Modify: `stdlib/spill.agency` (`keepOutput`)
 - Modify: `stdlib/safeBash.agency:939,955,961,963` and `stdlib/safeBash/actions.agency:144,151`
 - Modify: `docs/dev/stdlib/spill.md` (one paragraph on `source`)
@@ -111,10 +111,10 @@ onToolCallEnd: pass the call's arguments
   - `storeOutput(run: Run, text: string, source: string): string`
   - `findOutputSource(run: Run, name: string): string | null` (null when not found or when the entry has no source)
   - `outputNotice(text, name, exitCode, readers, maxChars?, source?: string)`: when `source` is given, the first line reads `[Output of "<source>" too long to return in full: ...]`; without it, unchanged.
-  - `spillSource(tool: ToolIdentity, args: Record<string, unknown>): string`: the tool name, then a space and the first argument whose value is a string, the whole cut at 80 characters; the tool name alone when no argument is a string.
+  - `SPILL_SOURCE_CHARS = 80` in `toolOutputStore.ts`. `storeOutput` cuts `source` to that length, so no caller cuts.
+  - `spillSource(tool: ToolIdentity, args: Record<string, unknown>): string`: the tool name, then a space and the first argument whose value is a string; the tool name alone when no argument is a string.
   - `capToolResultForLlm(result, cap, spill, tool, args: Record<string, unknown>)` and `toolResultCapper(cap, spill)` returning `(result, tool, args) => ...`.
   - `_keepOutput(text: string, exitCode: number, source: string): string` and Agency `keepOutput(text: string, exitCode: number, source: string): string`.
-  - `_spillSource(name: string): string | null` in `lib/stdlib/spill.ts`, reading `currentRun()`.
 
 - [ ] **Step 1: Write the failing store tests** in `lib/runtime/toolOutputStore.test.ts`
 
@@ -123,6 +123,8 @@ it("keeps a readable source beside the text", () => {
   withRun((run) => {
     const name = storeOutput(run, "x".repeat(10), "pnpm run typecheck");
     expect(findOutputSource(run, name)).toBe("pnpm run typecheck");
+    const long = storeOutput(run, "y", "z".repeat(200));
+    expect(findOutputSource(run, long)).toBe("z".repeat(SPILL_SOURCE_CHARS));
     expect(findOutputSource(run, "2026-01-01T00-00-00-000Z-abcdef.log")).toBeNull();
   });
 });
@@ -141,11 +143,11 @@ it("names the source in the notice", () => {
 });
 ```
 
-Update the existing `storeOutput(run, text)` calls in this file to pass a source.
+Update the existing `storeOutput(run, text)` calls in this file to pass a source. The second test reaches into the run's globals to drop the field: no public call writes an entry without one, and that is the shape an old checkpoint carries.
 
 - [ ] **Step 2: Write the failing spill and capper tests**
 
-In `lib/stdlib/spill.test.ts`, the "saves long output" case passes `"make"` as the third argument and adds `expect(_spillSource(name)).toBe("make")`. In `lib/runtime/prompt.test.ts` under `capToolResultForLlm`:
+In `lib/stdlib/spill.test.ts`, the "saves long output" case passes `"make"` as the third argument and asserts the notice starts with `[Output of "make" too long`. In `lib/runtime/prompt.test.ts` under `capToolResultForLlm`:
 
 ```ts
 it("saves a spilled tool result under the tool name and its first string argument", () => {
@@ -158,7 +160,7 @@ it("saves a spilled tool result under the tool name and its first string argumen
 it("uses the tool name alone when no argument is a string", () => { /* args: { n: 3 } → source equals tool name */ });
 ```
 
-(`page` is the existing `ToolIdentity` fixture in that describe; use its `name` in the expected string.) Add a unit test for `spillSource` cutting at 80 characters.
+(`page` is the existing `ToolIdentity` fixture in that describe; use its `name` in the expected string.)
 
 - [ ] **Step 3: Run the three test files and confirm they fail to compile or fail**
 
@@ -170,7 +172,7 @@ Run: `pnpm vitest run lib/runtime/toolOutputStore.test.ts lib/stdlib/spill.test.
 
 - [ ] **Step 5: Implement the Agency side**
 
-`spill.ts`: `_keepOutput(text, exitCode, source)` passes `source` to both `storeOutput` and `outputNotice`; add `_spillSource`. `spill.agency`: `keepOutput` gains `source: string` and its docstring says what to pass ("the command that produced the output"). `safeBash.agency`: the `echo` arm passes `content` cut to 80 characters; `runAgency` and `cliOutcome` pass `"agency " + args.join(" ")` (thread `args` into `cliOutcome`). `actions.agency` `runBash` passes `command`. Update the module doc comment example in `spill.agency` and add a paragraph to `docs/dev/stdlib/spill.md`.
+`spill.ts`: `_keepOutput(text, exitCode, source)` passes `source` to both `storeOutput` and `outputNotice`. `spill.agency`: `keepOutput` gains `source: string` and its docstring says what to pass ("the command that produced the output"). `safeBash.agency`: the `echo` arm passes `content` (the store cuts it); `runAgency` and `cliOutcome` pass `"agency " + args.join(" ")` (thread `args` into `cliOutcome`). `actions.agency` `runBash` passes `command`. Update the module doc comment example in `spill.agency` and add a paragraph to `docs/dev/stdlib/spill.md`.
 
 - [ ] **Step 6: Build, typecheck, run the tests**
 
@@ -189,17 +191,27 @@ spill: keep a readable source beside every saved output
 
 **Files:**
 - Modify: `lib/stdlib/agentToolTrace.ts` (types at 8-49, `TOOL_PRESENTATIONS` at 66, `describeToolEvent` at 157, `toolHeading` at 334, `traceOptionsForHost` at 104, `_printAgentTrace` at 125)
+- Create: `lib/utils/formatElapsed.ts` (moved from `lib/eval/run/statusBoard.ts:21`; update that file's import and any test that imports it from there)
 - Test: `lib/stdlib/agentToolTrace.test.ts`
 
 **Interfaces:**
 - Produces, all exported from `agentToolTrace.ts`:
-  - `ToolEndEvent` gains `args?: unknown`, `timeTaken?: number` (ms), `spillSource?: string | null`.
-  - `TraceOptions` gains `toolNames: boolean`. `traceOptionsForHost(host, toolNames = false)`. `_printAgentTrace(event, toolNames = false)`.
-  - `type SummaryArgument = { key: string; prefix?: string; limit?: "line" } | { range: { offset: string; limit: string } } | { flag: string; text: string }`. `key` prints the argument's value (strings as-is, numbers as digits, string arrays joined by spaces, anything else skipped). `range` prints `lines {offset}–{offset+limit}` when `offset` or `limit` is set and nonzero, `lines {offset}–end` when `limit` is 0 and `offset` set. `flag` prints `text` when the named boolean argument is true.
-  - `type ResultSummary = "none" | "verdict" | "preview" | { count: string } | { exitCode: true } | { custom: (value: unknown) => string | null }`. `{ count: "matches" }` prints `12 matches` for an array result (singular for 1). `exitCode` reads `value.exitCode` from an object. `verdict` prints nothing extra on success. `preview` is today's dim text.
-  - `type SummaryPresentation = { kind: "summary"; label: string; show: SummaryArgument[]; twoLines: boolean; result: ResultSummary; failure?: (message: string) => { line: string; detail: string } | null }`. `failure` is used by Task 4 for `safeBash`.
+  - `ToolEndEvent` gains `args?: unknown` and `timeTaken?: number` (ms).
+  - `TraceOptions` gains `toolNames: boolean` and `spillSource?: (name: string) => string | null`. `traceOptionsForHost(host, toolNames = false)` fills both: `spillSource` is `(name) => findOutputSource(currentRun(), name)`, imported from `lib/runtime/toolOutputStore.ts` beside the existing `currentHost` import. `_printAgentTrace(event, toolNames = false)`. Tests pass their own `spillSource` or none.
+  - Argument forms, each a named type:
+    - `type ArgumentValue = { key: string; prefix?: string; limit?: "line"; firstLine?: boolean; spillSource?: boolean }`: prints the argument's value (strings as-is, numbers as digits, string arrays joined by spaces, anything else skipped). `firstLine` keeps only the first line. `spillSource` looks the value up through `options.spillSource` and prints `output of <source>` when found, else the value.
+    - `type ArgumentRange = { range: { offset: string; limit: string } }`: `lines {offset}–{offset+limit}` when either is set and nonzero, `lines {offset}–end` when `limit` is 0 and `offset` set.
+    - `type ArgumentText = { text: string; when: string; equals: unknown }`: prints `text` when `args[when] === equals`. Covers booleans (`{ text: "recursive", when: "recursive", equals: true }`) and strings (`{ text: "append", when: "mode", equals: "append" }`).
+    - `type SummaryArgument = ArgumentValue | ArgumentRange | ArgumentText`.
+  - Result summaries, each a named type:
+    - `type CountSummary = { count: string }`: `12 matches` for an array result, singular for 1.
+    - `type ExitCodeSummary = { exitCode: true }`: `exit N` from `value.exitCode`.
+    - `type CustomSummary = { custom: (value: unknown, args: Record<string, unknown>) => string | null; failsWhen?: (value: unknown) => boolean }`: `failsWhen` switches the mark to `✗` on a success result (typecheck errors, failed test cases).
+    - `type ResultSummary = "none" | "verdict" | "preview" | CountSummary | ExitCodeSummary | CustomSummary`. `verdict` prints nothing extra on success. `preview` is today's dim text.
+  - `type FailureSummary = (message: string) => { line: string; detail: string } | null`.
+  - `type SummaryPresentation = { kind: "summary"; label: string; show: SummaryArgument[]; twoLines: boolean; result: ResultSummary; failure?: FailureSummary }`. `failure` is used by Task 4 for `safeBash`.
   - `type SilentPresentation = { kind: "silent" }`.
-  - `formatElapsed(ms: number): string | null`: null under 1000, `14s` under 60 s, `2m 14s` otherwise.
+  - Elapsed text comes from the existing `formatElapsed` in `lib/eval/run/statusBoard.ts`, which already prints `47s` and `5m 17s`. Move it to `lib/utils/formatElapsed.ts`, import it from `statusBoard.ts` and from here, and keep its tests where they are. The renderer applies the "at least 1000 ms" rule before calling it; `formatElapsed` itself does not change.
   - Line shape for a summary: `<mark> <label> <shown args joined by " "> · <result> · <elapsed>` with `·` separators only between present parts. Start line for a two-line tool: `● <label> <args>` in `active` style. End mark `✓` success style or `✗` error style. On failure the failure message is a `rows` entry in error style; the result summary is omitted.
   - Tool name suffix: `toolHeading` appends the dim tool name only when `options.toolNames` is true. This changes the generic headings too.
 
@@ -227,16 +239,15 @@ it("keeps the generic display for an unknown tool, without the tool name unless 
   expect(formatAgentTrace({ kind: "toolStart", toolName: "mystery", args: { a: 1 } }, plain)).toBe("● Tool call\n  │ a: 1");
   expect(formatAgentTrace({ kind: "toolStart", toolName: "mystery", args: { a: 1 } }, { ...plain, toolNames: true })).toBe("● Tool call  mystery\n  │ a: 1");
 });
-it("formats elapsed time", () => { expect(formatElapsed(999)).toBeNull(); expect(formatElapsed(14200)).toBe("14s"); expect(formatElapsed(134000)).toBe("2m 14s"); });
 ```
 
-Change the one existing assertion at `agentToolTrace.test.ts:54` from `"✓ Tool finished  echo\n  │ done"` to `"✓ Tool finished\n  │ done"`, and make `plain` include `toolNames: false`. The `gitAdd` and `ghPrGet` rows used above are added in this task with the shapes the spec gives (`label: "git add"`, `show: [{ key: "paths" }]`, two lines; `label: "gh pr get"`, `show: [{ key: "number", prefix: "#" }]`, two lines).
+Change the one existing assertion at `agentToolTrace.test.ts:54` from `"✓ Tool finished  echo\n  │ done"` to `"✓ Tool finished\n  │ done"`, and make `plain` include `toolNames: false`. The `gitAdd` and `ghPrGet` rows used above are added in this task with the shapes the spec gives (`label: "git add"`, `show: [{ key: "paths" }]`, two lines; `label: "gh pr get"`, `show: [{ key: "number", prefix: "#" }]`, two lines). The one `describeSummary` function holds every branch over the argument and result forms; rows never contain code except a `custom` or `failure` function.
 
 - [ ] **Step 2: Run and confirm failure**
 
 Run: `pnpm vitest run lib/stdlib/agentToolTrace.test.ts > <scratchpad>/t3.log 2>&1; grep -E "✓|✗|FAIL" <scratchpad>/t3.log | head -40`
 
-- [ ] **Step 3: Implement the types, `describeSummary`, `formatElapsed`, the `silent` kind, and the `toolNames` option**
+- [ ] **Step 3: Implement the types, `describeSummary`, the `silent` kind, and the `toolNames` and `spillSource` options**
 
 Add the types from Interfaces. In `describeToolEvent`, dispatch on `presentation.kind`: `silent` returns null for both phases; `summary` returns null at start when `twoLines` is false, else the start block; at end builds the line from `args`, `outcome`, `value`, `timeTaken`. Argument values go through the existing `sanitize` and `limit` machinery (`limit: "line"` means no character limit; the renderer already wraps). Keep `describeToolStart`/`describeToolEnd` for the generic path. `traceOptionsForHost` and `_printAgentTrace` take `toolNames`; `printAgentTrace(host, event, toolNames = false)`.
 
@@ -259,8 +270,8 @@ agentToolTrace: summary and silent presentation kinds
 - Test: `lib/stdlib/agentToolTrace.test.ts`
 
 **Interfaces:**
-- Produces, private to the file but reachable through rows: `summarizeGrep(value)` → `"12 lines in 3 files"` (distinct `file` fields; singulars for 1); `summarizeTypecheck(value)` → `"clean"` or `"3 errors, 1 warning"` (zero parts omitted; reads `errors`/`warnings` arrays of a `TypeCheckReport`, which arrives unwrapped from its Result); `summarizeTestReport(value)` → `"7 passed"` or `"5 passed, 2 failed"` from `cases[].pass`; `summarizeBytes(value)` → `"2.1 KB"` from a string's length, `"812 B"` under 1000; `summarizeEditCount(args)` → `"3 edits"` from `args.edits.length` (this one reads arguments, so `custom` receives `(value, args)`); `safeBashFailure(message)` → parses `{command, exitCode, stderr, stdout}` JSON and returns `{ line: "exit 2", detail: stderr }`, or null when the message is not that shape. Adjust the `ResultSummary.custom` signature to `(value: unknown, args: unknown) => string | null`.
-- A nonzero typecheck error count or any failed test case switches the mark to `✗` error style even on a success Result. Add `type ResultSummary` member `{ custom: fn; failsWhen?: (value) => boolean }` for that.
+- Produces, private to the file but reachable through rows: `summarizeGrep(value)` → `"12 lines in 3 files"` (distinct `file` fields; singulars for 1); `summarizeTypecheck(value)` → `"clean"` or `"3 errors, 1 warning"` (zero parts omitted; reads `errors`/`warnings` arrays of a `TypeCheckReport`, which arrives unwrapped from its Result); `summarizeTestReport(value)` → `"7 passed"` or `"5 passed, 2 failed"` from `cases[].pass`; `summarizeBytes(value)` → `"2.1 KB"` from a string's length, `"812 B"` under 1000; `summarizeEditCount(value, args)` → `"3 edits"` from `args.edits.length`; `safeBashFailure(message)` → parses `{command, exitCode, stderr, stdout}` JSON and returns `{ line: "exit 2", detail: stderr }`, or null when the message is not that shape (a `FailureSummary` from Task 3).
+- The `typecheck` and `testFile` rows set `failsWhen` (Task 3's `CustomSummary`) so errors or failed cases print `✗` on a success Result.
 
 - [ ] **Step 1: Write the failing tests**, one per summarizer, with real-shaped values:
 
@@ -300,12 +311,12 @@ agentToolTrace: result summarizers for grep, typecheck, tests, writes, and safeB
 - Test: `lib/stdlib/agentToolTrace.test.ts`
 
 **Interfaces:**
-- Consumes: `ToolEndEvent.spillSource` from Task 3. A `SummaryArgument` of the form `{ spillName: string }` prints `output of <event.spillSource>` when the event carries one, else the raw argument value.
+- Consumes: `options.spillSource` and the `ArgumentValue.spillSource` flag from Task 3.
 - Produces: every row in the spec's per-tool table, keyed by the model-facing tool name. The list, by group, with the exact `label` and `show`:
-  - Files: `read` (Task 3), `ls` `List [{key:"dir"},{flag:"recursive",text:"recursive"}]` count "entries"; `glob` `Glob [{key:"pattern"},{key:"dir",prefix:"in "}]` count "files"; `grep` (Task 4, add `{flag:"filesOnly",text:"files only"}`); `write` `Write [{key:"filename"},{key:"mode",only:"append"}]` one line, custom `summarizeBytes` on `args.content` (`only` is a new `key` option: print the value only when it equals `only`); `edit` (Task 4).
-  - Shell: `safeBash` (Task 3), `exec` `Run [{key:"command"},{key:"args"}]` two lines, exitCode; `readSpill` `Read [{spillName:"filename"},{range:{offset:"offset",limit:"limit"}}]` one line, none; `grepSpill` `Grep [{key:"pattern"},{spillName:"filename",prefix:"in "}]` one line, count "lines".
-  - Git read, one line, none: `gitIsRepo` `git rev-parse`; `gitStatus` `git status`; `gitLog` `git log [{key:"path"},{key:"ref"}]`; `gitDiff` `git diff [{key:"ref"},{key:"ref2"},{key:"path"},{flag:"staged",text:"--staged"}]`; `gitShow` `git show [{key:"ref"}]`; `gitBlame` `git blame [{key:"path"}]`; `gitBranchList` `git branch`; `gitRemoteList` `git remote`; `gitStashList` `git stash list`.
-  - Git write, two lines, none: `gitAdd` (Task 3); `gitCommit` `git commit [{key:"message", firstLine:true}]` (add a `firstLine` option to the `key` form); `gitCheckout` `git checkout [{key:"target"}]`; `gitSwitch` `git switch [{key:"branch"}]`; `gitBranchCreate` `git branch [{key:"branch"}]`; `gitBranchDelete` `git branch -d [{key:"branch"}]`; `gitStashPush` `git stash push`; `gitStashPop` `git stash pop`; `gitRestore` `git restore [{key:"paths"}]`.
+  - Files: `read` (Task 3), `ls` `List [{key:"dir"},{text:"recursive",when:"recursive",equals:true}]` count "entries"; `glob` `Glob [{key:"pattern"},{key:"dir",prefix:"in "}]` count "files"; `grep` (Task 4, add `{text:"files only",when:"filesOnly",equals:true}`); `write` `Write [{key:"filename"},{text:"append",when:"mode",equals:"append"}]` one line, custom `summarizeBytes` on `args.content`; `edit` (Task 4).
+  - Shell: `safeBash` (Task 3), `exec` `Run [{key:"command"},{key:"args"}]` two lines, exitCode; `readSpill` `Read [{key:"filename",spillSource:true},{range:{offset:"offset",limit:"limit"}}]` one line, none; `grepSpill` `Grep [{key:"pattern"},{key:"filename",spillSource:true,prefix:"in "}]` one line, count "lines".
+  - Git read, one line, none: `gitIsRepo` `git rev-parse`; `gitStatus` `git status`; `gitLog` `git log [{key:"path"},{key:"ref"}]`; `gitDiff` `git diff [{key:"ref"},{key:"ref2"},{key:"path"},{text:"--staged",when:"staged",equals:true}]`; `gitShow` `git show [{key:"ref"}]`; `gitBlame` `git blame [{key:"path"}]`; `gitBranchList` `git branch`; `gitRemoteList` `git remote`; `gitStashList` `git stash list`.
+  - Git write, two lines, none: `gitAdd` (Task 3); `gitCommit` `git commit [{key:"message",firstLine:true}]`; `gitCheckout` `git checkout [{key:"target"}]`; `gitSwitch` `git switch [{key:"branch"}]`; `gitBranchCreate` `git branch [{key:"branch"}]`; `gitBranchDelete` `git branch -d [{key:"branch"}]`; `gitStashPush` `git stash push`; `gitStashPop` `git stash pop`; `gitRestore` `git restore [{key:"paths"}]`.
   - GitHub, two lines, none: `ghPrGet` (Task 3); `ghPrList` `gh pr list`; `ghPrDiff`, `ghPrFiles`, `ghPrReviews`, `ghPrReviewComments`, `ghPrChecks` as `gh pr <x> [{key:"number",prefix:"#"}]`; `ghIssueGet`, `ghIssueComments` likewise with `gh issue`; `ghIssueList` `gh issue list`; `ghIssueSearch` `gh issue search [{key:"query"}]`; `ghPrReviewComment` `gh pr comment [#number]`; `ghPrReview` `gh pr review [#number, {key:"event"}]`; `ghPrApprove` `gh pr approve [#number]`; `ghIssueCreate` `gh issue create [{key:"title"}]`; `ghIssueComment` `gh issue comment [#number]`; `ghIssueClose` `gh issue close [#number]`; `ghIssueLabel` `gh issue label [#number, {key:"labels"}]`.
   - Web, two lines: `fetchMarkdown` `Fetch [{key:"url"},{key:"baseUrl"},{key:"path"}]` custom `summarizeBytes` on the result (the model may pass `url` or `baseUrl`; whichever is present prints); `wikipedia_search` `Wikipedia [{key:"query"}]`; `wikipedia_summary`, `wikipedia_article` `Wikipedia [{key:"title"}]`.
   - Agency: `typecheck`, `testFile` (Task 4; `testFile` shows `filename`, two lines); `parseAST` `Parse []` one line, verdict; `agencyCli` `agency [{key:"args"}]` two lines, exitCode.
@@ -315,7 +326,7 @@ agentToolTrace: result summarizers for grep, typecheck, tests, writes, and safeB
   - Images: `generateImageFile` `Generate image [{key:"path",prefix:"→ "}]` two lines, none; `viewImageFile` `View [{key:"path"}]` one line, none.
   - Coordinator: `learnSkill` `Learn skill [{key:"name"}]` two lines; `writeToolFor` `Write tool [{key:"name"}]` two lines; `listPresets` `Preset list`; `savePreset` `Preset save [{key:"name"}]`; `deletePreset` `Preset delete [{key:"name"}]`; `setDefaultPreset` `Preset default [{key:"name"}]`; `useLlmOptions` `LLM options`; all one line, none.
   - Code agent: `setAgentCwd` `Working directory [{key:"dir",prefix:"→ "}]` one line, none; `getAgentCwd` `Working directory` one line, preview.
-  - Subagents: the existing `agent` kind's completion line appends ` · <elapsed>` when `formatElapsed(timeTaken)` is not null.
+  - Subagents: the existing `agent` kind's completion line appends ` · <elapsed>` when `timeTaken` is at least 1000 ms, through the same elapsed helper the summary line uses.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -324,8 +335,10 @@ One test per group that exercises its distinctive shape, not every row:
 ```ts
 it("shows the spill source in place of the saved name, and the name when unknown", () => {
   const args = { filename: "2026-01-01T00-00-00-000Z-abcdef.log", offset: 1, limit: 200 };
-  expect(formatAgentTrace({ kind: "toolEnd", toolName: "readSpill", args, value: "t", outcome: "success", spillSource: "pnpm run typecheck" }, plain)).toBe("✓ Read output of pnpm run typecheck lines 1–201");
-  expect(formatAgentTrace({ kind: "toolEnd", toolName: "readSpill", args, value: "t", outcome: "success", spillSource: null }, plain)).toBe("✓ Read 2026-01-01T00-00-00-000Z-abcdef.log lines 1–201");  // Review Focus 4
+  const known = { ...plain, spillSource: () => "pnpm run typecheck" };
+  const unknown = { ...plain, spillSource: () => null };
+  expect(formatAgentTrace({ kind: "toolEnd", toolName: "readSpill", args, value: "t", outcome: "success" }, known)).toBe("✓ Read output of pnpm run typecheck lines 1–201");
+  expect(formatAgentTrace({ kind: "toolEnd", toolName: "readSpill", args, value: "t", outcome: "success" }, unknown)).toBe("✓ Read 2026-01-01T00-00-00-000Z-abcdef.log lines 1–201");  // Review Focus 4
 });
 it("shows the first line of a commit message", ...);           // "● git commit Add summary tier"
 it("prints the write mode only when it is append", ...);        // "✓ Write a.md append · 812 B" vs "✓ Write a.md · 812 B"
@@ -340,7 +353,7 @@ it("has a row for every tool the coordinator and code agent offer", () => {
 });
 ```
 
-- [ ] **Step 2: Run, confirm failure. Step 3: fill the table and the `spillName`, `only`, `firstLine` argument forms. Step 4: run and typecheck.**
+- [ ] **Step 2: Run, confirm failure. Step 3: fill the table. Step 4: run and typecheck.**
 
 - [ ] **Step 5: Commit**
 
@@ -359,8 +372,8 @@ agentToolTrace: presentation rows for every agent tool
 - Test: `lib/agents/agency-agent/tests/` or `brains/*/tests/` (find the existing test that checks trace output, by grepping for `Tool call` or `Tool finished`; update its expectations)
 
 **Interfaces:**
-- Consumes: `_printAgentTrace(event, toolNames)` from Task 3; `_spillSource(name)` from Task 2.
-- Produces: `onToolCallEnd` in `trace.agency` builds `{ kind: "toolEnd", toolName, args: data.args, timeTaken: data.timeTaken, value, outcome, provider, spillSource }` where `spillSource` is `_spillSource(data.args.filename)` when the tool is `readSpill` or `grepSpill`, else null. `_printAgentTrace(..., isDebug())` on every call. `SKIP_TRACING` is deleted; `whatIAmDoing` is a `silent` row (Task 5).
+- Consumes: `_printAgentTrace(event, toolNames)` from Task 3.
+- Produces: `onToolCallEnd` in `trace.agency` builds `{ kind: "toolEnd", toolName, args: data.args, timeTaken: data.timeTaken, value, outcome, provider }`. `_printAgentTrace(..., isDebug())` on every call. `SKIP_TRACING` is deleted; `whatIAmDoing` is a `silent` row (Task 5). No tool name is special-cased here: which tools show a spill source is the table's business.
 
 - [ ] **Step 1: Find and update the existing agent trace test**
 
@@ -370,7 +383,7 @@ Run: `grep -rln "Tool call\|Tool finished" lib/agents tests/agency-js | head`. W
 
 - [ ] **Step 3: Edit `trace.agency`**
 
-Import `_spillSource` from `agency-lang/stdlib-lib/spill.js`. Remove `SKIP_TRACING` and the two early returns. Pass `args`, `timeTaken`, `spillSource`, and `isDebug()` as described. Keep the Result and rejection unwrapping as is.
+Remove `SKIP_TRACING` and the two early returns. Pass `args`, `timeTaken`, and `isDebug()` as described. Keep the Result and rejection unwrapping as is.
 
 - [ ] **Step 4: `make`, typecheck, run the test**
 

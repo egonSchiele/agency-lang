@@ -7,9 +7,12 @@ import {
   outcomeOf,
   safeBash,
   resolveCwd,
+  GREP_FLAGS,
  } from "std::safeBash"
+import test { splitFlags } from "std::safeBash"
+import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
-import { glob } from "std::shell"
+import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
 import { setEnv } from "std::system"
 
@@ -505,4 +508,267 @@ node pipelineRunsThroughBash() {
     return "FAILED: ${why}"
   }
   return result.value
+}
+
+def split(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const result = splitFlags("grep", parsed.value[0], GREP_FLAGS)
+  if (result is failure(why)) {
+    return why
+  }
+  const args = result.value
+  const values = [entry.flag + "=" + entry.value for entry in args.values]
+  return [args.plain, values, args.positionals.length]
+}
+
+node splitGrepFlags() {
+  return [
+    split("grep -rni hello ."),
+    split("grep -A 3 hello ."),
+    split("grep -A3 hello ."),
+    split("grep -e hello ."),
+    split("grep --color=never hello ."),
+    split("grep -nA3 hello ."),
+    split("grep -z hello ."),
+    split("grep -R hello ."),
+    split("grep -e a -e b ."),
+    split("grep \"-R\" hello"),
+    split("grep -A"),
+    split("grep --filter=x hello ."),
+    split("grep --save-config hello ."),
+    split("grep --include=*.ts -rn hello ."),
+    split("grep -e \"-x\" one.txt"),
+    split("grep -n hello one.txt -s"),
+  ]
+}
+
+static const FIXTURES = __dirname + "/stdlib/grep-fixtures"
+
+/** The package directory, whose node_modules exists in every checkout
+ * and whose .gitignore ignores everything inside it. */
+static const PACKAGE_DIR = __dirname + "/../.."
+
+def grepNames(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  const names = [effect.name for effect in plan.effects]
+  return [names, plan.broadReason]
+}
+
+def grepPayloadOf(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::grep") {
+      return effect.payload
+    }
+  }
+  return "NO GREP EFFECT"
+}
+
+node grepThroughBash() {
+  // Not lone (a pipe or a redirect), or a flag the tool lacks: the
+  // command runs through bash, narrow only for one file.
+  return [
+    grepNames("grep -c hello one.txt"),
+    grepNames("grep -A 1 hello one.txt"),
+    grepNames("grep -n \"a+b\" one.txt"),
+    grepNames("grep -n hello one.txt > out.txt"),
+    grepNames("git status && grep -n hello one.txt"),
+  ]
+}
+
+node grepUnrecognized() {
+  return [
+    grepNames("grep hello"),
+    grepNames("git status | grep hello"),
+    grepNames("grep -z hello ."),
+    grepNames("grep -R hello ."),
+    grepNames("grep \"-R\" hello"),
+    grepNames("grep -e a -e b ."),
+    grepNames("grep --filter=x hello ."),
+    grepNames("grep -rn $PAT ."),
+    grepNames("grep -rn hello *.txt"),
+    grepNames("grep -rn hello one.txt two.txt"),
+    grepNames("grep -rn hello --include='*.txt' ."),
+    grepNames("grep -c hello ."),
+    grepNames("git status && grep -rn hello ."),
+    grepNames("rg hello ."),
+    grepNames("git status && grep -n hello one.txt -s"),
+    grepNames("grep -e \"-x\" one.txt"),
+    grepNames("grep --include=*.txt -rn hello ."),
+  ]
+}
+
+node grepMissingPath() {
+  // The detail names an absolute path, which differs per machine, so
+  // only the kind is pinned.
+  const reason = planFor("grep -rn hello missing-dir", FIXTURES).broadReason
+  if (reason == null) {
+    return null
+  }
+  return reason.kind
+}
+
+node grepBashPayload() {
+  const payload = grepPayloadOf("grep -cin hello one.txt")
+  return [payload.pattern, payload.file, payload.ignoreCase, payload.maxResults, payload.flags]
+}
+
+def executionKind(source: string): string {
+  return planFor(source, FIXTURES).execution.kind
+}
+
+node loneGrepIsShellFree() {
+  return [
+    executionKind("grep -rn hello ."),
+    executionKind("grep -rn hello"),
+    executionKind("grep -n hello one.txt"),
+    executionKind("grep -rniwl hello ."),
+    executionKind("grep -rnF \"a+b\" ."),
+    executionKind("grep -rnE \"hello|goodbye\" ."),
+    executionKind("grep -c hello one.txt"),
+    executionKind("grep -n \"a+b\" one.txt"),
+    executionKind("grep hello ."),
+    executionKind("grep -rn hello . | head"),
+    outcomeOf(planFor("grep -rn hello .", FIXTURES)),
+    executionKind("grep -rnw \" world\" ."),
+    executionKind("grep -n hello one.txt -s"),
+  ]
+}
+
+node shellFreePayloads() {
+  const fixed = grepPayloadOf("grep -rnF \"a+b\" .")
+  const dirSearch = grepPayloadOf("grep -rn hello .")
+  const fileSearch = grepPayloadOf("grep -n hello one.txt")
+  return [
+    fixed.pattern,
+    [dirSearch.file, dirSearch.maxResults, dirSearch.flags],
+    [fileSearch.file, fileSearch.dir == dirSearch.dir],
+  ]
+}
+
+/** The output's lines in a fixed order, without safeBash's own note lines.
+ * grep and the tool's walk visit files in different orders. */
+def sortedLines(text: string): string {
+  const lines = text.split("\n")
+  const matches = [line for line in lines if line != "" && !line.startsWith("(safeBash")]
+  return JSON.stringify(matches.sort())
+}
+
+def parityOf(source: string): any {
+  // Without this check, a row whose command fell back to the bash path
+  // would compare real grep with itself and pass for no reason.
+  if (planFor(source, FIXTURES).execution.kind != "grep") {
+    return "NOT SHELL-FREE: ${source}"
+  }
+  let ours = ""
+  let theirs = ""
+  handle {
+    const shellFree = safeBash(source, cwd: FIXTURES)
+    if (shellFree is success(out)) {
+      ours = out
+    }
+    // bash returns an ExecResult, not a Result.
+    const real = bash(source, cwd: FIXTURES)
+    theirs = real.stdout
+  } with approve
+  if (sortedLines(ours) == sortedLines(theirs)) {
+    return true
+  }
+  return [source, ours, theirs]
+}
+
+node shellFreeMatchesRealGrep() {
+  // No row runs `grep -rn hello` with no path: GNU grep prints bare names
+  // there, and BSD grep, macOS's grep, prints `./one.txt`. The rendering
+  // follows GNU, and a grepDialect unit test pins it.
+  return [
+    parityOf("grep -n hello one.txt"),
+    parityOf("grep hello one.txt"),
+    parityOf("grep -rn hello ."),
+    parityOf("grep -rh hello ."),
+    parityOf("grep -rl hello ."),
+    parityOf("grep -rni hello ."),
+    parityOf("grep -rnw hello ."),
+    parityOf("grep -rnv hello ."),
+    parityOf("grep -rnF \"o w\" ."),
+    parityOf("grep -rnE \"hello|goodbye\" ."),
+    parityOf("grep -rn \"^hello\" ."),
+    parityOf("grep -rn 'world$' ."),
+    parityOf("grep -rn \"h.l*o\" ."),
+    parityOf("grep -Hn hello one.txt"),
+    parityOf("grep -n hello one.txt -s"),
+  ]
+}
+
+node loneGrepAsksOneQuestion() {
+  // One std::grep approval, and no shell: a std::bash prompt would fail
+  // the run, because the test file answers only the grep message.
+  const result = safeBash("grep -rn hello .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return [result.value.includes("./one.txt:1:hello world"), result.value.includes("skips node_modules")]
+}
+
+node bashGrepOfOneFile() {
+  // -c has no tool equivalent, so real grep runs after one std::grep approval.
+  const result = safeBash("grep -c hello one.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+node shellFreeNoMatchFails() {
+  const result = safeBash("grep -rn nothing-matches-this .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return [why.includes("\"exitCode\":1"), why.includes("skips node_modules")]
+  }
+  return "UNEXPECTEDLY MATCHED"
+}
+
+node grepUnderRecommendedNeedsNoPrompt() {
+  // The launch directory is the package directory, so the fixtures are
+  // inside it and recommended approves std::grep there. This test has no
+  // interruptHandlers entry, so an unanswered interrupt fails the run.
+  let found = false
+  handle {
+    const result = safeBash("grep -rn hello " + FIXTURES)
+    if (result is success(text)) {
+      found = text.includes("hello again")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node grepOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("grep -rn root /etc", FIXTURES)
+  const effect = plan.effects[0]
+  const intr = { effect: effect.name, data: effect.payload }
+  return checkPolicy(recommendedAutoApprovePolicy, intr).type
+}
+
+node rejectedGrepNamesTheTool() {
+  const result = safeBash("grep -z hello .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node grepOfIgnoredFolder() {
+  // A lone grep of a folder .gitignore reaches into would come back empty
+  // from the tool's search, so it goes to the bash path, which asks
+  // std::bash for a directory.
+  const plan = planFor("grep -rn parseAgency node_modules", PACKAGE_DIR)
+  const names = [effect.name for effect in plan.effects]
+  return [plan.execution.kind, names, plan.broadReason]
 }

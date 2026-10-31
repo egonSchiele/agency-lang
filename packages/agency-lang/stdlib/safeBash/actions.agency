@@ -16,7 +16,8 @@ import { WriteMode } from "std::index"
 import { keepOutput } from "std::spill"
 
 import { _write } from "agency-lang/stdlib-lib/builtins.js"
-import { _bash } from "agency-lang/stdlib-lib/shell.js"
+import { _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
+import { _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 
 /** One interrupt a command needs raised before it may run.
  *
@@ -29,6 +30,7 @@ export type Effect =
   | { name: "std::git::status"; payload: { cwd: string } }
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
+  | { name: "std::grep"; payload: GrepPayload }
 
 export type WritePayload = {
   dir: string;
@@ -56,6 +58,26 @@ export def writeExecution(write: WritePayload): WriteExec {
   }
 }
 
+/** The fields the grep tool's own std::grep interrupt carries. */
+export type GrepPayload = {
+  pattern: string;
+  dir: string;
+  file: string | null;
+  flags: string;
+  maxResults: number;
+  ignoreCase: boolean;
+  wholeWord: boolean;
+  filesOnly: boolean;
+  invert: boolean
+}
+
+export def grepEffect(payload: GrepPayload): Effect {
+  return {
+    name: "std::grep",
+    payload: payload
+  }
+}
+
 export type GitDiffPayload = {
   cwd: string;
   ref: string;
@@ -70,7 +92,7 @@ export type GitDiffPayload = {
  * fields that way needs. The dispatch in `safeBash` matches over this
  * union exhaustively, so adding a variant is a type error at the dispatch
  * rather than a silent fall-through. */
-export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec
+export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec
 
 export type BashExec = {
   kind: "bash";
@@ -94,6 +116,43 @@ export type WriteExec = {
   dir: string;
   content: string;
   mode: WriteMode
+}
+
+/** Whether grep prints file names: `-H` gives "always", `-h` gives
+ * "never", neither gives "default". */
+export type GrepFileNames = "default" | "always" | "never"
+
+/** What a grep command said about printing. The rules that turn this
+ * into grep's output live in `_renderGrepOutput`
+ * (lib/stdlib/grepDialect.ts), whose type of the same name must keep
+ * these fields. */
+export type GrepRender = {
+  /** `-n` was given. */
+  lineNumbers: boolean;
+  fileNames: GrepFileNames;
+  /** The path as bash hands it to grep, or "" when none was written. */
+  argument: string;
+  /** The path names one file, not a directory. */
+  oneFile: boolean
+}
+
+/** A lone grep, run through the grep tool's own search with no shell.
+ * The search reads only what `payload` says, so the approval means what
+ * the grep tool's approval means. */
+export type GrepExec = {
+  kind: "grep";
+  payload: GrepPayload;
+  render: GrepRender
+}
+
+/** Both plan sides derive from one GrepPayload, so the question asked and
+ * the search run cannot disagree. */
+export def grepExecution(payload: GrepPayload, render: GrepRender): GrepExec {
+  return {
+    kind: "grep",
+    payload: payload,
+    render: render
+  }
 }
 
 export type RefuseExec = {
@@ -158,20 +217,73 @@ export def runBash(command: string, cwd: string, source: string = ""): Result<st
   // `source` is the command as the user typed it, which can differ from
   // the narrowed text this function ran; the trace names the original.
   const label = if (source == "") then command else source
-  const out = keepOutput(result.stdout, result.exitCode, label)
   if (result.exitCode != 0) {
-    return failure(
-      JSON.stringify(
-      {
-      command: command,
-      exitCode: result.exitCode,
-      stderr: keepOutput(result.stderr, result.exitCode, label),
-      stdout: out
-    },
-    ),
-    )
+    return exitFailure(command, result.exitCode, result.stdout, result.stderr, label)
   }
-  return success(out)
+  return success(keepOutput(result.stdout, result.exitCode, label))
+}
+
+/** The failure a command with a non-zero exit returns: its exit code and
+ * both streams, each long one saved and previewed. */
+def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string): Result<string> {
+  const out = keepOutput(stdout, exitCode, label)
+  return failure(
+    JSON.stringify(
+    {
+    command: command,
+    exitCode: exitCode,
+    stderr: keepOutput(stderr, exitCode, label),
+    stdout: out
+  },
+  ),
+  )
+}
+
+@capabilities(fileRead)
+export def runGrep(exec: GrepExec, command: string): Result<string> {
+  """
+  Run a lone grep through the grep tool's own search and print what grep
+  would print. No match is the failure grep's exit code 1 would give.
+  """
+  // `_grep`, NOT `grep`, for the reason `runBash` gives: the `grep` tool
+  // raises its own std::grep, and the caller already raised one carrying
+  // this same payload. The only path here runs through `raiseAll`.
+  const payload = exec.payload
+  const query = {
+    pattern: payload.pattern,
+    flags: payload.flags,
+    ignoreCase: payload.ignoreCase,
+    wholeWord: payload.wholeWord,
+    filesOnly: payload.filesOnly,
+    invert: payload.invert
+  }
+  const found = try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
+  if (isFailure(found)) {
+    return found
+  }
+  const results: any[] = found.value
+  const notes = grepNotes(payload, results.length)
+  if (results.length == 0) {
+    return exitFailure(command, 1, "", notes, command)
+  }
+  const printed = _renderGrepOutput(results, exec.render)
+  if (notes == "") {
+    return success(keepOutput(printed, 0, command))
+  }
+  return success(keepOutput(printed + notes + "\n", 0, command))
+}
+
+/** The lines safeBash adds to a shell-free grep's output: which folders
+ * the search skipped, and where it stopped. */
+def grepNotes(payload: GrepPayload, found: number): string {
+  let notes: string[] = []
+  if (payload.file == null) {
+    notes.push(_skippedDirsNote())
+  }
+  if (found >= payload.maxResults) {
+    notes.push("(safeBash stopped after ${payload.maxResults} matches. Narrow the pattern or the path.)")
+  }
+  return notes.join("\n")
 }
 
 @capabilities(fileRead, fileWrite)

@@ -12,6 +12,7 @@ import { abortableShell, abortableSpawn, AbortableSpawnOptions, SpawnResult } fr
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
+import { expandTilde, resolveAgainstCwd, type TildeMode } from "./prepareContainedPath.js";
 import {
   type GitignoreFile,
   isIgnored,
@@ -362,7 +363,7 @@ export type GrepMatch = {
   text: string;
 };
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache"]);
+export const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache"]);
 
 type Visitor = (rel: string, entry: Entry) => Promise<boolean>;
 
@@ -499,6 +500,24 @@ export async function _searchTarget(
     return { dir: path.dirname(real), file: path.basename(real) };
   }
   throw new Error(`"${real}" is a file, not a directory. ${FILE_INSTEAD[tool]}`);
+}
+
+/** A grep path resolved for safeBash. `argument` is the path as bash
+ *  hands it to grep, with `~` expanded. grep prints file names starting
+ *  from it, so the shell-free path renders names from it too. */
+export type GrepTarget = { dir: string; file: string | null; argument: string };
+
+/** `_searchTarget` for a path in a safeBash command, which is relative to
+ *  safeBash's cwd rather than the run's, and whose `~` bash expands only
+ *  when the word was unquoted. */
+export async function _searchTargetIn(
+  given: string,
+  cwd: string,
+  tildeMode: TildeMode,
+): Promise<GrepTarget> {
+  const absolute = resolveAgainstCwd(given, cwd, tildeMode, "grep");
+  const target = await _searchTarget(absolute, "grep");
+  return { dir: target.dir, file: target.file, argument: expandTilde(given, tildeMode) };
 }
 
 /** What a tool that needs a directory tells the model to do with a file. */
@@ -644,7 +663,7 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp("^" + result.result + "$");
 }
 
-function escapeRegex(s: string): string {
+export function escapeRegex(s: string): string {
   return s.replace(/[.+()|^$\[\]{}\\*?]/g, "\\$&");
 }
 

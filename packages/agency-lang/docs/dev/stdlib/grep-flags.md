@@ -88,6 +88,15 @@ parents; not `.git/info/exclude` or the global excludes. The
 `respectGitignore` parameter is true by default, and the agent toolkits
 lock it with partial application so the model cannot turn it off.
 
+## A bash grep through safeBash
+
+safeBash runs a lone bash `grep` through this tool's search instead of
+the grep program, when its flags and pattern translate exactly.
+`lib/stdlib/grepDialect.ts` holds that translation and grep's output
+format. A grep pattern goes into `pattern` only when every character
+means the same thing to grep and to a JavaScript regex, so the rule
+table above is not involved. See `docs/dev/stdlib/safe-bash.md`, "grep".
+
 ## Tests
 
 - `lib/stdlib/grepQuery.test.ts` covers the rule table and messages.

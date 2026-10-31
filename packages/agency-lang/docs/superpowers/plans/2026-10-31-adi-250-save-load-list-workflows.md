@@ -24,13 +24,20 @@
 ## Global Constraints
 
 - Public signatures exactly as the spec's "Public API": `writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<WorkflowEntry>`, `loadWorkflow(name: string, dir: string): Result<WorkflowEntry>`, `listWorkflows(dir: string): Result<WorkflowEntry[]>`. `dir` has no default: an empty string is refused with a message naming the parameter.
-- Effects exactly as the spec: `std::workflow::scan { dir: string }` and `std::workflow::save { dir: string; name: string; workflow: Workflow }`, both `@alwaysUnder(dir)`. `dir` in each payload is the real spelling of the workflows directory (`_realDir`), never the text the caller passed.
+- Effects as the spec declares them: `std::workflow::scan { dir: string }` and `std::workflow::save { dir: string; name: string; workflow: Workflow }`, both `@alwaysUnder(dir)`, and `save` also `@always(name)` (decision 2 above). `dir` in each payload is the real spelling of the workflows directory (`_realDir`), never the text the caller passed.
 - `save` is raised once per `writeWorkflow` call, after the check and before the first write. A rejection writes nothing and fails the call. A workflow that fails its check raises no prompt at all.
 - The folder layout is `<dir>/<name>/workflow.json` and `<dir>/<name>/meta.json`, with `name` the workflow's own `name` field (decision 23). Both files are written with `JSON.stringify(value, null, 2)`.
 - `meta.json` fields follow the toolbox's names: `createdAt` (ISO text from `format(now())`), and `createdBy`. `inputsSchema` is added by ADI-251, not here.
 - `writeWorkflow` returns the entry it wrote without reading the directory back, so it raises no `scan`.
-- After a `scan` approval, every read that fulfils it uses a non-interrupt primitive: `_glob` for the listing, `_read` for the files. `listWorkflows` raises `scan` and nothing else.
+- After a `scan` approval, every read that fulfils it uses a non-interrupt primitive: `_glob` for the listing, `_read` for the files. `listWorkflows` raises `scan` and nothing else. `_glob` does not read `.gitignore` files unless asked (`walkDir`'s `respectGitignore` option), and `listWorkflows` does not ask.
 - No new code under `lib/runtime/`. The one TypeScript change is an export from `lib/stdlib/workflow/`.
+
+## Two decisions for the owner
+
+The plan review raised these. The plan proceeds on the answer given here; say the word and it changes.
+
+1. **`dir` is both where workflows are saved and the directory a local tool's module path is relative to.** `_checked(workflow, tools, root)` hands `root` to `_toolRefs`, which writes each local tool's import relative to it and refuses a tool whose file is outside it (`lib/stdlib/workflow/tools.ts:56-64`, `120-129`). The spec says the same directory does both jobs ("Tools and modules", "Saving a workflow"), so this plan follows it: a project's workflows are saved as subfolders inside the project, beside the tool modules, and `listWorkflows` on the project directory finds them. Every test here uses `std::math` tools, so nothing in the tests shows this. The docstrings and the dev doc say it plainly ("the project directory: workflows are saved under it, and a local tool's file must be under it too"). If the owner wants a dedicated workflows directory instead, `writeWorkflow` needs a second directory argument for the modules, and `meta.json` must record it so a loaded workflow can be checked again. That is a spec change.
+2. **`std::workflow::save` carries `@always(name)` as well as `@alwaysUnder(dir)`.** Saving over an existing name overwrites it (call 1 below), and with only a directory pin a model calling `writeWorkflow` as a tool could replace any saved workflow in that directory with no prompt. Pinning the name too makes an "always" answer mean "this workflow, in this directory", the pin `std::workflow::run` already has. The other way, refusing an existing name and leaving replacement to the TUI, is a one-line change to `writeWorkflow` and the `saveTwiceOverwrites` test if the owner prefers it.
 
 ## Calls I made
 
@@ -126,6 +133,7 @@ effect std::workflow::scan {
 }
 
 @alwaysUnder(dir)
+@always(name)
 effect std::workflow::save {
   dir: string;
   name: string;
@@ -144,10 +152,11 @@ export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<
 In `lib/typeChecker/alwaysTag.stdlib.test.ts`, beside the `std::workflow::run` row:
 
 ```ts
-  // A directory of saved workflows: reading it and writing into it both
-  // pin the directory.
+  // A directory of saved workflows: reading it pins the directory. Saving
+  // pins the workflow's name too, since a save replaces a workflow of
+  // that name, so "always" means this workflow in this directory.
   "std::workflow::scan": ["dir/**"],
-  "std::workflow::save": ["dir/**"],
+  "std::workflow::save": ["name", "dir/**"],
 ```
 
 Run: `pnpm test:run lib/typeChecker/alwaysTag.stdlib.test.ts > /tmp/adi250-t2a.log 2>&1; tail -15 /tmp/adi250-t2a.log`
@@ -310,7 +319,7 @@ node emptyDirIsRefused(): boolean {
 | `saveTwiceOverwrites` | `[true,"Second save.",1]` |
 | `emptyDirIsRefused` | `true` |
 
-`saveThenLoadAndList` and `saveTwiceOverwrites` need `loadWorkflow` and `listWorkflows` from Task 3. Write all the nodes now, and expect those two to fail until Task 3 lands. The `effectsInOrder` expectation changes in ADI-251, when the schema subprocess adds `std::run` after the save.
+`saveThenLoadAndList` and `saveTwiceOverwrites` need `loadWorkflow` and `listWorkflows` from Task 3, and the file imports both, so it does not compile until the names exist. Task 2 Step 4 adds them as stubs; Task 3 replaces the stubs. The `effectsInOrder` expectation changes in ADI-251, when the schema subprocess adds `std::run` after the save.
 
 - [ ] **Step 3: Run it to verify it fails**
 
@@ -319,7 +328,7 @@ Expected: compile error, `writeWorkflow` is not exported.
 
 - [ ] **Step 4: Implement `writeWorkflow`**
 
-In `stdlib/workflow.agency`, add the imports (`now`, `format` from `std::date`; `exists`, `ls` from `std::shell`; `_read`, `_write` from `agency-lang/stdlib-lib/builtins.js`; `_realDir`, `_mkdir` from `agency-lang/stdlib-lib/fs.js`; `_workflowNameProblem` from the workflow index), the constants, the two types, and the two effects with a comment above each saying what it gates and why `dir` is the real spelling. Then:
+In `stdlib/workflow.agency`, add the imports (`now`, `format` from `std::date`; `exists` from `std::shell`; `filterEntries` from `std::object`; `_glob` from `agency-lang/stdlib-lib/shell.js`; `_read`, `_write` from `agency-lang/stdlib-lib/builtins.js`; `_realDir`, `_mkdir` from `agency-lang/stdlib-lib/fs.js`; `_workflowNameProblem` from the workflow index), the constants, the two types, and the two effects with a comment above each saying what it gates and why `dir` is the real spelling. Then:
 
 ```
 // Every entry point takes the workflows directory the same way. An empty
@@ -337,11 +346,11 @@ def expandRoot(dir: string): Result<string> {
 @capabilities(fileRead, fileWrite)
 export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<WorkflowEntry> {
   """
-  Save a workflow into a directory, as `<dir>/<name>/workflow.json` and `meta.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
+  Save a workflow into a project directory, as `<dir>/<name>/workflow.json` and `meta.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
 
   @param workflow - The workflow to save. Its `name` names the folder
   @param tools - The functions the workflow may call, for the check
-  @param dir - The workflows directory
+  @param dir - The project directory: the workflow is saved under it, and a local tool's file must be under it too, since the saved workflow imports the tool by a path relative to it
   """
   ...
 }
@@ -351,10 +360,12 @@ The body in order: `expandRoot`; `_checked(workflow, tools, root)`, returning it
 
 The writes after the prompt go in a `destructive { }` region, as `writeToolFile` in the toolbox does, so a retry after the first write cannot be mistaken for a fresh call.
 
+Also add the two Task 3 exports as stubs, each returning `failure("not built")` with the Task 3 signature and no docstring yet, so `save.agency` compiles. Task 3 replaces them.
+
 - [ ] **Step 5: Build, run, and check**
 
 Run: `make > /tmp/adi250-make.log 2>&1; pnpm test:run lib/typeChecker/alwaysTag.stdlib.test.ts > /tmp/adi250-t2a.log 2>&1; pnpm run agency test tests/agency/workflow/save.test.json > /tmp/adi250-t2.log 2>&1; tail -40 /tmp/adi250-t2.log`
-Expected: the `alwaysTag` test passes; `savePayload`, `effectsInOrder`, `badWorkflowAsksNothingAndWritesNothing`, `rejectedSaveWritesNothing`, and `emptyDirIsRefused` pass; the two that load or list fail to compile until Task 3. If the whole file refuses to compile because `loadWorkflow` does not exist, add the two export stubs from Task 3's Interfaces block returning `failure("not built")` and replace them in Task 3.
+Expected: the `alwaysTag` test passes; `savePayload`, `effectsInOrder`, `badWorkflowAsksNothingAndWritesNothing`, `rejectedSaveWritesNothing`, and `emptyDirIsRefused` pass; `saveThenLoadAndList` and `saveTwiceOverwrites` fail on the stubs until Task 3.
 
 - [ ] **Step 6: Commit**
 
@@ -420,6 +431,9 @@ node notAWorkflowFailsToLoadAndList(): Json {
   return [isFailure(loaded), isFailure(listed), errorOf(listed) =~ re/notAWorkflow/]
 }
 
+// Compares against resolve(OUT), which equals _realDir(OUT) only when no
+// path segment is a symlink. run.agency relies on the same thing for the
+// run payload.
 node scanPayloadIsTheWorkflowFolder(): Json {
   cleanup("scanned")
   runSave(doubleSum("scanned"))
@@ -455,8 +469,8 @@ Follow `metaFacts`, `entryFor`, `isToolDir`, `toolNames`, and `listTools` in `st
 
 - `readJsonFile(root: string, path: string): Result<Json>`: `_read`, then `try JSON.parse`, each failure naming the file. Used for both files.
 - `entryFor(root, name)`: `workflow.json` is required; read it and check `const file: Workflow! = parsed`. `meta.json` is optional: missing means `DEFAULT_META` (`createdAt: ""`, `createdBy: ""`), present and wrong means a failure. Validation fills a missing optional field with null, and null would win over the default in a spread, so keep only the present fields with `filterEntries(file.value, isPresent)` from `std::object`, where `isPresent(value: Json, key: string): boolean` is `value != null` (a named def, as `tests/agency/stdlib/object-filterEntries.agency` passes one), and spread that over `DEFAULT_META`. Every failure message from `entryFor` starts with the workflow's name, so a caller can return it as it is.
-- `loadWorkflow(name, dir)`: `_workflowNameProblem(name)` first, failing with its message and raising nothing; then `expandRoot`; then `if (!exists(name, root))` fail with `"no workflow named ${name} in ${root}"`; then `interrupt std::workflow::scan("Read the saved workflow ${name}?", { dir: "${root}/${name}" })`; then `entryFor`.
-- `listWorkflows(dir)`: `expandRoot`; a root that does not exist is `success([])`; `interrupt std::workflow::scan(..., { dir: root })`; then `try _glob(root, "", "*/${WORKFLOW_FILE}", MAX_WORKFLOWS + 1)`, which finds exactly the folders that hold a workflow file (no directory-type or dot-folder filter is needed), and the too-many check as `toolNames` does it. The folder name is the path's first segment: `map(paths, \path -> path.split("/")[0])`. Then `const entries = map(names, \name -> entryFor(root, name))`, `const broken = find(entries, \entry -> isFailure(entry))`, return `broken` if it is not null, otherwise `success(map(entries, \entry -> entry.value))`.
+- `loadWorkflow(name, dir)`: `_workflowNameProblem(name)` first, failing with its message and raising nothing; then `expandRoot`; then `if (!exists(name, root))` fail with `"no workflow named ${name} in ${root}"`; then `interrupt std::workflow::scan("Read the saved workflow ${name}?", { dir: "${root}/${name}" })`; then `entryFor`. Put a comment on the `exists` check: it runs before the prompt so a missing workflow fails with a message instead of asking first, the one check `ls`, `grep`, and `glob` make before their interrupt (`docs/dev/stdlib/grep-flags.md`).
+- `listWorkflows(dir)`: `expandRoot`; a root that does not exist is `success([])`; `interrupt std::workflow::scan(..., { dir: root })`; then `try _glob(root, ".", "*/${WORKFLOW_FILE}", MAX_WORKFLOWS + 1)` (`"."` is how `_glob` spells the root itself; `relativeTo` in `lib/stdlib/shell.ts:299` special-cases it), which finds exactly the folders that hold a workflow file, and the too-many check as `toolNames` does it. The folder name is the path's first segment: `map(paths, \path -> path.split("/")[0])`. A glob `*` compiles to `[^/]*` (`shell.ts:651`), which matches a dot-led name, so keep `filter(names, \name -> !name.startsWith("."))`, as `isToolDir` does. Then `const entries = map(names, \name -> entryFor(root, name))`, `const broken = find(entries, \entry -> isFailure(entry))`, return `broken` if it is not null, otherwise `success(map(entries, \entry -> entry.value))`.
 - Both carry `@capabilities(fileRead)` and docstrings saying they raise one `std::workflow::scan` prompt and nothing else.
 
 - [ ] **Step 4: Build, run, check**
@@ -483,7 +497,7 @@ Commit message: `std::workflow: loadWorkflow, listWorkflows, and the scan effect
 - Modify: `CLAUDE.md` (the `workflow.md` line in the docs index) and `.claude/skills/agency-stdlib-docs/SKILL.md` (the same line)
 - Modify: `docs/site/stdlib/workflow.md` is regenerated by `make`; do not edit it.
 
-- [ ] **Step 1: Add a section "Saving and loading" to the dev doc**, after "Running a workflow". Mechanism and rule only: the folder layout; why the directory is realpathed once and both prompts carry that spelling; the order in `writeWorkflow` (check, ask, write) and why the check comes first; why the name needs no check on save and one on load; the overwrite rule; why the listing uses `_glob` after one `scan` prompt, as `std::skills` does, rather than the toolbox's second `std::ls` prompt; what `listWorkflows` does with a folder it cannot read; and that `meta.json` is optional on read.
+- [ ] **Step 1: Add a section "Saving and loading" to the dev doc**, after "Running a workflow". Mechanism and rule only: the folder layout; that `dir` is the project directory, doing both jobs, and what follows for where workflows live; why `save` pins the name as well as the directory; why the directory is realpathed once and both prompts carry that spelling; the order in `writeWorkflow` (check, ask, write) and why the check comes first; why the name needs no check on save and one on load; the overwrite rule; why the listing uses `_glob` after one `scan` prompt, as `std::skills` does, rather than the toolbox's second `std::ls` prompt; what `listWorkflows` does with a folder it cannot read; and that `meta.json` is optional on read.
 - [ ] **Step 2: Fix the paragraph under "Running a workflow"** that says the `@always(name)` rule means "this workflow by name" only once workflows are loaded by name, "which the spec leaves to part 3". Now that `loadWorkflow` exists, say that a workflow loaded with `loadWorkflow` has the name of its folder, and one the caller built still has whatever name it was given.
 - [ ] **Step 3: Update "Not built yet"** to list `workflowTool`, `workflowTools`, `catalog`, and the inputs schema in `meta.json`.
 - [ ] **Step 4: Update the index line** in `CLAUDE.md` and the skill file to mention saving and loading, the two effects, and the overwrite rule.
@@ -509,4 +523,5 @@ Commit message: `docs: saving and loading workflows`.
 - Spec coverage: "Saving a workflow" (layout, `writeWorkflow` runs the full check, the two effects with `@alwaysUnder(dir)`, `save` raised once before anything is written) and the three "Public API" signatures are all in Tasks 2 and 3. The inputs schema in `meta.json` is ADI-251.
 - Ticket tests: round trip (`saveThenLoadAndList`), failed check writes nothing and asks nothing (`badWorkflowAsksNothingAndWritesNothing`), rejected save writes nothing (`rejectedSaveWritesNothing`), `alwaysTag` rows (Task 2, Step 1).
 - Type consistency: `WorkflowEntry.dir` is the workflow's folder in both `writeWorkflow` and `entryFor`; `entryFor` returns a `Result` in Task 3 and ADI-251 keeps that.
+- Found in review, not fixed here: `_checked` rebuilds a failed local-module read with `_workflowFailure(signatures.error)` (`stdlib/workflow.agency:152-155`), which drops the failure's `rejected` flag, so a rejected `std::read` reads to the model as an ordinary error (PR #1318 explains the flag). `writeWorkflow` inherits it. It is a one-line change to an existing function, filed as its own Linear ticket under the Workflows project rather than folded in here.
 - `expandRoot` is three lines that `stdlib/toolbox.agency` also has. Lifting it into a module both import would touch the toolbox, which this ticket leaves alone; worth a small follow-up once `std::skills` (which has the same `_realDir` step four times) is in the same change.

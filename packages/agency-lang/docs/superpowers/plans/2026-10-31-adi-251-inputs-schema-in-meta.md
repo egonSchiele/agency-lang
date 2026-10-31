@@ -18,6 +18,20 @@
 - **What ADI-250 built.** `writeWorkflow` is check, ask, write. `_checked` returns `{ program, warnings, wallClock }`, and `program` is the `CompiledProgram` handle `run` takes. `entryFor` reads `meta.json` through `MetaFile`, with `presentFields` over `DEFAULT_META`.
 - **Build and run.** `make` after editing the stdlib. `pnpm run agency test tests/agency/workflow/save.test.json > /tmp/adi251.log 2>&1`, then read the file.
 
+## What `schema()` gives for an optional field
+
+Checked on a current build during plan review: `schema(T).toJSONSchema()` for `type T = { a: number; b?: number }` is
+
+```json
+{"type":"object",
+ "properties":{"a":{"type":"number"},
+               "b":{"default":null,"anyOf":[{"type":"number"},{"type":"null"}]}},
+ "required":["a","b"],
+ "additionalProperties":false}
+```
+
+An optional field becomes a required key that may be null. That is how Agency compiles `?`, and this ticket records what the compiler gives, so a model calling the tool `workflowTool` builds (ADI-254) must send `b: null` to leave `b` out. Whether "required but nullable" is the contract the owner wants is a question for ADI-254, noted on the Linear ticket; changing it is a compiler change, not this ticket.
+
 ## Global Constraints
 
 - `WorkflowMeta.inputsSchema: Json | null`, the field name matching the node that produced it. `DEFAULT_META.inputsSchema` is `null`.
@@ -30,7 +44,7 @@
 
 1. A `meta.json` saved before this change (no `inputsSchema` key) loads with `inputsSchema: null` and `listWorkflows` does not fail on it. (Task 1)
 2. A rejected `std::run` leaves no folder behind. (Task 1)
-3. An `inputs` type with an optional field, `{ a: number; b?: string }`: `required` is `["a"]` only. (Task 1)
+3. An `inputs` type with an optional field: the stored schema is what the compiler gives, a required key with a `null` member in its `anyOf`. (Task 1)
 
 ---
 
@@ -65,13 +79,14 @@ export def _inputsSchema(program: CompiledProgram): Result<Json>
 Append to `save.agency`. `doubleSum` reads `inputs.a` and `inputs.b`, so a second builder with its own `inputs` type is simpler than patching it:
 
 ```
-/** One `add` step over typed inputs with an optional field. */
+/** One `add` step over typed inputs: the ticket's `noteTitle`, which no
+  step reads (an unread input is allowed), and an optional field. */
 def typedInputs(name: string): Workflow {
   return {
     format: 1,
     name: name,
-    description: "Add a to b.",
-    inputs: "{ a: number; b?: number }",
+    description: "Add one to a.",
+    inputs: "{ noteTitle: string; a: number; b?: number }",
     steps: [
       { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: 1 } }
     ]
@@ -87,9 +102,11 @@ node savedMetaHasInputsSchema(): Json {
     return ["failed", errorOf(saved), errorOf(loaded)]
   }
   const schema = loaded.value.meta.inputsSchema
+  const nullable = some(schema.properties.b.anyOf, \member -> member.type == "null")
   return [
+    schema.properties.noteTitle.type,
     schema.properties.a.type,
-    schema.properties.b.type,
+    nullable,
     schema.required,
     saved.value.meta.inputsSchema.required
   ]
@@ -127,13 +144,11 @@ Cases in `save.test.json`:
 
 | node | expectedOutput |
 |---|---|
-| `savedMetaHasInputsSchema` | `["number","number",["a"],["a"]]` |
+| `savedMetaHasInputsSchema` | `["string","number",true,["noteTitle","a","b"],["noteTitle","a","b"]]` |
 | `olderMetaLoadsWithNullSchema` | `[null,"writeWorkflow"]` |
 | `rejectedRunWritesNothing` | `[true,false,["std::workflow::save","std::run"]]` |
 
 And change the existing `effectsInOrder` expectation to `["std::workflow::save","std::run"]`.
-
-If the `b` property's schema comes out as a union with `null` rather than `{ "type": "number" }`, read the actual output in the log and pin what `toJSONSchema()` gives for an optional field. The point of the test is `required`.
 
 Note `olderMetaLoadsWithNullSchema` also exercises `listWorkflows` indirectly: the `notAWorkflow` fixture from ADI-250 sits in the same `fixtures/saved` directory, so `notAWorkflowFailsToLoadAndList` still fails on that folder and the `olderOne` folder must load cleanly on its own.
 
@@ -146,7 +161,7 @@ Expected: the three new cases and `effectsInOrder` fail.
 
 In `stdlib/workflow.agency`:
 
-- Add `inputsSchema: Json | null` to `WorkflowMeta` with a doc comment: the JSON Schema of the workflow's `inputs` type, as the program's own `inputsSchema` node reported it at save time; null for a workflow saved before schemas were recorded. Add `inputsSchema?: Json` to `MetaFile` and `inputsSchema: null` to `DEFAULT_META`.
+- Add `inputsSchema: Json | null` to `WorkflowMeta` with a doc comment: the JSON Schema of the workflow's `inputs` type, as the program's own `inputsSchema` node reported it at save time; null for a workflow saved before schemas were recorded. `Json` is `any`, so the `| null` is for the reader and the shape check does not inspect the schema; a `meta.json` with garbage there passes the load and is refused by `z.fromJSONSchema` when `workflowTool` uses it. Add `inputsSchema?: Json` to `MetaFile` and `inputsSchema: null` to `DEFAULT_META`.
 - Add `_inputsSchema(program)`:
 
 ```
@@ -187,7 +202,7 @@ Commit message: `std::workflow: store the inputs schema in meta.json at save tim
 - Modify: `docs/dev/stdlib/workflow.md`, the "Saving and loading" section from ADI-250
 - Modify: the `workflow.md` index line in `CLAUDE.md` and `.claude/skills/agency-stdlib-docs/SKILL.md`
 
-- [ ] **Step 1: Add a paragraph** to "Saving and loading": why the schema is computed at save time and not when the tool list is built (decision 24), the order of the two prompts, why the child runs with `run`'s default limits, and the `null` rule for an older `meta.json`. Remove "the inputs schema in `meta.json`" from "Not built yet".
+- [ ] **Step 1: Add a paragraph** to "Saving and loading": why the schema is computed at save time and not when the tool list is built (decision 24), the order of the two prompts, why the child runs with `run`'s default limits, the `null` rule for an older `meta.json`, that the shape check does not inspect the schema and where a bad one is refused, and what the compiler gives for an optional input (required, nullable) with what that means for a model calling the tool. Remove "the inputs schema in `meta.json`" from "Not built yet".
 - [ ] **Step 2: Extend the index line** with "the inputs schema computed at save time".
 - [ ] **Step 3: Commit**
 
@@ -208,6 +223,6 @@ Commit message: `docs: the inputs schema in meta.json`.
 
 ## Self-review notes
 
-- Ticket tests: schema names `noteTitle` as a string. The plan's workflow uses `a: number` and `b?: number` because `std::math`'s `add` takes numbers and the test must not read a local module; the assertion is the same shape. If the owner wants the ticket's exact field, `typedInputs` can carry an unused `noteTitle: string` input, since an input that no step reads is allowed.
+- Ticket tests: the schema names `noteTitle` as a string. `typedInputs` carries it as an unread input beside the `a` that `add` consumes, so the test needs no local module.
 - `_inputsSchema` is `@hidden` and exported so `workflowTool` (ADI-254) can call it for a workflow that was never saved, which the spec allows ("For a saved workflow it is read from `meta.json`").
 - The test for a `std::run` rejection pins that the save prompt comes first: a person who says no to the save never sees a `std::run` prompt, and one who says yes to the save and no to the run has nothing on disk.

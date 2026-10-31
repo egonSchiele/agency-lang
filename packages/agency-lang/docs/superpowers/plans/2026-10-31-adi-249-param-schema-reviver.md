@@ -15,15 +15,16 @@
 - **What a function value is.** Every Agency `def` compiles to an `AgencyFunction` (`lib/runtime/agencyFunction.ts`). It carries the function's name, module, parameters, and a `toolDefinition` with the description and the zod schema a model sees when the function is offered as a tool. A function value is immutable: `.partial()`, `.rename()`, `.describe()`, `.preapprove()`, and `.withParamSchema()` each return a copy. Every copy is made by `derive()`, which spreads `options()` under the change, so a field added to `options()` is carried by every derivation for free (`lib/runtime/agencyFunction.ts:210-231`).
 - **What `.withParamSchema` does.** `withParamSchema(name, jsonSchema)` (`lib/runtime/agencyFunction.ts:458-468`) replaces one unbound parameter's entry in the tool definition's zod object with `z.fromJSONSchema(jsonSchema)`. It is how a saved toolbox tool shows the model its `request` type (`lib/agents/agency-agent/lib/learned.agency:78`) and how `workflowTool` will show a workflow's typed inputs instead of `inputs: any JSON value`.
 - **How a function value is checkpointed.** A checkpoint is the program's serialized state (`docs/dev/runtime/checkpointing.md`). A function value in that state is written by `FunctionRefReviver.serialize` (`lib/runtime/revivers/functionRefReviver.ts:23-49`) as a small record: name, module, the registered name if renamed, the parameters if any are bound, the tool description, and the preapproved flag. `revive` looks the function up in the registry by its registered name and re-applies each of those: `rename`, then `partial`, then `describe`, then `preapprove` (`functionRefReviver.ts:55-115`). The schema set by `.withParamSchema` is not in the record, so a revived function has the schema its declaration gave it.
-- **The miss stub.** When the registry does not have the function, because the process holding the checkpoint never loaded its module, `revive` builds a stub that throws when invoked but re-serializes to the same record (`makeUnresolvedFunctionStub`, `functionRefReviver.ts:240-270`). Its comment says: every field `serialize` writes must be rebuilt here and covered by the round-trip tests. This plan adds one.
+- **The miss stub.** When the registry does not have the function, because the process holding the checkpoint never loaded its module, `revive` builds a stub that throws when invoked but re-serializes to the same record (`makeUnresolvedFunctionStub`, `functionRefReviver.ts:290-316`). Its comment (lines 285-289) says: every field `serialize` writes must be rebuilt here and covered by the round-trip tests. This plan adds one.
 - **`.partial()` and the schema.** `partial` builds a reduced zod schema that keeps the shape entries of the unbound parameters (`buildReducedSchema`, `agencyFunction.ts:711-722`), so a schema set with `.withParamSchema` survives a later `.partial()` of a different parameter. The new record must match: a bound parameter's entry is dropped, so that `revive`, which applies `partial` before `withParamSchema`, never calls `withParamSchema` on a bound parameter, which throws.
+- **The test helper for a round trip.** `functionRefReviver.test.ts:60-70` has `roundTripFunction(tool, registry)`, which points the module reviver at `registry`, serializes and revives through `JSON.stringify` and `JSON.parse`, and restores the previous registry in a `finally`. Use it, so a failing assertion never leaves the reviver pointed at a dead registry for the tests after it.
 - **Running the tests.** `pnpm test:run lib/runtime/agencyFunction.test.ts lib/runtime/revivers/functionRefReviver.test.ts > /tmp/adi249.log 2>&1`. Save the output to a file and read it, as CLAUDE.md asks. Then `pnpm run typecheck` and `pnpm run fmt:ts`.
 
 ## Global Constraints
 
 - `paramSchemas` holds the JSON Schema values exactly as `.withParamSchema` received them. It never holds zod values: zod does not serialize.
 - A function with no `.withParamSchema` call serializes exactly as it does today. `serialize` writes `paramSchemas` only when the record has at least one entry, so no existing checkpoint fixture changes.
-- `serialize(revive(x))` equals `x` for every record, including a registry miss.
+- `serialize(revive(x))` equals `x` for every record, including a registry miss, with or without a tool description, and for a function whose schemas were all dropped by binding (no `paramSchemas` key either side).
 - No change to what the model sees for a function that is never checkpointed: `.withParamSchema` builds the zod object the same way it does now.
 
 ## Review Focus
@@ -126,7 +127,7 @@ Commit message in the file: `AgencyFunction: remember the JSON Schema each withP
 
 - [ ] **Step 1: Write the failing tests**
 
-Add a new describe block at the end of `functionRefReviver.test.ts`. The file already imports `AgencyFunction`, `FunctionRefReviver`, `functionRefReviver`, `nativeTypeReplacer`, `nativeTypeReviver`, `testRun`, and `z`.
+Add a new describe block at the end of `functionRefReviver.test.ts`. The file already imports `AgencyFunction`, `FunctionRefReviver`, `testRun`, and `z`, and defines `roundTripFunction` at line 60.
 
 ```ts
 describe("withParamSchema schemas round-trip (ADI-249)", () => {
@@ -174,49 +175,55 @@ describe("withParamSchema schemas round-trip (ADI-249)", () => {
       .partial({ a: 1 })
       .withParamSchema("b", requestSchema)
       .describe("Run with n.");
-    functionRefReviver.registry = registry;
+    const restored = roundTripFunction(tool, registry);
 
-    const json = JSON.stringify({ tool }, nativeTypeReplacer);
-    const restored = JSON.parse(json, nativeTypeReviver);
-
-    expect(restored.tool.paramSchemas).toEqual({ b: requestSchema });
-    expect(restored.tool.toolDefinition.description).toBe("Run with n.");
-    const schema = jsonSchemaOf(restored.tool);
+    expect(restored.paramSchemas).toEqual({ b: requestSchema });
+    expect(restored.toolDefinition!.description).toBe("Run with n.");
+    const schema = jsonSchemaOf(restored);
     expect(Object.keys(schema.properties)).toEqual(["b"]);
     expect(schema.properties.b.properties.n).toEqual({ type: "number" });
     expect(schema.properties.b.required).toEqual(["n"]);
-    const result = await restored.tool.invoke(testRun(), { type: "positional", args: [{ n: 2 }] });
+    const result = await restored.invoke(testRun(), { type: "positional", args: [{ n: 2 }] });
     expect(result).toEqual([1, { n: 2 }]);
-
-    functionRefReviver.registry = null;
   });
 
   it("a schema set before partial() is kept for the unbound parameter", () => {
     const registry: Record<string, AgencyFunction> = {};
     const tool = makeRegistered(registry).withParamSchema("b", requestSchema).partial({ a: 1 });
-    functionRefReviver.registry = registry;
+    const restored = roundTripFunction(tool, registry);
 
-    const json = JSON.stringify({ tool }, nativeTypeReplacer);
-    const restored = JSON.parse(json, nativeTypeReviver);
-
-    expect(restored.tool.getUnboundParams().map((param: any) => param.name)).toEqual(["b"]);
-    expect(jsonSchemaOf(restored.tool).properties.b.required).toEqual(["n"]);
-
-    functionRefReviver.registry = null;
+    expect(restored.getUnboundParams().map((param: any) => param.name)).toEqual(["b"]);
+    expect(jsonSchemaOf(restored).properties.b.required).toEqual(["n"]);
   });
 
-  it("the miss stub re-serializes paramSchemas unchanged", () => {
+  it("binding every parameter that had a schema leaves no paramSchemas key", () => {
+    const reviver = new FunctionRefReviver();
+    const registry: Record<string, AgencyFunction> = {};
+    const tool = makeRegistered(registry).withParamSchema("b", requestSchema).partial({ b: { n: 1 } });
+    expect(reviver.serialize(tool)).not.toHaveProperty("paramSchemas");
+    expect(roundTripFunction(tool, registry).paramSchemas).toEqual({});
+  });
+
+  it("the miss stub re-serializes paramSchemas unchanged, with or without a description", () => {
     const reviver = new FunctionRefReviver();
     reviver.registry = {};
-    const serialized = {
+    const described = {
       __nativeType: "FunctionRef",
       name: "runTool",
       module: "stdlib/toolbox.agency",
       toolDescription: "Run.",
       paramSchemas: { b: requestSchema },
     };
-    const stub = reviver.revive(serialized) as AgencyFunction;
-    expect(reviver.serialize(stub)).toEqual(serialized);
+    const bare = {
+      __nativeType: "FunctionRef",
+      name: "runTool",
+      module: "stdlib/toolbox.agency",
+      paramSchemas: { b: requestSchema },
+    };
+    for (const serialized of [described, bare]) {
+      const stub = reviver.revive(serialized) as AgencyFunction;
+      expect(reviver.serialize(stub)).toEqual(serialized);
+    }
   });
 });
 ```
@@ -224,7 +231,7 @@ describe("withParamSchema schemas round-trip (ADI-249)", () => {
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm test:run lib/runtime/revivers/functionRefReviver.test.ts > /tmp/adi249-t2.log 2>&1; grep -n "×\|FAIL\|✓" /tmp/adi249-t2.log | tail -20`
-Expected: the four new tests fail; the rest still pass.
+Expected: the five new tests fail; the rest still pass.
 
 - [ ] **Step 3: Write and restore the field**
 
@@ -257,12 +264,12 @@ Commit message: `FunctionRefReviver: keep withParamSchema schemas across a check
 ### Task 3: Docs
 
 **Files:**
-- Modify: `docs/dev/runtime/checkpointing.md`, the part that describes how a function value is serialized (search for "FunctionRef" or "function value"; if there is no such part, add a short section "Function values in a checkpoint" listing the fields `serialize` writes and the order `revive` re-applies them, ending with `paramSchemas`)
+- Modify: `docs/dev/runtime/checkpointing.md`. It has no section on function values today (checked: no match for `FunctionRef` or `function value`), so add one, "Function values in a checkpoint", listing the fields `serialize` writes and the order `revive` re-applies them (rename, partial, describe, param schemas, preapprove)
 - Modify: `docs/superpowers/specs/2026-10-26-workflows-design.md`, section "Offering a workflow as a tool": the sentence "The reviver is fixed to save and re-apply the schema before `workflowTool` is built" becomes a statement that it does so, naming `paramSchemas`.
 
 - [ ] **Step 1: Write the dev doc paragraph**
 
-Mechanism and rule only, no history: what the record holds, why it is JSON Schema and not zod, why `partial` drops bound names, and why the miss stub carries the record without building a schema.
+Mechanism and rule only, no history: what the record holds, why it is JSON Schema and not zod, why `partial` drops bound names, why the miss stub carries the record without building a schema, and one line saying the record is plain JSON data, so `nativeTypeReplacer` never mistakes anything in it for a native type.
 
 - [ ] **Step 2: Commit**
 

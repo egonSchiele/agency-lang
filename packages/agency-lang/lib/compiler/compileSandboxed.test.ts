@@ -1,7 +1,6 @@
 import { describe, test, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import {
   compileAgencyOnly,
   compileSandboxed,
@@ -28,6 +27,22 @@ vi.mock("./splice/runGenerator.js", async (importOriginal) => {
 
 function makeDir(prefix: string): string {
   return fs.mkdtempSync(path.join(process.cwd(), prefix));
+}
+
+/** Run `body` with os.tmpdir() pointing at `tmp`, then put the variables back. */
+function withTempDir<T>(tmp: string, body: () => T): T {
+  const saved = { TMPDIR: process.env.TMPDIR, TEMP: process.env.TEMP, TMP: process.env.TMP };
+  process.env.TMPDIR = tmp;
+  process.env.TEMP = tmp;
+  process.env.TMP = tmp;
+  try {
+    return body();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 }
 
 function cleanup(dir: string): void {
@@ -245,12 +260,16 @@ describe("compileSandboxed", () => {
       fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
       fs.writeFileSync(path.join(dir, "main.agency"), MAIN);
       // Node builtins cannot be spied on under ESM, so the observable is the
-      // tmpdir itself: no agency-sandbox-* mirror survives either compile.
+      // temp directory: no agency-sandbox-* mirror survives either compile.
+      // The system temp directory is shared with every other test worker,
+      // whose own mirrors would show up as leaks here, so this test points
+      // os.tmpdir() at a private folder for the two compiles. os.tmpdir()
+      // reads TMPDIR (TEMP and TMP on Windows) on every call.
+      const tmp = path.join(dir, "tmp");
+      fs.mkdirSync(tmp);
       const listMirrors = () =>
-        fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith("agency-sandbox-"));
-      const before = listMirrors();
-
-      const ok = compileSandboxed({ entry: { file: "main.agency" }, dir });
+        fs.readdirSync(tmp).filter((name) => name.startsWith("agency-sandbox-"));
+      const ok = withTempDir(tmp, () => compileSandboxed({ entry: { file: "main.agency" }, dir }));
       expect(ok.success).toBe(true);
 
       // Type error inside the entry: compile fails after the mirror exists.
@@ -258,11 +277,10 @@ describe("compileSandboxed", () => {
         path.join(dir, "main.agency"),
         'import { helperValue } from "./helper.agency"\nexport node main(): number {\n  const x: number = "not a number"\n  return helperValue()\n}\n',
       );
-      const bad = compileSandboxed({ entry: { file: "main.agency" }, dir });
+      const bad = withTempDir(tmp, () => compileSandboxed({ entry: { file: "main.agency" }, dir }));
       expect(bad.success).toBe(false);
 
-      const leaked = listMirrors().filter((name) => !before.includes(name));
-      expect(leaked).toEqual([]);
+      expect(listMirrors()).toEqual([]);
     } finally {
       cleanup(dir);
     }

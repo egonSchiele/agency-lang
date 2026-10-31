@@ -410,8 +410,8 @@ export def resolveRequestAgainst(
   const raw = requestLayers(request, settings)
   const layers = buildLayers(raw, knownProviders(), providerEstablished)
   const all = resolveAll(layers, ctx)
-  if (all is failure(reason)) {
-    return failure(reason)
+  if (isFailure(all)) {
+    return all
   }
   return resolveLocalEmbeddingSlot(promoteAll(all.value))
 }
@@ -431,8 +431,8 @@ export def resolveHostedModels(
   const provider = requestProvider(request, settings)
   const inputs = detectionInputs(request)
   const detected = resolveDetected(inputs.pin, inputs.main, inputs.reasoning, provider)
-  if (detected is failure(reason)) {
-    return failure(reason)
+  if (isFailure(detected)) {
+    return detected
   }
   const ctx: Ctx = {
     provider: detected.value,
@@ -474,7 +474,7 @@ export def resolveLocalEmbedding(spec: string): Result<Resolved> {
   }
   const pathResult = try registerLocalModel(parsed.model)
   if (isFailure(pathResult)) {
-    return failure(pathResult.error)
+    return pathResult
   }
   return success({
     model: pathResult.value,
@@ -494,7 +494,7 @@ export def resolveLocalEmbeddingSlot(
   }
   const local = resolveLocalEmbedding("${embedding.provider}/${embedding.model}")
   if (isFailure(local)) {
-    return failure(local.error)
+    return local
   }
   return success({
     ...slots,

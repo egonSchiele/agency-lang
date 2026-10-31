@@ -260,7 +260,7 @@ export idempotent def grep(
   respectGitignore: boolean = true,
 ): Result {
   """
-  Search a directory or a single file for a regular expression, like `grep -rn`. A directory is searched recursively; a file is searched on its own. Every match comes back with its file path, line number, and line text. A directory search skips node_modules, .git, dist, build, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex, or the path is missing or cannot be read.
+  Search a directory or a single file for a regular expression, like `grep -rn`. A directory is searched recursively; a file is searched on its own. Every match comes back with its file path, line number, and line text. A directory search skips node_modules, .git, dist, build, .next, .cache, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex, or the path is missing or cannot be read.
 
   Returned file values are relative to the directory searched, or the file's own name when path is a file. Returns at most maxResults matches; if matches look truncated, narrow the path or refine the pattern. Symlinked entries are left out. Symlinks below the path are never followed.
 

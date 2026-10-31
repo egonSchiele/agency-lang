@@ -1,28 +1,39 @@
 // These imports are NOT unused. Effect declarations come with imports,
-// and without them the `raise std::bash(...)` and `raise std::git::*(...)`
-// sites below compile with their payload contracts UNENFORCED. Measured:
+// and without them the `raise std::bash(...)`, `raise std::grep(...)`, and
+// `raise std::git::*(...)` sites below compile with their payload
+// contracts UNENFORCED. Measured:
 // dropping them makes `raise std::git::status("...", { wrongField: x })`
 // typecheck clean. `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
-import { bash, ExecResult } from "std::shell"
+import { bash, grep, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
   BroadReason,
   Effect,
+  GrepPayload,
   Plan,
   WritePayload,
   WriteExec,
   writeEffect,
   writeExecution,
+  grepEffect,
+  grepExecution,
+  runGrep,
+  GrepRender,
+  GrepFileNames,
   runBash,
   runWrite,
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _addLine } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
+import { _searchTargetIn } from "agency-lang/stdlib-lib/shell.js"
+import { _grepPatternToRegex } from "agency-lang/stdlib-lib/grepDialect.js"
+import { _ignoredFromAbove } from "agency-lang/stdlib-lib/gitignore.js"
 
 export { MAX_STDOUT_LEN } from "std::spill"
 
@@ -220,8 +231,8 @@ def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
     return failure("`${redirect.op}` is not an output redirect")
   }
   const target = literalTarget(redirect.target)
-  if (target is failure(why)) {
-    return failure(why)
+  if (isFailure(target)) {
+    return target
   }
   const resolved = try _resolveRedirectTarget(target.value, cwd, tildeModeFor(redirect.target))
   if (resolved is failure(why)) {
@@ -263,8 +274,8 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   }
   const only = fileRedirects[0]
   const prepared = prepareRedirectWrite(only, cwd, "")
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success([writeEffect(prepared.value)])
 }
@@ -323,8 +334,8 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   }
   const flags = flagNames(command)
   const redirect = redirectEffect(command.redirects, cwd)
-  if (redirect is failure(why)) {
-    return failure(why)
+  if (isFailure(redirect)) {
+    return redirect
   }
 
   // `echo` contributes nothing on its own, whatever its arguments: bash
@@ -335,6 +346,13 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   // not be demoted by a check that only git needs.
   return match(name.text) {
     "echo" => success(redirect.value)
+    "grep" => {
+      const grep = grepEffects(command, cwd)
+      if (isFailure(grep)) {
+        return grep
+      }
+      return success([...grep.value, ...redirect.value])
+    }
     "git" => {
       // Both links can fail, which is what earns the pipe. Appending the
       // redirect contribution cannot, so it stays inline rather than
@@ -417,6 +435,515 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
   }
 }
 
+/** Which flags a verb takes. Short letters are listed one per entry, so a
+ * combined `-rn` is checked letter by letter. A long flag that takes no
+ * value is listed as written (`--color=never`). */
+export type FlagSpec = {
+  /** Flags that stand alone. */
+  plain: string[];
+  /** Flags that take a value, from the rest of the word (`-A3`), after
+   * `=` (`--regexp=x`), or from the next word (`-A 3`). Each may appear
+   * once. */
+  valued: string[];
+  /** Every flag must come before the first positional word. True for a
+   * command real grep will run: BSD grep, and GNU grep with
+   * POSIXLY_CORRECT set, read a later `-s` as a file to search. */
+  optionsFirst: boolean
+}
+
+/** One valued flag and its value. `flag` is the letter for a short flag
+ * (`A`) and the whole name for a long one (`--regexp`). */
+export type FlagValue = {
+  flag: string;
+  value: string
+}
+
+/** A command's arguments checked against a FlagSpec. */
+export type SplitArgs = {
+  plain: string[];
+  values: FlagValue[];
+  positionals: Word[]
+}
+
+/** What one flag word contributed, and how many words it used: 2 when
+ * its value was the next word. */
+type FlagRead = {
+  plain: string[];
+  values: FlagValue[];
+  consumed: number
+}
+
+/** The grep flags safeBash can describe exactly. An allowlist: it has to
+ * hold for GNU grep (Linux), BSD grep (macOS), and a grep a user put on
+ * their PATH such as ugrep, because the bash path runs whichever grep the
+ * shell finds. Left out on purpose, so a grep using
+ * one asks std::bash:
+ * - `-R`: GNU grep follows every symlink below the path.
+ * - `-f`, `--exclude-from`, `--include-from` read another file.
+ * - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
+ *   carry them out, and the bash path is narrow only for one named file,
+ *   where they change nothing.
+ * - `-m` counts per file, and the payload's maxResults is a total.
+ * - `-P` is missing from BSD grep.
+ * - `-z`, `-d`, `-D` mean different things in different greps.
+ * - ugrep's `--filter` runs a program and `--save-config` writes a file.
+ * - The long spellings of short flags (`--recursive`, `--ignore-case`). */
+export static const GREP_FLAGS: FlagSpec = {
+  plain: ["n", "r", "i", "w", "l", "v", "E", "F", "c", "h", "H", "o", "s", "--color=never"],
+  valued: ["e", "A", "B", "C"],
+  optionsFirst: true
+}
+
+def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<SplitArgs> {
+  """
+  Check a command's arguments against a flag table, and split them into
+  the flags it found, their values, and the remaining positional words.
+
+  Any flag the table does not list is a failure, because a payload that
+  ignored it would describe a different command. Positional words are
+  returned as they are, literal or not; the caller decides what each one
+  must be.
+  """
+  const args = command.args
+  let plain: string[] = []
+  let values: FlagValue[] = []
+  let positionals: Word[] = []
+  let index = 0
+  while (index < args.length) {
+    const word = args[index]
+    if (word is { tag: "flag" }) {
+      // Checked before the table, so a late flag is reported the same way
+      // whether or not the table knows it.
+      if (spec.optionsFirst && positionals.length > 0) {
+        return failure("an option after the first argument is a file name to some versions of ${verb}")
+      }
+      const next: Word | null = if (index + 1 < args.length) then args[index + 1] else null
+      const read = readFlagWord(verb, word, next, spec)
+      if (isFailure(read)) {
+        return read
+      }
+      for (entry in read.value.values) {
+        const earlier = [seen for seen in values if seen.flag == entry.flag]
+        if (earlier.length > 0) {
+          return failure("${verb} takes `${flagDisplay(entry.flag)}` only once")
+        }
+      }
+      plain = [...plain, ...read.value.plain]
+      values = [...values, ...read.value.values]
+      index = index + read.value.consumed
+      continue
+    }
+    const dash = refuseQuotedOption(verb, word)
+    if (isFailure(dash)) {
+      return dash
+    }
+    positionals.push(word)
+    index = index + 1
+  }
+  return success({
+    plain: plain,
+    values: values,
+    positionals: positionals
+  })
+}
+
+def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
+  """
+  One flag word checked against the table: a long flag whole, or a short
+  one letter by letter. A valued letter takes the rest of the word as its
+  value (`-A3`), or the next word when nothing follows it.
+  """
+  if (word.flagName.startsWith("--")) {
+    return readLongFlag(verb, word, next, spec)
+  }
+  if (word.flagValue != null) {
+    return failure("${verb} does not take `${renderFlag(word)}`")
+  }
+  const letters = word.flagName.slice(1)
+  let found: string[] = []
+  let position = 0
+  while (position < letters.length) {
+    const letter = letters.charAt(position)
+    if (spec.plain.includes(letter)) {
+      found.push(letter)
+      position = position + 1
+      continue
+    }
+    if (!spec.valued.includes(letter)) {
+      return failure("${verb} does not take `-${letter}`")
+    }
+    const rest = letters.slice(position + 1)
+    if (rest != "") {
+      return success({
+        plain: found,
+        values: [{ flag: letter, value: rest }],
+        consumed: 1
+      })
+    }
+    const value = nextWordValue(verb, letter, next)
+    if (isFailure(value)) {
+      return value
+    }
+    return success({
+      plain: found,
+      values: [{ flag: letter, value: value.value }],
+      consumed: 2
+    })
+  }
+  return success({
+    plain: found,
+    values: [],
+    consumed: 1
+  })
+}
+
+def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
+  const written = renderFlag(word)
+  if (spec.plain.includes(written)) {
+    return success({
+      plain: [written],
+      values: [],
+      consumed: 1
+    })
+  }
+  if (!spec.valued.includes(word.flagName)) {
+    return failure("${verb} does not take `${word.flagName}`")
+  }
+  if (word.flagValue == null) {
+    const value = nextWordValue(verb, word.flagName, next)
+    if (isFailure(value)) {
+      return value
+    }
+    return success({
+      plain: [],
+      values: [{ flag: word.flagName, value: value.value }],
+      consumed: 2
+    })
+  }
+  if (word.valueIsGlob == true) {
+    return failure("the value of `${word.flagName}` is a glob bash may expand")
+  }
+  return success({
+    plain: [],
+    values: [{ flag: word.flagName, value: word.flagValue }],
+    consumed: 1
+  })
+}
+
+def nextWordValue(verb: string, flag: string, next: Word | null): Result<string> {
+  """
+  A valued flag's value taken from the word after it. It must be literal,
+  and like any other word, a quoted one that starts with `-` is refused.
+  """
+  if (next == null) {
+    return failure("${verb}'s `${flagDisplay(flag)}` needs a value")
+  }
+  const text = literalWordText(next)
+  if (text is failure(why)) {
+    return failure("the value of `${flagDisplay(flag)}` is not literal")
+  }
+  const dash = refuseQuotedOption(verb, next)
+  if (isFailure(dash)) {
+    return dash
+  }
+  return success(text.value)
+}
+
+def refuseQuotedOption(verb: string, word: Word): Result {
+  """
+  A quoted word that starts with `-` is still an option to the program:
+  bash strips the quotes, so `grep "-R" src` runs `grep -R src`.
+  """
+  const text = literalWordText(word)
+  if (text is success(written)) {
+    if (written.startsWith("-")) {
+      return failure("a quoted `${written}` is still an option to ${verb}")
+    }
+  }
+  return success(null)
+}
+
+/** A flag as the model wrote it: `-A` for a letter, `--regexp` as is. */
+def flagDisplay(flag: string): string {
+  if (flag.startsWith("-")) {
+    return flag
+  }
+  return "-${flag}"
+}
+
+/** A grep path resolved for safeBash. Mirrors `GrepTarget` in
+ * lib/stdlib/shell.ts: `argument` is the path as bash hands it to grep. */
+type GrepTarget = {
+  dir: string;
+  file: string | null;
+  argument: string
+}
+
+/** A grep command checked against a flag table, with its one path resolved. */
+type GrepCall = {
+  split: SplitArgs;
+  /** The pattern as the command wrote it. */
+  pattern: string;
+  /** The resolved path. Its `argument` is "" when -r searched "." because
+   * no path was written, since grep then prints bare names. */
+  target: GrepTarget
+}
+
+/** The pattern, and the words after it that name paths. */
+type GrepWords = {
+  pattern: string;
+  paths: Word[]
+}
+
+/** grep's context flags, whose values are line counts. */
+static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
+
+@capabilities(fileRead)
+def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCall> {
+  """
+  A grep command checked against `spec`, with its pattern and its one
+  path resolved the way the grep tool resolves a path. Any doubt is a
+  failure, which sends the command to the broad question.
+  """
+  const split = splitFlags("grep", command, spec)
+  if (isFailure(split)) {
+    return split
+  }
+  const args = split.value
+  const words = grepWords(args)
+  if (isFailure(words)) {
+    return words
+  }
+  for (entry in args.values) {
+    if (CONTEXT_FLAGS.includes(entry.flag) && !isDigits(entry.value)) {
+      return failure("the value of `-${entry.flag}` is not a number")
+    }
+  }
+  const paths = words.value.paths
+  if (paths.length > 1) {
+    return failure("grep with more than one path")
+  }
+  if (paths.length == 0) {
+    return searchHere(args, words.value.pattern, cwd)
+  }
+  const pathWord = paths[0]
+  const text = literalWordText(pathWord)
+  if (text is failure(why)) {
+    return failure("the grep path is not literal")
+  }
+  const target = try _searchTargetIn(text.value, cwd, tildeModeFor(pathWord))
+  if (isFailure(target)) {
+    return target
+  }
+  return success({
+    split: args,
+    pattern: words.value.pattern,
+    target: target.value
+  })
+}
+
+/** With no path, `-r` searches the working directory and grep prints bare
+ * names. Without `-r`, grep reads its stdin. */
+@capabilities(fileRead)
+def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepCall> {
+  if (!args.plain.includes("r")) {
+    return failure("grep with no path reads stdin")
+  }
+  const here = try _searchTargetIn(".", cwd, "literal")
+  if (isFailure(here)) {
+    return here
+  }
+  return success({
+    split: args,
+    pattern: pattern,
+    target: {
+      dir: here.value.dir,
+      file: here.value.file,
+      argument: ""
+    }
+  })
+}
+
+def grepWords(args: SplitArgs): Result<GrepWords> {
+  """
+  With `-e`, the pattern is its value and every positional is a path.
+  Otherwise the first positional is the pattern and the rest are paths.
+  """
+  const fromFlag = [entry.value for entry in args.values if entry.flag == "e"]
+  if (fromFlag.length > 0) {
+    return success({
+      pattern: fromFlag[0],
+      paths: args.positionals
+    })
+  }
+  if (args.positionals.length == 0) {
+    return failure("grep with no pattern")
+  }
+  const first = literalWordText(args.positionals[0])
+  if (first is failure(why)) {
+    return failure("the grep pattern is not literal")
+  }
+  return success({
+    pattern: first.value,
+    paths: args.positionals.slice(1)
+  })
+}
+
+static const DIGITS = "0123456789"
+
+def isDigits(text: string): boolean {
+  const others = [char for char in text.split("") if !DIGITS.includes(char)]
+  return text != "" && others.length == 0
+}
+
+def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: number): GrepPayload {
+  """
+  The one place a grep command's flags become std::grep's fields. Both
+  paths call it; they differ only in the pattern, its regex flags, and
+  the cap they pass.
+  """
+  const letters = call.split.plain
+  return {
+    pattern: pattern,
+    dir: call.target.dir,
+    file: call.target.file,
+    flags: flags,
+    maxResults: maxResults,
+    ignoreCase: letters.includes("i"),
+    wholeWord: letters.includes("w"),
+    filesOnly: letters.includes("l"),
+    invert: letters.includes("v")
+  }
+}
+
+@capabilities(fileRead)
+def grepEffects(command: SimpleCommand, cwd: string): Result<Effect[]> {
+  """
+  A grep that runs through bash. It asks std::grep only for one named
+  file, which real grep and the grep tool read the same way. A directory
+  search through bash reads files the tool skips (.git, node_modules,
+  ignored files), so it asks std::bash.
+  """
+  const call = readGrep(command, cwd, GREP_FLAGS)
+  if (isFailure(call)) {
+    return call
+  }
+  if (call.value.target.file == null) {
+    return failure("grep through bash would search a directory, and reads files the grep tool skips")
+  }
+  // 0 means no cap, which is true of grep without -m.
+  return success([grepEffect(grepPayload(call.value, call.value.pattern, "", 0))])
+}
+
+/** The flags the grep tool's search can carry out exactly. A lone grep
+ * that uses only these runs shell-free. -c, -o, -A, -B, and -C have no
+ * equivalent in the tool, so a grep using them runs through bash. No real
+ * grep reads these arguments, so a flag may follow the pattern, as GNU
+ * grep allows. */
+static const SHELL_FREE_GREP_FLAGS: FlagSpec = {
+  plain: ["n", "r", "i", "w", "l", "v", "E", "F", "h", "H", "s", "--color=never"],
+  valued: ["e"],
+  optionsFirst: false
+}
+
+/** The regex flags a shell-free search runs with. `u` makes `.` match a
+ * whole character, as grep does in a UTF-8 locale, not half of an emoji. */
+static const SHELL_FREE_REGEX_FLAGS = "u"
+
+/** The most matches a shell-free grep returns; the output says so when it stops. */
+static const SHELL_FREE_GREP_CAP = 1000
+
+@capabilities(fileRead)
+def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  A lone grep, run through the grep tool's own search instead of the grep
+  program, so its approval means what the grep tool's approval means.
+  Applies only when every flag and every character of the pattern means
+  the same thing to grep and to the tool. A failure means "not this
+  path"; the general rules then decide.
+  """
+  const name = command.command
+  if (name == null || name.tag != "literal" || name.text != "grep") {
+    return failure("not grep")
+  }
+  if (command.assignments.length > 0 || command.redirects.length > 0) {
+    return failure("not a lone grep")
+  }
+  const call = readGrep(command, cwd, SHELL_FREE_GREP_FLAGS)
+  if (isFailure(call)) {
+    return call
+  }
+  const letters = call.value.split.plain
+  const target = call.value.target
+  // Without -r, grep does not search a directory, and the tool would.
+  if (target.file == null && !letters.includes("r")) {
+    return failure("grep without -r does not search a directory")
+  }
+  // The tool's search applies the .gitignore files above the directory to
+  // every entry, so where they reach into it (`**/dist/*` for `dist`) the
+  // search misses files grep reads, and an empty answer would read as
+  // "no match". Those go to the bash path.
+  if (target.file == null) {
+    const ignored = try _ignoredFromAbove(target.dir)
+    if (isFailure(ignored)) {
+      return ignored
+    }
+    if (ignored.value) {
+      return failure("git ignores files in this directory, and the grep tool's search would skip them")
+    }
+  }
+  const syntax = grepSyntax(letters)
+  if (isFailure(syntax)) {
+    return syntax
+  }
+  const regex = _grepPatternToRegex(call.value.pattern, syntax.value, letters.includes("w"))
+  if (regex == null) {
+    return failure("the pattern does not translate to the grep tool's regex")
+  }
+  // With both -H and -h the later one wins in grep, and the split does
+  // not keep their order.
+  if (letters.includes("H") && letters.includes("h")) {
+    return failure("grep with both -H and -h")
+  }
+  const payload = grepPayload(call.value, regex, SHELL_FREE_REGEX_FLAGS, SHELL_FREE_GREP_CAP)
+  const render: GrepRender = {
+    lineNumbers: letters.includes("n"),
+    fileNames: grepFileNames(letters),
+    argument: target.argument,
+    oneFile: target.file != null
+  }
+  return success({
+    effects: [grepEffect(payload)],
+    execution: grepExecution(payload, render),
+    broadReason: null,
+    verbs: verbNames([command])
+  })
+}
+
+/** Which pattern syntax the letters choose. GNU grep refuses -E with -F. */
+def grepSyntax(letters: string[]): Result<"basic" | "extended" | "fixed"> {
+  if (letters.includes("E") && letters.includes("F")) {
+    return failure("grep with both -E and -F")
+  }
+  if (letters.includes("F")) {
+    return success("fixed")
+  }
+  if (letters.includes("E")) {
+    return success("extended")
+  }
+  return success("basic")
+}
+
+def grepFileNames(letters: string[]): GrepFileNames {
+  if (letters.includes("H")) {
+    return "always"
+  }
+  if (letters.includes("h")) {
+    return "never"
+  }
+  return "default"
+}
+
 static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }
@@ -476,6 +1003,7 @@ export def outcomeOf(plan: Plan): string {
     "refuse" => "refuse"
     "echo" => "shellFree"
     "write" => "shellFree"
+    "grep" => "shellFree"
     "agency" => "agency"
     "bash" => bashOutcome(plan)
   }
@@ -635,8 +1163,8 @@ def echoWords(command: SimpleCommand): Result<string[]> {
   let out: string[] = []
   for (arg in command.args) {
     const text = literalWordText(arg)
-    if (text is failure(why)) {
-      return failure(why)
+    if (isFailure(text)) {
+      return text
     }
     out.push(text.value)
   }
@@ -690,8 +1218,8 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
     return failure("`echo` with flags prints differently")
   }
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   return success(
     {
@@ -723,12 +1251,12 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   }
   const only = command.redirects[0]
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   const prepared = prepareRedirectWrite(only, cwd, echoOutput(words.value))
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success(
     {
@@ -779,6 +1307,10 @@ export def planFor(source: string, cwd: string): Plan {
       }
       const shellFree = trySeeIfShellFree(only, cwd)
       if (shellFree is success(plan)) {
+        return plan
+      }
+      const shellFreeGrep = tryShellFreeGrep(only, cwd)
+      if (shellFreeGrep is success(plan)) {
         return plan
       }
     }
@@ -970,7 +1502,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -1009,15 +1541,18 @@ export def safeBash(
   }
 
   const raised = raiseAll(plan.effects, command, dir)
-  if (raised is failure(why)) {
+  // The rejection is passed on as it came, not rebuilt with `failure()`,
+  // which would drop its `rejected` flag. Without the flag the tool loop
+  // shows the user's reason as a tool error and says to call again.
+  if (isFailure(raised)) {
     if (plan.broadReason == null) {
-      return failure(why)
+      return raised
     }
     // A rejected broad question tells the model why no narrower one was
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return failure("${why}\n${broadExplanation(plan.broadReason)}")
+    return _addLine(raised, "${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -1033,6 +1568,7 @@ export def safeBash(
     { kind: "write" } => runWrite(exec)
     { kind: "echo", content } => success(keepOutput(content, 0, command))
     { kind: "agency", args } => runAgency(args, dir, command)
+    { kind: "grep" } => runGrep(exec, command)
     { kind: "bash", command as text } => runBash(text, dir, command)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
@@ -1054,6 +1590,35 @@ def broadExplanation(reason: BroadReason): string {
     return "safeBash could not ask a narrower question because ${sentence}."
   }
   return "safeBash could not ask a narrower question because ${sentence}: ${reason.detail}."
+}
+
+/** The tool to suggest when a broad command made only of these verbs is
+ * rejected. ADI-244 adds cat, head, and tail, pointing at read. */
+static const READ_TOOL_FOR_VERB: Record<string, string> = {
+  grep: "grep"
+}
+
+def toolHint(verbs: string[]): string {
+  """
+  A sentence pointing the model at the tool that does what its rejected
+  command did, when every verb in the command has one. safeBash cannot
+  see the policy, so the sentence does not claim the tool needs no
+  approval, only that a policy can approve its question.
+  """
+  let tools: string[] = []
+  for (verb in verbs) {
+    const tool = READ_TOOL_FOR_VERB[verb]
+    if (tool == null) {
+      return ""
+    }
+    if (!tools.includes(tool)) {
+      tools.push(tool)
+    }
+  }
+  if (tools.length == 0) {
+    return ""
+  }
+  return " Call the ${tools.join(" or ")} tool instead: a policy can approve its question in advance."
 }
 
 /** What the debug event says about one plan: the decision and why. */
@@ -1100,8 +1665,8 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   """
   for (effect in effects) {
     const answered = raiseOne(effect, fullCommand, cwd)
-    if (answered is failure(reason)) {
-      return failure(reason)
+    if (isFailure(answered)) {
+      return answered
     }
   }
   return success(null)
@@ -1144,6 +1709,21 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
         filename: effect.payload.filename,
         content: effect.payload.content,
         mode: effect.payload.mode,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::grep" => {
+      raise std::grep("Are you sure you want to search files with grep?", {
+        pattern: effect.payload.pattern,
+        dir: effect.payload.dir,
+        file: effect.payload.file,
+        flags: effect.payload.flags,
+        maxResults: effect.payload.maxResults,
+        ignoreCase: effect.payload.ignoreCase,
+        wholeWord: effect.payload.wholeWord,
+        filesOnly: effect.payload.filesOnly,
+        invert: effect.payload.invert,
         command: fullCommand
       })
       return success(null)

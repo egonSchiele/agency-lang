@@ -46,3 +46,17 @@ those names from `std::index` is redundant. Not everything in std::index is
 prelude, though: types like `WriteMode` must be imported, and an aliased
 import (`map as arrMap`) or one carrying a `destructive`/`idempotent`
 marker does real work — none of those are reported.
+
+<a id="al0004"></a>
+
+## AL0004 — failure(&#123;message&#125;) rebuilds '&#123;result&#125;' and drops its flags. Return '&#123;result&#125;' itself.
+
+*Default severity: hint.*
+
+Inside `if (x is failure(why))`, returning `failure(why)`
+builds a new failure from the message alone. Everything else on `x` is lost:
+its data, its checkpoint, and its `rejected` flag, which is how the tool loop
+tells "the user said no" from "the tool broke". A rejected interrupt that
+passes through such a rebuild reaches the model as a tool error it may
+retry. Return `x` itself, which keeps every field, or when a line must be
+added to the message, copy the failure instead of rebuilding it.

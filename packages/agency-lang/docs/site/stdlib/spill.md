@@ -58,7 +58,7 @@ export static const MAX_STDOUT_LEN = 2000
 ### keepOutput
 
 ```ts
-keepOutput(text: string, exitCode: number, source: string): string
+keepOutput(text: string, exitCode: number, source: string = ""): string
 ```
 
 What the model gets back for a command's output.
@@ -68,6 +68,7 @@ What the model gets back for a command's output.
   and the name it was saved under, with the tools that read it. `source`
   is the command that produced the output, as the user saw it; the preview
   names it, and so does the agent's trace line when the output is read back.
+  Leave it empty when there is no command to name.
 
 **Parameters:**
 
@@ -75,7 +76,7 @@ What the model gets back for a command's output.
 |---|---|---|
 | text | `string` |  |
 | exitCode | `number` |  |
-| source | `string` |  |
+| source | `string` | "" |
 
 **Returns:** `string`
 
@@ -103,7 +104,7 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L62))
 
 ### grepSpill
 
@@ -134,4 +135,4 @@ Search saved tool output for a regular expression. Each match comes back with it
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L77))

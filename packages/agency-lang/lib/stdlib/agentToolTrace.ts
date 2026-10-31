@@ -56,7 +56,8 @@ export type ToolArgs = Record<string, unknown>;
 /** The parts shown after a summary label, built from the call's arguments. A null part is skipped. */
 type ShowParts = (args: ToolArgs, lookup: SpillLookup) => (string | null)[];
 /** An array result as "12 matches" (singular for one). */
-type CountSummary = { count: string };
+/** An array result as "12 entries" or "1 entry": both noun forms are given, so nothing guesses. */
+type CountSummary = { one: string; many: string };
 /** A command object: "exit N", red when N is not 0, output under the line. */
 type ExitCodeSummary = { exitCode: true };
 type CustomSummary = {
@@ -66,8 +67,7 @@ type CustomSummary = {
   /** Text printed under the line. */
   detail?: (value: unknown) => string | null;
 };
-type ResultSummary =
-  "none" | "verdict" | "preview" | CountSummary | ExitCodeSummary | CustomSummary;
+type ResultSummary = "none" | "preview" | CountSummary | ExitCodeSummary | CustomSummary;
 /** What a failure message adds to the line and prints under it; null to print the message as is. */
 type FailureSummary = (message: string) => { line: string | null; detail: string | null } | null;
 /** One line per call: `<mark> <label> <parts> · <result> · <elapsed>`. */
@@ -185,8 +185,8 @@ export function commandDetail(stdout: unknown, stderr: unknown): string | null {
   return trimmed.startsWith(SPILL_NOTICE_PREFIX) ? trimmed.split("\n")[0] : trimmed;
 }
 
-function plural(count: number, noun: string): string {
-  return count === 1 ? `${count} ${noun.replace(/s$/, "")}` : `${count} ${noun}`;
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
 }
 
 function summarizeBytes(value: unknown): string | null {
@@ -202,10 +202,10 @@ function hasField(value: unknown, field: string): value is Record<string, unknow
 /** Grep returns match objects, or path strings when `filesOnly` was set. */
 function summarizeGrep(value: unknown): string | null {
   if (!Array.isArray(value)) return null;
-  if (value.every((item) => typeof item === "string")) return plural(value.length, "files");
+  if (value.every((item) => typeof item === "string")) return plural(value.length, "file", "files");
   const files = value.filter((match) => hasField(match, "file")).map((match) => match.file);
   const distinct = files.filter((file, index) => files.indexOf(file) === index);
-  return `${plural(value.length, "lines")} in ${plural(distinct.length, "files")}`;
+  return `${plural(value.length, "line", "lines")} in ${plural(distinct.length, "file", "files")}`;
 }
 
 /** grepSpill returns matches, or `{ pattern, matches }` groups when asked for several patterns. */
@@ -215,7 +215,7 @@ function summarizeGrepSpill(value: unknown): string | null {
   const lines = grouped
     ? value.reduce((sum: number, group) => sum + (group.matches as unknown[]).length, 0)
     : value.length;
-  return plural(lines, "lines");
+  return plural(lines, "line", "lines");
 }
 
 function countOf(value: unknown, field: string): number {
@@ -228,8 +228,8 @@ function summarizeTypecheck(value: unknown): string | null {
   const warnings = countOf(value, "warnings");
   if (errors === 0 && warnings === 0) return "clean";
   const parts = [
-    errors > 0 ? plural(errors, "errors") : null,
-    warnings > 0 ? plural(warnings, "warnings") : null,
+    errors > 0 ? plural(errors, "error", "errors") : null,
+    warnings > 0 ? plural(warnings, "warning", "warnings") : null,
   ];
   return parts.filter((part) => part !== null).join(", ");
 }
@@ -249,7 +249,7 @@ function summarizeTestReport(value: unknown): string | null {
 }
 
 function summarizeEditCount(_value: unknown, args: ToolArgs): string | null {
-  return Array.isArray(args.edits) ? plural(args.edits.length, "edits") : null;
+  return Array.isArray(args.edits) ? plural(args.edits.length, "edit", "edits") : null;
 }
 
 /** A safeBash failure is `{command, exitCode, stderr, stdout}` as JSON. */
@@ -315,8 +315,14 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
 
   // Files
   read: one("Read", (a) => [filePath(a), lineRange(a)]),
-  ls: one("List", (a) => [text(a.dir), flag(a, "recursive", "recursive")], { count: "entries" }),
-  glob: one("Glob", (a) => [text(a.pattern), prefixed("in ", a.dir)], { count: "files" }),
+  ls: one("List", (a) => [text(a.dir), flag(a, "recursive", "recursive")], {
+    one: "entry",
+    many: "entries",
+  }),
+  glob: one("Glob", (a) => [text(a.pattern), prefixed("in ", a.dir)], {
+    one: "file",
+    many: "files",
+  }),
   grep: one(
     "Grep",
     (a) => [
@@ -395,7 +401,7 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
 
   // Agency
   typecheck: one("Typecheck", nothing, typecheckReport),
-  parseAST: one("Parse", nothing, "verdict"),
+  parseAST: one("Parse", nothing),
   testFile: two("Test", (a) => [text(a.filename)], testReport),
   agencyCli: two("agency", (a) => [text(a.args)], exitCode),
 
@@ -584,15 +590,17 @@ function settle(event: ToolEndEvent, presentation: SummaryPresentation, args: To
       : { mark: failed, summary: parsed.line, detail: parsed.detail };
   }
   const result = presentation.result;
-  if (result === "none" || result === "verdict") {
+  if (result === "none") {
     return { mark: success, summary: null, detail: null };
   }
   if (result === "preview") {
     const preview = typeof event.value === "string" ? event.value : serialize(event.value);
     return { mark: success, summary: null, detail: preview === "" ? null : preview };
   }
-  if ("count" in result) {
-    const count = Array.isArray(event.value) ? plural(event.value.length, result.count) : null;
+  if ("many" in result) {
+    const count = Array.isArray(event.value)
+      ? plural(event.value.length, result.one, result.many)
+      : null;
     return { mark: success, summary: count, detail: null };
   }
   if ("exitCode" in result) {

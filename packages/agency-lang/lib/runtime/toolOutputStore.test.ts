@@ -45,6 +45,14 @@ describe("toolOutputStore", () => {
     });
   });
 
+  it("treats an empty source as none, in the store and in the notice", () => {
+    withRun((run) => {
+      expect(findOutputSource(run, storeOutput(run, "x", ""))).toBeNull();
+    });
+    const notice = outputNotice("a\n".repeat(2000), "n.log", 1, DEFAULT_READERS, Infinity, "");
+    expect(notice.startsWith("[Output too long to return in full:")).toBe(true);
+  });
+
   it("names the source in the notice", () => {
     const notice = outputNotice(
       "a\n".repeat(2000),

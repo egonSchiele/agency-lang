@@ -708,6 +708,11 @@ describe("result summarizers", () => {
     );
   });
 
+  it("uses the singular noun for one entry", () => {
+    expect(end("ls", { dir: "src" }, [{ name: "a" }])).toBe("✓ List src · 1 entry");
+    expect(end("glob", { pattern: "*.ts" }, ["a", "b"])).toBe("✓ Glob *.ts · 2 files");
+  });
+
   it("sums grepSpill lines across pattern groups", () => {
     const grouped = [
       {

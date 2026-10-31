@@ -212,7 +212,7 @@ Line ranges follow `sliceLines`: `offset` is the 1-based first line and
 `lines 460–579`, `offset 0, limit 120` prints `lines 1–120`, `offset 460,
 limit 0` prints `lines 460–end`, and both 0 prints nothing.
 
-`ResultSummary` is `"none"`, `"verdict"`, `"preview"`, `{ count: noun }`,
+`ResultSummary` is `"none"`, `"preview"`, `{ one, many }` (a count with both noun forms),
 `{ exitCode: true }`, or a `custom` function. `exitCode` prints `exit N`,
 turns the mark red when N is not 0, and prints the command's output under
 the line by the rule below. `exec` and `agencyCli` return a plain object,
@@ -417,7 +417,7 @@ answered, and adding that is out of scope.
 | Tool | Lines | Example | Shows | Result |
 |---|---|---|---|---|
 | typecheck | one | `✓ Typecheck · clean` or `✗ Typecheck · 3 errors, 1 warning` | nothing: the tool takes source text, not a path | custom from `TypeCheckReport`: "clean", or error and warning counts. Errors make the mark red even on a success Result. |
-| parseAST | one | `✓ Parse · ok` | nothing (source is inline text) | verdict |
+| parseAST | one | `✓ Parse` | nothing (source is inline text) | none |
 | testFile | two | `● Test review.test.json` then `✓ Test review.test.json · 7 passed` | filename | custom from `TestReport`: passed and failed counts; any failure is red |
 | agencyCli | two | `● agency fmt foo.agency` | args joined | exitCode |
 | compile, run, and other `std::agency` tools the code agent may have | generic | | | |

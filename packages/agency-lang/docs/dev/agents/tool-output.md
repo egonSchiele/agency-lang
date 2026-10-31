@@ -115,7 +115,7 @@ summary. `show` is a function and not a format language because the forms
 kept multiplying; its vocabulary is a few exported helpers (`text`,
 `filePath`, `lineRange`, `flag`, `prefixed`, `spillOutput`, `urlWithPath`),
 each tested once, and every value is cut to its first line. `result` is
-`none`, `verdict`, `preview`, a count with a noun, `exitCode` (red when not
+`none`, `preview`, a count with both noun forms, `exitCode` (red when not
 0, output under the line), or a custom summarizer that can also say the
 result counts as a failure. One function, `describeSummary`, holds every
 branch; rows hold no code beyond their `show` and the odd summarizer.

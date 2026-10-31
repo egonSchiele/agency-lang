@@ -19,8 +19,8 @@ export const MAX_STDOUT_LEN = 2000;
 
 /** What the model gets back for a command's output: short output as
  *  printed, long output saved under `source` (the command that ran) and
- *  replaced by the notice. */
-export function _keepOutput(text: string, exitCode: number, source: string): string {
+ *  replaced by the notice. An empty source means none was given. */
+export function _keepOutput(text: string, exitCode: number, source: string = ""): string {
   if (text.length <= MAX_STDOUT_LEN) return text;
   const run = currentRun();
   const name = storeOutput(run, text, source);

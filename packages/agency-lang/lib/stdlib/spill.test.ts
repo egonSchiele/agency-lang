@@ -12,6 +12,7 @@ describe("spill", () => {
   it("returns short output as printed", () => {
     withRun(() => {
       expect(_keepOutput("hello\n", 0, "echo hello")).toBe("hello\n");
+      expect(_keepOutput("hello\n", 0)).toBe("hello\n");
     });
   });
 

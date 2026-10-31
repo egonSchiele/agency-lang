@@ -45,7 +45,7 @@ import { _keepOutput, _readSpill, _grepSpill } from "agency-lang/stdlib-lib/spil
   saved and replaced by a preview (see `keepOutput`). */
 export static const MAX_STDOUT_LEN = 2000
 
-export def keepOutput(text: string, exitCode: number, source: string): string {
+export def keepOutput(text: string, exitCode: number, source: string = ""): string {
   """
   What the model gets back for a command's output.
 
@@ -54,6 +54,7 @@ export def keepOutput(text: string, exitCode: number, source: string): string {
   and the name it was saved under, with the tools that read it. `source`
   is the command that produced the output, as the user saw it; the preview
   names it, and so does the agent's trace line when the output is read back.
+  Leave it empty when there is no command to name.
   """
   return _keepOutput(text, exitCode, source)
 }

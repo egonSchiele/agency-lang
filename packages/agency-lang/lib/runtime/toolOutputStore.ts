@@ -98,8 +98,10 @@ function freshName(run: Run): string {
   return `${stamp}-${toHex(run.ctx.host.random.bytes(3))}.log`;
 }
 
-/** The source as the store keeps it and the notice shows it. */
-export function spillSourceLabel(source: string): string {
+/** The source as the store keeps it and the notice shows it; null when the
+ *  caller gave none (an empty string). */
+export function spillSourceLabel(source: string | null): string | null {
+  if (source === null || source === "") return null;
   return source.slice(0, SPILL_SOURCE_CHARS);
 }
 
@@ -112,7 +114,8 @@ export function storeOutput(run: Run, text: string, source: string): string {
     store.entries.shift();
   }
   const name = freshName(run);
-  store.entries.push({ name, text, source: spillSourceLabel(source) });
+  const label = spillSourceLabel(source);
+  store.entries.push(label === null ? { name, text } : { name, text, source: label });
   return name;
 }
 
@@ -194,7 +197,8 @@ export function outputNotice(
   source: string | null = null,
 ): string {
   const lines = text.split("\n");
-  const of = source === null ? "" : ` of "${spillSourceLabel(source)}"`;
+  const label = spillSourceLabel(source);
+  const of = label === null ? "" : ` of "${label}"`;
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
   const search =
     readers.grep === null

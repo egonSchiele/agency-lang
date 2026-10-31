@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "everyAgentToolHasARow",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

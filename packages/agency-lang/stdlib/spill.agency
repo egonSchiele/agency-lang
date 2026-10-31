@@ -32,8 +32,9 @@
   ```agency
   import { keepOutput, readSpill, grepSpill } from "std::spill"
 
-  const shown = keepOutput(hugeBuildLog, 1)
-  // shown is a preview naming an output such as 2026-09-04T01-02-03-000Z-a1b2c3.log
+  const shown = keepOutput(hugeBuildLog, 1, "make")
+  // shown is a preview naming an output such as 2026-09-04T01-02-03-000Z-a1b2c3.log,
+  // and saying it is the output of "make"
   const tail = readSpill("2026-09-04T01-02-03-000Z-a1b2c3.log", offset: 900, limit: 50)
   const errors = grepSpill("error", filename: "2026-09-04T01-02-03-000Z-a1b2c3.log")
   ```
@@ -44,15 +45,18 @@ import { _keepOutput, _readSpill, _grepSpill } from "agency-lang/stdlib-lib/spil
   saved and replaced by a preview (see `keepOutput`). */
 export static const MAX_STDOUT_LEN = 2000
 
-export def keepOutput(text: string, exitCode: number): string {
+export def keepOutput(text: string, exitCode: number, source: string = ""): string {
   """
   What the model gets back for a command's output.
 
   Short output comes back exactly as printed. Long output is saved in the
   run and replaced by a preview: the exit code, the first and last lines,
-  and the name it was saved under, with the tools that read it.
+  and the name it was saved under, with the tools that read it. `source`
+  is the command that produced the output, as the user saw it; the preview
+  names it, and so does the agent's trace line when the output is read back.
+  Leave it empty when there is no command to name.
   """
-  return _keepOutput(text, exitCode)
+  return _keepOutput(text, exitCode, source)
 }
 
 export idempotent def readSpill(

@@ -1,0 +1,31 @@
+/*
+ * Every tool the agent offers has a row in the trace renderer's table, or is
+ * one of the tools whose names are not known when the renderer is written:
+ * MCP tools, learned tools, Claude skill tools, and generated tools, which
+ * use the generic display by design. Adding a tool to a toolkit without a
+ * row fails this test; add the row (see docs/dev/agents/tool-output.md).
+ */
+import { presentedToolNames } from "agency-lang/stdlib-lib/agentToolTrace.js"
+import { buildTools as codingTools } from "std::agents/coding"
+import { filter, map } from "std::array"
+import { now } from "std::date"
+
+import { claudeSkillTools } from "../../../lib/claudeSkills.agency"
+import { learnedExtras } from "../../../lib/learned.agency"
+import { getMcpTools } from "../../../lib/mcp.agency"
+import { turnTools } from "../coordinator.agency"
+import { getGeneratedTools } from "../learn.agency"
+
+node everyAgentToolHasARow(): string {
+  const dynamic = map(
+    [...getMcpTools(), ...learnedExtras(), ...claudeSkillTools(), ...getGeneratedTools()],
+    \tool -> tool.name,
+  )
+  const offered = map([...turnTools(now()), ...codingTools()], \tool -> tool.name)
+  const rows = presentedToolNames()
+  const missing = filter(offered, \name -> !rows.includes(name) && !dynamic.includes(name))
+  if (missing.length > 0) {
+    return "FAIL: no presentation row for ${missing.join(", ")}"
+  }
+  return "ok"
+}

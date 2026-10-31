@@ -50,7 +50,13 @@ export type CallbackMap = {
   };
   onFunctionEnd: { functionName: string; timeTaken: number };
   onToolCallStart: { toolName: string; args: Record<string, unknown> };
-  onToolCallEnd: { toolName: string; result: any; timeTaken: number };
+  onToolCallEnd: {
+    toolName: string;
+    /** The call's named arguments, the same object `onToolCallStart` got. */
+    args: Record<string, unknown>;
+    result: any;
+    timeTaken: number;
+  };
   onLLMRetry: {
     attempt: number; // 1-based retry number
     maxRetries: number; // the configured retry count

@@ -306,6 +306,31 @@ export class GuardTripRetry extends Error {
   }
 }
 
+/** A guard-trip cancellation of an in-flight request is RESUMABLE
+ *  (resumable-guards PR 3): when the trip belongs to a non-root guard on
+ *  THIS stack, terminate the promptStart pair as a normal cancellation
+ *  and throw GuardTripRetry to hand control to the request-step's retry
+ *  wrapper, which runs a gate step to raise the trip as an interrupt. On
+ *  approve the wrapper re-issues the request from the current thread
+ *  state — the cancelled generation is honestly gone. Root-budget trips
+ *  and foreign-stack causes return without throwing and keep
+ *  _runPrompt's hard cancellation path. */
+export function throwRetryForResumableTrip(
+  cause: { kind?: string; guardId?: string } | undefined,
+  run: Run,
+  stateStack: StateStack | undefined,
+): void {
+  if (cause?.kind !== "guardTrip") return;
+  const trippedGuard = (stateStack ?? run.ctx.stateStack).guards.find(
+    (g) => g.guardId === cause.guardId,
+  );
+  if (!trippedGuard || trippedGuard.isRootBudget) return;
+  run.log.promptCancelled({
+    threadId: run.threads.activeId() ?? null,
+  });
+  throw new GuardTripRetry(trippedGuard.guardId);
+}
+
 /** The RUNNER surface for the same question the prompt gates ask: called
  *  at step entry (before shouldSkip's consuming walk) when
  *  `stack.firstRaisableTrip()` found an over-budget armed guard —

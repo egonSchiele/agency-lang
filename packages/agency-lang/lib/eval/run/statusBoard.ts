@@ -1,3 +1,4 @@
+import { formatElapsed } from "../../utils/formatElapsed.js";
 import { color } from "@/utils/termcolors.js";
 
 /**
@@ -16,13 +17,8 @@ type BoardEntry = {
   costUsd: number;
 };
 
-/** "47s" under a minute, "5m 17s" over. Shared with runSuite's sequential
- *  progress lines. */
-export function formatElapsed(ms: number): string {
-  const totalSec = Math.round(ms / 1000);
-  if (totalSec < 60) return `${totalSec}s`;
-  return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`;
-}
+// Shared with runSuite's sequential progress lines and the agent's tool traces.
+export { formatElapsed };
 
 export function startStatusBoard(ids: string[]): {
   update(id: string, patch: Partial<Omit<BoardEntry, "id">>): void;

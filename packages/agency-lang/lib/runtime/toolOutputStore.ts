@@ -9,8 +9,10 @@ import type { Run } from "./asyncContext.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { toHex } from "../utils/hash.js";
 
-/** One saved output. */
-export type SavedOutput = { name: string; text: string };
+/** One saved output. `source` is what produced it, for a human: the command
+ *  that ran, or the tool and its first string argument. Entries saved before
+ *  the field existed have none. */
+export type SavedOutput = { name: string; text: string; source?: string };
 
 /** The store: entries oldest first, so eviction drops from the front. */
 export type ToolOutputStore = { entries: SavedOutput[] };
@@ -32,6 +34,9 @@ export const PREVIEW_CHARS = 700;
 
 /** Longest line the preview shows before cutting it. */
 export const PREVIEW_LINE_LEN = 200;
+
+/** Longest source kept beside a saved output. */
+export const SPILL_SOURCE_CHARS = 80;
 
 /** A saved name: a timestamp, a random suffix, `.log`. The read tools accept
  *  only this shape, which is what keeps a lookup from matching anything
@@ -93,25 +98,42 @@ function freshName(run: Run): string {
   return `${stamp}-${toHex(run.ctx.host.random.bytes(3))}.log`;
 }
 
+/** The source as the store keeps it and the notice shows it; null when the
+ *  caller gave none (an empty string). */
+export function spillSourceLabel(source: string | null): string | null {
+  if (source === null || source === "") return null;
+  return source.slice(0, SPILL_SOURCE_CHARS);
+}
+
 /** Keep `text` whole under a fresh name and return the name. The oldest
  *  entries go first until the new one fits; an entry larger than the whole
  *  cap is kept alone, because the notice will already have promised it. */
-export function storeOutput(run: Run, text: string): string {
+export function storeOutput(run: Run, text: string, source: string): string {
   const store = readStore(run);
   while (store.entries.length > 0 && storedChars(store) + text.length > MAX_STORE_CHARS) {
     store.entries.shift();
   }
   const name = freshName(run);
-  store.entries.push({ name, text });
+  const label = spillSourceLabel(source);
+  store.entries.push(label === null ? { name, text } : { name, text, source: label });
   return name;
+}
+
+function findEntry(run: Run, name: string): SavedOutput | null {
+  if (!isOutputName(name)) return null;
+  return readStore(run).entries.find((entry) => entry.name === name) ?? null;
 }
 
 /** The saved text, or null when the name is not in the store: evicted, saved
  *  before a checkpoint this run resumed from, or saved by another run. */
 export function findOutput(run: Run, name: string): string | null {
-  if (!isOutputName(name)) return null;
-  const hit = readStore(run).entries.find((entry) => entry.name === name);
-  return hit === undefined ? null : hit.text;
+  return findEntry(run, name)?.text ?? null;
+}
+
+/** What produced the saved output, or null when the name is not in the
+ *  store or the entry was saved before sources were kept. */
+export function findOutputSource(run: Run, name: string): string | null {
+  return findEntry(run, name)?.source ?? null;
 }
 
 /** What a reader says about a name it cannot find. One message for every
@@ -163,7 +185,8 @@ function previewTail(lines: string[], skip: number, budget: number): string[] {
  * `readers`. `exitCode` is null for a tool result that is not a command's
  * output. The preview shrinks so the notice fits in `maxChars`; only when
  * the text around the preview is longer than that on its own does the
- * notice come out longer, and the caller cuts it.
+ * notice come out longer, and the caller cuts it. `source` names what
+ * produced the output in the first line.
  */
 export function outputNotice(
   text: string,
@@ -171,8 +194,11 @@ export function outputNotice(
   exitCode: number | null,
   readers: SpillReaders,
   maxChars: number = Infinity,
+  source: string | null = null,
 ): string {
   const lines = text.split("\n");
+  const label = spillSourceLabel(source);
+  const of = label === null ? "" : ` of "${label}"`;
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
   const search =
     readers.grep === null
@@ -180,7 +206,7 @@ export function outputNotice(
       : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
   const notice = (head: string[], tail: string[], headCount: number, tailCount: number) =>
     [
-      `[Output too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
+      `[Output${of} too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
       `--- first ${headCount} lines ---`,
       head.join("\n"),
       `--- last ${tailCount} lines ---`,

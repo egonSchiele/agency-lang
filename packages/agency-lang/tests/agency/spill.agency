@@ -32,10 +32,10 @@ def lengthOf(found: Result): number {
 node evictionDropsTheOldest() {
   // The store holds a million characters. Four saves of 300,000 push the
   // first one out, and the fourth is still whole.
-  const first = spilledName(keepOutput(big("a"), 0))
-  keepOutput(big("b"), 0)
-  keepOutput(big("c"), 0)
-  const fourth = spilledName(keepOutput(big("d"), 0))
+  const first = spilledName(keepOutput(big("a"), 0, "cmd"))
+  keepOutput(big("b"), 0, "cmd")
+  keepOutput(big("c"), 0, "cmd")
+  const fourth = spilledName(keepOutput(big("d"), 0, "cmd"))
   const gone = readSpill(first)
   let why = ""
   if (gone is failure(reason)) {
@@ -55,15 +55,15 @@ node survivesACheckpoint() {
   // store with four more saves, and restore. The entry is only there
   // afterwards if the checkpoint carried the store. The pass counter
   // lives in TypeScript because an Agency counter is rolled back too.
-  const name = spilledName(keepOutput(big("a"), 0))
+  const name = spilledName(keepOutput(big("a"), 0, "cmd"))
   const cp = checkpoint()
   const pass = getMutable("spillPass", 0)
   setMutable("spillPass", pass + 1)
   if (pass == 0) {
-    keepOutput(big("b"), 0)
-    keepOutput(big("c"), 0)
-    keepOutput(big("d"), 0)
-    keepOutput(big("e"), 0)
+    keepOutput(big("b"), 0, "cmd")
+    keepOutput(big("c"), 0, "cmd")
+    keepOutput(big("d"), 0, "cmd")
+    keepOutput(big("e"), 0, "cmd")
     const evicted = isFailure(readSpill(name))
     setMutable("spillEvicted", evicted)
     restore(cp, { maxRestores: 1 })

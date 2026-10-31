@@ -18,11 +18,15 @@ import { firstMatchingLines, type GrepMatch } from "./shell.js";
 export const MAX_STDOUT_LEN = 2000;
 
 /** What the model gets back for a command's output: short output as
- *  printed, long output saved and replaced by the notice. */
-export function _keepOutput(text: string, exitCode: number): string {
+ *  printed, long output saved under `source` (the command that ran) and
+ *  replaced by the notice. An empty source means none was given. */
+export function _keepOutput(text: string, exitCode: number, source: string = ""): string {
   if (text.length <= MAX_STDOUT_LEN) return text;
   const run = currentRun();
-  return outputNotice(text, storeOutput(run, text), exitCode, DEFAULT_READERS);
+  const name = storeOutput(run, text, source);
+  // The notice fits the same cap as inline output, so a long source never
+  // pushes it past what a short command would have returned.
+  return outputNotice(text, name, exitCode, DEFAULT_READERS, MAX_STDOUT_LEN, source);
 }
 
 function saved(name: string): string {

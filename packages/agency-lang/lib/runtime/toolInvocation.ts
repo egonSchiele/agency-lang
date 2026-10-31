@@ -217,6 +217,7 @@ export function capToolResultForLlm(
   cap: number,
   spill: SpillSettings | null,
   tool: ToolIdentity,
+  args: Record<string, unknown>,
 ): any {
   const ceiling = Number.isFinite(cap) && cap > 0 ? cap : Infinity;
   const saveOver = spill === null ? ceiling : Math.min(spill.over, ceiling);
@@ -229,7 +230,9 @@ export function capToolResultForLlm(
     // An object is saved indented, so its JSON has lines that readSpill's
     // offset and limit, and grepSpill, can work on.
     const saved = stringifyToolResult(result, 2);
-    const notice = outputNotice(saved, storeOutput(spill.run, saved), null, spill.readers, ceiling);
+    const source = spillSource(tool, args);
+    const name = storeOutput(spill.run, saved, source);
+    const notice = outputNotice(saved, name, null, spill.readers, ceiling, source);
     // The notice already fits unless the cap is too small for the text
     // around its preview; then the cap still wins.
     return notice.slice(0, ceiling);
@@ -238,11 +241,21 @@ export function capToolResultForLlm(
   return cutAt(text, ceiling, "");
 }
 
+/** What a saved tool result is labelled for a human: the tool's name and
+ *  its first string argument, which for the tools that spill is the URL or
+ *  the path. A fixed rule, not a lookup in the trace renderer's table, so
+ *  the runtime does not depend on the renderer. */
+export function spillSource(tool: ToolIdentity, args: Record<string, unknown>): string {
+  const noun = Object.values(args).find((value) => typeof value === "string");
+  return noun === undefined ? tool.name : `${tool.name} ${noun}`;
+}
+
 /** `capToolResultForLlm` with one `llm()` call's cap and spill settings
  *  fixed: what the loop runs every tool result, failure message, and
  *  rejection reason through. */
 export function toolResultCapper(cap: number, spill: SpillSettings | null) {
-  return (result: any, tool: ToolIdentity) => capToolResultForLlm(result, cap, spill, tool);
+  return (result: any, tool: ToolIdentity, args: Record<string, unknown>) =>
+    capToolResultForLlm(result, cap, spill, tool, args);
 }
 
 /** LLMs routinely emit an explicit `null` for an optional tool argument

@@ -15,6 +15,7 @@ const calls = [
   ["successful", {}],
   ["failedFixture", {}],
   ["whatIAmDoing", {}],
+  ["read", { filename: "a.md", offset: 1, limit: 20 }],
   ["researchAgent", { userMsg: "Find the original model announcement" }],
   ["web_search_tavily", {}],
   ["web_search_tavily", { query: 'site.example.com "quoted phrase"' }],
@@ -114,6 +115,8 @@ function detailed(output) {
     unwrappedFailure: output.includes("✗ Tool failed  failedFixture\n  │ fixture failure"),
     failedToolNeverSucceeded: !output.includes("✓ Tool finished  failedFixture"),
     suppressedWhatIAmDoing: !/Tool (call|returned|finished)  whatIAmDoing/.test(output),
+    summaryLine: output.includes("✓ Read a.md lines 1–20"),
+    noSummaryStart: !output.includes("● Tool call  read"),
     malformedSearchStaysCustom: output.includes(
       "⌕ Web search  web_search_tavily\n  │ Tavily\n  │ Queries not reported",
     ),

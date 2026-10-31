@@ -34,32 +34,28 @@ export def isTraceEnabled(): boolean {
   return _isInteractive || VERBOSE || AGENT_DEBUG
 }
 
-static const SKIP_TRACING = ["whatIAmDoing"]
+// Which tools print, and how, is the renderer's table (TOOL_PRESENTATIONS in
+// agentToolTrace.ts). Nothing here names a tool. The debug flag makes every
+// summary line carry the registered tool name, which is how a reader finds
+// the call in the log.
 callback("onToolCallStart") as data {
-  if (SKIP_TRACING.includes(data.toolName)) {
-    return
-  }
-
   if (isTraceEnabled()) {
-    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, provider: searchProviderName(data.toolName) })
+    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, provider: searchProviderName(data.toolName) }, AGENT_DEBUG)
   }
 }
 
 callback("onToolCallEnd") as data {
-  if (SKIP_TRACING.includes(data.toolName)) {
-    return
-  }
-
   if (isTraceEnabled()) {
     const provider = searchProviderName(data.toolName)
+    const base = { kind: "toolEnd", toolName: data.toolName, args: data.args, timeTaken: data.timeTaken, provider: provider }
     if (data.result is success(_result)) {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _result, outcome: "success", provider: provider })
+      _printAgentTrace({ ...base, value: _result, outcome: "success" }, AGENT_DEBUG)
     } else if (data.result is failure(_error)) {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _error, outcome: "failure", provider: provider })
+      _printAgentTrace({ ...base, value: _error, outcome: "failure" }, AGENT_DEBUG)
     } else if (isPlainObject(data.result) && data.result.type == "reject") {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result.value ?? "Tool call rejected", outcome: "failure", provider: provider })
+      _printAgentTrace({ ...base, value: data.result.value ?? "Tool call rejected", outcome: "failure" }, AGENT_DEBUG)
     } else {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result, outcome: "plain", provider: provider })
+      _printAgentTrace({ ...base, value: data.result, outcome: "plain" }, AGENT_DEBUG)
     }
   }
 }

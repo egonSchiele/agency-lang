@@ -53,6 +53,10 @@ The marker counts toward the limit, so a cut result is never longer than `maxToo
 
 **The preview is bounded by characters.** `previewHead` and `previewTail` each stop after `PREVIEW_CHARS`, or less when the notice has to fit a smaller limit, and a single line is cut at `PREVIEW_LINE_LEN`. Fifteen lines from each end of 200-character lines would make a preview three times longer than the output it replaced. The tail never reaches back into lines the head showed, so a two-line output is not printed twice.
 
+## What a saved output is called
+
+Every entry carries a `source` beside its name: the command `safeBash` ran, as the user typed it, or for a tool result the loop spilled, the tool's name and its first string argument (`fetchMarkdown https://…`). The notice names it in its first line, and the agent's trace shows `output of <source>` when `readSpill` or `grepSpill` reads it back, since the generated name means nothing to a person. `storeOutput` cuts the source to `SPILL_SOURCE_CHARS`. An entry saved before the field existed reads back with no source, and the trace falls back to the name. The tool-loop rule is a fixed heuristic in `lib/runtime/toolInvocation.ts` (`spillSource`), not a lookup in the trace renderer's table, so the runtime does not depend on the renderer.
+
 ## Where saved output ends up
 
 In every checkpoint the run writes: the agent's session file after every turn (`docs/dev/agents/agent-sessions.md`), every trace step on which the globals changed, and every hosted interrupt. Those files already hold the conversation. `how-hosted-serving-works.md` says that an end user who receives an interrupt receives the saved text as well as the previews. Files left in `~/.agency-agent/tool-output` by older versions are never read and can be deleted.

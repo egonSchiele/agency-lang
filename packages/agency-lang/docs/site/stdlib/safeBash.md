@@ -277,9 +277,8 @@ Which interrupts this one command needs raised.
 outcomeOf(plan: Plan): string
 ```
 
-Which of the five ways a plan can go this one went: refuse, shellFree,
-  agency, narrow, or broad. Exhaustive over Execution, so a new kind is a
-  type error here.
+Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
+  Exhaustive over Execution, so a new execution kind is a type error here.
 
 **Parameters:**
 
@@ -317,7 +316,7 @@ Decide everything about a call before any of it happens.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L728))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L727))
 
 ### isRefused
 
@@ -342,7 +341,7 @@ True when this command must not run, whatever anyone approves.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L823))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L822))
 
 ### bashParser
 
@@ -360,7 +359,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L899))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L898))
 
 ### resolveCwd
 
@@ -383,7 +382,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L923))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L922))
 
 ### safeBash
 
@@ -428,4 +427,4 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L944))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L943))

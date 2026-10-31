@@ -443,9 +443,8 @@ def verbName(command: SimpleCommand): string {
 
 export def outcomeOf(plan: Plan): string {
   """
-  Which of the five ways a plan can go this one went: refuse, shellFree,
-  agency, narrow, or broad. Exhaustive over Execution, so a new kind is a
-  type error here.
+  Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
+  Exhaustive over Execution, so a new execution kind is a type error here.
   """
   return match(plan.execution.kind) {
     "refuse" => "refuse"
@@ -777,7 +776,7 @@ export def planFor(source: string, cwd: string): Plan {
     }
     const effects = effectsFor(command, cwd)
     if (effects is failure(why)) {
-      if (allRecognized) {
+      if (firstMiss == "") {
         firstMiss = why
       }
       allRecognized = false
@@ -988,8 +987,10 @@ export def safeBash(
       return failure(why)
     }
     // A rejected broad question tells the model why no narrower one was
-    // available, so its next attempt can take the narrower path.
-    return failure("${why} ${broadExplanation(plan.broadReason)}")
+    // available, so its next attempt can take the narrower path. On its
+    // own line: the rejection text comes from the handler or a policy
+    // rejectMessage and may or may not end in a period.
+    return failure("${why}\n${broadExplanation(plan.broadReason)}")
   }
 
   // Echo output is truncated like every other path: a long echo returning

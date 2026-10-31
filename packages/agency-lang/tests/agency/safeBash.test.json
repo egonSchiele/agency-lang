@@ -318,7 +318,7 @@
       "nodeName": "rejectedBroadSaysWhy",
       "description": "A rejected broad question tells the model why safeBash could not ask a narrower one: the first command it had no rule for.",
       "input": "",
-      "expectedOutput": "\"interrupt rejected safeBash could not ask a narrower question because it has no rule for one of the commands: no rule for `xargs`.\"",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: no rule for `xargs`.\"",
       "interruptHandlers": [
         {
           "action": "reject",
@@ -335,7 +335,7 @@
       "nodeName": "rejectedAuditSaysWhy",
       "description": "The audit-rule case says every command was recognized, so the model is not told a command was unknown.",
       "input": "",
-      "expectedOutput": "\"interrupt rejected safeBash could not ask a narrower question because every command was recognized but none needs an approval of its own, so the shell itself had to be approved.\"",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because every command was recognized but none needs an approval of its own, so the shell itself had to be approved.\"",
       "interruptHandlers": [
         {
           "action": "reject",

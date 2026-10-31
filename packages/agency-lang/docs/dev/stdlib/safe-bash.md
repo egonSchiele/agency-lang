@@ -43,7 +43,11 @@ bash runs the original text.
   `std::write` for a redirect approves "a write to this file"; the
   content does not exist until bash runs.
 
-## The three outcomes
+## Outcomes
+
+A plan ends one of three ways: refused, shell-free, or handed to bash.
+`outcomeOf` names five, because it splits the bash way into `narrow` and
+`broad` and gives the in-process agency path its own name.
 
 `refuse`: the refuse wall (`isRefused`) matches `rm`, `rmdir`, `dd`,
 `shred`, `mkfs`, `truncate`, and the destructive git spellings, by command
@@ -103,12 +107,13 @@ There is no dedicated event type.
 ## What the model reads on a rejection
 
 When the broad question is rejected and the plan has a `broadReason`, the
-failure the model reads is the rejection text followed by one sentence
-from `BROAD_SENTENCES`, keyed by kind, with the detail appended when
-there is one:
+failure the model reads is the rejection text, then on its own line one
+sentence from `BROAD_SENTENCES`, keyed by kind, with the detail appended
+when there is one:
 
 ```
-interrupt rejected safeBash could not ask a narrower question because it has no rule for one of the commands: no rule for `xargs`.
+interrupt rejected
+safeBash could not ask a narrower question because it has no rule for one of the commands: no rule for `xargs`.
 ```
 
 A rejected narrow question carries no reason and reads as the rejection

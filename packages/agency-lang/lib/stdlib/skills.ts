@@ -72,10 +72,10 @@ export function _agentPromptsDir(): string {
 }
 
 // The characters Claude Code refuses in a skill name or folder name: control
-// characters, zero-width and bidirectional-control characters, private-use
-// characters, unusual blanks, and `<` and `>`.
+// characters, zero-width, invisible, and bidirectional-control characters,
+// private-use and tag characters, unusual blanks, and `<` and `>`.
 const REFUSED_NAME_CHARS =
-  /[\u0000-\u001F\u007F-\u009F\u00A0\u1680\u2000-\u200F\u2028-\u202F\u205F\u2066-\u2069\u3000\uE000-\uF8FF\uFEFF<>]/;
+  /[\u0000-\u001F\u007F-\u009F\u00A0\u00AD\u061C\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u2069\u3000\uE000-\uF8FF\uFEFF\u{E0000}-\u{E007F}<>]/u;
 
 // Names Claude Code keeps for its own synced skills.
 const RESERVED_SKILL_FOLDER = "synced";
@@ -107,13 +107,16 @@ const TOP_LEVEL_KEY = /^([A-Za-z0-9_-]+):(.*)$/;
 const BLOCK_SCALAR = /^[>|][+-]?$/;
 
 /** Read a `SKILL.md`: the top-level `key: value` lines of its frontmatter,
- *  as strings, and the text after it. Indented lines, list items, comments,
- *  and blank lines are skipped rather than failing the whole block, so a
- *  frontmatter switch survives a list or a multi-line value beside it. A
- *  `>` value is folded onto one line and a `|` value keeps its lines.
- *  With no frontmatter, or an unclosed fence, the whole file is body. */
+ *  as strings, and the text after it. A line that is not one of those
+ *  never fails the whole block, so a frontmatter switch survives a list, a
+ *  comment, or a multi-line value beside it. With no frontmatter, or an
+ *  unclosed fence, the whole file is body. */
 export function _parseSkillFile(raw: string): SkillFile {
-  const lines = raw.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+  const lines = raw
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n$/, "")
+    .split("\n");
   const end = lines[0] === FENCE ? lines.indexOf(FENCE, 1) : -1;
   if (end === -1) {
     return { data: {}, body: lines.join("\n") };
@@ -132,21 +135,49 @@ function readTopLevelKeys(lines: string[]): Record<string, string> {
       continue;
     }
     const [, key, rest] = match;
-    const value = rest.trim();
-    if (!BLOCK_SCALAR.test(value)) {
-      data[key] = unquote(value);
-      continue;
-    }
-    const block: string[] = [];
-    while (index < lines.length && (lines[index].startsWith(" ") || lines[index] === "")) {
-      block.push(lines[index].trim());
+    const continuation: string[] = [];
+    while (index < lines.length && isContinuation(lines[index])) {
+      continuation.push(lines[index].trim());
       index++;
     }
-    data[key] = value.startsWith(">")
-      ? block.filter((line) => line !== "").join(" ")
-      : block.join("\n").trim();
+    data[key] = valueOf(withoutComment(rest.trim()), continuation);
   }
   return data;
+}
+
+// An indented or blank line belongs to the key above it.
+function isContinuation(line: string): boolean {
+  return line === "" || line.startsWith(" ") || line.startsWith("\t");
+}
+
+// A `>` or `|` value is its indented lines. A plain value takes any
+// indented lines after it, folded onto one line, but never a list item or a
+// comment, so `allowed-tools:` followed by a list stays empty.
+function valueOf(value: string, continuation: string[]): string {
+  if (BLOCK_SCALAR.test(value)) {
+    return value.startsWith(">")
+      ? continuation.filter((line) => line !== "").join(" ")
+      : continuation.join("\n").trim();
+  }
+  const folded = continuation.filter(
+    (line) => line !== "" && !line.startsWith("- ") && !line.startsWith("#"),
+  );
+  return [unquote(value), ...folded].filter((part) => part !== "").join(" ");
+}
+
+// YAML starts a comment with a `#` at the start of the value or after a
+// space. After a quoted value, everything past the closing quote is dropped.
+function withoutComment(value: string): string {
+  const quote = value[0];
+  if (quote === '"' || quote === "'") {
+    const close = value.indexOf(quote, 1);
+    return close === -1 ? value : value.slice(0, close + 1);
+  }
+  if (value.startsWith("#")) {
+    return "";
+  }
+  const comment = value.indexOf(" #");
+  return comment === -1 ? value : value.slice(0, comment).trimEnd();
 }
 
 function unquote(value: string): string {

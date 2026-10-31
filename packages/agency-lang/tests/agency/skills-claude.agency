@@ -37,19 +37,19 @@ def commandNamed(scan: any, name: string): any {
 
 node namesAreEverySkill(): boolean {
   const scan = loadScan()
-  const expected = ["2024", "My-Skill", "bare", "first-line", "listy", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
+  const expected = ["2024", "My-Skill", "bare", "empty-desc", "first-line", "listy", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
   return JSON.stringify([...scan.names].sort()) == JSON.stringify(expected)
 }
 
 node entriesAreModelUsableSkills(): boolean {
   const scan = loadScan()
-  const expected = ["2024", "My-Skill", "bare", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
+  const expected = ["2024", "My-Skill", "bare", "empty-desc", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
   return sortedNames(scan.entries) == JSON.stringify(expected)
 }
 
 node commandsAreUserRunnableSkills(): boolean {
   const scan = loadScan()
-  const expected = ["2024", "My-Skill", "bare", "first-line", "listy", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
+  const expected = ["2024", "My-Skill", "bare", "empty-desc", "first-line", "listy", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
   return sortedNames(scan.commands) == JSON.stringify(expected)
 }
 
@@ -130,4 +130,16 @@ node numericNameBuildsATool(): boolean {
 node spaceInNameBecomesADash(): boolean {
   const scan = loadScan()
   return expandSlash("/My-Skill", scan.commands).endsWith("Spaced body.")
+}
+
+node emptyDescriptionFallsBackToFirstLine(): boolean {
+  const scan = loadScan()
+  return entryNamed(scan, "empty-desc").description == "The body's first line."
+}
+
+// skillsDir reads SKILL.md with the same parser, so a manual-only skill
+// whose frontmatter has a block list stays out of its listing too.
+node skillsDirFollowsMultiLineFrontmatter(): boolean {
+  const tool = skillsDir(fixture(), "standard") with approve
+  return !tool.description.includes("<name>listy</name>")
 }

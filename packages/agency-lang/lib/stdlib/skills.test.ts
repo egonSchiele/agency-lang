@@ -42,6 +42,11 @@ describe("stdlib docs recursive glob", () => {
 
 describe("_refusedSkillName", () => {
   const refused = [
+    "a\u2060b",
+    "a\u061Cb",
+    "a\u00ADb",
+    "a\u180Eb",
+    "a\u{E0041}b",
     "a\u0007b",
     "a\u200Bb",
     "a\u202Eb",
@@ -116,5 +121,45 @@ describe("_parseSkillFile", () => {
   it("treats a file with no frontmatter, or an unclosed fence, as all body", () => {
     expect(_parseSkillFile("Bare body.\n")).toEqual({ data: {}, body: "Bare body." });
     expect(_parseSkillFile("---\nname: x\n")).toEqual({ data: {}, body: "---\nname: x" });
+  });
+});
+
+describe("_parseSkillFile, YAML a skill author writes", () => {
+  const data = (frontmatter: string) => _parseSkillFile(`---\n${frontmatter}\n---\nBody.`).data;
+
+  it("drops an inline comment after a plain value", () => {
+    expect(data("disable-model-invocation: true # keep manual")).toEqual({
+      "disable-model-invocation": "true",
+    });
+  });
+
+  it("drops an inline comment after a quoted value", () => {
+    expect(data('name: "deploy" # main one')).toEqual({ name: "deploy" });
+  });
+
+  it("keeps a # that does not start a comment", () => {
+    expect(data("description: C# tips")).toEqual({ description: "C# tips" });
+  });
+
+  it("reads a value that starts on the next line", () => {
+    expect(data("description:\n  Use when the user asks for X.")).toEqual({
+      description: "Use when the user asks for X.",
+    });
+  });
+
+  it("folds a value wrapped onto a second line", () => {
+    expect(data("description: Use when the user\n  asks for X.")).toEqual({
+      description: "Use when the user asks for X.",
+    });
+  });
+
+  it("leaves a key followed by a list empty", () => {
+    expect(data("allowed-tools:\n  - Bash\nname: d")).toEqual({ "allowed-tools": "", name: "d" });
+  });
+
+  it("reads a file that starts with a byte-order mark", () => {
+    const parsed = _parseSkillFile("\uFEFF---\nname: d\n---\nBody.");
+    expect(parsed.data).toEqual({ name: "d" });
+    expect(parsed.body).toBe("Body.");
   });
 });

@@ -149,6 +149,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "emptyDescriptionFallsBackToFirstLine",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "skillsDirFollowsMultiLineFrontmatter",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

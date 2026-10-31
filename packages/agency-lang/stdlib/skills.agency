@@ -300,8 +300,16 @@ def scanEntries(
   if (pathsResult is failure) {
     return []
   }
+  // A SKILL.md goes through the same reader scanClaudeSkills uses, so a
+  // switch beside a list or a multi-line value still counts.
   const parsed = map(pathsResult.value) as path {
-    const data = (try _read(root, "${sub}/${path}", 0, 0) |> frontmatter) catch {}
+    const raw = try _read(root, "${sub}/${path}", 0, 0) catch ""
+    let data: any = {}
+    if (layout == "standard") {
+      data = _parseSkillFile(raw).data
+    } else {
+      data = frontmatter(raw) catch {}
+    }
     return {
       path: path,
       data: data
@@ -484,10 +492,14 @@ def firstNonEmptyLine(text: string): string {
   return ""
 }
 
-// Claude Code's listing text for a skill: its description, or else the
-// first line of its body, then `when_to_use`, cut to the listing limit.
+// Claude Code's listing text for a skill: its description, or the first
+// line of its body when that is missing or empty, then `when_to_use`, cut
+// to the listing limit.
 def skillDescription(data: any, body: string): string {
-  let text = "${data.description ?? firstNonEmptyLine(body)}"
+  let text = "${data.description ?? ""}"
+  if (text == "") {
+    text = firstNonEmptyLine(body)
+  }
   const whenToUse = "${data.when_to_use ?? ""}"
   if (text == "") {
     text = whenToUse

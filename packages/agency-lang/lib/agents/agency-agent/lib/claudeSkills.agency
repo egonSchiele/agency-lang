@@ -123,26 +123,32 @@ export def skillListing(sources: SkillSource[], budget: number): string {
   return listing
 }
 
-/** The one `skill` tool over every folder, or none when no skill is listed. */
+/** The one `skill` tool over every folder, or none when no skill is listed.
+  `sources` decides the listing; the tool loads from `SKILL_SOURCES`. */
 export def skillToolFor(sources: SkillSource[]): any[] {
   const listed = [src for src in sources if src.scan.entries.length > 0]
   if (listed.length == 0) {
     return []
   }
-  const tool = loadSkill.partial(sources: sources).rename("skill").describe(skillListing(sources, MAX_SKILL_LISTING_CHARS))
+  const tool = loadSkill.rename("skill").describe(skillListing(sources, MAX_SKILL_LISTING_CHARS))
   return [tool]
 }
 
-// The tool body. The read raises std::read for the skill's folder, which the
-// agent policy answers; the recommended policy approves the personal folder
-// and the launch directory's project folder.
-def loadSkill(sources: SkillSource[], name: string, file: string = "SKILL.md"): Result<string> {
+// The tool body reads SKILL_SOURCES itself and binds nothing, so a
+// checkpoint taken while the tool is in a frame does not carry the skills.
+def loadSkill(name: string, file: string = "SKILL.md"): Result<string> {
   """
   Load a skill by name.
 
   @param name - The skill's name, as listed
   @param file - A file in the skill's folder; SKILL.md by default
   """
+  return loadSkillFrom(SKILL_SOURCES, name, file)
+}
+
+// The read raises std::read for the skill's folder, which the agent policy
+// answers.
+def loadSkillFrom(sources: SkillSource[], name: string, file: string): Result<string> {
   for (src in sources) {
     for (entry in src.scan.entries) {
       if (entry.name == name) {

@@ -7,7 +7,7 @@ import { find, map } from "std::array"
 import { mkdir, remove } from "std::fs"
 import { ClaudeSkillsScan, SkillCommand } from "std::skills"
 
-import test { loadSkill, loadSkillSources } from "../lib/claudeSkills.agency"
+import test { loadSkillFrom, loadSkillSources } from "../lib/claudeSkills.agency"
 import {
   SkillSource,
   claudeSkillDirs,
@@ -255,7 +255,7 @@ node loadsASkillByName(): boolean {
     return false
   }
   const sources = loadSkillSources(tree() + "/repo/sub/work", tree() + "/home")
-  const loaded = loadSkill(sources, "mine") with approve
+  const loaded = loadSkillFrom(sources, "mine", "SKILL.md") with approve
   clearTree()
   if (loaded is failure) {
     return false
@@ -269,13 +269,13 @@ node loadsAFileTheSkillLinksTo(): boolean {
   }
   write("notes.md", "Linked notes.", dir: tree() + "/home/.claude/skills/mine") with approve
   const sources = loadSkillSources(tree() + "/repo/sub/work", tree() + "/home")
-  const loaded = loadSkill(sources, "mine", "notes.md") with approve
-  const escaped = loadSkill(sources, "mine", "../shared/SKILL.md") with approve
+  const loaded = loadSkillFrom(sources, "mine", "notes.md") with approve
+  const escaped = loadSkillFrom(sources, "mine", "../shared/SKILL.md") with approve
   clearTree()
   return loaded is success && loaded.value == "Linked notes." && escaped is failure
 }
 
 node unknownSkillIsAFailure(): boolean {
-  const loaded = loadSkill(twoSources(), "nope") with approve
+  const loaded = loadSkillFrom(twoSources(), "nope", "SKILL.md") with approve
   return loaded is failure && loaded.error.includes("nope")
 }

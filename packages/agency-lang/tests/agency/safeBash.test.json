@@ -375,6 +375,23 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "pipelineRunsThroughBash",
+      "description": "A pipe in a broad string reaches bash as one string and produces bash's output.",
+      "input": "",
+      "expectedOutput": "\"HI\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

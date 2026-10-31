@@ -481,3 +481,15 @@ node newShapes() {
     executionCommand("git    status |  git   log"),
   ]
 }
+
+node pipelineRunsThroughBash() {
+  // `tr` has no rule, so this plan is broad and runs the original text.
+  // What this pins is that a pipe in a broad string reaches bash through
+  // _bash and produces bash's output. The rebuilt-text path through a
+  // pipe is pinned by the executionCommand row in newShapes.
+  const result = safeBash("echo hi | tr a-z A-Z")
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}

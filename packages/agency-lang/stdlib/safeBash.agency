@@ -33,6 +33,7 @@ import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn } from "agency-lang/stdlib-lib/shell.js"
 import { _grepPatternToRegex } from "agency-lang/stdlib-lib/grepDialect.js"
+import { _ignoredFromAbove } from "agency-lang/stdlib-lib/gitignore.js"
 
 export { MAX_STDOUT_LEN } from "std::spill"
 
@@ -473,10 +474,11 @@ type FlagRead = {
 }
 
 /** The grep flags safeBash can describe exactly. An allowlist: it has to
- * hold for GNU grep, ugrep, and BSD grep, because the bash path runs
- * whichever grep the shell finds. Left out on purpose, so a grep using
+ * hold for GNU grep (Linux), BSD grep (macOS), and a grep a user put on
+ * their PATH such as ugrep, because the bash path runs whichever grep the
+ * shell finds. Left out on purpose, so a grep using
  * one asks std::bash:
- * - `-R` follows every symlink below the path.
+ * - `-R`: GNU grep follows every symlink below the path.
  * - `-f`, `--exclude-from`, `--include-from` read another file.
  * - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
  *   carry them out, and the bash path is narrow only for one named file,
@@ -794,17 +796,18 @@ def isDigits(text: string): boolean {
   return text != "" && others.length == 0
 }
 
-def grepPayload(call: GrepCall, pattern: string, maxResults: number): GrepPayload {
+def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: number): GrepPayload {
   """
   The one place a grep command's flags become std::grep's fields. Both
-  paths call it; they differ only in the pattern and the cap they pass.
+  paths call it; they differ only in the pattern, its regex flags, and
+  the cap they pass.
   """
   const letters = call.split.plain
   return {
     pattern: pattern,
     dir: call.target.dir,
     file: call.target.file,
-    flags: "",
+    flags: flags,
     maxResults: maxResults,
     ignoreCase: letters.includes("i"),
     wholeWord: letters.includes("w"),
@@ -829,7 +832,7 @@ def grepEffects(command: SimpleCommand, cwd: string): Result<Effect[]> {
     return failure("grep through bash would search a directory, and reads files the grep tool skips")
   }
   // 0 means no cap, which is true of grep without -m.
-  return success([grepEffect(grepPayload(call.value, call.value.pattern, 0))])
+  return success([grepEffect(grepPayload(call.value, call.value.pattern, "", 0))])
 }
 
 /** The flags the grep tool's search can carry out exactly. A lone grep
@@ -842,6 +845,10 @@ static const SHELL_FREE_GREP_FLAGS: FlagSpec = {
   valued: ["e"],
   optionsFirst: false
 }
+
+/** The regex flags a shell-free search runs with. `u` makes `.` match a
+ * whole character, as grep does in a UTF-8 locale, not half of an emoji. */
+static const SHELL_FREE_REGEX_FLAGS = "u"
 
 /** The most matches a shell-free grep returns; the output says so when it stops. */
 static const SHELL_FREE_GREP_CAP = 1000
@@ -872,6 +879,19 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   if (target.file == null && !letters.includes("r")) {
     return failure("grep without -r does not search a directory")
   }
+  // The tool's search applies the .gitignore files above the directory to
+  // every entry, so where they reach into it (`**/dist/*` for `dist`) the
+  // search misses files grep reads, and an empty answer would read as
+  // "no match". Those go to the bash path.
+  if (target.file == null) {
+    const ignored = try _ignoredFromAbove(target.dir)
+    if (isFailure(ignored)) {
+      return ignored
+    }
+    if (ignored.value) {
+      return failure("git ignores files in this directory, and the grep tool's search would skip them")
+    }
+  }
   const syntax = grepSyntax(letters)
   if (isFailure(syntax)) {
     return syntax
@@ -885,7 +905,7 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   if (letters.includes("H") && letters.includes("h")) {
     return failure("grep with both -H and -h")
   }
-  const payload = grepPayload(call.value, regex, SHELL_FREE_GREP_CAP)
+  const payload = grepPayload(call.value, regex, SHELL_FREE_REGEX_FLAGS, SHELL_FREE_GREP_CAP)
   const render: GrepRender = {
     lineNumbers: letters.includes("n"),
     fileNames: grepFileNames(letters),

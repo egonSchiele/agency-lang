@@ -482,9 +482,9 @@
     },
     {
       "nodeName": "shellFreePayloads",
-      "description": "The shell-free payload carries the regex the search uses (escaped for -F) and the 1000-match cap; a file search splits into the real parent directory and the file name.",
+      "description": "The shell-free payload carries the regex the search uses (escaped for -F), the u flag so . matches a whole character, and the 1000-match cap; a file search splits into the real parent directory and the file name.",
       "input": "",
-      "expectedOutput": "[\"a\\\\+b\",[null,1000],[\"one.txt\",true]]",
+      "expectedOutput": "[\"a\\\\+b\",[null,1000,\"u\"],[\"one.txt\",true]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -586,6 +586,17 @@
           "expectedMessage": "Are you sure you want to run this shell command?"
         }
       ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepOfIgnoredFolder",
+      "description": "A lone grep of a folder whose contents .gitignore ignores does not run the tool's search, which would come back empty; it asks std::bash, as any directory search through bash does.",
+      "input": "",
+      "expectedOutput": "[\"bash\",[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}]",
       "evaluationCriteria": [
         {
           "type": "exact"

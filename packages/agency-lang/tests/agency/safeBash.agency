@@ -547,6 +547,10 @@ node splitGrepFlags() {
 
 static const FIXTURES = __dirname + "/stdlib/grep-fixtures"
 
+/** The package directory, whose node_modules exists in every checkout
+ * and whose .gitignore ignores everything inside it. */
+static const PACKAGE_DIR = __dirname + "/../.."
+
 def grepNames(source: string): any {
   const plan = planFor(source, FIXTURES)
   const names = [effect.name for effect in plan.effects]
@@ -640,7 +644,7 @@ node shellFreePayloads() {
   const fileSearch = grepPayloadOf("grep -n hello one.txt")
   return [
     fixed.pattern,
-    [dirSearch.file, dirSearch.maxResults],
+    [dirSearch.file, dirSearch.maxResults, dirSearch.flags],
     [fileSearch.file, fileSearch.dir == dirSearch.dir],
   ]
 }
@@ -678,7 +682,7 @@ def parityOf(source: string): any {
 
 node shellFreeMatchesRealGrep() {
   // No row runs `grep -rn hello` with no path: GNU grep prints bare names
-  // there, and ugrep, macOS's grep, prints `./one.txt`. The rendering
+  // there, and BSD grep, macOS's grep, prints `./one.txt`. The rendering
   // follows GNU, and a grepDialect unit test pins it.
   return [
     parityOf("grep -n hello one.txt"),
@@ -758,4 +762,13 @@ node rejectedGrepNamesTheTool() {
     return why
   }
   return "UNEXPECTEDLY RAN"
+}
+
+node grepOfIgnoredFolder() {
+  // A lone grep of a folder .gitignore reaches into would come back empty
+  // from the tool's search, so it goes to the bash path, which asks
+  // std::bash for a directory.
+  const plan = planFor("grep -rn parseAgency node_modules", PACKAGE_DIR)
+  const names = [effect.name for effect in plan.effects]
+  return [plan.execution.kind, names, plan.broadReason]
 }

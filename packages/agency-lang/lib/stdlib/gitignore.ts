@@ -88,6 +88,32 @@ export async function readAncestorGitignores(host: Host, dir: string): Promise<G
   return files;
 }
 
+/** Whether the .gitignore files above `dir` ignore it or anything
+ * directly inside it. A search rooted at `dir` that respects .gitignore
+ * applies those files to every entry, so where this is true it misses
+ * files the grep program reads: with `**\/dist/*` above it, a search of
+ * `dist` finds nothing at all. The repository root's own .gitignore is
+ * not "above" a search rooted there. */
+export async function ignoredFromAbove(host: Host, dir: string): Promise<boolean> {
+  const files = await readAncestorGitignores(host, dir);
+  if (files.length === 0) {
+    return false;
+  }
+  const absolute = path.resolve(host.system.cwd(), dir);
+  if (isIgnored(absolute, true, files)) {
+    return true;
+  }
+  const entries = await host.files.list(await host.files.root(absolute), ".");
+  return entries.some((entry) =>
+    isIgnored(path.join(absolute, entry.name), entry.type === "dir", files),
+  );
+}
+
+/** `ignoredFromAbove` for Agency code, which has no host to pass. */
+export async function _ignoredFromAbove(dir: string): Promise<boolean> {
+  return ignoredFromAbove(currentHost(), dir);
+}
+
 /** The directories strictly above `dir`, an absolute path, up to and
  * including the repository root, outermost first. Null when no ancestor
  * holds a `.git` entry, and empty when `dir` is itself a repository root:

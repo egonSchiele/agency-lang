@@ -173,9 +173,10 @@ There are two greps, and safeBash uses both.
   `build`, `.next`, `.cache`) and, by default, anything `.gitignore`
   ignores, and it never follows a symlink below the path.
 - **The grep program** is whatever `grep` the shell finds: GNU grep on
-  Linux and CI, ugrep on recent macOS, BSD grep on older macOS. `grep -r`
-  reads every file under the path, `.git/config` included, and ugrep has
-  flags that run programs (`--filter`) and write files (`--save-config`).
+  Linux and CI, BSD grep on macOS, or another grep a user put on their
+  `PATH`, such as ugrep. `grep -r` reads every file under the path,
+  `.git/config` included, and ugrep has flags that run programs
+  (`--filter`) and write files (`--save-config`).
 
 Both raise `std::grep` with the same `dir`, so a policy cannot tell them
 apart, and a policy that approves `std::grep` under the launch directory
@@ -202,7 +203,8 @@ is looked up as written (`--color=never`) among the plain flags, then by
 name among the valued ones. Anything the table does not list is refused,
 because a payload that ignored it would describe a different command.
 
-Left out on purpose: `-R` (follows every symlink below the path); `-f`,
+Left out on purpose: `-R` (GNU grep follows every symlink below the
+path; BSD grep does not by default); `-f`,
 `--exclude-from`, `--include-from` (read another file); `--include`,
 `--exclude`, `--exclude-dir` (the shell-free path cannot carry them out,
 and the bash path is narrow only for one named file); `-m` (counted per
@@ -230,10 +232,22 @@ Four more refusals:
 `tryShellFreeGrep` applies to a grep that is the whole command line, with
 no pipe, chain, or redirect, whose flags are all in
 `SHELL_FREE_GREP_FLAGS` (the tool has no `-c`, `-o`, or context lines),
-whose directory target has `-r`, and whose pattern translates. It raises
+whose directory target has `-r`, whose directory target is not reached
+by the `.gitignore` files above it, and whose pattern translates. It raises
 `std::grep` and runs `runGrep`, which calls `_grep`. The payload and the
 search are built from one `GrepPayload`, and the payload's `pattern` is
-the JavaScript regex the search uses.
+the JavaScript regex the search uses, with the regex flag `u`, so `.`
+matches a whole character, an emoji included, as grep does in a UTF-8
+locale.
+
+The `.gitignore` check matters because the tool's search applies the
+`.gitignore` files above its root to every entry. Where they reach into
+the directory, the search misses files grep reads, and where they reach
+everything (`**/node_modules/*` for `grep -rn x node_modules`) it finds
+nothing, which the model would read as "no match". `ignoredFromAbove`
+(`lib/stdlib/gitignore.ts`) is true when those files ignore the directory
+or any entry directly inside it, and such a grep goes to the bash path,
+which asks `std::bash` for a directory.
 
 `_grepPatternToRegex` (`lib/stdlib/grepDialect.ts`) accepts a character
 only when grep and JavaScript give it the same meaning, from one role
@@ -255,8 +269,9 @@ table per syntax:
 a directory search (or with `-H`, never with `-h`), then `line:` with
 `-n`, then the text. A name is the match's path joined to the path as
 bash hands it to grep (`GrepTarget.argument`, with `~` expanded), so
-`grep -rn x .` prints `./a.txt` and `grep -rn x` prints `a.txt`. ugrep,
-macOS's grep, prints `./a.txt` for the second, and safeBash follows GNU.
+`grep -rn x .` prints `./a.txt` and `grep -rn x` prints `a.txt`. BSD
+grep, macOS's grep, prints `./a.txt` for the second, and safeBash follows
+GNU.
 After a directory search the output gains `_skippedDirsNote()`, built from
 `SKIP_DIRS`, so the model knows a miss may be in a skipped file; with no
 match, the note goes in the failure's `stderr`. The search stops at
@@ -265,12 +280,18 @@ match, the note goes in the failure's `stderr`. The search stops at
 `shellFreeMatchesRealGrep` runs the shell-free path and real grep on the
 same commands over `tests/agency/stdlib/grep-fixtures/` and compares the
 lines. Each row first checks that its command really runs shell-free.
-The fixtures are short ASCII text, so the test cannot see three
-differences, which change the output and not what is read: a binary file
-(GNU prints `Binary file ./x matches`, the tool prints the decoded text);
-a character outside the Basic Multilingual Plane, which a JavaScript `.`
-without the `u` flag matches only half of; and `-i` on non-ASCII text,
-where the case-folding rules differ.
+The fixtures are short ASCII text, and what grep does with other text
+depends on the locale, so the test cannot see these differences. They
+change the output, not what is read:
+
+- A binary file: GNU prints `Binary file ./x matches`, and the tool prints
+  the decoded text.
+- `-w` next to a non-ASCII letter: `\b` treats only ASCII letters as word
+  characters, even with `u`, so `grep -rnw foo .` matches `éfoo` in the
+  tool's search, and grep in a UTF-8 locale does not.
+- `-i` on non-ASCII text, where the case-folding rules differ.
+- In the C locale grep works on bytes, so its `.` matches one byte of a
+  multi-byte character, and the tool's matches a whole character.
 
 ### Any other grep runs real grep, narrow for one file only
 

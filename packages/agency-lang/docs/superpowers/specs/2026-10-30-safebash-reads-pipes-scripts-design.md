@@ -242,23 +242,28 @@ The data:
 | `cwd` | the resolved working directory |
 | `outcome` | `refuse`, `shellFree`, `agency`, `narrow`, or `broad` |
 | `reason` | why it was broad: `unparseable`, `unrecognized`, `noEffects`, `unrenderable`; empty otherwise |
-| `verbs` | the command word of every simple command, in order; empty when unparseable |
+| `verbs` | the command word of every simple command, in order; `""` for an assignment-only command; empty when unparseable |
 | `effects` | the effect names the plan raises |
-| `detail` | for `unrecognized`, the classifier's own message for the first unrecognized command, such as ``no rule for `xargs` `` |
+| `detail` | the parser message for `unparseable`, the classifier's message for the first unrecognized command (such as ``no rule for `xargs` ``) for `unrecognized`, the render failure for `unrenderable`, and empty for `noEffects` |
 
-`reason` and `detail` are new information. Today `planFor` computes a
-failure message for every unrecognized command and then throws it away
-(`allRecognized = false`). The `Plan` type gains a `reason` field
-carrying the first one, and the event reads it from there. Part 6 uses
-the same field for the message the model sees on a rejection.
+`reason`, `detail`, and `verbs` are new information. Today `planFor`
+computes a failure message for every unrecognized command and then
+throws it away (`allRecognized = false`), and holds the flattened
+command list it could name the verbs from. The `Plan` type gains
+`broadReason`, a record `{ kind, detail }` or null, and `verbs`, a list
+of command words; the event reads both from the plan, and `outcomeOf`,
+an exhaustive match in Agency over the `Execution` union, names the
+outcome. Part 6 uses `broadReason` for the message the model sees on a
+rejection.
 
 ### Where it lives
 
-- `lib/stdlib/safeBash.ts` gains `_logSafeBashPlan(plan, command, cwd)`,
-  which calls `debug` on the current run's log and is a no-op outside a
-  run, on the pattern of `_turnStart` in `lib/stdlib/statelog.ts`.
-- `stdlib/safeBash.agency` calls it from `safeBash` between `planFor`
-  and `raiseAll`.
+- `lib/stdlib/statelog.ts` gains `_debug(message, data)`, a generic
+  bridge beside `_turnStart` that calls `debug` on the current run's log
+  and is a no-op outside a run. Nothing in it knows about safeBash;
+  `lib/stdlib/safeBash.ts` stays a one-line re-export of the parser.
+- `stdlib/safeBash.agency` builds the data record and calls `_debug`
+  from `safeBash` between `planFor` and the refusal check.
 
 Reading the numbers back is a filter over the session's statelog JSONL
 for `debug` events whose message is `safeBash plan`. No viewer change.
@@ -290,18 +295,24 @@ glob depends on this change.
 
 In the tarsec repository, `lib/parsers/bash/`:
 
-- A new node, `Pipeline { tag: "pipeline"; stages: SimpleCommand[] }`,
-  with at least two stages. `Command` becomes
+- A new node, `Pipeline { tag: "pipeline"; stages: PipelineStage[] }`,
+  with at least two stages, where `PipelineStage = SimpleCommand |
+  Parens`, so `(a && b) | c` parses. `Command` becomes
   `SimpleCommand | Pipeline | And | Or | Parens`.
 - A pipeline binds tighter than `&&` and `||`, as in bash: `a | b && c`
-  is `(a | b) && c`. In `commandParser` the atom becomes "a simple
-  command, optionally followed by `| simple command` repeated", and the
-  `&&`/`||` level is unchanged.
-- `|` is the separator. `|&` is not recognized and stays a parse error.
-- A new redirect form, `2>&1` and `1>&2`, parsed as
-  `{ tag: "redirect", fd: 2, op: ">&", target: literal "1" }`. Only a
-  single digit on each side. `>&2` without a leading fd is `fd: 1`. Any
-  other `>&` spelling stays a parse error, as today.
+  is `(a | b) && c`. In `commandParser` the atom becomes "a stage,
+  followed by zero or more committed `| stage` pairs", and the
+  `&&`/`||` level is unchanged. Parentheses are a pipeline stage, and
+  the expression parser gets `fail()` for its paren slot: it tries that
+  slot before the atom, so a real paren parser there would consume
+  `(a && b)` whole and the `| c` could never attach.
+- `|` commits: `ls |` is a parse error, not `ls`. `|&` is not recognized
+  and stays a parse error.
+- A new redirect form, `2>&1` and `>&2`, parsed as
+  `{ tag: "redirect", fd: 2, op: ">&", target: literal "1" }`: an
+  optional fd of any length (`12>&1` parses, as bash allows), then `>&`,
+  then one digit with no space. `>&2` with no leading fd has no `fd`.
+  Any other `>&` spelling stays a parse error, as today.
 - A new word, `GlobWord { tag: "glob"; text: string }`: an unquoted word
   containing `*`, `?`, or `[`, otherwise made of the characters a path
   word allows. It is its own node because bash expands it and the
@@ -696,7 +707,7 @@ destination that will be read.
   other docs. It records the mechanism: plan then act, the five rules,
   the rule order in Part 6, the read-family table and what each column
   means, the `cd` rule, the wrapper list, the `std::exec` payload and
-  its one departure, the `safeBashPlan` event, and the test files. Add
+  its one departure, the `safeBash plan` debug event, and the test files. Add
   it to the index in `CLAUDE.md` and in
   `.claude/skills/agency-stdlib-docs/SKILL.md`.
 - `docs/dev/agents/approval-policies.md` gains a section, "What a read
@@ -795,7 +806,6 @@ candidates already visible for a later round are leading assignments and
 - Whether the read-family table lives in one `static const` array of
   records with the verb as key, or one `match` arm per verb like
   `gitEffects`. The array is likelier to stay readable at twenty rows.
-- The summary line's wording.
 - Whether `rg` needs its own row or aliases `grep`'s with a few extra
   flags.
 

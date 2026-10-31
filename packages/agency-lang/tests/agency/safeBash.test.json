@@ -364,6 +364,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "newShapes",
+      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
+      "input": "",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"unrecognized\",\"no rule for `head`\"],\"git status | git log\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

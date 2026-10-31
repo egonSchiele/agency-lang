@@ -249,13 +249,19 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   is a read the effect set would otherwise never mention, and a variable
   target cannot fill the payload without expanding it ourselves.
   """
-  if (redirects.length == 0) {
+  // A dup redirect (`2>&1`) moves a stream and writes no file, so it
+  // contributes nothing; it is the only `>&` form the parser accepts.
+  // prepareRedirectWrite stays strict on purpose: the shell-free write
+  // path computes the bytes it writes, and a dup changes which stream
+  // echo's output goes to.
+  const fileRedirects = [r for r in redirects if r.op != ">&"]
+  if (fileRedirects.length == 0) {
     return success([])
   }
-  if (redirects.length > 1) {
+  if (fileRedirects.length > 1) {
     return failure("more than one redirect")
   }
-  const only = redirects[0]
+  const only = fileRedirects[0]
   const prepared = prepareRedirectWrite(only, cwd, "")
   if (prepared is failure(why)) {
     return failure(why)

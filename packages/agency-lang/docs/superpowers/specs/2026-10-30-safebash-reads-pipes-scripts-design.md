@@ -412,6 +412,24 @@ flag named `-n20` and is unrecognized unless a row lists it.
 | `grep`, `rg` | `std::grep` | every positional after the pattern; `.` when `-r` and none | the letters in `lib/stdlib/grepQuery.ts` (`i m s u n r R g E P w l v`), plus `-c -h -H -o -F -A N -B N -C N`, `-e pat` as the pattern, `--include=`, `--exclude=`, `--exclude-dir=`, `--color=never`, `-m N`; `rg` additionally `-t`, `-g`, `--no-heading`, `-S` | `pattern`, `dir`, `file`, `flags` (the regex letters), `ignoreCase`, `wholeWord`, `filesOnly`, `invert`, `maxResults`; the same split `grep` the tool uses: a directory path gives `dir` and `file: null`, a file path gives its parent as `dir` and its name as `file` |
 | `find` | `std::glob` | the first positional, or `.` when none | `-name -iname -path -type -maxdepth -mindepth -newer -size -not -o -a -prune -print -print0 -L` refused, `-H -P` | `dir`, `pattern` = the `-name` or `-iname` value or `*`, `maxResults` = 0 |
 
+**Departures for `grep` and `rg` (ADI-242, decided 2026-10-31).** The
+built slice differs from the row above:
+
+- A lone `grep` runs the grep tool's own search (`_grep`), not the grep
+  program, when its flags and pattern translate exactly. A grep anywhere
+  else runs real grep and asks `std::grep` only for one named file. A
+  directory search through bash asks `std::bash`, because real `grep -r`
+  reads files the tool skips (`.git`, `node_modules`, ignored files).
+- `rg` stays unrecognized. Its letters mean different things from grep's,
+  it reads stdin or the working directory depending on what stdin it was
+  given, and `RIPGREP_CONFIG_PATH` can add `--pre=COMMAND`.
+- `flags` is `""`. `-R`, `-m`, `-P`, and the file filters (`--include`,
+  `--exclude`, `--exclude-dir`) are not accepted.
+- A flag after the first positional is refused on the bash path, because
+  BSD grep reads it as a file.
+
+See `docs/dev/stdlib/safe-bash.md`, "grep".
+
 Rows are easy to add later, and each is one line plus one test. What the
 table refuses is as important as what it accepts:
 
@@ -632,14 +650,14 @@ narrowed:
 
 ```
 The shell command was rejected. safeBash could not ask a narrower
-question because: no rule for `xargs`. The grep, read, and ls tools do
-not need approval under the current policy.
+question because: grep does not take `-z`. Call the grep tool instead:
+a policy can approve its question in advance.
 ```
 
 The first sentence is the existing rejection. The second is `reason`
-and `detail` from the plan. The third appears only when the plan's
-verbs are all in the read-family table or are filters, so it is only
-said when it is true. The whole change is one string, and it steers the
+and `detail` from the plan. The third appears only when every verb in
+the plan has a tool in `READ_TOOL_FOR_VERB`. It does not claim the tool
+needs no approval, because safeBash cannot see the policy. The whole change is one string, and it steers the
 model's next call.
 
 ## Part 7: What is unchanged, and the safety argument

@@ -337,6 +337,15 @@ earlier conversation and put what it found into the query of a web
 search, which `recommended` also approves. The user would not be asked
 at any step.
 
+A `std::grep` rule also covers a bash `grep` that safeBash recognized.
+A lone grep (`grep -rn foo src`) runs the grep tool's own search, so the
+approval means the same thing as for the tool. A grep elsewhere in a line
+(`git status && grep -n foo f.txt`) runs real grep, and safeBash asks
+`std::grep` for it only when it names one file. The same holds for
+`--approve std::grep`, the `FileRead` and `FileSystem` effect sets
+(`lib/runtime/effectSets.data.ts`), and an "approve always here" answer.
+See `docs/dev/stdlib/safe-bash.md`, "grep".
+
 `std::read` has one more rule than the others: `settings.json` in the
 agent home, by name (`settingsReadRule`). The tree-searching effects
 carry no `filename`, so a rule that names one cannot match them.

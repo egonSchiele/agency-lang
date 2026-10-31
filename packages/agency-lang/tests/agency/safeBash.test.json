@@ -413,6 +413,206 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "splitGrepFlags",
+      "description": "The grep flag table. Combined letters are checked one by one; a valued letter takes the rest of the word or the next word; unknown flags, -R, a repeated -e, a quoted word starting with a dash, a missing value, ugrep's --filter and --save-config, the file filters, and a flag after the first positional (a file name to BSD grep) are all refused.",
+      "input": "",
+      "expectedOutput": "[[[\"r\",\"n\",\"i\"],[],2],[[],[\"A=3\"],2],[[],[\"A=3\"],2],[[],[\"e=hello\"],1],[[\"--color=never\"],[],2],[[\"n\"],[\"A=3\"],2],\"grep does not take `-z`\",\"grep does not take `-R`\",\"grep takes `-e` only once\",\"a quoted `-R` is still an option to grep\",\"grep's `-A` needs a value\",\"grep does not take `--filter`\",\"grep does not take `--save-config`\",\"grep does not take `--include`\",\"a quoted `-x` is still an option to grep\",\"an option after the first argument is a file name to some versions of grep\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepThroughBash",
+      "description": "A grep that runs through bash asks std::grep only for one named file: a flag the grep tool lacks (-c, -A), a pattern that does not translate, a redirect, or another command on the line. A redirect still adds std::write.",
+      "input": "",
+      "expectedOutput": "[[[\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::grep\",\"std::write\"],null],[[\"std::git::status\",\"std::grep\"],null]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepUnrecognized",
+      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, two paths, a directory through bash, a flag after the first positional, and rg.",
+      "input": "",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `rg`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--include`\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepMissingPath",
+      "description": "A grep path that does not exist makes the command unrecognized; planFor does not throw.",
+      "input": "",
+      "expectedOutput": "\"unrecognized\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepBashPayload",
+      "description": "On the bash path the payload carries the pattern as written, the file, the booleans from the letters, no cap, and no regex flags.",
+      "input": "",
+      "expectedOutput": "[\"hello\",\"one.txt\",true,0,\"\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loneGrepIsShellFree",
+      "description": "A lone grep whose flags and pattern translate exactly runs through the grep tool's search, with no shell. A flag the tool lacks, a pattern that does not translate, a directory without -r, a pipe, or -w with a non-word edge sends it to the bash path. A flag after the file is fine here, where no real grep reads the arguments.",
+      "input": "",
+      "expectedOutput": "[\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"bash\",\"bash\",\"bash\",\"bash\",\"shellFree\",\"bash\",\"grep\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreePayloads",
+      "description": "The shell-free payload carries the regex the search uses (escaped for -F), the u flag so . matches a whole character, and the 1000-match cap; a file search splits into the real parent directory and the file name.",
+      "input": "",
+      "expectedOutput": "[\"a\\\\+b\",[null,1000,\"u\"],[\"one.txt\",true]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreeMatchesRealGrep",
+      "description": "Each row runs the shell-free path and the real grep program on the same command and compares the lines. The fixtures hold no skipped or ignored files, so a difference is a translation or rendering bug. Each row first checks that its command really runs shell-free.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loneGrepAsksOneQuestion",
+      "description": "A lone grep asks one std::grep question and no shell question, prints the lines the way grep does, and says which folders the search skipped.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bashGrepOfOneFile",
+      "description": "A grep of one file with a flag the tool lacks asks std::grep, then real grep runs through bash.",
+      "input": "",
+      "expectedOutput": "\"2\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreeNoMatchFails",
+      "description": "A shell-free grep with no match fails the way grep's exit code 1 does, and still says which folders were skipped, since the miss may be in one.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepUnderRecommendedNeedsNoPrompt",
+      "description": "Under the recommended policy, a grep inside the launch directory is approved with no prompt.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepOutsideTheLaunchDirIsUndecided",
+      "description": "Under the recommended policy, a grep outside the launch directory is left to a person.",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedGrepNamesTheTool",
+      "description": "When a broad command made only of verbs a tool can do is rejected, the model is pointed at that tool. rejectedBroadSaysWhy (an xargs line) gets no such sentence.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: grep does not take `-z`. Call the grep tool instead: a policy can approve its question in advance.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepOfIgnoredFolder",
+      "description": "A lone grep of a folder whose contents .gitignore ignores does not run the tool's search, which would come back empty; it asks std::bash, as any directory search through bash does.",
+      "input": "",
+      "expectedOutput": "[\"bash\",[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepOfPartlyIgnoredFolder",
+      "description": "A lone grep of a folder where .gitignore ignores only some entries (dot files, compiled .js files) still runs the tool's search, because the search finds the rest.",
+      "input": "",
+      "expectedOutput": "\"grep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

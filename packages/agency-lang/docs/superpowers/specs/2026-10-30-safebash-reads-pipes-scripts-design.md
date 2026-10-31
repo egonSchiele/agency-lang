@@ -186,6 +186,10 @@ than fighting it with more prompt text.
 - We can tell, from a session's log, how many approvals each part
   removed and what is left.
 
+The work is tracked in Linear under the milestone "M6: Safe Bash
+improvements" in the "Agency agent cleanup" project, one issue per slice
+in the order of Part 10.
+
 **Non-goals.**
 
 - safeBash does not become a capability layer. Bash still runs
@@ -220,12 +224,17 @@ test passed:
 
 ### The event
 
-Every `safeBash` call records one statelog event, `safeBashPlan`, after
-`planFor` returns and before `raiseAll` runs. Recording before raising
-means a plan whose question was later rejected still counts, which is
-the case we most want to see.
+Every `safeBash` call records one statelog `debug` event, the generic
+event the client already has (`debug(message, data)` in
+`lib/statelogClient.ts`, reached from runtime code as `run.log.debug`),
+after `planFor` returns and before `raiseAll` runs. The message is the
+fixed string `safeBash plan`, so a session's log can be filtered for it.
+Recording before raising means a plan whose question was later rejected
+still counts, which is the case we most want to see. There is no new
+event type: very few tools have one, and this one has nothing a reader
+of the log needs that `debug` cannot carry.
 
-The payload:
+The data:
 
 | field | meaning |
 |---|---|
@@ -245,18 +254,14 @@ the same field for the message the model sees on a rejection.
 
 ### Where it lives
 
-- `lib/statelogClient.ts` gains a `safeBashPlan` method beside
-  `evalValueRecorded`, posting `{ type: "safeBashPlan", ... }`.
 - `lib/stdlib/safeBash.ts` gains `_logSafeBashPlan(plan, command, cwd)`,
-  a no-op outside a run or when observability is off, on the pattern of
-  `_turnStart` in `lib/stdlib/statelog.ts`.
+  which calls `debug` on the current run's log and is a no-op outside a
+  run, on the pattern of `_turnStart` in `lib/stdlib/statelog.ts`.
 - `stdlib/safeBash.agency` calls it from `safeBash` between `planFor`
   and `raiseAll`.
-- `lib/logsViewer/summary.ts` learns the event, so a session summary
-  shows a line such as `safeBash: 52 calls, 31 narrow, 19 broad
-  (unrecognized: grep 12, pnpm 5, xargs 2)`. The exact rendering is the
-  builder's. The point is that `agency logs` on a session answers "what
-  is still prompting" without a script.
+
+Reading the numbers back is a filter over the session's statelog JSONL
+for `debug` events whose message is `safeBash plan`. No viewer change.
 
 ### What it is not
 
@@ -746,24 +751,38 @@ runs with real interrupts.
   policy with `{ command: "pnpm", subcommand: "test" }`. These run with
   a scratch `HOME`.
 - **Measurement:** `lib/stdlib/statelog.test.ts` pattern for the event:
-  one `safeBashPlan` per call with the right `outcome` and `reason`, and
-  none when observability is off.
+  one `debug` event with message `safeBash plan` per call, carrying the
+  right `outcome` and `reason`, and none outside a run.
 
 ## Part 10: Order of work
 
-1. **Measurement and `reason`** (this repo, one PR): the `Plan.reason`
-   field, the event, the summary line, the rejection message of Part 6.
-   Small, and it starts collecting data while the rest is built.
-2. **tarsec pipelines and dup redirects** (tarsec PR, release, pin
-   bump here with the `flattenOne` arm and the no-effect dup redirect).
-3. **Read family, filters, input redirects, `cd`** (one PR).
-4. **`std::exec` fallback and wrapper list** (one PR).
-5. **Docs** go with the PR that changes the behavior they describe; the
-   new dev doc starts in PR 1 and grows.
+One Linear issue and one PR each, in this order:
 
-After 3 and 4 have run for a few days, read the summary line on a few
-sessions and decide the next round from what is still broad. The two
-candidates already visible are leading assignments and `sed -n`.
+1. **Record what every call decided.** `Plan.reason`, the `debug`
+   event, the rejection message of Part 6, and the start of the dev doc.
+   No parser dependency.
+2. **tarsec: pipelines and `2>&1`.** In the tarsec repo.
+3. **tarsec: glob words and a leading `~`.** In the tarsec repo. Two and
+   three can ship in one release.
+4. **Parser parity here.** The pin bump, the mirrored nodes, the
+   `flattenOne` arm, the no-effect dup redirect, `literalWordText`
+   refusing a glob, and a pipeline classified as "every stage
+   recognized".
+5. **`grep` and `rg` raise `std::grep`.**
+6. **Project scripts raise `std::exec`,** with the wrapper list, the
+   `line` field, the ownership rule, and the policies-doc paragraph.
+7. **File reads raise `std::read`:** `cat` and friends, `< file`, and
+   the filters as later pipeline stages.
+8. **`cd` on the left of `&&`.**
+9. **Listings raise `std::ls` and `std::glob`.**
+10. **Globs as read paths.**
+
+Five, six, and seven need four only for their pipeline cases. If the
+tarsec release lags, they land first with the pipeline tests deferred to
+four. After five through seven have run for a few days, read the debug
+events on a few sessions before starting nine and ten. The two
+candidates already visible for a later round are leading assignments and
+`sed -n`.
 
 ## Part 11: Left to the builder
 

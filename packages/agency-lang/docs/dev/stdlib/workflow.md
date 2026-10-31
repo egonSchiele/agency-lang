@@ -122,7 +122,7 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 ```
 <dir>/<name>/workflow.json   the workflow, as given
-<dir>/<name>/meta.json       { createdAt, createdBy }
+<dir>/<name>/meta.json       { createdAt, createdBy, inputsSchema }
 ```
 
 `name` is the workflow's own `name` field. `loadWorkflow(name, dir)` reads one folder back and `listWorkflows(dir)` reads them all. Each returns a `WorkflowEntry`: the name, the folder, the workflow, and the meta record.
@@ -133,7 +133,8 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 1. The check is `_checked`, the same generate, typecheck, and compile `runWorkflow` runs. A workflow with problems fails here and raises nothing. The check also proves `name` is an identifier, so it is safe to use as a folder name.
 2. It raises `std::workflow::save` with the directory, the name, and the workflow. A rejection writes nothing.
-3. It creates the folder and writes both files with `_write`, which raises nothing more. The writes sit in a `destructive { }` region.
+3. It runs the program's `inputsSchema` node once with `run` from `std::agency`, which raises `std::run`. A rejection writes nothing.
+4. It creates the folder and writes both files with `_write`, which raises nothing more. The writes sit in a `destructive { }` region.
 
 Saving a name that already exists replaces it. Saving is how a workflow gets edited. The prompt names the workflow, so the person sees which one is replaced. Because a save can replace a workflow, `std::workflow::save` is tagged `@always(name)` as well as `@alwaysUnder(dir)`. An "always" answer means "this workflow, in this directory". With the directory pin alone, a model calling `writeWorkflow` as a tool could replace any saved workflow there with no prompt.
 
@@ -144,6 +145,22 @@ Saving a name that already exists replaces it. Saving is how a workflow gets edi
 **The real spelling.** `dir` is resolved once with `_realDir`, and both prompts and every read and write use that spelling. An "always" answer pins text, so the text must be the directory that is actually read and written.
 
 **What a load returns.** `workflow.json` is required and is checked against `Workflow` with `!`. `meta.json` is optional: a missing file gives the default record, and a present file with the wrong shape is a failure. The shape check fills a missing optional field with `null`. For `meta.json`, only the fields the file has are kept, over the defaults. For `workflow.json`, the entry holds the file's own value and not the checked one, because `result: null` is a literal result to the generator: a loaded workflow would return `null` in place of its last step.
+
+**The inputs schema.** An Agency type becomes a JSON Schema only in compiled code, so every generated program has an `inputsSchema` node that returns `schema(Inputs).toJSONSchema()`. `_inputsSchema` runs it on the program `_checked` already compiled, so the workflow is never compiled twice. It runs once, at save time, so `workflowTools` can build typed tools from the files alone, with no child process per workflow each time a host builds its tool list. The child runs with `run`'s default limits: the node calls no tool and no model, so the workflow's own `limits` do not apply.
+
+A `meta.json` with no `inputsSchema` key, saved before the field existed, reads back with `inputsSchema: null`. `Json` is `any`, so the shape check does not look inside the schema. A `meta.json` with a bad schema loads, and `z.fromJSONSchema` refuses it when `workflowTool` uses it.
+
+An optional input becomes a required key that may be null. For `inputs: "{ a: number; b?: number }"` the stored schema is:
+
+```json
+{"type":"object",
+ "properties":{"a":{"type":"number"},
+               "b":{"default":null,"anyOf":[{"type":"number"},{"type":"null"}]}},
+ "required":["a","b"],
+ "additionalProperties":false}
+```
+
+That is how Agency compiles `?`. A model calling a tool built from this schema must send `b: null` to leave `b` out.
 
 **A broken folder fails the listing.** A folder whose `workflow.json` cannot be read, is not JSON, or is not a workflow fails `listWorkflows`, with a message that starts with the folder's name. `WorkflowEntry` has no field for a broken entry, so the person fixes or removes that folder.
 
@@ -172,7 +189,7 @@ A guarded LLM step is the same `thread` block inside the guard, with `return <re
 
 ## Interrupts and checkpoints
 
-The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`, and `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
+The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`, then `run` raises `std::run` for the inputs schema, and `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
 
 The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, and the resume finishes the workflow. The test does not show that the resume skipped the LLM step. Each child builds its own mock client from the full mock list, so a repeated model call would be answered too.
 
@@ -184,4 +201,4 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
 
 ## Not built yet
 
-The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, and the inputs schema in `meta.json`.
+The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`) and `catalog`.

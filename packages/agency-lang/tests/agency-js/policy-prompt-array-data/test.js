@@ -20,7 +20,7 @@ try {
   writeFileSync("__result.json", JSON.stringify({
     // The bug surfaced as a render exception while drawing the prompt.
     crashedOnRender: asText.includes("content.split"),
-    rejected: asText.includes("interrupt rejected"),
+    rejected: asText.includes("The user rejected this call."),
   }, null, 2));
 } finally {
   rmSync(dir, { recursive: true, force: true });

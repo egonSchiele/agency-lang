@@ -227,8 +227,8 @@ export def usaspendingAwards(recipient: string = "", agency: string = "", awardT
   @param limit - Maximum number of awards to return
   """
   const codesResult = parseAwardType(awardType)
-  if (codesResult is failure(msg)) {
-    return failure(msg)
+  if (isFailure(codesResult)) {
+    return codesResult
   }
   const codes = codesResult.value
   return interrupt std::usaspending("Search USASpending federal awards?", { op: "awards", query: recipient })

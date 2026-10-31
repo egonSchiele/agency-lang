@@ -223,8 +223,8 @@ export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std:
   @param list - The curated list name
   """
   const nameResult = parseListName(list)
-  if (nameResult is failure(msg)) {
-    return failure(msg)
+  if (isFailure(nameResult)) {
+    return nameResult
   }
   const name = nameResult.value
   return interrupt std::yc("Fetch this YC company list?", { op: "list", query: list })

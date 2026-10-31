@@ -119,6 +119,15 @@ safeBash could not ask a narrower question because it has no rule for one of the
 A rejected narrow question carries no reason and reads as the rejection
 text alone.
 
+Both cases hand back the rejection failure itself, with the sentence added
+by `_addLine` (`lib/stdlib/builtins.ts`). Rebuilding it with
+`failure(why)` would drop the failure's `rejected` flag. The tool loop
+reads that flag to show the reason as a rejection. Without it, the user's
+reason reaches the model as `Error: <reason>. The call failed. You may
+call this tool again.`, and the model takes the user's words for a tool
+error. The lint rule AL0004 reports that rebuild shape anywhere in the
+stdlib (see `docs/dev/agents/tool-loop-guards.md`).
+
 ## Pipelines, dup redirects, and glob words
 
 The parser produces three shapes the classifier mirrors in its own

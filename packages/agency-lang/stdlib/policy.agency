@@ -1219,7 +1219,7 @@ def _handler(intr: any): any {
     return approve()
   }
   if (answer.action == "reject-always") {
-    return reject()
+    return reject("The user rejected this call and all later ${intr.effect} requests.")
   }
   if (answer.action == "approve") {
     return approve()
@@ -1234,17 +1234,24 @@ def _handler(intr: any): any {
   // prompt instead of picking a key. Use it directly so the LLM sees
   // their feedback without a second prompt.
   if (answer.reason != null) {
-    return reject(answer.reason)
+    return reject(userRejection(answer.reason))
   }
 
   // Interactive reject (user picked "r"): ask for optional guidance so
   // the LLM sees concrete feedback as the tool's return value and the
   // agent can course-correct without ending the turn.
   const reason = input("What should the agent do instead? (press enter to skip) ")
-  if (reason == "") {
-    return reject()
+  return reject(userRejection(reason))
+}
+
+// What the model reads when the user rejects a call at the prompt. It has
+// to say a person wrote the text: a bare "Why are you running this?" reads
+// to the model like an error from the tool.
+def userRejection(message: string): string {
+  if (message == "") {
+    return "The user rejected this call."
   }
-  return reject(reason)
+  return "The user rejected this call and wrote you this message:\n${message}"
 }
 
 // A rule's decision, carried out. Both checks end here: the one every
@@ -1267,7 +1274,7 @@ def applyRule(intr: any, decision: any): any {
   }
   // The rule's rejectMessage, when set: the model reads it as the
   // rejection reason and can steer its next attempt.
-  return reject(decision.message)
+  return reject(decision.message ?? "A rule in the approval policy rejected this call.")
 }
 
 /**

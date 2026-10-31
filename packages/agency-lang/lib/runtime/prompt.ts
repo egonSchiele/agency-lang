@@ -949,7 +949,9 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         removedTools.push(handler.name);
       }
       pushToolReply({
-        content: `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
+        // The reason ends its own line, unpunctuated: it is the rejecter's
+        // text, which may end in a question mark or run several lines.
+        content: `Tool call rejected: ${capped}\n${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
         toolCall,
         handler,
         log,

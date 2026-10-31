@@ -21,6 +21,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _addLine } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 
@@ -220,8 +221,8 @@ def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
     return failure("`${redirect.op}` is not an output redirect")
   }
   const target = literalTarget(redirect.target)
-  if (target is failure(why)) {
-    return failure(why)
+  if (isFailure(target)) {
+    return target
   }
   const resolved = try _resolveRedirectTarget(target.value, cwd, tildeModeFor(redirect.target))
   if (resolved is failure(why)) {
@@ -263,8 +264,8 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   }
   const only = fileRedirects[0]
   const prepared = prepareRedirectWrite(only, cwd, "")
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success([writeEffect(prepared.value)])
 }
@@ -323,8 +324,8 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   }
   const flags = flagNames(command)
   const redirect = redirectEffect(command.redirects, cwd)
-  if (redirect is failure(why)) {
-    return failure(why)
+  if (isFailure(redirect)) {
+    return redirect
   }
 
   // `echo` contributes nothing on its own, whatever its arguments: bash
@@ -635,8 +636,8 @@ def echoWords(command: SimpleCommand): Result<string[]> {
   let out: string[] = []
   for (arg in command.args) {
     const text = literalWordText(arg)
-    if (text is failure(why)) {
-      return failure(why)
+    if (isFailure(text)) {
+      return text
     }
     out.push(text.value)
   }
@@ -690,8 +691,8 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
     return failure("`echo` with flags prints differently")
   }
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   return success(
     {
@@ -723,12 +724,12 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   }
   const only = command.redirects[0]
   const words = echoWords(command)
-  if (words is failure(why)) {
-    return failure(why)
+  if (isFailure(words)) {
+    return words
   }
   const prepared = prepareRedirectWrite(only, cwd, echoOutput(words.value))
-  if (prepared is failure(why)) {
-    return failure(why)
+  if (isFailure(prepared)) {
+    return prepared
   }
   return success(
     {
@@ -1009,15 +1010,18 @@ export def safeBash(
   }
 
   const raised = raiseAll(plan.effects, command, dir)
-  if (raised is failure(why)) {
+  // The rejection is passed on as it came, not rebuilt with `failure()`,
+  // which would drop its `rejected` flag. Without the flag the tool loop
+  // shows the user's reason as a tool error and says to call again.
+  if (isFailure(raised)) {
     if (plan.broadReason == null) {
-      return failure(why)
+      return raised
     }
     // A rejected broad question tells the model why no narrower one was
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return failure("${why}\n${broadExplanation(plan.broadReason)}")
+    return _addLine(raised, broadExplanation(plan.broadReason))
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -1100,8 +1104,8 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   """
   for (effect in effects) {
     const answered = raiseOne(effect, fullCommand, cwd)
-    if (answered is failure(reason)) {
-      return failure(reason)
+    if (isFailure(answered)) {
+      return answered
     }
   }
   return success(null)

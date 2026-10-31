@@ -261,8 +261,8 @@ export def hnStories(list: string = "top", limit: number = 30): Result<Story[]> 
   @param limit - How many stories to hydrate (capped at 100)
   """
   const listResult = parseStoryList(list)
-  if (listResult is failure(msg)) {
-    return failure(msg)
+  if (isFailure(listResult)) {
+    return listResult
   }
   const file = listResult.value
   return interrupt std::hackernews("Fetch this Hacker News story list?", { op: "stories", query: list })
@@ -308,8 +308,8 @@ export def hnSearch(query: string, sort: string = "relevance", tags: string = "s
   @param limit - Maximum results (capped at 50)
   """
   const sortResult = parseSort(sort)
-  if (sortResult is failure(msg)) {
-    return failure(msg)
+  if (isFailure(sortResult)) {
+    return sortResult
   }
   const endpoint = sortResult.value
   return interrupt std::hackernews("Search Hacker News for this query?", { op: "search", query: query })

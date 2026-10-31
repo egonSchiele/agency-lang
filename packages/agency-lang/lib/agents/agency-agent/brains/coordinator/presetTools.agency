@@ -24,16 +24,16 @@ import { confirmServerUrl } from "./llmOptionTools.agency"
 
 def editPresets(edit: PresetEdit): Result<PresetEditOutcome> {
   const loaded = readSettingsFile()
-  if (loaded is failure(reason)) {
-    return failure(reason)
+  if (isFailure(loaded)) {
+    return loaded
   }
   const edited = applyPresetEdit(loaded.value, edit)
-  if (edited is failure(reason)) {
-    return failure(reason)
+  if (isFailure(edited)) {
+    return edited
   }
   const written = writeSettingsFile(edited.value)
-  if (written is failure(reason)) {
-    return failure(reason)
+  if (isFailure(written)) {
+    return written
   }
   setPresetTable(readPresetTable(edited.value.presets))
   return success(editOutcome(loaded.value, edit.name))

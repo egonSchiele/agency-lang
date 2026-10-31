@@ -281,8 +281,8 @@ export def littlesisRelationships(id: number, category: string = "", sort: strin
   // Result placed after `return interrupt` does not narrow). Bonus: makes the unknown-category
   // failure path reachable OFFLINE (returns before any interrupt).
   const filterResult = parseCategoryFilter(category)
-  if (filterResult is failure(msg)) {
-    return failure(msg)
+  if (isFailure(filterResult)) {
+    return filterResult
   }
   const filter = filterResult.value
   return interrupt std::littlesis("Fetch relationships for this LittleSis entity?", { op: "relationships", query: "${id}" })
@@ -302,8 +302,8 @@ export def littlesisConnections(id: number, category: string = ""): Result<Entit
   """
   // Validate the category BEFORE the interrupt (see littlesisRelationships for the rationale).
   const filterResult = parseCategoryFilter(category)
-  if (filterResult is failure(msg)) {
-    return failure(msg)
+  if (isFailure(filterResult)) {
+    return filterResult
   }
   const filter = filterResult.value
   return interrupt std::littlesis("Fetch connections for this LittleSis entity?", { op: "connections", query: "${id}" })

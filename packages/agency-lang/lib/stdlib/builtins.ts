@@ -11,6 +11,7 @@ import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep } from "./abortable.js";
 import { acceptsFailures } from "../runtime/failurePropagation.js";
+import type { ResultFailure } from "../runtime/result.js";
 
 export function _print(...messages: any[]): void {
   currentHost().terminal.print(messages);
@@ -20,9 +21,17 @@ export function _printJSON(obj: any): void {
   currentHost().terminal.print([JSON.stringify(obj, null, 2)]);
 }
 
+/** The same failure with one more line on its message. Agency's
+ *  `failure(why)` would build a new failure and drop `rejected`, which is
+ *  how the tool loop tells "the user said no" from "the tool broke". */
+export function _addLine(failed: ResultFailure, line: string): ResultFailure {
+  return { ...failed, error: `${failed.error}\n${line}` };
+}
+
 /**
  * SINGLE SOURCE OF TRUTH for stdlib TS helpers that legitimately receive
- * failure values (printing a failure is a debugging move). Add new
+ * failure values: printing one while debugging, or adding a line to one
+ * without losing its flags. Add new
  * failure-tolerant helpers HERE, never as scattered acceptsFailures()
  * calls. Runtime-layer builtins have their own list —
  * FAILURE_TOLERANT_BUILTINS in lib/runtime/failurePropagation.ts — because
@@ -31,6 +40,7 @@ export function _printJSON(obj: any): void {
 const FAILURE_TOLERANT_STDLIB_HELPERS: ReadonlyArray<(...args: any[]) => any> = [
   _print,
   _printJSON,
+  _addLine,
 ];
 for (const fn of FAILURE_TOLERANT_STDLIB_HELPERS) {
   acceptsFailures(fn);

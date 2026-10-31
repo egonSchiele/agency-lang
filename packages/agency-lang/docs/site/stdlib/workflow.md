@@ -28,6 +28,10 @@ When you want an agent to do the same task the same way every time, a
   runs the program in a subprocess. Each step's interrupts reach the
   caller's handlers, so a policy decides what the workflow may do.
 
+  `writeWorkflow` saves a checked workflow into a project directory as
+  `<dir>/<name>/workflow.json` and `meta.json`; `loadWorkflow` and
+  `listWorkflows` read them back.
+
 ## Types
 
 ### WorkflowLimits
@@ -46,7 +50,7 @@ export type WorkflowLimits = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L57))
 
 ### Workflow
 
@@ -69,7 +73,7 @@ export type Workflow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L65))
 
 ### WorkflowProblem
 
@@ -86,7 +90,7 @@ export type WorkflowProblem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L77))
 
 ### WorkflowFailure
 
@@ -99,7 +103,37 @@ export type WorkflowFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L84))
+
+### WorkflowMeta
+
+What `meta.json` records about a saved workflow.
+
+```ts
+/** What `meta.json` records about a saved workflow. */
+export type WorkflowMeta = {
+  createdAt: string;
+  createdBy: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L283))
+
+### WorkflowEntry
+
+A saved workflow: its name, its folder, the workflow, and its meta.json record.
+
+```ts
+/** A saved workflow: its name, its folder, the workflow, and its meta.json record. */
+export type WorkflowEntry = {
+  name: string;
+  dir: string;
+  workflow: Workflow;
+  meta: WorkflowMeta
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L289))
 
 ## Effects
 
@@ -115,7 +149,32 @@ effect std::workflow::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L121))
+
+### std::workflow::scan
+
+```ts
+@alwaysUnder(dir)
+effect std::workflow::scan {
+  dir: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L311))
+
+### std::workflow::save
+
+```ts
+@alwaysUnder(dir)
+@always(name)
+effect std::workflow::save {
+  dir: string;
+  name: string;
+  workflow: Workflow
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L321))
 
 ## Functions
 
@@ -154,7 +213,7 @@ The source is text, not a compiled program: hand it to `compile` or
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L176))
 
 ### checkWorkflow
 
@@ -192,7 +251,7 @@ Every problem the generator and the typechecker can find, in one pass,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L228))
 
 ### runWorkflow
 
@@ -234,4 +293,86 @@ Check, ask, run. The check compiles the program and the run uses it. The
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L238))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L250))
+
+### writeWorkflow
+
+```ts
+writeWorkflow(
+  workflow: Workflow,
+  tools: any[],
+  dir: string,
+): Result<WorkflowEntry>
+```
+
+Save a workflow into a project directory, as `<dir>/<name>/workflow.json` and `meta.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
+
+  @param workflow - The workflow to save. Its `name` names the folder
+  @param tools - The functions the workflow may call, for the check
+  @param dir - The project directory, which must exist: the workflow is saved under it, and a local tool's file must be under it too, since the saved workflow imports the tool by a path relative to it
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| workflow | [Workflow](#workflow) |  |
+| tools | `any[]` |  |
+| dir | `string` |  |
+
+**Returns:** `Result<WorkflowEntry>`
+
+**Throws:** `std::workflow::save`, `std::read`
+
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L340))
+
+### loadWorkflow
+
+```ts
+loadWorkflow(name: string, dir: string): Result<WorkflowEntry>
+```
+
+Load a saved workflow by name from a project directory. Raises one `std::workflow::scan` prompt for the workflow's folder before reading it, and nothing else.
+
+  @param name - The workflow's name, which is its folder under `dir`
+  @param dir - The project directory the workflow was saved under
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+| dir | `string` |  |
+
+**Returns:** `Result<WorkflowEntry>`
+
+**Throws:** `std::workflow::scan`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L466))
+
+### listWorkflows
+
+```ts
+listWorkflows(dir: string): Result<WorkflowEntry[]>
+```
+
+List the workflows saved in a project directory. Raises one `std::workflow::scan` prompt before reading anything, and nothing else. A directory that does not exist has no workflows. A folder whose files cannot be read fails the listing, with a message naming the folder.
+
+  @param dir - The project directory the workflows were saved under
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | `string` |  |
+
+**Returns:** `Result<WorkflowEntry[]>`
+
+**Throws:** `std::workflow::scan`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L504))

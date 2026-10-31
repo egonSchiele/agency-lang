@@ -1,0 +1,147 @@
+{
+  "tests": [
+    {
+      "nodeName": "saveThenLoadAndList",
+      "description": "a saved workflow loads and lists back, file for file",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",true,\"writeWorkflow\",true,true,[\"doubleSum\"],[true,true]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "savePayload",
+      "description": "std::workflow::save carries the real directory, the name, and the workflow",
+      "input": "",
+      "expectedOutput": "[true,\"shown\",\"Add two numbers and double the sum.\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "effectsInOrder",
+      "description": "a save raises std::workflow::save and nothing else",
+      "input": "",
+      "expectedOutput": "[\"std::workflow::save\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badWorkflowAsksNothingAndWritesNothing",
+      "description": "a workflow that fails its check raises nothing and writes nothing",
+      "input": "",
+      "expectedOutput": "[true,[],false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedSaveWritesNothing",
+      "description": "a rejected save writes nothing",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveTwiceOverwrites",
+      "description": "saving a name twice replaces the first save",
+      "input": "",
+      "expectedOutput": "[true,\"Second save.\",1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyDirIsRefused",
+      "description": "an empty dir is refused with a message naming it",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingDirIsRefused",
+      "description": "saving into a directory that does not exist fails before any prompt",
+      "input": "",
+      "expectedOutput": "[true,[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingDirListsNothing",
+      "description": "a directory that does not exist lists no workflows",
+      "input": "",
+      "expectedOutput": "[true,0]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badNameIsRefusedBeforeAsking",
+      "description": "a name that is not an identifier fails before any prompt",
+      "input": "",
+      "expectedOutput": "[true,true,[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingWorkflowFails",
+      "description": "loading a missing workflow fails naming it",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "notAWorkflowFailsToLoadAndList",
+      "description": "a folder holding something that is not a workflow fails load and list",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "scanPayloadIsTheWorkflowFolder",
+      "description": "loadWorkflow's scan names the workflow's own folder",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

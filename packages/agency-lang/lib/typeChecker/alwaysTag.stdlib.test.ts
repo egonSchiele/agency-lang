@@ -174,6 +174,11 @@ const EXPECTED: Record<string, string[]> = {
   // Running a workflow pins its name and its directory. The inputs change
   // with every run, so they are never pinned.
   "std::workflow::run": ["name", "dir/**"],
+  // A directory of saved workflows: reading it pins the directory. Saving
+  // pins the workflow's name too, since a save replaces a workflow of
+  // that name, so "always" means this workflow in this directory.
+  "std::workflow::scan": ["dir/**"],
+  "std::workflow::save": ["name", "dir/**"],
   "std::memory::enableMemory": [],
   "std::memory::disableMemory": [],
   "std::memory::remember": [],

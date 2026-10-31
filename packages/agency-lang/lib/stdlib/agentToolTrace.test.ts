@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { memoryHost } from "../host/memoryHost.js";
 import { stripAnsi, visualWidth } from "./layout/ansi.js";
-import { formatAgentTrace, printAgentTrace, traceOptionsForHost } from "./agentToolTrace.js";
+import {
+  commandDetail,
+  filePath,
+  formatAgentTrace,
+  lineRange,
+  presentedToolNames,
+  printAgentTrace,
+  text,
+  traceOptionsForHost,
+} from "./agentToolTrace.js";
 
 const plain = { columns: 80, color: false };
 
@@ -537,7 +546,12 @@ describe("terminal rendering", () => {
     const host = memoryHost();
     host.terminal.size = () => ({ columns: 40, rows: 24 });
     host.terminal.supportsColor = () => false;
-    expect(traceOptionsForHost(host)).toEqual({ columns: 40, color: false });
+    expect(traceOptionsForHost(host)).toEqual({
+      columns: 40,
+      color: false,
+      toolNames: false,
+      spillSource: expect.any(Function),
+    });
     printAgentTrace(host, { kind: "toolStart", toolName: "noop", args: {} });
     printAgentTrace(host, { kind: "hostedSearch", result: { tool: "unsupported" } });
     expect(host.state.output).toEqual(["● Tool call  noop\n\n"]);
@@ -545,5 +559,305 @@ describe("terminal rendering", () => {
     expect(traceOptionsForHost(host).columns).toBe(80);
     host.terminal.size = () => ({ columns: Number.NaN, rows: 24 });
     expect(traceOptionsForHost(host).columns).toBe(80);
+  });
+});
+
+describe("summary presentations", () => {
+  const end = (toolName: string, args: object, value: unknown, extra: object = {}) =>
+    formatAgentTrace(
+      { kind: "toolEnd", toolName, args, value, outcome: "success", ...extra },
+      plain,
+    );
+  const start = (toolName: string, args: object) =>
+    formatAgentTrace({ kind: "toolStart", toolName, args }, plain);
+
+  it("prints one line for read, with the directory and the range only when set", () => {
+    expect(start("read", { filename: "a.md" })).toBe("");
+    expect(end("read", { filename: "a.md", dir: "." }, "text", { timeTaken: 12 })).toBe(
+      "✓ Read a.md",
+    );
+    expect(end("read", { filename: "a.md", dir: "packages/x" }, "text")).toBe(
+      "✓ Read packages/x/a.md",
+    );
+    expect(end("read", { filename: "a.md", offset: 460, limit: 120 }, "t")).toBe(
+      "✓ Read a.md lines 460–579",
+    );
+    expect(end("read", { filename: "a.md", offset: 0, limit: 120 }, "t")).toBe(
+      "✓ Read a.md lines 1–120",
+    );
+    expect(end("read", { filename: "a.md", offset: 460, limit: 0 }, "t")).toBe(
+      "✓ Read a.md lines 460–end",
+    );
+  });
+
+  it("prints a start and an end for a two-line tool, with elapsed time from one second", () => {
+    expect(start("safeBash", { command: "pnpm run typecheck" })).toBe("● Run pnpm run typecheck");
+    expect(end("safeBash", { command: "pnpm run typecheck" }, "", { timeTaken: 14200 })).toBe(
+      "✓ Run pnpm run typecheck · 14s",
+    );
+    expect(end("safeBash", { command: "ls" }, "", { timeTaken: 900 })).toBe("✓ Run ls");
+    expect(end("read", { filename: "a.md" }, "t", { timeTaken: 5000 })).toBe("✓ Read a.md");
+  });
+
+  it("shows only the first line of a multi-line command", () => {
+    expect(start("safeBash", { command: "echo a\necho b\necho c" })).toBe("● Run echo a…");
+  });
+
+  it("puts a failure message in full under the line and drops the result summary", () => {
+    const out = formatAgentTrace(
+      {
+        kind: "toolEnd",
+        toolName: "grep",
+        args: { pattern: "x" },
+        value: "Tool call rejected: no",
+        outcome: "failure",
+      },
+      plain,
+    );
+    expect(out).toBe("✗ Grep x\n  │ Tool call rejected: no");
+  });
+
+  it("skips a shown argument the call did not pass, and prints numbers and arrays plainly", () => {
+    expect(end("ghPrGet", { number: 1310 }, {})).toBe("✓ gh pr get #1310");
+    expect(start("gitAdd", { paths: ["a", "b"] })).toBe("● git add a b");
+    expect(start("gitAdd", { all: true })).toBe("● git add --all");
+    expect(start("gitCommit", { message: "Add summary tier\n\nMore detail" })).toBe(
+      "● git commit Add summary tier…",
+    );
+  });
+
+  it("prints nothing for a silent tool", () => {
+    expect(start("question", { prompt: "Which?" })).toBe("");
+    expect(end("question", { prompt: "Which?" }, "that one")).toBe("");
+  });
+
+  it("keeps the generic display, with its tool name, for an unknown tool", () => {
+    expect(start("mystery", { a: 1 })).toBe("● Tool call  mystery\n  │ a: 1");
+  });
+
+  it("appends the tool name to a summary line only when asked", () => {
+    const debug = { ...plain, toolNames: true };
+    expect(
+      formatAgentTrace(
+        {
+          kind: "toolEnd",
+          toolName: "read",
+          args: { filename: "a.md" },
+          value: "t",
+          outcome: "success",
+        },
+        debug,
+      ),
+    ).toBe("✓ Read a.md  read");
+  });
+
+  it("treats a plain return as a success", () => {
+    expect(
+      formatAgentTrace(
+        {
+          kind: "toolEnd",
+          toolName: "read",
+          args: { filename: "a.md" },
+          value: "t",
+          outcome: "plain",
+        },
+        plain,
+      ),
+    ).toBe("✓ Read a.md");
+  });
+
+  it("builds parts with the shared helpers", () => {
+    expect(text(3)).toBe("3");
+    expect(text(["a", "b"])).toBe("a b");
+    expect(text({ nested: true })).toBeNull();
+    expect(text("")).toBeNull();
+    expect(filePath({ filename: "a.md", dir: "lib/" })).toBe("lib/a.md");
+    expect(filePath({ dir: "lib" })).toBeNull();
+    expect(lineRange({ offset: 0, limit: 0 })).toBeNull();
+    expect(commandDetail("out", "err")).toBe("err");
+    expect(commandDetail("out", "")).toBe("out");
+    expect(commandDetail("", "")).toBeNull();
+    expect(
+      commandDetail('[Output of "make" too long: 900 lines.\n--- first 10 lines ---\nx', ""),
+    ).toBe('[Output of "make" too long: 900 lines.');
+  });
+});
+
+describe("result summarizers", () => {
+  const end = (
+    toolName: string,
+    args: object,
+    value: unknown,
+    outcome: "success" | "failure" | "plain" = "success",
+  ) => formatAgentTrace({ kind: "toolEnd", toolName, args, value, outcome }, plain);
+
+  it("counts grep lines and distinct files, or files alone for a filesOnly search", () => {
+    const matches = [
+      { file: "a", line: 1, text: "" },
+      { file: "a", line: 2, text: "" },
+      { file: "b", line: 1, text: "" },
+    ];
+    expect(end("grep", { pattern: "x", path: "lib" }, matches)).toBe(
+      "✓ Grep x in lib · 3 lines in 2 files",
+    );
+    expect(end("grep", { pattern: "x", filesOnly: true }, ["a", "b", "c"])).toBe(
+      "✓ Grep x files only · 3 files",
+    );
+    expect(end("grep", { pattern: "x" }, [{ file: "a", line: 1, text: "" }])).toBe(
+      "✓ Grep x · 1 line in 1 file",
+    );
+  });
+
+  it("sums grepSpill lines across pattern groups", () => {
+    const grouped = [
+      {
+        pattern: "a",
+        matches: [
+          { file: "n", line: 1, text: "" },
+          { file: "n", line: 2, text: "" },
+        ],
+      },
+      { pattern: "b", matches: [] },
+    ];
+    expect(end("grepSpill", { pattern: "a", filename: "n.log" }, grouped)).toBe(
+      "✓ Grep a in n.log · 2 lines",
+    );
+  });
+
+  it("reports typecheck as clean or as counts, red when there are errors", () => {
+    expect(end("typecheck", { source: "x" }, { errors: [], warnings: [] })).toBe(
+      "✓ Typecheck · clean",
+    );
+    expect(end("typecheck", { source: "x" }, { errors: [1, 2, 3], warnings: [1] })).toBe(
+      "✗ Typecheck · 3 errors, 1 warning",
+    );
+  });
+
+  it("reports test cases passed and failed", () => {
+    const report = { pass: false, cases: [{ pass: true }, { pass: true }, { pass: false }] };
+    expect(end("testFile", { filename: "t.json" }, report)).toBe(
+      "✗ Test t.json · 2 passed, 1 failed",
+    );
+    expect(end("testFile", { filename: "t.json" }, { pass: true, cases: [{ pass: true }] })).toBe(
+      "✓ Test t.json · 1 passed",
+    );
+  });
+
+  it("shows the exit code and stderr for a safeBash failure, and the raw message otherwise", () => {
+    const message = JSON.stringify({
+      command: "make",
+      exitCode: 2,
+      stderr: "boom\nbang",
+      stdout: "",
+    });
+    expect(end("safeBash", { command: "make" }, message, "failure")).toBe(
+      "✗ Run make · exit 2\n  │ boom\n  │ bang",
+    );
+    expect(end("safeBash", { command: "make" }, "rejected by policy", "failure")).toBe(
+      "✗ Run make\n  │ rejected by policy",
+    );
+    const stdoutOnly = JSON.stringify({
+      command: "tsc",
+      exitCode: 2,
+      stderr: "",
+      stdout: "src/a.ts: error",
+    });
+    expect(end("safeBash", { command: "tsc" }, stdoutOnly, "failure")).toBe(
+      "✗ Run tsc · exit 2\n  │ src/a.ts: error",
+    );
+  });
+
+  it("turns a nonzero exit on a plain command result red", () => {
+    const result = { exitCode: 128, stdout: "", stderr: "fatal: bad" };
+    expect(end("exec", { command: "git", args: ["log"] }, result, "plain")).toBe(
+      "✗ Run git log · exit 128\n  │ fatal: bad",
+    );
+    expect(end("exec", { command: "ls" }, { exitCode: 0, stdout: "x", stderr: "" }, "plain")).toBe(
+      "✓ Run ls · exit 0",
+    );
+  });
+
+  it("sizes a write and counts edits", () => {
+    expect(end("write", { filename: "a.md", content: "x".repeat(2100) }, null)).toBe(
+      "✓ Write a.md · 2.1 KB",
+    );
+    expect(end("write", { filename: "a.md", content: "x", mode: "append" }, null)).toBe(
+      "✓ Write a.md append · 1 B",
+    );
+    expect(end("edit", { filename: "a.ts", edits: [{}, {}, {}] }, null)).toBe(
+      "✓ Edit a.ts · 3 edits",
+    );
+  });
+});
+
+describe("table rows", () => {
+  it("shows the spill source in place of the saved name, and the name when unknown", () => {
+    const args = { filename: "2026-01-01T00-00-00-000Z-abcdef.log", offset: 1, limit: 200 };
+    const event = {
+      kind: "toolEnd" as const,
+      toolName: "readSpill",
+      args,
+      value: "t",
+      outcome: "success" as const,
+    };
+    expect(formatAgentTrace(event, { ...plain, spillSource: () => "pnpm run typecheck" })).toBe(
+      "✓ Read output of pnpm run typecheck lines 1–200",
+    );
+    expect(formatAgentTrace(event, { ...plain, spillSource: () => null })).toBe(
+      "✓ Read 2026-01-01T00-00-00-000Z-abcdef.log lines 1–200",
+    );
+  });
+
+  it("marks a forced checkout and a staged diff", () => {
+    expect(
+      formatAgentTrace(
+        { kind: "toolStart", toolName: "gitCheckout", args: { target: "main", force: true } },
+        plain,
+      ),
+    ).toBe("● git checkout main --force");
+    expect(
+      formatAgentTrace(
+        {
+          kind: "toolEnd",
+          toolName: "gitDiff",
+          args: { staged: true },
+          value: {},
+          outcome: "success",
+        },
+        plain,
+      ),
+    ).toBe("✓ git diff --staged");
+  });
+
+  it("appends the fetch path to its base url", () => {
+    expect(
+      formatAgentTrace(
+        {
+          kind: "toolStart",
+          toolName: "fetchMarkdown",
+          args: { baseUrl: "https://x.test", path: "/doc" },
+        },
+        plain,
+      ),
+    ).toBe("● Fetch https://x.test/doc");
+  });
+
+  it("adds elapsed time to a subagent completion", () => {
+    const out = formatAgentTrace(
+      {
+        kind: "toolEnd",
+        toolName: "codeAgent",
+        value: "done",
+        outcome: "success",
+        timeTaken: 134000,
+      },
+      plain,
+    );
+    expect(out).toBe("✓ Code finished · 2m 14s  codeAgent\n  │ done");
+  });
+
+  it("exposes the rows for the coverage test", () => {
+    expect(presentedToolNames()).toContain("read");
+    expect(presentedToolNames()).toContain("todoWrite");
   });
 });

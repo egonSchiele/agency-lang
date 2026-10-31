@@ -1,0 +1,145 @@
+import { scanClaudeSkills, skillsDir, skillsToolFromEntries, expandSlash } from "std::skills"
+
+def fixture(): string {
+  return __dirname + "/skills-claude-fixture"
+}
+
+def loadScan(): any {
+  const scan = scanClaudeSkills(fixture()) with approve
+  if (scan is failure) {
+    return null
+  }
+  return scan.value
+}
+
+def sortedNames(items: any[]): string {
+  const names = [item.name for item in items]
+  return JSON.stringify([...names].sort())
+}
+
+def entryNamed(scan: any, name: string): any {
+  for (entry in scan.entries) {
+    if (entry.name == name) {
+      return entry
+    }
+  }
+  return null
+}
+
+def commandNamed(scan: any, name: string): any {
+  for (cmd in scan.commands) {
+    if (cmd.name == name) {
+      return cmd
+    }
+  }
+  return null
+}
+
+node namesAreEverySkill(): boolean {
+  const scan = loadScan()
+  const expected = ["2024", "My-Skill", "bare", "empty-desc", "first-line", "listy", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]
+  return JSON.stringify([...scan.names].sort()) == JSON.stringify(expected)
+}
+
+node entriesAreModelUsableSkills(): boolean {
+  const scan = loadScan()
+  const expected = ["2024", "My-Skill", "bare", "empty-desc", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]
+  return sortedNames(scan.entries) == JSON.stringify(expected)
+}
+
+node commandsAreUserRunnableSkills(): boolean {
+  const scan = loadScan()
+  const expected = ["2024", "My-Skill", "bare", "empty-desc", "first-line", "listy", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]
+  return sortedNames(scan.commands) == JSON.stringify(expected)
+}
+
+node commandBodyNamesItsFolder(): boolean {
+  const scan = loadScan()
+  const cmd = commandNamed(scan, "normal")
+  return cmd.body == "Base directory for this skill: " + scan.dir + "/normal\n\nRun on $ARGUMENTS."
+}
+
+node commandCarriesArgumentHint(): boolean {
+  const scan = loadScan()
+  const normal = commandNamed(scan, "normal")
+  const bare = commandNamed(scan, "bare")
+  return normal.argHint == "<file>"
+      && normal.description == "A normal skill."
+      && bare.description == "Bare body."
+      && bare.argHint == ""
+}
+
+node descriptionDefaultsToFirstLine(): boolean {
+  const scan = loadScan()
+  return entryNamed(scan, "first-line").description == "First line here."
+}
+
+node whenToUseIsAppended(): boolean {
+  const scan = loadScan()
+  return entryNamed(scan, "when").description == "Base. Say deploy."
+}
+
+node descriptionIsCapped(): boolean {
+  const scan = loadScan()
+  return entryNamed(scan, "long").description.length == 1536
+}
+
+node skillDirIsSubstituted(): boolean {
+  const scan = loadScan()
+  const body = commandNamed(scan, "skill-dir").body
+  return body.includes("Read " + scan.dir + "/skill-dir/notes.md.")
+      && !body.includes("CLAUDE_SKILL_DIR")
+}
+
+node commandExpandsWithArguments(): boolean {
+  const scan = loadScan()
+  return expandSlash("/normal notes.md", scan.commands).endsWith("Run on notes.md.")
+}
+
+node missingDirectoryIsEmpty(): boolean {
+  const scan = scanClaudeSkills(__dirname + "/no-such-folder") with approve
+  if (scan is failure) {
+    return false
+  }
+  return scan.value.names.length == 0 && scan.value.entries.length == 0 && scan.value.commands.length == 0
+}
+
+node skillsDirHidesManualOnlySkills(): boolean {
+  const tool = skillsDir(fixture(), "standard") with approve
+  return !tool.description.includes("<name>manual-only</name>")
+      && tool.description.includes("<name>normal</name>")
+}
+
+// A manual-only skill whose frontmatter also has a folded description and a
+// block list: the switch still counts, and the description is the folded text.
+node switchSurvivesMultiLineFrontmatter(): boolean {
+  const scan = loadScan()
+  const cmd = commandNamed(scan, "listy")
+  return entryNamed(scan, "listy") == null && cmd != null && cmd.description == "Ship the app to production."
+}
+
+// A name the YAML would read as a number is a string, so the tool builds.
+node numericNameBuildsATool(): boolean {
+  const scan = loadScan()
+  const entry = entryNamed(scan, "2024")
+  const tool = skillsToolFromEntries(scan.dir, scan.entries, "claude_fixture")
+  return entry != null && entry.name == "2024" && tool.description.includes("<name>2024</name>")
+}
+
+// A space in a name becomes a dash, so `/My-Skill` can be typed.
+node spaceInNameBecomesADash(): boolean {
+  const scan = loadScan()
+  return expandSlash("/My-Skill", scan.commands).endsWith("Spaced body.")
+}
+
+node emptyDescriptionFallsBackToFirstLine(): boolean {
+  const scan = loadScan()
+  return entryNamed(scan, "empty-desc").description == "The body's first line."
+}
+
+// skillsDir reads SKILL.md with the same parser, so a manual-only skill
+// whose frontmatter has a block list stays out of its listing too.
+node skillsDirFollowsMultiLineFrontmatter(): boolean {
+  const tool = skillsDir(fixture(), "standard") with approve
+  return !tool.description.includes("<name>listy</name>")
+}

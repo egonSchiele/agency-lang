@@ -70,3 +70,142 @@ export function _agentSkillsDir(agent: string): string {
 export function _agentPromptsDir(): string {
   return path.join(stdlibDir(), "agents", "prompts");
 }
+
+// The characters Claude Code refuses in a skill name or folder name: control
+// characters, zero-width, invisible, and bidirectional-control characters,
+// private-use and tag characters, unusual blanks, and `<` and `>`.
+const REFUSED_NAME_CHARS =
+  /[\u0000-\u001F\u007F-\u009F\u00A0\u00AD\u061C\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u2069\u3000\uE000-\uF8FF\uFEFF\u{E0000}-\u{E007F}<>]/u;
+
+// Names Claude Code keeps for its own synced skills.
+const RESERVED_SKILL_FOLDER = "synced";
+const RESERVED_SKILL_PREFIX = "anthropic-skills";
+
+/** True when Claude Code would refuse `name` as a skill name or folder name,
+ *  or reserves it, so a skill scan skips it. */
+export function _refusedSkillName(name: string): boolean {
+  if (REFUSED_NAME_CHARS.test(name)) {
+    return true;
+  }
+  if (name !== name.trim() || name.includes("  ")) {
+    return true;
+  }
+  if (name === RESERVED_SKILL_FOLDER || name === RESERVED_SKILL_PREFIX) {
+    return true;
+  }
+  return name.startsWith(`${RESERVED_SKILL_PREFIX}:`);
+}
+
+/** A skill file split into its frontmatter and its body. */
+export type SkillFile = {
+  data: Record<string, string>;
+  body: string;
+};
+
+const FENCE = "---";
+const TOP_LEVEL_KEY = /^([A-Za-z0-9_-]+):(.*)$/;
+const BLOCK_SCALAR = /^[>|][+-]?$/;
+
+/** Read a `SKILL.md`: the top-level `key: value` lines of its frontmatter,
+ *  as strings, and the text after it. A line that is not one of those
+ *  never fails the whole block, so a frontmatter switch survives a list, a
+ *  comment, or a multi-line value beside it. With no frontmatter, or an
+ *  unclosed fence, the whole file is body. */
+export function _parseSkillFile(raw: string): SkillFile {
+  const lines = raw
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n$/, "")
+    .split("\n");
+  const end = lines[0] === FENCE ? lines.indexOf(FENCE, 1) : -1;
+  if (end === -1) {
+    return { data: {}, body: lines.join("\n") };
+  }
+  return { data: readTopLevelKeys(lines.slice(1, end)), body: lines.slice(end + 1).join("\n") };
+}
+
+function readTopLevelKeys(lines: string[]): Record<string, string> {
+  // Null prototype, so a key such as `__proto__` is plain data.
+  const data: Record<string, string> = Object.create(null);
+  let index = 0;
+  while (index < lines.length) {
+    const match = TOP_LEVEL_KEY.exec(lines[index]);
+    index++;
+    if (!match) {
+      continue;
+    }
+    const [, key, rest] = match;
+    const continuation: string[] = [];
+    while (index < lines.length && isContinuation(lines[index])) {
+      continuation.push(lines[index].trim());
+      index++;
+    }
+    data[key] = valueOf(rest.trim(), continuation);
+  }
+  return data;
+}
+
+// An indented or blank line belongs to the key above it.
+function isContinuation(line: string): boolean {
+  return line === "" || line.startsWith(" ") || line.startsWith("\t");
+}
+
+// A quoted value runs to its closing quote, even across indented lines. A
+// `>` or `|` value is its indented lines. A plain value takes any indented
+// lines after it, folded onto one line, but never a list item or a comment,
+// so `allowed-tools:` followed by a list stays empty.
+function valueOf(first: string, continuation: string[]): string {
+  const folded = continuation.filter(
+    (line) => line !== "" && !line.startsWith("- ") && !line.startsWith("#"),
+  );
+  if (first.startsWith('"') || first.startsWith("'")) {
+    return readQuoted([first, ...folded].join(" "));
+  }
+  const head = withoutComment(first);
+  if (BLOCK_SCALAR.test(head)) {
+    return head.startsWith(">")
+      ? continuation.filter((line) => line !== "").join(" ")
+      : continuation.join("\n").trim();
+  }
+  const parts = [head, ...folded.map(withoutComment)];
+  return parts.filter((part) => part !== "").join(" ");
+}
+
+// YAML starts a comment with a `#` at the start of a plain value or after a
+// space.
+function withoutComment(value: string): string {
+  if (value.startsWith("#")) {
+    return "";
+  }
+  const comment = value.indexOf(" #");
+  return comment === -1 ? value : value.slice(0, comment).trimEnd();
+}
+
+// The text inside YAML quotes, up to the closing quote; anything after it is
+// a comment. Inside double quotes `\"` is a quote and `\\` a backslash, and
+// other escapes are kept as written. Inside single quotes `''` is a quote.
+function readQuoted(text: string): string {
+  const quote = text[0];
+  let out = "";
+  let index = 1;
+  while (index < text.length) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (quote === '"' && char === "\\" && next !== undefined) {
+      out += next === '"' || next === "\\" ? next : char + next;
+      index += 2;
+      continue;
+    }
+    if (char === quote && quote === "'" && next === "'") {
+      out += "'";
+      index += 2;
+      continue;
+    }
+    if (char === quote) {
+      return out;
+    }
+    out += char;
+    index++;
+  }
+  return out;
+}

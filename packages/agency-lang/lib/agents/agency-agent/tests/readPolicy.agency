@@ -27,6 +27,16 @@ node readsInsideCwd(): string[] {
   ]
 }
 
+// The personal skills folder and the launch directory's own project folder
+// are approved. A project folder in a parent directory is not.
+node readsClaudeSkillFolders(): string[] {
+  return [
+    decision("std::read", "${cwd()}/.claude/skills/normal"),
+    decision("std::read", os.homedir() + "/.claude/skills/normal"),
+    decision("std::read", path.dirname(cwd()) + "/.claude/skills/normal"),
+  ]
+}
+
 node readsOutsideCwd(): string[] {
   return [
     decision("std::read", "/"),

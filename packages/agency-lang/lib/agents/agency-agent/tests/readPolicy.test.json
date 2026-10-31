@@ -4,19 +4,41 @@
       "nodeName": "readsInsideCwd",
       "input": "",
       "expectedOutput": "[\"approve\",\"approve\",\"approve\",\"approve\",\"approve\",\"approve\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "readsOutsideCwd",
       "input": "",
       "expectedOutput": "[\"propagate\",\"propagate\",\"propagate\",\"propagate\",\"propagate\",\"propagate\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "readsTheParentDirectory",
       "input": "",
       "expectedOutput": "\"propagate\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readsClaudeSkillFolders",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"approve\",\"propagate\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

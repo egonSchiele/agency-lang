@@ -1,0 +1,37 @@
+# Claude Code skills in `agency agent`
+
+`agency agent` reads the user's Claude Code skills and offers them two ways. The model sees a list of them and reads one when a request fits its description. The user can also run one as `/name`.
+
+## Where the skills come from
+
+`lib/agents/agency-agent/lib/claudeSkills.agency` builds the list once, at startup, in a `static const`.
+
+- **Folders, in precedence order.** `claudeSkillDirs` returns `~/.claude/skills` first, then `.claude/skills` in the launch directory and in each parent, nearest first. The walk stops at the folder that holds `.git` (`repositoryAncestors` in `lib/stdlib/gitignore.ts`, reached from Agency through `_repositoryAncestors`). Outside a repository only the launch directory counts; that rule lives in `projectFolders`. Folders that do not exist are left out.
+- **One scan per folder.** `scanClaudeSkills` in `std::skills` reads each `*/SKILL.md` once. It returns every skill name in `names`, the model-usable skills in `entries`, and the user-runnable ones in `commands`.
+- **Precedence by name.** `mergeSkillSources` walks the folders in order. A name an earlier folder holds hides that name in every later folder, for both the entries and the commands. Names are claimed from `names`, before the frontmatter switches apply. So if `~/.claude/skills/deploy` is manual-only, the model sees no `deploy` at all, even when the project has a plain `deploy`. A folder that appears twice, such as `~/.claude/skills` when the agent starts in `~`, is read once.
+- **What the coordinator gets.** One `skill` tool (`skillToolFor`), whose description lists every model-usable skill from every folder in precedence order, one `- name: description` line each (`skillListing`). The model passes a skill's name, and `file` to read a file the skill links to. The read is an ordinary `read` in that skill's folder, so it cannot leave the folder, and the agent policy answers it. The skill lines may total 8,000 characters (`MAX_SKILL_LISTING_CHARS`, about 1% of a 200,000-token context, as in Claude Code). Past that, descriptions are dropped from the end of the list, so the lowest-precedence skills are listed by name only; every name is always listed. Only the coordinator gets the tool, from `turnTools`; subagents do not. Both coordinator prompts name it, worded as "if you have a `skill` tool", since the tool is left out when no skill is listed.
+- **Slash commands.** `slashCommands()` in `lib/commandPalette.agency` is the skill commands followed by the `.claude/commands` files. `expandSlash` and the `/` palette both take the first command with a name, so a skill hides a command file of the same name. The built-in commands are laid over the palette last, so `/clear` is always the built-in.
+
+## What a skill's frontmatter changes
+
+All of this is in `stdlib/skills.agency`. Every `SKILL.md`, for `scanClaudeSkills` and for `skillsDir`, is read by `_parseSkillFile` (`lib/stdlib/skills.ts`). It reads the top-level `key: value` lines of the frontmatter, as strings. Indented lines below a plain value are folded onto it, a `>` or `|` value is read, and inline `#` comments, list items, a byte-order mark, and Windows line endings are handled. Do not switch these files to `std::markdown`'s `frontmatter`: it drops the whole block when it meets a list, a comment, a blank line, or a multi-line value, which silently undoes a switch.
+
+- **`disable-model-invocation: true`** keeps the skill out of the model's list (`modelInvocable`). `skillsDir` follows the same rule, so it applies to the bundled and learned skills too.
+- **`user-invocable: false`** keeps it from running as `/name` (`userInvocable`).
+- Both switches accept Claude Code's spellings: `true`/`false`, `yes`/`no`, `on`/`off`, and `1`/`0`, in any letter case (`frontmatterFlagToBool`).
+- **The description** (`skillDescription`) is `description`, or the first non-empty line of the body when `description` is missing or empty. `when_to_use` is added after it, and the result is cut at 1,536 characters, Claude Code's limit for the list. `skillsDir` keeps its own descriptions.
+- **A command's body** starts with `Base directory for this skill: <folder>` and a blank line, so relative links in the skill can be followed. `${CLAUDE_SKILL_DIR}` in the body becomes that folder. `$ARGUMENTS` works through `expandSlash`, as for command files. The `skill` tool returns `SKILL.md` after the same base-directory line, with `${CLAUDE_SKILL_DIR}` left as written.
+- **Spaces** in a name become dashes, because `expandSlash` ends a command name at the first space: `My Skill` is `My-Skill` in the list and as `/My-Skill`.
+- **Refused names.** A name or folder name Claude Code refuses is skipped and claims nothing: control, zero-width, invisible, bidirectional-control, private-use, tag, and unusual blank characters, `<` or `>`, leading or trailing spaces, or two spaces in a row. So are the reserved folder `synced` and the names `anthropic-skills` and `anthropic-skills:*` (`_refusedSkillName` in `lib/stdlib/skills.ts`).
+
+Any other frontmatter field is ignored, as Claude Code ignores fields it does not know. These are not supported: positional arguments (`$ARGUMENTS[N]`, `$0`, `arguments`), shell injection (`` !`command` ``), `allowed-tools` and `disallowed-tools`, `model` and `effort`, `context: fork` with `agent` and `background`, `hooks`, and `paths`. The folders are not watched: a skill added during a session appears at the next start. Nested `.claude/skills` folders below the launch directory, plugin skills, `--add-dir`, and the claude.ai skills under `~/.claude/skills/synced/` are not read.
+
+## Approvals
+
+- **The scans.** Each folder's scan raises `std::skills::skillsDir`, and `loadSkillSources` approves it with `with approve`. The scans run during global initialization. `agency agent` passes no root policy to its child process (`withRootCarriers(process.env, { budget })` in `lib/cli/runBundledAgent.ts`), and the agent policy is a handler `runSession` installs around each turn (`lib/turn.agency`), after the statics have run. So nothing in `~/.agency-agent/policy.json` or the agent's `--policy` flag can stop these scans. A root policy can: since #987 it is installed before global initialization, so `agency run --policy ... agent.agency` or `--reject std::skills::skillsDir` rejects a scan, and the rejection wins over the inner `with approve`. A rejected scan leaves its folder out.
+- **The reads.** Reading a skill through its tool is an ordinary `read`. The recommended policy approves reads under `<home>/.claude/skills` and `./.claude/skills` (`docs/dev/agents/approval-policies.md`). A skill in a parent folder's `.claude/skills` prompts when read, and is rejected in a one-shot run. A saved `policy.json` gets the new rule through `/policy`. A file a manual-only skill links to is read with the generic `read` tool, under the same rules.
+- **What reaches the model.** A `.claude/commands` file does nothing until the user types its name. A skill's description goes to the model on every call. So a cloned repository's `.claude/skills` reaches the model as soon as the agent starts in it.
+
+## Resuming a session
+
+Statics are not part of a checkpoint. A session resumed with `--resume` runs in a new process, which scans the folders again, so it gets the folders' current skills. The `skill` tool reads `SKILL_SOURCES` itself rather than binding it with `.partial`, because bound values are written into every checkpoint taken while the tool is in a frame.

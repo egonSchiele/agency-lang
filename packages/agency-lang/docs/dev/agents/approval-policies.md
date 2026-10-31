@@ -304,7 +304,7 @@ pinned to it would match nothing ever again.
 The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
 `std::glob`, `std::grep`) and the scan effects that read a whole
 directory under one approval (`std::skills::skillsDir`,
-`std::skills::commandsDir`, `std::toolbox::scan`) are approved in three
+`std::skills::commandsDir`, `std::toolbox::scan`) are approved in four
 places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
 
 - the launch directory and everything under it, written as `{.,./**}` so
@@ -320,7 +320,13 @@ places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
   everything under it. The root is listed as well as its contents because
   a catalog scan of a whole directory names the root itself in its
   payload. Without this rule every read of a learned skill, every catalog
-  scan, and every `runTool` would prompt, and would auto-reject headless.
+  scan, and every `runTool` would prompt, and would auto-reject headless;
+- the Claude Code skill folders, `<home>/.claude/skills` and
+  `./.claude/skills`, each listed as the folder and everything under it.
+  `{.,./**}` does not cover `./.claude/skills`, because `**` does not
+  descend into a folder whose name starts with a dot. A `.claude/skills`
+  in a parent of the launch directory is not covered, so reading one of
+  its skills prompts. See `docs/dev/agents/claude-skills.md`.
 
 The agent home as a whole is not in scope, and that is deliberate.
 `sessions/` and `history` hold earlier conversations, often from other
@@ -435,12 +441,15 @@ The save and review gates (`std::skills::save`, `std::skills::review`,
 `std::toolbox::save`, `std::toolbox::review`) have no rule in any
 built-in but `approve-all`. They prompt.
 
-All three read rules, and the `std::mkdir` rule, are placeholders, not paths. `.` expands to the
+All four read rules, and the `std::mkdir` rule, are placeholders, not paths. `.` expands to the
 process cwd, `<agency>` to the directory the agency package is installed
 in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `substituteInstallDir`,
 `getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or
 `~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `substituteAgentHome`,
-`agentHomeDir` in `lib/runtime/agentHome.ts`). The three directories are
+`agentHomeDir` in `lib/runtime/agentHome.ts`), and `<home>` to the user's
+home directory (`HOME_PLACEHOLDER`, `substituteHome`). `substitutePlaceholders`
+in `lib/runtime/policy.ts` applies the three named placeholders; `.` is
+handled apart, by `substituteDot`. The directories are
 resolved once, when a run's context is built (`resolvePolicyDirs` in
 `lib/runtime/policyDirs.ts`, kept as `ctx.policyDirs`), and the matcher
 takes them as plain strings, so answering an interrupt reads no file. An

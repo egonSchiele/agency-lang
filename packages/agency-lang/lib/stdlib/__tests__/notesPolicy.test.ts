@@ -10,6 +10,7 @@ import {
 const DIRS: PolicyDirs = {
   cwd: "/",
   agentHome: "/home/agent/.agency-agent",
+  home: "/home/agent",
   agencyInstallDir: null,
 };
 const checkPolicyExplicit = (policy: Policy, interrupt: Parameters<typeof checkWith>[1]) =>

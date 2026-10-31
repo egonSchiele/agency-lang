@@ -1,6 +1,7 @@
 import {
   AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
   AGENT_HOME_PLACEHOLDER as AGENT_HOME,
+  HOME_PLACEHOLDER as HOME,
   type Policy,
   type PolicyRule,
   escapeGlob,
@@ -57,11 +58,26 @@ const AGENT_HOME_READ_DIRS = ["skills", "tools", "memory"]
   .flatMap((name) => [`${AGENT_HOME}/${name}`, `${AGENT_HOME}/${name}/**`])
   .join(",");
 
+// Claude Code skill folders: the personal one in the user's home, and the
+// launch directory's own project folder, which `./**` misses because `**`
+// does not descend into a folder whose name starts with a dot. A project
+// folder in a parent directory is not covered, so reading one of its
+// skills still asks. This does not put the home in scope: the rule names
+// `.claude/skills` only, and `**` does not descend into a dot folder such
+// as a `.git` inside it.
+const CLAUDE_SKILL_READ_DIRS = [
+  `${HOME}/.claude/skills`,
+  `${HOME}/.claude/skills/**`,
+  "./.claude/skills",
+  "./.claude/skills/**",
+].join(",");
+
 export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
     { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
     { match: { dir: `{${AGENT_HOME_READ_DIRS}}` }, action: "approve" },
+    { match: { dir: `{${CLAUDE_SKILL_READ_DIRS}}` }, action: "approve" },
   ];
 }
 

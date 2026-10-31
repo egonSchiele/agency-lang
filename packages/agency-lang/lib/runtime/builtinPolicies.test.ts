@@ -22,6 +22,12 @@ describe("builtinPolicy", () => {
         },
         action: "approve",
       },
+      {
+        match: {
+          dir: "{<home>/.claude/skills,<home>/.claude/skills/**,./.claude/skills,./.claude/skills/**}",
+        },
+        action: "approve",
+      },
     ];
     for (const effect of ["std::readBinary", "std::ls", "std::glob", "std::grep"]) {
       expect(p![effect]).toEqual(scope);
@@ -97,6 +103,21 @@ describe("builtinPolicy", () => {
       "<agent-home>/sessions/project-a",
     ]) {
       expect(picomatch.isMatch(dir, home)).toBe(false);
+    }
+  });
+
+  it("reads the Claude Code skill folders and nothing else in the home", () => {
+    const skills = builtinPolicy("recommended", "/tmp/base")!["std::grep"][3].match!.dir!;
+    for (const dir of [
+      "<home>/.claude/skills",
+      "<home>/.claude/skills/review-pr",
+      "./.claude/skills",
+      "./.claude/skills/normal",
+    ]) {
+      expect(picomatch.isMatch(dir, skills)).toBe(true);
+    }
+    for (const dir of ["<home>", "<home>/.ssh", "<home>/.claude", "./.claude/commands"]) {
+      expect(picomatch.isMatch(dir, skills)).toBe(false);
     }
   });
 

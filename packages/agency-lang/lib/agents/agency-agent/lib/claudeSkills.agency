@@ -1,0 +1,202 @@
+/** @module
+  @summary The user's Claude Code skills: `~/.claude/skills`, then
+  `.claude/skills` in the launch directory and each parent up to the
+  repository root. Each folder is scanned once at startup and offered to
+  the coordinator as one `skill` tool, and its skills run as slash commands.
+  See docs/dev/agents/claude-skills.md.
+*/
+import { exists } from "std::shell"
+import { cwd } from "std::system"
+import { ClaudeSkillsScan, SkillCommand, SkillEntry, scanClaudeSkills, skillsToolFromEntries } from "std::skills"
+import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
+
+export type SkillLabel = "personal" | "project"
+
+export type SkillDir = {
+  label: SkillLabel;
+  dir: string
+}
+
+export type SkillSource = {
+  label: SkillLabel;
+  scan: ClaudeSkillsScan
+}
+
+static const SKILLS_SUBDIR = "/.claude/skills"
+
+/** The folders whose `.claude/skills` count, nearest first. `ancestors` is
+  `_repositoryAncestors(start)`: null means there is no repository, and then
+  only `start` counts. */
+export def projectFolders(start: string, ancestors: string[] | null): string[] {
+  if (ancestors == null) {
+    return [start]
+  }
+  return [start, ...[...ancestors].reverse()]
+}
+
+/** The skill folders that exist, in precedence order: the personal folder,
+  then the project folders nearest first. */
+@capabilities(fileRead)
+export def claudeSkillDirs(start: string, home: string): SkillDir[] {
+  const personal: SkillDir = {
+    label: "personal",
+    dir: home + SKILLS_SUBDIR
+  }
+  const folders = projectFolders(start, _repositoryAncestors(start))
+  const projects: SkillDir[] = [{ label: "project", dir: folder + SKILLS_SUBDIR } for folder in folders]
+  return [candidate for candidate in [personal, ...projects] if exists(candidate.dir)]
+}
+
+/** Claude Code's precedence: an earlier source's skill name hides that name
+  in every later source, for the model's entries and for commands alike.
+  Names are claimed from `scan.names`, before either switch applied, so a
+  manual-only skill still hides a same-named skill further down. A folder
+  seen twice, such as the home folder read as a project, is kept once. */
+export def mergeSkillSources(sources: SkillSource[]): SkillSource[] {
+  let seenDirs: string[] = []
+  let claimed: string[] = []
+  let merged: SkillSource[] = []
+  for (src in sources) {
+    if (seenDirs.includes(src.scan.dir)) {
+      continue
+    }
+    seenDirs.push(src.scan.dir)
+    const taken = claimed
+    const entries: SkillEntry[] = [item for item in src.scan.entries if !taken.includes(item.name)]
+    const commands: SkillCommand[] = [item for item in src.scan.commands if !taken.includes(item.name)]
+    merged.push({
+      label: src.label,
+      scan: {
+        dir: src.scan.dir,
+        names: src.scan.names,
+        entries: entries,
+        commands: commands
+      }
+    })
+    claimed = [...claimed, ...src.scan.names]
+  }
+  return merged
+}
+
+// The skill lines in the `skill` tool's description may total this many
+// characters, about 1% of a 200,000-token context, as in Claude Code.
+// Past it, descriptions are dropped from the end of the list, so the
+// lowest-precedence skills are listed by name only.
+static const MAX_SKILL_LISTING_CHARS = 8000
+
+static const LISTING_HEADER = "Load one of the user's Claude Code skills by its name, and follow it when a request fits its description. Pass `file` to read another file the skill links to, relative to the skill's folder. Skills:"
+
+static const NAME_ONLY_NOTE = "Skills listed by name only have their descriptions left out to save space; load them the same way."
+
+def skillLine(entry: SkillEntry, withDescription: boolean): string {
+  if (withDescription && entry.description != "") {
+    return "- ${entry.name}: ${entry.description}"
+  }
+  return "- ${entry.name}"
+}
+
+/** The `skill` tool's description: every model-usable skill, in precedence
+  order, one `- name: description` line each. When the lines pass `budget`
+  characters, descriptions are dropped from the end of the list until they
+  fit; every name is always listed. */
+export def skillListing(sources: SkillSource[], budget: number): string {
+  let entries: SkillEntry[] = []
+  for (src in sources) {
+    entries = [...entries, ...src.scan.entries]
+  }
+  let described = entries.length
+  let lines = [skillLine(entry, true) for entry in entries]
+  let total = 0
+  for (line in lines) {
+    total = total + line.length + 1
+  }
+  while (total > budget && described > 0) {
+    described = described - 1
+    const shorter = skillLine(entries[described], false)
+    total = total - lines[described].length + shorter.length
+    lines[described] = shorter
+  }
+  let listing = "${LISTING_HEADER}\n${lines.join("\n")}\n"
+  if (described < entries.length) {
+    listing = "${listing}${NAME_ONLY_NOTE}\n"
+  }
+  return listing
+}
+
+/** The one `skill` tool over every folder, or none when no skill is listed.
+  `sources` decides the listing; the tool loads from `SKILL_SOURCES`. */
+export def skillToolFor(sources: SkillSource[]): any[] {
+  const listed = [src for src in sources if src.scan.entries.length > 0]
+  if (listed.length == 0) {
+    return []
+  }
+  const tool = loadSkill.rename("skill").describe(skillListing(sources, MAX_SKILL_LISTING_CHARS))
+  return [tool]
+}
+
+// The tool body reads SKILL_SOURCES itself and binds nothing, so a
+// checkpoint taken while the tool is in a frame does not carry the skills.
+def loadSkill(name: string, file: string = "SKILL.md"): Result<string> {
+  """
+  Load a skill by name.
+
+  @param name - The skill's name, as listed
+  @param file - A file in the skill's folder; SKILL.md by default
+  """
+  return loadSkillFrom(SKILL_SOURCES, name, file)
+}
+
+// The read raises std::read for the skill's folder, which the agent policy
+// answers.
+def loadSkillFrom(sources: SkillSource[], name: string, file: string): Result<string> {
+  for (src in sources) {
+    for (entry in src.scan.entries) {
+      if (entry.name == name) {
+        const folder = "${src.scan.dir}/${entry.location.replace("/SKILL.md", "")}"
+        const text = read(file, dir: folder)
+        if (text is success(content)) {
+          if (file == "SKILL.md") {
+            return success("Base directory for this skill: ${folder}\n\n${content}")
+          }
+          return success(content)
+        }
+        return text
+      }
+    }
+  }
+  return failure("No skill named '${name}'. Use a name from the list in this tool's description.")
+}
+
+export def skillCommandsFor(sources: SkillSource[]): SkillCommand[] {
+  let commands: SkillCommand[] = []
+  for (src in sources) {
+    commands = [...commands, ...src.scan.commands]
+  }
+  return commands
+}
+
+// Each scan is approved here; an outer handler that rejects still wins, and
+// a rejected or failed scan is left out.
+def loadSkillSources(start: string, home: string): SkillSource[] {
+  let sources: SkillSource[] = []
+  for (candidate in claudeSkillDirs(start, home)) {
+    const scan = scanClaudeSkills(candidate.dir) with approve
+    if (scan is success(value)) {
+      sources.push({
+        label: candidate.label,
+        scan: value
+      })
+    }
+  }
+  return mergeSkillSources(sources)
+}
+
+static const SKILL_SOURCES = loadSkillSources(cwd(), os.homedir())
+
+export def claudeSkillTools(): any[] {
+  return skillToolFor(SKILL_SOURCES)
+}
+
+export def claudeSkillCommands(): SkillCommand[] {
+  return skillCommandsFor(SKILL_SOURCES)
+}

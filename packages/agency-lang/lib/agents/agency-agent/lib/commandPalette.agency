@@ -1,6 +1,15 @@
-import { commandsDir } from "std::skills"
+import { SkillCommand, commandsDir } from "std::skills"
 import { cwd } from "std::system"
+
+import { claudeSkillCommands } from "./claudeSkills.agency"
+
 export static const projectCommands = commandsDir("${cwd()}/.claude/commands") with approve
+
+/** Every `/name` command a turn can expand, in precedence order: the
+  user's Claude Code skills, then the project's `.claude/commands` files. */
+export def slashCommands(): SkillCommand[] {
+  return [...claudeSkillCommands(), ...projectCommands]
+}
 
 export def builtinPalette(): Record<string, string> {
   return {
@@ -22,20 +31,29 @@ export def builtinPalette(): Record<string, string> {
   }
 }
 
-// Built-ins win over file commands so a user `/clear.md` can't shadow
-// the built-in `/clear`. Build file entries first, then overlay builtins.
-export def mergedPalette(): Record<string, string> {
+// The first command with a name wins, as in `expandSlash`, and the
+// built-ins are laid over the result so a skill or file named `clear`
+// can't shadow the built-in `/clear`.
+export def paletteFrom(commands: SkillCommand[]): Record<string, string> {
   let out: Record<string, string> = {}
-  for (cmd in projectCommands) {
+  for (cmd in commands) {
+    const key = "/${cmd.name}"
+    if (out[key] != null) {
+      continue
+    }
     let label = cmd.description
     if (cmd.argHint != "") {
       label = "${cmd.description} ${cmd.argHint}"
     }
-    out["/${cmd.name}"] = label
+    out[key] = label
   }
   const builtins = builtinPalette()
   for (key in builtins) {
     out[key] = builtins[key]
   }
   return out
+}
+
+export def mergedPalette(): Record<string, string> {
+  return paletteFrom(slashCommands())
 }

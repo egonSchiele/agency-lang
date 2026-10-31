@@ -404,7 +404,7 @@ return runWorkflow
 
 `inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. For a saved workflow it is read from `meta.json`, where `writeWorkflow` stored it (decision 24). A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
 
-A checkpoint does not keep a schema set with `.withParamSchema`: the reviver saves a function value's name, description, and bound arguments, but not its parameter schemas (`lib/runtime/revivers/functionRefReviver.ts`). After a resume, the model would see the tool's `inputs` as any JSON value. The agent's learned tools have the same gap. The reviver is fixed to save and re-apply the schema before `workflowTool` is built.
+A checkpoint keeps a schema set with `.withParamSchema`. The function value records each schema it was given in `paramSchemas`, and the reviver writes that record and calls `.withParamSchema` again on revive (`lib/runtime/revivers/functionRefReviver.ts`, ADI-249). So after a resume the model still sees the tool's `inputs` type, and the agent's learned tools keep their `request` type too.
 
 `workflowTools(dir, tools)` lists a directory and builds one tool per saved workflow. A host with a handful of workflows adds these to its model's tool list, so "do the meal plan thing" is one ordinary tool choice. A workflow's name must not collide with a tool already in `tools`; `workflowTools` refuses one that does, since it has both lists in hand.
 

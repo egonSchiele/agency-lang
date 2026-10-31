@@ -29,6 +29,7 @@ export { MAX_STDOUT_LEN } from "std::spill"
 export type Word =
   | LiteralWord
   | PathWord
+  | GlobWord
   | FlagWord
   | SingleQuotedWord
   | DoubleQuotedWord
@@ -47,10 +48,20 @@ export type PathWord = {
   text: string
 }
 
+/** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
+ * so it is never mistaken for the quoted text `'*.ts'`; no rule here
+ * treats it as a literal. */
+export type GlobWord = {
+  tag: "glob";
+  text: string
+}
+
 export type FlagWord = {
   tag: "flag";
   flagName: string;
-  flagValue?: string
+  flagValue?: string;
+  /** Present and true when the value is an unquoted glob (`--include=*.ts`). */
+  valueIsGlob?: boolean
 }
 
 export type SingleQuotedWord = {
@@ -113,7 +124,16 @@ export type SimpleCommand = {
   redirects: Redirect[]
 }
 
-export type Command = SimpleCommand | And | Or | Parens
+export type Command = SimpleCommand | Pipeline | And | Or | Parens
+
+/** What may sit between pipes: a simple command or a parenthesized group. */
+export type PipelineStage = SimpleCommand | Parens
+
+/** `a | b | c`: flat, two or more stages, binding tighter than `&&`/`||`. */
+export type Pipeline = {
+  tag: "pipeline";
+  stages: PipelineStage[]
+}
 
 export type And = {
   tag: "and";
@@ -486,6 +506,7 @@ def flattenOne(command: Command): SimpleCommand[] {
   // happen.
   return match(command) {
     { tag: "simpleCommand" } => [command]
+    { tag: "pipeline", stages } => flattenCommands(stages)
     { tag: "and", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "or", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "parens", command as inner } => flattenOne(inner)

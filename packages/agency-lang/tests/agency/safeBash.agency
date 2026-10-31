@@ -370,10 +370,13 @@ node tildeRedirectQuoting(): boolean {
   const unquoted = writeExecOf("echo hi > ~/cf-sb-tilde.txt", "/repo")
   const single = writeExecOf("echo hi > '~/cf-sb-tilde.txt'", "/repo")
   const double = writeExecOf("echo hi > \"~/cf-sb-tilde.txt\"", "/repo")
-  const unquotedBroad = unquoted.kind == "bash"
+  // An unquoted `~` expands, so the write lands in the real home directory,
+  // wherever that is on this machine; a quoted one is a directory literally
+  // named `~` under the cwd.
+  const unquotedExpanded = unquoted.kind == "write" && unquoted.dir != "/repo/~" && unquoted.filename == "cf-sb-tilde.txt"
   const singleLiteral = single.dir == "/repo/~" && single.filename == "cf-sb-tilde.txt"
   const doubleLiteral = double.dir == "/repo/~" && double.filename == "cf-sb-tilde.txt"
-  return unquotedBroad && singleLiteral && doubleLiteral
+  return unquotedExpanded && singleLiteral && doubleLiteral
 }
 
 def planKind(source: string): string {

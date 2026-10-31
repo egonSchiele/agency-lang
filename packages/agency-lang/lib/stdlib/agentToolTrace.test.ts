@@ -11,6 +11,183 @@ const tasks = [
   { id: "3", text: "Compare hardware", status: "pending" },
 ];
 
+describe("compact tool activity", () => {
+  const start = (toolName: string, args: unknown) =>
+    formatAgentTrace({ kind: "toolStart", toolName, args }, { ...plain, columns: 240 });
+
+  it.each([
+    [{}, "● Reading  notes.md"],
+    [{ offset: 460, limit: 120 }, "● Reading  notes.md · lines 460–579"],
+    [{ offset: 460 }, "● Reading  notes.md · lines 460–end"],
+    [{ limit: 20 }, "● Reading  notes.md · lines 1–20"],
+    [{ offset: 0, limit: 0 }, "● Reading  notes.md"],
+  ])("shows the requested read extent for %j", (range, expected) => {
+    expect(start("read", { filename: "notes.md", ...range })).toBe(expected);
+  });
+
+  it("keeps the full path and distinguishes documentation and saved output", () => {
+    const filename = "a-long-directory/".repeat(4) + "notes.md";
+    expect(start("read", { filename, dir: "docs" })).toContain("docs/" + filename);
+    expect(start("agencyGuide", { filename: "handlers.md" })).toContain("agencyGuide: handlers.md");
+    expect(start("readSpill", { filename: "output.log", offset: 50 })).toContain(
+      "saved output output.log · lines 50–end",
+    );
+  });
+
+  it("shows search scope and active modes without default argument rows", () => {
+    const text = start("grep", {
+      pattern: "registers|plugin|local serve",
+      dir: "docs/models.md",
+      flags: "i",
+      maxResults: 30,
+      allowedPaths: [],
+      ignoreCase: true,
+      wholeWord: false,
+      filesOnly: false,
+      invert: false,
+    });
+    expect(text).toBe('● Searching  "registers|plugin|local serve" in docs/models.md');
+    expect(
+      start("grep", { pattern: "x", path: "src", wholeWord: true, invert: true, filesOnly: true }),
+    ).toContain("whole words · files only · nonmatching lines");
+    expect(start("grep", { pattern: "x", path: "src", respectGitignore: false })).toContain(
+      "including ignored files",
+    );
+  });
+
+  it("distinguishes glob, recursive listings, and every saved-output pattern", () => {
+    expect(start("glob", { pattern: "**/*.ts", dir: "src" })).toContain('"**/*.ts" in src');
+    expect(start("ls", { dir: "src", recursive: true })).toContain("recursive");
+    const output = start("grepSpill", {
+      filename: "output.log",
+      pattern: "first",
+      morePatterns: ["second", "third"],
+    });
+    for (const value of ["output.log", "first", "second", "third"]) {
+      expect(output).toContain(value);
+    }
+  });
+
+  it("preserves unsupported grep flags so a corrected retry looks different", () => {
+    const text = start("grep", { pattern: "x", flags: "-i", ignoreCase: true });
+    expect(text).toContain('flags "-i"');
+    expect(text).not.toBe(start("grep", { pattern: "x", flags: "i", ignoreCase: true }));
+  });
+
+  it("distinguishes an explicit process directory from the agent directory", () => {
+    expect(start("safeBash", { command: "pwd", cwd: "." })).toContain("in .");
+    expect(start("safeBash", { command: "pwd" })).not.toContain("in .");
+    expect(start("safeBash", { command: "pwd", cwd: "" })).not.toContain("in ");
+  });
+
+  it.each(["read", "readSpill", "grep", "grepSpill", "glob", "ls", "agencyGuide"])(
+    "suppresses routine %s completions but keeps failures",
+    (toolName) => {
+      expect(
+        formatAgentTrace(
+          { kind: "toolEnd", toolName, value: "contents", outcome: "success" },
+          plain,
+        ),
+      ).toBe("");
+      expect(
+        formatAgentTrace(
+          { kind: "toolEnd", toolName, value: "permission denied", outcome: "failure" },
+          plain,
+        ),
+      ).toContain("permission denied");
+    },
+  );
+
+  it("reports slow reads without printing the contents or inventing call context", () => {
+    const text = formatAgentTrace(
+      { kind: "toolEnd", toolName: "read", value: "contents", outcome: "success", timeTaken: 1250 },
+      plain,
+    );
+    expect(text).toContain("read");
+    expect(text).toContain("1.3s");
+    expect(text).not.toContain("contents");
+  });
+
+  it("keeps mutation targets and command arguments while omitting write bodies", () => {
+    expect(
+      start("write", { filename: "a.md", dir: "docs", content: "secret body", mode: "append" }),
+    ).toBe("● Writing  docs/a.md · append");
+    expect(
+      start("edit", { filename: "a.md", edits: [{ oldText: "old", newText: "new" }] }),
+    ).toContain("a.md · 1 edit");
+    const command = "a".repeat(120);
+    expect(start("safeBash", { command, cwd: "project" })).toContain(command);
+    expect(
+      start("exec", { command: "git", args: ["status", "--short"], cwd: "project" }),
+    ).toContain('git "status" "--short"');
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "write", value: true, outcome: "success" },
+        plain,
+      ),
+    ).toContain("Tool finished");
+  });
+
+  it.each(["exec", "agencyCli"])("reports nonzero %s exits as failures", (toolName) => {
+    const text = formatAgentTrace(
+      {
+        kind: "toolEnd",
+        toolName,
+        outcome: "plain",
+        value: { stdout: "", stderr: "broken", exitCode: 2 },
+      },
+      plain,
+    );
+    expect(text).toContain("✗");
+    expect(text).toContain("exit 2");
+    expect(text).toContain("broken");
+    expect(text).not.toContain("✓");
+  });
+
+  it("keeps complete supplied arguments and results in debug output", () => {
+    const value = "z".repeat(220);
+    const options = { columns: 300, color: false };
+    expect(
+      formatAgentTrace(
+        {
+          kind: "toolStart",
+          toolName: "read",
+          args: { filename: value, offset: 20 },
+          detailed: true,
+        },
+        options,
+      ),
+    ).toContain('filename: "' + value + '"');
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "read", value, outcome: "success", detailed: true },
+        options,
+      ),
+    ).toContain(value);
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "custom", value, outcome: "plain", detailed: true },
+        options,
+      ),
+    ).toContain(value);
+  });
+
+  it("falls back for malformed arguments and sanitizes compact values", () => {
+    expect(start("read", {})).toContain("Tool call  read");
+    expect(start("grep", null)).toContain("Tool call  grep");
+    const text = formatAgentTrace(
+      {
+        kind: "toolStart",
+        toolName: "read",
+        args: { filename: "bad\x1b[2J\nfile.md", offset: 20, limit: 10 },
+      },
+      { columns: 20, color: false },
+    );
+    expect(text).not.toContain("\x1b");
+    expect(text.split("\n").every((line) => visualWidth(line) <= 20)).toBe(true);
+  });
+});
+
 describe("custom presentations", () => {
   it("announces a subagent once and labels its completion", () => {
     expect(

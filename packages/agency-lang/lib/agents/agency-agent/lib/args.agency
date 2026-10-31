@@ -26,11 +26,11 @@ export def parseAgentArgs() {
         },
         debug: {
           type: "boolean",
-          description: "Log tool returns (toolName, result, timing). Same as AGENT_DEBUG=1"
+          description: "Show full ordinary tool arguments and results, timing for slow calls, and LLM diagnostics. Same as AGENT_DEBUG=1"
         },
         verbose: {
           type: "boolean",
-          description: "Echo tool-call starts to stdout in non-interactive mode"
+          description: "Show compact tool activity and LLM diagnostics in non-interactive mode"
         },
         model: {
           type: "string",

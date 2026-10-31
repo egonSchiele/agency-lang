@@ -59,8 +59,19 @@ const ROLES: Record<"basic" | "extended", Record<string, CharRole>> = {
 /** What a quantifier may follow: something that matches a character. */
 const REPEATABLE: CharRole[] = ["literal", "any", "close"];
 
+/** Below this code point, every character is a control character (tab,
+ *  newline, ...). */
+const FIRST_PRINTABLE = 0x20;
+/** DEL, the one control character above FIRST_PRINTABLE in ASCII. */
+const DELETE = 0x7f;
+
+function isControlCharacter(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code < FIRST_PRINTABLE || code === DELETE;
+}
+
 function hasControlCharacter(pattern: string): boolean {
-  return pattern.split("").some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f);
+  return pattern.split("").some(isControlCharacter);
 }
 
 function isWordText(text: string): boolean {

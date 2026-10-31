@@ -695,8 +695,6 @@ type GrepWords = {
 /** grep's context flags, whose values are line counts. */
 static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
 
-static const GREP_DIRECTORY_REFUSAL = "grep through bash would search a directory, and reads files the grep tool skips"
-
 @capabilities(fileRead)
 def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCall> {
   """
@@ -827,7 +825,7 @@ def grepEffects(command: SimpleCommand, cwd: string): Result<Effect[]> {
     return failure(why)
   }
   if (call.value.target.file == null) {
-    return failure(GREP_DIRECTORY_REFUSAL)
+    return failure("grep through bash would search a directory, and reads files the grep tool skips")
   }
   // 0 means no cap, which is true of grep without -m.
   return success([grepEffect(grepPayload(call.value, call.value.pattern, 0))])

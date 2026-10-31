@@ -9,6 +9,7 @@ import {
   _glob,
   _grep,
   _searchTarget,
+  _searchTargetIn,
   _stat,
 } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
@@ -467,6 +468,75 @@ describe("_searchTarget resolves what a listing or search tool was given", () =>
     await expect(_searchTarget(missing, "grep")).rejects.toThrow(message);
     await expect(_searchTarget(missing, "ls")).rejects.toThrow(message);
     await expect(_searchTarget(missing, "glob")).rejects.toThrow(message);
+  });
+});
+
+describe("_searchTargetIn resolves a grep path against a cwd", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-search-target-in-"));
+    fs.writeFileSync(path.join(root, "notes.md"), "needle\n");
+    fs.mkdirSync(path.join(root, "sub"));
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("a relative directory resolves under the cwd, and keeps the path as written", async () => {
+    expect(await _searchTargetIn("sub", root, "expand")).toEqual({
+      dir: path.join(root, "sub"),
+      file: null,
+      argument: "sub",
+    });
+  });
+
+  it("a relative file splits into its real parent and its name", async () => {
+    expect(await _searchTargetIn("notes.md", root, "expand")).toEqual({
+      dir: root,
+      file: "notes.md",
+      argument: "notes.md",
+    });
+  });
+
+  it("dot is the cwd itself", async () => {
+    expect(await _searchTargetIn(".", root, "expand")).toEqual({
+      dir: root,
+      file: null,
+      argument: ".",
+    });
+  });
+
+  it("a missing path rejects with the message the grep tool gives", async () => {
+    await expect(_searchTargetIn("nope", root, "expand")).rejects.toThrow(
+      /No file or directory at/,
+    );
+  });
+
+  it("a quoted tilde stays a literal directory name under the cwd", async () => {
+    fs.mkdirSync(path.join(root, "~"));
+    expect(await _searchTargetIn("~", root, "literal")).toEqual({
+      dir: path.join(root, "~"),
+      file: null,
+      argument: "~",
+    });
+  });
+
+  it("an unquoted tilde is the home directory, and the argument is expanded the way bash hands it to grep", async () => {
+    const target = await _searchTargetIn("~", root, "expand");
+    expect(target.dir).toBe(fs.realpathSync(os.homedir()));
+    expect(target.argument).toBe(os.homedir());
+  });
+
+  it("another user's home is refused", async () => {
+    await expect(_searchTargetIn("~root", root, "expand")).rejects.toThrow(/not supported/);
+  });
+
+  it("an empty cwd is refused", async () => {
+    await expect(_searchTargetIn("sub", "", "expand")).rejects.toThrow(
+      "grep refused: cwd must not be empty.",
+    );
   });
 });
 

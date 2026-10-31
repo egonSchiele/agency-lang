@@ -33,6 +33,36 @@ export async function prepareContainedPath(
 export type TildeMode = "expand" | "literal";
 
 /**
+ * A path as bash hands it to the program it runs. Bash expands a leading
+ * `~` only in an unquoted word, so the caller says which kind of word
+ * this was. `~user` throws (see `expandPath`).
+ */
+export function expandTilde(target: string, tildeMode: TildeMode): string {
+  if (tildeMode === "literal") {
+    return target;
+  }
+  return expandPath(target, currentHost().system.homeDir());
+}
+
+/**
+ * A path from a safeBash command, made absolute against safeBash's cwd.
+ * No filesystem access. `refusal` names the caller in the message for an
+ * empty cwd, which would otherwise resolve against the process's own.
+ */
+export function resolveAgainstCwd(
+  target: string,
+  cwd: string,
+  tildeMode: TildeMode,
+  refusal: string,
+): string {
+  if (cwd.trim() === "") {
+    throw new Error(`${refusal} refused: cwd must not be empty.`);
+  }
+  const baseDir = resolveCwdPath(currentHost(), cwd);
+  return path.resolve(baseDir, expandTilde(target, tildeMode));
+}
+
+/**
  * Where a safeBash redirect will land: the target resolved through the
  * strict walk and split into real parent plus name, so the payload's dir
  * is the destination the policy judges. No containment, because safeBash
@@ -44,12 +74,7 @@ export async function resolveRedirectTarget(
   cwd: string,
   tildeMode: TildeMode,
 ): Promise<ContainedPath> {
-  const host = currentHost();
-  if (cwd.trim() === "") {
-    throw new Error("redirect refused: cwd must not be empty.");
-  }
-  const baseDir = resolveCwdPath(host, cwd);
-  const expanded = tildeMode === "expand" ? expandPath(target, host.system.homeDir()) : target;
-  const resolved = await host.files.realDir(path.resolve(baseDir, expanded));
+  const absolute = resolveAgainstCwd(target, cwd, tildeMode, "redirect");
+  const resolved = await currentHost().files.realDir(absolute);
   return { dir: path.dirname(resolved), filename: path.basename(resolved) };
 }

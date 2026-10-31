@@ -9,6 +9,7 @@ import { bash, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
+  BroadReason,
   Effect,
   Plan,
   WritePayload,
@@ -20,6 +21,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 
 export { MAX_STDOUT_LEN } from "std::spill"
@@ -393,17 +395,19 @@ static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }
 
-def refusePlan(reason: string): Plan {
+def refusePlan(reason: string, verbs: string[]): Plan {
   return {
     effects: [],
     execution: {
       kind: "refuse",
       reason: reason
-    }
+    },
+    broadReason: null,
+    verbs: verbs
   }
 }
 
-def bashPlan(command: string, effects: Effect[]): Plan {
+def bashPlan(command: string, effects: Effect[], verbs: string[], broadReason: BroadReason | null): Plan {
   // Spawning a shell always raises at least one effect, so a log of
   // effects is a complete audit of shell invocations. A string of nothing
   // but echoes would otherwise raise nothing and still start a shell.
@@ -413,8 +417,49 @@ def bashPlan(command: string, effects: Effect[]): Plan {
     execution: {
       kind: "bash",
       command: command
-    }
+    },
+    broadReason: broadReason,
+    verbs: verbs
   }
+}
+
+/** The broad question for the whole string, with the reason it came to that. */
+def broadPlan(command: string, verbs: string[], reason: BroadReason): Plan {
+  return bashPlan(command, [BASH_EFFECT], verbs, reason)
+}
+
+/** The command word of each simple command, "" for an assignment-only one. */
+def verbNames(commands: SimpleCommand[]): string[] {
+  return [verbName(command) for command in commands]
+}
+
+def verbName(command: SimpleCommand): string {
+  const name = command.command
+  if (name == null) {
+    return ""
+  }
+  return name.text
+}
+
+export def outcomeOf(plan: Plan): string {
+  """
+  Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
+  Exhaustive over Execution, so a new execution kind is a type error here.
+  """
+  return match(plan.execution.kind) {
+    "refuse" => "refuse"
+    "echo" => "shellFree"
+    "write" => "shellFree"
+    "agency" => "agency"
+    "bash" => bashOutcome(plan)
+  }
+}
+
+def bashOutcome(plan: Plan): string {
+  if (plan.broadReason == null) {
+    return "narrow"
+  }
+  return "broad"
 }
 
 def flattenCommands(commands: Command[]): SimpleCommand[] {
@@ -504,11 +549,12 @@ def tryAgencyPlan(command: SimpleCommand): Result<Plan> {
     return failure("not an agency command")
   }
   const names = literalNames(command)
+  const verbs = verbNames([command])
   return match(name.text) {
     "agency" => agencyCommandPlan(command)
-    "which" => refuseIfLookingUpAgency(names.includes("agency"))
-    "type" => refuseIfLookingUpAgency(names.includes("agency"))
-    "command" => refuseIfLookingUpAgency(names.length > 0 && names[0] == "agency")
+    "which" => refuseIfLookingUpAgency(names.includes("agency"), verbs)
+    "type" => refuseIfLookingUpAgency(names.includes("agency"), verbs)
+    "command" => refuseIfLookingUpAgency(names.length > 0 && names[0] == "agency", verbs)
     _ => failure("not an agency command")
   }
 }
@@ -521,9 +567,9 @@ def literalNames(command: SimpleCommand): string[] {
   }
 }
 
-def refuseIfLookingUpAgency(lookingUp: boolean): Result<Plan> {
+def refuseIfLookingUpAgency(lookingUp: boolean, verbs: string[]): Result<Plan> {
   if (lookingUp) {
-    return success(refusePlan(CLI_NOT_AVAILABLE))
+    return success(refusePlan(CLI_NOT_AVAILABLE, verbs))
   }
   return failure("not about agency")
 }
@@ -533,7 +579,7 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
   A redirect or a non-literal argument has no in-process meaning.
   """
   if (command.redirects.length > 0) {
-    return success(refusePlan(CLI_NOT_AVAILABLE))
+    return success(refusePlan(CLI_NOT_AVAILABLE, verbNames([command])))
   }
   return match(echoWords(command)) {
     success(args) => success({
@@ -541,9 +587,11 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
       execution: {
         kind: "agency",
         args: args
-      }
+      },
+      broadReason: null,
+      verbs: verbNames([command])
     })
-    failure(why) => success(refusePlan(CLI_NOT_AVAILABLE))
+    failure(why) => success(refusePlan(CLI_NOT_AVAILABLE, verbNames([command])))
   }
 }
 
@@ -624,7 +672,9 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
     execution: {
       kind: "echo",
       content: echoOutput(words.value)
-    }
+    },
+    broadReason: null,
+    verbs: verbNames([command])
   },
   )
 }
@@ -656,7 +706,9 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   return success(
     {
     effects: [writeEffect(prepared.value)],
-    execution: writeExecution(prepared.value)
+    execution: writeExecution(prepared.value),
+    broadReason: null,
+    verbs: verbNames([command])
   },
   )
 }
@@ -687,7 +739,7 @@ export def planFor(source: string, cwd: string): Plan {
   if (parsed is failure(why)) {
     // Unparseable: nothing was understood, so ask the broad question and
     // hand bash the text the human will have seen.
-    return bashPlan(source, [])
+    return broadPlan(source, [], { kind: "unparseable", detail: why })
   }
   const commands: Command[] = parsed.value
 
@@ -709,19 +761,24 @@ export def planFor(source: string, cwd: string): Plan {
   // nodes, and `true && rm -rf /` has no top-level simple command at all —
   // without this walk the wall never sees the `rm`.
   const simple = flattenCommands(commands)
+  const verbs = verbNames(simple)
 
   let narrow: Effect[] = []
+  let firstMiss = ""
   let allRecognized = true
   for (command in simple) {
     if (isRefused(command)) {
       const name = command.command
       if (name == null) {
-        return refusePlan("this command is not allowed")
+        return refusePlan("this command is not allowed", verbs)
       }
-      return refusePlan("`${name.text}` is not allowed")
+      return refusePlan("`${name.text}` is not allowed", verbs)
     }
     const effects = effectsFor(command, cwd)
     if (effects is failure(why)) {
+      if (firstMiss == "") {
+        firstMiss = why
+      }
       allRecognized = false
     } else {
       narrow = [...narrow, ...effects.value]
@@ -732,13 +789,13 @@ export def planFor(source: string, cwd: string): Plan {
     // We have to ask the broad question anyway, so asking narrow ones
     // first adds prompts without adding information. The ORIGINAL text
     // runs, because that is what the human read.
-    return bashPlan(source, [BASH_EFFECT])
+    return broadPlan(source, verbs, { kind: "unrecognized", detail: firstMiss })
   }
   if (narrow.length == 0) {
     // Everything recognized but nothing contributed an effect — a string
     // of nothing but echoes. The audit rule makes this a std::bash
     // question, so by the same rule it runs the original text.
-    return bashPlan(source, [BASH_EFFECT])
+    return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
   }
   // Narrow questions were asked, so run the tree we classified.
   const rebuilt = rebuild(commands)
@@ -746,9 +803,9 @@ export def planFor(source: string, cwd: string): Plan {
     // We cannot produce the text we classified, so we must not ask narrow
     // questions about it. Doing this AFTER raising would break the first
     // hard rule.
-    return bashPlan(source, [BASH_EFFECT])
+    return broadPlan(source, verbs, { kind: "unrenderable", detail: why })
   }
-  return bashPlan(rebuilt.value, narrow)
+  return bashPlan(rebuilt.value, narrow, verbs, null)
 }
 
 /** Commands we decline to run even when a human approves. */
@@ -913,6 +970,10 @@ export def safeBash(
   const plan = planFor(command, dir)
   const exec = plan.execution
 
+  // Logged before the refusal check, so a refused plan is on the record
+  // too. Nothing has been raised or run yet.
+  _debug("safeBash plan", planRecord(plan, command, dir))
+
   // A refusal returns before anything is raised: there is nothing to
   // approve. It still has an arm in the match below, because the match is
   // exhaustive over Execution.
@@ -922,7 +983,14 @@ export def safeBash(
 
   const raised = raiseAll(plan.effects, command, dir)
   if (raised is failure(why)) {
-    return failure(why)
+    if (plan.broadReason == null) {
+      return failure(why)
+    }
+    // A rejected broad question tells the model why no narrower one was
+    // available, so its next attempt can take the narrower path. On its
+    // own line: the rejection text comes from the handler or a policy
+    // rejectMessage and may or may not end in a period.
+    return failure("${why}\n${broadExplanation(plan.broadReason)}")
   }
 
   // Echo output is truncated like every other path: a long echo returning
@@ -942,6 +1010,41 @@ export def safeBash(
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
+  }
+}
+
+/** The sentence the model reads for each reason a plan went broad. */
+static const BROAD_SENTENCES = {
+  unparseable: "the command could not be parsed",
+  unrecognized: "it has no rule for one of the commands",
+  noEffects: "every command was recognized but none needs an approval of its own, so the shell itself had to be approved",
+  unrenderable: "the parsed command could not be rendered back to text"
+}
+
+def broadExplanation(reason: BroadReason): string {
+  const sentence = BROAD_SENTENCES[reason.kind]
+  if (reason.detail == "") {
+    return "safeBash could not ask a narrower question because ${sentence}."
+  }
+  return "safeBash could not ask a narrower question because ${sentence}: ${reason.detail}."
+}
+
+/** What the debug event says about one plan: the decision and why. */
+def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
+  let reason = ""
+  let detail = ""
+  if (plan.broadReason != null) {
+    reason = plan.broadReason.kind
+    detail = plan.broadReason.detail
+  }
+  return {
+    command: command,
+    cwd: cwd,
+    outcome: outcomeOf(plan),
+    reason: reason,
+    detail: detail,
+    verbs: plan.verbs,
+    effects: [e.name for e in plan.effects]
   }
 }
 

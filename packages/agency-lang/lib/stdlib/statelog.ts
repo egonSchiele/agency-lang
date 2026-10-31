@@ -94,6 +94,14 @@ export async function _turnStart(message: string): Promise<void> {
   await frame.log.turnStart({ message: String(message) });
 }
 
+/** Posts a `debug` event, the generic statelog event for anything a
+ *  module wants on the record; a no-op outside an Agency frame. */
+export async function _debug(message: string, data: unknown): Promise<void> {
+  const frame = currentRunOrNone();
+  if (!frame) return;
+  await frame.log.debug(String(message), data);
+}
+
 export async function _evalOutput(value: unknown): Promise<void> {
   const prepared = prepareEvalEvent(value);
   if (!prepared) return;

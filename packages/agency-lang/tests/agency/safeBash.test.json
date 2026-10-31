@@ -280,6 +280,90 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "planReasons",
+      "description": "A broad plan records why: the parser message, the first unrecognized command, the audit rule, or an unrenderable tree. A narrow or refused plan has no reason.",
+      "input": "",
+      "expectedOutput": "[null,[\"unrecognized\",\"no rule for `xargs`\"],[\"noEffects\",\"\"],[\"unparseable\",\"Unexpected input after commands: \\\"$(date)\\\"\"],null,[\"unrecognized\",\"no rule for `xargs`\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planVerbs",
+      "description": "The plan carries the command word of every simple command it decided over: empty when unparseable, an empty string for an assignment-only command.",
+      "input": "",
+      "expectedOutput": "[[\"git\",\"xargs\"],[],[\"\"],[\"rm\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planOutcomes",
+      "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
+      "input": "",
+      "expectedOutput": "[\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedBroadSaysWhy",
+      "description": "A rejected broad question tells the model why safeBash could not ask a narrower one: the first command it had no rule for.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: no rule for `xargs`.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedAuditSaysWhy",
+      "description": "The audit-rule case says every command was recognized, so the model is not told a command was unknown.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because every command was recognized but none needs an approval of its own, so the shell itself had to be approved.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedNarrowIsUnchanged",
+      "description": "A rejected narrow question carries no reason, so the failure reads as it always did.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Show git status"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

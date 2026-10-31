@@ -4,6 +4,7 @@ import {
   isRefused,
   effectsFor,
   planFor,
+  outcomeOf,
   safeBash,
   resolveCwd,
  } from "std::safeBash"
@@ -394,4 +395,72 @@ node agencyCommandLines() {
     planKind("ls agency-lang"),
     planKind("which git"),
   ]
+}
+
+def planReason(source: string): any {
+  const plan = planFor(source, "/repo")
+  if (plan.broadReason == null) {
+    return null
+  }
+  return [plan.broadReason.kind, plan.broadReason.detail]
+}
+
+def planOutcome(source: string): string {
+  return outcomeOf(planFor(source, "/repo"))
+}
+
+node planReasons() {
+  return [
+    planReason("git status"),
+    planReason("xargs rm x"),
+    planReason("echo hi; echo bye"),
+    planReason("echo $(date)"),
+    planReason("rm -rf build"),
+    planReason("git status; xargs rm x"),
+  ]
+}
+
+node planVerbs() {
+  return [
+    planFor("git status; xargs rm x", "/repo").verbs,
+    planFor("echo $(date)", "/repo").verbs,
+    planFor("FOO=bar", "/repo").verbs,
+    planFor("rm -rf build", "/repo").verbs,
+  ]
+}
+
+node planOutcomes() {
+  return [
+    planOutcome("git status"),
+    planOutcome("xargs rm x"),
+    planOutcome("echo hi"),
+    planOutcome("echo hi > out.txt"),
+    planOutcome("rm -rf build"),
+    planOutcome("agency typecheck foo.agency"),
+    planOutcome("echo hi; echo bye"),
+  ]
+}
+
+node rejectedBroadSaysWhy() {
+  const result = safeBash("xargs echo hi")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node rejectedAuditSaysWhy() {
+  const result = safeBash("echo hi; echo bye")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node rejectedNarrowIsUnchanged() {
+  const result = safeBash("git status")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
 }

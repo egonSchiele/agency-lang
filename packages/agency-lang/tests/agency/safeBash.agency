@@ -361,11 +361,10 @@ node payloadExecutionParity(): boolean {
   return fieldsAgree && contentAgrees && resolvedRight && gitOk
 }
 
-// Quote-aware tilde. The bash word grammar refuses an unquoted `~`
-// outright, so that spelling can never reach the narrow write path: the
-// whole command falls back to the broad std::bash question, which is
-// strictly safer than expanding it ourselves. Quoted tildes parse and
-// stay a literal name beneath the cwd, exactly as bash treats them.
+// Quote-aware tilde. An unquoted `~` is expanded, so the redirect is a
+// recognized write whose payload names the real home directory, which is
+// the destination the policy should judge. Quoted tildes stay a literal
+// name beneath the cwd, exactly as bash treats them.
 node tildeRedirectQuoting(): boolean {
   const unquoted = writeExecOf("echo hi > ~/cf-sb-tilde.txt", "/repo")
   const single = writeExecOf("echo hi > '~/cf-sb-tilde.txt'", "/repo")

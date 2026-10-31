@@ -940,6 +940,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     type InvokedCall = {
       handler: AgencyFunction;
       toolCall: smoltalk.ToolCallJSON;
+      namedArgs: Record<string, unknown>;
       /** The logger of the tool call's branch. */
       log: Run["log"];
       callKey: string;
@@ -958,8 +959,8 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       call: InvokedCall,
       reason: string,
     ): { toolResult: any; invokeOutcome: "rejected" } => {
-      const { handler, toolCall, log, callKey, branchKey, marks, toolResult } = call;
-      const capped = String(capForLlm(reason, handler));
+      const { handler, toolCall, namedArgs, log, callKey, branchKey, marks, toolResult } = call;
+      const capped = String(capForLlm(reason, handler, namedArgs));
       if (!rejectedCalls.includes(callKey)) {
         rejectedCalls.push(callKey);
       }
@@ -986,10 +987,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       call: InvokedCall,
       failed: { error: string; neverStarted?: boolean; destructiveRan?: boolean },
     ): { toolResult: any; invokeOutcome: "failed" } => {
-      const { handler, toolCall, log, branchKey, marks, toolResult } = call;
+      const { handler, toolCall, namedArgs, log, branchKey, marks, toolResult } = call;
       const errorMessage = failed.error;
       // Cap only what the LLM sees; statelog keeps the full message.
-      const cappedError = String(capForLlm(errorMessage, handler));
+      const cappedError = String(capForLlm(errorMessage, handler, namedArgs));
       toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
       log.error({
         errorType: "toolError",
@@ -1149,6 +1150,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       const call: InvokedCall = {
         handler,
         toolCall,
+        namedArgs,
         log: args.run.log,
         callKey,
         branchKey,
@@ -1221,6 +1223,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         rawToolResult,
         toolCall,
         handler,
+        namedArgs,
         branchStack,
         log: args.run.log,
         marks,
@@ -1308,13 +1311,14 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       rawToolResult: unknown;
       toolCall: smoltalk.ToolCallJSON;
       handler: AgencyFunction;
+      namedArgs: Record<string, unknown>;
       branchStack: StateStack;
       log: Run["log"];
       marks: TurnMarks;
       round: number;
       invocationIndex: number;
     }): void => {
-      const { toolResult, toolCall, handler, branchStack, log, marks } = args;
+      const { toolResult, toolCall, handler, namedArgs, branchStack, log, marks } = args;
       const replyMarker = harvestReplyAttachments({
         queued: branchStack.drainPendingReplyAttachments(),
         runnerState: self.runnerState,
@@ -1322,7 +1326,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         toolName: handler.name,
       });
       const content = appendReplyMarker(
-        capForLlm(unwrapToolResultForLlm(toolResult, handler.name), handler),
+        capForLlm(unwrapToolResultForLlm(toolResult, handler.name), handler, namedArgs),
         replyMarker,
         stringifyToolResult,
       );

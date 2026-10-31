@@ -936,31 +936,32 @@ export def safeBash(
   // dropped by a rebuild.
   return match(exec) {
     { kind: "write" } => runWrite(exec)
-    { kind: "echo", content } => success(keepOutput(content, 0))
-    { kind: "agency", args } => runAgency(args, dir)
-    { kind: "bash", command as text } => runBash(text, dir)
+    { kind: "echo", content } => success(keepOutput(content, 0, command))
+    { kind: "agency", args } => runAgency(args, dir, command)
+    { kind: "bash", command as text } => runBash(text, dir, command)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
 }
 
-def runAgency(args: string[], cwd: string): Result<string> {
+def runAgency(args: string[], cwd: string, source: string): Result<string> {
   """
   What the CLI would have printed. A non-zero exit is a failure carrying
-  the output, the way a failing bash command is.
+  the output, the way a failing bash command is. `source` is the command
+  the user saw, kept beside any saved output.
   """
   return match(cli(args, cwd)) {
-    success(result) => cliOutcome(result, cwd)
-    failure(err) => failure(keepOutput("${err}", 1))
+    success(result) => cliOutcome(result, source)
+    failure(err) => failure(keepOutput("${err}", 1, source))
   }
 }
 
-def cliOutcome(result: ExecResult, cwd: string): Result<string> {
+def cliOutcome(result: ExecResult, source: string): Result<string> {
   if (result.exitCode != 0) {
-    return failure(keepOutput(result.stdout + result.stderr, result.exitCode))
+    return failure(keepOutput(result.stdout + result.stderr, result.exitCode, source))
   }
-  return success(keepOutput(result.stdout, 0))
+  return success(keepOutput(result.stdout, 0, source))
 }
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { inFrameOf, makeMockCtx } from "./__tests__/testHelpers.js";
 import type { Run } from "./asyncContext.js";
+import { GlobalStore } from "./state/globalStore.js";
 import {
   DEFAULT_READERS,
   MAX_STORE_CHARS,
+  SPILL_SOURCE_CHARS,
   findOutput,
+  findOutputSource,
   isOutputName,
   missingOutputMessage,
   outputNotice,
@@ -18,9 +21,45 @@ function withRun<T>(fn: (run: Run) => T): T {
 }
 
 describe("toolOutputStore", () => {
+  it("keeps a readable source beside the text", () => {
+    withRun((run) => {
+      const name = storeOutput(run, "x".repeat(10), "pnpm run typecheck");
+      expect(findOutputSource(run, name)).toBe("pnpm run typecheck");
+      expect(findOutputSource(run, "2026-01-01T00-00-00-000Z-abcdef.log")).toBeNull();
+      const long = storeOutput(run, "y", "z".repeat(200));
+      expect(findOutputSource(run, long)).toBe("z".repeat(SPILL_SOURCE_CHARS));
+    });
+  });
+
+  it("reads an entry saved without a source as having none", () => {
+    withRun((run) => {
+      const name = storeOutput(run, "x", "cmd");
+      // No public call writes an entry without a source; this is the shape a
+      // checkpoint taken before the field existed carries.
+      const store = run.globals.get(GlobalStore.INTERNAL_MODULE, "__toolOutput") as {
+        entries: { source?: string }[];
+      };
+      delete store.entries[0].source;
+      expect(findOutputSource(run, name)).toBeNull();
+      expect(findOutput(run, name)).toBe("x");
+    });
+  });
+
+  it("names the source in the notice", () => {
+    const notice = outputNotice(
+      "a\n".repeat(2000),
+      "n.log",
+      1,
+      DEFAULT_READERS,
+      Infinity,
+      "pnpm test",
+    );
+    expect(notice.startsWith('[Output of "pnpm test" too long to return in full:')).toBe(true);
+  });
+
   it("stores text under a fresh name and finds it again", () => {
     withRun((run) => {
-      const name = storeOutput(run, "one\ntwo\nthree\n");
+      const name = storeOutput(run, "one\ntwo\nthree\n", "cmd");
       expect(isOutputName(name)).toBe(true);
       expect(findOutput(run, name)).toBe("one\ntwo\nthree\n");
     });
@@ -28,8 +67,8 @@ describe("toolOutputStore", () => {
 
   it("gives two outputs two names", () => {
     withRun((run) => {
-      const first = storeOutput(run, "a");
-      const second = storeOutput(run, "b");
+      const first = storeOutput(run, "a", "cmd");
+      const second = storeOutput(run, "b", "cmd");
       expect(first).not.toBe(second);
       expect(findOutput(run, first)).toBe("a");
       expect(findOutput(run, second)).toBe("b");
@@ -39,9 +78,9 @@ describe("toolOutputStore", () => {
   it("evicts the oldest entries when the cap is reached", () => {
     withRun((run) => {
       const third = Math.ceil(MAX_STORE_CHARS / 3) + 1;
-      const first = storeOutput(run, "a".repeat(third));
-      const second = storeOutput(run, "b".repeat(third));
-      const fourth = storeOutput(run, "c".repeat(third));
+      const first = storeOutput(run, "a".repeat(third), "cmd");
+      const second = storeOutput(run, "b".repeat(third), "cmd");
+      const fourth = storeOutput(run, "c".repeat(third), "cmd");
       expect(findOutput(run, first)).toBeNull();
       expect(findOutput(run, second)).toHaveLength(third);
       expect(findOutput(run, fourth)).toHaveLength(third);
@@ -50,8 +89,8 @@ describe("toolOutputStore", () => {
 
   it("keeps one entry larger than the whole cap, alone", () => {
     withRun((run) => {
-      const small = storeOutput(run, "small");
-      const huge = storeOutput(run, "h".repeat(MAX_STORE_CHARS + 10));
+      const small = storeOutput(run, "small", "cmd");
+      const huge = storeOutput(run, "h".repeat(MAX_STORE_CHARS + 10), "cmd");
       expect(findOutput(run, small)).toBeNull();
       expect(findOutput(run, huge)).toHaveLength(MAX_STORE_CHARS + 10);
     });

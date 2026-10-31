@@ -11,7 +11,7 @@ function withRun<T>(fn: (run: Run) => T): T {
 describe("spill", () => {
   it("returns short output as printed", () => {
     withRun(() => {
-      expect(_keepOutput("hello\n", 0)).toBe("hello\n");
+      expect(_keepOutput("hello\n", 0, "echo hello")).toBe("hello\n");
     });
   });
 
@@ -19,8 +19,9 @@ describe("spill", () => {
     withRun(() => {
       const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
       expect(text.length).toBeGreaterThan(MAX_STDOUT_LEN);
-      const notice = _keepOutput(text, 3);
+      const notice = _keepOutput(text, 3, "make");
       expect(notice).toContain("Command exited with code 3");
+      expect(notice.startsWith('[Output of "make" too long')).toBe(true);
       const name = /full output saved as (\S+) ---/.exec(notice)![1];
       expect(_readSpill(name, 0, 0)).toBe(text);
       expect(_readSpill(name, 2, 1)).toContain("line 1");
@@ -42,7 +43,7 @@ describe("spill", () => {
   it("searches several patterns in one call, grouping the matches by pattern", () => {
     withRun(() => {
       const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
-      const name = /full output saved as (\S+) ---/.exec(_keepOutput(text, 0))![1];
+      const name = /full output saved as (\S+) ---/.exec(_keepOutput(text, 0, "cmd"))![1];
       expect(_grepSpill("line 7$", name, 10, ["line 12$", "no such line"])).toEqual([
         { pattern: "line 7$", matches: [{ file: name, line: 8, text: "line 7" }] },
         { pattern: "line 12$", matches: [{ file: name, line: 13, text: "line 12" }] },

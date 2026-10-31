@@ -108,7 +108,7 @@ export type Plan = {
 }
 
 @capabilities(fileRead, subprocess)
-export def runBash(command: string, cwd: string): Result<string> {
+export def runBash(command: string, cwd: string, source: string = ""): Result<string> {
   """
   Run a command string through bash and return what it printed.
 
@@ -141,14 +141,17 @@ export def runBash(command: string, cwd: string): Result<string> {
   // `try` WRAPS the call in a Result, so the ExecResult is inside
   // `.value`. Reading `attempt.stdout` directly is undefined.
   const result: any = attempt.value
-  const out = keepOutput(result.stdout, result.exitCode)
+  // `source` is the command as the user typed it, which can differ from
+  // the narrowed text this function ran; the trace names the original.
+  const label = if (source == "") then command else source
+  const out = keepOutput(result.stdout, result.exitCode, label)
   if (result.exitCode != 0) {
     return failure(
       JSON.stringify(
       {
       command: command,
       exitCode: result.exitCode,
-      stderr: keepOutput(result.stderr, result.exitCode),
+      stderr: keepOutput(result.stderr, result.exitCode, label),
       stdout: out
     },
     ),

@@ -363,7 +363,7 @@ export type GrepMatch = {
   text: string;
 };
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache"]);
+export const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache"]);
 
 type Visitor = (rel: string, entry: Entry) => Promise<boolean>;
 
@@ -663,7 +663,7 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp("^" + result.result + "$");
 }
 
-function escapeRegex(s: string): string {
+export function escapeRegex(s: string): string {
   return s.replace(/[.+()|^$\[\]{}\\*?]/g, "\\$&");
 }
 

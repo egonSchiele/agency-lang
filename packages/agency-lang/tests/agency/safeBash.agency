@@ -372,7 +372,7 @@ node tildeRedirectQuoting(): boolean {
   // An unquoted `~` expands, so the write lands in the real home directory,
   // wherever that is on this machine; a quoted one is a directory literally
   // named `~` under the cwd.
-  const unquotedExpanded = unquoted.dir != null && unquoted.dir != "/repo/~" && unquoted.filename == "cf-sb-tilde.txt"
+  const unquotedExpanded = unquoted.dir != null && !unquoted.dir.startsWith("/repo") && unquoted.filename == "cf-sb-tilde.txt"
   const singleLiteral = single.dir == "/repo/~" && single.filename == "cf-sb-tilde.txt"
   const doubleLiteral = double.dir == "/repo/~" && double.filename == "cf-sb-tilde.txt"
   return unquotedExpanded && singleLiteral && doubleLiteral

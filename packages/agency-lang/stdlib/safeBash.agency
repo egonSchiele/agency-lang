@@ -254,7 +254,7 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   // prepareRedirectWrite stays strict on purpose: the shell-free write
   // path computes the bytes it writes, and a dup changes which stream
   // echo's output goes to.
-  const fileRedirects = [r for r in redirects if r.op != ">&"]
+  const fileRedirects = [redirect for redirect in redirects if redirect.op != ">&"]
   if (fileRedirects.length == 0) {
     return success([])
   }

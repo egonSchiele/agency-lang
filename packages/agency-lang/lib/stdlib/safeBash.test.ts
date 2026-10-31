@@ -43,6 +43,12 @@ const CORPUS = [
   "git status && git log",
   "git status || git log",
   "(git status && git log)",
+  "grep -rn foo src | head -20",
+  "make 2>&1 | tail -100",
+  "echo x >&2",
+  "ls *.txt",
+  "cat ~/notes.txt",
+  "grep -rn x --include=*.ts src",
 ];
 
 describe("astToBash round-trips every command family the classifier sees", () => {

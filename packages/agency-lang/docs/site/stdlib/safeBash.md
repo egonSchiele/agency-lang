@@ -12,6 +12,7 @@ name: "safeBash"
 export type Word =
   | LiteralWord
   | PathWord
+  | GlobWord
   | FlagWord
   | SingleQuotedWord
   | DoubleQuotedWord
@@ -27,7 +28,7 @@ export type Word =
 export type ScriptName = LiteralWord | PathWord
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L39))
 
 ### LiteralWord
 
@@ -38,7 +39,7 @@ export type LiteralWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L41))
 
 ### PathWord
 
@@ -49,7 +50,25 @@ export type PathWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L46))
+
+### GlobWord
+
+An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
+so it is never mistaken for the quoted text `'*.ts'`; no rule here
+treats it as a literal.
+
+```ts
+/** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
+ * so it is never mistaken for the quoted text `'*.ts'`; no rule here
+ * treats it as a literal. */
+export type GlobWord = {
+  tag: "glob";
+  text: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L54))
 
 ### FlagWord
 
@@ -57,11 +76,13 @@ export type PathWord = {
 export type FlagWord = {
   tag: "flag";
   flagName: string;
-  flagValue?: string
+  flagValue?: string;
+  /** Present and true when the value is an unquoted glob (`--include=*.ts`). */
+  valueIsGlob?: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L59))
 
 ### SingleQuotedWord
 
@@ -72,7 +93,7 @@ export type SingleQuotedWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L67))
 
 ### DoubleQuotedWord
 
@@ -83,7 +104,7 @@ export type DoubleQuotedWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L72))
 
 ### VariableWord
 
@@ -94,7 +115,7 @@ export type VariableWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L77))
 
 ### InterpolatedVariableWord
 
@@ -117,7 +138,7 @@ export type InterpolatedVariableWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L86))
 
 ### Assignment
 
@@ -132,20 +153,20 @@ export type Assignment = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L96))
 
 ### Redirect
 
-A redirect like `> out.txt`, `>> log`, `2> err.txt` or `< in.txt`.
-`fd` is the explicit file descriptor (`2` in `2>`), or undefined for the
-default. Only `>`, `>>`, `<` and `&>` are recognized; `2>&1`, heredocs
-and here-strings are rejected rather than parsed.
+A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
+the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
+explicit file descriptor (`2` in `2>`), or undefined for the default.
+Heredocs and here-strings are rejected rather than parsed.
 
 ```ts
-/** A redirect like `> out.txt`, `>> log`, `2> err.txt` or `< in.txt`.
- * `fd` is the explicit file descriptor (`2` in `2>`), or undefined for the
- * default. Only `>`, `>>`, `<` and `&>` are recognized; `2>&1`, heredocs
- * and here-strings are rejected rather than parsed. */
+/** A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
+ * the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
+ * explicit file descriptor (`2` in `2>`), or undefined for the default.
+ * Heredocs and here-strings are rejected rather than parsed. */
 export type Redirect = {
   tag: "redirect";
   fd?: number;
@@ -154,7 +175,7 @@ export type Redirect = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L106))
 
 ### SimpleCommand
 
@@ -174,15 +195,40 @@ export type SimpleCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L113))
 
 ### Command
 
 ```ts
-export type Command = SimpleCommand | And | Or | Parens
+export type Command = SimpleCommand | Pipeline | And | Or | Parens
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L127))
+
+### PipelineStage
+
+What may sit between pipes: a simple command or a parenthesized group.
+
+```ts
+/** What may sit between pipes: a simple command or a parenthesized group. */
+export type PipelineStage = SimpleCommand | Parens
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L130))
+
+### Pipeline
+
+`a | b | c`: flat, two or more stages, binding tighter than `&&`/`||`.
+
+```ts
+/** `a | b | c`: flat, two or more stages, binding tighter than `&&`/`||`. */
+export type Pipeline = {
+  tag: "pipeline";
+  stages: PipelineStage[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L133))
 
 ### And
 
@@ -194,7 +240,7 @@ export type And = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L138))
 
 ### Or
 
@@ -206,7 +252,7 @@ export type Or = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L144))
 
 ### Parens
 
@@ -217,7 +263,7 @@ export type Parens = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L150))
 
 ### BashNode
 
@@ -231,7 +277,7 @@ export type BashNode =
   | ScriptName
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L155))
 
 ### BashAST
 
@@ -239,7 +285,7 @@ export type BashNode =
 export type BashAST = Command[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L163))
 
 ## Functions
 
@@ -269,7 +315,7 @@ Which interrupts this one command needs raised.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L271))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L297))
 
 ### outcomeOf
 
@@ -288,7 +334,7 @@ Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L444))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L470))
 
 ### planFor
 
@@ -316,7 +362,7 @@ Decide everything about a call before any of it happens.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L727))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L754))
 
 ### isRefused
 
@@ -341,7 +387,7 @@ True when this command must not run, whatever anyone approves.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L822))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L849))
 
 ### bashParser
 
@@ -359,7 +405,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L898))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L925))
 
 ### resolveCwd
 
@@ -382,7 +428,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L922))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L949))
 
 ### safeBash
 
@@ -427,4 +473,4 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L943))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L970))

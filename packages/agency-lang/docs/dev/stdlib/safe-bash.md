@@ -119,6 +119,27 @@ safeBash could not ask a narrower question because it has no rule for one of the
 A rejected narrow question carries no reason and reads as the rejection
 text alone.
 
+## Pipelines, dup redirects, and glob words
+
+The parser produces three shapes the classifier mirrors in its own
+types. A `pipeline` is a flat list of stages, each a simple command or a
+parenthesized group; `flattenOne` flattens it through `flattenCommands`,
+so the refuse wall sees every stage and classification needs no new
+branch: a pipeline is recognized when every stage is, its effects are
+the union, and it runs through bash as the rebuilt text (`git status |
+git log` is narrow; `git status | head` is broad). A dup redirect
+(`2>&1`, op `>&`) moves a stream and writes no file, so `redirectEffect`
+skips it; `prepareRedirectWrite` stays strict, because the shell-free
+write path computes the bytes it writes and a dup changes which stream
+`echo`'s output goes to. A `glob` word is never a literal:
+`literalWordText` refuses it, so every rule that needs a literal (a
+redirect target, an `echo` argument, a git argument) treats a command
+with one as unrecognized until a later slice gives globs a meaning.
+
+An unquoted `~` now parses, so `echo hi > ~/x` is a recognized write to
+the real home directory (`tildeModeFor` expands an unquoted word); a
+quoted `'~/x'` stays a directory literally named `~` under the cwd.
+
 ## Why the executors call `_bash` and `_write`
 
 The `bash` and `write` tools raise their own interrupts. Calling them

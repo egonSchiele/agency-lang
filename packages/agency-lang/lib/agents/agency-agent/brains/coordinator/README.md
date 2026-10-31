@@ -91,11 +91,20 @@ machinery: its own tools, its skill files, and the one-shot flag.
 parse and typecheck, with no model call.
 
 The code subagent has no expert, brainstorm, supervisor, or verifier
-around the coder. Each was a second model telling the first what to do,
-and on a weak model each made things worse. Given "write a skill for my
-`tv` command", the expert guessed `tv` was an unrelated program it found on
-the web, and the coder then spent the session working around that guess
-instead of running `tv --help`.
+around the coder, so one model works the task from real tool output. The
+expert and the brainstorm were removed because they misled the coder.
+Given "write a skill for my `tv` command", the expert guessed `tv` was an
+unrelated program it found on the web, the brainstormed plans carried that
+guess, and the coder spent the session working around it instead of
+running `tv --help`. The supervisor and the verifier went with them so
+that no second model advises the coder; nothing in those sessions showed
+them doing harm. If terminal-bench scores drop, the verifier round is the
+first thing to check.
+
+`converse` runs under `@guarded` with the `maxSeconds` and `maxDollars`
+the coordinator passes, $20 and 15 minutes by default. The coder's tool
+loop runs there and not inside a stdlib agent, so that guard is its only
+limit.
 
 The oracle and the explorer are handoffs, so a `--agent oracle` or
 `--agent explorer` call, which has no conversation to continue, gets a thread

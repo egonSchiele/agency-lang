@@ -16,6 +16,7 @@ import { agencyCodingAgent } from "std::agents/agency/coding"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
+import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { skillsDir } from "std::skills"
 
@@ -27,6 +28,7 @@ import { systemMessage } from "std::thread"
 import { projectContextText } from "../../../lib/projectContext.agency"
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
+import { timeBudget } from "../lib/budgets.agency"
 import { oracleAgent } from "./oracle.agency"
 import { reviewWrittenFiles } from "../lib/autoReview.agency"
 
@@ -128,8 +130,9 @@ export def setCodeOneShot(oneShot: boolean) {
 // only add system message the first time
 let _first = true
 
-static const ESCALATE_MAX_COST = $20.00
-static const ESCALATE_MAX_TIME = 15m
+// The default budget for one codeAgent call, and for escalate's planner.
+static const CODE_MAX_COST = $20.00
+static const CODE_MAX_TIME = 15m
 
 def escalate(task: string, reason: string, plan: string): string {
   """
@@ -146,8 +149,8 @@ def escalate(task: string, reason: string, plan: string): string {
     task,
     context: reason,
     plan: plan,
-    maxCost: ESCALATE_MAX_COST,
-    maxTime: ESCALATE_MAX_TIME,
+    maxCost: CODE_MAX_COST,
+    maxTime: CODE_MAX_TIME,
   )
   if (isFailure(planned)) {
     return "Planner stopped: ${planned.error}"
@@ -179,7 +182,13 @@ ${task}
    ends at valid code. Placing that code is this caller's job: when the task
    names a file, write the source there; otherwise hand it back as the reply
    for the caller to place. */
-def solve(task: string, context: string, agencyTask: boolean): Result<string> {
+def solve(
+  task: string,
+  context: string,
+  agencyTask: boolean,
+  maxCost: number,
+  maxTime: number,
+): Result<string> {
   if (agencyTask) {
     // The target is decided BEFORE generation so the writer knows what kind
     // of source to produce. Without this, "create fib.agency containing a
@@ -199,8 +208,8 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
       task: writerTask,
       context: context,
       requireMain: target == "",
-      maxCost: ESCALATE_MAX_COST,
-      maxTime: ESCALATE_MAX_TIME,
+      maxCost: maxCost,
+      maxTime: maxTime,
       extraTools: [question],
     )
     if (isFailure(written)) {
@@ -220,12 +229,17 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
   return codingAgent(
     task: task,
     context: context,
-    maxCost: ESCALATE_MAX_COST,
-    maxTime: ESCALATE_MAX_TIME,
+    maxCost: maxCost,
+    maxTime: maxTime,
   )
 }
 
-export def codeAgent(userMsg: string, agencyTask: boolean = false) {
+export def codeAgent(
+  userMsg: string,
+  agencyTask: boolean = false,
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
+) {
   """
   This agent can help with all coding-related tasks,
   such as reading, writing, or editing code. It can also
@@ -236,20 +250,51 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
   @param agencyTask - true when the code in question is Agency code, which
     routes to the agents that know the language. Leave it false for every
     other language.
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (15 minutes).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($20).
   """
   announce("codeAgent", userMsg)
+  const maxCost = maxDollars ?? CODE_MAX_COST
+  const maxTime = timeBudget(maxSeconds, CODE_MAX_TIME)
   if (_oneShot) {
-    return solveUnattended(task: userMsg, agencyTask: agencyTask)
+    return solveUnattended(
+      task: userMsg,
+      agencyTask: agencyTask,
+      maxCost: maxCost,
+      maxTime: maxTime,
+    )
   }
-  return converse(userMsg: userMsg, originalUserMsg: userMsg, agencyTask: agencyTask)
+  const replied = converse(
+    userMsg: userMsg,
+    agencyTask: agencyTask,
+    maxCost: maxCost,
+    maxTime: maxTime,
+  )
+  if (isFailure(replied)) {
+    return "The code agent stopped: ${replied.error}"
+  }
+  return replied.value
 }
 
 /* `agency agent -p`: nobody is here to answer a question and there is no next
    turn, which is what the stdlib coding agent already does. The rules for
    working that way are the whole of ONE_SHOT_NOTE, so they travel as context
    rather than as a second copy of the loop. */
-def solveUnattended(task: string, agencyTask: boolean): string {
-  const solved = solve(task: task, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
+def solveUnattended(
+  task: string,
+  agencyTask: boolean,
+  maxCost: number,
+  maxTime: number,
+): string {
+  const solved = solve(
+    task: task,
+    context: ONE_SHOT_NOTE,
+    agencyTask: agencyTask,
+    maxCost: maxCost,
+    maxTime: maxTime,
+  )
   if (isFailure(solved)) {
     return "The task did not complete: ${solved.error}"
   }
@@ -257,12 +302,16 @@ def solveUnattended(task: string, agencyTask: boolean): string {
 }
 
 /* The interactive turn, which is the part that is genuinely this agent's own:
-   a conversation with the user, in their thread, formatted for the REPL. */
+   a conversation with the user, in their thread, formatted for the REPL.
+   The guard is the turn's only budget: the coder's tool loop runs here and
+   not inside a stdlib agent, so no other limit applies. */
+@guarded(cost: maxCost, time: maxTime, label: "codeAgent")
 def converse(
   userMsg: string,
-  originalUserMsg: string,
   agencyTask: boolean,
-): string {
+  maxCost: number,
+  maxTime: number,
+): Result<string> {
   const tools = [...codeTools]
   tools.push(escalate.partial(task: userMsg))
   let message = userMsg
@@ -307,7 +356,7 @@ def converse(
 
    User message:
    ```
-   ${originalUserMsg}
+   ${userMsg}
    ```
 
    Code agent response:

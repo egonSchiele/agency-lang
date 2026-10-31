@@ -772,3 +772,10 @@ node grepOfIgnoredFolder() {
   const names = [effect.name for effect in plan.effects]
   return [plan.execution.kind, names, plan.broadReason]
 }
+
+node grepOfPartlyIgnoredFolder() {
+  // The repository's .gitignore ignores some entries of stdlib (`.*`,
+  // `**/*.js`) but not all of them, so the tool's search still finds the
+  // rest and the grep runs shell-free.
+  return planFor("grep -rn hello stdlib", PACKAGE_DIR).execution.kind
+}

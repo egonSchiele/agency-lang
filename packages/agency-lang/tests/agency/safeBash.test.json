@@ -602,6 +602,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "grepOfPartlyIgnoredFolder",
+      "description": "A lone grep of a folder where .gitignore ignores only some entries (dot files, compiled .js files) still runs the tool's search, because the search finds the rest.",
+      "input": "",
+      "expectedOutput": "\"grep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

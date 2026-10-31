@@ -88,11 +88,16 @@ export async function readAncestorGitignores(host: Host, dir: string): Promise<G
   return files;
 }
 
-/** Whether the .gitignore files above `dir` ignore it or anything
- * directly inside it. A search rooted at `dir` that respects .gitignore
- * applies those files to every entry, so where this is true it misses
- * files the grep program reads: with `**\/dist/*` above it, a search of
- * `dist` finds nothing at all. The repository root's own .gitignore is
+/** A name no rule is written for, so only a rule that ignores every
+ * entry of a directory (`dist/`, `**\/node_modules/*`, `*`) ignores it. */
+const PROBE_NAME = "agency-ignore-probe";
+
+/** Whether the .gitignore files above `dir` ignore it or everything in
+ * it. A search rooted at `dir` that respects .gitignore applies those
+ * files to every entry, so where this is true it finds nothing: with
+ * `**\/dist/*` above it, a search of `dist` comes back empty. A rule that
+ * ignores only some entries (`.*`, `*.js`) leaves this false, since the
+ * search still finds the rest. The repository root's own .gitignore is
  * not "above" a search rooted there. */
 export async function ignoredFromAbove(host: Host, dir: string): Promise<boolean> {
   const files = await readAncestorGitignores(host, dir);
@@ -100,12 +105,11 @@ export async function ignoredFromAbove(host: Host, dir: string): Promise<boolean
     return false;
   }
   const absolute = path.resolve(host.system.cwd(), dir);
-  if (isIgnored(absolute, true, files)) {
-    return true;
-  }
-  const entries = await host.files.list(await host.files.root(absolute), ".");
-  return entries.some((entry) =>
-    isIgnored(path.join(absolute, entry.name), entry.type === "dir", files),
+  const probe = path.join(absolute, PROBE_NAME);
+  return (
+    isIgnored(absolute, true, files) ||
+    isIgnored(probe, false, files) ||
+    isIgnored(probe, true, files)
   );
 }
 

@@ -232,8 +232,8 @@ Four more refusals:
 `tryShellFreeGrep` applies to a grep that is the whole command line, with
 no pipe, chain, or redirect, whose flags are all in
 `SHELL_FREE_GREP_FLAGS` (the tool has no `-c`, `-o`, or context lines),
-whose directory target has `-r`, whose directory target is not reached
-by the `.gitignore` files above it, and whose pattern translates. It raises
+whose directory target has `-r`, whose directory target is not wholly
+ignored by the `.gitignore` files above it, and whose pattern translates. It raises
 `std::grep` and runs `runGrep`, which calls `_grep`. The payload and the
 search are built from one `GrepPayload`, and the payload's `pattern` is
 the JavaScript regex the search uses, with the regex flag `u`, so `.`
@@ -241,13 +241,22 @@ matches a whole character, an emoji included, as grep does in a UTF-8
 locale.
 
 The `.gitignore` check matters because the tool's search applies the
-`.gitignore` files above its root to every entry. Where they reach into
-the directory, the search misses files grep reads, and where they reach
-everything (`**/node_modules/*` for `grep -rn x node_modules`) it finds
-nothing, which the model would read as "no match". `ignoredFromAbove`
-(`lib/stdlib/gitignore.ts`) is true when those files ignore the directory
-or any entry directly inside it, and such a grep goes to the bash path,
-which asks `std::bash` for a directory.
+`.gitignore` files above its root to every entry. Where they ignore
+everything in the directory (`**/node_modules/*` for
+`grep -rn x node_modules`), the search finds nothing, which the model
+would read as "no match". `ignoredFromAbove` (`lib/stdlib/gitignore.ts`)
+is true when those files ignore the directory itself, or a made-up name
+inside it. Only a rule that covers every entry (`dist/`,
+`**/node_modules/*`, `src/*`) ignores the made-up name. Such a grep goes
+to the bash path, which asks `std::bash` for a directory.
+
+A rule that ignores only some entries (`.*` for `.DS_Store`, `**/*.js`
+for compiled files) does not send the grep to bash. The search then finds
+fewer matches than grep would, the same as a search of the repository
+root, and the note at the end of the output says what it skipped. Do not
+make the check look at the entries themselves: nearly every real folder
+holds one ignored file, so nearly every grep would go back to
+`std::bash`.
 
 `_grepPatternToRegex` (`lib/stdlib/grepDialect.ts`) accepts a character
 only when grep and JavaScript give it the same meaning, from one role

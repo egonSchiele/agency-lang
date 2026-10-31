@@ -160,10 +160,19 @@ describe("ignoredFromAbove", () => {
     expect(await ignoredFromAbove(host, join(base, "node_modules"))).toBe(true);
   });
 
-  it("is true when the rules ignore any entry directly inside the directory", async () => {
-    const base = repoWith("*.log\n", ["src/a.ts", "src/b.log", "lib/a.ts"]);
+  it("is true for a directory a bare star ignores", async () => {
+    const base = repoWith("src/*\n", ["src/a.ts"]);
     expect(await ignoredFromAbove(host, join(base, "src"))).toBe(true);
-    expect(await ignoredFromAbove(host, join(base, "lib"))).toBe(false);
+  });
+
+  it("is false when the rules ignore only some entries, since the search still finds the rest", async () => {
+    const base = repoWith(".*\n*.log\n**/*.js\n", [
+      "src/a.ts",
+      "src/b.log",
+      "src/.DS_Store",
+      "src/c.js",
+    ]);
+    expect(await ignoredFromAbove(host, join(base, "src"))).toBe(false);
   });
 
   it("is false at the repository root, whose own .gitignore is the walk's to apply", async () => {

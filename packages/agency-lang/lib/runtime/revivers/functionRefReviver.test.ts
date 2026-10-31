@@ -867,3 +867,95 @@ describe("lazy callback refs resolve through the shared lookup", () => {
     expect(fired).toBe(true);
   });
 });
+
+describe("withParamSchema schemas round-trip (ADI-249)", () => {
+  const requestSchema = {
+    type: "object",
+    properties: { n: { type: "number" } },
+    required: ["n"],
+    additionalProperties: false,
+  };
+  function makeRegistered(registry: Record<string, AgencyFunction>): AgencyFunction {
+    return AgencyFunction.create(
+      {
+        name: "runTool",
+        module: "stdlib/toolbox.agency",
+        fn: (_run: unknown, a: number, b: unknown) => [a, b],
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: {
+          name: "runTool",
+          description: "Run.",
+          schema: z.object({ a: z.number(), b: z.any() }),
+        },
+      },
+      registry,
+    );
+  }
+  const jsonSchemaOf = (fn: AgencyFunction): any =>
+    (fn.toolDefinition!.schema as z.ZodType).toJSONSchema();
+
+  it("serialize writes paramSchemas only when a schema was set", () => {
+    const reviver = new FunctionRefReviver();
+    const plain = makeRegistered({});
+    expect(reviver.serialize(plain)).not.toHaveProperty("paramSchemas");
+    expect(reviver.serialize(plain.withParamSchema("b", requestSchema))).toMatchObject({
+      paramSchemas: { b: requestSchema },
+    });
+  });
+
+  it("partial, describe, and withParamSchema all survive a round trip", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const tool = makeRegistered(registry)
+      .partial({ a: 1 })
+      .withParamSchema("b", requestSchema)
+      .describe("Run with n.");
+    const restored = roundTripFunction(tool, registry);
+
+    expect(restored.paramSchemas).toEqual({ b: requestSchema });
+    expect(restored.toolDefinition!.description).toBe("Run with n.");
+    const schema = jsonSchemaOf(restored);
+    expect(Object.keys(schema.properties)).toEqual(["b"]);
+    expect(schema.properties.b.properties.n).toEqual({ type: "number" });
+    expect(schema.properties.b.required).toEqual(["n"]);
+    const result = await restored.invoke(testRun(), { type: "positional", args: [{ n: 2 }] });
+    expect(result).toEqual([1, { n: 2 }]);
+  });
+
+  it("a schema set before partial() is kept for the unbound parameter", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const tool = makeRegistered(registry).withParamSchema("b", requestSchema).partial({ a: 1 });
+    const restored = roundTripFunction(tool, registry);
+
+    expect(restored.getUnboundParams().map((param) => param.name)).toEqual(["b"]);
+    expect(jsonSchemaOf(restored).properties.b.required).toEqual(["n"]);
+  });
+
+  it("binding every parameter that had a schema leaves no paramSchemas key", () => {
+    const reviver = new FunctionRefReviver();
+    const registry: Record<string, AgencyFunction> = {};
+    const tool = makeRegistered(registry)
+      .withParamSchema("b", requestSchema)
+      .partial({ b: { n: 1 } });
+    expect(reviver.serialize(tool)).not.toHaveProperty("paramSchemas");
+    expect(roundTripFunction(tool, registry).paramSchemas).toEqual({});
+  });
+
+  it("the miss stub re-serializes paramSchemas unchanged, with or without a description", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const bare = {
+      __nativeType: "FunctionRef",
+      name: "runTool",
+      module: "stdlib/toolbox.agency",
+      paramSchemas: { b: requestSchema },
+    };
+    const described = { ...bare, toolDescription: "Run." };
+    for (const serialized of [described, bare]) {
+      const stub = reviver.revive(serialized) as AgencyFunction;
+      expect(reviver.serialize(stub)).toEqual(serialized);
+    }
+  });
+});

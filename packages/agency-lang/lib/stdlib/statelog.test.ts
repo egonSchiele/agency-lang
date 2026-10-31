@@ -21,6 +21,7 @@ import {
   _isLogging,
   _setAgentName,
   _turnStart,
+  _debug,
   logReplTurn,
 } from "./statelog.js";
 
@@ -66,14 +67,16 @@ function spyClient(ctx: RuntimeContext<any>) {
   const evalOutputRecorded = vi.fn(async () => undefined);
   const agentName = vi.fn(async () => undefined);
   const turnStart = vi.fn(async () => undefined);
+  const debug = vi.fn(async () => undefined);
   ctx.statelogClient = {
     ...ctx.statelogClient,
     evalValueRecorded,
     evalOutputRecorded,
     agentName,
     turnStart,
+    debug,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded, agentName, turnStart };
+  return { evalValueRecorded, evalOutputRecorded, agentName, turnStart, debug };
 }
 
 async function withFrame(
@@ -138,6 +141,20 @@ describe("std::statelog eval annotations", () => {
 
     expect(spies.turnStart).toHaveBeenCalledWith({ message: "do the same for modem.ai" });
     await expect(_turnStart("outside a frame")).resolves.toBeUndefined();
+  });
+
+  it("_debug posts a debug event with the message and data it was given", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const spies = spyClient(ctx);
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      await _debug("safeBash plan", { outcome: "broad" });
+    });
+
+    expect(spies.debug).toHaveBeenCalledOnce();
+    expect(spies.debug).toHaveBeenCalledWith("safeBash plan", { outcome: "broad" });
+    await expect(_debug("outside a frame", {})).resolves.toBeUndefined();
   });
 
   it("isLogging reports the run's observability setting", async () => {

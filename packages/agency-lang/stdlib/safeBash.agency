@@ -21,6 +21,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 
 export { MAX_STDOUT_LEN } from "std::spill"
@@ -970,6 +971,10 @@ export def safeBash(
   const plan = planFor(command, dir)
   const exec = plan.execution
 
+  // Logged before the refusal check, so a refused plan is on the record
+  // too. Nothing has been raised or run yet.
+  _debug("safeBash plan", planRecord(plan, command, dir))
+
   // A refusal returns before anything is raised: there is nothing to
   // approve. It still has an arm in the match below, because the match is
   // exhaustive over Execution.
@@ -999,6 +1004,25 @@ export def safeBash(
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
+  }
+}
+
+/** What the debug event says about one plan: the decision and why. */
+def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
+  let reason = ""
+  let detail = ""
+  if (plan.broadReason != null) {
+    reason = plan.broadReason.kind
+    detail = plan.broadReason.detail
+  }
+  return {
+    command: command,
+    cwd: cwd,
+    outcome: outcomeOf(plan),
+    reason: reason,
+    detail: detail,
+    verbs: plan.verbs,
+    effects: [e.name for e in plan.effects]
   }
 }
 

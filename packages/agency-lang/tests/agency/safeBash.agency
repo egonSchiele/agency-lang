@@ -11,7 +11,7 @@ import {
  } from "std::safeBash"
 import test { splitFlags } from "std::safeBash"
 import { resolve } from "std::path"
-import { glob } from "std::shell"
+import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
 import { setEnv } from "std::system"
 
@@ -595,4 +595,91 @@ node grepMissingPath() {
 node grepBashPayload() {
   const payload = grepPayloadOf("grep -cin hello one.txt")
   return [payload.pattern, payload.file, payload.ignoreCase, payload.maxResults, payload.flags]
+}
+
+def executionKind(source: string): string {
+  return planFor(source, FIXTURES).execution.kind
+}
+
+node loneGrepIsShellFree() {
+  return [
+    executionKind("grep -rn hello ."),
+    executionKind("grep -rn hello"),
+    executionKind("grep -n hello one.txt"),
+    executionKind("grep -rniwl hello ."),
+    executionKind("grep -rnF \"a+b\" ."),
+    executionKind("grep -rnE \"hello|goodbye\" ."),
+    executionKind("grep -c hello one.txt"),
+    executionKind("grep -n \"a+b\" one.txt"),
+    executionKind("grep hello ."),
+    executionKind("grep -rn hello . | head"),
+    outcomeOf(planFor("grep -rn hello .", FIXTURES)),
+    executionKind("grep -rnw \" world\" ."),
+    executionKind("grep -n hello one.txt -s"),
+  ]
+}
+
+node shellFreePayloads() {
+  const fixed = grepPayloadOf("grep -rnF \"a+b\" .")
+  const dirSearch = grepPayloadOf("grep -rn hello .")
+  const fileSearch = grepPayloadOf("grep -n hello one.txt")
+  return [
+    fixed.pattern,
+    [dirSearch.file, dirSearch.maxResults],
+    [fileSearch.file, fileSearch.dir == dirSearch.dir],
+  ]
+}
+
+/** The output's lines in a fixed order, without safeBash's own note lines.
+ * grep and the tool's walk visit files in different orders. */
+def sortedLines(text: string): string {
+  const lines = text.split("\n")
+  const matches = [line for line in lines if line != "" && !line.startsWith("(safeBash")]
+  return JSON.stringify(matches.sort())
+}
+
+def parityOf(source: string): any {
+  // Without this check, a row whose command fell back to the bash path
+  // would compare real grep with itself and pass for no reason.
+  if (planFor(source, FIXTURES).execution.kind != "grep") {
+    return "NOT SHELL-FREE: ${source}"
+  }
+  let ours = ""
+  let theirs = ""
+  handle {
+    const shellFree = safeBash(source, cwd: FIXTURES)
+    if (shellFree is success(out)) {
+      ours = out
+    }
+    // bash returns an ExecResult, not a Result.
+    const real = bash(source, cwd: FIXTURES)
+    theirs = real.stdout
+  } with approve
+  if (sortedLines(ours) == sortedLines(theirs)) {
+    return true
+  }
+  return [source, ours, theirs]
+}
+
+node shellFreeMatchesRealGrep() {
+  // No row runs `grep -rn hello` with no path: GNU grep prints bare names
+  // there, and ugrep, macOS's grep, prints `./one.txt`. The rendering
+  // follows GNU, and a grepDialect unit test pins it.
+  return [
+    parityOf("grep -n hello one.txt"),
+    parityOf("grep hello one.txt"),
+    parityOf("grep -rn hello ."),
+    parityOf("grep -rh hello ."),
+    parityOf("grep -rl hello ."),
+    parityOf("grep -rni hello ."),
+    parityOf("grep -rnw hello ."),
+    parityOf("grep -rnv hello ."),
+    parityOf("grep -rnF \"o w\" ."),
+    parityOf("grep -rnE \"hello|goodbye\" ."),
+    parityOf("grep -rn \"^hello\" ."),
+    parityOf("grep -rn 'world$' ."),
+    parityOf("grep -rn \"h.l*o\" ."),
+    parityOf("grep -Hn hello one.txt"),
+    parityOf("grep -n hello one.txt -s"),
+  ]
 }

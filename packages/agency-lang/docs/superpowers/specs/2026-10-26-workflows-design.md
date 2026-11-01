@@ -257,7 +257,7 @@ export node main(inputs: Inputs!): Result {
 }
 
 export node inputsSchema(): Json {
-  return schema(Inputs).toJSONSchema()
+  return schema(Inputs).toJSONSchema("input")
 }
 ```
 
@@ -402,11 +402,11 @@ return runWorkflow
   .withParamSchema("inputs", inputsSchema)
 ```
 
-`inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. For a saved workflow it is read from the saved file's `meta`, where `writeWorkflow` stored it (decision 24). A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
+`inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. For a saved workflow it is read from the saved file's `meta`, where `writeWorkflow` stored it (decision 24). An optional input is optional in the tool's schema, because the stored schema is zod's input form, where a key with a default is not required (ADI-254). A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
 
 A checkpoint keeps a schema set with `.withParamSchema`. The function value records each schema it was given in `paramSchemas`, and the reviver writes that record and calls `.withParamSchema` again on revive (`lib/runtime/revivers/functionRefReviver.ts`, ADI-249). So after a resume the model still sees the tool's `inputs` type, and the agent's learned tools keep their `request` type too.
 
-`workflowTools(dir, tools)` lists a directory and builds one tool per saved workflow. A host with a handful of workflows adds these to its model's tool list, so "do the meal plan thing" is one ordinary tool choice. A workflow's name must not collide with a tool already in `tools`; `workflowTools` refuses one that does, since it has both lists in hand.
+`workflowTools(dir, tools)` lists a directory and builds one tool per saved workflow. A host with a handful of workflows adds these to its model's tool list, so "do the meal plan thing" is one ordinary tool choice. A workflow's name must not collide with a tool already in `tools`; `workflowTool` and `workflowTools` both refuse one that does, since each has both names in hand.
 
 ## The catalog
 
@@ -454,7 +454,7 @@ type WorkflowFailure = { problems: WorkflowProblem[] }
 compileWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<string, WorkflowFailure>
 checkWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<WorkflowProblem[], WorkflowFailure>
 runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: string = ""): Result<Json>
-workflowTool(workflow: Workflow, tools: any[], dir: string = ""): any
+workflowTool(workflow: Workflow, tools: any[], dir: string = ""): Result<any>
 workflowTools(dir: string, tools: any[]): Result<any[]>
 catalog(tools: any[], dir: string = ""): Result<CatalogEntry[]>
 loadWorkflow(name: string, dir: string): Result<WorkflowEntry>

@@ -13,7 +13,9 @@ export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record
 
 /** The shape of every generated program. Fixed text, not a template: filling
  *  a hole inside `node main(inputs: Inputs)` with statements that mention
- *  `inputs` would rename the parameter (template hygiene). */
+ *  `inputs` would rename the parameter (template hygiene). `inputsSchema`
+ *  asks for the input form: a key with a default is optional there, so an
+ *  optional input is optional in the tool a workflow becomes. */
 const SCAFFOLD = `import { Json } from "std::validation"
 {{imports}}
 
@@ -24,7 +26,7 @@ export node main(inputs: Inputs!): Result {
 }
 
 export node inputsSchema(): Json {
-  return schema(Inputs).toJSONSchema()
+  return schema(Inputs).toJSONSchema("input")
 }
 `;
 
@@ -40,7 +42,7 @@ export node main(inputs: Inputs!): Result {
 }
 
 export node inputsSchema(): Json {
-  return schema(Inputs).toJSONSchema()
+  return schema(Inputs).toJSONSchema("input")
 }
 `;
 

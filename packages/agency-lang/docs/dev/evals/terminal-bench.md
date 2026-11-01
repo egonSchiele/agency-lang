@@ -236,10 +236,9 @@ Agent (published to npm; committed on `main` unless noted):
 - Prompt hard rules #13 (the deliverable is a *run-and-verified* artifact) and
   #14 (an exact output contract), plus a one-shot note saying the output is
   graded automatically.
-- A **verification step** with fresh eyes in the one-shot loop (**PR #497**).
-  The reviewer subagents now live under
-  `lib/agents/agency-agent/brains/coordinator/subagents/`, as `review.agency`
-  and `supervisor.agency`. There is no `verify.agency`.
+- The one-shot loop is a single solve. It once ended with a verifier and a
+  fix round (**PR #497**), and ran under a supervisor; both are gone, so the
+  coder checks its own work under hard rule #13.
 
 Adapter (`~/bench-agency/adapter.py`, local, not npm): `-p --` separator; key
 forwarding for all providers; `--policy approve-all`; direct-to-file transcript;

@@ -2,10 +2,7 @@ import * as fs from "node:fs";
 
 /**
  * Reading a statelog one line at a time. `makeLineSplitter` turns bytes into
- * complete lines; `makeLineReader` feeds it a file in chunks. Every statelog
- * reader gets its lines here: the viewer's follow watcher, the eval cost
- * tailer, `readTraces`, the runs explorer's scan and its first-line sniff,
- * and stdin.
+ * complete lines; `makeLineReader` feeds it a file in chunks.
  *
  * Lines are split on the newline byte before they are decoded. That byte
  * never appears inside a multi-byte UTF-8 character, so each line decodes on
@@ -21,9 +18,9 @@ export type LineSplitter = {
   /** The complete lines finished by `chunk`. The bytes after the last
    *  newline are kept as the partial line, for a later push to complete. */
   push(chunk: Buffer): string[];
-  /** The partial line as it stands, or undefined when there is none. The
-   *  splitter keeps it, so a later push can still complete it. */
-  tail(): string | undefined;
+  /** For a source that has ended: the partial last line as one more batch of
+   *  lines. See `finishedTail`. */
+  finish(): string[];
   /** How many bytes the partial line holds. */
   pendingBytes(): number;
   /** Forget the partial line. */
@@ -63,10 +60,11 @@ export function makeLineSplitter(): LineSplitter {
       }
       return lines;
     },
-    tail(): string | undefined {
-      return pendingLength === 0
-        ? undefined
-        : Buffer.concat(pending, pendingLength).toString("utf8");
+    finish(): string[] {
+      if (pendingLength === 0) {
+        return [];
+      }
+      return finishedTail(Buffer.concat(pending, pendingLength).toString("utf8"));
     },
     pendingBytes: () => pendingLength,
     reset(): void {
@@ -74,6 +72,23 @@ export function makeLineSplitter(): LineSplitter {
       pendingLength = 0;
     },
   };
+}
+
+/**
+ * The one rule for the partial last line of a statelog that has ended: it is
+ * a line when it holds a complete JSON value, and it is left out when it does
+ * not, since that is a write cut off partway. A reader of a file that is still
+ * being written does not ask: its partial line may be half written, and the
+ * rest is still to come.
+ */
+function finishedTail(text: string): string[] {
+  try {
+    JSON.parse(text);
+  } catch {
+    // Not complete JSON: a cut-off write, which the rule leaves out.
+    return [];
+  }
+  return [text];
 }
 
 export type LineChunk = {
@@ -88,54 +103,85 @@ export type LineReader = {
   /** Read to the end of the file as it is now, handing over the lines that
    *  finish one chunk at a time, so no caller holds the whole file. */
   readToEnd(onLines: (lines: string[]) => void): void;
-  /** The partial last line. A file another process is still writing may end
-   *  mid-line, so only a reader of a finished file should treat it as a
-   *  line. The reader keeps it either way. */
-  tail(): string | undefined;
+  /** For a finished file: the partial last line as one more batch of lines,
+   *  under the rule in `finishedTail`. The reader keeps the bytes, so a viewer
+   *  that starts following the file afterwards can still complete the line. */
+  finish(): string[];
   /** How many bytes the partial last line holds. */
   pendingBytes(): number;
+  /** Close the file. A read that reaches the end closes it by itself, so only
+   *  a caller that stops early needs this. */
+  close(): void;
 };
 
 /**
  * A reader of a file that may still be growing. Each read picks up where the
- * last one stopped. `startOffset` is where reading begins: 0 reads the whole
- * file; `currentFileSize(path)` reads only what is appended later. A missing
- * file reads as empty. A file that shrank (rotated or truncated) rewinds to
- * the start, and that read returns no lines.
+ * last one stopped, and the file stays open from one read to the next until a
+ * read reaches the end. `startOffset` is where reading begins: 0 reads the
+ * whole file; `currentFileSize(path)` reads only what is appended later. A
+ * missing file reads as empty. A file that shrank (rotated or truncated)
+ * rewinds to the start, and that read returns no lines.
  */
 export function makeLineReader(path: string, startOffset = 0): LineReader {
   const splitter = makeLineSplitter();
   let offset = startOffset;
+  let fd: number | undefined;
+
+  const closeFile = (): void => {
+    if (fd !== undefined) {
+      fs.closeSync(fd);
+      fd = undefined;
+    }
+  };
+
+  // Reads up to `maxChunks` chunks from `openFd`; false when the file turned
+  // out shorter than it was measured.
+  const readFrom = (
+    openFd: number,
+    size: number,
+    maxChunks: number,
+    onLines: (lines: string[]) => void,
+  ): boolean => {
+    for (let chunks = 0; chunks < maxChunks && offset < size; chunks += 1) {
+      const bytes = readBytes(openFd, offset, Math.min(READ_CHUNK_BYTES, size - offset));
+      if (bytes.length === 0) {
+        return false;
+      }
+      offset += bytes.length;
+      const lines = splitter.push(bytes);
+      if (lines.length > 0) {
+        onLines(lines);
+      }
+    }
+    return true;
+  };
 
   // Reads up to `maxChunks` chunks and returns whether it reached the end.
   const readChunks = (maxChunks: number, onLines: (lines: string[]) => void): boolean => {
     const size = currentFileSize(path);
     if (size < offset) {
+      closeFile();
       offset = 0;
       splitter.reset();
       return true;
     }
-    if (size === offset) {
-      return true;
-    }
-    const fd = fs.openSync(path, "r");
-    try {
-      for (let chunks = 0; chunks < maxChunks && offset < size; chunks += 1) {
-        const bytes = readBytes(fd, offset, Math.min(READ_CHUNK_BYTES, size - offset));
-        if (bytes.length === 0) {
-          // The file shrank after it was measured. The next read rewinds.
-          return true;
-        }
-        offset += bytes.length;
-        const lines = splitter.push(bytes);
-        if (lines.length > 0) {
-          onLines(lines);
-        }
+    let whole = true;
+    if (offset < size) {
+      fd ??= fs.openSync(path, "r");
+      try {
+        whole = readFrom(fd, size, maxChunks, onLines);
+      } catch (error) {
+        closeFile();
+        throw error;
       }
-    } finally {
-      fs.closeSync(fd);
     }
-    return offset >= size;
+    // A short read means the file shrank after it was measured; the next
+    // read rewinds.
+    const atEnd = !whole || offset >= size;
+    if (atEnd) {
+      closeFile();
+    }
+    return atEnd;
   };
 
   return {
@@ -149,8 +195,9 @@ export function makeLineReader(path: string, startOffset = 0): LineReader {
     readToEnd(onLines: (lines: string[]) => void): void {
       readChunks(Infinity, onLines);
     },
-    tail: () => splitter.tail(),
+    finish: () => splitter.finish(),
     pendingBytes: () => splitter.pendingBytes(),
+    close: closeFile,
   };
 }
 

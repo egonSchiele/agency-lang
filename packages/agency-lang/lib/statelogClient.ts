@@ -156,12 +156,10 @@ function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
 const RUNTIME_STATE_KEYS = ["ctx", "run"];
 
 /** A node event's state without the runtime. The graph hands each node
- *  `{ messages, data, ctx, isResume, run }`. `ctx` and `run` both hold the
- *  whole state stack, so logging them wrote the stack three times per event,
- *  and no reader uses them. A state that is not a plain object is returned
- *  as it is. */
+ *  `{ messages, data, ctx, isResume, run }`, and `ctx` and `run` both hold
+ *  the whole state stack, which no reader of the log uses. */
 function nodeStateForLog(state: unknown): unknown {
-  if (state === null || typeof state !== "object" || Array.isArray(state)) {
+  if (state === null || typeof state !== "object") {
     return state;
   }
   const kept = Object.entries(state).filter(([key]) => !RUNTIME_STATE_KEYS.includes(key));
@@ -701,8 +699,8 @@ export class StatelogClient {
       model,
       timeTaken,
       // Names only. Every call offers the whole tool list, so its
-      // descriptions and schemas were most of each event, and readers use
-      // only the names (`toolsOf`).
+      // descriptions and schemas would repeat in every event, and readers
+      // use only the names (`toolsOf`).
       tools: tools?.map((tool) => tool.name),
       responseFormat,
       usage,

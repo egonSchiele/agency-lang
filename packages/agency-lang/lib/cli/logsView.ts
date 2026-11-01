@@ -9,7 +9,7 @@ import * as fs from "fs";
 import * as tty from "tty";
 import type { AgencyConfig } from "@/config/config.js";
 import { _hostedModelInfo } from "@/stdlib/llm.js";
-import { runViewer } from "@/logsViewer/run.js";
+import { runViewer, type ViewerResolution } from "@/logsViewer/run.js";
 import type { ViewerThresholds } from "@/logsViewer/thresholds.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
@@ -126,8 +126,8 @@ const TRACE_ID_USAGE =
  * plain text instead of flashing the viewer. A unique prefix is accepted, as
  * `agency logs extract` accepts one. Returns `"none"` when the flag was not
  * given; reports and returns `"missing"` when no trace matches, so the caller
- * can stop. A statelog file is not read twice for this: the viewer checks the
- * id once it has read the file. Exported for its test.
+ * can stop. For a statelog file the viewer checks the id instead, against the
+ * log it reads. Exported for its test.
  */
 export type FocusTrace =
   | { kind: "none" }
@@ -237,8 +237,8 @@ type ViewerLifecycleResult = { ok: true } | { ok: false; error: unknown };
  *  exiting, rather than the output's teardown alone. */
 export function createViewerHost(
   dependencies: ViewerTerminalDependencies,
-): (source: ViewerSource) => Promise<void> {
-  return async function runViewerOnTerminal(source: ViewerSource): Promise<void> {
+): (source: ViewerSource) => Promise<ViewerResolution> {
+  return async function runViewerOnTerminal(source: ViewerSource): Promise<ViewerResolution> {
     let restoreStdin: (() => void) | undefined;
     let input: InputSource | undefined;
     let output: OutputTarget | undefined;
@@ -263,6 +263,7 @@ export function createViewerHost(
     process.on("SIGTERM", sigterm);
 
     let operation: ViewerLifecycleResult = { ok: true };
+    let resolution: ViewerResolution = "quit";
     try {
       // Only the drained-stdin case reopens the controlling TTY for keys.
       if (source.kind === "events" && source.terminalInput === "controlling-tty") {
@@ -270,7 +271,9 @@ export function createViewerHost(
       }
       input = dependencies.createInput();
       output = dependencies.createOutput();
-      await dependencies.runViewer(viewerOptions(source, input, output, dependencies.viewport()));
+      resolution = await dependencies.runViewer(
+        viewerOptions(source, input, output, dependencies.viewport()),
+      );
     } catch (error) {
       operation = { ok: false, error };
     } finally {
@@ -278,6 +281,7 @@ export function createViewerHost(
       process.removeListener("SIGTERM", sigterm);
       throwCombinedLifecycleErrors(operation, releaseOnce());
     }
+    return resolution;
   };
 }
 
@@ -371,17 +375,16 @@ const defaultViewerHost = createViewerHost({
  *  `remote logs` passes `current-stdin` (stdin is intact after an HTTP fetch);
  *  the piped local `view -` passes `controlling-tty` (stdin was drained for the
  *  data). */
-export function openViewer(opts: {
+export async function openViewer(opts: {
   parsed: ParseResult;
   terminalInput: ViewerTerminalInput;
   thresholds?: Partial<ViewerThresholds>;
 }): Promise<void> {
-  return defaultViewerHost({ kind: "events", ...opts });
+  await defaultViewerHost({ kind: "events", ...opts });
 }
 
 /** Parse a statelog as it streams in, one chunk of lines at a time, so its
- *  text is never one string. The stream has ended when this returns, so a
- *  last line with no newline is a line. */
+ *  text is never one string. */
 export async function parseStatelogStream(
   stream: AsyncIterable<Buffer | string>,
 ): Promise<ParseResult> {
@@ -397,19 +400,15 @@ export async function parseStatelogStream(
   for await (const chunk of stream) {
     addLines(splitter.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
   }
-  const last = splitter.tail();
-  if (last !== undefined) {
-    addLines([last]);
-  }
+  addLines(splitter.finish());
   return log;
 }
 
 /** The original single-file viewer path. A LOCAL file additionally enables the
  *  tree `x` extract-a-trace action; stdin does not (no local file to read). */
 async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<void> {
-  // The viewer checks --trace-id against the log once it has read it, so no
-  // path here reads the log only to check the id. Under --follow the named
-  // trace may not have started yet, and the viewer waits for it.
+  // The viewer checks --trace-id against the log it reads. Under --follow the
+  // named trace may not have started yet, and the viewer waits for it.
   if (file === "-") {
     const parsed = await parseStatelogStream(process.stdin);
     if (cliOpts.follow) {
@@ -417,20 +416,21 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     }
     // Piped stdin was drained for the data, so keys come from the controlling TTY.
     // No extract: stdin has no local file to read a trace back from.
-    await defaultViewerHost({
+    const resolution = await defaultViewerHost({
       kind: "events",
       parsed,
       terminalInput: "controlling-tty",
       thresholds: cliOpts.config?.viewer,
       focusTraceId: cliOpts.traceId,
     });
+    failOnMissingTrace(resolution);
     return;
   }
   if (!fs.existsSync(file)) {
     console.error(`File not found: ${file}`);
     process.exit(1);
   }
-  await defaultViewerHost({
+  const resolution = await defaultViewerHost({
     kind: "file",
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
@@ -443,6 +443,15 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
       humanAuthorAtTerminal(),
     ),
   });
+  failOnMissingTrace(resolution);
+}
+
+/** A `--trace-id` that named no trace exits with code 1 once the viewer has
+ *  given the terminal back, so a script can tell it failed. */
+function failOnMissingTrace(resolution: ViewerResolution): void {
+  if (resolution === "noSuchTrace") {
+    process.exitCode = 1;
+  }
 }
 
 // Open the controlling terminal at /dev/tty and graft it onto

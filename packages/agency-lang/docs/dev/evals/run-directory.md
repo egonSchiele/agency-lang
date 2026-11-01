@@ -62,12 +62,12 @@ A read during such a save may see the old text, the new text, or null.
 `makeLineReader` (`lib/statelog/lineReader.ts`), so the file's text is never
 one string, and parses each line with `parseStatelogLine`
 (`lib/statelog/parse.ts`), the one owner of line decoding. A last line with no
-newline is kept when it is a complete event and ignored when it is not valid
-JSON, since that is a write cut off mid-line. It drops byte-identical
-duplicate lines within a trace (the harmless result of `cat`), keyed by a hash
-of each line, and computes a per-trace **digest over a hash of each
-canonicalized event**, so key order does not matter and no string ever holds a
-whole trace. The digest is only compared in memory, never stored. Extracting a
+newline goes through the reader's `finish()`: it is kept when it is complete
+JSON and ignored when it is a write cut off partway. It drops byte-identical
+duplicate lines within a trace (the harmless result of `cat`), and computes a
+per-trace **digest over a hash of each canonicalized event**, so key order
+does not matter and no string ever holds a whole trace. The digest is only
+compared in memory, never stored, so its formula can change. Extracting a
 trace and merging traces into a run directory write one line at a time, for
 the same reason. It does not — cannot — detect two different streams
 sharing an id once they are interleaved; that check lives in the merge planner.

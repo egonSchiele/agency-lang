@@ -232,6 +232,20 @@ describe("follow mode", () => {
     expect(out.lastText()).toContain("lastTool");
   });
 
+  it("leaves out a cut-off last line when the file is opened without --follow", async () => {
+    const wholeLine = envelope("s2", "toolCallStart", 500, { toolName: "wholeTool" });
+    const cutLine = envelope("s3", "toolCallStart", 1_000, { toolName: "cutTool" }).slice(0, 30);
+    fs.writeFileSync(file, bootLine + wholeLine + cutLine);
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = start(input, out);
+    await until(() => out.frames.length > 0 && out.lastText().includes("wholeTool"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("wholeTool");
+    expect(out.lastText()).not.toContain("parse error");
+  });
+
   it("under --follow, a line still being written waits for its newline", async () => {
     // A poll can land in the middle of a line the writer has not finished.
     // That line must not show as a parse error while it waits.

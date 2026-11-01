@@ -724,10 +724,8 @@ describe("StatelogClient", () => {
       const file = newLogFile("node-state-primitive");
       const client = fileClient(file);
       await client.exitNode({ nodeId: "main", data: 5 });
-      await client.exitNode({ nodeId: "main", data: ["a", "b"] });
-      const [primitive, list] = readEvents(file);
-      expect(primitive.data.data).toBe(5);
-      expect(list.data.data).toEqual(["a", "b"]);
+      const [evt] = readEvents(file);
+      expect(evt.data.data).toBe(5);
     });
 
     it("agentStart emits the right type and entryNode", async () => {

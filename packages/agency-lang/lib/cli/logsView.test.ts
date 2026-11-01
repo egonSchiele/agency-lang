@@ -223,6 +223,19 @@ describe("createViewerHost lifecycle", () => {
     expect(restore).toHaveBeenCalledTimes(1);
   });
 
+  it("returns how the viewer ended, so the CLI can set the exit code", async () => {
+    const host = createViewerHost({
+      createInput: () => fakeInput().input,
+      createOutput: () => fakeOutput().output,
+      swapStdinToTty: () => vi.fn(),
+      runViewer: vi.fn().mockResolvedValue("noSuchTrace"),
+      viewport,
+    });
+    await expect(
+      host({ kind: "events", parsed: EMPTY_LOG, terminalInput: "current-stdin" }),
+    ).resolves.toBe("noSuchTrace");
+  });
+
   it("passes the parsed log for events and followPath/initialFollow for file", async () => {
     const runViewer = vi.fn().mockResolvedValue("quit");
     const host = createViewerHost({

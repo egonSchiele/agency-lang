@@ -162,8 +162,7 @@ place, or undefined to leave the value to the next rule.
 1. `redactRule(globals)` swaps a value tagged `redact` for its marker. It also
    scrubs a redacted string **contained inside** a larger string
    (`GlobalStore.redactContainedStrings`), because a tagged string
-   interpolated into a new string would otherwise log verbatim. When the
-   store holds no tags, the rule is a no-op chosen once per event.
+   interpolated into a new string would otherwise log verbatim.
 2. `omitBinaryRule` replaces picture bytes, and any other binary data sent as
    base64, with a marker such as `[image/png: 6000 bytes omitted]`. It matches
    a string over 4,096 characters that is a base64 `data:` URI, or that is
@@ -177,11 +176,11 @@ place, or undefined to leave the value to the next rule.
 with `makeScrubReplacer(rules)`. The replacer returns the envelope's own
 fields unchanged, so a pathological redaction such as a tag on the number 1
 can never blank `format_version` or the ids. The rules run on every event,
-tags or not, because pictures arrive without tags. Any replacer takes
-`JSON.stringify` off V8's fast path: a 1.9 MB event takes about 6 ms, against
-2.1 ms with no replacer. Node events no longer carry the runtime and prompt
-events no longer carry tool schemas, so events stay small and the cost does
-too. The biggest event in a BMO run is about 0.65 MB.
+tags or not, because pictures arrive without tags. That has a cost: any
+replacer takes `JSON.stringify` off V8's fast path, which makes a large event
+about three times slower to serialize. Keeping events small keeps that cost
+small, which is one reason node events leave out the runtime and prompt events
+log tool names only.
 
 `safeStatelogValue` (`lib/runtime/runner.ts`) runs the same rules while it
 clones a fork branch's value, before it truncates an oversized one into a
@@ -317,9 +316,8 @@ Agency hands every node this state:
 ```
 
 `nodeStateForLog` in the client drops `ctx` and `run` before posting. Both
-hold the whole state stack: `run` carries `ctx` again and the same stack as
-`run.stack`. Logging them wrote the stack three times per event, and no
-reader uses them.
+hold the whole state stack, since `run` carries `ctx` again and the same stack
+as `run.stack`, and no reader uses them.
 
 LLM: `promptStart` (request shape, before dispatch) → terminated by exactly one
 of `promptCompletion` (full redacted messages + completion + usage/cost),
@@ -329,10 +327,10 @@ nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
 is a hung/killed-mid-call run.
 
 `promptCompletion.tools` lists the offered tools by name. Every call offers
-the whole tool list, so its descriptions and schemas were most of each event:
-251 MB of a 591 MB log from BMO. Readers use only the names (`toolsOf` in
-`lib/statelog/wireAccessors.ts`). An `llmError` still logs the full
-definitions, since a bad schema can be the reason a request failed.
+the whole tool list, so logging the descriptions and schemas would repeat them
+in every event, and readers use only the names (`toolsOf` in
+`lib/statelog/wireAccessors.ts`). An `llmError` logs the full definitions,
+since a bad schema can be the reason a request failed.
 
 Both prompt events carry `usageKind`: `"completion"` for a text model and
 `"decision"` for a decision model such as Jev or Laya (the

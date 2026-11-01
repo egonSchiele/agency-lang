@@ -80,7 +80,9 @@ export type RunViewerOpts = {
   contextWindowOf?: (model: string) => number | undefined;
 };
 
-export type ViewerResolution = "quit" | "back";
+/** How the viewer ended. `"noSuchTrace"` is a `--trace-id` that named no
+ *  single trace, which the CLI turns into exit code 1. */
+export type ViewerResolution = "quit" | "back" | "noSuchTrace";
 
 /** Follow watcher handle, named so the extract handler can pause and resume it. */
 type FollowWatcher = ReturnType<typeof makeFollowWatcher>;
@@ -185,13 +187,13 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     height: opts.viewport.rows,
   });
 
-  // A --trace-id that names no trace in a log that will not grow: say so and
-  // go back. Under --follow the trace may not have started yet.
+  // A --trace-id that names no trace in a log that will not grow: say so,
+  // and end as noSuchTrace. Under --follow the trace may not have started yet.
   const focusProblem = focusProblemAtBoot(opts, roots);
   if (focusProblem !== undefined) {
     screen.render(lines(wrapLine(focusProblem, opts.viewport.cols)));
     await opts.input.nextKey();
-    return "back";
+    return "noSuchTrace";
   }
 
   // Empty log: exit — EXCEPT under --follow, where an empty (or not yet
@@ -978,10 +980,10 @@ function rowBindings(
  * truncated: start over from offset 0 with an empty log; view setData
  * cursor-fallback absorbs it.
  *
- * A file opened without `--follow` is treated as finished at boot, so a last
- * line with no newline shows. Polls show complete lines only, since a live
- * writer may be in the middle of one; the reader keeps that partial line, so
- * a later poll can complete it.
+ * A file opened without `--follow` is treated as finished at boot, so its
+ * partial last line goes through the reader's `finish()`. Polls show complete
+ * lines only, since a live writer may be in the middle of one; the reader
+ * keeps that partial line, so a later poll can complete it.
  *
  * @internal Exported for its test.
  */
@@ -1049,7 +1051,7 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
     if (reader === undefined) {
       return opts.parsed ?? { events: [], errors: [] };
     }
-    return opts.initialFollow ? log : withLastLine(log, reader.tail(), lineCount + 1);
+    return opts.initialFollow ? log : withParsedLines(log, reader.finish(), lineCount + 1);
   };
 
   readAppended();
@@ -1075,13 +1077,13 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
   };
 }
 
-/** `log` with a finished file's last line, when it has no newline, parsed
- *  onto the end. */
-function withLastLine(log: ParseResult, last: string | undefined, lineNumber: number): ParseResult {
-  if (last === undefined) {
-    return log;
-  }
-  const parsed = parseStatelogLines([last], lineNumber);
+/** `log` with `lines`, numbered from `firstLineNumber`, parsed onto the end. */
+function withParsedLines(
+  log: ParseResult,
+  lines: readonly string[],
+  firstLineNumber: number,
+): ParseResult {
+  const parsed = parseStatelogLines(lines, firstLineNumber);
   return {
     events: log.events.concat(parsed.lines.map((entry) => entry.event)),
     errors: log.errors.concat(parsed.errors),

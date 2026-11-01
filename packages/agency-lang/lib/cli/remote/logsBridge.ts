@@ -23,8 +23,7 @@ export function normalizeTraceLogs(logs: TraceLog[]): ViewerTraceLog[] {
   }));
 }
 
-/** The fetched logs as the viewer's parsed log, with no round trip through
- *  text. */
+/** The fetched logs as the viewer's parsed log. */
 export function traceLogsToEvents(logs: TraceLog[]): ParseResult {
   return parseStatelogRecords(normalizeTraceLogs(logs));
 }

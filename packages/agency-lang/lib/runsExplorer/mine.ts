@@ -4,9 +4,9 @@
 //
 // The statelog scan is resumable on purpose: one advance() reads at
 // most one chunk, so the shell can interleave scanning a multi-megabyte
-// log with keystrokes. The line reader carries a line across chunks,
-// and every failure becomes a typed warning — a torn line keeps the
-// metrics accumulated before it.
+// log with keystrokes. The line reader carries a line across chunks.
+// Every failure becomes a typed warning, and an unparseable line keeps
+// the metrics accumulated before it.
 import { emptyTally, tallyEvent, type TurnTally } from "../logsViewer/timeline/turns.js";
 import * as fs from "fs";
 
@@ -81,11 +81,7 @@ export function createStatelogScan(file: string): StatelogScan {
       }
       chunk.lines.forEach(consumeLine);
       if (chunk.atEnd) {
-        // The file is finished, so a last line with no newline is a line.
-        const last = reader.tail();
-        if (last !== undefined) {
-          consumeLine(last);
-        }
+        reader.finish().forEach(consumeLine);
         done = true;
       }
       return done;

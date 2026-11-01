@@ -65,7 +65,7 @@ describe("createStatelogScan", () => {
     expect(buildTraceRows(file, result)[0].wallMs).toBe(2_000);
   });
 
-  it("a torn final line preserves the metrics before it and adds a warning", () => {
+  it("a torn final line is left out and the metrics before it are kept", () => {
     const file = writeStatelog(path.join(tmpDir, "torn.jsonl"), [
       promptCompletion("t1", "sonnet", 1.0),
     ]);
@@ -76,6 +76,21 @@ describe("createStatelogScan", () => {
       throw new Error("expected ok");
     }
     expect(result.traces["t1"].costUsd).toBeCloseTo(1.0);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("an unparseable line in the middle is skipped with a warning", () => {
+    const file = writeStatelog(path.join(tmpDir, "middle.jsonl"), [
+      promptCompletion("t1", "sonnet", 1.0),
+    ]);
+    fs.appendFileSync(file, "not json\n");
+    fs.appendFileSync(file, JSON.stringify(promptCompletion("t1", "sonnet", 2.0)) + "\n");
+
+    const result = runScanToEnd(createStatelogScan(file));
+    if (result.kind !== "ok") {
+      throw new Error("expected ok");
+    }
+    expect(result.traces["t1"].costUsd).toBeCloseTo(3.0);
     expect(result.warnings).toHaveLength(1);
   });
 

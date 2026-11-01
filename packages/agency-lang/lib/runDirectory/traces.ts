@@ -2,7 +2,6 @@ import * as fs from "fs";
 
 import { makeLineReader } from "@/statelog/lineReader.js";
 import {
-  parseStatelogLine,
   parseStatelogLines,
   type ParsedEventLine,
   type ParseError,
@@ -42,8 +41,8 @@ export function traceDigest(events: readonly EventEnvelope[]): string {
  * grouping by id, keeping raw lines for merging, and the digest.
  *
  * The file is read one chunk of lines at a time, so its text is never one
- * string. A last line with no newline is kept when it is a complete event; one
- * that is not valid JSON is a write that was cut off, and is ignored. A line
+ * string, and its partial last line follows the line reader's rule for a
+ * finished file (`LineReader.finish`). A line
  * byte-identical to one already seen for its trace is dropped: that is the
  * harmless result of `cat`-ing two copies of one trace. Nothing more is
  * checked here — two different streams sharing an id cannot be told apart once
@@ -57,11 +56,12 @@ export function readTraces(statelogPath: string): ReadTracesResult {
   const grouper = makeTraceGrouper();
   const errors: ParseError[] = [];
   let lineCount = 0;
-  reader.readToEnd((lines) => {
+  const addLines = (lines: string[]): void => {
     addParsedLines(parseStatelogLines(lines, lineCount + 1), grouper, errors);
     lineCount += lines.length;
-  });
-  addLastLine(reader.tail(), lineCount + 1, grouper, errors);
+  };
+  reader.readToEnd(addLines);
+  addLines(reader.finish());
   return { traces: grouper.traces(), errors };
 }
 
@@ -137,26 +137,6 @@ function addParsedLines(
   }
   for (const error of parsed.errors) {
     errors.push(error);
-  }
-}
-
-/** The last line of a finished file, when it has no newline. A complete
- *  event is kept. A line that is not valid JSON was cut off mid-write and is
- *  ignored, as a reader of a live file would wait for the rest of it. */
-function addLastLine(
-  last: string | undefined,
-  lineNumber: number,
-  grouper: TraceGrouper,
-  errors: ParseError[],
-): void {
-  if (last === undefined) {
-    return;
-  }
-  const parsed = parseStatelogLine(last, lineNumber);
-  if (parsed.kind === "event") {
-    grouper.add(parsed.entry);
-  } else if (parsed.kind === "error" && parsed.error.kind !== "invalid_json") {
-    errors.push(parsed.error);
   }
 }
 

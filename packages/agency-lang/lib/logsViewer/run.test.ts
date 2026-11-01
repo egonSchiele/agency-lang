@@ -147,7 +147,7 @@ describe("runViewer", () => {
     expect(out.textAt(0).toLowerCase()).toMatch(/no events/);
   });
 
-  it("a --trace-id that names no trace shows why and goes back", async () => {
+  it("a --trace-id that names no trace shows why and ends as noSuchTrace", async () => {
     const out = new FrameRecorder();
     const resolution = await runViewer({
       parsed: parseStatelogJsonl(sample),
@@ -156,7 +156,7 @@ describe("runViewer", () => {
       output: out,
       viewport: { rows: 5, cols: 120 },
     });
-    expect(resolution).toBe("back");
+    expect(resolution).toBe("noSuchTrace");
     expect(out.textAt(0)).toContain("No trace matches --trace-id nope (found: abc)");
   });
 

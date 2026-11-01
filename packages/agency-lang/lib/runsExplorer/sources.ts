@@ -111,19 +111,23 @@ type FirstLineSniff =
  *  ever loading the file. A "complete" line ends in a newline or EOF. */
 function sniffFirstLine(file: string): FirstLineSniff {
   const reader = makeLineReader(file, 0);
-  for (;;) {
-    const chunk = reader.readChunk();
-    const first = chunk.lines.find((line) => line.trim() !== "");
-    if (first !== undefined) {
-      return { kind: "line", line: first.trim() };
+  try {
+    for (;;) {
+      const chunk = reader.readChunk();
+      const lines = chunk.atEnd ? [...chunk.lines, ...reader.finish()] : chunk.lines;
+      const first = lines.find((line) => line.trim() !== "");
+      if (first !== undefined) {
+        return { kind: "line", line: first.trim() };
+      }
+      if (reader.pendingBytes() > MAX_SOURCE_SNIFF_LINE_BYTES) {
+        return { kind: "line-too-long" };
+      }
+      if (chunk.atEnd) {
+        return { kind: "empty" };
+      }
     }
-    if (reader.pendingBytes() > MAX_SOURCE_SNIFF_LINE_BYTES) {
-      return { kind: "line-too-long" };
-    }
-    if (chunk.atEnd) {
-      const last = reader.tail()?.trim() ?? "";
-      return last === "" ? { kind: "empty" } : { kind: "line", line: last };
-    }
+  } finally {
+    reader.close();
   }
 }
 

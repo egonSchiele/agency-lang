@@ -17,6 +17,8 @@ const lowered: Lowered = {
   ],
   result: _parseExpr("a"),
   guard: null,
+  guardLabel: "wf",
+  guardLabels: [],
 };
 
 const withInputs = (text: string): Lowered => ({
@@ -48,7 +50,7 @@ describe("renderWorkflow", () => {
         "    }",
         "    return success(a)",
         "  } with (guardTrip) {",
-        '    if (guardTrip.effect == "std::guard") {',
+        '    if (guardTrip.effect == "std::guard" && [].includes(guardTrip.data.label)) {',
         "      return reject()",
         "    }",
         "    return pass()",
@@ -80,12 +82,16 @@ describe("renderWorkflow", () => {
   });
 
   it("indents the body by six under a guard and shifts the ranges by one more", () => {
-    const r = renderWorkflow({ ...lowered, guard: { maxTime: 300000, maxCost: 1 } });
+    const r = renderWorkflow({
+      ...lowered,
+      guard: { maxTime: 300000, maxCost: 1 },
+      guardLabels: ["wf", "a"],
+    });
     const lines = r.source!.split("\n");
-    expect(lines.slice(7, 17)).toEqual([
+    expect(lines.slice(7, 18)).toEqual([
       "export node main(inputs: Inputs!): Result {",
       "  handle {",
-      "    return guard(time: 300000, cost: 1) {",
+      '    return guard(label: "wf", time: 300000, cost: 1) {',
       "      const a = 1",
       "      if (a is failure) {",
       "        return a",
@@ -93,6 +99,7 @@ describe("renderWorkflow", () => {
       "      return success(a)",
       "    }",
       "  } with (guardTrip) {",
+      '    if (guardTrip.effect == "std::guard" && ["wf","a"].includes(guardTrip.data.label)) {',
     ]);
     expect(r.ranges).toEqual([
       { from: 4, to: 6, owner: inputsOwner },
@@ -104,7 +111,7 @@ describe("renderWorkflow", () => {
 
   it("writes only the limits that are set", () => {
     expect(renderWorkflow({ ...lowered, guard: { maxCost: 0.5 } }).source).toContain(
-      "    return guard(cost: 0.5) {",
+      '    return guard(label: "wf", cost: 0.5) {',
     );
     expect(renderWorkflow({ ...lowered, guard: {} }).source).not.toContain("return guard(");
   });

@@ -201,5 +201,10 @@ export function lowerWorkflow(resolved: ResolvedWorkflow): Lowered {
     body,
     result: valueCode(result, steps),
     guard: resolved.limits,
+    guardLabel: resolved.name,
+    guardLabels: [
+      ...(resolved.limits === null ? [] : [resolved.name]),
+      ...resolved.steps.filter((step) => step.limits !== null).map((step) => step.id),
+    ],
   };
 }

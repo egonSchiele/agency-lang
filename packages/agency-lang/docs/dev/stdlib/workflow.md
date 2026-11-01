@@ -178,14 +178,16 @@ A guard always gives a `Result`: a `Result` the block returns passes through, an
 
 ### Every limit is hard
 
-A trip raises `std::guard`, and a handler that approves it gives the guard more budget. So without anything else, a caller's handler or policy could raise a workflow's limits. The scaffold prevents that. It wraps `main`'s body in a handler that rejects every `std::guard`:
+A trip raises `std::guard`, and a handler that approves it gives the guard more budget. So without anything else, a caller's handler or policy could raise a workflow's limits. The scaffold prevents that. It labels the guard around the body with the workflow's name, and wraps `main`'s body in a handler that rejects a trip from any of the workflow's own guards:
 
 ```
 export node main(inputs: Inputs!): Result {
   handle {
-    ...the steps...
+    return guard(label: "updateMealPlanFromNote", time: 300000, cost: 1) {
+      ...the steps...
+    }
   } with (guardTrip) {
-    if (guardTrip.effect == "std::guard") {
+    if (guardTrip.effect == "std::guard" && ["updateMealPlanFromNote", "add"].includes(guardTrip.data.label)) {
       return reject()
     }
     return pass()
@@ -193,11 +195,11 @@ export node main(inputs: Inputs!): Result {
 }
 ```
 
-Every handler in the chain is consulted, and a rejection wins over any approval. So no caller can extend the workflow's guard or a step's. This is what the `@guarded` decorator does for the function it wraps. A `return` inside a `handle` block returns from the enclosing function, so the steps' checks and the final `return success(...)` work unchanged. Under a workflow guard, the `return guard(...) { ... }` sits inside the `handle` block. `guardTrip`, `reject`, and `pass` are in `PROGRAM_NAMES`, so no tool can shadow them.
+`lower` writes the list as `guardLabels`: the workflow's name when it has limits, and the id of each step with limits, which is its guard's label. Both are identifiers, so render writes them with `JSON.stringify` as Agency string literals.
 
-The handler rejects every guard trip raised inside the workflow, including a guard inside a tool. Matching only the workflow's own labels would leave a tool's guard extendable by the caller.
+Every handler in the chain is consulted, and a rejection wins over any approval. So no caller can extend the workflow's guard or a step's. This is what the `@guarded` decorator does for the function it wraps: it rejects a trip with its own label and passes on every other. A `return` inside a `handle` block returns from the enclosing function, so the steps' checks and the final `return success(...)` work unchanged. `guardTrip`, `reject`, and `pass` are in `PROGRAM_NAMES`, so no tool can shadow them.
 
-That has one cost. `supervise()` extends its own guard by approving `std::guard` at each check (`stdlib/supervise.agency`), and inside a workflow this rejection wins over that approval. Take a tool that runs a coding agent under supervision:
+The handler passes on a trip from a guard inside a tool. A tool's guard sits inside the step's guard and the workflow's, so a caller who extends it is still stopped at the workflow's limits. What a caller can extend is only the tool's own budget, up to the workflow's, which is what they can do when they call that tool directly. A tool that extends its own guard keeps working too. `supervise()` does that at each check:
 
 ```
 supervise(every: 5m, maxTime: 30m, check: myCheck) {
@@ -205,9 +207,9 @@ supervise(every: 5m, maxTime: 30m, check: myCheck) {
 }
 ```
 
-Called from a workflow step, it stops after 5 minutes, not 30. A handler cannot tell a tool's own approval from a caller's, so keeping `supervise` working would let callers extend a tool's guard too. The limitation is accepted.
+A tool guard whose label matches a step id is rejected too, which is the safe direction for a collision. An earlier version rejected every `std::guard`, which stopped `supervise` at its first check and bought nothing.
 
-The tests are `stepLimitIsHard` and `workflowLimitIsHard` in `tests/agency/workflow/runMealPlan.agency`. Their caller approves every trip with more time. Their tool is `busyEcho`, which works for a second without sleeping. A time trip during `sleep()` skips every handler (ADI-137), so a tool that sleeps passes these tests with or without the scaffold's handler.
+The tests are in `tests/agency/workflow/runMealPlan.agency`. In `stepLimitIsHard` and `workflowLimitIsHard`, the caller approves every trip with more time, and the workflow still stops. In `toolExtendsItsOwnGuard`, a tool extends its own 100 ms guard, and the workflow finishes. Their tool is `busyEcho`, which works for a second without sleeping. A time trip during `sleep()` skips every handler (ADI-137), so a tool that sleeps passes these tests with or without the scaffold's handler.
 
 ### Guarded LLM steps
 
@@ -232,7 +234,7 @@ Parse checks the shape: a list whose entries are `*` or effect names (`EFFECT_NA
 step add, tool: addListItems raises "test::lists::add", which the workflow's raises does not allow
 ```
 
-The check lives in `resolve`, not in the type checker's AG3013, for two reasons. AG3013 would point at `main`, not at the step. And it would count `std::guard`, which never reaches a workflow's caller.
+The check lives in `resolve`, not in the type checker's AG3013, for two reasons. AG3013 would point at `main`, not at the step. And it would count `std::guard`, which `stepEffects` leaves out.
 
 Like Agency's own `raises`, this is static analysis made before the workflow runs. It can miss an effect, such as one raised through a function passed as a value (`docs/dev/compiler/effect-propagation.md`). It never reports an effect the tool cannot raise. The safety while running comes from the caller's handlers and policy.
 
@@ -283,7 +285,7 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
 
 The entry joins two sources. `describe` reads the tool's module. It gives the description, the return type, and each parameter's `type`, `default`, and `description`, which is the text of the parameter's `@param` entry. The tool's function value gives each parameter's `schema`, the JSON Schema a model sees for it.
 
-`effects` is what the tool can raise, as `describe` reports it. It keeps `std::guard` for a tool that uses `guard`, because an entry describes the tool, not a workflow. `stepEffects` drops `std::guard`, because a workflow rejects every guard trip itself. So `agency workflow tools` can list `std::guard` for a tool that `agency workflow check` never lists for a workflow that calls it.
+`effects` is what the tool can raise, as `describe` reports it. It keeps `std::guard` for a tool that uses `guard`, because an entry describes the tool, not a workflow. `stepEffects` drops `std::guard`, because a guard trip is a question about budget, not a permission. So `agency workflow tools` can list `std::guard` for a tool that `agency workflow check` never lists for a workflow that calls it.
 
 `type`, `default`, and `returns` are Agency text, written the way the signature writes them, so a reader can compare one tool's `returns` with another tool's parameter `type`. A `default` of null means a step must pass the parameter. A function-typed parameter, such as a block, is not in the tool's schema, and the catalog leaves it out, because a step's arguments are JSON values. The entry's `description` is the docstring with every `@param` entry removed, including one whose name matches no parameter.
 

@@ -22,9 +22,8 @@ export type CatalogEntry = {
   params: CatalogParam[];
   returns: string | null;
   /** What the tool can raise, as `describe` reports it. A tool that uses
-   *  `guard` lists `std::guard`. A workflow rejects every guard trip itself,
-   *  so `std::guard` never reaches a workflow's caller, and `stepEffects`
-   *  leaves it out. */
+   *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard
+   *  trip is a question about budget, not a permission. */
   effects: string[];
 };
 

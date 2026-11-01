@@ -190,6 +190,12 @@ export type Lowered = {
   body: Fragment[];
   result: Code;
   guard: Limits | null;
+  /** The label of the guard around the whole body: the workflow's name. */
+  guardLabel: string;
+  /** The label of every guard the workflow itself writes: the workflow's
+   *  name when it has limits, and each step with limits by its id. The
+   *  scaffold's handler rejects a trip with one of these labels. */
+  guardLabels: string[];
 };
 
 /** Source lines `from` to `to` (1-based, inclusive) belong to `owner`. */

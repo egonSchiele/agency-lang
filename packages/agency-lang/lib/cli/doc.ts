@@ -547,17 +547,12 @@ function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string 
 // environment (the render key deliberately excludes the environment).
 const generator = new AgencyGenerator({ debug: false });
 
-function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
-  if (!node) return "";
-  return generator.processNode(node).trim();
-}
-
 function generateParamTable(params: FunctionParameter[], ctx: DocContext): string | null {
   if (params.length === 0) return null;
   const rows = params.map((p) => [
     paramNameCell(p),
     p.typeHint ? formatTypeLinked(p.typeHint, ctx) : "",
-    formatDefaultValue(p.defaultValue),
+    generator.paramDefaultOf(p) ?? "",
   ]);
   return `${bold("Parameters:")}\n\n${markdownTable(["Name", "Type", "Default"], rows)}`;
 }

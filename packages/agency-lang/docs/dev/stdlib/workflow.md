@@ -196,6 +196,32 @@ A relative `dir` is read against the working directory at run time. The source f
 
 The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. Two tools with the same name are refused next, in a problem that names both modules: an import line names a tool by its name, and renaming is refused, so the fix is to rename one def in its file.
 
+## The catalog
+
+`catalog(tools, dir)` describes each tool a workflow may call. Here is the entry for `round` from `std::math`:
+
+```json
+{
+  "module": "std::math",
+  "name": "round",
+  "description": "Round a number to a given number of decimal places. With no precision it\n  rounds to a whole number.",
+  "params": [
+    { "name": "num", "type": "number", "default": null,
+      "description": "The number to round", "schema": { "type": "number" } },
+    { "name": "precision", "type": "number", "default": "0",
+      "description": "The number of decimal places. Defaults to 0.",
+      "schema": { "anyOf": [{ "type": "number" }, { "type": "null" }], "description": "Default: 0" } }
+  ],
+  "returns": "number"
+}
+```
+
+The entry joins two sources. `describe` reads the tool's module. It gives the description, the return type, and each parameter's `type`, `default`, and `description`, which is the text of the parameter's `@param` entry. The tool's function value gives each parameter's `schema`, the JSON Schema a model sees for it.
+
+`type`, `default`, and `returns` are Agency text, written the way the signature writes them, so a reader can compare one tool's `returns` with another tool's parameter `type`. A `default` of null means a step must pass the parameter. A function-typed parameter, such as a block, is not in the tool's schema, and the catalog leaves it out, because a step's arguments are JSON values. The entry's `description` is the docstring with every `@param` entry removed, including one whose name matches no parameter.
+
+`catalog` starts with the same two steps as `checkWorkflow`: `_toolRefs`, then `_signatures`. So it refuses the same tool lists, with every problem in `data.problems`, and it raises one `std::read` for each local module and nothing for a `std::` module. A failed or rejected read is returned as it came. It keeps its `rejected` flag and has no `data.problems`, which is how a caller tells it from a refused tool list. Entries keep the tool list's order.
+
 ## Not built yet
 
-The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`) and `catalog`.
+The spec covers this: offering a workflow as a tool (`workflowTool`, `workflowTools`).

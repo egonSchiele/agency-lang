@@ -163,6 +163,7 @@ describe("resolveWorkflow", () => {
         returnType: "string[]",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const list = resolve(mealPlan, mealRefs, signatures).resolved!.steps[2];
@@ -177,6 +178,7 @@ describe("resolveWorkflow", () => {
         returnType: "string[]",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const limited = withStep(mealPlan, 2, { limits: { maxTime: 1000 } });
@@ -201,6 +203,7 @@ describe("resolveWorkflow", () => {
         returnType: null,
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const r = resolve(mealPlan, mealRefs, signatures);
@@ -223,6 +226,7 @@ describe("resolveWorkflow", () => {
         returnType: "Json",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const r = resolve(mealPlan, mealRefs, signatures);
@@ -244,6 +248,7 @@ describe("resolveWorkflow", () => {
         returnType: "Result<Json, string>",
         returnsResult: true,
         docstring: null,
+        params: [],
       },
     };
     const r = resolve(mealPlan, mealRefs, signatures);
@@ -265,6 +270,7 @@ describe("resolveWorkflow", () => {
         returnType: "Result",
         returnsResult: true,
         docstring: null,
+        params: [],
       },
     };
     expect(resolve(mealPlan, mealRefs, signatures).resolved!.warnings).toEqual([
@@ -285,6 +291,7 @@ describe("resolveWorkflow", () => {
         returnType: "Result<Note[]>",
         returnsResult: true,
         docstring: null,
+        params: [],
       },
     };
     expect(resolve(mealPlan, mealRefs, signatures).resolved!.warnings).toEqual([]);
@@ -345,6 +352,7 @@ describe("resolveWorkflow", () => {
         returnType: "string",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const wf = withStep(mealPlan, 2, { module: "./notes.agency", tool: "failure", args: {} });
@@ -366,6 +374,7 @@ describe("resolveWorkflow", () => {
         returnType: "string",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const wf = withStep(mealPlan, 2, { module: "./notes.agency", tool: "step_note", args: {} });

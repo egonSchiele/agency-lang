@@ -1,0 +1,81 @@
+{
+  "tests": [
+    {
+      "nodeName": "stdToolEntry",
+      "description": "a std:: tool's entry: module, name, description without @param lines, parameters, schema, return type; no prompt",
+      "input": "",
+      "expectedOutput": "[\"std::math\",\"round\",true,false,[[\"num\",\"number\",null,\"The number to round\"],[\"precision\",\"number\",\"0\",\"The number of decimal places. Defaults to 0.\"]],\"Default: 0\",\"number\",[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localToolEntry",
+      "description": "a local tool's entry, read with one std::read",
+      "input": "",
+      "expectedOutput": "[\"./notes.agency\",\"Find notes whose title matches the query.\",[[\"query\",\"string\",null,\"Text to match against note titles\"]],{\"type\":\"string\"},\"Result<Note[]>\",[\"std::read\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "entriesFollowTheToolList",
+      "description": "entries keep the tool list's order",
+      "input": "",
+      "expectedOutput": "[\"searchNotes\",\"add\",\"round\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refusedLikeCheckWorkflow",
+      "description": "a partial and a renamed function are refused, every problem at once, before any read",
+      "input": "",
+      "expectedOutput": "[[\"tool \\\"round\\\" is a partial; pass the original def\",\"tool \\\"plus\\\" is renamed from \\\"add\\\"; pass the original def\"],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "repeatedToolRefused",
+      "description": "a tool listed twice is refused by name",
+      "input": "",
+      "expectedOutput": "[\"tools \\\"add\\\" from \\\"std::math\\\" and \\\"std::math\\\" have the same name; a workflow imports each tool by its name\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedReadKeepsTheRejection",
+      "description": "a rejected std::read fails the catalog, keeps rejected, and has no data.problems",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyToolList",
+      "description": "an empty tool list gives an empty catalog",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

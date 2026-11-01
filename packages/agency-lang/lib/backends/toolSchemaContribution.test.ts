@@ -112,8 +112,9 @@ describe("paramSchemaContribution — schema field generation", () => {
 
   // #34/#35 — @param docstring preservation/strip behaviour. The current
   // codegen embeds the entire docstring (including @param lines) in the
-  // tool `description` field — and `stripBoundParams` removes lines for
-  // params bound via `.partial()` at runtime. The schema-generator change
+  // tool `description` field — and `stripBoundParams` in
+  // `lib/runtime/paramDocs.ts` removes lines for params bound via
+  // `.partial()` at runtime. The schema-generator change
   // does NOT add per-field zod descriptions in this PR — that would be a
   // separate behavior shift. We pin the current behavior so any
   // accidental change is loud.

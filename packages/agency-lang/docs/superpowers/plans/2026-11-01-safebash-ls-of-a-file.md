@@ -4,7 +4,7 @@
 
 **Goal:** `ls -la package.json`, `ls -1 one.txt two.txt`, and `du -sh one.txt` ask `std::ls` for the folder that holds the file, so `recommended` approves them under the launch directory with no prompt. Today a file given to `ls` or `du` makes the line broad.
 
-**Architecture:** One change in how a listing turns its paths into payloads. Today `resolveDirs` refuses any path that is not a folder. After this plan, `listEffects` resolves each path with the shared `resolveTarget`. A folder is listed as today. A file is listed as its folder with `recursive: false`, when the verb's row allows it. `find` keeps refusing a file. A file reached through a symlink is refused, so the payload never names a folder that the listing doesn't read.
+**Architecture:** One change in how a listing turns its paths into payloads. Today `resolveDirs` refuses any path that is not a folder. After this plan, `listEffects` resolves each path with the shared `resolveTarget`. A folder is listed as today. A file is listed as its folder with `recursive: false`, when the verb's row allows it. `find` keeps refusing a file. A path whose last step is a symlink is refused, whether it names a file or a folder, for `ls`, `du`, `tree`, and `find` alike. That way the payload never names a folder the program doesn't read.
 
 **Tech Stack:** Agency (`stdlib/safeBash.agency`), the Agency test runner, `make`.
 
@@ -28,13 +28,17 @@ A missing path or a special file is a failure.
 
 Why a file can ask for its folder: the `std::ls` payload names a folder, and `ls -la one.txt` prints one entry of that folder. So the question names more than runs, which fails safe. A policy that approves listing the folder approves listing every entry in it, and one entry is among them.
 
-Why a symlinked file is refused: `ls -l link.txt` prints the link's own entry from the link's folder, including the path it points to. But the resolver follows the link, so `dir` would name the target's folder. Those can be two different folders. Say `/tmp/x.txt` links into the project. The payload would name the project folder, `recommended` would approve it, and `ls` would read an entry in `/tmp`. So the plan refuses a file whose path involves a symlink at the last step, the way `CLAUDE.md` asks: refuse symlinks instead of adding machinery for them.
+Why a path whose last step is a symlink is refused:
+- `ls -l link.txt` prints the link's own entry from the link's folder, including the path it points to. But the resolver follows the link, so `dir` names the target's folder. Those can be two different folders. Say `/tmp/x.txt` links into the project. The payload would name the project folder, `recommended` would approve it, and `ls` would read an entry in `/tmp`.
+- A folder link has the same mismatch. `ls -l dirlink`, `ls -d dirlink`, `du dirlink`, and `find dirlink` all print the link's own entry without following it, while the payload names the target folder.
 
-The check uses only the resolver, with no new TypeScript. A path's last step is a symlink exactly when one of these holds:
-- the real file's name differs from the last segment of the path as written;
-- the real folder of the written path's parent differs from `dir`.
+So the plan refuses every path whose last step is a link, the way `CLAUDE.md` asks: refuse symlinks instead of adding machinery for them. That includes a link to a file in the same folder (`ln -s plain.txt alias.txt; ls -l alias.txt`), because any doubt asks `std::bash`. It also refuses `ls dirlink` without `-l`, which follows the link and lists the target, so its payload would have been true. That costs a little, in the safe direction. On macOS it also refuses `ls /etc` and `ls /tmp`, because those are links to `/private/etc` and `/private/tmp`. Both are outside the launch directory, so they asked a person anyway, through `std::ls`. Now they ask through `std::bash`.
 
-A symlink earlier in the path is fine. `ls linkdir/one.txt` reads the entry through `linkdir`, which is the folder the payload names after both paths are realpathed.
+The check uses only the resolver, with no new TypeScript. Name the real path's last segment and parent: for a file they're `file` and `dir`, and for a folder they're the last segment of `dir` and its parent. The written path's last step is a link exactly when one of these holds:
+- the real last segment differs from the last segment of the path as written;
+- the real folder of the written path's parent differs from the real parent.
+
+The check is skipped when the written path's last segment is `.`, `..`, or empty (`/`). Those can't be links, and `.` is what a listing with no path lists. A symlink earlier in the path is fine. `ls linkdir/one.txt` reads the entry through `linkdir`, which is the folder the payload names after both paths are realpathed.
 
 Which verbs take a file:
 
@@ -44,6 +48,8 @@ Which verbs take a file:
 | `du` | that one file's size | ask for the folder |
 | `tree` | the name and an error about opening it as a folder | refuse, as today |
 | `find` | the file, if it matches the expression | refuse, as today; `std::glob` searches a folder |
+
+`du` of a file gets `recursive: false` even though the `du` row says `always`. There's no walk for one file. Say so in the `LIST_VERBS` comment.
 
 ## Global Constraints
 
@@ -61,9 +67,9 @@ Which verbs take a file:
 
 ## Review Focus
 
-1. **`ls -l link.txt`, where `link.txt` points at a file in another folder.** Expected: `std::bash`, with "ls of a symlink is not described". The payload must not name the target's folder while `ls` reads the link's. There's a test with a fixture folder of its own.
+1. **`ls -l link.txt`, where `link.txt` points at a file in another folder, and `ls -l dirlink` for a folder link.** Expected: `std::bash`, with "ls of a symlink is not described". The payload must not name the target's folder while `ls` reads the link's. There's a test with a fixture folder of its own.
 2. **`ls -R one.txt`.** Expected: `std::ls { dir: <its folder>, recursive: false }`. `-R` on a file prints the one entry, so the payload doesn't claim a walk.
-3. **`ls one.txt two.txt`, both in the same folder.** Expected: one `std::ls`, not two identical questions in a row.
+3. **`ls one.txt two.txt`, both in the same folder, and `ls -R . one.txt`.** Expected: one `std::ls` each. A second question about a folder already asked about adds nothing. When either path walks the tree, the one payload says `recursive: true`. Today's code asks twice for `ls -R . .`, and the new rule fixes that too.
 4. **`find one.txt -name x` and `tree one.txt`.** Expected: unchanged, "find of a file is not a listing" and "tree of a file is not a listing".
 5. **`ls one.txt ..`.** Expected: two `std::ls` effects, one per folder.
 
@@ -72,7 +78,7 @@ Which verbs take a file:
 ### Task 1: A file given to `ls` or `du` asks for its folder
 
 **Files:**
-- Modify: `stdlib/safeBash.agency` (`ListVerb`, `LIST_VERBS`, new `FileArgument`, `listEffects`, `resolveDirs` becoming `resolveTargets`, `resolveDirPath` becoming `requireFolder`, new `listingOf`, new `linkFree`, `findEffects`)
+- Modify: `stdlib/safeBash.agency` (`ListVerb`, `LIST_VERBS`, new `FileArgument`, `listEffects`, `resolveDirs` becoming `resolveTargets`, `resolveDirPath` becoming `requireFolder`, new `listingOf`, new `linkFree`, new `mergeListings`, `findEffects`, and an aliased `std::path` import)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
@@ -90,7 +96,7 @@ export type FileArgument = "folder" | "refuse"
 def resolveTargets(verb: string, words: Word[], cwd: string): Result<PathTarget[]>
 ```
 
-This is today's `resolveDirs` loop with the folder check taken out. Each word must be literal (failing with "the ${verb} path is not literal"), and each is resolved with `resolveTarget`. `resolveDirs` is deleted.
+This is today's `resolveDirs` loop with the folder check taken out and the link check put in. Each word must be literal (failing with "the ${verb} path is not literal"), each is resolved with `resolveTarget`, and each target goes through `linkFree`. `resolveDirs` is deleted. Only the listings and `find` call `resolveTargets`, so the link rule is in one place and covers all four verbs. The read verbs keep calling `resolveTarget` directly: `cat link.txt` reads the target's bytes, which is what its `std::read` payload names.
 
 ```agency
 def requireFolder(verb: string, target: PathTarget): Result<string>
@@ -99,27 +105,36 @@ def requireFolder(verb: string, target: PathTarget): Result<string>
 `requireFolder` replaces `resolveDirPath`'s folder check. It returns `target.dir` for a folder, and fails with `"${verb} of a file is not a listing"` for a file. It's the one place that refusal is written. `findEffects` maps its targets through it, and so does `listingOf` for a row that refuses files. Without it, the same check and message would be written twice.
 
 ```agency
-@capabilities(fileRead)
-def listingOf(verb: string, spec: ListVerb, target: PathTarget, walk: boolean, cwd: string): Result<LsPayload>
+def listingOf(verb: string, spec: ListVerb, target: PathTarget, walk: boolean): Result<LsPayload>
 ```
 
 `listingOf` decides one path's payload:
 - A folder (`target.file == null`) gives `{ dir: target.dir, recursive: walk, maxResults: 0 }`, as today.
 - A file under a `refuse` row goes through `requireFolder`, which fails with its message.
-- A file under a `folder` row runs `linkFree(verb, target, cwd)` first. Then it gives `{ dir: target.dir, recursive: false, maxResults: 0 }`.
+- A file under a `folder` row gives `{ dir: target.dir, recursive: false, maxResults: 0 }`. `resolveTargets` has already run the link check.
+
+`listingOf` no longer needs `cwd`, so drop that parameter.
 
 ```agency
 @capabilities(fileRead)
 def linkFree(verb: string, target: PathTarget, cwd: string): Result
 ```
 
-`linkFree` fails with `"${verb} of a symlink is not described"` in either of these cases:
-- `basename(target.argument)` differs from `target.file`;
-- the real folder of `dirname(target.argument)` differs from `target.dir`.
+`linkFree` follows the background's rule. It returns success at once when `lastSegment(target.argument)` is `.`, `..`, or empty. Otherwise it fails with `"${verb} of a symlink is not described"` in either of these cases:
+- `lastSegment(target.argument)` differs from the real last segment (`target.file` for a file, and `lastSegment(target.dir)` for a folder);
+- the real folder of `parentOf(target.argument)` differs from the real parent (`target.dir` for a file, and `parentOf(target.dir)` for a folder).
 
-Resolve the parent with `try _searchTargetIn(parent, cwd, "literal")`. `argument` already has its `~` expanded, so the literal mode is right; `readGrep`'s `"."` lookup is the precedent. Import `basename` and `dirname` from `std::path`. A parent that fails to resolve is a failure too, because any doubt asks `std::bash`.
+Write "the real last segment" and "the real parent" as two small defs, so `linkFree` reads as the two comparisons.
 
-`listEffects` loops over `resolveTargets(...)` in order, through `listingOf`. It skips a payload equal to one already collected: same `dir` and same `recursive`. Write that check as a small def with a for loop over the collected list, not a set. Then it adds the redirects. `walk` is the existing rule: the row says `always`, or `R` is in the split's `plain`.
+Resolve the written parent with `try _searchTargetIn(parent, cwd, "literal")`. `argument` already has its `~` expanded, so the literal mode is right; `readGrep`'s `"."` lookup is the precedent. A parent that fails to resolve is a failure too, because any doubt asks `std::bash`.
+
+Import the path helpers under names that say what they mean here: `import { basename as lastSegment, dirname as parentOf } from "std::path"`. `safeBash.agency` already has a local `baseName(text)` that the refuse wall uses on the command word, so a plain `basename` beside it would be two names that differ by one letter and mean different things. Aliased imports are already in use (`import { reviewAgent as generalReviewAgent }` in `lib/agents/`).
+
+```agency
+def mergeListings(payloads: LsPayload[]): LsPayload[]
+```
+
+`mergeListings` keeps one payload per `dir`, in order of first appearance. When two payloads share a `dir`, the kept one is recursive if either was, because a walk of the folder covers a look at one entry of it. It's a for loop over the input that builds a new list; no set, and no record changed in place. `listEffects` maps `resolveTargets(...)` through `listingOf`, then calls `mergeListings`, then adds the redirects. `walk` is the existing rule: the row says `always`, or `R` is in the split's `plain`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -131,6 +146,8 @@ In `listingsAskStdLs`, the row `ls one.txt` changes from `U("ls of a file is not
     grepNames("ls one.txt .."),
     grepNames("du -sh one.txt"),
     grepNames("tree one.txt"),
+    grepNames("ls -R . ."),
+    grepNames("ls one.txt/"),
 ```
 
 Expected:
@@ -139,10 +156,12 @@ Expected:
 - `ls one.txt ..`: `[["std::ls","std::ls"],null]`
 - `du -sh one.txt`: `[["std::ls"],null]`
 - `tree one.txt`: `U("tree of a file is not a listing")`
+- `ls -R . .`: `[["std::ls"],null]` (today it asks twice)
+- `ls one.txt/`: pin the first run's value, with a comment in the row saying why it's what it is. `ls` prints "Not a directory" for this. Either a failure from the resolver or a `std::ls` for the folder is fine, because both are safe: the second names more than runs. The row is there so nobody later reads it as a gap.
 
 `findAsksStdGlob`'s row `find one.txt -name x` keeps `U("find of a file is not a listing")`.
 
-In `lsPayloadFields`, add `lsPayloads("ls -R one.txt")` and `lsPayloads("du one.txt")`, each expecting `[[true,false]]`. The `dir` is `FIXTURES`, and `recursive` is false even though `-R` is given, and even though `du` always walks a folder.
+In `lsPayloadFields`, add `lsPayloads("ls -R one.txt")` and `lsPayloads("du one.txt")`, each expecting `[[true,false]]`. The `dir` is `FIXTURES`, and `recursive` is false even though `-R` is given, and even though `du` always walks a folder. Also add `lsPayloads("ls -R . one.txt")`, expecting `[[true,true]]`: one payload, recursive because `.` is walked.
 
 A symlink node in a fixture folder of its own. Copy `listingPayloadNamesTheRealFolder`: `remove`, `mkdir`, then build the files with `bash` under `with approve`, then `remove` again.
 
@@ -152,9 +171,12 @@ static const LS_FILE_LINK_FIXTURE = __dirname + "/stdlib/__safebash_ls_file_link
 node listingOfALinkedFileIsRefused() {
   remove(LS_FILE_LINK_FIXTURE) with approve
   mkdir(LS_FILE_LINK_FIXTURE) with approve
-  bash("mkdir inside outside && echo hi > outside/target.txt && echo hi > inside/plain.txt && ln -s ../outside/target.txt inside/link.txt", cwd: LS_FILE_LINK_FIXTURE) with approve
+  bash("mkdir inside outside && echo hi > outside/target.txt && echo hi > inside/plain.txt && ln -s ../outside/target.txt inside/link.txt && ln -s plain.txt inside/alias.txt && ln -s ../outside inside/dirlink", cwd: LS_FILE_LINK_FIXTURE) with approve
   const inside = LS_FILE_LINK_FIXTURE + "/inside"
   const linked = planFor("ls -l link.txt", inside).broadReason
+  const aliased = planFor("ls -l alias.txt", inside).broadReason
+  const dirLinked = planFor("ls -l dirlink", inside).broadReason
+  const foundLinked = planFor("find dirlink -name x", inside).broadReason
   let plainDir = ""
   for (effect in planFor("ls -l plain.txt", inside).effects) {
     if (effect.name == "std::ls") {
@@ -162,11 +184,15 @@ node listingOfALinkedFileIsRefused() {
     }
   }
   remove(LS_FILE_LINK_FIXTURE) with approve
-  return [linked, plainDir == inside]
+  return [linked, aliased, dirLinked, foundLinked, plainDir == inside]
 }
 ```
 
-Expected: `[{"kind":"unrecognized","detail":"ls of a symlink is not described"}, true]`.
+Expected, with `S(v)` for `{"kind":"unrecognized","detail":"<v> of a symlink is not described"}`: `[S(ls), S(ls), S(ls), S(find), true]`. The `alias.txt` row is a link to a file in the same folder, so it shows the rule is about the last step being a link, not about the folders differing.
+
+**Existing rows that change.**
+- `listingPayloadNamesTheRealFolder` (from ADI-246) runs `ls link` for a folder link and expects the payload to name the real folder. That case is now refused. Change the node to expect the refusal, and rename it `listingOfALinkedFolderIsRefused`. Its fixture already holds the folder link, so the node is a few lines.
+- `listingOutsideTheLaunchDirIsUndecided` plans `ls /etc`, and `findOutsideTheLaunchDirIsUndecided` plans `find /etc -name hosts`. On macOS `/etc` is a link to `/private/etc`, so both lines are now refused, and each node would return its "NO ... EFFECT" text. Change both paths to `/usr`, which isn't a link on macOS or Linux, and keep their expected `"propagate"`. Use `find /usr -name ls` for the find row.
 
 `linkFree` calls `_searchTargetIn` directly, not `resolveTarget`. `resolveTarget` takes the `Word` to decide whether `~` expands, and `linkFree` works from `argument`, which is already expanded. `readGrep` makes the same direct call for `"."`, so this matches existing code.
 
@@ -177,25 +203,27 @@ End to end: `listingOfAFileAsksOneQuestion` runs `safeBash("ls -la one.txt", cwd
 Run the agency test into `$SCRATCH/t1.txt`. Expected:
 - the new `ls` and `du` rows say "ls of a file is not a listing" (or the `du` version of it);
 - the payload rows are empty;
-- the symlink node returns the same broad reason, because today every file is refused;
+- the symlink node returns today's reasons: "ls of a file is not a listing" for the file links, and an `std::ls` for the folder link;
+- `listingOfALinkedFolderIsRefused` gets today's `std::ls` payload;
 - the end-to-end node fails on an unmatched `std::bash` interrupt.
 
 - [ ] **Step 3: Implement**
 
-The interfaces above. Then run `make`, the agency test, and `pnpm vitest run lib/stdlibCapabilities.test.ts`. Expected: all pass. `linkFree` and `listingOf` reach `_searchTargetIn`, so both carry `@capabilities(fileRead)`.
+The interfaces above. Then run `make`, the agency test, and `pnpm vitest run lib/stdlibCapabilities.test.ts`. Expected: all pass. `linkFree` and `resolveTargets` reach `_searchTargetIn`, so both carry `@capabilities(fileRead)`. `listingOf`, `requireFolder`, and `mergeListings` touch no files and need no tag.
 
 - [ ] **Step 4: Commit**
 
-Message: `safeBash: ls or du of a file asks std::ls for its folder`.
+Message: `safeBash: ls or du of a file asks std::ls for its folder, and a linked path is refused`.
 
 ---
 
 ### Task 2: Docs, checks, PR
 
 - [ ] **Step 1: `docs/dev/stdlib/safe-bash.md`, "Listings"**
-  - Replace the sentence "A file (`ls one.txt`), a missing path, or a glob word makes the command unrecognized" with the new rule: a file given to `ls` or `du` asks `std::ls` for its folder, not recursive, and one question per folder. Add the fail-safe reason: the folder holds the one entry that is printed. Add the symlink refusal and why.
+  - Replace the sentence "A file (`ls one.txt`), a missing path, or a glob word makes the command unrecognized" with the new rule: a file given to `ls` or `du` asks `std::ls` for its folder, not recursive, and one question per folder, recursive if any path to it walks. Add the fail-safe reason: the folder holds the one entry that is printed.
   - Add the per-verb table from the background to the `LIST_VERBS` part of the section.
-  - The section already says `ls -l link` of a folder link "lists the link itself and does not go into the folder, while the payload names the folder the link points to". The new symlink paragraph should say that the file case is refused because the link and its target can sit in different folders. Leave the folder-link sentence as it is. It's out of scope here; see Step 4.
+  - State the link rule as "a path whose last step is a link is refused, file or folder, for every listing verb and `find`". Give the reason, with the other-folder case as the example, and say that same-folder links and `ls dirlink` without `-l` are refused too, on purpose. Mention the macOS `/etc` and `/tmp` consequence in one sentence.
+  - Delete the sentence that says `ls -l link` of a folder link "lists the link itself and does not go into the folder, while the payload names the folder the link points to". The new rule replaces it.
 
 - [ ] **Step 2: Index line**
 
@@ -213,8 +241,8 @@ Run each of these, save the output to a file, and confirm it's green:
 - [ ] **Step 4: Commit and PR**
 
 Push, and open the PR with the body in a file:
-- A before/after table for `ls -la package.json`, `ls one.txt two.txt`, `ls -R one.txt`, `du -sh one.txt`, `tree one.txt`, and `ls -l link.txt`.
-- Where to look: `listingOf`, `linkFree`, and the `files` field of `LIST_VERBS`.
-- Left out: a folder given through a symlink (`ls -l dirlink`). Its payload names the target folder while `ls -l` prints the link's own entry from the link's folder. That's the same mismatch this PR refuses for files. The dev doc accepted it as naming more than runs, but the two can be different folders. It's a one-line change to `listingOf` if the owner wants it, and it's not done here, so the PR stays the size of its ticket.
+- A before/after table for `ls -la package.json`, `ls one.txt two.txt`, `ls -R one.txt`, `ls -R . .`, `du -sh one.txt`, `tree one.txt`, `ls -l link.txt`, `ls -l dirlink`, and `ls /etc` on macOS.
+- Where to look: `listingOf`, `linkFree` (called from `resolveTargets`), `mergeListings`, and the `files` field of `LIST_VERBS`.
+- The tests that changed: `listingOfALinkedFolderIsRefused` (was `listingPayloadNamesTheRealFolder`), and `/etc` to `/usr` in the two "outside the launch directory" nodes.
 
 Link ADI-275 and end with the attribution line. The owner merges.

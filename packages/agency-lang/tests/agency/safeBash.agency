@@ -9,6 +9,7 @@ import {
   resolveCwd,
   GREP_FLAGS,
   READ_VERBS,
+  FlagSpec,
  } from "std::safeBash"
 import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
@@ -554,6 +555,39 @@ node splitGrepFlags() {
     split("grep --include=*.ts -rn hello ."),
     split("grep -e \"-x\" one.txt"),
     split("grep -n hello one.txt -s"),
+    split("grep --color=always x one.txt"),
+  ]
+}
+
+/** A find-shaped table: single-dash flags are whole words. */
+static const WHOLE_FLAGS: FlagSpec = {
+  plain: ["-print"],
+  valued: ["-name"],
+  optionsFirst: false,
+  wholeWords: true
+}
+
+def splitSummary(source: string, spec: FlagSpec): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const result = splitFlags("x", parsed.value[0], spec)
+  if (result is failure(why)) {
+    return why
+  }
+  const args = result.value
+  const values = [entry.flag + "=" + entry.value for entry in args.values]
+  return [args.plain, values, args.positionals.length]
+}
+
+node wholeShortFlags() {
+  return [
+    splitSummary("x -name foo -print f", WHOLE_FLAGS),
+    splitSummary("x -name", WHOLE_FLAGS),
+    splitSummary("x -nam f", WHOLE_FLAGS),
+    splitSummary("x -name=foo f", WHOLE_FLAGS),
+    splitSummary("x -n f", WHOLE_FLAGS),
   ]
 }
 

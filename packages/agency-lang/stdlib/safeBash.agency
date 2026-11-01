@@ -526,7 +526,11 @@ export type FlagSpec = {
   /** The valued flag a bare digit flag stands for: with `n`, head's `-20`
    * is `-n 20`. A digit flag after a valued flag is that flag's value,
    * so `head -n -5` stays a refused value. */
-  digitFlag?: string
+  digitFlag?: string;
+  /** A single-dash flag is one word, listed with its dash (`-name`), and
+   * never a run of letters. True for find. No verb mixes the two kinds,
+   * so a table holds letters or words, not both. */
+  wholeWords?: boolean
 }
 
 /** One valued flag and its value. `flag` is the letter for a short flag
@@ -646,6 +650,9 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   if (word.flagValue != null) {
     return failure("${verb} does not take `${renderFlag(word)}`")
   }
+  if (spec.wholeWords == true) {
+    return readWholeWord(verb, word, next, spec)
+  }
   const letters = word.flagName.slice(1)
   let found: string[] = []
   let position = 0
@@ -684,6 +691,30 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   })
 }
 
+/** A single-dash flag looked up whole, for a table of whole words. */
+def readWholeWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
+  const name = word.flagName
+  if (spec.plain.includes(name)) {
+    return success({
+      plain: [name],
+      values: [],
+      consumed: 1
+    })
+  }
+  if (!spec.valued.includes(name)) {
+    return failure("${verb} does not take `${name}`")
+  }
+  const value = nextWordValue(verb, name, next)
+  if (isFailure(value)) {
+    return value
+  }
+  return success({
+    plain: [],
+    values: [{ flag: name, value: value.value }],
+    consumed: 2
+  })
+}
+
 def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
   const written = renderFlag(word)
   if (spec.plain.includes(written)) {
@@ -694,7 +725,9 @@ def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
     })
   }
   if (!spec.valued.includes(word.flagName)) {
-    return failure("${verb} does not take `${word.flagName}`")
+    // The flag as written, value and all, so a refused `--color=always`
+    // is not read as a refusal of `--color=never`.
+    return failure("${verb} does not take `${written}`")
   }
   if (word.flagValue == null) {
     const value = nextWordValue(verb, word.flagName, next)

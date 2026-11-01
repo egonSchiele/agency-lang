@@ -7,7 +7,14 @@ import * as os from "os";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
-import { ensureSessionsDir, sessionsDir, writeRecord } from "@/debugger/attach/registry.js";
+import {
+  ensureSessionsDir,
+  listRecords,
+  recordPaths,
+  removeStale,
+  sessionsDir,
+  writeRecord,
+} from "@/debugger/attach/registry.js";
 import { fixtureDir } from "@/debugger/testHelpers.js";
 import { TestInput } from "@/debugger/testSession.js";
 import { DebuggerUI } from "@/debugger/ui.js";
@@ -261,13 +268,61 @@ describe("attaching to a program in another process", () => {
     // Kept for the failure message: a child that dies says why here.
     child.stdout!.on("data", (chunk: Buffer) => (childOutput += chunk.toString()));
     child.stderr!.on("data", (chunk: Buffer) => (childOutput += chunk.toString()));
-    const record = path.join(sessionsDir(nodeHost()), `${child.pid}.json`);
-    for (let i = 0; i < 400 && !fs.existsSync(record); i++) {
+    // The record is written first and the socket opened a tick later;
+    // the command refuses at once on a missing socket, so wait for both.
+    const paths = recordPaths(sessionsDir(nodeHost()), child.pid!);
+    const registered = (): boolean => fs.existsSync(paths.json) && fs.existsSync(paths.sock);
+    for (let i = 0; i < 400 && !registered(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    expect(fs.existsSync(record), childOutput).toBe(true);
+    expect(registered(), childOutput).toBe(true);
     return child;
   }
+
+  it("a registered child is ended by SIGUSR2 like any Node process", async () => {
+    // The regression test for a program under nodemon, whose restart
+    // sends SIGUSR2: before the socket was opened at registration, the
+    // program took the signal as a request to open its debugger and
+    // kept running, orphaned from its supervisor.
+    const started = await startChild();
+    const exited = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
+      started.once("exit", (code, signal) => resolve({ code, signal })),
+    );
+    started.kill("SIGUSR2");
+    expect(await exited).toEqual({ code: null, signal: "SIGUSR2" });
+    // A process ended by a signal never runs its exit hook, so both files
+    // stay until a sweep; the next registration in any program runs one.
+    const paths = recordPaths(sessionsDir(nodeHost()), started.pid!);
+    expect(fs.existsSync(paths.json)).toBe(true);
+    expect(fs.existsSync(paths.sock)).toBe(true);
+    const dir = sessionsDir(nodeHost());
+    removeStale(dir, listRecords(dir));
+    expect(fs.existsSync(paths.json)).toBe(false);
+    expect(fs.existsSync(paths.sock)).toBe(false);
+  });
+
+  it("a program that finishes at once leaves nothing in the sessions directory", async () => {
+    // `listen` binds the path in one tick and calls back in the next; a
+    // program that ends between the two still removes both files in its
+    // exit hook.
+    const out = path.join(work, "no-return.js");
+    compile({}, path.join(fixtureDir, "no-return.agency"), out, {
+      importStrategy: new RunStrategy(),
+    });
+    const quick = spawn(process.execPath, [out], {
+      cwd: packageRoot,
+      env: { ...process.env, AGENCY_HOME: home },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    quick.stdout!.on("data", (chunk: Buffer) => (output += chunk.toString()));
+    quick.stderr!.on("data", (chunk: Buffer) => (output += chunk.toString()));
+    const code = await new Promise<number | null>((resolve) => quick.once("exit", resolve));
+    expect(code, output).toBe(0);
+    const paths = recordPaths(sessionsDir(nodeHost()), quick.pid!);
+    expect(fs.existsSync(paths.json)).toBe(false);
+    expect(fs.existsSync(paths.sock)).toBe(false);
+  });
 
   it("lists the program, then attaches, ignores escape, steps, and detaches on q", async () => {
     const started = await startChild();

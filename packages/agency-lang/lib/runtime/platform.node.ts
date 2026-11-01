@@ -11,12 +11,14 @@ import path from "path";
 import { isMainThread } from "worker_threads";
 import {
   ensureSessionsDir,
+  listRecords,
   removeRecord,
+  removeStale,
   sessionsDir,
   writeRecord,
   type AttachRecord,
 } from "../debugger/attach/registry.js";
-import { startAttachServer, type AttachServer } from "../debugger/attach/server.js";
+import { startAttachServer } from "../debugger/attach/server.js";
 import { CoverageCollector } from "./coverageCollector.js";
 import type { AttachFunctions } from "./attachedDebugger.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
@@ -54,73 +56,74 @@ export function resolveLocalEmbeddingModel(provider: string, model: string): Pro
   return _resolveLocalEmbeddingModel(provider, model);
 }
 
-/** The signal that asks a running program to open its debug socket.
- *  Node reserves SIGUSR1 for its own inspector, whose port any local
- *  user can reach, so Agency does not touch it. */
-export const ATTACH_SIGNAL = "SIGUSR2";
+/** The environment variable that keeps a program from registering for
+ *  attach at all. Set to "1", like AGENCY_IPC, for a host that does not
+ *  want a debug socket opened in its process. */
+export const NO_ATTACH_VAR = "AGENCY_NO_ATTACH";
 
-/** The record and the signal listener are per process, written once by
- *  the first node run; the context a debugger attaches to is the one that
- *  most recently started a node. A TypeScript program that imports two
- *  Agency modules, or a test worker that runs many fixtures, has several
- *  contexts in one process, and the one running now is the one a person
- *  attaching now means. */
-let attachTarget: { functions: AttachFunctions; pid: number } | null = null;
+/** The attach target this process serves, shared by every copy of the
+ *  runtime in it. A process can hold more than one copy (a test worker
+ *  re-evaluates modules per file; a package can be under node_modules
+ *  twice), and `startAttachServer` removes a socket at its own pid's
+ *  path before listening, so two copies each opening a server would
+ *  fight over one path. The first registration opens the server; every
+ *  registration sets the functions, so the context that most recently
+ *  started a node is the one a debugger gets. A TypeScript program that
+ *  imports two Agency modules, or a test worker that runs many fixtures,
+ *  has several contexts in one process, and the one running now is the
+ *  one a person attaching now means. */
+const ATTACH_TARGET_SLOT = Symbol.for("agency.debug.attachTarget");
+type SharedAttachTarget = { functions: AttachFunctions };
+
+function sharedAttachTarget(): SharedAttachTarget | null {
+  const slot = process as unknown as Record<symbol, SharedAttachTarget | undefined>;
+  return slot[ATTACH_TARGET_SLOT] ?? null;
+}
+
+function setSharedAttachTarget(target: SharedAttachTarget): void {
+  const slot = process as unknown as Record<symbol, SharedAttachTarget | undefined>;
+  slot[ATTACH_TARGET_SLOT] = target;
+}
 
 /** A sessions directory this process was refused, so a program that runs
  *  a node in a loop does not repeat the check and the log line each
  *  time. */
 let refusedDir: string | null = null;
 
-/** Where the process keeps its one attach listener. A process can hold
- *  more than one copy of the runtime (a test worker re-evaluates modules
- *  per file; a program can have the package twice in node_modules), and
- *  each copy has its own `attachTarget`. The signal must reach one
- *  listener, the copy that most recently registered, or two servers would
- *  race for one socket and the loser would answer with a context whose
- *  modules it cannot see. Every registration claims the slot, so copies
- *  registering A, B, A leave A's listener in place. */
-const ATTACH_LISTENER_SLOT = Symbol.for("agency.debug.attachListener");
-let attachListener: (() => void) | null = null;
-
-function claimAttachListener(listener: () => void): void {
-  const slot = process as unknown as Record<symbol, (() => void) | undefined>;
-  const previous = slot[ATTACH_LISTENER_SLOT];
-  if (previous === listener) {
-    return;
-  }
-  if (previous !== undefined) {
-    process.removeListener(ATTACH_SIGNAL, previous);
-  }
-  slot[ATTACH_LISTENER_SLOT] = listener;
-  process.on(ATTACH_SIGNAL, listener);
-}
-
-/** Make the program attachable: write its record in the sessions
- *  directory, listen for `ATTACH_SIGNAL`, and open the debug socket when
- *  it arrives (docs/dev/cli/debugger-attach.md). Called by `runNode` for
- *  every node run, and returns at once when: this process already
- *  registered; the host is not the Node host, so a memory host in a test
- *  writes nothing; a debugger is already installed, so `agency debug`
- *  does not register its own process and a second debugger cannot attach
- *  over the first; or the process is an IPC child of a parent Agency
+/** Make the program attachable: sweep the records of programs that have
+ *  exited, write this one's record in the sessions directory, and listen
+ *  on its debug socket (docs/dev/cli/debugger-attach.md). Called by
+ *  `runNode` for every node run, and returns at once when: this process
+ *  already registered; the host is not the Node host, so a memory host in
+ *  a test writes nothing; a debugger is already installed, so `agency
+ *  debug` does not register its own process and a second debugger cannot
+ *  attach over the first; the process is an IPC child of a parent Agency
  *  program (`AGENCY_IPC`, which the parent sets; any child process with
  *  an IPC channel, such as a test worker, is not one), which the listing
- *  leaves out. A sessions directory that
- *  cannot be used is logged under DEBUG and the run goes on without
- *  attach: a program must never fail because it cannot be debugged. */
+ *  leaves out; or `AGENCY_NO_ATTACH` is "1". A sessions directory that
+ *  cannot be used, or a socket that cannot be opened, is logged under
+ *  DEBUG and the run goes on without attach: a program must never fail,
+ *  or print, because it cannot be debugged. When the socket fails the
+ *  record is removed with it, so the listing shows only programs a
+ *  debugger can reach. Until this change the socket was opened on
+ *  SIGUSR2, and nodemon, which restarts a child with that signal, left
+ *  the program running with its debugger open instead. */
 export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttachArgs): void {
-  // A worker thread's `process.on` never sees a signal: the main thread
-  // does, and with no listener there the signal would end the process.
-  // Such a program is not listed, so nobody sends it one.
-  if (host.name !== "node" || ctx.hasDebugger() || isIpcMode(host) || !isMainThread) {
+  // A worker thread's `process.on` never saw the signal, and a socket
+  // opened there would name the main thread's pid. Such a program is
+  // not listed.
+  if (
+    host.name !== "node" ||
+    ctx.hasDebugger() ||
+    isIpcMode(host) ||
+    !isMainThread ||
+    host.settings.read(NO_ATTACH_VAR) === "1"
+  ) {
     return;
   }
-  if (attachTarget !== null) {
-    attachTarget.functions = functions;
-    if (attachListener !== null) {
-      claimAttachListener(attachListener);
-    }
+  const shared = sharedAttachTarget();
+  if (shared !== null) {
+    shared.functions = functions;
     return;
   }
   const dir = sessionsDir(host);
@@ -133,6 +136,10 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     debugLine(`not attachable: ${refusal.refused}`);
     return;
   }
+  // A program ended by a signal, as a supervisor's restart does, never
+  // runs its exit hook and leaves its record and socket behind; only the
+  // CLI's listing removed them before.
+  removeStale(dir, listRecords(dir));
   const record: AttachRecord = {
     pid: process.pid,
     program: process.argv[1] ?? "",
@@ -149,33 +156,29 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     debugLine(`not attachable: could not write the record: ${(error as Error).message}`);
     return;
   }
-  const target = { functions, pid: record.pid };
-  attachTarget = target;
-  let server: AttachServer | null = null;
-  const listener = (): void => {
-    if (server !== null) {
-      return;
-    }
-    // The server reads the target when a debugger connects, so the
-    // context running then is the one it attaches to.
-    // A rejection here would end the program (an unhandled rejection
-    // exits by default), so it is caught and printed like a refusal.
-    void startAttachServer({ dir, record, functions: () => target.functions }).then(
-      (started) => {
-        if ("unavailable" in started) {
-          console.error(`[agency debug] ${started.unavailable}`);
-          return;
-        }
-        server = started;
-      },
-      (error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[agency debug] could not open the debug socket: ${message}`);
-      },
-    );
+  const target: SharedAttachTarget = { functions };
+  setSharedAttachTarget(target);
+  const failed = (reason: string): void => {
+    debugLine(`not attachable: ${reason}`);
+    removeRecord(dir, record.pid);
   };
-  attachListener = listener;
-  claimAttachListener(listener);
+  // The server reads the target when a debugger connects, so the context
+  // running then is the one it attaches to. `startAttachServer` is
+  // async, so a throw before its first await is a rejection too, and
+  // both arms here keep a failure out of the program: an unhandled
+  // rejection would end it.
+  void startAttachServer({ dir, record, functions: () => target.functions }).then(
+    (started) => {
+      if ("unavailable" in started) {
+        failed(started.unavailable);
+      }
+    },
+    (error: unknown) => {
+      failed(
+        `could not open the debug socket: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    },
+  );
   host.system.onExit(() => removeRecord(dir, record.pid));
 }
 

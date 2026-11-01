@@ -9,7 +9,7 @@ import * as path from "path";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { isFailure } from "@/runtime/result.js";
 import { processState } from "@/runDirectory/lock.js";
-import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
+import * as fs from "fs";
 import { DebuggerUI } from "@/debugger/ui.js";
 import { Screen, TerminalInput, TerminalOutput } from "@/tui/index.js";
 import { lineChannel } from "@/debugger/attach/lineChannel.js";
@@ -133,9 +133,11 @@ export function parseStartTime(output: string): number | null {
 
 /** The record for `pid`, when its process is the one the record is
  *  about. A run that crashes leaves its record behind, and the operating
- *  system may later give that pid to an unrelated process, which the
- *  attach signal would kill; so the live process is checked before
- *  anything is sent. A process that is gone has its record removed. One
+ *  system may later give that pid to an unrelated process; so the live
+ *  process is checked before the record is shown as live or connected
+ *  to. (The check was written when attaching sent a signal that would
+ *  have killed the stranger; it now keeps the listing honest.) A
+ *  process that is gone has its record removed. One
  *  that is alive must have started around when the record was written:
  *  later than that, and it is a stranger that got the pid after the
  *  registered process exited, so the record is removed; more than
@@ -195,7 +197,25 @@ export function checkedRecord(
   return record;
 }
 
-/** Connect to `sock`, retrying while the program opens it. The retry's
+/** Why `pid` cannot be connected to when its socket file is missing, or
+ *  null when the file is there. A registered program opens its socket
+ *  right after its record, so a missing file means the program could
+ *  not (a long path, a filesystem without Unix sockets) or is on a
+ *  version that still waits for a signal; either way there is nothing
+ *  to retry for, and the person is told at once. Shared by `--attach`
+ *  and `agency debug session attach`. */
+export function missingSocket(dir: string, pid: number): string | null {
+  if (fs.existsSync(recordPaths(dir, pid).sock)) {
+    return null;
+  }
+  return (
+    `pid ${pid} has no debug socket. The program may have been refused its sessions ` +
+    `directory, or may be on an Agency version before 0.35; start it with DEBUG=1 to see why.`
+  );
+}
+
+/** Connect to `sock`, retrying while the program finishes opening it: the
+ *  file exists from `listen`, a tick before connections are taken. The retry's
  *  error listener comes off once connected, so a later error on the
  *  socket does not open a second connection. */
 export function connectWithRetry(pid: number, sock: string, retryMs: number): Promise<Channel> {
@@ -254,7 +274,7 @@ export async function attachCommand(options: AttachCommandOptions): Promise<numb
     print(formatListing(listRecords(dir), Date.now(), process.cwd()));
     return 0;
   }
-  // Checked before the signal: a terminal UI with no terminal would fail
+  // Checked before connecting: a terminal UI with no terminal would fail
   // at its first key, and that failure would end the program's session
   // right after it opened.
   if (options.ui === undefined && !process.stdin.isTTY) {
@@ -267,10 +287,9 @@ export async function attachCommand(options: AttachCommandOptions): Promise<numb
     printError(`Error: ${record.refused}`);
     return 1;
   }
-  try {
-    process.kill(pid, ATTACH_SIGNAL);
-  } catch (error) {
-    printError(`Error: could not signal pid ${pid}: ${(error as Error).message}`);
+  const missing = missingSocket(dir, pid);
+  if (missing !== null) {
+    printError(`Error: ${missing}`);
     return 1;
   }
   let channel: Channel;

@@ -89,3 +89,36 @@ function pctValue(w: PlannedWidth | null): number {
 function sumPercentages(plan: ColumnPlan[]): number {
   return plan.reduce((sum, col) => sum + pctValue(col.parsed), 0);
 }
+
+// Shrink a std::ui/table's columns so they fit in `available` cells.
+// Only columns with no width of their own shrink; they all come down to
+// one shared width, the largest that fits, and none goes below its
+// minWidth (or 1). Cells left over go to the leftmost shrunk columns.
+// When even the floors don't fit, the floors are returned and the table
+// overflows. The TUI table does not call this: its columns keep their
+// natural widths.
+export function fitColumnWidths(widths: number[], plan: ColumnPlan[], available: number): number[] {
+  const shrinkable = plan.map((col) => col.parsed === null);
+  const floors = widths.map((width, i) => Math.min(width, Math.max(plan[i].minWidth, 1)));
+  const atLevel = (level: number): number[] =>
+    widths.map((width, i) => (shrinkable[i] ? Math.max(floors[i], Math.min(width, level)) : width));
+  const total = (level: number): number => atLevel(level).reduce((sum, width) => sum + width, 0);
+
+  // No level above `available` can fit: a column wider than it fills the
+  // space on its own. Starting there bounds the loop by the space, not by
+  // the widest cell.
+  let level = Math.min(Math.max(0, ...widths), available);
+  while (level > 0 && total(level) > available) {
+    level--;
+  }
+  const fitted = atLevel(level);
+  let leftover = available - total(level);
+  for (let i = 0; i < fitted.length && leftover > 0; i++) {
+    const wasCut = shrinkable[i] && widths[i] > level && floors[i] <= level;
+    if (wasCut) {
+      fitted[i] += 1;
+      leftover -= 1;
+    }
+  }
+  return fitted;
+}

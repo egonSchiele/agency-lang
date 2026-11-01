@@ -185,6 +185,7 @@ export function _diff(
     hunkHeaders,
     summary,
     renderBody,
+    maxWidth: host.terminal.size()?.columns,
   });
 }
 

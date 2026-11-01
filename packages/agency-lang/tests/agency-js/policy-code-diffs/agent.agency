@@ -11,11 +11,14 @@ const POLICY = {}
 const APPROVE_REVIEW: Policy = { "std::toolbox::review": [{ action: "approve" }] }
 
 node main(args: { policyFile: string }): string {
+  // Long enough that the prompt's table must wrap it to fit.
+  const letter = "a"
+  const longDir = "/work/${letter.repeat(200)}"
   setPolicy(args.policyFile, POLICY)
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::edit("apply this edit?", {
-      dir: ".",
+      dir: longDir,
       filename: "greet.agency",
       before: "def greet(): string {\n  return \"hi\"\n}",
       after: "def greet(): string {\n  return \"hello\"\n}",
@@ -39,6 +42,15 @@ node main(args: { policyFile: string }): string {
       blocking: ["run ignores the topic"],
       unresolved: [{ point: "asks for a publication time", reason: "no std search returns one" }],
       resumed: true
+    })
+    // Raised the way designSkill raises it: the answer is assigned, so
+    // the prompt takes the path for a raise that expects a value. The
+    // skill prints above the prompt; the prompt's table keeps dir and name.
+    let answer = interrupt std::skills::review("Review this skill before it is saved", {
+      dir: "/home/me/.agency-agent/skills",
+      name: "tv-tables",
+      description: "Show tables in tv when the user asks\u001b[2J",
+      body: "# tv\n\nRun tv agent new yourself. See [the docs](https://example.com/x)."
     })
   } with (data) {
     return handler(data)

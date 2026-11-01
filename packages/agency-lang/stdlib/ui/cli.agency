@@ -3,6 +3,7 @@ import {
   _setSlashPalette,
   _clearScreen,
   _termWidth,
+  _interruptBodyWidth,
   _clearHistory,
   _interruptChoice,
   _stickyInterruptAvailable,
@@ -368,6 +369,14 @@ export def chooseOption(
 
 def _entryKey(entry: any): string {
   return entry.key
+}
+
+@capabilities(terminal)
+export def interruptBodyWidth(): number {
+  """
+  The width, in columns, that the approval prompt wraps its body to. Render a table at this width so the prompt does not wrap it a second time.
+  """
+  return _interruptBodyWidth()
 }
 
 @capabilities(terminal)

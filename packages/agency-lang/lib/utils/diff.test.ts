@@ -219,6 +219,38 @@ describe("renderDiff highlighted path", () => {
     expect(result).toContain(color.green("2 + "));
   });
 
+  it("caps the bar width at maxWidth minus the line's gutter", () => {
+    const hunks = computeHunks("aa\nbb", "aa\n" + "B".repeat(300), -1, false);
+    const result = renderDiff(hunks, {
+      colored: true,
+      renderBody: stub,
+      lineNumbers: true,
+      maxWidth: 80,
+    });
+    // the gutter "2 + " is 4 columns, so the bar is 76
+    expect(strip(result).split("\n")).toContain(`2 + <insert:76:${"B".repeat(300)}>`);
+  });
+
+  it("expands tabs before measuring, so a tab-indented bar fits too", () => {
+    const hunks = computeHunks("aa", "\tBB", -1, false);
+    const result = renderDiff(hunks, { colored: true, renderBody: stub, maxWidth: 80 });
+    // a tab takes several screen columns but counts as one character, so
+    // it is expanded to spaces before the bar is measured and padded
+    expect(strip(result)).toContain("<insert:6:    BB>");
+    expect(result).not.toContain("\t");
+  });
+
+  it("keeps the widest-line width when it is under maxWidth", () => {
+    const hunks = computeHunks("aa\nbb", "aa\nBB", -1, false);
+    const result = renderDiff(hunks, {
+      colored: true,
+      renderBody: stub,
+      lineNumbers: true,
+      maxWidth: 80,
+    });
+    expect(strip(result)).toContain("<insert:2:BB>");
+  });
+
   it("falls back to inline when not colored, even if renderBody is set", () => {
     const hunks = computeHunks("a", "b", -1, false);
     const withBody = renderDiff(hunks, { colored: false, renderBody: stub });

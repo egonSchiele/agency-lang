@@ -161,7 +161,10 @@ Build a bordered table as a layout node. Pass the data form: `header`,
   @param borderColor - Color of the border characters
   @param caption - Caption shown beneath the table
   @param cellPadding - Horizontal padding inside each cell, in cells
-  @param width - Table width in cells, or "full" / "N%"
+  @param width - Table width in cells, or "full" / "N%". With no width, a
+    table whose cells are wider than the terminal (or the box it sits in)
+    wraps its widest columns. With no terminal, the limit is 80 columns.
+    Raw cells do not wrap, so their columns do not shrink.
   @param columns - Per-column configuration (alignment, width, color)
   @param header - Header cells
   @param body - Body rows, each an array of cells

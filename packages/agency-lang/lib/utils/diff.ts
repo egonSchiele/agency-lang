@@ -35,6 +35,10 @@ export type RenderDiffOpts = {
   // each line's body is produced by this function (syntax highlighting +
   // background tint for changed lines), padded to `width` columns.
   renderBody?: (code: string, kind: DiffLine["kind"], width: number) => string;
+  // The full width of one output line, gutter included. Changed-line bars
+  // stop there instead of padding past the terminal's edge. Undefined
+  // means no cap.
+  maxWidth?: number;
 };
 
 // Collapse runs of whitespace and trim, for comparison only (the original
@@ -256,22 +260,46 @@ function gutterWidth(hunks: Hunk[]): number {
   return String(max).length;
 }
 
-// Widest raw line in display columns (line text is ANSI-free, so length is the
-// visible width). Changed-line backgrounds pad to this so the bars align.
+// Columns a tab advances to in the highlighted path's code.
+const TAB_WIDTH = 4;
+
+// A tab counts as one character but takes several screen columns, so a
+// bar padded by character count would run past the terminal's edge. The
+// highlighted path expands tabs to spaces before it measures or pads.
+function expandTabs(text: string): string {
+  let out = "";
+  for (const char of text) {
+    out += char === "\t" ? " ".repeat(TAB_WIDTH - (out.length % TAB_WIDTH)) : char;
+  }
+  return out;
+}
+
+// Widest line in display columns, tabs expanded (line text is ANSI-free, so
+// length is the visible width). Changed-line backgrounds pad to this so the
+// bars align.
 function blockWidth(hunks: Hunk[]): number {
   let max = 0;
-  for (const h of hunks) for (const l of h.lines) max = Math.max(max, l.text.length);
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) {
+      max = Math.max(max, expandTabs(line.text).length);
+    }
+  }
   return max;
 }
 
-// Gutter for the highlighted path: line number (per side) + the -/+/space
-// marker, colored by change kind (sits on the default background, left of the
-// tinted code).
-function highlightGutter(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
+// Gutter text for the highlighted path, before it is colored: line number
+// (per side) + the -/+/space marker.
+function gutterText(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
   const marker = line.kind === "delete" ? "-" : line.kind === "insert" ? "+" : " ";
   const num = line.kind === "delete" ? line.oldNum : line.newNum;
   const numStr = lineNumbers ? `${(num === null ? "" : String(num)).padStart(numWidth)} ` : "";
-  const cell = `${numStr}${marker} `;
+  return `${numStr}${marker} `;
+}
+
+// The gutter, colored by change kind (sits on the default background, left
+// of the tinted code).
+function highlightGutter(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
+  const cell = gutterText(line, numWidth, lineNumbers);
   if (line.kind === "delete") return color.red(cell);
   if (line.kind === "insert") return color.green(cell);
   return color.dim(cell);
@@ -299,6 +327,14 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
   const useHighlight = colored && !!opts.renderBody;
   const numWidth = opts.lineNumbers ? gutterWidth(hunks) : 0;
   const blockW = useHighlight ? blockWidth(hunks) : 0;
+  // Bars pad to the widest line so they line up, but stop at maxWidth.
+  const barWidth = (line: DiffLine): number => {
+    if (opts.maxWidth === undefined) {
+      return blockW;
+    }
+    const gutterWidth = gutterText(line, numWidth, opts.lineNumbers ?? false).length;
+    return Math.max(0, Math.min(blockW, opts.maxWidth - gutterWidth));
+  };
 
   const gutter = (l: DiffLine): string => {
     if (!opts.lineNumbers) return "";
@@ -316,7 +352,7 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
       for (const line of h.lines) {
         out.push(
           highlightGutter(line, numWidth, opts.lineNumbers ?? false) +
-            opts.renderBody!(line.text, line.kind, blockW),
+            opts.renderBody!(expandTabs(line.text), line.kind, barWidth(line)),
         );
       }
     } else {

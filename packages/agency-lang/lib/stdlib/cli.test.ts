@@ -752,6 +752,15 @@ describe("renderInterruptFooter", () => {
     });
     expect(lines.join("\n")).toContain("not a valid option");
   });
+  it("interruptBodyWidth is the width the footer wraps its body to", () => {
+    expect(_internal.interruptBodyWidth(60)).toBe(58);
+    const linesFor = (body: string): number =>
+      _internal
+        .renderInterruptFooter({ ...base, body, columns: 60 })
+        .filter((line) => line.includes("x")).length;
+    expect(linesFor("x".repeat(58))).toBe(1);
+    expect(linesFor("x".repeat(59))).toBe(2);
+  });
 });
 
 describe("stickyInterruptPrompt (integration)", () => {

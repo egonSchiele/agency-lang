@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "childUsesParentModel",
+      "description": "a child started by run uses the model the parent's agency.json names, not the sandbox default",
+      "input": "",
+      "expectedOutput": "[\"hi\",true,false]",
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }],
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "grandchildUsesParentModel",
+      "description": "a grandchild inherits the root's model through a child compiled in the sandbox",
+      "input": "",
+      "expectedOutput": "[\"hi\",true,false]",
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }],
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+// A child compiled by `compile` bakes the built-in default model. The
+// agency.json beside this file names gpt-4o-mini, and the child must use
+// it. The child logs the model it resolved before each request, so the
+// parent reads the child's log file to see it. The mock answers the one
+// model call; no node here calls a model itself.
+import { compile, run } from "std::agency"
+import { mkdir, remove } from "std::fs"
+
+const OUT = __dirname + "/test-output"
+
+/** Runs `source`'s main in a child that logs to `logName`, approving every
+  prompt, and returns [the child's result, the log text]. */
+def runLogged(source: string, logName: string): Result<any[]> {
+  const compiled = compile(source)
+  if (compiled is failure(err)) {
+    return failure("compile failed: ${err}")
+  }
+  const logFile = OUT + "/" + logName
+  handle {
+    mkdir(OUT)
+    remove(logFile)
+    const ran = run(compiled: compiled.value, node: "main", logFile: logFile)
+    if (ran is failure(err)) {
+      return failure("run failed: ${err}")
+    }
+    const log = read(logName, OUT)
+    if (log is failure(err)) {
+      return failure("read failed: ${err}")
+    }
+    return success([ran.value.data, log.value])
+  } with (intr) {
+    return approve()
+  }
+}
+
+node childUsesParentModel() {
+  const source = """
+node main(): string {
+  return llm("Say hi.")
+}
+"""
+  const got = runLogged(source, "child.jsonl")
+  if (got is failure(err)) {
+    return "${err}"
+  }
+  const log = got.value[1]
+  return [got.value[0], log =~ re/gpt-4o-mini/, log =~ re/gpt-5-mini/]
+}
+
+/** The child compiles and runs a grandchild. The child was itself compiled
+  in the sandbox, so this passes only if the child's own context holds the
+  values it was handed and passes them on. The grandchild's source is a
+  plain string inside the child's triple-quoted source: a triple-quoted
+  string keeps `\"` as two characters, which the child's compiler then
+  reads as an escaped quote. */
+node grandchildUsesParentModel() {
+  const grandchildLog = OUT + "/grandchild.jsonl"
+  const source = """
+import { compile, run } from "std::agency"
+
+node main(): string {
+  const compiled = compile("node main(): string { return llm(\"Say hi.\") }")
+  if (compiled is failure(err)) {
+    return "grandchild compile failed: \${err}"
+  }
+  const ran = run(compiled: compiled.value, node: "main", logFile: "${grandchildLog}")
+  if (ran is failure(err)) {
+    return "grandchild run failed: \${err}"
+  }
+  return ran.value.data
+}
+"""
+  remove(grandchildLog) with approve
+  const got = runLogged(source, "child-of-grandchild.jsonl")
+  if (got is failure(err)) {
+    return "${err}"
+  }
+  const log = read("grandchild.jsonl", OUT) with approve
+  if (log is failure(err)) {
+    return "read failed: ${err}"
+  }
+  return [got.value[0], log.value =~ re/gpt-4o-mini/, log.value =~ re/gpt-5-mini/]
+}

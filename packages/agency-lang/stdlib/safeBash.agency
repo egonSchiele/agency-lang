@@ -30,6 +30,11 @@ import {
   GrepFileNames,
   runBash,
   runWrite,
+  runChain,
+  Execution,
+  StepExec,
+  ChainStep,
+  Join,
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
@@ -1343,6 +1348,131 @@ def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   }
 }
 
+@capabilities(fileRead)
+def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  The plan for one command that runs in process with no shell: an echo
+  (redirected or not), a grep that translates, or a cat, head, or tail
+  that translates. The one list of in-process planners, used for a lone
+  command and for each step of a chain. A failure means "not in process".
+  """
+  const echo = trySeeIfShellFree(command, cwd)
+  if (echo is success(plan)) {
+    return echo
+  }
+  const search = tryShellFreeGrep(command, cwd)
+  if (search is success(plan)) {
+    return search
+  }
+  return tryShellFreeRead(command, cwd)
+}
+
+/** One command of a chain and how it follows the one before. */
+type ChainLink = {
+  join: Join;
+  command: SimpleCommand
+}
+
+@capabilities(fileRead)
+def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
+  """
+  A line of commands joined by `;`, `&&`, or `||` where every command
+  runs in process on its own. All or nothing: one command that does not
+  sends the whole line down the general path, where the refuse wall runs.
+  """
+  const links = chainLinks(commands)
+  if (isFailure(links)) {
+    return links
+  }
+  if (links.value.length < 2) {
+    return failure("not a chain")
+  }
+  let steps: ChainStep[] = []
+  let effects: Effect[] = []
+  for (link in links.value) {
+    const plan = tryShellFreeStep(link.command, cwd)
+    if (isFailure(plan)) {
+      return plan
+    }
+    const execution = stepExecOf(plan.value.execution)
+    if (isFailure(execution)) {
+      return execution
+    }
+    steps.push({ join: link.join, execution: execution.value })
+    effects = [...effects, ...plan.value.effects]
+  }
+  return success({
+    effects: effects,
+    execution: { kind: "chain", steps: steps },
+    broadReason: null,
+    verbs: verbNames([link.command for link in links.value])
+  })
+}
+
+def stepExecOf(exec: Execution): Result<StepExec> {
+  """
+  An in-process execution as a chain step. Exhaustive with no catch-all,
+  so a new execution kind is a type error here until someone decides
+  whether a chain may hold it.
+  """
+  return match(exec) {
+    { kind: "echo" } => success(exec)
+    { kind: "write" } => success(exec)
+    { kind: "grep" } => success(exec)
+    { kind: "read" } => success(exec)
+    { kind: "bash" } => failure("a shell is not a chain step")
+    { kind: "agency" } => failure("an agency command is not a chain step")
+    { kind: "refuse" } => failure("a refused command is not a chain step")
+    { kind: "chain" } => failure("a chain is not a chain step")
+  }
+}
+
+def chainLinks(commands: Command[]): Result<ChainLink[]> {
+  """
+  The commands of a line in the order bash runs them, each with the join
+  before it. The top-level list is joined by `;`.
+  """
+  let out: ChainLink[] = []
+  for (command in commands) {
+    const links = linksOf(command, "seq")
+    if (isFailure(links)) {
+      return links
+    }
+    out = [...out, ...links.value]
+  }
+  return success(out)
+}
+
+def linksOf(command: Command, join: Join): Result<ChainLink[]> {
+  // A second walk over the tree beside `flattenOne`, on purpose.
+  // `flattenOne` feeds the refuse wall, so it must see through
+  // parentheses and pipelines. A chain must stop at them: bash skips
+  // `(b || c)` in `a && (b || c)` as a whole, which a flat list cannot
+  // say. One walk answering both would give the wall a reason to skip a
+  // node. The parser is left-associative (`a && b || c` is
+  // `Or(And(a, b), c)`), so the flat list with a join per link runs in
+  // bash's order.
+  return match(command) {
+    { tag: "simpleCommand" } => success([{ join: join, command: command }])
+    { tag: "and", left, right } => joinedLinks(left, join, right, "and")
+    { tag: "or", left, right } => joinedLinks(left, join, right, "or")
+    { tag: "parens" } => failure("a parenthesized group is not run in process")
+    { tag: "pipeline" } => failure("a pipeline is not run in process")
+  }
+}
+
+def joinedLinks(left: Command, leftJoin: Join, right: Command, rightJoin: Join): Result<ChainLink[]> {
+  const first = linksOf(left, leftJoin)
+  if (isFailure(first)) {
+    return first
+  }
+  const second = linksOf(right, rightJoin)
+  if (isFailure(second)) {
+    return second
+  }
+  return success([...first.value, ...second.value])
+}
+
 def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Result<Plan> {
   return match(found) {
     { kind: "stdin" } => failure("a lone read with no path reads stdin")
@@ -1473,6 +1603,7 @@ export def outcomeOf(plan: Plan): string {
     "write" => "shellFree"
     "grep" => "shellFree"
     "read" => "shellFree"
+    "chain" => "shellFree"
     "agency" => "agency"
     "bash" => bashOutcome(plan)
   }
@@ -1811,19 +1942,15 @@ export def planFor(source: string, cwd: string): Plan {
       if (agency is success(plan)) {
         return plan
       }
-      const shellFree = trySeeIfShellFree(only, cwd)
-      if (shellFree is success(plan)) {
-        return plan
-      }
-      const shellFreeGrep = tryShellFreeGrep(only, cwd)
-      if (shellFreeGrep is success(plan)) {
-        return plan
-      }
-      const shellFreeRead = tryShellFreeRead(only, cwd)
-      if (shellFreeRead is success(plan)) {
+      const inProcess = tryShellFreeStep(only, cwd)
+      if (inProcess is success(plan)) {
         return plan
       }
     }
+  }
+  const chain = tryShellFreeChain(commands, cwd)
+  if (chain is success(plan)) {
+    return plan
   }
 
   // Flatten first. A chain hides its halves inside `and`/`or`/`parens`
@@ -2081,6 +2208,7 @@ export def safeBash(
     { kind: "agency", args } => runAgency(args, dir, command)
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
+    { kind: "chain" } => runChain(exec, command)
     { kind: "bash", command as text } => runBash(text, dir, command)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.

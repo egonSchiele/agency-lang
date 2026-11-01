@@ -311,7 +311,7 @@ export type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L441))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L439))
 
 ### FlagValue
 
@@ -327,7 +327,7 @@ export type FlagValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L456))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L454))
 
 ### SplitArgs
 
@@ -342,7 +342,25 @@ export type SplitArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L462))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L460))
+
+### FlatCommand
+
+One simple command from a flattened line, and whether a pipe feeds
+it its stdin. Not named `Stage`: `PipelineStage` is a parsed pipe
+stage, which may be a whole parenthesized group.
+
+```ts
+/** One simple command from a flattened line, and whether a pipe feeds
+ * it its stdin. Not named `Stage`: `PipelineStage` is a parsed pipe
+ * stage, which may be a whole parenthesized group. */
+export type FlatCommand = {
+  command: SimpleCommand;
+  readsStdin: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1061))
 
 ## Constants
 
@@ -373,14 +391,18 @@ export static const GREP_FLAGS: FlagSpec = {
 
 **Type:** [FlagSpec](#flagspec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L491))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L489))
 
 ## Functions
 
 ### effectsFor
 
 ```ts
-effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]>
+effectsFor(
+  command: SimpleCommand,
+  cwd: string,
+  readsStdin: boolean = false,
+): Result<Effect[]>
 ```
 
 Which interrupts this one command needs raised.
@@ -391,6 +413,7 @@ Which interrupts this one command needs raised.
 
   @param command - One simple command from the parsed AST
   @param cwd - The resolved working directory, for payloads that need it
+  @param readsStdin - True when a pipe feeds this command its stdin
 
 **Parameters:**
 
@@ -398,6 +421,7 @@ Which interrupts this one command needs raised.
 |---|---|---|
 | command | [SimpleCommand](#simplecommand) |  |
 | cwd | `string` |  |
+| readsStdin | `boolean` | false |
 
 **Returns:** `Result<Effect[]>`
 
@@ -422,7 +446,7 @@ Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L997))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1036))
 
 ### planFor
 
@@ -450,7 +474,7 @@ Decide everything about a call before any of it happens.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1282))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1341))
 
 ### isRefused
 
@@ -475,7 +499,7 @@ True when this command must not run, whatever anyone approves.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1381))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1441))
 
 ### bashParser
 
@@ -493,7 +517,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1457))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1517))
 
 ### resolveCwd
 
@@ -516,7 +540,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1481))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1541))
 
 ### safeBash
 
@@ -561,4 +585,4 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1502))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1562))

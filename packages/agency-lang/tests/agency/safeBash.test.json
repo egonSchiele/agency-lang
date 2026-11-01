@@ -438,9 +438,9 @@
     },
     {
       "nodeName": "grepUnrecognized",
-      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, two paths, a directory through bash, a flag after the first positional, and rg.",
+      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path outside a pipe, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, two paths, a directory through bash, a flag after the first positional, and rg.",
       "input": "",
-      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `rg`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--include`\"}]]",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `rg`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--include`\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -619,6 +619,17 @@
       "description": "Every flattened command says whether it reads a pipe: the first stage of a pipe does not, every command in a later stage does, and a command outside the pipe does not.",
       "input": "",
       "expectedOutput": "[[false],[false,true,true],[false,true,false],[false,true,true],[false,false,true],[false,true,true]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepFilterStages",
+      "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r still wins (it reads the working directory), a named path wins over the pipe, a grep outside the pipe still reads stdin, the flag table still applies, and a line of recognized commands with no effect asks std::bash by the audit rule.",
+      "input": "",
+      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"

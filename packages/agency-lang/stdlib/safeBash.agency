@@ -347,12 +347,9 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
   // not be demoted by a check that only git needs.
   return match(name.text) {
     "echo" => success(redirect.value)
-    "grep" => {
-      const grep = grepEffects(command, cwd)
-      if (isFailure(grep)) {
-        return grep
-      }
-      return success([...grep.value, ...redirect.value])
+    "grep" => match(readGrep(command, cwd, GREP_FLAGS)) {
+      success(found) => grepReadEffects(found, readsStdin, redirect.value)
+      failure(why) => failure(why)
     }
     "git" => {
       // Both links can fail, which is what earns the pipe. Appending the
@@ -699,12 +696,29 @@ type GrepWords = {
 /** grep's context flags, whose values are line counts. */
 static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
 
-@capabilities(fileRead)
-def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCall> {
+/** What a grep command reads: the path it names (or `.` with -r), or
+ * its stdin when it names no path. */
+type GrepRead = { kind: "stdin" } | { kind: "search"; call: GrepCall }
+
+def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  A grep command checked against `spec`, with its pattern and its one
-  path resolved the way the grep tool resolves a path. Any doubt is a
-  failure, which sends the command to the broad question.
+  A command that names no file and reads its stdin. Fed by a pipe, it
+  reads only the previous command's output, so it adds nothing beyond its
+  redirects. Anywhere else its stdin is safeBash's closed one, so the
+  command does nothing useful and stays unrecognized.
+  """
+  if (readsStdin) {
+    return success(redirects)
+  }
+  return failure("${verb} with no path reads stdin")
+}
+
+@capabilities(fileRead)
+def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRead> {
+  """
+  A grep command checked against `spec`: what it reads, with its pattern
+  and its one path resolved the way the grep tool resolves a path. Any
+  doubt is a failure, which sends the command to the broad question.
   """
   const split = splitFlags("grep", command, spec)
   if (isFailure(split)) {
@@ -737,30 +751,37 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepCa
     return target
   }
   return success({
-    split: args,
-    pattern: words.value.pattern,
-    target: target.value
+    kind: "search",
+    call: {
+      split: args,
+      pattern: words.value.pattern,
+      target: target.value
+    }
   })
 }
 
 /** With no path, `-r` searches the working directory and grep prints bare
- * names. Without `-r`, grep reads its stdin. */
+ * names. That check comes first: a pipe does not stop `-r` from reading
+ * files (ugrep reads both). Without `-r`, grep reads its stdin. */
 @capabilities(fileRead)
-def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepCall> {
+def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> {
   if (!args.plain.includes("r")) {
-    return failure("grep with no path reads stdin")
+    return success({ kind: "stdin" })
   }
   const here = try _searchTargetIn(".", cwd, "literal")
   if (isFailure(here)) {
     return here
   }
   return success({
-    split: args,
-    pattern: pattern,
-    target: {
-      dir: here.value.dir,
-      file: here.value.file,
-      argument: ""
+    kind: "search",
+    call: {
+      split: args,
+      pattern: pattern,
+      target: {
+        dir: here.value.dir,
+        file: here.value.file,
+        argument: ""
+      }
     }
   })
 }
@@ -817,23 +838,26 @@ def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: numb
   }
 }
 
-@capabilities(fileRead)
-def grepEffects(command: SimpleCommand, cwd: string): Result<Effect[]> {
-  """
-  A grep that runs through bash. It asks std::grep only for one named
-  file, which real grep and the grep tool read the same way. A directory
-  search through bash reads files the tool skips (.git, node_modules,
-  ignored files), so it asks std::bash.
-  """
-  const call = readGrep(command, cwd, GREP_FLAGS)
-  if (isFailure(call)) {
-    return call
+/** The effects of a grep that runs through bash, by what it reads. */
+def grepReadEffects(found: GrepRead, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  return match(found) {
+    { kind: "stdin" } => stdinStage("grep", readsStdin, redirects)
+    { kind: "search", call } => grepSearchEffects(call, redirects)
   }
-  if (call.value.target.file == null) {
+}
+
+def grepSearchEffects(call: GrepCall, redirects: Effect[]): Result<Effect[]> {
+  """
+  A grep of a path that runs through bash. It asks std::grep only for one
+  named file, which real grep and the grep tool read the same way. A
+  directory search through bash reads files the tool skips (.git,
+  node_modules, ignored files), so it asks std::bash.
+  """
+  if (call.target.file == null) {
     return failure("grep through bash would search a directory, and reads files the grep tool skips")
   }
   // 0 means no cap, which is true of grep without -m.
-  return success([grepEffect(grepPayload(call.value, call.value.pattern, "", 0))])
+  return success([grepEffect(grepPayload(call, call.pattern, "", 0)), ...redirects])
 }
 
 /** The flags the grep tool's search can carry out exactly. A lone grep
@@ -870,19 +894,33 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   if (command.assignments.length > 0 || command.redirects.length > 0) {
     return failure("not a lone grep")
   }
-  const call = readGrep(command, cwd, SHELL_FREE_GREP_FLAGS)
-  if (isFailure(call)) {
-    return call
+  return match(readGrep(command, cwd, SHELL_FREE_GREP_FLAGS)) {
+    success(found) => shellFreeGrepRead(found, command, cwd)
+    failure(why) => failure(why)
   }
-  const letters = call.value.split.plain
-  const target = call.value.target
+}
+
+def shellFreeGrepRead(found: GrepRead, command: SimpleCommand, cwd: string): Result<Plan> {
+  return match(found) {
+    { kind: "stdin" } => failure("a lone grep with no path reads stdin")
+    { kind: "search", call } => shellFreeGrepPlan(call, command, cwd)
+  }
+}
+
+@capabilities(fileRead)
+def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  The plan for a lone grep of a path, once its flags and path are read.
+  """
+  const letters = call.split.plain
+  const target = call.target
   // Without -r, grep does not search a directory, and the tool would.
   if (target.file == null && !letters.includes("r")) {
     return failure("grep without -r does not search a directory")
   }
   // The tool's search applies the .gitignore files above the directory to
-  // every entry, so where they reach into it (`**/dist/*` for `dist`) the
-  // search misses files grep reads, and an empty answer would read as
+  // every entry. Where they ignore everything in it (`**/dist/*` for
+  // `dist`), the search finds nothing, and an empty answer would read as
   // "no match". Those go to the bash path.
   if (target.file == null) {
     const ignored = try _ignoredFromAbove(target.dir)
@@ -890,14 +928,14 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
       return ignored
     }
     if (ignored.value) {
-      return failure("git ignores files in this directory, and the grep tool's search would skip them")
+      return failure("git ignores everything in this directory, so the grep tool's search would find nothing")
     }
   }
   const syntax = grepSyntax(letters)
   if (isFailure(syntax)) {
     return syntax
   }
-  const regex = _grepPatternToRegex(call.value.pattern, syntax.value, letters.includes("w"))
+  const regex = _grepPatternToRegex(call.pattern, syntax.value, letters.includes("w"))
   if (regex == null) {
     return failure("the pattern does not translate to the grep tool's regex")
   }
@@ -906,7 +944,7 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   if (letters.includes("H") && letters.includes("h")) {
     return failure("grep with both -H and -h")
   }
-  const payload = grepPayload(call.value, regex, SHELL_FREE_REGEX_FLAGS, SHELL_FREE_GREP_CAP)
+  const payload = grepPayload(call, regex, SHELL_FREE_REGEX_FLAGS, SHELL_FREE_GREP_CAP)
   const render: GrepRender = {
     lineNumbers: letters.includes("n"),
     fileNames: grepFileNames(letters),

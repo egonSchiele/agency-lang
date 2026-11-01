@@ -582,7 +582,6 @@ node grepThroughBash() {
 node grepUnrecognized() {
   return [
     grepNames("grep hello"),
-    grepNames("git status | grep hello"),
     grepNames("grep -z hello ."),
     grepNames("grep -R hello ."),
     grepNames("grep \"-R\" hello"),
@@ -797,5 +796,20 @@ node stagesReadStdin() {
     stdinFlags("(a | b) | c"),
     stdinFlags("a; b | c"),
     stdinFlags("a | (b && c)"),
+  ]
+}
+
+node grepFilterStages() {
+  return [
+    grepNames("git status | grep hello"),
+    grepNames("git status | grep -v hello | grep -c x"),
+    grepNames("git status | grep -rn hello"),
+    grepNames("git status | grep hello one.txt"),
+    grepNames("git status | grep hello > out.txt"),
+    grepNames("git status | grep hello && grep bye"),
+    grepNames("git status | grep -R hello"),
+    grepNames("echo hi | grep h"),
+    grepNames("git status | grep hello -i"),
+    grepNames("git status | grep -e hello"),
   ]
 }

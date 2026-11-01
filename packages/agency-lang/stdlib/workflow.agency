@@ -47,13 +47,19 @@ import {
   runs the program in a subprocess. Each step's interrupts reach the
   caller's handlers, so a policy decides what the workflow may do.
 
+  A workflow's `limits` are hard: the program rejects every guard trip
+  itself, so no caller can give it more budget. That includes a tool's own
+  guards, so a tool that uses `supervise()` stops at its first check when
+  a workflow calls it. A workflow's optional `raises` lists the effects it
+  may raise, and `checkWorkflow` reports each step that raises another.
+
   `writeWorkflow` saves a checked workflow as `<dir>/workflows/<name>.json`;
   `loadWorkflow` and `listWorkflows` read saved workflows back.
   `workflowTool` makes a workflow one tool a model can call, and
   `workflowTools` makes one per saved workflow.
 
-  `catalog` lists the tools a workflow may call, with their parameters and
-  return types, for a GUI or a person writing a workflow.
+  `catalog` lists the tools a workflow may call, with their parameters,
+  return types, and effects, for a GUI or a person writing a workflow.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and

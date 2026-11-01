@@ -224,7 +224,9 @@ export function getEffectsFromSource(source: string, config: AgencyConfig = {}):
  * and `typecheckEffects.test.ts` are the only callers, and it is not part of
  * the package's public API. The parameter is defaulted so those keep
  * working, and so the next production caller does not inherit the hole
- * silently.
+ * silently. The production path that reads a real path is
+ * `getEffectsFromSourceAt` below, which `_describe` calls with splices
+ * refused.
  */
 export function getEffectsFromFile(filePath: string, config: AgencyConfig = {}): EffectsByExport {
   const absolute = path.resolve(filePath);

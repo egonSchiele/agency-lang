@@ -31,6 +31,7 @@ export type Effect =
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
   | { name: "std::grep"; payload: GrepPayload }
+  | { name: "std::read"; payload: ReadPayload }
 
 export type WritePayload = {
   dir: string;
@@ -74,6 +75,20 @@ export type GrepPayload = {
 export def grepEffect(payload: GrepPayload): Effect {
   return {
     name: "std::grep",
+    payload: payload
+  }
+}
+
+/** The fields the read tool's own std::read interrupt is keyed on: the
+ * real parent of the file, and its name. */
+export type ReadPayload = {
+  dir: string;
+  filename: string
+}
+
+export def readEffect(payload: ReadPayload): Effect {
+  return {
+    name: "std::read",
     payload: payload
   }
 }

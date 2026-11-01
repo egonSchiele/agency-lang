@@ -20,6 +20,7 @@ import {
   writeExecution,
   grepEffect,
   grepExecution,
+  readEffect,
   runGrep,
   GrepRender,
   GrepFileNames,
@@ -361,7 +362,31 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
       }
       return success([...git.value, ...redirect.value])
     }
-    _ => failure("no rule for `${name.text}`")
+    _ => otherVerbEffects(name.text, command, cwd, readsStdin, redirect.value)
+  }
+}
+
+@capabilities(fileRead)
+def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  """
+  The effects of a verb with no arm of its own in `effectsFor`: a read
+  verb asks std::read for each file it names, and reading its stdin from
+  a pipe adds nothing. Any other verb is unrecognized.
+  """
+  const spec = READ_VERBS[verb]
+  if (spec == null) {
+    return failure("no rule for `${verb}`")
+  }
+  return match(readFileVerb(verb, command, cwd, spec)) {
+    success(found) => fileReadEffects(verb, found, readsStdin, redirects)
+    failure(why) => failure(why)
+  }
+}
+
+def fileReadEffects(verb: string, found: FileRead, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  return match(found) {
+    { kind: "stdin" } => stdinStage(verb, readsStdin, redirects)
+    { kind: "files", paths } => success([...[readEffect({ dir: path.dir, filename: path.filename }) for path in paths], ...redirects])
   }
 }
 
@@ -1873,9 +1898,12 @@ def broadExplanation(reason: BroadReason): string {
 }
 
 /** The tool to suggest when a broad command made only of these verbs is
- * rejected. ADI-244 adds cat, head, and tail, pointing at read. */
+ * rejected. Not wc: the read tool cannot count lines. */
 static const READ_TOOL_FOR_VERB: Record<string, string> = {
-  grep: "grep"
+  grep: "grep",
+  cat: "read",
+  head: "read",
+  tail: "read"
 }
 
 def toolHint(verbs: string[]): string {
@@ -2004,6 +2032,14 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
         wholeWord: effect.payload.wholeWord,
         filesOnly: effect.payload.filesOnly,
         invert: effect.payload.invert,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::read" => {
+      raise std::read("Are you sure you want to read this file?", {
+        dir: effect.payload.dir,
+        filename: effect.payload.filename,
         command: fullCommand
       })
       return success(null)

@@ -438,6 +438,8 @@ node planVerbs() {
 node planOutcomes() {
   return [
     planOutcome("git status"),
+    // A read needs a file that exists, so this row plans in the fixtures.
+    outcomeOf(planFor("cat one.txt && git status", FIXTURES)),
     planOutcome("xargs rm x"),
     planOutcome("echo hi"),
     planOutcome("echo hi > out.txt"),
@@ -876,4 +878,43 @@ node readVerbsReadFiles() {
     readOf("cut -c 1-3 one.txt"),
     readOf("diff"),
   ]
+}
+
+node readsAskStdRead() {
+  return [
+    grepNames("cat one.txt"),
+    grepNames("cat one.txt two.txt"),
+    grepNames("wc -l one.txt"),
+    grepNames("diff one.txt two.txt"),
+    grepNames("sort one.txt"),
+    grepNames("cat one.txt > copy.txt"),
+    grepNames("git status && cat one.txt"),
+    grepNames("cat one.txt | head -3"),
+    grepNames("head -3 one.txt | cat"),
+    grepNames("cat"),
+    grepNames("cat -A one.txt"),
+    grepNames("tail -f one.txt"),
+    grepNames("cat ."),
+  ]
+}
+
+/** A folder of its own for the symlink test. A link in FIXTURES would
+ * change the output of the grep parity rows, which search it with -r. */
+static const LINK_FIXTURE = __dirname + "/stdlib/__safebash_link__"
+
+node readPayloadNamesTheRealParent(): any {
+  remove(LINK_FIXTURE) with approve
+  mkdir(LINK_FIXTURE) with approve
+  bash("mkdir inside outside && echo hi > outside/target.txt && ln -s ../outside/target.txt inside/link.txt", cwd: LINK_FIXTURE) with approve
+  let dir = ""
+  let filename = ""
+  const plan = planFor("cat link.txt", LINK_FIXTURE + "/inside")
+  for (effect in plan.effects) {
+    if (effect.name == "std::read") {
+      dir = effect.payload.dir
+      filename = effect.payload.filename
+    }
+  }
+  remove(LINK_FIXTURE) with approve
+  return [dir == LINK_FIXTURE + "/outside", filename]
 }

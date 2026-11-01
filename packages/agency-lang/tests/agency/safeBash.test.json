@@ -307,7 +307,7 @@
       "nodeName": "planOutcomes",
       "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
       "input": "",
-      "expectedOutput": "[\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
+      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -388,9 +388,9 @@
     },
     {
       "nodeName": "newShapes",
-      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
+      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"unrecognized\",\"no rule for `head`\"],\"git status | git log\"]",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],null,\"git status | git log\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -641,6 +641,28 @@
       "description": "Each read verb's row says what a command reads: the files it names, each a regular file, or its stdin when it names none. A digit flag on head or tail is a line count unless it is the value of -n. A folder, a missing file, a variable or a glob, a flag the row does not list, or the wrong number of paths is unrecognized.",
       "input": "",
       "expectedOutput": "[[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],\"stdin\",\"stdin\",\"head takes one path\",\"uniq takes one path\",\"the value of `-n` is not a number\",\"the value of `-n` is not literal\",\"tail does not take `-f`\",\"cat does not take `-A`\",\"the cat path is not literal\",\"the cat path is not literal\",\"diff takes two paths\",\"diff does not take `-r`\",\"cat would read a directory\",true,\"sort does not take `-o`\",\"an option after the first argument is a file name to some versions of cat\",[\"one.txt\"],\"diff takes two paths\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readsAskStdRead",
+      "description": "A read of a named file asks std::read for each path and runs through bash. A redirect adds std::write, a git command adds its own question, and a read verb with no path in a later pipe stage adds nothing. With no path outside a pipe, an unlisted flag, or a folder, the line asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[[\"std::read\"],null],[[\"std::read\",\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\",\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\",\"std::write\"],null],[[\"std::git::status\",\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat does not take `-A`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat would read a directory\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readPayloadNamesTheRealParent",
+      "description": "A read of a symlink names the directory of the file it points to, so the policy judges where the bytes really are.",
+      "input": "",
+      "expectedOutput": "[true,\"target.txt\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

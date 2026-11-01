@@ -49,6 +49,8 @@ import {
 
   `writeWorkflow` saves a checked workflow as `<dir>/workflows/<name>.json`;
   `loadWorkflow` and `listWorkflows` read saved workflows back.
+  `workflowTool` makes a workflow one tool a model can call, and
+  `workflowTools` makes one per saved workflow.
 
   `catalog` lists the tools a workflow may call, with their parameters and
   return types, for a GUI or a person writing a workflow.
@@ -324,6 +326,84 @@ export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: stri
   return ran.value.data
 }
 
+// ---- a workflow as a tool ----
+
+/** Why a workflow named `name` cannot be handed to a model beside `tools`,
+  or null when it can: two tools with one name are refused at the model
+  call. Named like `_workflowNameProblem`: the message is the rule. */
+def nameClashProblem(name: string, tools: any[]): string | null {
+  if (!some(tools, \tool -> tool.name == name)) {
+    return null
+  }
+  return "workflow \"${name}\" has the same name as a tool the host passed; rename one of them"
+}
+
+/** The tool: runWorkflow with the workflow, the tools, and the directory
+  bound, under the workflow's name and description, with the inputs schema
+  as the type of its one parameter. */
+def toolFor(workflow: Workflow, tools: any[], dir: string, inputsSchema: Json): any {
+  const bound = runWorkflow.partial(workflow: workflow, tools: tools, dir: dir)
+  return bound.rename(workflow.name).describe(workflow.description).withParamSchema("inputs", inputsSchema)
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+export def workflowTool(workflow: Workflow, tools: any[], dir: string = ""): Result<any> {
+  """
+  Make one tool that runs a workflow when called. The tool has the workflow's name and description, and its one parameter, `inputs`, has the workflow's inputs type. Checks the workflow first, then runs its program's `inputsSchema` node once in a subprocess, which raises `std::run`. A workflow with problems fails with every problem and starts nothing. A workflow named like one of `tools` is refused, since a model cannot be handed both; the tool loop still refuses a name clash with any other tool at the model call.
+
+  @param workflow - The workflow the tool runs
+  @param tools - The functions the workflow may call
+  @param dir - The directory a workflow's local modules are named relative to
+  """
+  const where = resolve(dir)
+  const clash = nameClashProblem(workflow.name, tools)
+  if (clash != null) {
+    return failure(clash)
+  }
+  const checked = _checked(workflow, tools, where)
+  if (checked is failure) {
+    return failure(checked.error, checked.data)
+  }
+  const inputsSchema = _inputsSchema(checked.value.program)
+  if (inputsSchema is failure) {
+    return inputsSchema
+  }
+  return success(toolFor(workflow, tools, where, inputsSchema.value))
+}
+
+/** One saved workflow as a tool, or the reason it cannot be one. */
+def toolForEntry(entry: WorkflowEntry, tools: any[], dir: string): Result<any> {
+  if (entry.meta.inputsSchema == null) {
+    return failure("${entry.name} was saved before inputs schemas were recorded; save it again with writeWorkflow")
+  }
+  const clash = nameClashProblem(entry.name, tools)
+  if (clash != null) {
+    return failure(clash)
+  }
+  return success(toolFor(entry.workflow, tools, dir, entry.meta.inputsSchema))
+}
+
+@capabilities(fileRead)
+export def workflowTools(dir: string, tools: any[]): Result<any[]> {
+  """
+  One tool per workflow saved under a project directory, in name order, each built as `workflowTool` builds it, from the inputs schema saved with the workflow. Starts no subprocess, and does not check a saved workflow against `tools`: a workflow whose tools changed since it was saved fails when it is called, with the problems listed, and starts nothing. Raises one `std::workflow::scan` prompt, or none for a project with no `workflows` folder. Refuses a workflow whose name is already a tool's name in `tools`, and one saved before inputs schemas were recorded.
+
+  @param dir - The project directory the workflows were saved under
+  @param tools - The functions the workflows may call. A workflow may not share a name with one of them
+  """
+  const listed = listWorkflows(dir)
+  if (listed is failure) {
+    return listed
+  }
+  const where = resolve(dir)
+  const built = map(listed.value, \entry -> toolForEntry(entry, tools, where))
+  const broken = find(built, \tool -> isFailure(tool))
+  if (broken != null) {
+    return broken
+  }
+  return success(map(built, \tool -> tool.value))
+}
+
 // ---- saving and loading ----
 
 const WORKFLOWS_DIR = "workflows"
@@ -562,7 +642,7 @@ def isVisible(fileName: string): boolean {
 @capabilities(fileRead)
 export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
   """
-  List the workflows saved under a project directory. Raises one `std::workflow::scan` prompt before reading anything, and nothing else. A project with no saved workflows lists none. A file that cannot be read as a saved workflow fails the listing, with a message naming it.
+  List the workflows saved under a project directory, in name order. Raises one `std::workflow::scan` prompt before reading anything, and nothing else. A project with no saved workflows lists none. A file that cannot be read as a saved workflow fails the listing, with a message naming it.
 
   @param dir - The project directory the workflows were saved under
   """
@@ -585,7 +665,7 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
   if (fileNames.value.length > MAX_WORKFLOWS) {
     return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
   }
-  const names = map(filter(fileNames.value, isVisible), workflowName)
+  const names = sortBy(map(filter(fileNames.value, isVisible), workflowName), \name -> name)
   const entries = map(names, \name -> entryFor(root.value, name))
   const broken = find(entries, \entry -> isFailure(entry))
   if (broken != null) {

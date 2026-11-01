@@ -48,7 +48,7 @@
       "nodeName": "rebuiltVersusOriginal",
       "description": "A narrow plan runs the tree it classified (whitespace normalized); a broad plan runs the caller's text verbatim.",
       "input": "",
-      "expectedOutput": "[\"git status\",\"ls    -la\"]",
+      "expectedOutput": "[\"git status\",\"xargs    -0\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -963,6 +963,106 @@
         {
           "action": "approve",
           "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingsAskStdLs",
+      "description": "ls, tree, and du ask std::ls for each folder they list, . when none is named. A file, a flag the table does not list, a late flag, a count that is not a number, or a path that is not literal asks std::bash. A listing ignores its stdin.",
+      "input": "",
+      "expectedOutput": "[[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\",\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::git::log\",\"std::ls\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls of a file is not a listing\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls does not take `-L`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of ls\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls does not take `--color=always`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-L` is not a number\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the ls path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the ls path is not literal\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingOfAMissingPath",
+      "description": "A listing of a path that does not exist asks std::bash, with the resolver's message.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "lsPayloadFields",
+      "description": "The std::ls payload names the real folder and says whether the listing walks the tree: ls only with -R, tree and du always.",
+      "input": "",
+      "expectedOutput": "[[[true,false]],[[true,true]],[[true,true]],[[true,true]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingPayloadNamesTheRealFolder",
+      "description": "A listing of a symlink to a folder names the folder it points to, so the policy judges where the entries really are.",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingUnderRecommendedNeedsNoPrompt",
+      "description": "Under the recommended policy, a listing inside the launch directory runs with no prompt.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingOutsideTheLaunchDirIsUndecided",
+      "description": "Under the recommended policy, a listing outside the launch directory is left to a person.",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingAsksOneQuestion",
+      "description": "A listing asks one std::ls question and no shell question, and prints what ls prints.",
+      "input": "",
+      "expectedOutput": "\"one.txt\\ntwo.txt\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to list this directory?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedListingNamesTheTool",
+      "description": "When a broad listing is rejected, the model is pointed at the ls tool.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: ls does not take `-L`. Call the ls tool instead: a policy can approve its question in advance.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
         }
       ],
       "evaluationCriteria": [

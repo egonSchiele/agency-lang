@@ -71,7 +71,7 @@ node classifyOneCommand() {
     effectNamesFor("git diff --staged"),
     effectNamesFor("git log"),
     effectNamesFor("echo hi"),
-    effectNamesFor("ls"),
+    effectNamesFor("xargs"),
     effectNamesFor("git log --graph"),
     effectNamesFor("/bin/git status"),
     effectNamesFor("FOO=1 git status"),
@@ -102,8 +102,8 @@ node wholeStringPlans() {
   return [
     planSummary("git status"),
     planSummary("git status; git log"),
-    planSummary("git status; ls"),
-    planSummary("ls"),
+    planSummary("git status; xargs"),
+    planSummary("xargs"),
     planSummary("echo hi; echo bye"),
     planSummary("rm -rf build"),
     planSummary("git status; rm -rf build"),
@@ -111,7 +111,7 @@ node wholeStringPlans() {
     planSummary("git status && git log"),
     planSummary("true && rm -rf /tmp/x"),
     planSummary("(git status && git log)"),
-    planSummary("git status && ls"),
+    planSummary("git status && xargs"),
   ]
 }
 
@@ -127,7 +127,7 @@ node rebuiltVersusOriginal() {
   // normalizes whitespace, so on the narrow path `execution.command` must
   // be the NORMALIZED form, and on the broad path it must be the caller's
   // text VERBATIM.
-  return [executionCommand("git    status"), executionCommand("ls    -la")]
+  return [executionCommand("git    status"), executionCommand("xargs    -0")]
 }
 
 def planDetail(source: string): any {
@@ -408,7 +408,7 @@ node agencyCommandLines() {
     planKind("which git agency"),
     planKind("agency test $f"),
     planKind("agency test x.test.json > out"),
-    planKind("ls agency-lang"),
+    planKind("xargs agency-lang"),
     planKind("which git"),
   ]
 }
@@ -1276,4 +1276,109 @@ node chainOfReadsAsksOnlyTheReads() {
     return "FAILED: ${why}"
   }
   return result.value
+}
+
+node listingsAskStdLs() {
+  return [
+    grepNames("ls"),
+    grepNames("ls -la ."),
+    grepNames("ls -R ."),
+    grepNames("ls . .."),
+    grepNames("tree -L 2 ."),
+    grepNames("du -sh ."),
+    grepNames("git log | ls"),
+    grepNames("ls one.txt"),
+    grepNames("ls -L ."),
+    grepNames("ls . -la"),
+    grepNames("ls --color=always ."),
+    grepNames("tree -L x ."),
+    grepNames("ls $D"),
+    grepNames("ls *.txt"),
+  ]
+}
+
+node listingOfAMissingPath() {
+  // The resolver's message names the absolute path, so only its start is
+  // pinned.
+  const detail = grepNames("ls nope")[1].detail
+  return detail.startsWith("No file or directory at")
+}
+
+def lsPayloads(source: string): any {
+  // A for loop with an `if` on the name, the shape
+  // readPayloadNamesTheRealParent uses, so `payload` narrows to LsPayload.
+  let out: any[] = []
+  for (effect in planFor(source, FIXTURES).effects) {
+    if (effect.name == "std::ls") {
+      out.push([effect.payload.dir == FIXTURES, effect.payload.recursive])
+    }
+  }
+  return out
+}
+
+node lsPayloadFields() {
+  return [lsPayloads("ls"), lsPayloads("ls -R ."), lsPayloads("tree ."), lsPayloads("du -s .")]
+}
+
+/** A folder of its own for the listing symlink test. */
+static const LS_LINK_FIXTURE = __dirname + "/stdlib/__safebash_ls_link__"
+
+node listingPayloadNamesTheRealFolder() {
+  remove(LS_LINK_FIXTURE) with approve
+  mkdir(LS_LINK_FIXTURE) with approve
+  bash("mkdir inside outside && ln -s ../outside inside/link", cwd: LS_LINK_FIXTURE) with approve
+  let dir = ""
+  for (effect in planFor("ls link", LS_LINK_FIXTURE + "/inside").effects) {
+    if (effect.name == "std::ls") {
+      dir = effect.payload.dir
+    }
+  }
+  remove(LS_LINK_FIXTURE) with approve
+  return [dir == LS_LINK_FIXTURE + "/outside"]
+}
+
+node listingUnderRecommendedNeedsNoPrompt() {
+  // The fixtures are inside the launch directory, so recommended approves
+  // std::ls there. No interruptHandlers entry: an unanswered interrupt
+  // fails the run.
+  let found = false
+  handle {
+    const result = safeBash("ls " + FIXTURES)
+    if (result is success(text)) {
+      found = text.includes("one.txt")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node listingOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("ls /etc", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::ls") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO LS EFFECT"
+}
+
+node listingAsksOneQuestion() {
+  const result = safeBash("ls -1", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+node rejectedListingNamesTheTool() {
+  const result = safeBash("ls -L .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
 }

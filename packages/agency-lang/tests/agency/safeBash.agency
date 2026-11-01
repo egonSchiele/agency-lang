@@ -148,6 +148,12 @@ node shellFreeEcho() {
     planDetail("echo \"a b\" c"),
     planDetail("echo -n hi"),
     planDetail("echo hi; echo bye"),
+    planDetail("echo -n"),
+    planDetail("echo -e x"),
+    planDetail("echo hi -n"),
+    planDetail("echo -n -n hi"),
+    planDetail("echo \"-n\" hi"),
+    planDetail("echo hi \"-x\""),
   ]
 }
 
@@ -169,6 +175,7 @@ node shellFreeWrite() {
     writePlanDetail("echo hi >> out.txt"),
     writePlanDetail("echo hi > $F"),
     writePlanDetail("echo $HOME > out.txt"),
+    writePlanDetail("echo -n hi > out.txt"),
   ]
 }
 
@@ -1031,24 +1038,32 @@ node loneReadIsShellFree() {
  * from FIXTURES so no grep parity row's output changes. */
 static const READ_FIXTURES = __dirname + "/stdlib/read-fixtures"
 
-def readParityOf(source: string): any {
+def exactParityOf(source: string, kind: string, cwd: string): any {
   // Without this check, a row whose command fell back to the bash path
   // would compare the real program with itself and pass for no reason.
-  if (planFor(source, READ_FIXTURES).execution.kind != "read") {
+  if (planFor(source, cwd).execution.kind != kind) {
     return "NOT SHELL-FREE: ${source}"
   }
   let ours = ""
   let theirs = ""
+  let failed = ""
   handle {
-    const shellFree = safeBash(source, cwd: READ_FIXTURES)
+    const shellFree = safeBash(source, cwd: cwd)
     if (shellFree is success(out)) {
       ours = out
+    } else if (shellFree is failure(why)) {
+      failed = "${why}"
     }
     // bash returns an ExecResult, not a Result.
-    const real = bash(source, cwd: READ_FIXTURES)
+    const real = bash(source, cwd: cwd)
     theirs = real.stdout
   } with approve
-  // cat, head, and tail print in order, so the comparison is exact.
+  // A failure is reported, not compared: a failed run and a program that
+  // printed nothing would otherwise both be "".
+  if (failed != "") {
+    return "FAILED: ${failed}"
+  }
+  // These commands print in order, so the comparison is exact.
   if (ours == theirs) {
     return true
   }
@@ -1057,20 +1072,20 @@ def readParityOf(source: string): any {
 
 node shellFreeReadMatchesRealTools() {
   return [
-    readParityOf("cat one.txt"),
-    readParityOf("cat -n one.txt"),
-    readParityOf("head -1 one.txt"),
-    readParityOf("head -n 1 one.txt"),
-    readParityOf("head -n 100 one.txt"),
-    readParityOf("tail -1 one.txt"),
-    readParityOf("tail -n 100 one.txt"),
-    readParityOf("cat noeol.txt"),
-    readParityOf("cat -n noeol.txt"),
-    readParityOf("tail -1 noeol.txt"),
-    readParityOf("cat empty.txt"),
-    readParityOf("cat -n empty.txt"),
-    readParityOf("cat crlf.txt"),
-    readParityOf("tail -1 crlf.txt"),
+    exactParityOf("cat one.txt", "read", READ_FIXTURES),
+    exactParityOf("cat -n one.txt", "read", READ_FIXTURES),
+    exactParityOf("head -1 one.txt", "read", READ_FIXTURES),
+    exactParityOf("head -n 1 one.txt", "read", READ_FIXTURES),
+    exactParityOf("head -n 100 one.txt", "read", READ_FIXTURES),
+    exactParityOf("tail -1 one.txt", "read", READ_FIXTURES),
+    exactParityOf("tail -n 100 one.txt", "read", READ_FIXTURES),
+    exactParityOf("cat noeol.txt", "read", READ_FIXTURES),
+    exactParityOf("cat -n noeol.txt", "read", READ_FIXTURES),
+    exactParityOf("tail -1 noeol.txt", "read", READ_FIXTURES),
+    exactParityOf("cat empty.txt", "read", READ_FIXTURES),
+    exactParityOf("cat -n empty.txt", "read", READ_FIXTURES),
+    exactParityOf("cat crlf.txt", "read", READ_FIXTURES),
+    exactParityOf("tail -1 crlf.txt", "read", READ_FIXTURES),
   ]
 }
 
@@ -1120,4 +1135,14 @@ node bashOnlyFormsStayUnparseable() {
   // syntax error, so a parser that accepted them would make a narrow plan
   // fail there. Pinned so a tarsec release cannot widen this unnoticed.
   return [grepNames("make |& tail"), grepNames("echo hi &>> log")]
+}
+
+node shellFreeEchoMatchesBash() {
+  return [
+    exactParityOf("echo hi", "echo", FIXTURES),
+    exactParityOf("echo -n hi", "echo", FIXTURES),
+    exactParityOf("echo -n", "echo", FIXTURES),
+    exactParityOf("echo -nn a b", "echo", FIXTURES),
+    exactParityOf("echo 'a\\tb'", "echo", FIXTURES),
+  ]
 }

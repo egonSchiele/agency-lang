@@ -55,8 +55,8 @@ word including the last part of a path. Nothing is raised. The wall is
 friction against the obvious spelling; `find -delete` gets past it and is
 approvable under `std::bash`, which is where the control lives.
 
-`shellFree`: a single literal `echo`, with or without one output
-redirect, never spawns a shell. The output is computed in Agency and
+`shellFree`: a single literal `echo`, with `-n` or without, and with or
+without one output redirect, never spawns a shell. The output is computed in Agency and
 returned, or written with `_write` under a `std::write` whose payload
 carries the bytes. A lone `grep` that translates exactly runs the grep
 tool's own search (see "grep" below). A lone `cat`, `head`, or `tail` of
@@ -127,6 +127,14 @@ glob). The list is `SHELL_ENV_REMOVED` in
 `lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
 programs in the child read options anywhere on the line. No plan
 changes, because the flag tables that care set `optionsFirst`.
+
+The shell-free echo models bash's builtin echo. `-n` is the one flag it
+takes. `-e` and `-E` go to bash, because the shell-free path does not
+read backslash escapes, and so does a flag after the first word, since
+bash prints `echo hi -n` as `hi -n`. A quoted word that starts with a
+dash goes to bash too: bash strips the quotes and reads `echo "-n" hi`
+as the option, so it prints `hi` with no newline. That also sends
+`echo hi "-x"` to bash, which prints `hi -x`.
 
 When there is no bash, the command fails with a message that names bash.
 Nothing falls back to `sh`. The in-process paths still work on such a
@@ -564,9 +572,6 @@ empty file, and a file with Windows line endings.
 
 These are left out:
 
-- `echo -n`. macOS `/bin/sh` prints `-n hi` for `echo -n hi`, so a
-  shell-free `echo -n` would disagree with the same echo inside a chain.
-  It waits on ADI-248, which decides which shell runs the text.
 - `wc` in process. GNU and BSD pad the count column differently.
 - More than one file in process. `head` prints a header per file.
 - `file`, `stat`, `md5sum`, `shasum`, `column`, `xxd`, and `hexdump`.

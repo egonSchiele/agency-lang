@@ -690,6 +690,66 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "readUnderRecommendedNeedsNoPrompt",
+      "description": "Under the recommended policy, a read inside the launch directory and a git status run with no prompt.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readOutsideTheLaunchDirIsUndecided",
+      "description": "Under the recommended policy, a read of a file outside the launch directory is left to a person, because the payload names the real parent.",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readAsksExactlyOneQuestion",
+      "description": "A read beside a git command asks one std::read and one git question, and no shell question.",
+      "input": "",
+      "expectedOutput": "true",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Show git status"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedReadNamesTheTool",
+      "description": "When a broad line made only of verbs the read tool can do is rejected, the model is pointed at the read tool.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: cat does not take `-A`. Call the read tool instead: a policy can approve its question in advance.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

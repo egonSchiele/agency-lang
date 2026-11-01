@@ -954,3 +954,52 @@ node filtersInAPipe() {
     grepNames("cat one.txt | tr -dd x"),
   ]
 }
+
+node readUnderRecommendedNeedsNoPrompt() {
+  // The launch directory is the package directory, so the fixtures are
+  // inside it and recommended approves std::read there, and it approves
+  // git status anywhere. This test has no interruptHandlers entry, so an
+  // unanswered interrupt fails the run.
+  let found = false
+  handle {
+    const result = safeBash("wc -l " + FIXTURES + "/one.txt && git status")
+    if (result is success(text)) {
+      found = text.includes("one.txt")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node readOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("cat /etc/hosts", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::read") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO READ EFFECT"
+}
+
+node readAsksExactlyOneQuestion() {
+  // The test file answers one std::read and one std::git::status message.
+  // A std::bash prompt, or a second read, would fail the run.
+  const result = safeBash("wc -l one.txt && git status", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.includes("one.txt")
+}
+
+node rejectedReadNamesTheTool() {
+  const result = safeBash("cat -A one.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}

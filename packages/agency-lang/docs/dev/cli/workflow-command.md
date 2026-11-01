@@ -79,6 +79,8 @@ The `std::run` rule pins the node and the depth, not the module, because the com
 
 The catch-all reject carries a `rejectMessage`, `CATCH_ALL_MESSAGE` in `runPolicy.ts`, so a step it rejects says the rejection came from `agency workflow run` and not from a rule of the person's.
 
+The catch-all also answers a tool's own `std::guard` trip, which the generated program passes on (`docs/dev/stdlib/workflow.md`, "Every limit is hard"). A rejection wins over the tool's own approval, so a tool that extends its own guard, as `supervise()` does, stops at its first check under `run`. A policy has no action that means "no opinion", so there is no rule that would leave the trip to the tool.
+
 A person's own `"*"` rule turns all of this off: no start rules, no prompt, and no catch-all. They wrote a rule for everything and meant it.
 
 An effect is "covered" when the person's policy has any rule for it. A rule that propagates counts. At run time it propagates, `interactive` is false, nothing can answer, and the driver returns the interrupt unanswered. The child saved a checkpoint, but the command does not keep it, so it says the run cannot be resumed and how to cover the effect.

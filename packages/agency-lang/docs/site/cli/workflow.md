@@ -158,5 +158,6 @@ The other `agency run` flags are left out. `--max-time` cannot stop a run while 
 
 - A tool's module may import other local `.agency` files in the project. It may not import a TypeScript file, because a workflow's program runs in the sandbox, which refuses them. The commands report such a module on the step's `module` field.
 - The commands compile each tool's module, which writes a `.js` file beside it, as `agency run` does. After `agency workflow check`, you will see `src/agent/lists.js` beside `src/agent/lists.agency`.
+- The run's catch-all rejects every interrupt your policy and the prompt did not approve, and that includes a tool's own `std::guard`. A tool that extends its own guard, as `supervise()` does, stops at its first check under `run`. Give the step time with `limits.maxTime` in the workflow instead.
 - A run stopped by `--max-cost` exits 1 and prints one line, such as `Guard exceeded its cost budget: spent 0.000002 of limit 0.000001`. `agency run` exits 3 for the same stop.
 

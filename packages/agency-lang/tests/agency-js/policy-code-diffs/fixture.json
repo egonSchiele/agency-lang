@@ -16,5 +16,7 @@
   "resumedDraftSaysSo": true,
   "quietDraftHasNoFindings": true,
   "survivedNullPayload": "survived",
-  "titleReached": true
+  "titleReached": true,
+  "tablesFitPrompt": true,
+  "longDirKept": true
 }

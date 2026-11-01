@@ -4,7 +4,7 @@ import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { highlight, diff } from "std::syntax"
 import { ChoiceItem } from "std::ui/cli"
-import { interruptChoice } from "std::ui/cli"
+import { interruptBodyWidth, interruptChoice } from "std::ui/cli"
 import { render, text } from "std::ui/layout"
 import { table } from "std::ui/table"
 
@@ -846,7 +846,8 @@ def printInterruptDiff(intr: any) {
 // interrupt's payload (`intr.data`); `effect` is `intr.effect`, used to
 // leave out the fields an effect shows better elsewhere, as the two
 // code-changing effects show their source as a diff above the prompt.
-def prettyPrintInterruptData(data: any, effect: string = ""): string {
+// `cols` is the width to draw the table at; 0 means the terminal's.
+def prettyPrintInterruptData(data: any, effect: string = "", cols: number = 0): string {
   // JS reports `null` as `typeof == "object"`, so guard explicitly.
   // Otherwise `for (key in data)` would throw and crash the interrupt
   // prompt.
@@ -868,10 +869,10 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // the diff already shows, and a tool review's findings, which are
   // printed under its diff.
   if (effect == "std::edit") {
-    return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"])
+    return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"], cols: cols)
   }
   if (effect == "std::toolbox::review") {
-    return renderObjAsTable(data, excludeKeys: ["source", "previous", "notes", "blocking", "unresolved", "resumed"])
+    return renderObjAsTable(data, excludeKeys: ["source", "previous", "notes", "blocking", "unresolved", "resumed"], cols: cols)
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields
@@ -887,10 +888,10 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
         i = i + 1
       }
     }
-    return render(paramTable)
+    return render(paramTable, cols: cols)
   }
   if (typeof data == "object") {
-    return renderObjAsTable(data)
+    return renderObjAsTable(data, cols: cols)
   }
   return JSON.stringify(data)
 }
@@ -901,6 +902,7 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
 def renderObjAsTable(
   obj: Record<string, any>,
   excludeKeys: string[] = null,
+  cols: number = 0,
 ): string {
   const skip = excludeKeys || []
   let rows = 0
@@ -916,7 +918,7 @@ def renderObjAsTable(
   if (rows == 0) {
     return ""
   }
-  return render(paramTable)
+  return render(paramTable, cols: cols)
 }
 
 @hidden
@@ -972,7 +974,7 @@ def askUser(intr: any): AskUserResult {
   // wrote among them, and it goes to the footer whole. The effect beside
   // it is a name from the code.
   const title = "${color.bold(intr.effect)}  ${stripControlChars(intr.message)}"
-  const body = prettyPrintInterruptData(intr.data, intr.effect)
+  const body = prettyPrintInterruptData(intr.data, intr.effect, cols: interruptBodyWidth())
 
   const items = askUserChoices(intr)
 

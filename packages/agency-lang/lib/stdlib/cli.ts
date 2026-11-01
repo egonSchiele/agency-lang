@@ -557,17 +557,23 @@ type InterruptFooterInput = {
   columns: number;
 };
 
+/** The width the footer wraps its body to: the footer's width, less the
+ *  1-col indent. A table rendered wider than this gets wrapped again. */
+function interruptBodyWidth(columns: number): number {
+  return Math.max(MIN_FOOTER_WIDTH, columns - 1) - 1;
+}
+
 /** Body lines for the footer, capped to INTERRUPT_BODY_MAX_LINES *physical*
- *  rows. Wrapping happens here (to `width - 1`, leaving room for the 1-col
- *  indent) so the cap bounds real screen rows — buildFrame re-wraps at
- *  `width`, but each line is already within it, so that is a no-op. Capping
- *  raw `\n` lines instead would let one very long line re-expand past the
- *  cap and blow out the pinned region. */
-function bodyLines(body: string, width: number): { lines: string[]; truncated: boolean } {
+ *  rows. Wrapping happens here (to `wrapWidth`, from interruptBodyWidth)
+ *  so the cap bounds real screen rows — buildFrame re-wraps at the
+ *  footer's width, but each line is already within it, so that is a no-op.
+ *  Capping raw `\n` lines instead would let one very long line re-expand
+ *  past the cap and blow out the pinned region. */
+function bodyLines(body: string, wrapWidth: number): { lines: string[]; truncated: boolean } {
   if (body === "") {
     return { lines: [], truncated: false };
   }
-  const wrapped = wrapText(body, Math.max(1, width - 1));
+  const wrapped = wrapText(body, Math.max(1, wrapWidth));
   const lines = wrapped
     .slice(0, INTERRUPT_BODY_MAX_LINES)
     .map((line) => ` ${DIM}${line}${COLOR_RESET}`);
@@ -581,8 +587,7 @@ function bodyLines(body: string, width: number): { lines: string[]; truncated: b
 /** True when this prompt's body does not fit the footer, so the widget
  *  offers VIEW_KEY. The shell and the renderer must agree on it. */
 function bodyIsTruncated(body: string, columns: number): boolean {
-  const width = Math.max(MIN_FOOTER_WIDTH, columns - 1);
-  return bodyLines(body, width).truncated;
+  return bodyLines(body, interruptBodyWidth(columns)).truncated;
 }
 
 /** Render the sticky approval prompt as footer lines. Pure. The real
@@ -594,7 +599,7 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
   if (input.title !== "") {
     lines.push(` ${input.title}`);
   }
-  const body = bodyLines(input.body, width);
+  const body = bodyLines(input.body, interruptBodyWidth(input.columns));
   body.lines.forEach((line) => lines.push(line));
   const items = body.truncated
     ? [...input.items, { key: VIEW_KEY, label: VIEW_LABEL }]
@@ -1791,6 +1796,7 @@ export const _internal = {
   INITIAL_INTERRUPT_STATE,
   packOptions,
   renderInterruptFooter,
+  interruptBodyWidth,
   stickyInterruptPrompt,
   replyOutput,
 };
@@ -1818,4 +1824,8 @@ export function _clearHistory(path: string): void {
 
 export function _termWidth(): number {
   return process.stdout.columns || 80;
+}
+
+export function _interruptBodyWidth(): number {
+  return interruptBodyWidth(_termWidth());
 }

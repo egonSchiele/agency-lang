@@ -36,6 +36,8 @@ try {
 
 // The diff body, with the ANSI the highlighter adds taken back off.
 const plain = printed.replace(/\x1b\[[\d;]*m/g, "");
+// Every line of the prompt's key/value tables.
+const tableLines = plain.split("\n").filter((line) => line.includes("│"));
 // The table row the tool's name renders on, which is where a CR the
 // strip missed would do its damage.
 const nameRow = (printed.split("\n").find((line) => line.includes("greetHindi")) ?? "");
@@ -80,4 +82,8 @@ writeFileSync("__result.json", JSON.stringify({
   quietDraftHasNoFindings: (plain.match(/The reviewer notes:/g) || []).length === 1,
   survivedNullPayload,
   titleReached: plain.includes("review this tool?"),
+  // The prompt's tables are drawn at the prompt's width. stdout is a
+  // pipe here, so that width is 78 on every machine.
+  tablesFitPrompt: tableLines.length > 0 && tableLines.every((line) => line.length <= 78),
+  longDirKept: tableLines.join("").replace(/[│\s]/g, "").includes("a".repeat(200)),
 }, null, 2));

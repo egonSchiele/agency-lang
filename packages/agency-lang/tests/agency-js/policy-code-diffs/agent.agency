@@ -11,11 +11,14 @@ const POLICY = {}
 const APPROVE_REVIEW: Policy = { "std::toolbox::review": [{ action: "approve" }] }
 
 node main(args: { policyFile: string }): string {
+  // Long enough that the prompt's table must wrap it to fit.
+  const letter = "a"
+  const longDir = "/work/${letter.repeat(200)}"
   setPolicy(args.policyFile, POLICY)
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::edit("apply this edit?", {
-      dir: ".",
+      dir: longDir,
       filename: "greet.agency",
       before: "def greet(): string {\n  return \"hi\"\n}",
       after: "def greet(): string {\n  return \"hello\"\n}",

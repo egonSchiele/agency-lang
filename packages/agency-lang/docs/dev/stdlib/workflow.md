@@ -113,39 +113,37 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
    `dir` is resolved to an absolute path first, and the check and the run use that same path. A relative `dir` would pin text that names a different directory under a different working directory. The default `""` would pin the pattern `{,/**}`, which matches every absolute path and not the run it was given for. `read` in `std::index` raises its resolved directory for the same reason.
 
-   `name` is a field of the workflow value the caller passed. A caller, or a model calling `runWorkflow` as a tool, can give a new workflow a name the user already approved "always", and that workflow skips this one prompt. Every step still raises its own effects, and `std::run` still asks. A workflow from `loadWorkflow` has the name of its folder. One the caller built has whatever name it was given.
+   `name` is a field of the workflow value the caller passed. A caller, or a model calling `runWorkflow` as a tool, can give a new workflow a name the user already approved "always", and that workflow skips this one prompt. Every step still raises its own effects, and `std::run` still asks. `loadWorkflow` refuses a file whose workflow's name differs from the file name, so a loaded workflow runs under its file's name. One the caller built has whatever name it was given.
 3. **Run.** It calls `run` from `std::agency` on the compiled program's `main` with `{ inputs }`. `run` raises its own `std::run`. The wall clock is the workflow's `maxTime` plus 30 seconds (`wallClockFor` in `limits.ts`), or `null`, which lets `run` apply its own default. The workflow code does not restate that default. `run` succeeds with an envelope whose `data` is what `main` returned, so `runWorkflow` returns that `Result`: the last step's value, or the failure that stopped the workflow, which names the step.
 
 ## Saving and loading
 
-`writeWorkflow(workflow, tools, dir)` saves a workflow as two files:
+`writeWorkflow(workflow, tools, dir)` saves a workflow as one file, `<dir>/workflows/<name>.json`:
 
+```json
+{ "workflow": { "format": 1, "name": "mealPlan", ... },
+  "meta": { "savedAt": "2026-10-31T12:00:00.000Z", "savedBy": "writeWorkflow" } }
 ```
-<dir>/<name>/workflow.json   the workflow, as given
-<dir>/<name>/meta.json       { createdAt, createdBy }
-```
 
-`name` is the workflow's own `name` field. `loadWorkflow(name, dir)` reads one folder back and `listWorkflows(dir)` reads them all. Each returns a `WorkflowEntry`: the name, the folder, the workflow, and the meta record.
+`loadWorkflow(name, dir)` reads one file back and `listWorkflows(dir)` reads them all. Each returns a `WorkflowEntry`: the name, the file's path, the workflow, and `meta`.
 
-**`dir` is the project directory.** It is where the workflow folders go, and it is also the directory a local tool's import path is written relative to (`toolRefs` in `tools.ts`). A local tool whose file is outside `dir` is refused by the check. So a project's workflows are saved as folders inside the project, beside its tool modules. `dir` must already exist, because the check reads the tool modules from it. Only the workflow's own folder is created.
+`dir` is the project directory, and it must exist. A local tool's import path is written relative to it, so a local tool whose file is outside `dir` is refused by the check (`toolRefs` in `tools.ts`). Saved workflows go in its `workflows` folder, so a listing only reads files `writeWorkflow` wrote.
 
-**`writeWorkflow` checks, asks, then writes.**
+`writeWorkflow` checks, asks, then writes:
 
-1. The check is `_checked`, the same generate, typecheck, and compile `runWorkflow` runs. A workflow with problems fails here and raises nothing. The check also proves `name` is an identifier, so it is safe to use as a folder name.
-2. It raises `std::workflow::save` with the directory, the name, and the workflow. A rejection writes nothing.
-3. It creates the folder and writes both files with `_write`, which raises nothing more. The writes sit in a `destructive { }` region.
+1. `_checked`, the generate, typecheck, and compile `runWorkflow` also runs. A workflow with problems fails here and raises nothing. The check also proves `name` is an identifier, so it is safe in a file name.
+2. `std::workflow::save`. A rejection writes nothing.
+3. One `_write` of the file, inside a `destructive { }` region. `_write` raises no prompt of its own.
 
-Saving a name that already exists replaces it. Saving is how a workflow gets edited. The prompt names the workflow, so the person sees which one is replaced. Because a save can replace a workflow, `std::workflow::save` is tagged `@always(name)` as well as `@alwaysUnder(dir)`. An "always" answer means "this workflow, in this directory". With the directory pin alone, a model calling `writeWorkflow` as a tool could replace any saved workflow there with no prompt.
+Saving a name that exists replaces it, which is how a workflow is edited. So `save` is tagged `@always(name)` as well as `@alwaysUnder(dir)`: an "always" answer covers this workflow in this folder. With only the folder pinned, a model calling `writeWorkflow` as a tool could replace any saved workflow there without a prompt.
 
-**Reading raises one prompt.** `std::workflow::scan` is tagged `@alwaysUnder(dir)`. `listWorkflows` raises it with the directory and `loadWorkflow` with the workflow's folder. The reads that follow use `_glob` and `_read`, which raise nothing, as `std::skills` does. The toolbox's `listTools` raises a second prompt for its `ls`; this module does not. `_glob` matches `*/workflow.json` and is asked for one more than `MAX_WORKFLOWS`, so a directory with too many is refused instead of cut short. A glob `*` matches a name starting with a dot, so dot folders are dropped by hand.
+`listWorkflows` and `loadWorkflow` raise one `std::workflow::scan` for the `workflows` folder. The reads after it use `_glob` and `_read`, which raise nothing. The glob asks for one more than `MAX_WORKFLOWS`, so a folder with too many is refused rather than cut short.
 
-**Checks before the prompt.** `loadWorkflow` takes its name from the caller, not from a checked workflow, so it checks the name with parse's own rule (`_workflowNameProblem`) before anything else. A name such as `../x` fails with no prompt. It then checks the folder exists, so a missing workflow fails with a message instead of asking first. `ls`, `grep`, and `glob` make the same check before their interrupt (`docs/dev/stdlib/grep-flags.md`). `listWorkflows` on a directory that does not exist returns an empty list.
+`loadWorkflow` builds a file name from the name its caller passes, so it first checks that name with parse's rule (`_workflowNameProblem`): `../x` fails before anything is read. It then checks the file exists, so a missing workflow fails without a prompt, as `ls`, `grep`, and `glob` do (`grep-flags.md`).
 
-**The real spelling.** `dir` is resolved once with `_realDir`, and both prompts and every read and write use that spelling. An "always" answer pins text, so the text must be the directory that is actually read and written.
+Every payload's `dir` is the real spelling from `_realDir`, because an "always" answer pins text.
 
-**What a load returns.** `workflow.json` is required and is checked against `Workflow` with `!`. `meta.json` is optional: a missing file gives the default record, and a present file with the wrong shape is a failure. The shape check fills a missing optional field with `null`. For `meta.json`, only the fields the file has are kept, over the defaults. For `workflow.json`, the entry holds the file's own value and not the checked one, because `result: null` is a literal result to the generator: a loaded workflow would return `null` in place of its last step.
-
-**A broken folder fails the listing.** A folder whose `workflow.json` cannot be read, is not JSON, or is not a workflow fails `listWorkflows`, with a message that starts with the folder's name. `WorkflowEntry` has no field for a broken entry, so the person fixes or removes that folder.
+A loaded file is checked against `{ workflow: Workflow; meta?: ... }` with `!`. Missing `meta` fields take their defaults. A file whose workflow's `name` differs from the file name is refused: `std::workflow::run` names a workflow by its own `name`, so a copied file that kept the old name would run under the old name's "always" answer. A file that fails any check fails `listWorkflows`, with a message that starts with its name.
 
 ## Limits and the step guard
 
@@ -172,7 +170,7 @@ A guarded LLM step is the same `thread` block inside the guard, with `return <re
 
 ## Interrupts and checkpoints
 
-The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`, and `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
+The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`. `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
 
 The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, and the resume finishes the workflow. The test does not show that the resume skipped the LLM step. Each child builds its own mock client from the full mock list, so a repeated model call would be answered too.
 
@@ -184,4 +182,4 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
 
 ## Not built yet
 
-The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, and the inputs schema in `meta.json`.
+The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, and the inputs schema in a saved file's `meta`.

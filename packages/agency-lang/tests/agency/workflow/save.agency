@@ -1,7 +1,7 @@
 // Saving a workflow: the full check runs first, one std::workflow::save
-// prompt gates the writes, and a saved workflow loads and lists back.
+// prompt gates the write, and a saved workflow loads and lists back.
 // No node here calls a model.
-import { writeWorkflow, loadWorkflow, listWorkflows, Workflow, WorkflowEntry } from "std::workflow"
+import { writeWorkflow, loadWorkflow, listWorkflows, runWorkflow, Workflow, WorkflowEntry } from "std::workflow"
 import { add, multiply } from "std::math"
 import { mkdir, remove } from "std::fs"
 import { exists } from "std::shell"
@@ -38,7 +38,11 @@ def badWorkflow(name: string): Workflow {
 }
 
 def cleanup(name: string) {
-  remove(OUT + "/${name}") with approve
+  remove(OUT + "/workflows/${name}.json") with approve
+}
+
+def hasEntry(listed: Result<WorkflowEntry[]>, name: string): number {
+  return filter(listed catch [], \entry -> entry.name == name).length
 }
 
 /** The failure's message, or "" for a success. */
@@ -71,21 +75,34 @@ node saveThenLoadAndList(): Json {
   const saved = runSave(doubleSum("doubleSum"))
   const loaded = loadWorkflow("doubleSum", OUT) with approve
   const listed = listWorkflows(OUT) with approve
-  const files = [exists("doubleSum/workflow.json", OUT), exists("doubleSum/meta.json", OUT)]
+  const written = exists("workflows/doubleSum.json", OUT)
   cleanup("doubleSum")
   if (saved is failure || loaded is failure || listed is failure) {
     return ["failed", errorOf(saved), errorOf(loaded), errorOf(listed)]
   }
-  const names = map(listed.value, \entry -> entry.name)
   return [
     saved.value.name,
-    saved.value.dir == resolve(OUT) + "/doubleSum",
-    saved.value.meta.createdBy,
-    JSON.stringify(loaded.value.workflow) == JSON.stringify(doubleSum("doubleSum")),
-    loaded.value.meta.createdAt == saved.value.meta.createdAt,
-    names,
-    files
+    saved.value.path == resolve(OUT) + "/workflows/doubleSum.json",
+    saved.value.meta.savedBy,
+    loaded.value.workflow.steps.length,
+    loaded.value.workflow.result,
+    loaded.value.meta.savedAt == saved.value.meta.savedAt,
+    hasEntry(listed, "doubleSum"),
+    written
   ]
+}
+
+/** A loaded workflow runs and returns its last step, like the one saved. */
+node loadedWorkflowRuns(): Json {
+  cleanup("reloaded")
+  runSave(doubleSum("reloaded"))
+  const loaded = loadWorkflow("reloaded", OUT) with approve
+  cleanup("reloaded")
+  if (loaded is failure(err)) {
+    return "failed: ${err}"
+  }
+  const ran = runWorkflow(loaded.value.workflow, { a: 2, b: 3 }, TOOLS, OUT) with approve
+  return ran catch "run failed"
 }
 
 node savePayload(): Json {
@@ -93,7 +110,7 @@ node savePayload(): Json {
   runSave(doubleSum("shown"))
   cleanup("shown")
   const payload = getMutable("std::workflow::save", null)
-  return [payload.dir == resolve(OUT), payload.name, payload.workflow.description]
+  return [payload.dir == resolve(OUT) + "/workflows", payload.name, payload.workflow.description]
 }
 
 node effectsInOrder(): Json {
@@ -106,14 +123,14 @@ node effectsInOrder(): Json {
 node badWorkflowAsksNothingAndWritesNothing(): Json {
   cleanup("bad")
   const result = runSave(badWorkflow("bad"))
-  const written = exists("bad", OUT)
+  const written = exists("workflows/bad.json", OUT)
   return [isFailure(result), getMutable("effects", []), written]
 }
 
 node rejectedSaveWritesNothing(): Json {
   cleanup("rejected")
   const result = runSave(doubleSum("rejected"), null)
-  const written = exists("rejected", OUT)
+  const written = exists("workflows/rejected.json", OUT)
   return [isFailure(result), written]
 }
 
@@ -125,7 +142,7 @@ node saveTwiceOverwrites(): Json {
   const loaded = loadWorkflow("twice", OUT) with approve
   const listed = listWorkflows(OUT) with approve
   cleanup("twice")
-  const count = filter(listed catch [], \entry -> entry.name == "twice").length
+  const count = hasEntry(listed, "twice")
   let description = ""
   if (loaded is success(entry)) {
     description = entry.workflow.description
@@ -173,16 +190,23 @@ node missingWorkflowFails(): boolean {
 }
 
 node notAWorkflowFailsToLoadAndList(): Json {
-  const saved = __dirname + "/fixtures/saved"
+  const saved = __dirname + "/fixtures/saved/notAWorkflow"
   const loaded = loadWorkflow("notAWorkflow", saved) with approve
   const listed = listWorkflows(saved) with approve
   return [isFailure(loaded), isFailure(listed), errorOf(listed) =~ re/notAWorkflow/]
 }
 
+node renamedFileFailsToLoadAndList(): Json {
+  const saved = __dirname + "/fixtures/saved/renamed"
+  const loaded = loadWorkflow("renamed", saved) with approve
+  const listed = listWorkflows(saved) with approve
+  return [errorOf(loaded) =~ re/named original/, errorOf(listed) =~ re/named original/]
+}
+
 // Compares against resolve(OUT), which equals _realDir(OUT) only when no
 // path segment is a symlink. run.agency relies on the same thing for the
 // run payload.
-node scanPayloadIsTheWorkflowFolder(): Json {
+node scanPayloadIsTheWorkflowsFolder(): Json {
   cleanup("scanned")
   runSave(doubleSum("scanned"))
   handle {
@@ -192,5 +216,5 @@ node scanPayloadIsTheWorkflowFolder(): Json {
     return approve()
   }
   cleanup("scanned")
-  return getMutable("std::workflow::scan", null).dir == resolve(OUT) + "/scanned"
+  return getMutable("std::workflow::scan", null).dir == resolve(OUT) + "/workflows"
 }

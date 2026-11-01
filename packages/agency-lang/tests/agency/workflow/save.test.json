@@ -2,9 +2,20 @@
   "tests": [
     {
       "nodeName": "saveThenLoadAndList",
-      "description": "a saved workflow loads and lists back, file for file",
+      "description": "a saved workflow loads and lists back",
       "input": "",
-      "expectedOutput": "[\"doubleSum\",true,\"writeWorkflow\",true,true,[\"doubleSum\"],[true,true]]",
+      "expectedOutput": "[\"doubleSum\",true,\"writeWorkflow\",2,{\"$ref\":\"steps.doubled\"},true,1,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loadedWorkflowRuns",
+      "description": "a loaded workflow runs and returns its last step",
+      "input": "",
+      "expectedOutput": "10",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -123,7 +134,7 @@
     },
     {
       "nodeName": "notAWorkflowFailsToLoadAndList",
-      "description": "a folder holding something that is not a workflow fails load and list",
+      "description": "a file that is not a saved workflow fails load and list",
       "input": "",
       "expectedOutput": "[true,true,true]",
       "evaluationCriteria": [
@@ -133,8 +144,19 @@
       ]
     },
     {
-      "nodeName": "scanPayloadIsTheWorkflowFolder",
-      "description": "loadWorkflow's scan names the workflow's own folder",
+      "nodeName": "renamedFileFailsToLoadAndList",
+      "description": "a file whose workflow has another name fails load and list",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "scanPayloadIsTheWorkflowsFolder",
+      "description": "loadWorkflow's scan names the project's workflows folder",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

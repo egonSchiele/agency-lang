@@ -46,9 +46,8 @@ import {
   runs the program in a subprocess. Each step's interrupts reach the
   caller's handlers, so a policy decides what the workflow may do.
 
-  `writeWorkflow` saves a checked workflow into a project directory as
-  `<dir>/<name>/workflow.json` and `meta.json`; `loadWorkflow` and
-  `listWorkflows` read them back.
+  `writeWorkflow` saves a checked workflow as `<dir>/workflows/<name>.json`;
+  `loadWorkflow` and `listWorkflows` read saved workflows back.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
@@ -275,47 +274,55 @@ export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: stri
 
 // ---- saving and loading ----
 
-const WORKFLOW_FILE = "workflow.json"
-const META_FILE = "meta.json"
+const WORKFLOWS_DIR = "workflows"
+const FILE_SUFFIX = ".json"
 const MAX_WORKFLOWS = 500
 
-/** What `meta.json` records about a saved workflow. */
+/** What a saved workflow's file records beside the workflow. */
 export type WorkflowMeta = {
-  createdAt: string;
-  createdBy: string
+  /** When the workflow was last saved, as ISO text. */
+  savedAt: string;
+  /** What saved it, such as `writeWorkflow`. */
+  savedBy: string
 }
 
-/** A saved workflow: its name, its folder, the workflow, and its meta.json record. */
+/** A saved workflow: its name, the file it is saved in, the workflow, and
+  the record saved with it. */
 export type WorkflowEntry = {
   name: string;
-  dir: string;
+  path: string;
   workflow: Workflow;
   meta: WorkflowMeta
 }
 
-/** meta.json as written; every field may be missing. */
+/** The meta record as written; every field may be missing. */
 type MetaFile = {
-  createdAt?: string;
-  createdBy?: string
+  savedAt?: string;
+  savedBy?: string
+}
+
+/** A saved file as written. */
+type SavedFile = {
+  workflow: Workflow;
+  meta?: MetaFile
 }
 
 const DEFAULT_META: WorkflowMeta = {
-  createdAt: "",
-  createdBy: ""
+  savedAt: "",
+  savedBy: ""
 }
 
-// Reading saved workflows. One approval covers the reads that fulfil it,
-// which use the non-interrupt primitives, as std::skills and std::toolbox
-// do. `dir` is the real spelling of the directory read.
+/** Raised before saved workflows are read. `dir` is the real path of the
+  project's `workflows` folder, and an "always" answer pins that folder. */
 @alwaysUnder(dir)
 effect std::workflow::scan {
   dir: string
 }
 
-// Saving a workflow. Raised after the check and before anything is
-// written. Saving a name that exists replaces it, so an "always" answer
-// pins the workflow's name as well as the directory: this workflow, in
-// this directory. `dir` is the real spelling of the project directory.
+/** Raised once before a workflow is saved, after its check passes. `dir`
+  is the real path of the project's `workflows` folder. Saving a name that
+  exists replaces that workflow, so an "always" answer pins the name as
+  well as the folder. */
 @alwaysUnder(dir)
 @always(name)
 effect std::workflow::save {
@@ -324,10 +331,9 @@ effect std::workflow::save {
   workflow: Workflow
 }
 
-// Every entry point takes the project directory the same way. An empty
-// string is refused because the file primitives would resolve it to the
-// process cwd. The real spelling is what every prompt names, so one
-// "always" answer covers the reads and writes that fulfil it.
+// An empty `dir` is refused because the file primitives would resolve it
+// to the process cwd. Every prompt names the real spelling, so an "always"
+// answer pins the folder that is actually read and written.
 @capabilities(fileRead)
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
@@ -336,140 +342,118 @@ def expandRoot(dir: string): Result<string> {
   return try _realDir(dir)
 }
 
+def savedFile(name: string): string {
+  return "${WORKFLOWS_DIR}/${name}${FILE_SUFFIX}"
+}
+
 @capabilities(fileRead, fileWrite)
 export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<WorkflowEntry> {
   """
-  Save a workflow into a project directory, as `<dir>/<name>/workflow.json` and `meta.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
+  Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
 
-  @param workflow - The workflow to save. Its `name` names the folder
+  @param workflow - The workflow to save. Its `name` names the file
   @param tools - The functions the workflow may call, for the check
-  @param dir - The project directory, which must exist: the workflow is saved under it, and a local tool's file must be under it too, since the saved workflow imports the tool by a path relative to it
+  @param dir - The project directory, which must exist. A local tool's file must be under it, since the workflow imports the tool by a path relative to it
   """
   const root = expandRoot(dir)
   if (root is failure) {
     return root
   }
-  // The project directory holds the tool modules the check reads, so it
-  // must already exist; only the workflow's own folder is created.
   if (!exists(root.value)) {
     return failure("${root.value} does not exist; dir must name an existing project directory")
   }
-  // The check runs first, so a workflow with problems asks nothing. It
-  // also proves `name` is an identifier, so it is safe as a folder name.
+  // The check also proves `name` is an identifier, so it is safe in a file name.
   const checked = _checked(workflow, tools, root.value)
   if (checked is failure) {
     return failure(checked.error, checked.data)
   }
+  const folder = "${root.value}/${WORKFLOWS_DIR}"
   return interrupt std::workflow::save("Save the workflow ${workflow.name}?", {
-    dir: root.value,
+    dir: folder,
     name: workflow.name,
     workflow: workflow
   })
   const meta: WorkflowMeta = {
-    createdAt: format(now()),
-    createdBy: "writeWorkflow"
+    savedAt: format(now()),
+    savedBy: "writeWorkflow"
   }
-  const folder = workflow.name
+  const file = savedFile(workflow.name)
   destructive {
-    // The host's mkdir is recursive, so an existing folder is not an error.
-    const made = try _mkdir("${root.value}/${folder}")
+    const made = try _mkdir(folder)
     if (made is failure) {
       return made
     }
-    const wroteWorkflow = try _write(root.value, "${folder}/${WORKFLOW_FILE}", JSON.stringify(workflow, null, 2), "overwrite")
-    if (wroteWorkflow is failure) {
-      return wroteWorkflow
-    }
-    const wroteMeta = try _write(root.value, "${folder}/${META_FILE}", JSON.stringify(meta, null, 2), "overwrite")
-    if (wroteMeta is failure) {
-      return wroteMeta
+    const content = JSON.stringify({ workflow: workflow, meta: meta }, null, 2)
+    const wrote = try _write(root.value, file, content, "overwrite")
+    if (wrote is failure) {
+      return wrote
     }
   }
   return success({
     name: workflow.name,
-    dir: "${root.value}/${folder}",
+    path: "${root.value}/${file}",
     workflow: workflow,
     meta: meta
   })
-}
-
-@capabilities(fileRead)
-def readJsonFile(root: string, path: string): Result<Json> {
-  const raw = try _read(root, path, 0, 0)
-  if (raw is failure(readErr)) {
-    return failure("${path} could not be read: ${readErr}")
-  }
-  const parsed = try JSON.parse(raw.value)
-  if (parsed is failure(parseErr)) {
-    return failure("${path} is not valid JSON: ${parseErr}")
-  }
-  return success(parsed.value)
 }
 
 def isPresent(value: Json, key: string): boolean {
   return value != null
 }
 
-// A missing meta.json is the default record. A present one that cannot be
-// read, is not JSON, or has a field of the wrong type is a failure.
-// Validation fills a missing optional field with null, and a null would
-// win over the default in a spread, so only the fields the file has are kept.
-@capabilities(fileRead)
-def metaFor(root: string, name: string): Result<WorkflowMeta> {
-  if (!exists("${name}/${META_FILE}", root)) {
-    return success(DEFAULT_META)
+// The shape check fills a missing field with null, and a null would win
+// over the default in a spread, so only the fields the file has are kept.
+def metaOf(file: MetaFile | null): WorkflowMeta {
+  if (file == null) {
+    return DEFAULT_META
   }
-  const parsed = readJsonFile(root, "${name}/${META_FILE}")
-  if (parsed is failure) {
-    return parsed
-  }
-  const file: MetaFile! = parsed.value
-  if (file is failure(shapeErr)) {
-    return failure("${META_FILE} has the wrong shape: ${shapeErr}")
-  }
-  return success({
+  return {
     ...DEFAULT_META,
-    ...filterEntries(file.value, isPresent)
-  })
+    ...filterEntries(file, isPresent)
+  }
 }
 
-// `root` is the directory the scan named and `name` a folder under it.
 // Every failure starts with the workflow's name, so a caller can return it
 // as it is.
 @capabilities(fileRead)
 def entryFor(root: string, name: string): Result<WorkflowEntry> {
-  const parsed = readJsonFile(root, "${name}/${WORKFLOW_FILE}")
-  if (parsed is failure(readErr)) {
-    return failure("${name}: ${readErr}")
+  const file = savedFile(name)
+  const raw = try _read(root, file, 0, 0)
+  if (raw is failure(readErr)) {
+    return failure("${name}: ${file} could not be read: ${readErr}")
   }
-  const checked: Workflow! = parsed.value
-  if (checked is failure(shapeErr)) {
-    return failure("${name}: ${WORKFLOW_FILE} is not a workflow: ${shapeErr}")
+  const parsed = try JSON.parse(raw.value)
+  if (parsed is failure(parseErr)) {
+    return failure("${name}: ${file} is not valid JSON: ${parseErr}")
   }
-  const meta = metaFor(root, name)
-  if (meta is failure(metaErr)) {
-    return failure("${name}: ${metaErr}")
+  const saved: SavedFile! = parsed.value
+  if (saved is failure(shapeErr)) {
+    return failure("${name}: ${file} is not a saved workflow: ${shapeErr}")
   }
-  // The file's own value, not the checked one: the check fills a missing
-  // `result` or `limits` with null, and a null `result` is a literal
-  // result to the generator.
-  const saved: Workflow = parsed.value
+  // `std::workflow::run` names the workflow by its own `name`, so a copied
+  // file that kept the old name would run under an approval for the old one.
+  const workflow = saved.value.workflow
+  if (workflow.name != name) {
+    return failure("${name}: ${file} holds a workflow named ${workflow.name}; the file name and the workflow's name must match")
+  }
   return success({
     name: name,
-    dir: "${root}/${name}",
-    workflow: saved,
-    meta: meta.value
+    path: "${root}/${file}",
+    workflow: workflow,
+    meta: metaOf(saved.value.meta)
   })
 }
 
 @capabilities(fileRead)
 export def loadWorkflow(name: string, dir: string): Result<WorkflowEntry> {
   """
-  Load a saved workflow by name from a project directory. Raises one `std::workflow::scan` prompt for the workflow's folder before reading it, and nothing else.
+  Load a saved workflow by name. Raises one `std::workflow::scan` prompt before reading it, and nothing else.
 
-  @param name - The workflow's name, which is its folder under `dir`
+  @param name - The workflow's name
   @param dir - The project directory the workflow was saved under
   """
+  // The name comes from the caller, so it gets the rule parse gives a
+  // workflow's name: `../x` must not name a file outside the folder.
   const problem = _workflowNameProblem(name)
   if (problem != null) {
     return failure(problem)
@@ -478,32 +462,30 @@ export def loadWorkflow(name: string, dir: string): Result<WorkflowEntry> {
   if (root is failure) {
     return root
   }
-  // Checked before the prompt, so a missing workflow fails with a message
-  // instead of asking first: the check ls, grep, and glob make before
-  // their interrupt (docs/dev/stdlib/grep-flags.md).
-  if (!exists(name, root.value)) {
-    return failure("no workflow named ${name} in ${root.value}")
+  // Before the prompt, so a missing workflow fails without asking first,
+  // as ls, grep, and glob do (docs/dev/stdlib/grep-flags.md).
+  if (!exists(savedFile(name), root.value)) {
+    return failure("no workflow named ${name} in ${root.value}/${WORKFLOWS_DIR}")
   }
   return interrupt std::workflow::scan("Read the saved workflow ${name}?", {
-    dir: "${root.value}/${name}"
+    dir: "${root.value}/${WORKFLOWS_DIR}"
   })
   return entryFor(root.value, name)
 }
 
-// The glob's `*` matches a name that starts with a dot, so dot folders are
-// left out by hand.
-def workflowFolder(path: string): string {
-  return path.split("/")[0]
+def workflowName(fileName: string): string {
+  return fileName.slice(0, fileName.length - FILE_SUFFIX.length)
 }
 
-def isVisible(name: string): boolean {
-  return !name.startsWith(".")
+// A glob `*` matches a name that starts with a dot.
+def isVisible(fileName: string): boolean {
+  return !fileName.startsWith(".")
 }
 
 @capabilities(fileRead)
 export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
   """
-  List the workflows saved in a project directory. Raises one `std::workflow::scan` prompt before reading anything, and nothing else. A directory that does not exist has no workflows. A folder whose files cannot be read fails the listing, with a message naming the folder.
+  List the workflows saved under a project directory. Raises one `std::workflow::scan` prompt before reading anything, and nothing else. A project with no saved workflows lists none. A file that cannot be read as a saved workflow fails the listing, with a message naming it.
 
   @param dir - The project directory the workflows were saved under
   """
@@ -511,22 +493,22 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
   if (root is failure) {
     return root
   }
-  if (!exists(root.value)) {
+  const folder = "${root.value}/${WORKFLOWS_DIR}"
+  if (!exists(folder)) {
     return success([])
   }
-  return interrupt std::workflow::scan("Read the workflows saved in this directory?", {
-    dir: root.value
+  return interrupt std::workflow::scan("Read the workflows saved in this project?", {
+    dir: folder
   })
-  // Asked for one more than the cap, so a listing that long is refused
-  // instead of cut short without a word.
-  const paths = try _glob(root.value, ".", "*/${WORKFLOW_FILE}", MAX_WORKFLOWS + 1)
-  if (paths is failure) {
-    return paths
+  // One more than the cap, so a folder that full is refused, not cut short.
+  const fileNames = try _glob(root.value, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)
+  if (fileNames is failure) {
+    return fileNames
   }
-  if (paths.value.length > MAX_WORKFLOWS) {
-    return failure("${root.value} has more than ${MAX_WORKFLOWS} workflows")
+  if (fileNames.value.length > MAX_WORKFLOWS) {
+    return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
   }
-  const names = filter(map(paths.value, workflowFolder), isVisible)
+  const names = map(filter(fileNames.value, isVisible), workflowName)
   const entries = map(names, \name -> entryFor(root.value, name))
   const broken = find(entries, \entry -> isFailure(entry))
   if (broken != null) {

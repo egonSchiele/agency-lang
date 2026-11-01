@@ -8,13 +8,13 @@ import { failure, success, type ResultFailure, type ResultSuccess } from "../../
 import { wallClockFor } from "./limits.js";
 import { lowerWorkflow } from "./lower.js";
 import { parseWorkflow } from "./parse.js";
-
-export { _workflowNameProblem } from "./parse.js";
 import { problemsFromDiagnostics, type Diagnostic } from "./problems.js";
 import { renderWorkflow } from "./render.js";
 import { resolveWorkflow, signatureKey } from "./resolve.js";
 import { toolRefs } from "./tools.js";
 import type { Owner, Problem, Range, Signature, ToolRef } from "./types.js";
+
+export { _workflowNameProblem } from "./parse.js";
 
 export type Compiled = {
   source: string;

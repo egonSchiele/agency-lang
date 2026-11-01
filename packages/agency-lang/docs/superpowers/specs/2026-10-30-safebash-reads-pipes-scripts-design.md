@@ -453,6 +453,19 @@ from the rows above and from "Paths" below:
 
 See `docs/dev/stdlib/safe-bash.md`, "The read family".
 
+**Departures for listings (ADI-246).** The built slice differs from the
+`ls`, `tree`/`du`, and `find` rows above:
+
+- `-newer`, `-iname`, `-H`, `-P`, and `ls -G` are out.
+- The `std::glob` pattern is `**/` plus the `-name` value, not the bare
+  value, and `**` when `-not`, `-o`, or `-prune` widens the search.
+- `find` with no path is refused, and so is `-maxdepth 0`.
+- A file given to `ls` or `find` is unrecognized.
+- `-name` may appear once.
+- A glob word anywhere is unrecognized until ADI-247.
+
+See `docs/dev/stdlib/safe-bash.md`, "Listings".
+
 Rows are easy to add later, and each is one line plus one test. What the
 table refuses is as important as what it accepts:
 

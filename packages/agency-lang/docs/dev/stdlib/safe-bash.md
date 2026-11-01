@@ -67,8 +67,8 @@ runs in-process through `std::agency`.
 
 `bash`: everything else. Narrow when every command was recognized
 (`git status`, `git log`, `git diff`, `git diff --staged`, a grep of one
-named file, a read of named files, a redirect contributing `std::write`
-or `std::read`), broad otherwise.
+named file, a read of named files, a listing of named folders, a find, a
+redirect contributing `std::write` or `std::read`), broad otherwise.
 
 `outcomeOf(plan)` names which of these a plan is (`refuse`, `shellFree`,
 `agency`, `narrow`, `broad`) with an exhaustive match over the
@@ -89,6 +89,7 @@ bash will do, and `std::bash` otherwise.
 | `echo "== a =="; cat a.txt` | the echo and `_read`, in order | `std::read` for `a.txt` |
 | `grep -c hello one.txt` | real grep, through bash | `std::grep` for the one file |
 | `wc -l one.txt` | real wc, through bash | `std::read` for the one file |
+| `ls src` | real ls, through bash | `std::ls` for `src`, as the ls tool does |
 
 The rule has three reasons:
 
@@ -438,6 +439,11 @@ field needs two facts:
 - `maxResults` is `SHELL_FREE_GREP_CAP` on the shell-free path. On the
   bash path it is `0`, meaning no cap, which is true of grep without
   `-m`. In the grep tool, `0` means no results at all.
+- The same holds for `std::ls` and `std::glob` from a listing or a
+  `find`: `maxResults` is `0`, meaning no cap, because real `ls`, `tree`,
+  `du`, and `find` list everything. The `ls` and `glob` tools cap their
+  results with it, and `_glob` returns nothing for `0`, so a policy
+  author must not read `0` as "nothing".
 
 ### Resolving the path when the plan is made
 
@@ -590,6 +596,97 @@ These are left out:
   prints them, and the shell-free read returns the failure alone.
 - `file`, `stat`, `md5sum`, `shasum`, `column`, `xxd`, and `hexdump`.
 
+## Listings
+
+A listing asks the question the `ls` tool asks, and a `find` asks the
+question the `glob` tool asks. So `recommended` approves both under the
+launch directory with no prompt, and `ls /etc` or `find ~ -name '*.pem'`
+still reaches a person. Both run real programs through bash. Nothing
+here is shell-free.
+
+### `ls`, `tree`, and `du`
+
+`LIST_VERBS` gives each listing verb its flags, the valued flags that
+hold a count, and whether it walks the tree:
+
+| Verb | Flags | Count flags | Walks the tree |
+|---|---|---|---|
+| `ls` | `l a A h 1 t r S R d p F --color=never` | none | with `-R` |
+| `tree` | `a d --noreport`, valued `L I` | `L` | always |
+| `du` | `s h a c`, valued `d` | `d` | always |
+
+`listEffects` raises one `std::ls { dir, recursive, maxResults: 0 }` per
+folder named, and `.` when none is named. Every path goes through
+`resolveDirPath`. It must be literal and must be a folder, and the
+payload names the real folder. A file (`ls one.txt`), a missing path, or
+a glob word makes the command unrecognized. `ls -l link` lists the link
+itself and does not go into the folder, while the payload names the
+folder the link points to. So the question names more than runs, which
+fails safe. A listing ignores its stdin, so `git log | ls` is a listing
+of `.`.
+
+Left out: `-L` on every verb, because it follows symlinks out of the
+folder. `ls -G` is left out because it turns on color on macOS and hides
+the group column on GNU. `tree` is not on macOS by default. The line is
+recognized, and the shell reports it missing, as with `tac`.
+
+### `find`
+
+`findEffects` raises one `std::glob { pattern, dir, maxResults: 0 }` per
+path. `FIND_FLAGS` is an allowlist of whole words: `-not -o -a -prune
+-print -print0`, and valued `-name -path -type -maxdepth -mindepth
+-size`. An unlisted word makes the command unrecognized, which keeps
+`-exec`, `-delete`, `-fprint`, `-L`, and the ones the list forgot on the
+`std::bash` path. `-exec rm {} \;` does not parse at all. `-newer` reads
+another file's time. `-iname` matches without case, and the glob tool's
+pattern does not. `-H` and `-P` are taken only before the paths, where
+the ordering rule refuses them.
+
+The table sets `wholeWords` (see `FlagSpec`), so `readFlagWord` reads
+`-name` as one word and not as the letters `n a m e`. An unknown word
+is refused by its whole name (`find does not take -delete`). No verb
+mixes the two kinds, so a table holds letters or words.
+
+find's paths come first and its expression after. A `find` with no path
+is refused, because BSD `find -name x` is a usage error while GNU reads
+`.`. A path after the first expression word is refused, because it is a
+usage error in find's grammar. Every path must be a folder. `-name` may
+appear once, the rule `splitFlags` applies to every valued flag, so
+`find . -name a -o -name b` asks `std::bash`. `-maxdepth 0` is refused,
+because it lists only the path itself and no pattern says that.
+
+The pattern describes find's search or a wider one. It never describes
+a narrower one. The glob tool matches a pattern against the whole
+relative path, with `*` stopping at `/`, while `-name` matches the last
+part of the path at any depth. So `findPattern` gives:
+
+| `-name` given, with no `-not`, `-o`, or `-prune` | `-maxdepth 1` | Pattern |
+|---|---|---|
+| yes | no | `**/` and the value |
+| yes | yes | the value |
+| no | no | `**` |
+| no | yes | `*` |
+
+The three words widen or invert what `-name` selects. `-not -name x`
+lists everything except `x`. `-name x -o -type d` lists `x` and every
+folder. `-path ./node_modules -prune -o -name x` lists `./node_modules`
+too. `**` says the search may list anything under `dir`, which is true
+of every expression the allowlist accepts, and it keeps the common
+`-not -path '*/node_modules/*'` narrow. So `find . -name a -o -path b`
+is narrow, with pattern `**`.
+
+### What a recursive listing shows
+
+The `ls` tool's recursive walk and the `glob` tool's walk skip
+`SKIP_DIRS` (`node_modules`, `.git`, `dist`, `build`, `.next`,
+`.cache`), and `_glob` also honors `.gitignore`. Real `ls -R`, `du`,
+`tree`, and `find` skip nothing. A recursive listing through bash is
+still narrow under the same payload. It shows the names under `.git`
+and `node_modules` that the tools leave out, and no file's contents.
+The names are not what decided grep, where a directory search through
+bash asks `std::bash` because real grep reads the contents the tool
+skips.
+
 ## Chains in process
 
 `tryShellFreeChain` plans a line whose commands are joined by `;`, `&&`,
@@ -683,7 +780,10 @@ internals through each step's executor.
   runs with interrupt expectations, and the rejection messages. The
   chain nodes are `chainsOfInProcessCommands`, `chainMatchesBash`,
   `chainFailureAfterAWriteIsDestructive`, `chainFailsLikeBash`, and
-  `chainOfReadsAsksOnlyTheReads`.
+  `chainOfReadsAsksOnlyTheReads`. The listing nodes are
+  `wholeShortFlags`, `listingsAskStdLs`, `lsPayloadFields`,
+  `listingPayloadNamesTheRealFolder`, `findAsksStdGlob`, `findPatterns`,
+  and the end-to-end runs under `recommended`.
 - `lib/stdlib/safeBash.test.ts`: `astToBash` round-trips every command
   family the classifier sees.
 - `lib/stdlib/statelog.test.ts`: `_debug`.

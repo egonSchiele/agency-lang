@@ -286,6 +286,7 @@ export default defineConfig({
             { text: "test", link: "/cli/test" },
             { text: "trace", link: "/cli/trace-and-bundle" },
             { text: "typecheck", link: "/cli/typecheck" },
+            { text: "workflow", link: "/cli/workflow" },
           ],
         },
       ],

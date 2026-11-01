@@ -202,11 +202,12 @@ export def generateImageLocal(
   The scribble ControlNet reads white lines on black. For a drawing made
   with dark lines on white paper, pass `invertControlImage: true`.
 
-  FLUX.2 [klein] edits pictures. Pass up to 4 paths in `images` and say in
-  the prompt what to change: `generateImageLocal("add a hat to the
-  character", "flux2-klein-4b", images: ["cat.png"])`. Each picture is read
-  from this machine, under std::readImage, and never uploaded. With `size`
-  left empty, the result keeps the first picture's shape.
+  FLUX.2 [klein] and Qwen-Image-Edit edit pictures. Pass up to 4 paths in
+  `images` and say in the prompt what to change: `generateImageLocal("add
+  a hat to the character", "flux2-klein-4b", images: ["cat.png"])`. Each
+  picture is read from this machine, under std::readImage, and never
+  uploaded. With `size` left empty, the result keeps the first picture's
+  shape. Qwen-Image-Edit only edits: it refuses a call with no picture.
 
   Every other model redraws a picture instead: pass its path in
   `startImage` and say in the prompt what it should become,
@@ -233,10 +234,10 @@ export def generateImageLocal(
   @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
   @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
-  @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
-  @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] takes one
+  @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] and Qwen-Image-Edit take them, and at most 4. Qwen-Image-Edit needs at least one
+  @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] and Qwen-Image-Edit takes one
   @param strength - How much of startImage to redraw, above 0 and up to 1. Low keeps it close, high changes more. Null uses the model's default, which can change when a mask is added: for Z-Image Turbo it goes from 0.6 to 1.0, which redraws the white part from scratch
-  @param mask - A black-and-white picture the same size as startImage, as a path to a file on this machine. White is redrawn and black is kept. Goes with startImage. Every model but FLUX.2 [klein] takes one
+  @param mask - A black-and-white picture the same size as startImage, as a path to a file on this machine. White is redrawn and black is kept. Goes with startImage. Every model but FLUX.2 [klein] and Qwen-Image-Edit takes one
   """
   // Every input path is checked before the first interrupt, so a call that
   // is going to fail asks for nothing.

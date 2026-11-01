@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { DIFFUSERS_VERSION, imageServerScript } from "./localServe.js";
+import { DIFFUSERS_VERSION, EDIT_ONLY_IMAGE_FAMILIES, imageServerScript } from "./localServe.js";
 import { MAX_STEPS } from "../stdlib/mlxImage.js";
 import { LOCAL_IMAGE_FIELDS, localBodyBytes } from "../stdlib/localImageInputs.js";
 
@@ -508,15 +508,36 @@ print(adapter_names(os.path.join(d, "missing")))
     }
   });
 
-  it("gives every family row the same keys, a loaded class among its pipelines, and only known modes", () => {
+  it("gives every family row the same keys, a loaded class among its pipelines, a warm-up mode, and only known modes", () => {
     const out = rules(`
 keys = [sorted(row) for row in FAMILIES.values()]
 print(all(k == keys[0] for k in keys))
 modes = ["plain"] + [row["mode"] for row in INPUT_IMAGES.values()]
 print(all(mode in modes for row in FAMILIES.values() for mode in row["pipelines"]))
 print(all(row["loads"] in row["pipelines"].values() for row in FAMILIES.values()))
+print(all(warm_up_mode(row) in WARM_UP_INPUTS for row in FAMILIES.values()))
 `);
-    expect(out.split("\n")).toEqual(["True", "True", "True"]);
+    expect(out.split("\n")).toEqual(["True", "True", "True", "True"]);
+  });
+
+  it("lists the same edit-only families as the serve banner", () => {
+    const out = rules(`
+print(*sorted(name for name, row in FAMILIES.items() if "plain" not in row["pipelines"]))
+`);
+    expect(out).toBe([...EDIT_ONLY_IMAGE_FAMILIES].sort().join(" "));
+  });
+
+  it("names the family when its loaded class runs in no warm-up mode", () => {
+    const out = rules(`
+inpaint_only = {**FAMILIES["StableDiffusionXLPipeline"], "loads": "StableDiffusionXLInpaintPipeline"}
+try:
+    warm_up_mode(inpaint_only)
+except ValueError as e:
+    print(e)
+`);
+    expect(out).toBe(
+      "SDXL loads StableDiffusionXLInpaintPipeline, which runs in none of the warm-up modes (plain and reference). Add its mode to WARM_UP_INPUTS.",
+    );
   });
 
   it("decides a request's mode from its image field, and refuses what does not fit the mode", () => {

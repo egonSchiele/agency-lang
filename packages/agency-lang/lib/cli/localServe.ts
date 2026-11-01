@@ -33,6 +33,7 @@ import {
   parseServedUri,
   modelDirSizeBytes,
   modelDirEntries,
+  readModelJson,
   type ServedBackend,
 } from "../stdlib/modelBackend.js";
 import { IMAGES_PATH, VISION_PATHS } from "./serveLog.js";
@@ -1155,6 +1156,23 @@ const TRY_VISION: Record<VisionFamily["tryIt"], (name: string) => string> = {
   embedImage: (name) => `embedImage("drawing.png", "${name}")`,
 };
 
+/** The image families that only edit pictures: they refuse a prompt with
+ *  no picture, so the banner's example passes one. These are the rows of
+ *  `FAMILIES` in diffusersImageRules.py with no plain class, and a test
+ *  compares the two. */
+export const EDIT_ONLY_IMAGE_FAMILIES = ["QwenImageEditPlusPipeline"];
+
+/** The `generateImageLocal` call the banner suggests for an image model,
+ *  read from the `_class_name` in its model_index.json. */
+function tryImage(model: BannerModel): string {
+  const className =
+    model.dir === undefined ? undefined : readModelJson(model.dir, "model_index.json")?._class_name;
+  if (typeof className === "string" && EDIT_ONLY_IMAGE_FAMILIES.includes(className)) {
+    return `generateImageLocal("put a red hat on the cat", "${model.name}", images: ["cat.png"])`;
+  }
+  return `generateImageLocal("a lighthouse in a storm", "${model.name}")`;
+}
+
 /** The suffix after a model's name in the banner. Chat models get none. */
 const BANNER_SUFFIX: Record<ServeKind, string> = {
   chat: "",
@@ -1198,13 +1216,13 @@ export function servingBanner(port: number, models: BannerModel[]): string[] {
       `    speakLocal("Hello there.", "${speech}")`,
     );
   }
-  const image = first("image");
+  const image = models.find((model) => model.kind === "image");
   if (image !== undefined) {
     lines.push(
       "",
       "  In Agency code:",
       `    import { generateImageLocal } from "std::image"`,
-      `    generateImageLocal("a lighthouse in a storm", "${image}")`,
+      `    ${tryImage(image)}`,
     );
   }
   const vision = models.find((model) => model.kind === "vision");

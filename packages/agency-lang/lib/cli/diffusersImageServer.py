@@ -422,10 +422,11 @@ class Generator:
         """One small generation before the port opens. A model that loads
         but cannot generate fails here, and `agency local serve` reports the
         exit instead of the user's first call finding it."""
-        self.generate(
-            check_request(self.rules, warm_up_request(self.rules), self.adapters_dir, self.controlnets_dir),
-            None,
-        )
+        try:
+            body = warm_up_request(self.rules)
+        except ValueError as err:
+            fail(str(err))
+        self.generate(check_request(self.rules, body, self.adapters_dir, self.controlnets_dir), None)
 
 
 def encode(image, fmt):

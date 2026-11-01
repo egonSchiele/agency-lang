@@ -1332,8 +1332,16 @@ def pipeline_args(rules, request, width, height):
 def warm_up_mode(rules):
     """The first mode in WARM_UP_INPUTS that runs the class the server
     loads: plain for a family that draws from a prompt alone, reference
-    for one that only edits."""
-    return next(mode for mode in WARM_UP_INPUTS if rules["pipelines"].get(mode) == rules["loads"])
+    for one that only edits. Raises ValueError for a family whose loaded
+    class runs in no such mode, so the server stops with a message
+    instead of a bare StopIteration."""
+    mode = next((mode for mode in WARM_UP_INPUTS if rules["pipelines"].get(mode) == rules["loads"]), None)
+    if mode is None:
+        raise ValueError(
+            f"{rules['label']} loads {rules['loads']}, which runs in none of the warm-up modes "
+            f"({join_names(list(WARM_UP_INPUTS))}). Add its mode to WARM_UP_INPUTS."
+        )
+    return mode
 
 
 def warm_up_request(rules):

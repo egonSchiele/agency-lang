@@ -635,6 +635,18 @@ describe("servingBanner", () => {
     ]);
   });
 
+  it("passes a picture in the example for a model that only edits", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "banner-"));
+    fs.writeFileSync(
+      path.join(dir, "model_index.json"),
+      JSON.stringify({ _class_name: "QwenImageEditPlusPipeline" }),
+    );
+    expect(servingBanner(8080, [{ name: "/m/qwen-edit", kind: "image", dir }]).slice(-1)).toEqual([
+      `    generateImageLocal("put a red hat on the cat", "/m/qwen-edit", images: ["cat.png"])`,
+    ]);
+    safeDeleteDirectoryWithin(os.tmpdir(), dir);
+  });
+
   it("marks speech models and shows the speakLocal call for the first", () => {
     expect(servingBanner(8080, [{ name: "org/tts", kind: "speech" }])).toEqual([
       "Serving 1 model on http://127.0.0.1:8080/v1:",

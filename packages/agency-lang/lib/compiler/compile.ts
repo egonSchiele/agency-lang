@@ -205,8 +205,8 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       throw e;
     }
 
-    // 7. Generate TypeScript
-    const outputPath = path.join(os.tmpdir(), `${moduleId}.js`);
+    // 7. Generate TypeScript. No output file: this code is loaded from
+    // wherever the subprocess writes it, so it records no source file.
     const mirrorInitPlan = initPlanForModule(closure, syntheticPath);
     const initPlan =
       config.fingerprintModuleId === undefined
@@ -217,7 +217,7 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       config,
       info,
       generatedModuleId,
-      outputPath,
+      undefined,
       initPlan,
       config.fingerprintModuleId !== undefined,
     );

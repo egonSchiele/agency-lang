@@ -387,9 +387,11 @@ export class TypeScriptBuilder {
    * @param moduleId - Unique identifier for this module (e.g., "foo.agency"), used to
    *   namespace global variables in the GlobalStore so that different modules' globals
    *   don't collide. Must be consistent between the defining module and any importers.
-   * @param outputFile - Absolute path where the generated code will be written.
-   *   Used to compute relative import paths for stdlib. If not provided, falls
-   *   back to resolving moduleId against cwd.
+   * @param outputFile - Absolute path of the file the generated code is
+   *   written to and loaded from. The module records its source file as a
+   *   path from here. Leave it out for code that loads from somewhere else,
+   *   which then records none. It is also the base for import paths when
+   *   the unit has no `fromFile`.
    * @param initPlan - Optional per-module init plan + resolver from
    *   `compileClosure`. See the field docstring above.
    */
@@ -2679,6 +2681,7 @@ export class TypeScriptBuilder {
     const createProps: Record<string, TsNode> = {
       name: ts.str(functionName),
       module: ts.str(this.moduleId),
+      sourceFile: ts.id("__sourceFile"),
       fn: ts.id(implName),
       params: ts.arr(paramNodes),
       toolDefinition: toolDef,
@@ -4717,7 +4720,27 @@ export class TypeScriptBuilder {
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),
+      sourceFile: this.sourceFileCode(),
     });
+  }
+
+  /** The module's source file, as code: the path from the compiled file's
+   *  folder to its `.agency` file, joined to `__dirname` when the module
+   *  loads. Null when the output file or the source file is unknown. */
+  private sourceFileCode(): string {
+    const sourceFile = this.compilationUnit.fromFile;
+    if (this.outputFile === undefined || sourceFile === undefined) {
+      return "null";
+    }
+    const fromOutput = path.relative(path.dirname(this.outputFile), sourceFile);
+    // join, not resolve: in a browser __dirname is a URL, and the portable
+    // path module's resolve then reads process.cwd(), which throws.
+    return printTs(
+      $.id("path")
+        .prop("join")
+        .call([ts.id("__dirname"), ts.str(fromOutput)])
+        .done(),
+    );
   }
 
   private preprocess(): TsNode[] {

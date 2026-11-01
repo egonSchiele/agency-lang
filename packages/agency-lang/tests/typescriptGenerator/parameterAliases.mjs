@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -320,6 +321,7 @@ return runtimeFailure(__error, {
 export const fetchLike = __AgencyFunction.create({
   name: "fetchLike",
   module: "parameterAliases.agency",
+  sourceFile: __sourceFile,
   fn: __fetchLike_impl,
   params: [{
     name: "baseUrl",

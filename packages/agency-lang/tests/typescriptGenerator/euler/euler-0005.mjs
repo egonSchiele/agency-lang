@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -329,6 +330,7 @@ return runtimeFailure(__error, {
 export const gcd = __AgencyFunction.create({
   name: "gcd",
   module: "euler-0005.agency",
+  sourceFile: __sourceFile,
   fn: __gcd_impl,
   params: [{
     name: "a",
@@ -496,6 +498,7 @@ return runtimeFailure(__error, {
 export const lcm = __AgencyFunction.create({
   name: "lcm",
   module: "euler-0005.agency",
+  sourceFile: __sourceFile,
   fn: __lcm_impl,
   params: [{
     name: "a",

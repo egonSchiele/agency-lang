@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -313,6 +314,7 @@ return runtimeFailure(__error, {
 export const patch = __AgencyFunction.create({
   name: "patch",
   module: "utilityTypes.agency",
+  sourceFile: __sourceFile,
   fn: __patch_impl,
   params: [{
     name: "changes",

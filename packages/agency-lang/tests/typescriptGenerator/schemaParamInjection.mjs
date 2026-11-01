@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -318,6 +319,7 @@ return runtimeFailure(__error, {
 export const parseValue = __AgencyFunction.create({
   name: "parseValue",
   module: "schemaParamInjection.agency",
+  sourceFile: __sourceFile,
   fn: __parseValue_impl,
   params: [{
     name: "input",
@@ -470,6 +472,7 @@ return runtimeFailure(__error, {
 export const wrapper = __AgencyFunction.create({
   name: "wrapper",
   module: "schemaParamInjection.agency",
+  sourceFile: __sourceFile,
   fn: __wrapper_impl,
   params: [],
   toolDefinition: {

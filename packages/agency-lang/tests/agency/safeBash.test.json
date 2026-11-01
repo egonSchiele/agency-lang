@@ -750,6 +750,45 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "loneReadIsShellFree",
+      "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash.",
+      "input": "",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreeReadMatchesRealTools",
+      "description": "Each row runs the shell-free path and the real program on the same command and compares the output exactly, including a file with no final newline, an empty file, and a file with Windows line endings. Each row first checks that its command really runs shell-free.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loneReadAsksOneQuestion",
+      "description": "A lone read asks one std::read question and no shell question, and prints what head prints.",
+      "input": "",
+      "expectedOutput": "\"hello world\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

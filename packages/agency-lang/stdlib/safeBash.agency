@@ -22,6 +22,9 @@ import {
   grepExecution,
   readEffect,
   ReadPayload,
+  ReadView,
+  readExecution,
+  runRead,
   runGrep,
   GrepRender,
   GrepFileNames,
@@ -1325,6 +1328,104 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
   })
 }
 
+/** The read verbs the shell-free path prints itself. */
+static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
+
+@capabilities(fileRead)
+def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  A lone cat, head, or tail of one file, run through the read tool's own
+  read instead of the program, so its approval means what the read
+  tool's approval means. Applies only to the flags `_renderReadView`
+  prints exactly. A failure means "not this path"; the general rules
+  then decide.
+  """
+  const name = command.command
+  if (name == null || name.tag != "literal" || !SHELL_FREE_READ_VERBS.includes(name.text)) {
+    return failure("not a lone read")
+  }
+  if (command.assignments.length > 0 || command.redirects.length > 0) {
+    return failure("not a lone read")
+  }
+  const verb = name.text
+  const spec = READ_VERBS[verb]
+  if (spec == null) {
+    return failure("not a lone read")
+  }
+  return match(readFileVerb(verb, command, cwd, spec)) {
+    success(found) => shellFreeReadOf(verb, found, command)
+    failure(why) => failure(why)
+  }
+}
+
+def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Result<Plan> {
+  return match(found) {
+    { kind: "stdin" } => failure("a lone read with no path reads stdin")
+    { kind: "files", paths, split } => shellFreeReadPlan(verb, paths, split, command)
+  }
+}
+
+def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command: SimpleCommand): Result<Plan> {
+  if (paths.length != 1) {
+    return failure("the shell-free path reads one file")
+  }
+  const view = readViewFor(verb, split)
+  if (isFailure(view)) {
+    return view
+  }
+  const payload: ReadPayload = {
+    dir: paths[0].dir,
+    filename: paths[0].filename
+  }
+  return success({
+    effects: [readEffect(payload)],
+    execution: readExecution(payload, view.value),
+    broadReason: null,
+    verbs: verbNames([command])
+  })
+}
+
+def readViewFor(verb: string, split: SplitArgs): Result<ReadView> {
+  """
+  How the shell-free path prints this command, or a failure for a flag it
+  does not print. cat takes only -n; head and tail take only -n with a
+  count of at least 1. BSD `head -n 0` prints an error and exits 1 while
+  GNU prints nothing, so no one rendering of 0 is right everywhere.
+  """
+  if (verb == "cat") {
+    const others = [letter for letter in split.plain if letter != "n"]
+    if (others.length > 0) {
+      return failure("not rendered shell-free")
+    }
+    if (split.plain.length > 0) {
+      return success({ kind: "numbered" })
+    }
+    return success({ kind: "whole" })
+  }
+  const notCounts = [entry for entry in split.values if entry.flag != "n"]
+  if (notCounts.length > 0) {
+    return failure("not rendered shell-free")
+  }
+  const counts = [entry.value for entry in split.values if entry.flag == "n"]
+  const lines = if (counts.length == 0) then 10 else digitsValue(counts[0])
+  if (lines == 0) {
+    return failure("a count of 0 is refused shell-free")
+  }
+  if (verb == "head") {
+    return success({ kind: "head", lines: lines })
+  }
+  return success({ kind: "tail", lines: lines })
+}
+
+/** The number a string of digits spells. The caller checked `isDigits`. */
+def digitsValue(text: string): number {
+  let value = 0
+  for (char in text.split("")) {
+    value = value * 10 + DIGITS.indexOf(char)
+  }
+  return value
+}
+
 static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }
@@ -1385,6 +1486,7 @@ export def outcomeOf(plan: Plan): string {
     "echo" => "shellFree"
     "write" => "shellFree"
     "grep" => "shellFree"
+    "read" => "shellFree"
     "agency" => "agency"
     "bash" => bashOutcome(plan)
   }
@@ -1714,6 +1816,10 @@ export def planFor(source: string, cwd: string): Plan {
       if (shellFreeGrep is success(plan)) {
         return plan
       }
+      const shellFreeRead = tryShellFreeRead(only, cwd)
+      if (shellFreeRead is success(plan)) {
+        return plan
+      }
     }
   }
 
@@ -1971,6 +2077,7 @@ export def safeBash(
     { kind: "echo", content } => success(keepOutput(content, 0, command))
     { kind: "agency", args } => runAgency(args, dir, command)
     { kind: "grep" } => runGrep(exec, command)
+    { kind: "read" } => runRead(exec, command)
     { kind: "bash", command as text } => runBash(text, dir, command)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.

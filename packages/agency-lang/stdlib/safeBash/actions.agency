@@ -33,6 +33,8 @@ export type Effect =
   | { name: "std::git::diff"; payload: GitDiffPayload }
   | { name: "std::grep"; payload: GrepPayload }
   | { name: "std::read"; payload: ReadPayload }
+  | { name: "std::ls"; payload: LsPayload }
+  | { name: "std::glob"; payload: GlobPayload }
 
 export type WritePayload = {
   dir: string;
@@ -90,6 +92,38 @@ export type ReadPayload = {
 export def readEffect(payload: ReadPayload): Effect {
   return {
     name: "std::read",
+    payload: payload
+  }
+}
+
+/** The fields the ls tool's own std::ls interrupt is keyed on. On the
+ * bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
+ * everything. */
+export type LsPayload = {
+  dir: string;
+  recursive: boolean;
+  maxResults: number
+}
+
+export def lsEffect(payload: LsPayload): Effect {
+  return {
+    name: "std::ls",
+    payload: payload
+  }
+}
+
+/** The fields the glob tool's own std::glob interrupt is keyed on. On the
+ * bash path `maxResults` is 0, meaning no cap: real find lists
+ * everything. */
+export type GlobPayload = {
+  pattern: string;
+  dir: string;
+  maxResults: number
+}
+
+export def globEffect(payload: GlobPayload): Effect {
+  return {
+    name: "std::glob",
     payload: payload
   }
 }

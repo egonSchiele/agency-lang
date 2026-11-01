@@ -6,7 +6,7 @@
 // typecheck clean. `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
-import { bash, grep, ExecResult } from "std::shell"
+import { bash, grep, ls, glob, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
@@ -21,6 +21,8 @@ import {
   grepEffect,
   grepExecution,
   readEffect,
+  lsEffect,
+  globEffect,
   ReadPayload,
   ReadView,
   readExecution,
@@ -409,6 +411,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
       return success([...git.value, ...redirect.value])
     }
     "tr" => trEffects(command, readsStdin, redirect.value)
+    "find" => findEffects(command, cwd, redirect.value)
     _ => otherVerbEffects(name.text, command, cwd, readsStdin, redirect.value)
   }
 }
@@ -416,10 +419,15 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
 @capabilities(fileRead)
 def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  The effects of a verb with no arm of its own in `effectsFor`: a read
-  verb asks std::read for each file it names, and reading its stdin from
-  a pipe adds nothing. Any other verb is unrecognized.
+  The effects of a verb with no arm of its own in `effectsFor`: a listing
+  asks std::ls for each folder it names, a read verb asks std::read for
+  each file it names, and reading its stdin from a pipe adds nothing. Any
+  other verb is unrecognized.
   """
+  const listing = LIST_VERBS[verb]
+  if (listing != null) {
+    return listEffects(verb, command, cwd, listing, redirects)
+  }
   const spec = READ_VERBS[verb]
   if (spec == null) {
     return failure("no rule for `${verb}`")
@@ -526,7 +534,11 @@ export type FlagSpec = {
   /** The valued flag a bare digit flag stands for: with `n`, head's `-20`
    * is `-n 20`. A digit flag after a valued flag is that flag's value,
    * so `head -n -5` stays a refused value. */
-  digitFlag?: string
+  digitFlag?: string;
+  /** A single-dash flag is one word, listed with its dash (`-name`), and
+   * never a run of letters. True for find. No verb mixes the two kinds,
+   * so a table holds letters or words, not both. */
+  wholeWords?: boolean
 }
 
 /** One valued flag and its value. `flag` is the letter for a short flag
@@ -646,6 +658,9 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   if (word.flagValue != null) {
     return failure("${verb} does not take `${renderFlag(word)}`")
   }
+  if (spec.wholeWords == true) {
+    return readWholeWord(verb, word, next, spec)
+  }
   const letters = word.flagName.slice(1)
   let found: string[] = []
   let position = 0
@@ -684,6 +699,30 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   })
 }
 
+/** A single-dash flag looked up whole, for a table of whole words. */
+def readWholeWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
+  const name = word.flagName
+  if (spec.plain.includes(name)) {
+    return success({
+      plain: [name],
+      values: [],
+      consumed: 1
+    })
+  }
+  if (!spec.valued.includes(name)) {
+    return failure("${verb} does not take `${name}`")
+  }
+  const value = nextWordValue(verb, name, next)
+  if (isFailure(value)) {
+    return value
+  }
+  return success({
+    plain: [],
+    values: [{ flag: name, value: value.value }],
+    consumed: 2
+  })
+}
+
 def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
   const written = renderFlag(word)
   if (spec.plain.includes(written)) {
@@ -694,7 +733,9 @@ def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
     })
   }
   if (!spec.valued.includes(word.flagName)) {
-    return failure("${verb} does not take `${word.flagName}`")
+    // The flag as written, value and all, so a refused `--color=always`
+    // is not read as a refusal of `--color=never`.
+    return failure("${verb} does not take `${written}`")
   }
   if (word.flagValue == null) {
     const value = nextWordValue(verb, word.flagName, next)
@@ -724,6 +765,11 @@ def nextWordValue(verb: string, flag: string, next: Word | null): Result<string>
   """
   if (next == null) {
     return failure("${verb}'s `${flagDisplay(flag)}` needs a value")
+  }
+  // The parser makes a word that starts with a dash a flag word, so
+  // `-size -1M` and `head -n -5` land here with a literal value.
+  if (next is { tag: "flag" }) {
+    return failure("the value of `${flagDisplay(flag)}` starts with a dash")
   }
   const text = literalWordText(next)
   if (text is failure(why)) {
@@ -758,9 +804,10 @@ def flagDisplay(flag: string): string {
   return "-${flag}"
 }
 
-/** A grep path resolved for safeBash. Mirrors `GrepTarget` in
- * lib/stdlib/shell.ts: `argument` is the path as bash hands it to grep. */
-type GrepTarget = {
+/** A path resolved for safeBash: a grep's, a read's, or a listing's.
+ * Mirrors `GrepTarget` in lib/stdlib/shell.ts: `file` is null for a
+ * folder, and `argument` is the path as bash hands it to the program. */
+type PathTarget = {
   dir: string;
   file: string | null;
   argument: string
@@ -773,7 +820,7 @@ type GrepCall = {
   pattern: string;
   /** The resolved path. Its `argument` is "" when -r searched "." because
    * no path was written, since grep then prints bare names. */
-  target: GrepTarget
+  target: PathTarget
 }
 
 /** The pattern, and the words after it that name paths. */
@@ -835,7 +882,7 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
   if (text is failure(why)) {
     return failure("the grep path is not literal")
   }
-  const target = try _searchTargetIn(text.value, cwd, tildeModeFor(pathWord))
+  const target = resolveTarget(text.value, pathWord, cwd)
   if (isFailure(target)) {
     return target
   }
@@ -1259,7 +1306,7 @@ def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Res
   never return. A missing path is refused too, so any doubt asks
   std::bash. `subject` names the reader in the folder message.
   """
-  const target = try _searchTargetIn(text, cwd, tildeModeFor(word))
+  const target = resolveTarget(text, word, cwd)
   if (isFailure(target)) {
     return target
   }
@@ -1275,6 +1322,219 @@ def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Res
 }
 
 @capabilities(fileRead)
+def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
+  """
+  A path resolved against safeBash's cwd with `_searchTargetIn`: the real
+  folder, and the file name when it is a regular file. A missing path or
+  a special file is a failure. The one resolver behind a grep's path, a
+  read verb's, `<`, and a listing's.
+  """
+  return try _searchTargetIn(text, cwd, tildeModeFor(word))
+}
+
+@capabilities(fileRead)
+def resolveDirPath(text: string, word: Word, cwd: string, subject: string): Result<string> {
+  """
+  A path a command lists, resolved to its real folder. A file is refused
+  because the listing payload names a folder. `subject` names the lister
+  in the message.
+  """
+  const target = resolveTarget(text, word, cwd)
+  if (isFailure(target)) {
+    return target
+  }
+  if (target.value.file != null) {
+    return failure("${subject} of a file is not a listing")
+  }
+  return success(target.value.dir)
+}
+
+@capabilities(fileRead)
+def resolveDirs(verb: string, words: Word[], cwd: string): Result<string[]> {
+  """
+  The real folders a listing names, each literal and each a folder.
+  """
+  let dirs: string[] = []
+  for (word in words) {
+    const text = literalWordText(word)
+    if (text is failure(why)) {
+      return failure("the ${verb} path is not literal")
+    }
+    const dir = resolveDirPath(text.value, word, cwd, verb)
+    if (isFailure(dir)) {
+      return dir
+    }
+    dirs.push(dir.value)
+  }
+  return success(dirs)
+}
+
+def checkCountFlags(split: SplitArgs, countFlags: string[]): Result {
+  """
+  The valued flags whose value must be digits, checked once for every
+  verb table: head's -n, tree's -L, find's -maxdepth.
+  """
+  for (entry in split.values) {
+    if (countFlags.includes(entry.flag) && !isDigits(entry.value)) {
+      return failure("the value of `${flagDisplay(entry.flag)}` is not a number")
+    }
+  }
+  return success(null)
+}
+
+/** Whether a listing walks the tree always, or only when given -R. */
+export type ListWalk = "always" | "withR"
+
+/** A verb that lists directories: its flags, which valued flags hold a
+ * count, and whether it walks the tree. */
+export type ListVerb = {
+  flags: FlagSpec;
+  /** The valued flags whose value must be digits, such as `-L` on tree. */
+  countFlags: string[];
+  recursive: ListWalk
+}
+
+/** The verbs that list the folders they name, or `.` when they name
+ * none. Every letter means the same thing in GNU and BSD. Left out: `-L`
+ * on every verb (follows symlinks out of the folder) and `ls -G` (color
+ * on macOS, no group column on GNU). tree is not on macOS by default;
+ * the line is recognized and the shell reports it missing. A recursive
+ * listing through bash shows the entries under `.git` and `node_modules`
+ * that the ls tool's walk leaves out, and no file's contents. */
+export static const LIST_VERBS: Record<string, ListVerb> = {
+  ls: {
+    flags: { plain: ["l", "a", "A", "h", "1", "t", "r", "S", "R", "d", "p", "F", "--color=never"], valued: [], optionsFirst: true },
+    countFlags: [],
+    recursive: "withR"
+  },
+  tree: {
+    flags: { plain: ["a", "d", "--noreport"], valued: ["L", "I"], optionsFirst: true },
+    countFlags: ["L"],
+    recursive: "always"
+  },
+  du: {
+    flags: { plain: ["s", "h", "a", "c"], valued: ["d"], optionsFirst: true },
+    countFlags: ["d"],
+    recursive: "always"
+  }
+}
+
+/** find's expression, as whole words. An allowlist: an unlisted word is
+ * unrecognized, which is what keeps -exec, -delete, -fprint, -L, and the
+ * ones this list forgot on the std::bash path. -newer is out because it
+ * reads another file's time. -iname is out because the glob tool's
+ * pattern is case-sensitive and the payload would say so. -H and -P are
+ * out because find takes them only before its paths, where the ordering
+ * rule refuses them. */
+static const FIND_FLAGS: FlagSpec = {
+  plain: ["-not", "-o", "-a", "-prune", "-print", "-print0"],
+  valued: ["-name", "-path", "-type", "-maxdepth", "-mindepth", "-size"],
+  optionsFirst: false,
+  wholeWords: true
+}
+
+/** The expression words that widen or invert what -name selects. With
+ * any of them the pattern is `**`, because `-not -name x` lists the
+ * opposite of x and `-name x -o -type d` lists more than x. */
+static const FIND_WIDENING_WORDS: string[] = ["-not", "-o", "-prune"]
+
+static const FIND_COUNT_FLAGS: string[] = ["-maxdepth", "-mindepth"]
+
+@capabilities(fileRead)
+def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Result<Effect[]> {
+  """
+  A find asks std::glob for each path it searches, as the glob tool
+  does. Its paths come first and its expression after, as find's grammar
+  says, and every path must be a folder.
+  """
+  const split = splitFlags("find", command, FIND_FLAGS)
+  if (isFailure(split)) {
+    return split
+  }
+  const counts = checkCountFlags(split.value, FIND_COUNT_FLAGS)
+  if (isFailure(counts)) {
+    return counts
+  }
+  const depths = [entry.value for entry in split.value.values if entry.flag == "-maxdepth"]
+  if (depths.length > 0 && digitsValue(depths[0]) == 0) {
+    return failure("find -maxdepth 0 lists only the path itself")
+  }
+  const positionals = split.value.positionals
+  if (positionals.length == 0) {
+    return failure("find needs a path before its tests")
+  }
+  if (leadingPositionals(command) != positionals.length) {
+    return failure("find takes its paths before its tests")
+  }
+  const dirs = resolveDirs("find", positionals, cwd)
+  if (isFailure(dirs)) {
+    return dirs
+  }
+  const pattern = findPattern(split.value)
+  const searches = [globEffect({ pattern: pattern, dir: dir, maxResults: 0 }) for dir in dirs.value]
+  return success([...searches, ...redirects])
+}
+
+/** How many of a command's arguments come before its first flag word. */
+def leadingPositionals(command: SimpleCommand): number {
+  let count = 0
+  for (word in command.args) {
+    if (word is { tag: "flag" }) {
+      return count
+    }
+    count = count + 1
+  }
+  return count
+}
+
+def findPattern(split: SplitArgs): string {
+  """
+  The glob pattern that describes find's search, or a wider one. The
+  glob tool matches a whole relative path with `*` stopping at `/`,
+  while -name matches the last part at any depth, so -name's value gets
+  a `**/` in front unless the search stops at depth 1. With no -name, or
+  with a word that widens or inverts it, the pattern is everything.
+  """
+  const names = [entry.value for entry in split.values if entry.flag == "-name"]
+  const widened = [word for word in split.plain if FIND_WIDENING_WORDS.includes(word)]
+  const depths = [entry.value for entry in split.values if entry.flag == "-maxdepth"]
+  const depthOne = depths.length > 0 && digitsValue(depths[0]) == 1
+  if (names.length == 1 && widened.length == 0) {
+    const prefix = if (depthOne) then "" else "**/"
+    return prefix + names[0]
+  }
+  return if (depthOne) then "*" else "**"
+}
+
+/** The folder a listing with no path lists. */
+static const CURRENT_DIR_WORD: Word = { tag: "literal", text: "." }
+
+@capabilities(fileRead)
+def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVerb, redirects: Effect[]): Result<Effect[]> {
+  """
+  A listing asks std::ls for each folder it names, as the ls tool does.
+  A listing ignores its stdin, so a pipe into it changes nothing.
+  """
+  const split = splitFlags(verb, command, spec.flags)
+  if (isFailure(split)) {
+    return split
+  }
+  const counts = checkCountFlags(split.value, spec.countFlags)
+  if (isFailure(counts)) {
+    return counts
+  }
+  const named = split.value.positionals
+  const words: Word[] = if (named.length == 0) then [CURRENT_DIR_WORD] else named
+  const dirs = resolveDirs(verb, words, cwd)
+  if (isFailure(dirs)) {
+    return dirs
+  }
+  const recursive = spec.recursive == "always" || split.value.plain.includes("R")
+  const listings = [lsEffect({ dir: dir, recursive: recursive, maxResults: 0 }) for dir in dirs.value]
+  return success([...listings, ...redirects])
+}
+
+@capabilities(fileRead)
 def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVerb): Result<FileRead> {
   """
   A read verb's command checked against its row: the files it reads,
@@ -1284,10 +1544,9 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
   if (isFailure(split)) {
     return split
   }
-  for (entry in split.value.values) {
-    if (spec.countFlags.includes(entry.flag) && !isDigits(entry.value)) {
-      return failure("the value of `-${entry.flag}` is not a number")
-    }
+  const counts = checkCountFlags(split.value, spec.countFlags)
+  if (isFailure(counts)) {
+    return counts
   }
   const positionals = split.value.positionals
   if (!countFits(positionals.length, spec.paths)) {
@@ -2140,7 +2399,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -2233,12 +2492,16 @@ def broadExplanation(reason: BroadReason): string {
 }
 
 /** The tool to suggest when a broad command made only of these verbs is
- * rejected. Not wc: the read tool cannot count lines. */
+ * rejected. Not wc: the read tool cannot count lines. Not du: the ls
+ * tool gives each entry's size and no folder total. */
 static const READ_TOOL_FOR_VERB: Record<string, string> = {
   grep: "grep",
   cat: "read",
   head: "read",
-  tail: "read"
+  tail: "read",
+  ls: "ls",
+  tree: "ls",
+  find: "glob"
 }
 
 def toolHint(verbs: string[]): string {
@@ -2375,6 +2638,24 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
       raise std::read("Are you sure you want to read this file?", {
         dir: effect.payload.dir,
         filename: effect.payload.filename,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::ls" => {
+      raise std::ls("Are you sure you want to list this directory?", {
+        dir: effect.payload.dir,
+        recursive: effect.payload.recursive,
+        maxResults: effect.payload.maxResults,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::glob" => {
+      raise std::glob("Are you sure you want to glob files?", {
+        pattern: effect.payload.pattern,
+        dir: effect.payload.dir,
+        maxResults: effect.payload.maxResults,
         command: fullCommand
       })
       return success(null)

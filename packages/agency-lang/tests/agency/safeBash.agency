@@ -9,6 +9,7 @@ import {
   resolveCwd,
   GREP_FLAGS,
   READ_VERBS,
+  FlagSpec,
  } from "std::safeBash"
 import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
@@ -70,7 +71,7 @@ node classifyOneCommand() {
     effectNamesFor("git diff --staged"),
     effectNamesFor("git log"),
     effectNamesFor("echo hi"),
-    effectNamesFor("ls"),
+    effectNamesFor("xargs"),
     effectNamesFor("git log --graph"),
     effectNamesFor("/bin/git status"),
     effectNamesFor("FOO=1 git status"),
@@ -101,8 +102,8 @@ node wholeStringPlans() {
   return [
     planSummary("git status"),
     planSummary("git status; git log"),
-    planSummary("git status; ls"),
-    planSummary("ls"),
+    planSummary("git status; xargs"),
+    planSummary("xargs"),
     planSummary("echo hi; echo bye"),
     planSummary("rm -rf build"),
     planSummary("git status; rm -rf build"),
@@ -110,7 +111,7 @@ node wholeStringPlans() {
     planSummary("git status && git log"),
     planSummary("true && rm -rf /tmp/x"),
     planSummary("(git status && git log)"),
-    planSummary("git status && ls"),
+    planSummary("git status && xargs"),
   ]
 }
 
@@ -126,7 +127,7 @@ node rebuiltVersusOriginal() {
   // normalizes whitespace, so on the narrow path `execution.command` must
   // be the NORMALIZED form, and on the broad path it must be the caller's
   // text VERBATIM.
-  return [executionCommand("git    status"), executionCommand("ls    -la")]
+  return [executionCommand("git    status"), executionCommand("xargs    -0")]
 }
 
 def planDetail(source: string): any {
@@ -407,7 +408,7 @@ node agencyCommandLines() {
     planKind("which git agency"),
     planKind("agency test $f"),
     planKind("agency test x.test.json > out"),
-    planKind("ls agency-lang"),
+    planKind("xargs agency-lang"),
     planKind("which git"),
   ]
 }
@@ -527,7 +528,11 @@ def split(source: string): any {
   if (parsed is failure(why)) {
     return "UNPARSEABLE"
   }
-  const result = splitFlags("grep", parsed.value[0], GREP_FLAGS)
+  const first = parsed.value[0]
+  if (!(first is { tag: "simpleCommand" })) {
+    return "NOT-SIMPLE"
+  }
+  const result = splitFlags("grep", first, GREP_FLAGS)
   if (result is failure(why)) {
     return why
   }
@@ -554,6 +559,43 @@ node splitGrepFlags() {
     split("grep --include=*.ts -rn hello ."),
     split("grep -e \"-x\" one.txt"),
     split("grep -n hello one.txt -s"),
+    split("grep --color=always x one.txt"),
+  ]
+}
+
+/** A find-shaped table: single-dash flags are whole words. */
+static const WHOLE_FLAGS: FlagSpec = {
+  plain: ["-print"],
+  valued: ["-name"],
+  optionsFirst: false,
+  wholeWords: true
+}
+
+def splitSummary(source: string, spec: FlagSpec): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const first = parsed.value[0]
+  if (!(first is { tag: "simpleCommand" })) {
+    return "NOT-SIMPLE"
+  }
+  const result = splitFlags("x", first, spec)
+  if (result is failure(why)) {
+    return why
+  }
+  const args = result.value
+  const values = [entry.flag + "=" + entry.value for entry in args.values]
+  return [args.plain, values, args.positionals.length]
+}
+
+node wholeShortFlags() {
+  return [
+    splitSummary("x -name foo -print f", WHOLE_FLAGS),
+    splitSummary("x -name", WHOLE_FLAGS),
+    splitSummary("x -nam f", WHOLE_FLAGS),
+    splitSummary("x -name=foo f", WHOLE_FLAGS),
+    splitSummary("x -n f", WHOLE_FLAGS),
   ]
 }
 
@@ -1242,4 +1284,196 @@ node chainOfReadsAsksOnlyTheReads() {
     return "FAILED: ${why}"
   }
   return result.value
+}
+
+node listingsAskStdLs() {
+  return [
+    grepNames("ls"),
+    grepNames("ls -la ."),
+    grepNames("ls -R ."),
+    grepNames("ls . .."),
+    grepNames("tree -L 2 ."),
+    grepNames("du -sh ."),
+    grepNames("git log | ls"),
+    grepNames("ls one.txt"),
+    grepNames("ls -L ."),
+    grepNames("ls . -la"),
+    grepNames("ls --color=always ."),
+    grepNames("tree -L x ."),
+    grepNames("ls $D"),
+    grepNames("ls *.txt"),
+  ]
+}
+
+node listingOfAMissingPath() {
+  // The resolver's message names the absolute path, so only its start is
+  // pinned.
+  const detail = grepNames("ls nope")[1].detail
+  return detail.startsWith("No file or directory at")
+}
+
+def lsPayloads(source: string): any {
+  // A for loop with an `if` on the name, the shape
+  // readPayloadNamesTheRealParent uses, so `payload` narrows to LsPayload.
+  let out: any[] = []
+  for (effect in planFor(source, FIXTURES).effects) {
+    if (effect.name == "std::ls") {
+      out.push([effect.payload.dir == FIXTURES, effect.payload.recursive])
+    }
+  }
+  return out
+}
+
+node lsPayloadFields() {
+  return [lsPayloads("ls"), lsPayloads("ls -R ."), lsPayloads("tree ."), lsPayloads("du -s .")]
+}
+
+/** A folder of its own for the listing symlink test. */
+static const LS_LINK_FIXTURE = __dirname + "/stdlib/__safebash_ls_link__"
+
+node listingPayloadNamesTheRealFolder() {
+  remove(LS_LINK_FIXTURE) with approve
+  mkdir(LS_LINK_FIXTURE) with approve
+  bash("mkdir inside outside && ln -s ../outside inside/link", cwd: LS_LINK_FIXTURE) with approve
+  let dir = ""
+  for (effect in planFor("ls link", LS_LINK_FIXTURE + "/inside").effects) {
+    if (effect.name == "std::ls") {
+      dir = effect.payload.dir
+    }
+  }
+  remove(LS_LINK_FIXTURE) with approve
+  return [dir == LS_LINK_FIXTURE + "/outside"]
+}
+
+node listingUnderRecommendedNeedsNoPrompt() {
+  // The fixtures are inside the launch directory, so recommended approves
+  // std::ls there. No interruptHandlers entry: an unanswered interrupt
+  // fails the run.
+  let found = false
+  handle {
+    const result = safeBash("ls " + FIXTURES)
+    if (result is success(text)) {
+      found = text.includes("one.txt")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node listingOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("ls /etc", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::ls") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO LS EFFECT"
+}
+
+node listingAsksOneQuestion() {
+  const result = safeBash("ls -1", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+node rejectedListingNamesTheTool() {
+  const result = safeBash("ls -L .", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node findAsksStdGlob() {
+  return [
+    grepNames("find . -name '*.txt'"),
+    grepNames("find . -iname '*.TXT' -type f"),
+    grepNames("find . -type f -not -path '*/node_modules/*'"),
+    grepNames("find . -H -name x"),
+    grepNames("find . . -name x"),
+    grepNames("find . -maxdepth 2 -print0"),
+    grepNames("find . -name *.txt"),
+    grepNames("find . -delete"),
+    grepNames("find . -exec rm {} \\;"),
+    grepNames("find . -L -name x"),
+    grepNames("find -name x"),
+    grepNames("find . -name x foo"),
+    grepNames("find . -name a -o -name b"),
+    grepNames("find . -maxdepth x"),
+    grepNames("find . -maxdepth 0"),
+    grepNames("find . -newer one.txt"),
+    grepNames("find . -size -1M"),
+    grepNames("find one.txt -name x"),
+    grepNames("find . -name '*.txt' | head"),
+  ]
+}
+
+def globPayloads(source: string): any {
+  // The for-and-if shape, so `payload` narrows to GlobPayload.
+  let out: any[] = []
+  for (effect in planFor(source, FIXTURES).effects) {
+    if (effect.name == "std::glob") {
+      out.push([effect.payload.pattern, effect.payload.dir == FIXTURES])
+    }
+  }
+  return out
+}
+
+node findPatterns() {
+  return [
+    globPayloads("find . -name '*.txt'"),
+    globPayloads("find . -maxdepth 1 -name '*.txt'"),
+    globPayloads("find . -type f"),
+    globPayloads("find . -maxdepth 1"),
+    globPayloads("find . -maxdepth 3 -name x"),
+    globPayloads("find . -not -name '*.txt'"),
+    globPayloads("find . -name '*.txt' -o -type d"),
+    globPayloads("find . -path ./node_modules -prune -o -name '*.txt'"),
+    globPayloads("find . -maxdepth 1 -not -name x"),
+  ]
+}
+
+node findUnderRecommendedNeedsNoPrompt() {
+  // No interruptHandlers entry: an unanswered interrupt fails the run.
+  let found = false
+  handle {
+    const result = safeBash("find " + FIXTURES + " -name '*.txt'")
+    if (result is success(text)) {
+      found = text.includes("one.txt")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node findOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("find /etc -name hosts", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::glob") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO GLOB EFFECT"
+}
+
+node findAsksOneQuestion() {
+  // find lists in directory order, which differs between file systems,
+  // so the lines are compared sorted.
+  const result = safeBash("find . -name '*.txt'", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return [line for line in result.value.split("\n") if line != ""].sort()
 }

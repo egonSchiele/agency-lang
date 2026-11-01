@@ -1163,3 +1163,43 @@ describe("bindRecord (the decorator rebind)", () => {
     );
   });
 });
+
+describe("sourceFile", () => {
+  const shout = (sourceFile?: string | null) =>
+    AgencyFunction.create(
+      {
+        name: "shout",
+        module: "agent/shout.agency",
+        sourceFile,
+        fn: (_run, text: string) => text,
+        params: [
+          { name: "text", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "loud", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: {
+          name: "shout",
+          description: "Shout.",
+          schema: z.object({ text: z.string(), loud: z.boolean() }),
+        },
+      },
+      {},
+    );
+
+  it("is null when none is given", () => {
+    expect(shout().sourceFile).toBeNull();
+  });
+
+  it("is carried by every derivation", () => {
+    const original = shout("/proj/agent/shout.agency");
+    const derived = [
+      original.partial({ loud: true }),
+      original.rename("yell"),
+      original.describe("Shout louder."),
+      original.preapprove(),
+      original.withParamSchema("text", { type: "string" }),
+    ];
+    expect(derived.map((fn) => fn.sourceFile)).toEqual(
+      derived.map(() => "/proj/agent/shout.agency"),
+    );
+  });
+});

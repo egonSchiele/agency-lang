@@ -136,6 +136,11 @@ export type AgencyFunctionOpts = {
    *  name, kept so a checkpoint can restore it. Never zod: zod does not
    *  serialize. */
   paramSchemas?: Record<string, unknown>;
+  /** The absolute path of the `.agency` file this function was defined in,
+   *  resolved when its compiled module loaded. Null for a function with no
+   *  source file, such as a block, a builtin, or code compiled for a
+   *  subprocess. */
+  sourceFile?: string | null;
 };
 
 export class AgencyFunction {
@@ -166,6 +171,7 @@ export class AgencyFunction {
   readonly registeredName: string;
   readonly created?: CreatedTool;
   readonly paramSchemas: Record<string, unknown>;
+  readonly sourceFile: string | null;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
@@ -174,6 +180,7 @@ export class AgencyFunction {
     this._fn = opts.fn;
     this.created = opts.created;
     this.paramSchemas = opts.paramSchemas ?? {};
+    this.sourceFile = opts.sourceFile ?? null;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
@@ -228,6 +235,7 @@ export class AgencyFunction {
       capabilities: this.capabilities,
       created: this.created,
       paramSchemas: this.paramSchemas,
+      sourceFile: this.sourceFile,
     };
   }
 

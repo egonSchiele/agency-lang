@@ -9,7 +9,7 @@ import {
   resolveCwd,
   GREP_FLAGS,
  } from "std::safeBash"
-import test { splitFlags } from "std::safeBash"
+import test { splitFlags, flattenCommands } from "std::safeBash"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
@@ -582,7 +582,6 @@ node grepThroughBash() {
 node grepUnrecognized() {
   return [
     grepNames("grep hello"),
-    grepNames("git status | grep hello"),
     grepNames("grep -z hello ."),
     grepNames("grep -R hello ."),
     grepNames("grep \"-R\" hello"),
@@ -778,4 +777,40 @@ node grepOfPartlyIgnoredFolder() {
   // `**/*.js`) but not all of them, so the tool's search still finds the
   // rest and the grep runs shell-free.
   return planFor("grep -rn hello stdlib", PACKAGE_DIR).execution.kind
+}
+
+def stdinFlags(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const flat = flattenCommands(parsed.value)
+  return [entry.readsStdin for entry in flat]
+}
+
+node stagesReadStdin() {
+  return [
+    stdinFlags("git status"),
+    stdinFlags("a | b | c"),
+    stdinFlags("a | b && c"),
+    stdinFlags("(a | b) | c"),
+    stdinFlags("a; b | c"),
+    stdinFlags("a | (b && c)"),
+    stdinFlags("a | (b | c)"),
+  ]
+}
+
+node grepFilterStages() {
+  return [
+    grepNames("git status | grep hello"),
+    grepNames("git status | grep -v hello | grep -c x"),
+    grepNames("git status | grep -rn hello"),
+    grepNames("git status | grep hello one.txt"),
+    grepNames("git status | grep hello > out.txt"),
+    grepNames("git status | grep hello && grep bye"),
+    grepNames("git status | grep -R hello"),
+    grepNames("echo hi | grep h"),
+    grepNames("git status | grep hello -i"),
+    grepNames("git status | grep -e hello"),
+  ]
 }

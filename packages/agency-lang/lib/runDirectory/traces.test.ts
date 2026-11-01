@@ -57,6 +57,38 @@ describe("readTraces", () => {
   it("returns nothing for an empty file", () => {
     expect(tracesFromText("")).toEqual({ traces: [], errors: [] });
   });
+
+  it("keeps a complete last line that has no newline", () => {
+    const file = writeLog(line("aaa", "agentStart") + "\n" + line("aaa", "agentEnd"));
+    const { traces, errors } = readTraces(file);
+    expect(errors).toEqual([]);
+    expect(traces[0].events.map((event) => event.data.type)).toEqual(["agentStart", "agentEnd"]);
+    expect(traces[0].lines[1]).toBe(line("aaa", "agentEnd"));
+  });
+
+  it("ignores a torn last line in a file", () => {
+    const file = writeLog(line("aaa", "agentStart") + "\n" + line("aaa", "agentEnd").slice(0, 20));
+    const { traces, errors } = readTraces(file);
+    expect(errors).toEqual([]);
+    expect(traces[0].events).toHaveLength(1);
+  });
+
+  it("numbers a bad line by its place in the file across read chunks", () => {
+    // Enough lines to span several of the reader's chunks.
+    const padding = "p".repeat(2000);
+    const lines = Array.from({ length: 600 }, (_, index) =>
+      line("aaa", "note", { index, padding }),
+    );
+    lines[450] = "not json";
+    const { traces, errors } = readTraces(writeLog(lines.join("\n") + "\n"));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ line: 451, kind: "invalid_json" });
+    expect(traces[0].events).toHaveLength(599);
+  });
+
+  it("throws for a missing file", () => {
+    expect(() => readTraces(path.join(os.tmpdir(), "no-such-statelog.jsonl"))).toThrow(/ENOENT/);
+  });
 });
 
 describe("traceDigest", () => {

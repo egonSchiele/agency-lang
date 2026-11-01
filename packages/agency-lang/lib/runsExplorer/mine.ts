@@ -4,15 +4,17 @@
 //
 // The statelog scan is resumable on purpose: one advance() reads at
 // most one chunk, so the shell can interleave scanning a multi-megabyte
-// log with keystrokes. Bytes carry across chunks (a UTF-8 character
-// split at a chunk boundary must survive), and every failure becomes a
-// typed warning — a torn line keeps the metrics accumulated before it.
+// log with keystrokes. The line reader carries a line across chunks,
+// and every failure becomes a typed warning — a torn line keeps the
+// metrics accumulated before it.
 import { emptyTally, tallyEvent, type TurnTally } from "../logsViewer/timeline/turns.js";
 import * as fs from "fs";
 
 import { stripQuotes } from "../logsViewer/spanText.js";
+import { makeLineReader, READ_CHUNK_BYTES, type LineChunk } from "../statelog/lineReader.js";
 
-export const STATELOG_SCAN_CHUNK_BYTES = 256 * 1024;
+/** One advance reads one chunk of the line reader. */
+export const STATELOG_SCAN_CHUNK_BYTES = READ_CHUNK_BYTES;
 
 // ── statelog mining ────────────────────────────────────────────────
 
@@ -46,25 +48,9 @@ export type StatelogScan = {
 export function createStatelogScan(file: string): StatelogScan {
   const traces: Record<string, TraceTotals> = Object.create(null);
   const warnings: string[] = [];
-  let carry = Buffer.alloc(0);
-  let fd: number | null = null;
-  let openFailure: string | null = null;
-  let done = false;
-
-  try {
-    fd = fs.openSync(file, "r");
-  } catch (error) {
-    openFailure = `could not open ${file}: ${errText(error)}`;
-    done = true;
-  }
-
-  const finish = (): void => {
-    done = true;
-    if (fd !== null) {
-      fs.closeSync(fd);
-      fd = null;
-    }
-  };
+  const openFailure = unopenableReason(file);
+  const reader = makeLineReader(file, 0);
+  let done = openFailure !== null;
 
   const consumeLine = (line: string): void => {
     if (line.trim() === "") {
@@ -85,30 +71,24 @@ export function createStatelogScan(file: string): StatelogScan {
       if (done) {
         return true;
       }
-      const buf = Buffer.alloc(STATELOG_SCAN_CHUNK_BYTES);
-      let bytesRead: number;
+      let chunk: LineChunk;
       try {
-        bytesRead = fs.readSync(fd as number, buf, 0, buf.length, null);
+        chunk = reader.readChunk();
       } catch (error) {
         warnings.push(`${file}: read failed: ${errText(error)}`);
-        finish();
+        done = true;
         return true;
       }
-      if (bytesRead === 0) {
-        if (carry.length > 0) {
-          consumeLine(carry.toString("utf8"));
-          carry = Buffer.alloc(0);
+      chunk.lines.forEach(consumeLine);
+      if (chunk.atEnd) {
+        // The file is finished, so a last line with no newline is a line.
+        const last = reader.tail();
+        if (last !== undefined) {
+          consumeLine(last);
         }
-        finish();
-        return true;
+        done = true;
       }
-      carry = Buffer.concat([carry, buf.subarray(0, bytesRead)]);
-      let newlineAt: number;
-      while ((newlineAt = carry.indexOf(0x0a)) !== -1) {
-        consumeLine(carry.subarray(0, newlineAt).toString("utf8"));
-        carry = carry.subarray(newlineAt + 1);
-      }
-      return false;
+      return done;
     },
     peekTraces(): Record<string, TraceTotals> {
       return traces;
@@ -125,6 +105,17 @@ export function createStatelogScan(file: string): StatelogScan {
       return { kind: "ok", traces, warnings };
     },
   };
+}
+
+/** Why the file cannot be read, or null when it can. The line reader reads a
+ *  missing file as empty, and the scan reports one instead. */
+function unopenableReason(file: string): string | null {
+  try {
+    fs.closeSync(fs.openSync(file, "r"));
+    return null;
+  } catch (error) {
+    return `could not open ${file}: ${errText(error)}`;
+  }
 }
 
 /** Drive a scan to its terminal result. The synchronous completion path

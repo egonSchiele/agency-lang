@@ -1,9 +1,12 @@
 import * as fs from "fs";
 
+import { makeLineReader } from "@/statelog/lineReader.js";
 import {
-  parseStatelogJsonlWithLines,
+  parseStatelogLine,
+  parseStatelogLines,
   type ParsedEventLine,
   type ParseError,
+  type ParseWithLinesResult,
 } from "@/statelog/parse.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 import { canonicalize } from "@/utils/canonicalize.js";
@@ -31,18 +34,32 @@ export function traceDigest(events: readonly EventEnvelope[]): string {
  *
  * This is the many-trace, byte-preserving reader; `StatelogParser`
  * (lib/eval/statelogParser.ts) is the one-trace, one-file view for graders.
- * Both parse lines with `parseStatelogJsonlWithLines`, and a trace's eval
- * record is still `extractEvalRecord` (see `evalRecord.ts`). What is new here
- * is only grouping by id, keeping raw lines for merging, and the digest.
+ * Both parse lines with `parseStatelogLine`, and a trace's eval record is
+ * still `extractEvalRecord` (see `evalRecord.ts`). What is new here is only
+ * grouping by id, keeping raw lines for merging, and the digest.
  *
- * A trailing line without its newline is a torn write and is ignored. A line
+ * The file is read one chunk of lines at a time, so its text is never one
+ * string. A last line with no newline is kept when it is a complete event; one
+ * that is not valid JSON is a write that was cut off, and is ignored. A line
  * byte-identical to one already seen for its trace is dropped: that is the
  * harmless result of `cat`-ing two copies of one trace. Nothing more is
  * checked here — two different streams sharing an id cannot be told apart once
  * concatenated; `mergeStatelog` refuses that while they are still separate.
  */
 export function readTraces(statelogPath: string): ReadTracesResult {
-  return tracesFromText(fs.readFileSync(statelogPath, "utf8"));
+  // The line reader reads a missing file as empty; a missing statelog is an
+  // error here.
+  fs.statSync(statelogPath);
+  const reader = makeLineReader(statelogPath, 0);
+  const grouper = makeTraceGrouper();
+  const errors: ParseError[] = [];
+  let lineCount = 0;
+  reader.readToEnd((lines) => {
+    addParsedLines(parseStatelogLines(lines, lineCount + 1), grouper, errors);
+    lineCount += lines.length;
+  });
+  addLastLine(reader.tail(), lineCount + 1, grouper, errors);
+  return { traces: grouper.traces(), errors };
 }
 
 /** For writers: a statelog with any unparseable line is refused whole, since a
@@ -65,39 +82,87 @@ export function readTracesOrThrow(statelogPath: string): Trace[] {
 }
 
 export function tracesFromText(text: string): ReadTracesResult {
-  const parsed = parseStatelogJsonlWithLines(dropTornTail(text));
-  return { traces: groupByTrace(parsed.lines), errors: parsed.errors };
+  const lines = text.split("\n");
+  // The text after the last newline: empty when the text ends with one.
+  const last = lines.pop();
+  const grouper = makeTraceGrouper();
+  const errors: ParseError[] = [];
+  addParsedLines(parseStatelogLines(lines, 1), grouper, errors);
+  addLastLine(last === "" ? undefined : last, lines.length + 1, grouper, errors);
+  return { traces: grouper.traces(), errors };
 }
 
-function dropTornTail(text: string): string {
-  if (text.length === 0 || text.endsWith("\n")) return text;
-  const lastNewline = text.lastIndexOf("\n");
-  return lastNewline === -1 ? "" : text.slice(0, lastNewline + 1);
-}
+type TraceGrouper = {
+  add(entry: ParsedEventLine): void;
+  traces(): Trace[];
+};
 
-function groupByTrace(lines: readonly ParsedEventLine[]): Trace[] {
-  const byId: Record<
-    string,
-    { events: EventEnvelope[]; lines: string[]; seen: Record<string, true> }
-  > = Object.create(null);
+type TraceGroup = { events: EventEnvelope[]; lines: string[]; seen: Record<string, true> };
+
+function makeTraceGrouper(): TraceGrouper {
+  const byId: Record<string, TraceGroup> = Object.create(null);
   const order: string[] = [];
-  for (const entry of lines) {
-    const traceId = entry.event.trace_id;
-    let group = byId[traceId];
-    if (group === undefined) {
-      group = { events: [], lines: [], seen: Object.create(null) };
-      byId[traceId] = group;
-      order.push(traceId);
-    }
-    if (group.seen[entry.raw]) continue;
-    group.seen[entry.raw] = true;
-    group.events.push(entry.event);
-    group.lines.push(entry.raw);
+  return {
+    add(entry: ParsedEventLine): void {
+      const traceId = entry.event.trace_id;
+      let group = byId[traceId];
+      if (group === undefined) {
+        group = { events: [], lines: [], seen: Object.create(null) };
+        byId[traceId] = group;
+        order.push(traceId);
+      }
+      if (group.seen[entry.raw]) {
+        return;
+      }
+      group.seen[entry.raw] = true;
+      group.events.push(entry.event);
+      group.lines.push(entry.raw);
+    },
+    traces(): Trace[] {
+      return order.map((traceId) => {
+        const group = byId[traceId];
+        return {
+          traceId,
+          events: group.events,
+          lines: group.lines,
+          digest: traceDigest(group.events),
+        };
+      });
+    },
+  };
+}
+
+function addParsedLines(
+  parsed: ParseWithLinesResult,
+  grouper: TraceGrouper,
+  errors: ParseError[],
+): void {
+  for (const entry of parsed.lines) {
+    grouper.add(entry);
   }
-  return order.map((traceId) => {
-    const group = byId[traceId];
-    return { traceId, events: group.events, lines: group.lines, digest: traceDigest(group.events) };
-  });
+  for (const error of parsed.errors) {
+    errors.push(error);
+  }
+}
+
+/** The last line of a finished file, when it has no newline. A complete
+ *  event is kept. A line that is not valid JSON was cut off mid-write and is
+ *  ignored, as a reader of a live file would wait for the rest of it. */
+function addLastLine(
+  last: string | undefined,
+  lineNumber: number,
+  grouper: TraceGrouper,
+  errors: ParseError[],
+): void {
+  if (last === undefined) {
+    return;
+  }
+  const parsed = parseStatelogLine(last, lineNumber);
+  if (parsed.kind === "event") {
+    grouper.add(parsed.entry);
+  } else if (parsed.kind === "error" && parsed.error.kind !== "invalid_json") {
+    errors.push(parsed.error);
+  }
 }
 
 export type TraceMatch =

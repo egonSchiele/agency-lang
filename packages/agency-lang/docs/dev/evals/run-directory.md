@@ -58,11 +58,15 @@ a person's file, edited with any editor, and nothing in Agency writes it.
 unlink-then-rename save cannot crash a reader), any other I/O error propagates.
 A read during such a save may see the old text, the new text, or null.
 
-`readTraces` (`traces.ts`) is built on `parseStatelogJsonlWithLines`
-(`lib/statelog/parse.ts`), the one owner of line decoding. It drops a torn final
-line and byte-identical duplicate lines within a trace (the harmless result of
-`cat`), and computes a per-trace **digest over the canonicalized events**, so
-key order does not matter. It does not — cannot — detect two different streams
+`readTraces` (`traces.ts`) reads the file one chunk of lines at a time through
+`makeLineReader` (`lib/statelog/lineReader.ts`), so the file's text is never
+one string, and parses each line with `parseStatelogLine`
+(`lib/statelog/parse.ts`), the one owner of line decoding. A last line with no
+newline is kept when it is a complete event and ignored when it is not valid
+JSON, since that is a write cut off mid-line. It drops byte-identical
+duplicate lines within a trace (the harmless result of `cat`), and computes a
+per-trace **digest over the canonicalized events**, so key order does not
+matter. It does not — cannot — detect two different streams
 sharing an id once they are interleaved; that check lives in the merge planner.
 
 ## Annotations (`annotations.ts`)
@@ -214,8 +218,9 @@ One file per command; none imports the lock or the append helpers.
 - `agency logs extract <log> [--trace <id>] [-o <file>] [--overwrite]` — copy
   one trace out of a statelog (a single-trace log needs no `--trace`; with
   several, the refusal points at `agency logs traces` to list them). Lines
-  are copied as they appear, except the two things `readTraces` drops: a torn
-  final line and a byte-identical repeat of an earlier line in the same trace.
+  are copied as they appear, except the two things `readTraces` drops: a last
+  line cut off mid-write and a byte-identical repeat of an earlier line in the
+  same trace.
   An existing `--out` file is refused unless `--overwrite` is passed, and the
   source log itself is never a valid output. The viewer's `x` key does the
   same for the focused trace, prompting for a path, and also refuses an

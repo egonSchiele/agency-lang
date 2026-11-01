@@ -8,6 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { childRunDirectories, isRunDirectory } from "@/runDirectory/findRuns.js";
+import { makeLineReader } from "@/statelog/lineReader.js";
 
 export type Source = { kind: "runDir"; dir: string } | { kind: "statelog"; file: string };
 
@@ -20,7 +21,6 @@ export type Discovery = {
   errors: string[];
 };
 
-const SOURCE_SNIFF_CHUNK_BYTES = 64 * 1024;
 const MAX_SOURCE_SNIFF_LINE_BYTES = 1024 * 1024;
 
 const ACCEPTED_KINDS =
@@ -110,34 +110,20 @@ type FirstLineSniff =
 /** Read chunks until the first complete nonblank line arrives, without
  *  ever loading the file. A "complete" line ends in a newline or EOF. */
 function sniffFirstLine(file: string): FirstLineSniff {
-  const fd = fs.openSync(file, "r");
-  try {
-    const buf = Buffer.alloc(SOURCE_SNIFF_CHUNK_BYTES);
-    let carry = Buffer.alloc(0);
-    for (;;) {
-      const bytesRead = fs.readSync(fd, buf, 0, buf.length, null);
-      if (bytesRead === 0) {
-        const finalLine = carry.toString("utf8").trim();
-        if (finalLine === "") {
-          return { kind: "empty" };
-        }
-        return { kind: "line", line: finalLine };
-      }
-      carry = Buffer.concat([carry, buf.subarray(0, bytesRead)]);
-      let newlineAt: number;
-      while ((newlineAt = carry.indexOf(0x0a)) !== -1) {
-        const line = carry.subarray(0, newlineAt).toString("utf8").trim();
-        carry = carry.subarray(newlineAt + 1);
-        if (line !== "") {
-          return { kind: "line", line };
-        }
-      }
-      if (carry.length > MAX_SOURCE_SNIFF_LINE_BYTES) {
-        return { kind: "line-too-long" };
-      }
+  const reader = makeLineReader(file, 0);
+  for (;;) {
+    const chunk = reader.readChunk();
+    const first = chunk.lines.find((line) => line.trim() !== "");
+    if (first !== undefined) {
+      return { kind: "line", line: first.trim() };
     }
-  } finally {
-    fs.closeSync(fd);
+    if (reader.pendingBytes() > MAX_SOURCE_SNIFF_LINE_BYTES) {
+      return { kind: "line-too-long" };
+    }
+    if (chunk.atEnd) {
+      const last = reader.tail()?.trim() ?? "";
+      return last === "" ? { kind: "empty" } : { kind: "line", line: last };
+    }
   }
 }
 

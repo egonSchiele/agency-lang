@@ -180,7 +180,9 @@ The full command line goes in `line`, not `command`. The other arms put it in `c
 /** Bash builtins. The exec tool cannot run one, so no std::exec payload
  * can describe it, and some change what later commands run (`cd`,
  * `hash -p`, `enable -f`, `export`). `bash -c 'compgen -b'` on bash 3.2,
- * plus mapfile, readarray, and compopt from bash 5. */
+ * plus mapfile, readarray, and compopt from bash 5. kill, printf, pwd,
+ * and test are also programs, but bash runs the builtin of that name, so
+ * the builtin rule is the one that describes them. */
 static const BUILTIN_VERBS: string[] = [
   ".", ":", "[", "alias", "bg", "bind", "break", "builtin", "caller", "cd",
   "command", "compgen", "complete", "compopt", "continue", "declare",
@@ -312,7 +314,7 @@ Expected, row by row, where `X` is `[["std::exec"],null]` and `U(d)` is `[["std:
 23. `U("`true` is a bash builtin, not a program")`
 24. `U("no rule for `npx`")`
 25. `X`
-26. `U("`pnpm` reads a pipe, and std::exec cannot say what it reads")`
+26. `U("`pnpm` reads a pipe, and std::exec cannot say what it reads")` (the first failure in flattened order is the `detail`, and `cat one.txt` succeeds, so the message is `pnpm`'s)
 
 A payload node. `lsPayloads` and `globPayloads` each repeat the same loop: plan the line, keep the effects with one name, and read their payloads. Don't add a third copy. Add one generic helper and use it here. It reads each effect through an `any` local, the way `payloadValuesAreCorrect` does, because a name held in a variable doesn't narrow the union:
 

@@ -8,8 +8,9 @@ import {
   safeBash,
   resolveCwd,
   GREP_FLAGS,
+  READ_VERBS,
  } from "std::safeBash"
-import test { splitFlags, flattenCommands } from "std::safeBash"
+import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
@@ -437,6 +438,8 @@ node planVerbs() {
 node planOutcomes() {
   return [
     planOutcome("git status"),
+    // A read needs a file that exists, so this row plans in the fixtures.
+    outcomeOf(planFor("cat one.txt && git status", FIXTURES)),
     planOutcome("xargs rm x"),
     planOutcome("echo hi"),
     planOutcome("echo hi > out.txt"),
@@ -813,4 +816,270 @@ node grepFilterStages() {
     grepNames("git status | grep hello -i"),
     grepNames("git status | grep -e hello"),
   ]
+}
+
+def filesOf(found: any): any {
+  return match(found) {
+    { kind: "stdin" } => "stdin"
+    { kind: "files", paths } => [p.filename for p in paths]
+  }
+}
+
+def readOf(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const first = parsed.value[0]
+  if (first is { tag: "simpleCommand" }) {
+    const verb = verbName(first)
+    const spec = READ_VERBS[verb]
+    if (spec == null) {
+      return "NOT A READ VERB"
+    }
+    return match(readFileVerb(verb, first, FIXTURES, spec)) {
+      success(found) => filesOf(found)
+      failure(why) => why
+    }
+  }
+  return "NOT-SIMPLE"
+}
+
+node readVerbsReadFiles() {
+  return [
+    readOf("cat one.txt"),
+    readOf("cat one.txt two.txt"),
+    readOf("cat -n one.txt"),
+    readOf("head one.txt"),
+    readOf("head -n 20 one.txt"),
+    readOf("head -20 one.txt"),
+    readOf("tail -n5 one.txt"),
+    readOf("wc -l one.txt"),
+    readOf("diff one.txt two.txt"),
+    readOf("sort -u one.txt"),
+    readOf("uniq -c one.txt"),
+    readOf("cat"),
+    readOf("head -n 3"),
+    readOf("head one.txt two.txt"),
+    readOf("uniq one.txt out.txt"),
+    readOf("tail -n +5 one.txt"),
+    readOf("head -n -5 one.txt"),
+    readOf("tail -f one.txt"),
+    readOf("cat -A one.txt"),
+    readOf("cat $F"),
+    readOf("cat *.txt"),
+    readOf("diff one.txt"),
+    readOf("diff -r one.txt two.txt"),
+    readOf("cat ."),
+    // The message names an absolute path, which differs per machine.
+    readOf("cat nope.txt").startsWith("No file or directory at"),
+    readOf("sort -o out.txt one.txt"),
+    readOf("cat one.txt -n"),
+    readOf("cut -c 1-3 one.txt"),
+    readOf("diff"),
+    readOf("diff -U x one.txt two.txt"),
+    readOf("head -n 1 -n 2 one.txt"),
+    readOf("head -2 -n 1 one.txt"),
+  ]
+}
+
+node readsAskStdRead() {
+  return [
+    grepNames("cat one.txt"),
+    grepNames("cat one.txt two.txt"),
+    grepNames("wc -l one.txt"),
+    grepNames("diff one.txt two.txt"),
+    grepNames("sort one.txt"),
+    grepNames("cat one.txt > copy.txt"),
+    grepNames("git status && cat one.txt"),
+    grepNames("cat one.txt | head -3"),
+    grepNames("head -3 one.txt | cat"),
+    grepNames("cat"),
+    grepNames("cat -A one.txt"),
+    grepNames("tail -f one.txt"),
+    grepNames("cat ."),
+  ]
+}
+
+/** A folder of its own for the symlink test. A link in FIXTURES would
+ * change the output of the grep parity rows, which search it with -r. */
+static const LINK_FIXTURE = __dirname + "/stdlib/__safebash_link__"
+
+node readPayloadNamesTheRealParent(): any {
+  remove(LINK_FIXTURE) with approve
+  mkdir(LINK_FIXTURE) with approve
+  bash("mkdir inside outside && echo hi > outside/target.txt && ln -s ../outside/target.txt inside/link.txt", cwd: LINK_FIXTURE) with approve
+  let dir = ""
+  let filename = ""
+  const plan = planFor("cat link.txt", LINK_FIXTURE + "/inside")
+  for (effect in plan.effects) {
+    if (effect.name == "std::read") {
+      dir = effect.payload.dir
+      filename = effect.payload.filename
+    }
+  }
+  remove(LINK_FIXTURE) with approve
+  return [dir == LINK_FIXTURE + "/outside", filename]
+}
+
+node inputRedirectIsARead() {
+  return [
+    grepNames("git status < one.txt"),
+    grepNames("cat < one.txt"),
+    grepNames("echo hi < one.txt > copy.txt"),
+    grepNames("git status < $F"),
+    grepNames("git status < one.txt < two.txt"),
+    grepNames("git status < ."),
+    grepNames("git status | grep hello < one.txt"),
+    grepNames("echo hi < one.txt"),
+  ]
+}
+
+node filtersInAPipe() {
+  return [
+    grepNames("git log | sort | uniq -c"),
+    grepNames("cat one.txt | sort -u"),
+    grepNames("cat one.txt | cut -d : -f 1"),
+    grepNames("cat one.txt | tr a b"),
+    grepNames("cat one.txt | tr -d x"),
+    grepNames("cat one.txt | tr -s a b"),
+    grepNames("cat one.txt | tr a"),
+    grepNames("cat one.txt | sort two.txt"),
+    grepNames("cat one.txt | sort -o out.txt"),
+    grepNames("sort one.txt"),
+    grepNames("git log | tee log.txt"),
+    grepNames("git log | xargs echo"),
+    grepNames("git log | sort > sorted.txt"),
+    grepNames("git log | tac"),
+    grepNames("cut -d, -f1 one.txt"),
+    grepNames("tr a b"),
+    grepNames("cat one.txt | tr a $B"),
+    grepNames("cat one.txt | tr -dd x"),
+  ]
+}
+
+node readUnderRecommendedNeedsNoPrompt() {
+  // The launch directory is the package directory, so the fixtures are
+  // inside it and recommended approves std::read there, and it approves
+  // git status anywhere. This test has no interruptHandlers entry, so an
+  // unanswered interrupt fails the run.
+  let found = false
+  handle {
+    const result = safeBash("wc -l " + FIXTURES + "/one.txt && git status")
+    if (result is success(text)) {
+      found = text.includes("one.txt")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node readOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("cat /etc/hosts", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::read") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO READ EFFECT"
+}
+
+node readAsksExactlyOneQuestion() {
+  // The test file answers one std::read and one std::git::status message.
+  // A std::bash prompt, or a second read, would fail the run.
+  const result = safeBash("wc -l one.txt && git status", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.includes("one.txt")
+}
+
+node rejectedReadNamesTheTool() {
+  const result = safeBash("cat -A one.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node loneReadIsShellFree() {
+  return [
+    outcomeOf(planFor("cat one.txt", FIXTURES)),
+    outcomeOf(planFor("cat -n one.txt", FIXTURES)),
+    outcomeOf(planFor("head -3 one.txt", FIXTURES)),
+    outcomeOf(planFor("tail -n 2 one.txt", FIXTURES)),
+    outcomeOf(planFor("cat -b one.txt", FIXTURES)),
+    outcomeOf(planFor("head -c 5 one.txt", FIXTURES)),
+    outcomeOf(planFor("head -n 0 one.txt", FIXTURES)),
+    outcomeOf(planFor("cat one.txt two.txt", FIXTURES)),
+    outcomeOf(planFor("cat one.txt > copy.txt", FIXTURES)),
+    outcomeOf(planFor("cat one.txt | head", FIXTURES)),
+    outcomeOf(planFor("wc -l one.txt", FIXTURES)),
+    outcomeOf(planFor("cat nope.txt", FIXTURES)),
+    outcomeOf(planFor("head -n 1 -n 2 one.txt", FIXTURES)),
+    outcomeOf(planFor("head -2 -n 1 one.txt", FIXTURES)),
+    outcomeOf(planFor("tail -n 1 -n 2 one.txt", FIXTURES)),
+  ]
+}
+
+/** Files whose line endings test the shell-free rendering, kept apart
+ * from FIXTURES so no grep parity row's output changes. */
+static const READ_FIXTURES = __dirname + "/stdlib/read-fixtures"
+
+def readParityOf(source: string): any {
+  // Without this check, a row whose command fell back to the bash path
+  // would compare the real program with itself and pass for no reason.
+  if (planFor(source, READ_FIXTURES).execution.kind != "read") {
+    return "NOT SHELL-FREE: ${source}"
+  }
+  let ours = ""
+  let theirs = ""
+  handle {
+    const shellFree = safeBash(source, cwd: READ_FIXTURES)
+    if (shellFree is success(out)) {
+      ours = out
+    }
+    // bash returns an ExecResult, not a Result.
+    const real = bash(source, cwd: READ_FIXTURES)
+    theirs = real.stdout
+  } with approve
+  // cat, head, and tail print in order, so the comparison is exact.
+  if (ours == theirs) {
+    return true
+  }
+  return [source, ours, theirs]
+}
+
+node shellFreeReadMatchesRealTools() {
+  return [
+    readParityOf("cat one.txt"),
+    readParityOf("cat -n one.txt"),
+    readParityOf("head -1 one.txt"),
+    readParityOf("head -n 1 one.txt"),
+    readParityOf("head -n 100 one.txt"),
+    readParityOf("tail -1 one.txt"),
+    readParityOf("tail -n 100 one.txt"),
+    readParityOf("cat noeol.txt"),
+    readParityOf("cat -n noeol.txt"),
+    readParityOf("tail -1 noeol.txt"),
+    readParityOf("cat empty.txt"),
+    readParityOf("cat -n empty.txt"),
+    readParityOf("cat crlf.txt"),
+    readParityOf("tail -1 crlf.txt"),
+  ]
+}
+
+node loneReadAsksOneQuestion() {
+  // One std::read approval, and no shell: a std::bash prompt would fail
+  // the run, because the test file answers only the read message.
+  const result = safeBash("head -1 one.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
 }

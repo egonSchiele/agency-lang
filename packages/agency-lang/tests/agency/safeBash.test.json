@@ -307,7 +307,7 @@
       "nodeName": "planOutcomes",
       "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
       "input": "",
-      "expectedOutput": "[\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
+      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -388,9 +388,9 @@
     },
     {
       "nodeName": "newShapes",
-      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
+      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"unrecognized\",\"no rule for `head`\"],\"git status | git log\"]",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],null,\"git status | git log\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -630,6 +630,160 @@
       "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r still wins (it reads the working directory), a named path wins over the pipe, a grep outside the pipe still reads stdin, the flag table still applies, and a line of recognized commands with no effect asks std::bash by the audit rule.",
       "input": "",
       "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readVerbsReadFiles",
+      "description": "Each read verb's row says what a command reads: the files it names, each a regular file, or its stdin when it names none. A digit flag on head or tail is a line count unless it is the value of -n. A folder, a missing file, a variable or a glob, a flag the row does not list, a count given twice, or the wrong number of paths is unrecognized.",
+      "input": "",
+      "expectedOutput": "[[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],\"stdin\",\"stdin\",\"head takes at most 1 path\",\"uniq takes at most 1 path\",\"the value of `-n` is not a number\",\"the value of `-n` is not literal\",\"tail does not take `-f`\",\"cat does not take `-A`\",\"the cat path is not literal\",\"the cat path is not literal\",\"diff takes 2 paths\",\"diff does not take `-r`\",\"cat would read a directory\",true,\"sort does not take `-o`\",\"an option after the first argument is a file name to some versions of cat\",[\"one.txt\"],\"diff takes 2 paths\",\"the value of `-U` is not a number\",\"head takes `-n` only once\",\"head takes `-n` only once\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readsAskStdRead",
+      "description": "A read of a named file asks std::read for each path and runs through bash. A redirect adds std::write, a git command adds its own question, and a read verb with no path in a later pipe stage adds nothing. With no path outside a pipe, an unlisted flag, or a folder, the line asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[[\"std::read\"],null],[[\"std::read\",\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\",\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\",\"std::write\"],null],[[\"std::git::status\",\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat does not take `-A`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat would read a directory\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readPayloadNamesTheRealParent",
+      "description": "A read of a symlink names the directory of the file it points to, so the policy judges where the bytes really are.",
+      "input": "",
+      "expectedOutput": "[true,\"target.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "inputRedirectIsARead",
+      "description": "A < redirect reads its target, so it asks std::read beside the command's own question. A stdin reader with only an input redirect stays unrecognized, and so does a variable target, two input redirects, or a folder. A pipe-fed grep with an input redirect reads the file, so the line asks for it. An echo with an input redirect is not shell-free: the shell opens the file, so it asks std::read and runs through bash.",
+      "input": "",
+      "expectedOutput": "[[[\"std::git::status\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat with no path reads stdin\"}],[[\"std::read\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`variable` is not fully literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"more than one input redirect\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an input redirect would read a directory\"}],[[\"std::git::status\",\"std::read\"],null],[[\"std::read\"],null]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "filtersInAPipe",
+      "description": "A filter in a later pipe stage reads the previous stage's output and adds nothing; a filter that names a file asks std::read for it, in a pipe or not. tr takes only literal sets, as many as its flags allow. tee and xargs have no rule, sort -o is refused, and a comma joined to a flag does not parse yet.",
+      "input": "",
+      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `tee`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"-d, -f1 one.txt\\\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readUnderRecommendedNeedsNoPrompt",
+      "description": "Under the recommended policy, a read inside the launch directory and a git status run with no prompt.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readOutsideTheLaunchDirIsUndecided",
+      "description": "Under the recommended policy, a read of a file outside the launch directory is left to a person, because the payload names the real parent.",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readAsksExactlyOneQuestion",
+      "description": "A read beside a git command asks one std::read and one git question, and no shell question.",
+      "input": "",
+      "expectedOutput": "true",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Show git status"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedReadNamesTheTool",
+      "description": "When a broad line made only of verbs the read tool can do is rejected, the model is pointed at the read tool.",
+      "input": "",
+      "expectedOutput": "\"interrupt rejected\\nsafeBash could not ask a narrower question because it has no rule for one of the commands: cat does not take `-A`. Call the read tool instead: a policy can approve its question in advance.\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loneReadIsShellFree",
+      "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
+      "input": "",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreeReadMatchesRealTools",
+      "description": "Each row runs the shell-free path and the real program on the same command and compares the output exactly, including a file with no final newline, an empty file, and a file with Windows line endings. Each row first checks that its command really runs shell-free.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loneReadAsksOneQuestion",
+      "description": "A lone read asks one std::read question and no shell question, and prints what head prints.",
+      "input": "",
+      "expectedOutput": "\"hello world\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"

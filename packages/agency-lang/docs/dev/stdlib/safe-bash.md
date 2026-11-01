@@ -59,16 +59,47 @@ approvable under `std::bash`, which is where the control lives.
 redirect, never spawns a shell. The output is computed in Agency and
 returned, or written with `_write` under a `std::write` whose payload
 carries the bytes. A lone `grep` that translates exactly runs the grep
-tool's own search (see "grep" below). An `agency <sub> <file>` line runs
-in-process through `std::agency`.
+tool's own search (see "grep" below). A lone `cat`, `head`, or `tail` of
+one file runs the read tool's own read (see "The read family" below). An
+`agency <sub> <file>` line runs in-process through `std::agency`.
 
 `bash`: everything else. Narrow when every command was recognized
 (`git status`, `git log`, `git diff`, `git diff --staged`, a grep of one
-named file, a redirect contributing `std::write`), broad otherwise.
+named file, a read of named files, a redirect contributing `std::write`
+or `std::read`), broad otherwise.
 
 `outcomeOf(plan)` names which of these a plan is (`refuse`, `shellFree`,
 `agency`, `narrow`, `broad`) with an exhaustive match over the
 `Execution` union, so a new execution kind is a type error there.
+
+## In process when it translates
+
+The shell-free grep and the shell-free read follow one rule. A lone
+command whose flags and arguments translate exactly runs the matching
+stdlib tool in process, under that tool's effect. Any other command runs
+through bash, with a narrow effect only when the payload describes what
+bash will do, and `std::bash` otherwise.
+
+| Command | Runs | Raises |
+|---|---|---|
+| `grep -rn hello src` | `_grep` | `std::grep`, as the grep tool does |
+| `cat one.txt` | `_read` | `std::read`, as the read tool does |
+| `grep -c hello one.txt` | real grep, through bash | `std::grep` for the one file |
+| `wc -l one.txt` | real wc, through bash | `std::read` for the one file |
+
+The rule has three reasons:
+
+1. The approval describes exactly what runs. A policy that approves the
+   read tool under a folder approves the same read when the model spells
+   it `cat`.
+2. The output is the same on every machine and under every `sh`, because
+   no program prints it.
+3. The in-process path works on a host with no shell.
+
+The rule is not a defense against a trojaned program on the user's
+`PATH`. The bash path still runs whatever `cat` the shell finds. The
+containment floor in `docs/dev/security/goal.md` is the defense against
+that.
 
 ## Why a plan went broad
 
@@ -150,7 +181,8 @@ parenthesized group; `flattenOne` flattens it through `flattenCommands`,
 so the refuse wall sees every stage and classification needs no new
 branch: a pipeline is recognized when every stage is, its effects are
 the union, and it runs through bash as the rebuilt text (`git status |
-git log` is narrow; `git status | head` is broad). A dup redirect
+git log` and `git status | head` are narrow; `git status | xargs echo` is
+broad). A dup redirect
 (`2>&1`, op `>&`) moves a stream and writes no file, so `redirectEffect`
 skips it; `prepareRedirectWrite` stays strict, because the shell-free
 write path computes the bytes it writes and a dup changes which stream
@@ -188,10 +220,9 @@ Two pieces carry this, each with one job:
 `stdinStage(verb, readsStdin, redirects)` joins them, and it is the only
 place that reads the flag. A stdin reader fed by a pipe contributes only
 its redirects; anywhere else it is unrecognized, with the message `grep
-with no path reads stdin`. grep is the one caller today. A verb that can
-also read its stdin (`head`, `tail`, `wc`, `cat` with no file) is added
-by writing its "reads stdin" answer and calling the same helper; the
-plan for that is `docs/superpowers/plans/2026-10-31-safebash-reads-in-process.md`.
+with no path reads stdin`. Its callers are grep, the read verbs (see "The
+read family"), and `tr`. A new verb that can read its stdin writes its
+"reads stdin" answer and calls the same helper.
 
 A grep in a pipe still goes through the flag table, so `-R` or
 `--filter` is still refused, and so is a flag after the pattern (`git
@@ -366,17 +397,150 @@ field needs two facts:
 
 ### Resolving the path when the plan is made
 
-`readGrep` resolves the path before anything runs, and bash runs the line
-later. That is safe only while nothing that runs before the grep in a
+`readGrep` and `readFileVerb` resolve a path before anything runs, and
+bash runs the line later. That is safe only while nothing that runs before the grep in a
 narrow line can change which file the path names. Today the narrow
-commands are git reads and redirects, and a redirect writes into a file
-but cannot turn it into a symlink. Once project scripts are narrow
-(ADI-243), `pnpm build && grep -n x out.txt` could replace `out.txt`
-between the plan and the run, and that slice has to deal with it.
+commands are git reads, file reads, and redirects, and a redirect writes
+into a file but cannot turn it into a symlink. Once project scripts are
+narrow (ADI-243), `pnpm build && cat out.txt` could replace `out.txt`
+between the plan and the run, and that slice has to deal with it. The
+shell-free read does not have this gap: `_read` opens the file without
+following a final link and checks it is the regular file it resolved.
 
-## Why the executors call `_bash`, `_write`, and `_grep`
+## The read family
 
-The `bash`, `write`, and `grep` tools raise their own interrupts. Calling them
+`READ_VERBS` is a table of the verbs that read the files they name, or
+their stdin when they name none. Each row is a `ReadVerb`: a `FlagSpec`,
+how many paths the verb takes as a `CountRange`, and which valued flags
+hold a count.
+
+| Verbs | Flags | Paths |
+|---|---|---|
+| `cat` | `-n -b -s` | any number |
+| `head`, `tail` | `-n N`, `-c N`, and `-N` for `-n N` | one |
+| `wc` | `-l -w -c -m` | any number |
+| `diff` | `-u -q -N -w -b -B --color=never`, `-U N` | two |
+| `cmp` | none | two |
+| `sort` | `-n -r -u -f -b`, `-k K`, `-t C` | any number |
+| `uniq` | `-c -d -u -i` | one |
+| `cut` | `-d C`, `-f F`, `-c C` | any number |
+| `nl` | `-b B` | any number |
+| `tac`, `rev` | none | any number |
+
+Every letter means the same thing in GNU coreutils, BSD coreutils, and
+busybox. These are left out on purpose:
+
+- `cat -A -e -t -v`: GNU and BSD spell the escapes differently.
+- `tail -f`: it never returns.
+- `tail -r`: BSD only.
+- `wc -L`: GNU only.
+- `diff -r`: it reads a whole tree under a question that names one folder.
+- `diff -y`: its column width depends on the terminal.
+- `sort -o`: it writes a file. `sort -m` and `-c` change what sort does.
+- `uniq`'s second positional: it is the output file.
+
+`tac` is not on macOS. A line with it is recognized, and the shell
+reports it missing. `sort` may spill a large input to files under
+`$TMPDIR`, and no payload names those files.
+
+### What a read verb reads
+
+`readFileVerb` checks a command against its row and answers a
+`FileRead`: `{ kind: "files", paths, split }`, or `{ kind: "stdin" }`
+when it names no path. It never sees the pipe flag. A `stdin` answer goes
+to `stdinStage`, so `git log | head -20` asks only the git question.
+
+`head -20` parses as one flag named `-20`. The head and tail rows set
+`digitFlag: "n"` on their `FlagSpec`, so `readFlagWord` reads a bare digit
+flag as the value of `-n`. A digit flag after `-n` is read as `-n`'s
+value, the way any next word is, so `head -n -5` is refused as a value
+that is not literal. GNU reads that as "all but the last five". A row's
+`countFlags` must have digit values, so `tail -n +5` and `diff -U x` are
+refused too.
+
+Every path must be literal, and it must name a regular file.
+`resolveReadPath` resolves each one with `_searchTargetIn`, the resolver
+grep uses, which realpaths the path and stats it. An input redirect's
+target goes through the same function:
+
+- A folder is refused. With folders, `diff a b` reads every file under
+  both, following links, under two questions that name only `a` and `b`.
+- A FIFO or a device is refused. `wc -l pipe` would never return, and
+  `runBash` has no timeout.
+- A missing path is refused, so `cat nope.txt` asks `std::bash`, as
+  `grep x nope.txt` does.
+
+The payload names the file's real parent as `dir` and its name as
+`filename`, so a link to `~/.ssh/id_rsa` names `~/.ssh`.
+
+### On the bash path
+
+`otherVerbEffects` is the `effectsFor` arm for every verb with no arm of
+its own. For a read verb it raises one `std::read { dir, filename }` per
+path, the effect the read tool raises. `recommended` approves `std::read`
+under the launch directory, so `wc -l one.txt` there needs no prompt.
+
+`<` follows the same rules. `redirectEffect` raises `std::read` for an
+input redirect, the mirror of `>` raising `std::write`, and one input and
+one output redirect may both appear. A stdin reader whose only input is a
+redirect (`cat < one.txt`) names no path and is not in a pipe, so it
+stays unrecognized.
+
+`tr` is the one filter whose positionals are not paths. They are
+character sets, so `tr` has its own arm in `effectsFor`. `trEffects`
+checks the sets are literal and that there are as many as its flags take
+(`TR_SET_COUNTS`, a `CountRange` per flag set), then calls
+`stdinStage`.
+
+The bash parser refuses a comma joined to a flag, so `sort -t, -k2`,
+`cut -d, -f1`, and `sort -k2,2n` are unparseable and ask `std::bash`. The
+same flags with a space (`cut -d : -f 1`) parse.
+
+### A lone cat, head, or tail runs the read tool's read
+
+`tryShellFreeRead` applies to a lone `cat`, `cat -n`, `head -n N`, or
+`tail -n N` of one file, with no redirect, where N is at least 1. It
+raises `std::read` and runs `runRead`, which reads the file with `_read`
+and prints it with `_renderReadView` (`lib/stdlib/readDialect.ts`):
+
+- `whole`: the text as it is.
+- `numbered`: each line after its number, right-aligned in six columns,
+  and a tab. A last line with no newline is numbered and keeps no
+  newline. An empty file prints nothing.
+- `head`: the first N lines, each with its newline if it had one.
+- `tail`: the last N lines. A last line with no newline counts as one.
+
+Only `\n` ends a line, so a `\r` stays inside its line. A count of 0 is
+refused, because BSD `head -n 0` prints an error and exits 1 while GNU
+prints nothing. `cat -b`, `cat -s`, and `-c` go through bash.
+
+A count given twice never reaches the renderer. `splitFlags` takes a
+valued flag once, so `head -n 1 -n 2` and `head -2 -n 1` are refused on
+every path and ask `std::bash`. GNU head and tail take the last count,
+BSD head takes the last, and BSD tail refuses the line, so no one
+answer would be right.
+
+`runRead` returns `_read`'s own failure. The plan already refused a
+missing file or a folder, so a failure there is a race or a permission
+error, and `_read`'s message says which.
+
+`shellFreeReadMatchesRealTools` runs each shell-free row and the real
+program over `tests/agency/stdlib/read-fixtures/`, and compares the
+output exactly. The fixtures include a file with no final newline, an
+empty file, and a file with Windows line endings.
+
+These are left out:
+
+- `echo -n`. macOS `/bin/sh` prints `-n hi` for `echo -n hi`, so a
+  shell-free `echo -n` would disagree with the same echo inside a chain.
+  It waits on ADI-248, which decides which shell runs the text.
+- `wc` in process. GNU and BSD pad the count column differently.
+- More than one file in process. `head` prints a header per file.
+- `file`, `stat`, `md5sum`, `shasum`, `column`, `xxd`, and `hexdump`.
+
+## Why the executors call `_bash`, `_write`, `_grep`, and `_read`
+
+The `bash`, `write`, `grep`, and `read` tools raise their own interrupts. Calling them
 after `raiseAll` would ask the broad question a second time. The bypass
 is correct for one reason: the only path to an executor runs through a
 `raiseAll` that raised every effect in the plan and returned success, and
@@ -390,8 +554,10 @@ every plan raises at least one effect.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
 - `lib/stdlib/grepDialect.ts`: the pattern translation, grep's output
   format, and the skipped-folders note.
+- `lib/stdlib/readDialect.ts`: what `cat`, `cat -n`, `head`, and `tail`
+  print for a file's text.
 - `lib/stdlib/shell.ts`: `_searchTargetIn`, which resolves a grep path
-  against safeBash's cwd.
+  or a read path against safeBash's cwd.
 - `lib/stdlib/statelog.ts`: `_debug`.
 - `tests/agency/safeBash.agency`: plan tests (`planReasons`,
   `planVerbs`, `planOutcomes`, `wholeStringPlans`, ...), the end-to-end
@@ -401,6 +567,9 @@ every plan raises at least one effect.
 - `lib/stdlib/statelog.test.ts`: `_debug`.
 - `lib/stdlib/grepDialect.test.ts`: the translation table, the rendering
   rules, and the docstring check for `SKIP_DIRS`.
+- `lib/stdlib/readDialect.test.ts`: the four read views.
+- `tests/agency/stdlib/grep-fixtures/` and `read-fixtures/`: the files the
+  parity tests read.
 
 Design: `docs/superpowers/specs/2026-07-26-safebash-classifier-design.md`
 (the plan-then-act model) and

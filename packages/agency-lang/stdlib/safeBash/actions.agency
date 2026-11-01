@@ -15,9 +15,10 @@ import { WriteMode } from "std::index"
 
 import { keepOutput } from "std::spill"
 
-import { _write } from "agency-lang/stdlib-lib/builtins.js"
+import { _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
 import { _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
+import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
 
 /** One interrupt a command needs raised before it may run.
  *
@@ -31,6 +32,7 @@ export type Effect =
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
   | { name: "std::grep"; payload: GrepPayload }
+  | { name: "std::read"; payload: ReadPayload }
 
 export type WritePayload = {
   dir: string;
@@ -78,6 +80,20 @@ export def grepEffect(payload: GrepPayload): Effect {
   }
 }
 
+/** The fields the read tool's own std::read interrupt is keyed on: the
+ * real parent of the file, and its name. */
+export type ReadPayload = {
+  dir: string;
+  filename: string
+}
+
+export def readEffect(payload: ReadPayload): Effect {
+  return {
+    name: "std::read",
+    payload: payload
+  }
+}
+
 export type GitDiffPayload = {
   cwd: string;
   ref: string;
@@ -92,7 +108,7 @@ export type GitDiffPayload = {
  * fields that way needs. The dispatch in `safeBash` matches over this
  * union exhaustively, so adding a variant is a type error at the dispatch
  * rather than a silent fall-through. */
-export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec
+export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec
 
 export type BashExec = {
   kind: "bash";
@@ -152,6 +168,35 @@ export def grepExecution(payload: GrepPayload, render: GrepRender): GrepExec {
     kind: "grep",
     payload: payload,
     render: render
+  }
+}
+
+/** How the shell-free path prints a file: whole, numbered (cat -n), the
+ * first `lines` lines (head), or the last `lines` lines (tail). The rules
+ * live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
+ * the same name must keep these fields. */
+export type ReadView =
+  | { kind: "whole" }
+  | { kind: "numbered" }
+  | { kind: "head"; lines: number }
+  | { kind: "tail"; lines: number }
+
+/** A lone cat, head, or tail of one file, run through the read tool's
+ * own read with no shell. The read covers only what `payload` names, so
+ * the approval means what the read tool's approval means. */
+export type ReadExec = {
+  kind: "read";
+  payload: ReadPayload;
+  view: ReadView
+}
+
+/** Both plan sides derive from one ReadPayload, so the question asked and
+ * the file read cannot disagree. */
+export def readExecution(payload: ReadPayload, view: ReadView): ReadExec {
+  return {
+    kind: "read",
+    payload: payload,
+    view: view
   }
 }
 
@@ -271,6 +316,26 @@ export def runGrep(exec: GrepExec, command: string): Result<string> {
     return success(keepOutput(printed, 0, command))
   }
   return success(keepOutput(printed + notes + "\n", 0, command))
+}
+
+@capabilities(fileRead)
+export def runRead(exec: ReadExec, command: string): Result<string> {
+  """
+  Run a lone cat, head, or tail of one file through the read tool's own
+  read and print what the program would print.
+  """
+  // `_read`, NOT `read`, for the reason `runBash` gives: the `read` tool
+  // raises its own std::read, and the caller already raised one carrying
+  // this same payload. The only path here runs through `raiseAll`.
+  //
+  // The plan refused a missing file or a folder before anything ran, so
+  // a failure here is a race or a permission error, and `_read`'s own
+  // message says which.
+  const text = try _read(exec.payload.dir, exec.payload.filename)
+  if (isFailure(text)) {
+    return text
+  }
+  return success(keepOutput(_renderReadView(text.value, exec.view), 0, command))
 }
 
 /** The lines safeBash adds to a shell-free grep's output: which folders

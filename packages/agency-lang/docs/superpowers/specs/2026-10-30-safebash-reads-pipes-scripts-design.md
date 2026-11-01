@@ -430,6 +430,26 @@ built slice differs from the row above:
 
 See `docs/dev/stdlib/safe-bash.md`, "grep".
 
+**Departures for the read family (ADI-244).** The built slice differs
+from the rows above and from "Paths" below:
+
+- A lone `cat`, `head`, or `tail` of one file runs the read tool's own
+  read (`_read`) with no shell, under one `std::read`. Every other read
+  runs through bash.
+- A read path must name a regular file. A missing path, a folder, or a
+  special file (a FIFO, `/dev/zero`) makes the command unrecognized. With
+  folders, `diff a b` would read every file under both, following links,
+  under two questions that name only `a` and `b`, and a FIFO would hang
+  `runBash`, which has no timeout.
+- `diff -r` is refused, for the same reason.
+- The filters (`sort`, `uniq`, `cut`, `nl`, `tac`, `rev`) are read
+  verbs: each reads the files it names, so `sort a.txt` asks `std::read`,
+  and `sort` with no path in a later pipe stage adds nothing. `tr` is the
+  one filter with its own rule, because its positionals are character
+  sets.
+
+See `docs/dev/stdlib/safe-bash.md`, "The read family".
+
 Rows are easy to add later, and each is one line plus one test. What the
 table refuses is as important as what it accepts:
 

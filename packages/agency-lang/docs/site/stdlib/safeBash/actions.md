@@ -40,9 +40,10 @@ export type Effect =
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
   | { name: "std::grep"; payload: GrepPayload }
+  | { name: "std::read"; payload: ReadPayload }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L28))
 
 ### WritePayload
 
@@ -55,7 +56,7 @@ export type WritePayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L37))
 
 ### GrepPayload
 
@@ -76,7 +77,23 @@ export type GrepPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L64))
+
+### ReadPayload
+
+The fields the read tool's own std::read interrupt is keyed on: the
+real parent of the file, and its name.
+
+```ts
+/** The fields the read tool's own std::read interrupt is keyed on: the
+ * real parent of the file, and its name. */
+export type ReadPayload = {
+  dir: string;
+  filename: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L85))
 
 ### GitDiffPayload
 
@@ -90,7 +107,7 @@ export type GitDiffPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L97))
 
 ### Execution
 
@@ -115,9 +132,10 @@ export type Execution =
   | AgencyExec
   | RefuseExec
   | GrepExec
+  | ReadExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
 
 ### BashExec
 
@@ -128,7 +146,7 @@ export type BashExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L113))
 
 ### EchoExec
 
@@ -139,7 +157,7 @@ export type EchoExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L118))
 
 ### AgencyExec
 
@@ -153,7 +171,7 @@ export type AgencyExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L124))
 
 ### WriteExec
 
@@ -167,7 +185,7 @@ export type WriteExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L129))
 
 ### GrepFileNames
 
@@ -180,7 +198,7 @@ Whether grep prints file names: `-H` gives "always", `-h` gives
 export type GrepFileNames = "default" | "always" | "never"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L139))
 
 ### GrepRender
 
@@ -205,7 +223,7 @@ export type GrepRender = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L145))
 
 ### GrepExec
 
@@ -224,7 +242,47 @@ export type GrepExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L158))
+
+### ReadView
+
+How the shell-free path prints a file: whole, numbered (cat -n), the
+first `lines` lines (head), or the last `lines` lines (tail). The rules
+live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
+the same name must keep these fields.
+
+```ts
+/** How the shell-free path prints a file: whole, numbered (cat -n), the
+ * first `lines` lines (head), or the last `lines` lines (tail). The rules
+ * live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
+ * the same name must keep these fields. */
+export type ReadView =
+  | { kind: "whole" }
+  | { kind: "numbered" }
+  | { kind: "head"; lines: number }
+  | { kind: "tail"; lines: number }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L178))
+
+### ReadExec
+
+A lone cat, head, or tail of one file, run through the read tool's
+own read with no shell. The read covers only what `payload` names, so
+the approval means what the read tool's approval means.
+
+```ts
+/** A lone cat, head, or tail of one file, run through the read tool's
+ * own read with no shell. The read covers only what `payload` names, so
+ * the approval means what the read tool's approval means. */
+export type ReadExec = {
+  kind: "read";
+  payload: ReadPayload;
+  view: ReadView
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L187))
 
 ### RefuseExec
 
@@ -235,7 +293,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L203))
 
 ### BroadReason
 
@@ -259,7 +317,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L212))
 
 ### Plan
 
@@ -278,7 +336,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L218))
 
 ## Functions
 
@@ -299,7 +357,7 @@ Both plan sides derive from one WritePayload, so payload/execution
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L46))
 
 ### writeExecution
 
@@ -315,7 +373,7 @@ writeExecution(write: WritePayload): WriteExec
 
 **Returns:** [WriteExec](#writeexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L53))
 
 ### grepEffect
 
@@ -331,7 +389,23 @@ grepEffect(payload: GrepPayload): Effect
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L76))
+
+### readEffect
+
+```ts
+readEffect(payload: ReadPayload): Effect
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| payload | [ReadPayload](#readpayload) |  |
+
+**Returns:** [Effect](#effect)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L90))
 
 ### grepExecution
 
@@ -351,7 +425,27 @@ the search run cannot disagree.
 
 **Returns:** [GrepExec](#grepexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L166))
+
+### readExecution
+
+```ts
+readExecution(payload: ReadPayload, view: ReadView): ReadExec
+```
+
+Both plan sides derive from one ReadPayload, so the question asked and
+the file read cannot disagree.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| payload | [ReadPayload](#readpayload) |  |
+| view | [ReadView](#readview) |  |
+
+**Returns:** [ReadExec](#readexec)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L195))
 
 ### runBash
 
@@ -383,7 +477,7 @@ Run a command string through bash and return what it printed.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L229))
 
 ### runGrep
 
@@ -405,7 +499,29 @@ Run a lone grep through the grep tool's own search and print what grep
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L243))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L288))
+
+### runRead
+
+```ts
+runRead(exec: ReadExec, command: string): Result<string>
+```
+
+Run a lone cat, head, or tail of one file through the read tool's own
+  read and print what the program would print.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| exec | [ReadExec](#readexec) |  |
+| command | `string` |  |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L322))
 
 ### runWrite
 
@@ -430,4 +546,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L355))

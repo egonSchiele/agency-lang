@@ -6,7 +6,7 @@
 // typecheck clean. `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
-import { bash, grep, ls, ExecResult } from "std::shell"
+import { bash, grep, ls, glob, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
@@ -22,6 +22,7 @@ import {
   grepExecution,
   readEffect,
   lsEffect,
+  globEffect,
   ReadPayload,
   ReadView,
   readExecution,
@@ -410,6 +411,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
       return success([...git.value, ...redirect.value])
     }
     "tr" => trEffects(command, readsStdin, redirect.value)
+    "find" => findEffects(command, cwd, redirect.value)
     _ => otherVerbEffects(name.text, command, cwd, readsStdin, redirect.value)
   }
 }
@@ -1412,6 +1414,93 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
   }
 }
 
+/** find's expression, as whole words. An allowlist: an unlisted word is
+ * unrecognized, which is what keeps -exec, -delete, -fprint, -L, and the
+ * ones this list forgot on the std::bash path. -newer is out because it
+ * reads another file's time. -iname is out because the glob tool's
+ * pattern is case-sensitive and the payload would say so. -H and -P are
+ * out because find takes them only before its paths, where the ordering
+ * rule refuses them. */
+static const FIND_FLAGS: FlagSpec = {
+  plain: ["-not", "-o", "-a", "-prune", "-print", "-print0"],
+  valued: ["-name", "-path", "-type", "-maxdepth", "-mindepth", "-size"],
+  optionsFirst: false,
+  wholeWords: true
+}
+
+/** The expression words that widen or invert what -name selects. With
+ * any of them the pattern is `**`, because `-not -name x` lists the
+ * opposite of x and `-name x -o -type d` lists more than x. */
+static const FIND_WIDENING_WORDS: string[] = ["-not", "-o", "-prune"]
+
+static const FIND_COUNT_FLAGS: string[] = ["-maxdepth", "-mindepth"]
+
+@capabilities(fileRead)
+def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Result<Effect[]> {
+  """
+  A find asks std::glob for each path it searches, as the glob tool
+  does. Its paths come first and its expression after, as find's grammar
+  says, and every path must be a folder.
+  """
+  const split = splitFlags("find", command, FIND_FLAGS)
+  if (isFailure(split)) {
+    return split
+  }
+  const counts = checkCountFlags(split.value, FIND_COUNT_FLAGS)
+  if (isFailure(counts)) {
+    return counts
+  }
+  const depths = [entry.value for entry in split.value.values if entry.flag == "-maxdepth"]
+  if (depths.length > 0 && digitsValue(depths[0]) == 0) {
+    return failure("find -maxdepth 0 lists only the path itself")
+  }
+  const positionals = split.value.positionals
+  if (positionals.length == 0) {
+    return failure("find needs a path before its tests")
+  }
+  if (leadingPositionals(command) != positionals.length) {
+    return failure("find takes its paths before its tests")
+  }
+  const dirs = resolveDirs("find", positionals, cwd)
+  if (isFailure(dirs)) {
+    return dirs
+  }
+  const pattern = findPattern(split.value)
+  const searches = [globEffect({ pattern: pattern, dir: dir, maxResults: 0 }) for dir in dirs.value]
+  return success([...searches, ...redirects])
+}
+
+/** How many of a command's arguments come before its first flag word. */
+def leadingPositionals(command: SimpleCommand): number {
+  let count = 0
+  for (word in command.args) {
+    if (word is { tag: "flag" }) {
+      return count
+    }
+    count = count + 1
+  }
+  return count
+}
+
+def findPattern(split: SplitArgs): string {
+  """
+  The glob pattern that describes find's search, or a wider one. The
+  glob tool matches a whole relative path with `*` stopping at `/`,
+  while -name matches the last part at any depth, so -name's value gets
+  a `**/` in front unless the search stops at depth 1. With no -name, or
+  with a word that widens or inverts it, the pattern is everything.
+  """
+  const names = [entry.value for entry in split.values if entry.flag == "-name"]
+  const widened = [word for word in split.plain if FIND_WIDENING_WORDS.includes(word)]
+  const depths = [entry.value for entry in split.values if entry.flag == "-maxdepth"]
+  const depthOne = depths.length > 0 && digitsValue(depths[0]) == 1
+  if (names.length == 1 && widened.length == 0) {
+    const prefix = if (depthOne) then "" else "**/"
+    return prefix + names[0]
+  }
+  return if (depthOne) then "*" else "**"
+}
+
 /** The folder a listing with no path lists. */
 static const CURRENT_DIR_WORD: Word = { tag: "literal", text: "." }
 
@@ -2305,7 +2394,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -2406,7 +2495,8 @@ static const READ_TOOL_FOR_VERB: Record<string, string> = {
   head: "read",
   tail: "read",
   ls: "ls",
-  tree: "ls"
+  tree: "ls",
+  find: "glob"
 }
 
 def toolHint(verbs: string[]): string {
@@ -2551,6 +2641,15 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
       raise std::ls("Are you sure you want to list this directory?", {
         dir: effect.payload.dir,
         recursive: effect.payload.recursive,
+        maxResults: effect.payload.maxResults,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::glob" => {
+      raise std::glob("Are you sure you want to glob files?", {
+        pattern: effect.payload.pattern,
+        dir: effect.payload.dir,
         maxResults: effect.payload.maxResults,
         command: fullCommand
       })

@@ -1382,3 +1382,89 @@ node rejectedListingNamesTheTool() {
   }
   return "UNEXPECTEDLY RAN"
 }
+
+node findAsksStdGlob() {
+  return [
+    grepNames("find . -name '*.txt'"),
+    grepNames("find . -iname '*.TXT' -type f"),
+    grepNames("find . -type f -not -path '*/node_modules/*'"),
+    grepNames("find . -H -name x"),
+    grepNames("find . . -name x"),
+    grepNames("find . -maxdepth 2 -print0"),
+    grepNames("find . -name *.txt"),
+    grepNames("find . -delete"),
+    grepNames("find . -exec rm {} \\;"),
+    grepNames("find . -L -name x"),
+    grepNames("find -name x"),
+    grepNames("find . -name x foo"),
+    grepNames("find . -name a -o -name b"),
+    grepNames("find . -maxdepth x"),
+    grepNames("find . -maxdepth 0"),
+    grepNames("find . -newer one.txt"),
+    grepNames("find one.txt -name x"),
+    grepNames("find . -name '*.txt' | head"),
+  ]
+}
+
+def globPayloads(source: string): any {
+  // The for-and-if shape, so `payload` narrows to GlobPayload.
+  let out: any[] = []
+  for (effect in planFor(source, FIXTURES).effects) {
+    if (effect.name == "std::glob") {
+      out.push([effect.payload.pattern, effect.payload.dir == FIXTURES])
+    }
+  }
+  return out
+}
+
+node findPatterns() {
+  return [
+    globPayloads("find . -name '*.txt'"),
+    globPayloads("find . -maxdepth 1 -name '*.txt'"),
+    globPayloads("find . -type f"),
+    globPayloads("find . -maxdepth 1"),
+    globPayloads("find . -maxdepth 3 -name x"),
+    globPayloads("find . -not -name '*.txt'"),
+    globPayloads("find . -name '*.txt' -o -type d"),
+    globPayloads("find . -path ./node_modules -prune -o -name '*.txt'"),
+    globPayloads("find . -maxdepth 1 -not -name x"),
+  ]
+}
+
+node findUnderRecommendedNeedsNoPrompt() {
+  // No interruptHandlers entry: an unanswered interrupt fails the run.
+  let found = false
+  handle {
+    const result = safeBash("find " + FIXTURES + " -name '*.txt'")
+    if (result is success(text)) {
+      found = text.includes("one.txt")
+    }
+  } with (intr) {
+    if (checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return found
+}
+
+node findOutsideTheLaunchDirIsUndecided() {
+  const plan = planFor("find /etc -name hosts", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::glob") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO GLOB EFFECT"
+}
+
+node findAsksOneQuestion() {
+  // find lists in directory order, which differs between file systems,
+  // so the lines are compared sorted.
+  const result = safeBash("find . -name '*.txt'", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return [line for line in result.value.split("\n") if line != ""].sort()
+}

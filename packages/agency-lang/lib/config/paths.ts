@@ -1,13 +1,10 @@
 import { z } from "zod";
+import { isPlainObject } from "../utils/isPlainObject.js";
 
 // A config path is dotted keys, where `*` matches any one key:
 // "mcpServers.*.env.*". Merge rules and secret masking are lists of these.
 
 const WILDCARD = "*";
-
-export function isPlainObject(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function matchesConfigPath(pattern: string, keys: string[]): boolean {
   const parts = pattern.split(".");

@@ -1,6 +1,6 @@
 import type { Host } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
-import { isPlainObject } from "../config/paths.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";

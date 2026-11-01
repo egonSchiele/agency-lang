@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { isPlainObject, mapConfigValues, matchesConfigPath, schemaAtConfigPath } from "./paths.js";
+import { mapConfigValues, matchesConfigPath, schemaAtConfigPath } from "./paths.js";
 
 describe("matchesConfigPath", () => {
   it("matches exact keys and * wildcards", () => {
@@ -66,14 +66,5 @@ describe("schemaAtConfigPath", () => {
     expect(schemaAtConfigPath(schema, "log.nope")).toBeUndefined();
     expect(schemaAtConfigPath(schema, "servers.fs")).toBeUndefined();
     expect(schemaAtConfigPath(schema, "servers.*.nope")).toBeUndefined();
-  });
-});
-
-describe("isPlainObject", () => {
-  it("is true only for non-array objects", () => {
-    expect(isPlainObject({})).toBe(true);
-    expect(isPlainObject([])).toBe(false);
-    expect(isPlainObject(null)).toBe(false);
-    expect(isPlainObject("x")).toBe(false);
   });
 });

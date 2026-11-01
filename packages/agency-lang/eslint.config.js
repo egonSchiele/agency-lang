@@ -64,6 +64,7 @@ export const BROWSER_FILES = [
   "lib/utils/formatElapsed.ts",
   "lib/utils/formatType.ts",
   "lib/utils/hash.ts",
+  "lib/utils/isPlainObject.ts",
   "lib/utils/iteration.ts",
   "lib/utils/parameterAliases.ts",
   "lib/utils/sha256.node.ts",

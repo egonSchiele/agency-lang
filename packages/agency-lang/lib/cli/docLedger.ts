@@ -38,6 +38,7 @@ import {
 } from "@/compiler/buildManifest.js";
 import { dependencyFingerprint } from "@/compiler/depFingerprint.js";
 import { getStdlibDir } from "@/importPaths.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 
 export type DocLedgerEntry = {
   sourceHash: string;
@@ -183,10 +184,6 @@ export function docRenderKey(config: AgencyConfig, effectiveBaseUrl: string): st
   return hashBytes(
     JSON.stringify({ configKey: deriveConfigKey(config), baseUrl: effectiveBaseUrl }),
   );
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** Recursive: one malformed nested value anywhere denies the WHOLE ledger

@@ -1,0 +1,219 @@
+// A workflow as one tool: runWorkflow bound to the workflow, under its
+// name, with its inputs schema. The model calls in modelCallsTheTool are
+// mocked; no other node calls a model.
+import { workflowTool, workflowTools, writeWorkflow, Workflow } from "std::workflow"
+import { add, multiply } from "std::math"
+import { mkdir, remove } from "std::fs"
+import { keys } from "std::object"
+import { Json } from "std::validation"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+// Its own folder: CI runs test files in parallel, and save.agency writes
+// under test-output too.
+const OUT = __dirname + "/test-output/tool"
+const TOOLS = [add, multiply]
+
+/** A checkpoint is written when this is raised with no handler in the
+  program, which is how schemaSurvivesACheckpoint pauses. */
+effect test::pause {
+  reason: string
+}
+
+def doubleSum(name: string): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Add two numbers and double the sum.",
+    inputs: "{ a: number; b: number }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: { "$ref": "inputs.b" } } },
+      { id: "doubled", kind: "tool", module: "std::math", tool: "multiply", args: { a: { "$ref": "steps.sum" }, b: 2 } }
+    ],
+    result: { "$ref": "steps.doubled" }
+  }
+}
+
+/** `b` is optional, so the tool's schema must not require it. */
+def withOptional(name: string): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Add one to a.",
+    inputs: "{ a: number; b?: number }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: 1 } }
+    ]
+  }
+}
+
+/** The check refuses this: `subtract` is not in TOOLS. */
+def badWorkflow(name: string): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Subtract.",
+    inputs: "{ a: number }",
+    steps: [{ id: "diff", kind: "tool", module: "std::math", tool: "subtract", args: { a: { "$ref": "inputs.a" }, b: 1 } }]
+  }
+}
+
+def cleanup(name: string) {
+  remove(OUT + "/workflows/${name}.json") with approve
+}
+
+/** The failure's message, or "" for a success. */
+def errorOf(result: Result<any>): string {
+  if (result is failure(err)) {
+    return "${err}"
+  }
+  return ""
+}
+
+/** The JSON Schema the model sees for the tool's `inputs` parameter. This
+  is the output form of the tool's own schema, which is what the tool loop
+  sends; `b` is still not required there, because `fromJSONSchema` read the
+  input form the workflow stored. */
+def inputsSchemaOf(tool: any): Json {
+  return tool.toolDefinition.schema.toJSONSchema().properties.inputs
+}
+
+/** Builds the tool, recording every effect raised in "effects" and each
+  payload under its effect's name. The check needs `dir` to exist. */
+def buildTool(workflow: Workflow): Result<any> {
+  mkdir(OUT) with approve
+  setMutable("effects", [])
+  handle {
+    return workflowTool(workflow, TOOLS, OUT)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    setMutable(intr.effect, intr.data)
+    return approve()
+  }
+}
+
+node toolShape(): Json {
+  const built = buildTool(doubleSum("doubleSum"))
+  if (built is failure(err)) {
+    return "failed: ${err}"
+  }
+  const tool = built.value
+  const toolSchema = tool.toolDefinition.schema.toJSONSchema()
+  return [
+    tool.name,
+    tool.toolDefinition.description,
+    toolSchema.required,
+    inputsSchemaOf(tool).required,
+    getMutable("effects", [])
+  ]
+}
+
+node optionalInputIsOptional(): Json {
+  const built = buildTool(withOptional("withOptional"))
+  if (built is failure(err)) {
+    return "failed: ${err}"
+  }
+  const inputs = inputsSchemaOf(built.value)
+  return [inputs.required, keys(inputs.properties)]
+}
+
+node badWorkflowIsRefused(): Json {
+  const built = buildTool(badWorkflow("bad"))
+  return [isFailure(built), errorOf(built) =~ re/subtract/, getMutable("effects", [])]
+}
+
+/** A workflow named like one of its tools cannot be handed to a model
+  beside it, so workflowTool refuses it as workflowTools does. */
+node workflowToolRefusesAClash(): Json {
+  const built = buildTool(doubleSum("add"))
+  return [isFailure(built), errorOf(built) =~ re/"add"/, getMutable("effects", [])]
+}
+
+node modelCallsTheTool(): Json {
+  const built = buildTool(doubleSum("doubleSum"))
+  if (built is failure(err)) {
+    return "failed: ${err}"
+  }
+  setMutable("effects", [])
+  let answer = ""
+  handle {
+    answer = llm("Double the sum of 2 and 3.", { tools: [built.value] })
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    setMutable(intr.effect, intr.data)
+    return approve()
+  }
+  const run = getMutable("std::workflow::run", {})
+  return [answer, getMutable("effects", []), run.name, run.inputs]
+}
+
+node schemaSurvivesACheckpoint(): Json {
+  const built = buildTool(doubleSum("doubleSum"))
+  if (built is failure(err)) {
+    return "failed: ${err}"
+  }
+  const tool = built.value
+  // No handler here: the raise reaches the test runner, which writes a
+  // checkpoint with `tool` as a live local and approves.
+  return interrupt test::pause("pause with the tool in a local", { reason: "checkpoint" })
+  return inputsSchemaOf(tool).required
+}
+
+/** Saves `workflow` under OUT with every prompt approved. */
+def save(workflow: Workflow): Result<any> {
+  mkdir(OUT) with approve
+  return writeWorkflow(workflow, TOOLS, OUT) with approve
+}
+
+/** Lists the tools under `dir`, recording every effect raised in "effects". */
+def listTools(dir: string, tools: any[]): Result<any[]> {
+  setMutable("effects", [])
+  handle {
+    return workflowTools(dir, tools)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    return approve()
+  }
+}
+
+node savedWorkflowsBecomeTools(): Json {
+  cleanup("toolDoubleSum")
+  cleanup("toolOptional")
+  const savedOne = save(doubleSum("toolDoubleSum"))
+  const savedTwo = save(withOptional("toolOptional"))
+  const listed = listTools(OUT, TOOLS)
+  cleanup("toolDoubleSum")
+  cleanup("toolOptional")
+  if (savedOne is failure || savedTwo is failure || listed is failure) {
+    return ["failed", errorOf(savedOne), errorOf(savedTwo), errorOf(listed)]
+  }
+  const optional = find(listed.value, \tool -> tool.name == "toolOptional")
+  return [
+    map(listed.value, \tool -> tool.name),
+    inputsSchemaOf(optional).required,
+    getMutable("effects", [])
+  ]
+}
+
+node nameClashIsRefused(): Json {
+  cleanup("toolDoubleSum")
+  const saved = save(doubleSum("toolDoubleSum"))
+  const listed = listTools(OUT, [add, multiply.rename("toolDoubleSum")])
+  cleanup("toolDoubleSum")
+  if (saved is failure) {
+    return "failed: ${errorOf(saved)}"
+  }
+  return [isFailure(listed), errorOf(listed) =~ re/toolDoubleSum/]
+}
+
+node olderSaveIsRefused(): Json {
+  const listed = listTools(__dirname + "/fixtures/saved/olderOne", TOOLS)
+  return [isFailure(listed), errorOf(listed) =~ re/olderOne/, errorOf(listed) =~ re/writeWorkflow/]
+}
+
+node emptyProjectHasNoTools(): Json {
+  mkdir(OUT) with approve
+  cleanup("toolDoubleSum")
+  cleanup("toolOptional")
+  const listed = listTools(OUT, TOOLS)
+  return map(listed catch ["failed"], \tool -> tool.name)
+}

@@ -233,8 +233,8 @@ def typedInputs(name: string): Workflow {
   }
 }
 
-// An optional input is a required key that may be null: that is how
-// Agency compiles `?`, and the stored schema is what the compiler gives.
+// An optional input is a key that is not required and may be null, which
+// is the input form of the schema.
 node savedMetaHasInputsSchema(): Json {
   cleanup("typed")
   const saved = runSave(typedInputs("typed"))

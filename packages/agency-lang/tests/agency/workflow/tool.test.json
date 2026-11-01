@@ -1,0 +1,138 @@
+{
+  "tests": [
+    {
+      "nodeName": "toolShape",
+      "description": "the tool has the workflow's name and description, one inputs parameter, and building it raises one std::run",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",\"Add two numbers and double the sum.\",[\"inputs\"],[\"a\",\"b\"],[\"std::run\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "optionalInputIsOptional",
+      "description": "an optional input is in the schema's properties and not in required",
+      "input": "",
+      "expectedOutput": "[[\"a\"],[\"a\",\"b\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badWorkflowIsRefused",
+      "description": "a workflow with problems fails with them and asks nothing",
+      "input": "",
+      "expectedOutput": "[true,true,[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "workflowToolRefusesAClash",
+      "description": "workflowTool refuses a workflow named like one of its tools, before asking anything",
+      "input": "",
+      "expectedOutput": "[true,true,[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelCallsTheTool",
+      "description": "a mocked model calls the tool, and the workflow runs with the inputs it sent",
+      "input": "",
+      "expectedOutput": "[\"done\",[\"std::workflow::run\",\"std::run\"],\"doubleSum\",{\"a\":2,\"b\":3}]",
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            {
+              "name": "doubleSum",
+              "args": {
+                "inputs": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            }
+          ]
+        },
+        {
+          "return": "done"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "schemaSurvivesACheckpoint",
+      "description": "the tool's inputs schema is still there after a pause and resume",
+      "input": "",
+      "expectedOutput": "[\"a\",\"b\"]",
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "savedWorkflowsBecomeTools",
+      "description": "workflowTools makes one tool per saved workflow, in name order, from the stored schema, with one scan prompt",
+      "input": "",
+      "expectedOutput": "[[\"toolDoubleSum\",\"toolOptional\"],[\"a\"],[\"std::workflow::scan\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nameClashIsRefused",
+      "description": "workflowTools refuses a saved workflow named like a host tool",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "olderSaveIsRefused",
+      "description": "a workflow saved before schemas were recorded is refused, naming it and writeWorkflow",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyProjectHasNoTools",
+      "description": "a project with no saved workflows has no tools",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

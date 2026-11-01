@@ -140,6 +140,7 @@ describe("_pickSignatures", () => {
     returnType,
     returnsResult: returnType !== null && returnType.startsWith("Result"),
     docstring: null,
+    params: [],
   });
 
   it("keys each named function by module and name", () => {
@@ -154,6 +155,7 @@ describe("_pickSignatures", () => {
         returnType: "string",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     });
   });

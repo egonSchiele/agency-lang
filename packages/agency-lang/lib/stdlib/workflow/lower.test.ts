@@ -61,6 +61,7 @@ describe("lowerWorkflow", () => {
         returnType: "string[]",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const body = printAll(resolved(mealPlan, signatures));
@@ -153,6 +154,7 @@ describe("lowerWorkflow", () => {
         returnType: "string[]",
         returnsResult: false,
         docstring: null,
+        params: [],
       },
     };
     const body = printAll(resolved(withStep(mealPlan, 2, { limits: { maxCost: 1 } }), signatures));

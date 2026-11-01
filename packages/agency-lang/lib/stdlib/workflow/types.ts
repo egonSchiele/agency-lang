@@ -1,3 +1,4 @@
+import type { ExportParam } from "../agency.js";
 import type { Code } from "../template.js";
 import { variableNameParser } from "../../parsers/parsers.js";
 import { isReservedInternalName } from "../../reservedNames.js";
@@ -95,6 +96,8 @@ export type Signature = {
   returnType: string | null;
   returnsResult: boolean;
   docstring: string | null;
+  /** What `describe` says about each parameter. */
+  params: ExportParam[];
 };
 
 /** A checked reference. `path` is the text after the root name, such as

@@ -10,6 +10,17 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-30-safebash-reads-pipes-scripts-design.md`, Part 5, the `ls`, `tree`/`du`, and `find` rows of the table and the "What the table refuses" list. Ticket ADI-246.
 
+## A decision the owner makes before this plan runs
+
+The `ls` tool's recursive walk and the `glob` tool's walk skip `SKIP_DIRS` (`node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`), and `_glob` also honors `.gitignore` (`lib/stdlib/shell.ts`, the `SKIP_DIRS` set and `walkDir`). Real `ls -R`, `du`, `tree`, and `find` skip nothing. So a policy that approves `std::ls` under the launch directory approves what the tool does, and the bash spelling with the same payload lists more: the names under `.git` and `node_modules`. For grep (ADI-242) the owner chose accuracy: a directory search through bash asks `std::bash`, because real grep reads file contents the tool skips.
+
+Two honest choices:
+
+- **A. Accept the difference and say so.** A listing prints names and sizes, not contents. The dev doc states that a recursive listing through bash shows entries the tool's walk leaves out.
+- **B. Follow grep.** A recursive listing through bash (`ls -R`, `du`, `tree`, `find`) asks `std::bash`; only a listing of one folder's own entries (`ls`, `ls -la src`) is narrow. In `listEffects` this is one refusal when `recursive` is true, and `find` is then unrecognized altogether.
+
+This plan is written for **A**, because names are not the secret that decided grep. If the owner picks B, Task 2 gains the refusal, Task 3 is dropped, and the tests change to match.
+
 ## Background for the implementer
 
 Read `docs/dev/stdlib/safe-bash.md` whole, with care for "The read family" (this plan copies its shape) and "Stages that read a pipe". Then in `stdlib/safeBash.agency`: `effectsFor`, `otherVerbEffects`, `READ_VERBS`, `ReadVerb`, `readFileVerb`, `resolveReadPath`, `splitFlags`, `readFlagWord`, `readLongFlag`, `nextWordValue`, `raiseOne`, `READ_TOOL_FOR_VERB`; in `stdlib/safeBash/actions.agency`: `Effect`, `ReadPayload`, `readEffect`; in `stdlib/shell.agency`: the `ls` and `glob` tools and the `std::ls` and `std::glob` effect declarations (`@alwaysUnder(dir)` is what lets `recommended` approve them under the launch directory); in `lib/stdlib/shell.ts`: `_searchTarget` and `_searchTargetIn`.
@@ -59,7 +70,7 @@ What is refused and why:
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
-- Produces: in `readFlagWord`, after the `--` branch and the digit branch, a whole-word check: when `spec.plain.includes(word.flagName)` the flag is plain with its name as written (`-name`); when `spec.valued.includes(word.flagName)` it is valued and takes the next word through `nextWordValue(verb, word.flagName, next)` (a joined value, `-name=x`, is refused by the existing `flagValue != null` check for short flags). Only then does the letter loop run. A row lists a whole short flag with its dash (`"-name"`) and a letter without (`"n"`), so the two cannot collide. `flagDisplay` already prints a name that starts with `-` as is.
+- Produces: in `readFlagWord`, after the `--` branch, the digit branch, and the existing `flagValue != null` refusal, a whole-word check: when `spec.plain.includes(word.flagName)` the flag is plain with its name as written (`-name`); when `spec.valued.includes(word.flagName)` it is valued and takes the next word through `nextWordValue(verb, word.flagName, next)`. Only then does the letter loop run. The order matters: the parser hands `-name=x` over as flag `-name` with `flagValue: "x"` (checked), and GNU find rejects that spelling, so the refusal must come first or the whole-word branch would take the next word as the value and drop the `=x`. A row lists a whole short flag with its dash (`"-name"`) and a letter without (`"n"`), so the two cannot collide. `flagDisplay` already prints a name that starts with `-` as is.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -78,15 +89,16 @@ node wholeShortFlags() {
     splitSummary("x -n 3 -a f", WHOLE_FLAGS),
     splitSummary("x -name", WHOLE_FLAGS),
     splitSummary("x -nam f", WHOLE_FLAGS),
+    splitSummary("x -name=foo f", WHOLE_FLAGS),
   ]
 }
 ```
 
-where `splitSummary(source, spec)` parses the source, runs `splitFlags` on its first simple command, and returns `[plain, values as "flag=value" strings, positional texts]` or the failure text. Expected: `[[ "-print" ], ["-name=foo"], ["f"]]`; `[["a"], ["n=3"], ["f"]]`; `"x's `-name` needs a value"`; `"x does not take `-m`"` (the letters `n`, `a` match, `m` does not; read `readFlagWord` to confirm which letter the message names and pin that).
+where `splitSummary(source, spec)` parses the source, runs `splitFlags` on its first simple command, and returns `[plain, values as "flag=value" strings, positional texts]` or the failure text. Expected: `[[ "-print" ], ["-name=foo"], ["f"]]`; `[["a"], ["n=3"], ["f"]]`; `"x's `-name` needs a value"`; `[[], ["n=am"], ["f"]]` (a near miss on a whole flag falls back to the letter rules: `n` is valued and takes the rest of the word, `am`, as its value, which is what the letter loop does today); `"x does not take `-name=foo`"` (the joined-value refusal, with whatever text `renderFlag` gives; pin it).
 
 - [ ] **Step 2: Run to verify it fails**
 
-The agency test into `$SCRATCH/t1.txt`. Expected: the first row fails with "x does not take `-m`" or similar, since `-name` is split into letters.
+The agency test into `$SCRATCH/t1.txt`. Expected: the first row fails with a letter message, since `-name` is split into letters; the last row may already pass.
 
 - [ ] **Step 3: Implement, `make`, run, verify pass, commit**
 
@@ -98,7 +110,7 @@ Message: `safeBash: a short flag listed whole in a flag table matches whole`.
 
 **Files:**
 - Modify: `stdlib/safeBash/actions.agency` (`Effect`, `LsPayload`, `lsEffect`)
-- Modify: `stdlib/safeBash.agency` (`LIST_VERBS`, `ListVerb`, `listEffects`, `checkCountFlags` and `resolveTargets` pulled out of `readFileVerb`, `foldersOnly`, `otherVerbEffects`, `raiseOne`, `safeBash`'s `raises` clause, `READ_TOOL_FOR_VERB`)
+- Modify: `stdlib/safeBash.agency` (`LIST_VERBS`, `ListVerb`, `listEffects`, `checkCountFlags` pulled out of `readFileVerb`, `resolveReadPath` becoming `resolvePath` with a `want`, `resolvePaths`, `otherVerbEffects`, `raiseOne`, `safeBash`'s `raises` clause, `READ_TOOL_FOR_VERB`)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
@@ -130,7 +142,7 @@ export type ListVerb = {
 
 export static const LIST_VERBS: Record<string, ListVerb> = {
   ls: {
-    flags: { plain: ["l", "a", "A", "h", "1", "t", "r", "S", "R", "d", "p", "F", "G", "--color=never"], valued: [], optionsFirst: true },
+    flags: { plain: ["l", "a", "A", "h", "1", "t", "r", "S", "R", "d", "p", "F", "--color=never"], valued: [], optionsFirst: true },
     recursive: "withR"
   },
   tree: {
@@ -144,29 +156,43 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
 }
 ```
 
-`optionsFirst` is true for all three: BSD `ls src -la` reads `-la` as a file name. `tree -L N` and `du -d N` must be digits: give `ListVerb` a `countFlags: string[]` like `ReadVerb` (`["L"]`, `["d"]`, `[]` for ls). `-I pat` on `tree` takes a literal pattern; a glob word there is refused by `nextWordValue` already.
+`optionsFirst` is true for all three: BSD `ls src -la` reads `-la` as a file name. `-G` is out: on macOS it turns on color, on GNU it hides the group column. `tree` is not on macOS by default; a line with it is recognized and the shell reports it missing, as `tac` is in the read family (say so in the table comment). `tree -L N` and `du -d N` must be digits: give `ListVerb` a `countFlags: string[]` like `ReadVerb` (`["L"]`, `["d"]`, `[]` for ls). `-I pat` on `tree` takes a literal pattern; a glob word there is refused by `nextWordValue` already.
 
-Two pieces of `readFileVerb` are needed again here and in Task 3, so they move out of it into helpers both call. Do the extraction in this task and keep `readVerbsReadFiles` green as the proof that `readFileVerb` still behaves.
+Two pieces of the read family are needed again here and in Task 3, so they become shared helpers. Do that in this task and keep `readVerbsReadFiles` and `inputRedirectIsARead` green as the proof that the read family still behaves.
 
 ```agency
 /** The valued flags whose value must be digits, checked once for every
  * verb table: head's -n, tree's -L, find's -maxdepth. */
 def checkCountFlags(split: SplitArgs, countFlags: string[]): Result
-
-/** Every positional as a literal path resolved against the cwd. The
- * caller decides whether it wanted files or folders. */
-@capabilities(fileRead)
-def resolveTargets(verb: string, words: Word[], cwd: string): Result<GrepTarget[]>
 ```
 
-`checkCountFlags` is the loop in `readFileVerb` that returns `"the value of `-${flag}` is not a number"`. `resolveTargets` is `readFileVerb`'s loop over positionals (`literalWordText`, the failure `"the ${verb} path is not literal"`, `try _searchTargetIn(text, cwd, tildeModeFor(word))`), returning the targets. `readFileVerb` then keeps only its own rule: every target must have `file != null`, else `"${verb} would read a directory"`. The listings keep the opposite: every target must have `file == null`, else `"${verb} of a file is not a listing"`. `GrepTarget` is the type `_searchTargetIn` returns (`{ dir, file, argument }`); check how `safeBash.agency` names it today and use that name.
+This is the loop in `readFileVerb`. Its message uses `flagDisplay(entry.flag)`, not `` `-${entry.flag}` ``: a letter prints as `-n`, and a whole flag such as `-maxdepth` prints as itself instead of `--maxdepth`. `splitFlags`' repeated-flag message already does this.
+
+```agency
+/** What a path must name. */
+type PathKind = "file" | "dir"
+
+/** Why a path of the other kind is refused, by what was wanted. */
+static const WRONG_KIND: Record<PathKind, string> = {
+  file: "would read a directory",
+  dir: "of a file is not a listing"
+}
+
+@capabilities(fileRead)
+def resolvePath(text: string, word: Word, cwd: string, subject: string, want: PathKind): Result<GrepTarget>
+
+@capabilities(fileRead)
+def resolvePaths(verb: string, words: Word[], cwd: string, want: PathKind): Result<GrepTarget[]>
+```
+
+`resolvePath` is today's `resolveReadPath` with one more parameter: it resolves through `_searchTargetIn`, and refuses with `"${subject} ${WRONG_KIND[want]}"` when the target's `file` is null and a file was wanted, or not null and a folder was wanted. It returns the target; `readFileVerb` and `inputRedirectRead` build their `ReadPath` or `ReadPayload` from it as they do now, passing `"file"`. `resolvePaths` is `readFileVerb`'s loop over positionals (`literalWordText`, the failure `"the ${verb} path is not literal"`, then `resolvePath` with the verb as subject), moved out so the listings and `find` call it with `"dir"`. One resolver for the read verbs, `<`, the listings, and `find`. `GrepTarget` is the type `_searchTargetIn` returns (`{ dir, file, argument }`); check how `safeBash.agency` names it today and use that name.
 
 ```agency
 @capabilities(fileRead)
 def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVerb, redirects: Effect[]): Result<Effect[]>
 ```
 
-`splitFlags`, `checkCountFlags`, then `resolveTargets` over the positionals, or over a literal `.` word when there are none (build the `Word` as `{ tag: "literal", text: "." }`; check the `Word` type for the exact shape). One `lsEffect({ dir, recursive, maxResults: 0 })` per target, `recursive` true when the row says `always` or the split's `plain` includes `R`; then the redirects. `readsStdin` is not consulted: a listing ignores its stdin, so `git log | ls` is a listing of `.`.
+`splitFlags`, `checkCountFlags`, then `resolvePaths(verb, positionals, cwd, "dir")`, with a literal `.` word in place of the positionals when there are none (build the `Word` as `{ tag: "literal", text: "." }`; check the `Word` type for the exact shape). One `lsEffect({ dir, recursive, maxResults: 0 })` per target, `recursive` true when the row says `always` or the split's `plain` includes `R`; then the redirects. `readsStdin` is not consulted: a listing ignores its stdin, so `git log | ls` is a listing of `.`.
 
 Dispatch: `otherVerbEffects` is already "the verb with no arm of its own in `effectsFor`". It looks the verb up in `LIST_VERBS` first and returns `listEffects` when a row exists, then in `READ_VERBS` as today, then fails with `"no rule for `${verb}`"`. Two lookups, each an `if (row != null) { return ... }`, one failure at the end.
 
@@ -275,10 +301,13 @@ export def globEffect(payload: GlobPayload): Effect
 /** find's expression, as whole words. An allowlist: an unlisted word is
  * unrecognized, which is what keeps -exec, -delete, -fprint, -L, and the
  * ones this list forgot on the std::bash path. -newer is out because it
- * reads another file's time. */
+ * reads another file's time. -iname is out because the glob tool's
+ * pattern is case-sensitive and the payload would say so. -H and -P are
+ * out because find takes them only before its paths, where the ordering
+ * rule below refuses them. */
 static const FIND_FLAGS: FlagSpec = {
-  plain: ["-not", "-o", "-a", "-prune", "-print", "-print0", "-H", "-P"],
-  valued: ["-name", "-iname", "-path", "-type", "-maxdepth", "-mindepth", "-size"],
+  plain: ["-not", "-o", "-a", "-prune", "-print", "-print0"],
+  valued: ["-name", "-path", "-type", "-maxdepth", "-mindepth", "-size"],
   optionsFirst: false
 }
 
@@ -290,7 +319,18 @@ static const FIND_COUNT_FLAGS: string[] = ["-maxdepth", "-mindepth"]
 def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Result<Effect[]>
 ```
 
-`splitFlags("find", command, FIND_FLAGS)`; `checkCountFlags(split, FIND_COUNT_FLAGS)`; `positionals.length == 0` is `"find needs a path before its tests"`; `leadingPositionals(command) != positionals.length` is `"find takes its paths before its tests"`, where `leadingPositionals` counts the args before the first flag word. `resolveTargets("find", positionals, cwd)`, and every target must be a folder (`"find of a file is not a listing"`), the same check `listEffects` makes; put that check in one def, `foldersOnly(verb, targets): Result<string[]>`, returning the `dir` of each, and call it from both. The pattern is the `-name` value, else the `-iname` value, else `"*"`. One `globEffect({ pattern, dir, maxResults: 0 })` per folder, then the redirects. (`maxResults: 0` is the spec's value: the payload describes a search with no cap. It is never handed to `_glob`, which would return nothing for 0.)
+`splitFlags("find", command, FIND_FLAGS)`; `checkCountFlags(split, FIND_COUNT_FLAGS)`; `positionals.length == 0` is `"find needs a path before its tests"`; `leadingPositionals(command) != positionals.length` is `"find takes its paths before its tests"`, where `leadingPositionals` counts the args before the first flag word. `resolvePaths("find", positionals, cwd, "dir")`. One `globEffect({ pattern, dir, maxResults: 0 })` per folder, then the redirects. (`maxResults: 0` is the spec's value: the payload describes a search with no cap. It is never handed to `_glob`, which would return nothing for 0.)
+
+The pattern must describe the search find runs. `find -name '*.txt'` matches the last part of the path at any depth; the glob tool's pattern is matched against the whole relative path, anchored at both ends, with `*` stopping at `/` (`globToRegExp` in `lib/stdlib/shell.ts`), so `*.txt` would describe a top-level search. `findPattern(split: SplitArgs): string` therefore gives:
+
+| `-name` | `-maxdepth` | pattern |
+|---|---|---|
+| given | absent, or more than 1 | `**/` + the value |
+| given | `1` | the value |
+| absent | absent, or more than 1 | `**` |
+| absent | `1` | `*` |
+
+Write it as those two lookups, not as a chain of ifs: `const depthOne = ...`, `const name = ...`, then the two cases each from a small table or a template.
 
 `effectsFor` gains a `"find"` arm. `raiseOne` gains `"std::glob"` raising `std::glob("Are you sure you want to glob files?", { pattern, dir, maxResults, command: fullCommand })`. `raises` gains `std::glob`. `READ_TOOL_FOR_VERB` gains `find: "glob"`.
 
@@ -302,6 +342,7 @@ node findAsksStdGlob() {
     grepNames("find . -name '*.txt'"),
     grepNames("find . -iname '*.TXT' -type f"),
     grepNames("find . -type f -not -path '*/node_modules/*'"),
+    grepNames("find . -H -name x"),
     grepNames("find . . -name x"),
     grepNames("find . -maxdepth 2 -print0"),
     grepNames("find . -name *.txt"),
@@ -319,9 +360,9 @@ node findAsksStdGlob() {
 }
 ```
 
-Expected: `std::glob` for the first five (two for the fourth), then: `"the value of `-name` is not literal"` (a glob word), `"find does not take `-delete`"`, unparseable (pin the parser's text), `"find does not take `-L`"`, `"find needs a path before its tests"`, `"find takes its paths before its tests"`, `"find takes `-name` only once"`, `"the value of `-maxdepth` is not a number"`, `"find does not take `-newer`"`, `"find of a file is not a listing"`, and `[["std::glob"],null]` for the pipe (head with no path in a pipe adds nothing).
+Expected: `std::glob` for rows 1, 3, 4 (two), and 5; row 2 `"find does not take `-iname`"`; row 6 (`-H`) `"find does not take `-H`"`; then `"the value of `-name` is not literal"` (a glob word), `"find does not take `-delete`"`, unparseable (pin the parser's text), `"find does not take `-L`"`, `"find needs a path before its tests"`, `"find takes its paths before its tests"`, `"find takes `-name` only once"`, `"the value of `-maxdepth` is not a number"`, `"find does not take `-newer`"`, `"find of a file is not a listing"`, and `[["std::glob"],null]` for the pipe (head with no path in a pipe adds nothing).
 
-Payload node: `find . -name '*.txt'` gives `pattern "*.txt"`; `find . -type f` gives `"*"`; `dir` is the fixtures folder.
+Payload node, one row per line of the pattern table: `find . -name '*.txt'` gives `"**/*.txt"`; `find . -maxdepth 1 -name '*.txt'` gives `"*.txt"`; `find . -type f` gives `"**"`; `find . -maxdepth 1` gives `"*"`; `find . -maxdepth 3 -name x` gives `"**/x"`; `dir` is the fixtures folder in each.
 
 End to end: `findUnderRecommendedNeedsNoPrompt` (`find <FIXTURES> -name '*.txt'`, output names `one.txt`), `findOutsideTheLaunchDirIsUndecided` (`find /etc -name hosts`, `"propagate"`), `findAsksOneQuestion` (one approve for "Are you sure you want to glob files?"; expected output from a first run, after checking it is `./one.txt\n./two.txt\n` in some order; sort with `| sort` is not in process, so pin BSD and GNU order if they differ by reading `find`'s output on both: if they do differ, assert on the set of lines instead).
 
@@ -344,9 +385,9 @@ Message: `safeBash: find asks std::glob per path`.
 
 - [ ] **Step 1: Dev doc**
 
-New section "Listings" after "The read family", with: the `LIST_VERBS` table (verbs, flags, recursive rule) and `FIND_FLAGS`; the path rule (a directory, realpathed, `.` when none; a file, a missing path, or a glob is unrecognized); what is refused and why (the list from Background, as rules, not history); the whole-word short flag rule in `readFlagWord` and why `find` needs it; `find`'s two ordering rules; the pattern rule (`-name`, else `-iname`, else `*`) and that `maxResults: 0` describes an uncapped search; that a listing ignores its stdin; and the `-name` given twice limit. Update "Outcomes" (`bash`, narrow: add "a listing of named directories, a find"), the "In process when it translates" table (`ls src` runs real ls through bash, raises `std::ls`), "What the model reads on a rejection" if it lists `READ_TOOL_FOR_VERB`, and "Files and tests".
+New section "Listings" after "The read family", with: the `LIST_VERBS` table (verbs, flags, recursive rule) and `FIND_FLAGS`; the path rule (a directory, realpathed, `.` when none; a file, a missing path, or a glob is unrecognized), with one sentence that `ls -l link` lists the link itself and does not descend, while the payload names the target folder, so the question names more than runs and fails safe; what is refused and why (the list from Background, as rules, not history); the owner's decision from the top of this plan, as the rule it became (a recursive listing through bash shows entries under `.git` and `node_modules` that the tool's walk leaves out, and no file's contents); the whole-word short flag rule in `readFlagWord` and why `find` needs it; `find`'s two ordering rules; the pattern table and why `**/` is in it; that a listing ignores its stdin; and the `-name` given twice limit. Add `std::ls` and `std::glob` to "What the payload fields mean": `maxResults: 0` describes an uncapped search on the bash path, while the tools' own `maxResults` caps results and `_glob` returns nothing for 0, so a policy author must not read 0 as "nothing". Update "Outcomes" (`bash`, narrow: add "a listing of named directories, a find"), the "In process when it translates" table (`ls src` runs real ls through bash, raises `std::ls`), "What the model reads on a rejection" if it lists `READ_TOOL_FOR_VERB`, and "Files and tests".
 
-Spec Part 5: a "Departures for listings (ADI-246)" note beside the read-family one: `-newer` is out; `find` with no path is refused; a file given to `ls` or `find` is unrecognized; `-name` may appear once; a glob word anywhere is unrecognized until ADI-247.
+Spec Part 5: a "Departures for listings (ADI-246)" note beside the read-family one: `-newer`, `-iname`, `-H`, `-P`, and `ls -G` are out; the `std::glob` pattern is `**/` plus the `-name` value, not the bare value; `find` with no path is refused; a file given to `ls` or `find` is unrecognized; `-name` may appear once; a glob word anywhere is unrecognized until ADI-247.
 
 - [ ] **Step 2: Index lines**
 
@@ -358,4 +399,4 @@ Spec Part 5: a "Departures for listings (ADI-246)" note beside the read-family o
 
 - [ ] **Step 4: Commit and PR**
 
-Commit docs and index lines. Push. PR body in a file: before/after table (`ls src`, `ls -R .`, `tree -L 2`, `find . -name '*.ts'`, `find . -delete`, `ls /etc`), where to look (`LIST_VERBS`, `findEffects`, the whole-word branch of `readFlagWord`), departures from the spec, what is left out (`-newer`; globs until ADI-247; `-name` twice; `column`, `stat`, `file` not in any table). Link ADI-246. End with the attribution line. The owner merges.
+Commit docs and index lines. Push. PR body in a file: before/after table (`ls src`, `ls -R .`, `tree -L 2`, `find . -name '*.ts'`, `find . -delete`, `ls /etc`), where to look (`LIST_VERBS`, `findEffects` and `findPattern`, the whole-word branch of `readFlagWord`, `resolvePath`'s `want`), departures from the spec, what is left out (`-newer`, `-iname`; `find . -name a -o -name b`, the common way to ask for two extensions, is refused because `-name` may appear once; globs until ADI-247; `column`, `stat`, `file` not in any table). Link ADI-246. End with the attribution line. The owner merges.

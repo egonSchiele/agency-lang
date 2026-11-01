@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Every shell script a host runs goes to `bash -c`, never `sh -c`, so the text safeBash classified as bash runs as bash; and a lone `echo -n` prints in process, which the shell mismatch was the only reason to refuse.
+**Goal:** Every `{ kind: "shell" }` command the host runs goes to `bash -c`, never `sh -c`, so the text safeBash classified as bash runs as bash; and a lone `echo -n` prints in process, which the shell mismatch was the only reason to refuse.
 
-**Architecture:** `spawnCommand` in the Node host looks `bash` up on the search path and spawns it, or rejects with a message that names bash when it is missing. Nothing in safeBash's classifier changes for that. The shell-free echo then gains a one-flag table, `ECHO_FLAGS`, read through the existing `splitFlags`, so `-n` drops the trailing newline on both the echo path and the write path.
+**Architecture:** `spawnCommand` in the Node host looks `bash` up on the search path and spawns it, or rejects with a message that names bash when it is missing. It also hands bash an environment with the variables removed that would make bash run code the script did not name (`BASH_ENV`, exported functions). Nothing in safeBash's classifier changes for that. The shell-free echo then gains a one-flag table, `ECHO_FLAGS`, read through the existing `splitFlags`, so `-n` drops the trailing newline on both the echo path and the write path.
 
 **Tech Stack:** TypeScript (`lib/host/node/nodeSubprocess.ts`, vitest), Agency (`stdlib/safeBash.agency`, the Agency test runner).
 
@@ -31,6 +31,7 @@ Today `echoPlan` and `writePlan` refuse any flag (`flagNames(command).length > 0
 
 ## Review Focus
 
+0. `BASH_ENV=/tmp/x.sh` in the environment, or an exported function named `git`. Expected: a narrow `git status` runs git and nothing else. A non-interactive `bash -c` sources the file `BASH_ENV` names before the script, and imports a function from any variable named `BASH_FUNC_<name>%%` (bash 4.3 and later) or `BASH_FUNC_<name>()` (older), which `sh` ignores. Checked on this Mac: `BASH_ENV=benv.sh /bin/bash -c 'echo hi'` prints the script's line first, and `env 'BASH_FUNC_git%%=() { echo FAKE-GIT; }' /bin/bash -c 'git --version'` prints `FAKE-GIT`. A program can put these in the environment through `setEnv`, whose approval says nothing about shells, and a user's own shell can export them. Test in Task 1.
 1. A machine with no `bash` on the search path. Expected: `safeBash` returns a failure whose message names bash, and nothing runs under `sh`. Test in Task 1.
 2. `echo hi &> out.txt` approved as a broad question. Expected: `out.txt` holds `hi` and stdout is empty, which is what the person who read the text as bash approved. Test in Task 2.
 3. `echo 'a\tb'` alone and `echo 'a\tb'; echo x` in a chain. Expected: the same `a\tb` bytes in both, since bash's echo does not read escapes. Test in Task 2.
@@ -47,12 +48,13 @@ Today `echoPlan` and `writePlan` refuse any flag (`flagNames(command).length > 0
 - Create: `lib/host/node/nodeSubprocess.test.ts`
 
 **Interfaces:**
-- Produces: `locateProgram(program: string, searchPath: string): Promise<string | null>` in `nodeSubprocess.ts`, the body of today's `locate` with the search path as an argument. `nodeSubprocess.locate(program)` calls it with `process.env.PATH ?? ""`.
-- Produces: for `{ kind: "shell" }`, `spawnCommand` resolves `bash` through `locateProgram(program, options.env?.PATH ?? process.env.PATH ?? "")` and spawns the absolute path with `["-c", script]`. When it is `null`, the returned child's `ended` promise rejects with `new Error("bash was not found on the PATH. safeBash and the bash tool run their commands with bash.")`. `spawnCommand` is synchronous today and returns a `ChildProcess`; make `startChild` do the lookup before spawning, since it already returns a promise for `ended`. Read `startChild` to see where the `error` listener attaches and reject through the same path.
+- Produces: `locateProgramSync(program: string, searchPath: string): string | null` in `nodeSubprocess.ts`: the body of today's `locate` with the search path as an argument and `fs.statSync`/`fs.accessSync` in place of the promises. `nodeSubprocess.locate(program)` becomes a call to it with `process.env.PATH ?? ""`. Synchronous on purpose: `startChild` returns `child` and `kill` at once, and `nodeSubprocess.start` hands `kill` to its caller before `ended` settles, so the spawn cannot wait on a promise. Skip a search-path entry that is not absolute: `path.resolve(".", "bash")` would point into the parent's working directory, which an agent writes into.
+- Produces: `shellEnvironment(env: Record<string, string>): Record<string, string>`, a copy with these removed: `BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`, and every name that starts with `BASH_FUNC_`. The list is one constant, `SHELL_ENV_REMOVED: string[]` for the exact names and `SHELL_ENV_REMOVED_PREFIX = "BASH_FUNC_"`, with a comment per entry: `BASH_ENV` and `ENV` name a file bash sources before the script; `BASH_FUNC_*` carries an exported function that shadows a program; `BASHOPTS` (bash 4.1 and later read it) could turn on `xpg_echo` and change what `echo` prints; `SHELLOPTS` likewise.
+- Produces: for `{ kind: "shell" }`, `spawnCommand` takes `options.env ?? process.env`, resolves `bash` through `locateProgramSync("bash", env.PATH ?? "")`, and spawns the absolute path with `["-c", script]` and `shellEnvironment(env)` as the child's environment. When bash is not found it throws `new Error("bash was not found on the PATH. safeBash and the bash tool run their commands with bash.")`; `run` and `start` turn that throw into a rejected promise (wrap the `startChild` call in a try, or make `startChild` catch the throw from `spawnCommand` and return a rejected `ended`; say which in the ledger). The `{ kind: "program" }` branch is unchanged, so `exec` and `locate` behave as before.
 
 - [ ] **Step 1: Write the failing tests**
 
-`lib/host/node/nodeSubprocess.test.ts`. Each test makes a temp folder with `fs.mkdtempSync` under `os.tmpdir()` and removes it after.
+`lib/host/node/nodeSubprocess.test.ts`. Each test makes a temp folder with `fs.mkdtempSync` under `os.tmpdir()` and removes it in a `finally` with `safeDeleteDirectoryWithin(os.tmpdir(), dir)` from `lib/utils.ts` (the repo's anti-patterns doc forbids a bare `rmSync`). Write a small `withTempDir(async (dir) => ...)` helper at the top of the file so each test states only what it checks.
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -60,43 +62,54 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { nodeSubprocess } from "./nodeSubprocess.js";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
+
+const shell = (script: string, options = {}) => nodeSubprocess.run({ kind: "shell", script }, options);
 
 describe("the shell a script runs under", () => {
-  it("runs scripts with bash: &> redirects both streams into the file", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-bash-"));
-    const result = await nodeSubprocess.run({ kind: "shell", script: "echo hi &> out.txt" }, { cwd: dir });
-    expect(result.stdout).toBe("");
-    expect(fs.readFileSync(path.join(dir, "out.txt"), "utf8")).toBe("hi\n");
-    fs.rmSync(dir, { recursive: true });
-  });
+  it("runs scripts with bash: &> redirects both streams into the file", () =>
+    withTempDir(async (dir) => {
+      const result = await shell("echo hi &> out.txt", { cwd: dir });
+      expect(result.stdout).toBe("");
+      expect(fs.readFileSync(path.join(dir, "out.txt"), "utf8")).toBe("hi\n");
+    }));
 
   it("runs scripts with bash: echo -n drops the newline and echo keeps a backslash", async () => {
-    const noNewline = await nodeSubprocess.run({ kind: "shell", script: "echo -n hi" });
-    expect(noNewline.stdout).toBe("hi");
-    const escaped = await nodeSubprocess.run({ kind: "shell", script: "echo 'a\\tb'" });
-    expect(escaped.stdout).toBe("a\\tb\n");
+    expect((await shell("echo -n hi")).stdout).toBe("hi");
+    expect((await shell("echo 'a\\tb'")).stdout).toBe("a\\tb\n");
   });
 
-  it("rejects with a message naming bash when the search path has none", async () => {
-    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "agency-nopath-"));
-    await expect(
-      nodeSubprocess.run({ kind: "shell", script: "echo hi" }, { env: { PATH: empty } }),
-    ).rejects.toThrow("bash was not found on the PATH");
-    fs.rmSync(empty, { recursive: true });
+  it("rejects with a message naming bash when the search path has none", () =>
+    withTempDir(async (empty) => {
+      await expect(shell("echo hi", { env: { PATH: empty } })).rejects.toThrow("bash was not found on the PATH");
+    }));
+
+  it("does not source BASH_ENV before the script", () =>
+    withTempDir(async (dir) => {
+      fs.writeFileSync(path.join(dir, "env.sh"), "touch sourced\n");
+      await shell("echo hi", { cwd: dir, env: { ...process.env, BASH_ENV: path.join(dir, "env.sh") } });
+      expect(fs.existsSync(path.join(dir, "sourced"))).toBe(false);
+    }));
+
+  it("does not import an exported function that shadows a program", async () => {
+    const fake = "() { echo FAKE-GIT; }";
+    const env = { ...process.env, "BASH_FUNC_git%%": fake, "BASH_FUNC_git()": fake };
+    const result = await shell("git --version", { env });
+    expect(result.stdout).toMatch(/^git version/);
   });
 });
 ```
 
-Under dash the first test prints `hi` to stdout and leaves `out.txt` empty; under macOS `sh` the second prints `-n hi`. On the owner's machine today `/bin/sh` is bash in POSIX mode, so the first test may pass before the change there; the third fails everywhere.
+Under dash the first test prints `hi` to stdout and leaves `out.txt` empty; under macOS `sh` the second prints `-n hi`. On the owner's machine today `/bin/sh` is bash in POSIX mode, so the first test may pass before the change there; the third, fourth, and fifth fail everywhere before the change (the fourth and fifth because bash does read those variables).
 
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `pnpm vitest run lib/host/node/nodeSubprocess.test.ts > $SCRATCH/t1.txt 2>&1; tail -30 $SCRATCH/t1.txt`
-Expected: the third test fails (no rejection); on Linux the first two fail too.
+Expected: the third, fourth, and fifth tests fail; on Linux the first two fail too.
 
 - [ ] **Step 3: Implement**
 
-In `nodeSubprocess.ts`: extract `locateProgram(program, searchPath)`; make the `{ kind: "shell" }` branch look up `bash` and spawn the located path; reject through `ended` with the message above when it is `null`. Keep the existing `ENOENT` behavior for `{ kind: "program" }` untouched.
+In `nodeSubprocess.ts`: `locateProgramSync`, `shellEnvironment` with its constants, and the `{ kind: "shell" }` branch of `spawnCommand` as the Interfaces block says. Keep the existing `ENOENT` behavior for `{ kind: "program" }` untouched.
 
 In `abortable.ts`, `abortableShell` passes the string `"sh"` twice (to `spawnResultOf` and to `runCancellable`). Read what each uses it for (a label in failure text) and change both to `"bash"`.
 
@@ -104,7 +117,7 @@ Check `lib/stdlib/shell.ts` near line 41: it maps `spawn <command> ENOENT` to a 
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: the same command. Expected: 3 passed. Then `pnpm vitest run lib/stdlib/abortable.test.ts lib/stdlib/shell.test.ts > $SCRATCH/t1b.txt 2>&1` (if `shell.test.ts` does not exist, run only `abortable.test.ts`). Expected: all pass. Then `pnpm run typecheck && pnpm run lint:structure` and prettier on the three files.
+Run: the same command. Expected: 5 passed. Then `pnpm vitest run lib/stdlib/abortable.test.ts lib/stdlib/shell.test.ts > $SCRATCH/t1b.txt 2>&1` (if `shell.test.ts` does not exist, run only `abortable.test.ts`). Expected: all pass. Then `pnpm run typecheck && pnpm run lint:structure` and prettier on the three files.
 
 - [ ] **Step 5: Commit**
 
@@ -152,16 +165,27 @@ node ampersandRedirectWritesTheFile() {
 
 node echoIsTheSameAloneAndInAChain() {
   // bash's echo does not read backslash escapes, alone or in a chain. The
-  // chain asks std::bash, which the test file approves.
+  // lone echo asks nothing; the chain asks std::bash, which is the one
+  // question the test file approves.
   const alone = safeBash("echo 'a\\tb'")
   const chain = safeBash("echo 'a\\tb'; echo x")
   return [alone, chain]
 }
+
+node bashOnlyFormsStayUnparseable() {
+  // The parser accepts what bash 3.2 accepts, because macOS ships that
+  // version. `|&` and `&>>` are bash 4 forms; 3.2 rejects both with a
+  // syntax error, so a parser that accepted them would make a narrow plan
+  // fail there. Pinned so a tarsec release cannot widen this unnoticed.
+  return [grepNames("make |& tail"), grepNames("echo hi &>> log")]
+}
 ```
+
+Expected for the last node: both `[["std::bash"],{"kind":"unparseable","detail":...}]`, with the parser's exact text pinned from a first run.
 
 `.test.json` rows: `ampersandRedirectWritesTheFile` expects `["", {"value":"hi\n", ...}]`: read what the `read` tool returns (a `Result`), and pin the exact JSON after the first run that fails for the right reason. `interruptHandlers`: one approve for "Are you sure you want to run this shell command?". `echoIsTheSameAloneAndInAChain` expects `[{"success":true,"value":"a\\tb\n"},{"success":true,"value":"a\\tb\nx\n"}]` (check how a `Result` serializes in an existing row and match it), with one approve for the shell question.
 
-Check first that the parser accepts `&>` as a redirect op: `node --input-type=module -e "import {bashParser} from 'tarsec/parsers/bash'; console.log(JSON.stringify(bashParser('echo hi &> out.txt')))"` from the package directory. If it does not parse, the plan is still broad (unparseable) and the test proves the same thing.
+The parser accepts `echo hi &> out.txt` as a redirect with op `&>` (checked with tarsec 0.5.6), and `redirectEffect` refuses that op ("`&>` is not an output redirect"), so the line is broad and the one `std::bash` approval is the right handler.
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -174,7 +198,9 @@ Expected: on macOS with `/bin/sh` as bash, `ampersandRedirectWritesTheFile` may 
 
 `docs/dev/stdlib/safe-bash.md`: a new section after "In process when it translates" titled "Which shell runs the text", four short paragraphs: the text runs under `bash -c`, found on the search path; why (the parser is a bash parser and the rebuilt text is bash; `sh` is a different program per platform, with `&>`, `echo -n`, braces, and `$'...'` as the forms that differ; a narrow plan must never run under a shell it was not classified for); what happens with no bash (a failure naming it, and the in-process paths still work); and that the parser's accepted subset is what bash 3.2 accepts, since macOS ships that version. No history.
 
-`docs/dev/runtime/host.md`, "The subprocess part": say a `shell` command runs under bash looked up on the search path, and is refused with a message when there is none.
+`docs/dev/runtime/host.md`, "The subprocess part": say a `shell` command runs under bash looked up on the search path, with the environment variables that would make bash run unnamed code removed (name them), and that a missing bash rejects with a message naming it. The paragraph's sentence "A program that cannot be started rejects with the platform's error (`ENOENT` on Node)" is now true of a `program` command only; say so in that sentence.
+
+`docs/dev/stdlib/safe-bash.md`, the new section, also names the removed variables and why (`BASH_ENV` sources a file before the script; an exported function shadows a program the payload named).
 
 - [ ] **Step 4: `make`, run the test, verify pass**
 
@@ -194,13 +220,15 @@ Message: `safeBash: the text runs under bash, and two tests pin what bash does`.
 ### Task 3: A lone `echo -n` runs in process
 
 **Files:**
-- Modify: `stdlib/safeBash.agency` (`echoPlan`, `writePlan`, `echoWords`, `echoOutput`, new `ECHO_FLAGS`)
+- Modify: `stdlib/safeBash.agency` (`echoPlan`, `writePlan`, `echoWords`, `echoOutput`, `agencyCommandPlan`, new `ECHO_FLAGS`)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 - Modify: `docs/dev/stdlib/safe-bash.md` ("Outcomes", and the `echo -n` bullet under "The read family")
 
 **Interfaces:**
 - Produces: `static const ECHO_FLAGS: FlagSpec = { plain: ["n"], valued: [], optionsFirst: true }`.
-- Produces: `echoText(command: SimpleCommand): Result<string>`, the one place that says what an echo prints: `splitFlags("echo", command, ECHO_FLAGS)`, then `echoWords` over the split's positionals, then the words joined by single spaces, with a trailing `"\n"` unless the split's `plain` includes `"n"`. Today `echoPlan` and `writePlan` each call `flagNames`, `echoWords`, and `echoOutput` themselves; both now call `echoText` and nothing else about the text, so a change to what echo prints is one edit. `echoWords` takes `positionals: Word[]`; fold `echoOutput` into `echoText`.
+- Produces: `echoText(command: SimpleCommand): Result<string>`, the one place that says what an echo prints: `splitFlags("echo", command, ECHO_FLAGS)`, then `echoWords` over the split's positionals, then the words joined by single spaces, with a trailing `"\n"` unless the split's `plain` includes `"n"`. Today `echoPlan` and `writePlan` each call `flagNames`, `echoWords`, and `echoOutput` themselves; both now call `echoText` and nothing else about the text, so a change to what echo prints is one edit. `echoWords` takes `words: Word[]`; fold `echoOutput` into `echoText`. `echoWords` has a third caller, `agencyCommandPlan`, which turns an `agency` line's arguments into text; change that call to `echoWords(command.args)`, which keeps today's behavior there (a flag word makes it fail).
+
+A quoted dash is refused, and that is a fix: `echo "-n" hi` plans shell-free today and prints `-n hi` with a newline, but bash strips the quotes, sees the option, and prints `hi` with no newline (checked with `/bin/bash -c 'echo "-n" hi'`). `splitFlags` refuses a quoted word that starts with `-` through `refuseQuotedOption`, so the line goes to bash, which prints the right thing. The cost is `echo hi "-x"`, which is shell-free today and prints `hi -x` in bash; it goes to bash now too. Say both in the dev doc's echo sentence.
 
 Why `optionsFirst: true`: bash's echo takes flags only at the front, so `echo hi -n` prints `hi -n`. The table refuses the late flag, the line goes to bash as it does today, and bash prints the right thing. Why no `-e` or `-E`: `-e` turns on escape reading, which the shell-free path does not model.
 
@@ -213,27 +241,29 @@ Add rows to `shellFreeEcho`:
     planDetail("echo -e x"),
     planDetail("echo hi -n"),
     planDetail("echo -n -n hi"),
+    planDetail("echo \"-n\" hi"),
+    planDetail("echo hi \"-x\""),
 ```
 
-and change the expectation for the existing `echo -n hi` row from `["bash","",["std::bash"]]` to `["echo","hi",[]]`. New rows expect `["echo","",[]]`, `["bash","",["std::bash"]]`, `["bash","",["std::bash"]]`, `["echo","hi",[]]`. Update the row's description: "A flag other than -n, or a flag after the first word, sends it to bash."
+and change the expectation for the existing `echo -n hi` row from `["bash","",["std::bash"]]` to `["echo","hi",[]]`. New rows expect `["echo","",[]]`, `["bash","",["std::bash"]]`, `["bash","",["std::bash"]]`, `["echo","hi",[]]`, `["bash","",["std::bash"]]`, `["bash","",["std::bash"]]`. Update the description: "A flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too."
 
 Find the node that checks a shell-free write's payload (grep the test file for `"write"` and `content`) and add a row for `echo -n hi > out.txt` expecting content `"hi"` with the same `dir` and `filename` shape its neighbors use.
 
-Generalize the existing parity helper instead of copying it. `readParityOf(source)` in the test file plans in `READ_FIXTURES`, requires `execution.kind == "read"`, and compares `safeBash` with `bash`. Rename it `parityOf(source: string, kind: string, cwd: string): any` with the kind and folder as arguments, change the `shellFreeReadMatchesRealTools` rows to `parityOf("cat one.txt", "read", READ_FIXTURES)` and so on, and add:
+Generalize the existing exact parity helper instead of copying it. The test file has two: `parityOf(source)` for grep, which compares sorted lines in `FIXTURES`, and `readParityOf(source)`, which plans in `READ_FIXTURES`, requires `execution.kind == "read"`, and compares exactly. Leave the grep one alone. Rename the second `exactParityOf(source: string, kind: string, cwd: string): any` with the kind and folder as arguments, change the `shellFreeReadMatchesRealTools` rows to `exactParityOf("cat one.txt", "read", READ_FIXTURES)` and so on, and add:
 
 ```agency
 node shellFreeEchoMatchesBash() {
   return [
-    parityOf("echo hi", "echo", FIXTURES),
-    parityOf("echo -n hi", "echo", FIXTURES),
-    parityOf("echo -n", "echo", FIXTURES),
-    parityOf("echo -nn a b", "echo", FIXTURES),
-    parityOf("echo 'a\\tb'", "echo", FIXTURES),
+    exactParityOf("echo hi", "echo", FIXTURES),
+    exactParityOf("echo -n hi", "echo", FIXTURES),
+    exactParityOf("echo -n", "echo", FIXTURES),
+    exactParityOf("echo -nn a b", "echo", FIXTURES),
+    exactParityOf("echo 'a\\tb'", "echo", FIXTURES),
   ]
 }
 ```
 
-The chain plan that follows this one adds `parityOf(..., "chain", FIXTURES)` rows to the same helper.
+The chain plan that follows this one adds `exactParityOf(..., "chain", FIXTURES)` rows through the same helper.
 
 Expected `[true,true,true,true,true]`.
 
@@ -243,7 +273,7 @@ Run the agency test command into `$SCRATCH/t3.txt`. Expected: `shellFreeEcho` fa
 
 - [ ] **Step 3: Implement**
 
-`ECHO_FLAGS` and `echoText`; `echoPlan` and `writePlan` each become a call to `echoText` plus what they already do with the text. `flagNames(command)` stays for its other callers; check with grep whether echo was its only caller and delete it if so.
+`ECHO_FLAGS` and `echoText`; `echoPlan` and `writePlan` each become a call to `echoText` plus what they already do with the text; `agencyCommandPlan`'s call becomes `echoWords(command.args)`. `flagNames` stays: `effectsFor` calls it for the git arm.
 
 - [ ] **Step 4: `make`, run, verify pass**
 
@@ -276,4 +306,4 @@ Message: `safeBash: a lone echo -n runs in process`.
 
 - [ ] **Step 3: Commit and PR**
 
-Commit the index lines. Push the branch. Open a PR with the body in a file: what changes (a table: `echo hi &> f.txt`, `echo -n hi`, `echo 'a\tb'; echo x`, a host with no bash, each before and after), where to look (`spawnCommand`, `ECHO_FLAGS`), and what is left out (`echo -e`; the `exec` tool is unaffected because it spawns a program, not a shell). End with the attribution line the session gave you. Link ADI-248 and ADI-263 in the body. Stop there; the owner merges.
+Commit the index lines. Push the branch. Open a PR with the body in a file: what changes (a table: `echo hi &> f.txt`, `echo -n hi`, `echo 'a\tb'; echo x`, `BASH_ENV` set, a host with no bash, each before and after), where to look (`spawnCommand`, `shellEnvironment`, `ECHO_FLAGS`), and what is left out (`echo -e`; `echo hi "-x"` now goes to bash; the `exec` tool is unaffected because it spawns a program, not a shell; the eval grader in `lib/eval/gradersJson/build.ts` spawns `sh -c` on its own, outside the host, and keeps doing so). End with the attribution line the session gave you. Link ADI-248 and ADI-263 in the body. Stop there; the owner merges.

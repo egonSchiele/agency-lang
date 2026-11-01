@@ -658,9 +658,9 @@ node main(): string {
 Notes for the implementer:
 
 - `${grandchildLog}` and `${err}` inside the triple-quoted string: the outer program interpolates `${grandchildLog}` (wanted: the absolute path lands in the child's source). `${err}` must NOT be interpolated by the outer program; write it as `\${err}` in the outer source, which is the one escape a triple-quoted string honors (`docs/dev/language/triple-quoted-string-escapes.md`). The code block above shows the intent; apply the escape when you type it.
-- `read` is the builtin from `std::index` (`read(filename, dir)`), not from `std::fs`. It raises `std::read`; the handler approves it, and the one outside the handler uses `with approve`. If `const x = ... with approve` does not parse, wrap that read in a `handle` block like `runLogged` does.
+- `read` is the builtin from `std::index` (`read(filename, dir)`), not from `std::fs`. It raises `std::read`; the handler approves it, and the one outside the handler uses `with approve`. The whole program above, with the `\${err}` escape applied, was parsed and typechecked on the built CLI while writing this plan; the only output is the AG3009 warning that `runLogged` may raise interrupts, which the handler inside it answers.
 - The grandchild's `run` raises `std::run` inside the child. The child has no handler, so the interrupt goes up to the parent's handler in `runLogged`, which approves it. That is the distributed chain doing its job, not a problem.
-- Before relying on the exact expected output, run `pnpm run ast tests/agency/subprocess-config/inherits.agency > /dev/null` to check the file parses, and `node dist/scripts/agency.js typecheck tests/agency/subprocess-config/inherits.agency` after `make`.
+- If you change the program, run `pnpm run ast tests/agency/subprocess-config/inherits.agency > /dev/null` to check it still parses, and `node dist/scripts/agency.js typecheck tests/agency/subprocess-config/inherits.agency` after `make`.
 
 - [ ] **Step 3: Write the test file**
 

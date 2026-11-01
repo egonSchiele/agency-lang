@@ -121,7 +121,7 @@ function importPolicyViolations(program: AgencyProgram, policy: ImportPolicy): s
     );
 }
 
-export { typeCheckSource, getEffectsFromSource } from "./typecheck.js";
+export { typeCheckSource, getEffectsFromSource, getEffectsFromSourceAt } from "./typecheck.js";
 export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
 export function compileSource(source: string, config: CompileSourceOptions): CompileResult {

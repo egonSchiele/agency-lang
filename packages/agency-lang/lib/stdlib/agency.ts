@@ -1,4 +1,9 @@
-import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
+import {
+  typeCheckSource,
+  getEffectsFromSource,
+  getEffectsFromSourceAt,
+  TypeCheckReport,
+} from "../compiler/compile.js";
 import { rootPath } from "../host/roots.js";
 import { resolve, sep, join, dirname } from "path";
 // The synchronous file operations of nodeHost, not host.files: this file runs a subprocess and is Node-only.
@@ -252,8 +257,38 @@ function isInternalExport(name: string): boolean {
  *  re-exports (relative paths cannot resolve from a bare source string)
  *  come back as thin "reexport" entries whose effects carry the
  *  "unknown" sentinel — never a silent omission. */
-export function _describe(source: string): ModuleInfo {
-  return describeSource(source, []).info;
+export function _describe(source: string, dir: string = "", filename: string = ""): ModuleInfo {
+  if ((dir === "") !== (filename === "")) {
+    throw new Error(
+      "describe needs both dir and filename to resolve a module's imports, or neither",
+    );
+  }
+  if (dir === "") {
+    return describeSource(source, []).info;
+  }
+  return describeSource(source, [], describedFilePath(source, dir, filename)).info;
+}
+
+/** The real path of the module `describe` was told `source` came from,
+ *  after the checks a sandboxed compile makes. Its imports are read from
+ *  disk, so they are checked the way `compile` checks them, before
+ *  anything runs: a TypeScript file, an escape from `dir`, a symlink, or a
+ *  splice is refused. `source` must be the file's text, or the check would
+ *  cover one set of imports while describe resolved another. */
+function describedFilePath(source: string, dir: string, filename: string): string {
+  const realPath = resolveInSandbox(dir, filename, root);
+  if (readText(root(dir), filename) !== source) {
+    throw new Error(`describe was given text that is not the contents of ${filename}`);
+  }
+  try {
+    validateClosure({ entry: { file: filename }, dir });
+  } catch (error) {
+    if (error instanceof ClosureValidationError) {
+      throw new Error(`describe refused ${filename}: ${error.violations.join("; ")}`);
+    }
+    throw error;
+  }
+  return realPath;
 }
 
 /** True when the re-export's source module can be read from a bare
@@ -280,7 +315,10 @@ export function parseDescribedProgram(source: string): AgencyProgram {
   return program;
 }
 
-function describeSource(source: string, visited: string[]): DescribeResult {
+/** With `sourcePath`, the module's relative imports resolve from its file,
+ *  so effects that come through a local helper are counted. The caller has
+ *  checked those imports (`describedFilePath`). */
+function describeSource(source: string, visited: string[], sourcePath?: string): DescribeResult {
   const program = parseDescribedProgram(source);
   // The effects pipeline REQUIRES every re-export to resolve, and
   // relative/pkg paths cannot resolve from a bare string — so effects
@@ -298,7 +336,10 @@ function describeSource(source: string, visited: string[]): DescribeResult {
         ),
       })
     : source;
-  const effects = getEffectsFromSource(effectsSource);
+  const effects =
+    sourcePath === undefined
+      ? getEffectsFromSource(effectsSource)
+      : getEffectsFromSourceAt(effectsSource, sourcePath, { refuseSplices: true });
   const generator = new AgencyGenerator();
   const aliases = aliasTableFrom(program.nodes);
   const exports: ExportInfo[] = [];

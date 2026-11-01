@@ -232,6 +232,22 @@ export function getEffectsFromFile(filePath: string, config: AgencyConfig = {}):
 }
 
 /**
+ * The same map for source text that lives at `sourcePath`, so its relative
+ * imports resolve against that file's folder. The entry's own text is
+ * `source`, not what is on disk. With a real path the pipeline can expand
+ * splices, which runs their generators, so a caller holding text it does
+ * not trust checks the imports first and passes `refuseSplices`, as
+ * `_describe` does.
+ */
+export function getEffectsFromSourceAt(
+  source: string,
+  sourcePath: string,
+  config: AgencyConfig = {},
+): EffectsByExport {
+  return effectsVia(source, sourcePath, config, { [sourcePath]: source });
+}
+
+/**
  * What each exported node or function of a file on disk needs from the host,
  * as the type checker computes it. The oracle test compares this with the
  * symbol table's own answer (`lib/analysis/effectsOracle.test.ts`); nothing
@@ -263,6 +279,7 @@ function effectsVia(
   source: string,
   sourcePath: string | undefined,
   config: AgencyConfig,
+  overrides: Record<string, string> = {},
 ): EffectsByExport {
   return runCheckerPipeline(
     source,
@@ -280,5 +297,6 @@ function effectsVia(
       }
       return out;
     },
+    overrides,
   );
 }

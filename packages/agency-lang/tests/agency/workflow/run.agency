@@ -3,6 +3,7 @@ import { add, multiply } from "std::math"
 import { Json } from "std::validation"
 import { resolve } from "std::path"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+import { greet } from "./fixtures/tools/withHelper.agency"
 
 const TOOLS = [add, multiply]
 
@@ -107,4 +108,24 @@ node badInputsFailBeforeFirstStep(): boolean {
 
 node inputsThatAreNotAnObject(): boolean {
   return failsOnInputs("x")
+}
+
+/** A tool whose module imports another local file runs, and the helper's
+  value comes back. */
+node toolWithLocalImportRuns(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "greetOne",
+    description: "Greet someone loudly.",
+    inputs: "{ name: string }",
+    steps: [{ id: "greeting", kind: "tool", module: "./withHelper.agency", tool: "greet", args: { name: { "$ref": "inputs.name" } } }]
+  }
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(workflow, { name: "ada" }, [greet], __dirname + "/fixtures/tools")
+  } with approve
+  if (result is failure) {
+    return "failed: ${result.error}"
+  }
+  return result.value
 }

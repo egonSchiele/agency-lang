@@ -2,6 +2,7 @@ import { checkWorkflow, Workflow, WorkflowProblem } from "std::workflow"
 import { Json } from "std::validation"
 import { searchNotes, readNote, untyped } from "./fixtures/tools/notes.agency"
 import { findLists, addListItems } from "./fixtures/tools/lists.agency"
+import { greet } from "./fixtures/tools/withHelper.agency"
 
 const DIR = __dirname + "/fixtures/tools"
 const TOOLS = [searchNotes, readNote, untyped]
@@ -169,4 +170,24 @@ node raisesLeavesOutAStepsEffect(): Json {
     return "no problems"
   }
   return map(checked.data.problems, \problem -> "${problem.step}/${problem.field}")
+}
+
+/** The workflow named by greetWorkflow in run.agency: one step whose tool's
+  module imports another local file. */
+def greetWorkflow(): Workflow {
+  return {
+    format: 1,
+    name: "greetOne",
+    description: "Greet someone loudly.",
+    inputs: "{ name: string }",
+    steps: [{ id: "greeting", kind: "tool", module: "./withHelper.agency", tool: "greet", args: { name: { "$ref": "inputs.name" } } }]
+  }
+}
+
+node toolWithLocalImportChecks(): Json {
+  const checked = checkWorkflow(greetWorkflow(), [greet], DIR) with approve
+  if (checked is failure) {
+    return checked.error
+  }
+  return checked.value
 }

@@ -1,4 +1,4 @@
-import { compile, describe, run, typecheck, CompiledProgram, ExportInfo } from "std::agency"
+import { compile, describe, run, typecheck, CompiledProgram, ExportInfo, ModuleInfo } from "std::agency"
 import { now, format } from "std::date"
 import { read } from "std::index"
 import { filterEntries } from "std::object"
@@ -139,15 +139,19 @@ effect std::workflow::run {
 export def _signatures(refs: ToolRef[], dir: string): Result<Record<string, ExportInfo>> {
   let signatures: Record<string, ExportInfo> = {}
   for (group in _signatureSources(refs)) {
-    let source = group.reExport
-    if (source == null) {
+    // A local module is described with its path, so its own imports of
+    // other local files resolve. They are read without prompts of their
+    // own, as `_checked`'s type check already reads them.
+    let info: Result<ModuleInfo> = failure("not described")
+    if (group.reExport == null) {
       const text = read(group.module, dir)
       if (text is failure) {
         return text
       }
-      source = text.value
+      info = describe(text.value, dir: dir, filename: group.module)
+    } else {
+      info = describe(group.reExport)
     }
-    const info = describe(source)
     if (info is failure) {
       return info
     }

@@ -193,7 +193,6 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "getImports",
     "getFunctions",
     "getGraphNodes",
-    "describe",
     "parseAST",
     "holesOf",
     "fill",

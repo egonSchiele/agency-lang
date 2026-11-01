@@ -350,14 +350,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     }
   }
 
-  async function runWithOptions(
-    input: string,
-    options: RunOptions,
-    nodeArgs: string[] = [],
-    resume?: ResumeCarrier,
-    entryNode?: string,
-  ) {
-    options = await withLocalModel(options);
+  /** Config, run policy, and budget from a run's flags, after
+   *  `withLocalModel`. A bad policy or budget flag exits 2. `input` names
+   *  the default trace file, and is unused when no trace flag is set. */
+  function runSettings(options: RunOptions, input: string) {
     // applyCliFlags takes one field: a path, or `true` for the default path.
     // The CLI splits that across two flags so neither swallows the filename.
     const config = applyCliFlags(
@@ -389,6 +385,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
+    return { config, runPolicy, budget };
+  }
+
+  async function runWithOptions(
+    input: string,
+    options: RunOptions,
+    nodeArgs: string[] = [],
+    resume?: ResumeCarrier,
+    entryNode?: string,
+  ) {
+    options = await withLocalModel(options);
+    const { config, runPolicy, budget } = runSettings(options, input);
     run(
       config,
       input,
@@ -517,9 +525,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   }
 
-  /** The flags that shape a run, shared by `run`, `resume`, and `debug`:
-   *  the policy, the budget, the model, and the compile settings. */
-  function addRunOptions(cmd: Command) {
+  /** Where a run's statelog events go. */
+  function addLogOptions(cmd: Command) {
     return cmd
       .option(
         "--log-file <path>",
@@ -528,7 +535,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--observability",
         "Enable statelog observability for this run (use with a configured host, or --log-file)",
-      )
+      );
+  }
+
+  /** How a run's program is compiled, and its tool-loop caps. */
+  function addCompileOptions(cmd: Command) {
+    return cmd
       .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
       .option("--refuse-splices", DESC_REFUSE_SPLICES)
       .option(
@@ -540,7 +552,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--max-tool-result-chars <n>",
         "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
         parseNonNegativeInt,
-      )
+      );
+  }
+
+  /** The model a run's LLM calls use. */
+  function addModelOptions(cmd: Command) {
+    return cmd
       .option(
         "--model <name>",
         "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
@@ -552,11 +569,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--local <model>",
         "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
-      )
-      .option(
-        "--draft <model>",
-        "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
-      )
+      );
+  }
+
+  /** A draft model for speculative decoding with --local. */
+  function addDraftOption(cmd: Command) {
+    return cmd.option(
+      "--draft <model>",
+      "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
+    );
+  }
+
+  /** The interrupt policy: a policy file or name, and --approve and --reject. */
+  function addPolicyOptions(cmd: Command) {
+    return cmd
       .option(
         "--policy <name|path>",
         "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
@@ -570,7 +596,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--reject <effects>",
         "Comma-separated interrupt effects or capability set names to auto-reject",
         joinEffectFlags,
-      )
+      );
+  }
+
+  /** The run's cost and time budget. */
+  function addBudgetOptions(cmd: Command) {
+    return cmd
       .option(
         "--max-cost <dollars>",
         "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
@@ -578,11 +609,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--max-time <duration>",
         "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
-      )
-      .option(
-        "--agency-only",
-        "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
       );
+  }
+
+  /** Refusing anything in the import closure that is not Agency source. */
+  function addAgencyOnlyOption(cmd: Command) {
+    return cmd.option(
+      "--agency-only",
+      "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
+    );
+  }
+
+  /** The flags that shape a run, shared by `run`, `resume`, and `debug`:
+   *  the policy, the budget, the model, and the compile settings. The
+   *  groups are separate so `workflow run` can take only the ones that
+   *  reach a workflow. */
+  function addRunOptions(cmd: Command) {
+    // Each group adds its options to `cmd` itself, in this order.
+    addLogOptions(cmd);
+    addCompileOptions(cmd);
+    addModelOptions(cmd);
+    addDraftOption(cmd);
+    addPolicyOptions(cmd);
+    addBudgetOptions(cmd);
+    addAgencyOnlyOption(cmd);
+    return cmd;
   }
 
   addRunAndRecordingOptions(

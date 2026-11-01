@@ -186,3 +186,17 @@ describe("lowerWorkflow", () => {
     expect(printAll(resolved())).toBe(printAll(resolved()));
   });
 });
+
+describe("lowerWorkflow guard labels", () => {
+  it("lists the workflow's name and each step with limits, the guards the program rejects", () => {
+    const withStepLimit = withStep(mealPlan, 3, { limits: { maxTime: 60000 } });
+    const lowered = lowerWorkflow(resolved(withStepLimit));
+    expect(lowered.guardLabel).toBe("updateMealPlanFromNote");
+    expect(lowered.guardLabels).toEqual(["updateMealPlanFromNote", "meals"]);
+  });
+
+  it("leaves out the workflow's name when it has no limits", () => {
+    const lowered = lowerWorkflow(resolved({ ...mealPlan, limits: null }));
+    expect(lowered.guardLabels).toEqual([]);
+  });
+});

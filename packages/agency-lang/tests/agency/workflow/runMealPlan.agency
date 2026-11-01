@@ -2,7 +2,7 @@ import { runWorkflow, Workflow } from "std::workflow"
 import { Json } from "std::validation"
 import { searchNotes, readNote } from "./fixtures/tools/notes.agency"
 import { findLists, addListItems } from "./fixtures/tools/lists.agency"
-import { slowEcho, busyEcho } from "./fixtures/tools/slow.agency"
+import { slowEcho, busyEcho, selfExtending } from "./fixtures/tools/slow.agency"
 
 const DIR = __dirname + "/fixtures/tools"
 const TOOLS = [searchNotes, readNote, findLists, addListItems]
@@ -138,7 +138,7 @@ node stepLimitTrips(): Json {
 }
 
 /** A caller that approves `std::guard` with more time cannot extend a
-  step's limit: the program's own handler rejects every guard trip, and a
+  step's limit: the program's own handler rejects its guards' trips, and a
   rejection wins. Without that handler the tool would finish. The tool is
   busyEcho, not slowEcho, because a trip during `sleep()` skips handlers. */
 node stepLimitIsHard(): Json {
@@ -191,3 +191,31 @@ node workflowLimitIsHard(): Json {
   }
   return [result.data.type, result.data.maxTime]
 }
+
+/** A tool that extends its own guard, as supervise() does, keeps working
+  inside a workflow: the program rejects only its own guards' trips. The
+  caller passes on std::guard, so only the tool answers the trip. */
+node toolExtendsItsOwnGuard(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "selfExtendingOne",
+    description: "Echo text under a guard the tool extends itself.",
+    inputs: "{ text: string }",
+    steps: [{ id: "echo", kind: "tool", module: "./slow.agency", tool: "selfExtending", args: { text: { "$ref": "inputs.text" } } }],
+    limits: { maxTime: 20000 }
+  }
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(workflow, { text: "hi" }, [selfExtending], DIR)
+  } with (intr) {
+    if (isPlumbing(intr.effect)) {
+      return approve()
+    }
+    return pass()
+  }
+  if (result is failure) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+

@@ -98,6 +98,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "toolExtendsItsOwnGuard",
+      "description": "a tool that extends its own guard keeps working inside a workflow; the program rejects only the workflow's own guards",
+      "input": "",
+      "expectedOutput": "\"hi\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

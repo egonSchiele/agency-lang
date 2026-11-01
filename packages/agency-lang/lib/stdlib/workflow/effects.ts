@@ -8,13 +8,13 @@ import { signatureKey, type Signature, type ToolStep, type Workflow } from "./ty
 /** One tool step and the effects its tool can raise. */
 export type StepEffects = { step: string; tool: string; effects: string[] };
 
-/** The generated program rejects every guard trip itself (render.ts), so a
- *  trip never reaches whoever runs the workflow. */
-const ANSWERED_BY_THE_PROGRAM = "std::guard";
+/** A guard trip asks for more budget, not for a permission. The program
+ *  rejects its own guards' trips (render.ts), and a tool's own guard is the
+ *  tool's to answer. Neither belongs in `raises` or the run's prompt. */
+const BUDGET_EFFECT = "std::guard";
 
 /** The effects each tool step raises, in step order. `std::guard` is left
- *  out: the generated program rejects every guard trip itself, so it never
- *  reaches a caller. A step whose signature is missing raises nothing here;
+ *  out, since it is a question about budget, not a permission. A step whose signature is missing raises nothing here;
  *  resolve reports that step on its own. */
 export function stepEffects(
   workflow: Workflow,
@@ -28,7 +28,7 @@ export function stepEffects(
       return {
         step: step.id,
         tool: step.tool,
-        effects: effects.filter((effect) => effect !== ANSWERED_BY_THE_PROGRAM),
+        effects: effects.filter((effect) => effect !== BUDGET_EFFECT),
       };
     });
 }

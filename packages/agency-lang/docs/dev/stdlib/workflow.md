@@ -147,9 +147,11 @@ Saving a name that exists replaces it, which is how a workflow is edited. So `sa
 
 Every payload's `dir` is the real spelling from `_realDir`, because an "always" answer pins text.
 
-`meta.inputsSchema` is the JSON Schema of the workflow's `inputs` type. Only compiled code can turn an Agency type into a JSON Schema, so every generated program has an `inputsSchema` node that returns `schema(Inputs).toJSONSchema()`. `_inputsSchema` runs it on the program `_checked` compiled, once, at save time, so `workflowTools` can build typed tools from the files with no child process per workflow. The child gets `run`'s default limits: the node calls no tool and no model, so the workflow's `limits` do not apply. A file with no `inputsSchema` reads back as `null`. `Json` is `any`, so the load does not check the schema; `z.fromJSONSchema` refuses a bad one when `workflowTool` uses it.
+`meta.inputsSchema` is the JSON Schema of the workflow's `inputs` type. Only compiled code can turn an Agency type into a JSON Schema, so every generated program has an `inputsSchema` node that returns `schema(Inputs).toJSONSchema("input")`. `_inputsSchema` runs it on the program `_checked` compiled, once, at save time, so `workflowTools` can build typed tools from the files with no child process per workflow. The child gets `run`'s default limits: the node calls no tool and no model, so the workflow's `limits` do not apply. A file with no `inputsSchema` reads back as `null`. `Json` is `any`, so the load does not check the schema; `z.fromJSONSchema` refuses a bad one when `workflowTool` uses it.
 
-An optional input becomes a required key that may be null, which is how Agency compiles `?`. For `inputs: "{ a: number; b?: number }"`, `required` is `["a", "b"]` and `b` is `{ "default": null, "anyOf": [{ "type": "number" }, { "type": "null" }] }`. A model calling a tool built from this schema must send `b: null` to leave `b` out.
+The node asks zod for the schema's input form, which describes what a caller may send. Agency compiles `b?: number` to a key with a default of `null`, and a key with a default is not required in the input form. So for `inputs: "{ a: number; b?: number }"`, `required` is `["a"]`, and `b` is `{ "default": null, "anyOf": [{ "type": "number" }, { "type": "null" }] }`: a model may leave `b` out or send `null`. `Schema.toJSONSchema()` with no argument gives the output form, which describes a parsed value, so there `b` is required.
+
+The input form has no `additionalProperties: false`, so the model is not told that an extra key is refused. Nothing parses a tool call's arguments against the tool's schema, and `main(inputs: Inputs!)` drops an unknown key, so an extra key changes nothing that runs. It does show in the `std::workflow::run` payload. A file saved before the input form was used keeps `b` in `required` until it is saved again.
 
 A loaded file is checked against `{ workflow: Workflow; meta?: ... }` with `!`. Missing `meta` fields take their defaults. A file whose workflow's `name` differs from the file name is refused: `std::workflow::run` names a workflow by its own `name`, so a copied file that kept the old name would run under the old name's "always" answer. A file that fails any check fails `listWorkflows`, with a message that starts with its name.
 
@@ -178,7 +180,7 @@ A guarded LLM step is the same `thread` block inside the guard, with `return <re
 
 ## Interrupts and checkpoints
 
-The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`, then `run` raises `std::run` for the inputs schema. `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
+The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`, then `run` raises `std::run` for the inputs schema. `workflowTool` raises `std::read` for each local module and `std::run` for the inputs schema. `loadWorkflow`, `listWorkflows`, and `workflowTools` raise `std::workflow::scan`.
 
 The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, and the resume finishes the workflow. The test does not show that the resume skipped the LLM step. Each child builds its own mock client from the full mock list, so a repeated model call would be answered too.
 
@@ -222,6 +224,28 @@ The entry joins two sources. `describe` reads the tool's module. It gives the de
 
 `catalog` starts with the same two steps as `checkWorkflow`: `_toolRefs`, then `_signatures`. So it refuses the same tool lists, with every problem in `data.problems`, and it raises one `std::read` for each local module and nothing for a `std::` module. A failed or rejected read is returned as it came. It keeps its `rejected` flag and has no `data.problems`, which is how a caller tells it from a refused tool list. Entries keep the tool list's order.
 
-## Not built yet
+## Offering a workflow as a tool
 
-The spec covers this: offering a workflow as a tool (`workflowTool`, `workflowTools`).
+`workflowTool(workflow, tools, dir)` makes a workflow one tool a model can call. The tool is `runWorkflow` with three of its four parameters bound:
+
+```
+const bound = runWorkflow.partial(workflow: workflow, tools: tools, dir: dir)
+return bound.rename(workflow.name).describe(workflow.description).withParamSchema("inputs", inputsSchema)
+```
+
+The tool's one parameter is `inputs`, with the workflow's inputs type nested inside it, so a model sends `{ "inputs": { "a": 2, "b": 3 } }`. Each call is a `runWorkflow` call: it checks the workflow, raises `std::workflow::run`, and runs the program in a subprocess.
+
+`workflowTool` gets the schema the way `writeWorkflow` does. It runs `_checked`, then runs the program's `inputsSchema` node once with `_inputsSchema`. So it raises `std::read` for each local module and one `std::run`. A workflow with problems fails with them, as it does in `runWorkflow`, and raises nothing.
+
+`workflowTools(dir, tools)` makes one tool per saved workflow, from the schema stored in each file, so it starts no subprocess. It raises the one `std::workflow::scan` that `listWorkflows` raises, or none when the project has no `workflows` folder. The listing is in name order, so the tool list is the same on every machine. Two kinds of saved workflow are refused, and the first one fails the whole call:
+
+- one saved before schemas were recorded, whose `meta.inputsSchema` is null. The message says to save it again with `writeWorkflow`.
+- one whose name is a name in `tools`.
+
+`workflowTools` does not check a saved workflow's steps against `tools`. A workflow whose tool was renamed or removed after it was saved still becomes a tool. Each call runs the check before its prompt, so the call fails with the problems listed and starts nothing.
+
+Both functions refuse a workflow named like one of `tools`, through one helper, `nameClashProblem`. A model cannot be handed two tools with one name, and the refusal returns a failure the host can read. `tools` is the list of functions the workflow may call. The host may hand `llm()` a different list, so the tool loop's `assertUniqueToolNames` (`lib/runtime/toolInvocation.ts`) is still the last check for that list.
+
+The tool's `dir` is `resolve(dir)`, the absolute path `runWorkflow` names in its `std::workflow::run` payload. An "always" answer given to a direct `runWorkflow` call therefore covers the tool's calls too.
+
+The tool keeps its schema across a checkpoint: `.withParamSchema` records the schema in the function value's `paramSchemas`, and the reviver applies it again (see [checkpointing.md](../runtime/checkpointing.md)).

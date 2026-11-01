@@ -53,18 +53,14 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
   };
 }
 
-/** One entry per ref, in the refs' order, which is the tool list's order.
- *  Each ref is paired with the tool of the same name; names are unique,
- *  because `toolRefs` refuses a repeated name. */
+/** One entry per ref. `toolRefs` returns one ref per tool, in the tool
+ *  list's order, so `refs[i]` and `tools[i]` describe the same tool. */
 export function catalogEntries(
   tools: unknown[],
   refs: ToolRef[],
   signatures: Record<string, Signature>,
 ): CatalogEntry[] {
-  return refs.map((ref) => {
-    const tool = tools.find(
-      (candidate) => AgencyFunction.isAgencyFunction(candidate) && candidate.name === ref.name,
-    );
-    return catalogEntry(tool, ref, signatures[signatureKey(ref.module, ref.name)]);
-  });
+  return refs.map((ref, index) =>
+    catalogEntry(tools[index], ref, signatures[signatureKey(ref.module, ref.name)]),
+  );
 }

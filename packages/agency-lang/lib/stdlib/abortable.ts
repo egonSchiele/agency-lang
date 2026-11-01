@@ -107,14 +107,14 @@ export async function abortableSpawn(
   );
 }
 
-/** `abortableSpawn` for a script the platform's shell runs. */
+/** `abortableSpawn` for a script bash runs. */
 export async function abortableShell(
   host: Host,
   script: string,
   options: AbortableSpawnOptions,
 ): Promise<SpawnResult> {
   return spawnResultOf(
-    "sh",
+    "bash",
     options,
     await runCancellable(
       host,
@@ -127,7 +127,7 @@ export async function abortableShell(
         signal: options.signal,
         maxOutputBytes: options.maxOutputBytes,
       },
-      "sh",
+      "bash",
     ),
   );
 }

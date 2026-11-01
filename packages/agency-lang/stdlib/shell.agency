@@ -157,7 +157,7 @@ export def bash(
   useAgentCwd: boolean = false,
 ): ExecResult {
   """
-  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The shell interprets the string, so pipes, redirects, and globbing work. Interpolated values are also subject to shell interpretation, so prefer running an executable directly with structured arguments when passing untrusted or dynamic values.
+  Run a shell command string via bash -c and return its stdout, stderr, and exit code. The shell interprets the string, so pipes, redirects, and globbing work. Interpolated values are also subject to shell interpretation, so prefer running an executable directly with structured arguments when passing untrusted or dynamic values.
 
   @param command - The shell command to run
   @param cwd - Working directory for the command

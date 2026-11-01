@@ -57,9 +57,9 @@
     },
     {
       "nodeName": "shellFreeEcho",
-      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a flag, or a sequence sends it to bash.",
+      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -70,7 +70,7 @@
       "nodeName": "shellFreeWrite",
       "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is still recognized and goes to bash raising std::write with no content — approval of the destination, not the bytes. Non-write plans report only the fields their Execution variant carries.",
       "input": "",
-      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]]]",
+      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"write\",\"hi\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -784,6 +784,62 @@
           "expectedMessage": "Are you sure you want to read this file?"
         }
       ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ampersandRedirectWritesTheFile",
+      "description": "`&>` sends both streams to the file, because the text runs under bash, which is how the person who approved it read it.",
+      "input": "",
+      "expectedOutput": "[\"\",{\"__type\":\"resultType\",\"success\":true,\"value\":\"hi\\n\"}]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "echoIsTheSameAloneAndInAChain",
+      "description": "bash's echo keeps a backslash, alone in process and in a chain through bash, so the two paths print the same bytes.",
+      "input": "",
+      "expectedOutput": "[{\"__type\":\"resultType\",\"success\":true,\"value\":\"a\\\\tb\\n\"},{\"__type\":\"resultType\",\"success\":true,\"value\":\"a\\\\tb\\nx\\n\"}]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bashOnlyFormsStayUnparseable",
+      "description": "`|&` and `&>>` stay unparseable, because bash 3.2 rejects them.",
+      "input": "",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"|& tail\\\"\"}],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"&>> log\\\"\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellFreeEchoMatchesBash",
+      "description": "Each row runs the shell-free echo and bash's echo on the same command and compares the output exactly, with -n, a combined -nn, and a backslash. Each row first checks that its command really runs shell-free.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true]",
       "evaluationCriteria": [
         {
           "type": "exact"

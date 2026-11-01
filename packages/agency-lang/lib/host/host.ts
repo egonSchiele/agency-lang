@@ -253,8 +253,7 @@ export type HostRandom = {
   bytes(length: number): Uint8Array;
 };
 
-/** What a host runs: a program with its arguments, or a script for the
- *  platform's shell. */
+/** What a host runs: a program with its arguments, or a script bash runs. */
 export type Command =
   { kind: "program"; program: string; args: string[] } | { kind: "shell"; script: string };
 

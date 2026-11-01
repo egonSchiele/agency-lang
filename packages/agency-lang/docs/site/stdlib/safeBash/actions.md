@@ -455,6 +455,10 @@ runBash(command: string, cwd: string, source: string = ""): Result<string>
 
 Run a command string through bash and return what it printed.
 
+  The script runs under bash, found on the search path. When there is no
+  bash the result is a failure that says so; nothing falls back to
+  another shell.
+
   On success the value is bash's stdout, raw — nothing added, nothing
   stripped. stderr is discarded on success and reported on failure: two
   captured pipes cannot interleave the way a terminal does, so this is a
@@ -499,7 +503,7 @@ Run a lone grep through the grep tool's own search and print what grep
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L288))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L292))
 
 ### runRead
 
@@ -521,7 +525,7 @@ Run a lone cat, head, or tail of one file through the read tool's own
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L322))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L326))
 
 ### runWrite
 
@@ -546,4 +550,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L355))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L359))

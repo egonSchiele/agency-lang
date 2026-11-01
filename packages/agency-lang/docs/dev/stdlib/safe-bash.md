@@ -55,8 +55,8 @@ word including the last part of a path. Nothing is raised. The wall is
 friction against the obvious spelling; `find -delete` gets past it and is
 approvable under `std::bash`, which is where the control lives.
 
-`shellFree`: a single literal `echo`, with or without one output
-redirect, never spawns a shell. The output is computed in Agency and
+`shellFree`: a single literal `echo`, with `-n` or without, and with or
+without one output redirect, never spawns a shell. The output is computed in Agency and
 returned, or written with `_write` under a `std::write` whose payload
 carries the bytes. A lone `grep` that translates exactly runs the grep
 tool's own search (see "grep" below). A lone `cat`, `head`, or `tail` of
@@ -100,6 +100,47 @@ The rule is not a defense against a trojaned program on the user's
 `PATH`. The bash path still runs whatever `cat` the shell finds. The
 containment floor in `docs/dev/security/goal.md` is the defense against
 that.
+
+## Which shell runs the text
+
+Every command that reaches a shell runs under `bash -c`. The Node host
+finds `bash` on the search path, skipping relative entries, which would
+resolve inside the working directory an agent writes into. The `bash`
+tool takes the same path.
+
+The reason is that the parser is a bash parser and the rebuilt text is
+bash. `sh` is a different program on each platform: dash on Ubuntu, bash
+3.2 in POSIX mode on macOS, busybox ash on Alpine. They disagree on
+`&>` (a redirect of both streams in bash, a background job and a
+truncating redirect in dash), on `echo -n` and backslashes in `echo`,
+on braces, and on `$'...'`. A narrow plan must never run under a shell
+other than the one it was classified for.
+
+The host removes the variables that would make bash run something the
+text does not say: `BASH_ENV` (a file bash sources before the script),
+every `BASH_FUNC_*` (an exported function that shadows a program, so
+`git status` could run a function named `git`), `POSIXLY_CORRECT` (POSIX
+mode, where macOS bash prints `echo -n hi` as `-n hi`), `SHELLOPTS` and
+`BASHOPTS` (shell options at startup, such as `xpg_echo`), `CDPATH`
+(sends `cd target` somewhere else), and `GLOBIGNORE` (drops names from a
+glob). The list is `SHELL_ENV_REMOVED` in
+`lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
+programs in the child read options anywhere on the line. No plan
+changes, because the flag tables that care set `optionsFirst`.
+
+The shell-free echo models bash's builtin echo. `-n` is the one flag it
+takes. `-e` and `-E` go to bash, because the shell-free path does not
+read backslash escapes, and so does a flag after the first word, since
+bash prints `echo hi -n` as `hi -n`. A quoted word that starts with a
+dash goes to bash too: bash strips the quotes and reads `echo "-n" hi`
+as the option, so it prints `hi` with no newline. That also sends
+`echo hi "-x"` to bash, which prints `hi -x`.
+
+When there is no bash, the command fails with a message that names bash.
+Nothing falls back to `sh`. The in-process paths still work on such a
+host. The parser accepts what bash 3.2 accepts, because macOS ships that
+version: `|&` and `&>>` are bash 4 forms, and both are unparseable
+(`bashOnlyFormsStayUnparseable` pins them).
 
 ## Why a plan went broad
 
@@ -531,9 +572,6 @@ empty file, and a file with Windows line endings.
 
 These are left out:
 
-- `echo -n`. macOS `/bin/sh` prints `-n hi` for `echo -n hi`, so a
-  shell-free `echo -n` would disagree with the same echo inside a chain.
-  It waits on ADI-248, which decides which shell runs the text.
 - `wc` in process. GNU and BSD pad the count column differently.
 - More than one file in process. `head` prints a header per file.
 - `file`, `stat`, `md5sum`, `shasum`, `column`, `xxd`, and `hexdump`.

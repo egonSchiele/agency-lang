@@ -1624,7 +1624,7 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
   if (command.redirects.length > 0) {
     return success(refusePlan(CLI_NOT_AVAILABLE, verbNames([command])))
   }
-  return match(echoWords(command)) {
+  return match(echoWords(command.args)) {
     success(args) => success({
       effects: [],
       execution: {
@@ -1638,9 +1638,9 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
   }
 }
 
-def echoWords(command: SimpleCommand): Result<string[]> {
+def echoWords(words: Word[]): Result<string[]> {
   """
-  `echo`'s arguments as text, but only when every one is fully literal.
+  Words as text, but only when every one is fully literal.
 
   A plain word, a path, or a single-quoted string qualifies. A variable
   does not, and neither does a double-quoted string containing one: this
@@ -1649,7 +1649,7 @@ def echoWords(command: SimpleCommand): Result<string[]> {
   lived.
   """
   let out: string[] = []
-  for (arg in command.args) {
+  for (arg in words) {
     const text = literalWordText(arg)
     if (isFailure(text)) {
       return text
@@ -1683,12 +1683,35 @@ def literalParts(parts: Word[]): Result<string> {
   return success(out)
 }
 
-def echoOutput(words: string[]): string {
+/** The flags the shell-free echo prints, modeled on bash's builtin echo.
+ * `-n` drops the trailing newline. `-e` and `-E` are left out, because
+ * the shell-free path does not read backslash escapes. bash's echo reads
+ * flags only at the front (`echo hi -n` prints `hi -n`), so a later one
+ * sends the line to bash. */
+static const ECHO_FLAGS: FlagSpec = {
+  plain: ["n"],
+  valued: [],
+  optionsFirst: true
+}
+
+def echoText(command: SimpleCommand): Result<string> {
   """
-  What `echo` prints: its arguments joined by single spaces, then a
-  newline. Bare `echo` is still a newline, not nothing.
+  What an `echo` prints: its arguments joined by single spaces, then a
+  newline unless `-n` was given. Bare `echo` is still a newline. A
+  failure means the shell-free path cannot say: a flag it does not
+  model, a quoted word that starts with `-` (bash reads it as an option),
+  or an argument that is not fully literal.
   """
-  return words.join(" ") + "\n"
+  const split = splitFlags("echo", command, ECHO_FLAGS)
+  if (isFailure(split)) {
+    return split
+  }
+  const words = echoWords(split.value.positionals)
+  if (isFailure(words)) {
+    return words
+  }
+  const end = if (split.value.plain.includes("n")) then "" else "\n"
+  return success(words.value.join(" ") + end)
 }
 
 def echoPlan(command: SimpleCommand): Result<Plan> {
@@ -1702,19 +1725,16 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
   if (command.redirects.length > 0) {
     return failure("a redirected echo is handled elsewhere")
   }
-  if (flagNames(command).length > 0) {
-    return failure("`echo` with flags prints differently")
-  }
-  const words = echoWords(command)
-  if (isFailure(words)) {
-    return words
+  const text = echoText(command)
+  if (isFailure(text)) {
+    return text
   }
   return success(
     {
     effects: [],
     execution: {
       kind: "echo",
-      content: echoOutput(words.value)
+      content: text.value
     },
     broadReason: null,
     verbs: verbNames([command])
@@ -1734,15 +1754,12 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   if (command.redirects.length != 1) {
     return failure("not a single redirect")
   }
-  if (flagNames(command).length > 0) {
-    return failure("`echo` with flags prints differently")
-  }
   const only = command.redirects[0]
-  const words = echoWords(command)
-  if (isFailure(words)) {
-    return words
+  const text = echoText(command)
+  if (isFailure(text)) {
+    return text
   }
-  const prepared = prepareRedirectWrite(only, cwd, echoOutput(words.value))
+  const prepared = prepareRedirectWrite(only, cwd, text.value)
   if (isFailure(prepared)) {
     return prepared
   }

@@ -207,7 +207,7 @@ supervise(every: 5m, maxTime: 30m, check: myCheck) {
 }
 ```
 
-A tool guard whose label matches a step id is rejected too, which is the safe direction for a collision. An earlier version rejected every `std::guard`, which stopped `supervise` at its first check and bought nothing.
+A tool's own trip still travels up the chain, so a caller whose policy rejects `std::guard`, as the catch-all in `agency workflow run` does, stops the tool at its first check. A tool guard whose label matches a step id is rejected too, which is the safe direction for a collision. An earlier version rejected every `std::guard`, which stopped `supervise` at its first check and bought nothing.
 
 The tests are in `tests/agency/workflow/runMealPlan.agency`. In `stepLimitIsHard` and `workflowLimitIsHard`, the caller approves every trip with more time, and the workflow still stops. In `toolExtendsItsOwnGuard`, a tool extends its own 100 ms guard, and the workflow finishes. Their tool is `busyEcho`, which works for a second without sleeping. A time trip during `sleep()` skips every handler (ADI-137), so a tool that sleeps passes these tests with or without the scaffold's handler.
 

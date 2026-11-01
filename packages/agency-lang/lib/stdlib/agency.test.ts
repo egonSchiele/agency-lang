@@ -893,3 +893,57 @@ node main() { return _which("ls") }`;
     expect(codes(SHELL_IMPORT, false)).not.toContain("AG4013");
   });
 });
+
+describe("_describe: parameters", () => {
+  const source = `export def fetchPage(url: string, raw, retries: number = 3, note?: string) {
+  """
+  Fetch a page.
+
+  @param url - The page to fetch
+  @param retries The number of tries.
+      Zero means one try.
+  """
+  return url
+}
+
+export node main(name: string) {
+  return name
+}
+
+export type Page = { url: string }
+`;
+
+  it("lists each parameter's name, type, default, and @param text", () => {
+    expect(_describe(source).exports[0].params).toEqual([
+      { name: "url", type: "string", default: null, description: "The page to fetch" },
+      { name: "raw", type: null, default: null, description: null },
+      {
+        name: "retries",
+        type: "number",
+        default: "3",
+        description: "The number of tries. Zero means one try.",
+      },
+      { name: "note", type: "string | null", default: "null", description: null },
+    ]);
+  });
+
+  it("lists a node's parameters and gives other kinds an empty list", () => {
+    const rows = _describe(source).exports.map((entry) => [
+      entry.name,
+      entry.params.map((param) => param.name),
+    ]);
+    expect(rows).toEqual([
+      ["fetchPage", ["url", "raw", "retries", "note"]],
+      ["main", ["name"]],
+      ["Page", []],
+    ]);
+  });
+
+  it("carries a std:: re-export's parameters", () => {
+    const info = _describe('export { round } from "std::math"');
+    expect(info.exports[0].params.map((param) => [param.name, param.default])).toEqual([
+      ["num", null],
+      ["precision", "0"],
+    ]);
+  });
+});

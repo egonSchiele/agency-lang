@@ -195,6 +195,10 @@ builds no zod schema from the record, because a stub is never shown to a
 model. A field added to `serialize` must be added to the stub and to the
 round-trip tests in `functionRefReviver.test.ts` in the same change.
 
+`sourceFile`, the file a function was defined in, is not written. A revived
+function takes it from its registry entry, which comes from the module the
+resuming process loaded.
+
 ---
 
 ## Configuration

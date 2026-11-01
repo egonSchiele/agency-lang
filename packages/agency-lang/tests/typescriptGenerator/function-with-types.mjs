@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -331,6 +332,7 @@ return runtimeFailure(__error, {
 export const add = __AgencyFunction.create({
   name: "add",
   module: "function-with-types.agency",
+  sourceFile: __sourceFile,
   fn: __add_impl,
   params: [{
     name: "x",
@@ -498,6 +500,7 @@ return runtimeFailure(__error, {
 export const greet = __AgencyFunction.create({
   name: "greet",
   module: "function-with-types.agency",
+  sourceFile: __sourceFile,
   fn: __greet_impl,
   params: [{
     name: "name",
@@ -661,6 +664,7 @@ return runtimeFailure(__error, {
 export const mixed = __AgencyFunction.create({
   name: "mixed",
   module: "function-with-types.agency",
+  sourceFile: __sourceFile,
   fn: __mixed_impl,
   params: [{
     name: "count",
@@ -828,6 +832,7 @@ return runtimeFailure(__error, {
 export const processArray = __AgencyFunction.create({
   name: "processArray",
   module: "function-with-types.agency",
+  sourceFile: __sourceFile,
   fn: __processArray_impl,
   params: [{
     name: "items",
@@ -988,6 +993,7 @@ return runtimeFailure(__error, {
 export const flexible = __AgencyFunction.create({
   name: "flexible",
   module: "function-with-types.agency",
+  sourceFile: __sourceFile,
   fn: __flexible_impl,
   params: [{
     name: "value",

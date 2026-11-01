@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -334,6 +335,7 @@ return runtimeFailure(__error, {
 export const process = __AgencyFunction.create({
   name: "process",
   module: "bangParams.agency",
+  sourceFile: __sourceFile,
   fn: __process_impl,
   params: [{
     name: "data",

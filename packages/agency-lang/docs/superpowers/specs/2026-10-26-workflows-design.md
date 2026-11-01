@@ -351,7 +351,7 @@ The host passes the tools a workflow may call as function values, the same list 
 
 A partial or a renamed function has no importable name. `checkWorkflow` refuses one and says to pass the original def.
 
-A function value's `module` is the compiler's module id, a file path such as `stdlib/shell.agency`, so the generator translates it before comparing it with the format's `module` field. `moduleIdToOrigin` in `lib/runtime/origin.ts` already maps an id to `std::shell`, `pkg::name`, or `./path`; the generator uses it, and for a local file rewrites the path relative to `dir`, refusing a tool whose file is outside `dir`. The format's `module` is therefore written exactly as the import line will spell it: `std::shell`, `pkg::name`, or `./notes.agency` relative to `dir`.
+A function value's `module` is the compiler's module id, a file path such as `stdlib/shell.agency`, so the generator translates it before comparing it with the format's `module` field. `moduleIdToOrigin` in `lib/runtime/origin.ts` already maps an id to `std::shell`, `pkg::name`, or `./path`, and the generator uses it to tell a `std::` or `pkg::` tool from a local one. A local tool's path comes from its source file, the absolute path the function value records, written relative to `dir` (ADI-253). A tool whose file is outside `dir` is refused, and so is a tool with no source file. The format's `module` is therefore written exactly as the import line will spell it: `std::shell`, `pkg::name`, or `./notes.agency` relative to `dir`.
 
 For a module that is a user file, `module` is a path relative to `dir`, the directory the host passes to `runWorkflow`. `runCode` already confines local imports to `dir` and refuses absolute paths, `..`, and symlinks. Path aliases were considered and set aside: they would let a saved workflow survive a file move, but they are a compiler feature with a config surface, and the one thing they buy here is one line to fix when a host reorganizes.
 
@@ -410,7 +410,7 @@ A checkpoint keeps a schema set with `.withParamSchema`. The function value reco
 
 ## The catalog
 
-`catalog(tools)` returns, for each tool the host passed: its module, name, description, each parameter with its type and description, and its return type. This is what a GUI's tool dropdown reads, what lets a GUI offer `note[0].id` as a wire endpoint and refuse a wire from a string to a number, and what a person reads before writing a workflow by hand. It is built from `describe` and the tool's parameter schema, the same data the tool loop sends to a model.
+`catalog(tools)` returns, for each tool the host passed: its module, name, description, each parameter with its type and description, and its return type. This is what a GUI's tool dropdown reads, what lets a GUI offer `note[0].id` as a wire endpoint and refuse a wire from a string to a number, and what a person reads before writing a workflow by hand. It is built from `describe` and the tool's parameter schema, the same data the tool loop sends to a model. Each parameter carries its name, its type and default as Agency text, the text of its `@param` entry, and its JSON Schema (ADI-252).
 
 ## Saving a workflow
 
@@ -444,8 +444,10 @@ type Workflow = { format: number; name: string; description: string;
                   inputs: string; steps: Json[]; result?: Json; limits?: WorkflowLimits }
 type WorkflowProblem = { step: string | null; field: string | null; message: string }
 type WorkflowEntry = { name: string; path: string; workflow: Workflow; meta: WorkflowMeta }
+type CatalogParam = { name: string; type: string | null; default: string | null;
+                      description: string | null; schema: Json }
 type CatalogEntry = { module: string; name: string; description: string;
-                      params: CatalogParam[]; returns: string }
+                      params: CatalogParam[]; returns: string | null }
 
 type WorkflowFailure = { problems: WorkflowProblem[] }
 
@@ -532,4 +534,3 @@ Marked so the owner can check them while reading:
 - The exact fragment templates and the line-to-step map.
 - The `meta` field names, `savedAt` and `savedBy`.
 - The problem messages' wording, as long as each names the step and the field.
-- The shape of `CatalogParam`, following what the tool loop already builds per parameter.

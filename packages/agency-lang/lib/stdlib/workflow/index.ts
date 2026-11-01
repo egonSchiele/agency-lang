@@ -15,6 +15,7 @@ import { toolRefs } from "./tools.js";
 import type { Owner, Problem, Range, Signature, ToolRef } from "./types.js";
 
 export { _workflowNameProblem } from "./parse.js";
+export { catalogEntries as _catalogEntries } from "./catalog.js";
 
 export type Compiled = {
   source: string;
@@ -111,12 +112,13 @@ export function _pickSignatures(
         `"${source.module}" re-exports "${name}" from another file; pass a def the module itself defines`,
       );
     }
-    const { signature, returnType, returnsResult, docstring } = found;
+    const { signature, returnType, returnsResult, docstring, params } = found;
     signatures[signatureKey(source.module, name)] = {
       signature,
       returnType,
       returnsResult,
       docstring,
+      params,
     };
   }
   return success(signatures);

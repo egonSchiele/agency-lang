@@ -49,6 +49,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = {{{sourceFile:string}}};
 
 {{{runtimeContextCode:string}}}
 
@@ -127,6 +128,7 @@ const _run = __AgencyFunction.create({ name: "_run", module: "__runtime", fn: __
 `;
 
 export type TemplateType = {
+  sourceFile: string;
   runtimeContextCode: string;
 };
 

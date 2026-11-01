@@ -55,6 +55,8 @@ describe("agency logs session against a headless viewer", () => {
         openStore: openCommentsStore,
         cwd: dir,
         pathKind: (absolutePath) => (fs.existsSync(absolutePath) ? "file" : "missing"),
+        childRunDirectories: () => [],
+        configuredLog: () => undefined,
       },
       writeStdout: (text) => {
         printed.push(text);
@@ -122,6 +124,6 @@ describe("agency logs session against a headless viewer", () => {
     input.feedKey({ key: "q" });
     await done;
     expect(await logsSession({ name: "get" }, { json: false }, deps)).toBe(1);
-    expect(printed.at(-1)).toContain("no viewer is open");
+    expect(printed.at(-1)).toContain("No log given");
   });
 });

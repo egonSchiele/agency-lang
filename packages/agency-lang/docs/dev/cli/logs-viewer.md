@@ -244,9 +244,83 @@ notice instead of a server.
 Imperative code lives in four places here: `server.ts` and `client.ts`
 (sockets), `registry.ts` (files), and the wiring in `run.ts`. Everything
 else in `session/` is a type or a pure function. To remove the feature:
-delete `session/`, `lib/cli/logsSession/`, the `debug-logs` skill's
-session steps, and the `session` option with its call sites in `run.ts`
-and the two CLI routes. Comments, addresses, and `A` stay.
+delete `session/`, `lib/cli/logsSession/` (moving `chooseLog` out first,
+since `lib/cli/logsQuery/` uses it), the `debug-logs` skill's session
+steps, and the `session` option with its call sites in `run.ts` and the
+two CLI routes. Comments, addresses, and `A` stay.
+
+## The agent commands
+
+`agency logs traces`, `outline`, and `search` (`lib/cli/logsQuery/`) let an
+agent read a log without grepping it. Each command is a function from
+parsed options to `{ text, json, exitCode }`; `register.ts` is the only
+file that touches the process. They reuse the viewer's modules and add
+three small pure ones: `lib/runDirectory/traceSelection.ts` (which traces
+the flags pick), `lib/logsViewer/outlineText.ts` (a trace's rows as
+records), and `lib/logsViewer/rowSearch.ts` (the search over one trace).
+
+**Finding the log.** `chooseLog` in `lib/cli/logsSession/target.ts` is the
+one place any logs command finds its log: `--log`, else the one open
+viewer, else `log.logFile` from `agency.json` when no viewer is open, else
+a refusal naming all three. Several open viewers are refused even when the
+config names a log. `traces`, `outline`, and `search` probe the viewer
+registry the way the `session` commands do, so an address `search` prints
+is one `session show` finds in the same file. `configuredLog` is a function, called only on the
+branch that needs it, so a broken `agency.json` cannot stop a command that
+passed `--log`. An empty `logFile` counts as unset, because `--log stdout`
+writes `""` there to cancel a configured file. A directory with no
+`statelog.jsonl` that holds run directories is refused with a pointer to
+`--csv`.
+
+**Picking traces.** `selectTraces` takes anything with a `traceId` and a
+`startedAt`, which `TraceSummary` has, so start time is computed once, in
+`traceSummaries`. Traces sort newest first by start time and not by file
+position, because concurrent runs interleave their lines. The flag
+combinations are a table (`COMBINATIONS`) with one row for each of the
+sixteen sets of the four flags, matched exactly. The viewer's trace picker
+lists traces in file order; `--csv` and these commands sort by start time.
+
+**Building a trace.** Each trace's forest is built from its own events,
+the way `session show` builds it, and not in one pass over the file as the
+viewer does. That keeps every printed address resolvable by `show`. Every
+command builds every trace's forest, even `outline --trace X`, because the
+start times that `--trace`, `--last`, and `--since` pick by come from
+`traceSummaries`, which needs the forest. On a 70 MB log of 89 traces,
+reading the file takes about 0.35 s and building every transcript about
+0.85 s, so each command finishes in under two seconds.
+
+**The outline.** `outlineLines` is `storyOutline` with one more filter:
+`hiddenByDefault` in `story.ts`, the rule the trace screen's `matches()`
+also calls, hides approved interrupts unless `--approvals` (or `--admin`,
+which needs them as parents for its handler decisions). There is no flag
+for the `m` view, whose rows and ids differ from the story's.
+
+**Search is a filter over transcript blocks.** The transcript already
+decides which block a message belongs to: it keeps, per thread, a record of
+every message a block has stood for, so a message repeated in every later
+call's history is one block, on the call where it first appeared. Search
+reuses that and adds no ownership rule of its own. `SEARCHED_BLOCKS` names
+the block kinds searched and the `--kind` each reports. A tool call's
+arguments are on two blocks, the assistant block that requested it and the
+tool block, so they give two hits. An interrupt outside any tool has no
+block, so search does not find it; the outline shows it.
+
+**Blocks to rows.** `blockRowId` in `transcript.ts` is the one mapping from
+a block to the story row it stands for. The transcript screen's `A`
+(`selectedRowId`) and search both call it. It is a table (`BLOCK_ROWS`)
+keyed by block kind. A system block keeps `roundId` undefined, since the
+screen reads `roundId` for focus, and carries the call that first sent the
+prompt as `ownerRoundId`. An error block finds the story row built from the
+same node. The mapping looks ids up in the story and never parses one.
+
+**Headers.** `headerLine` in `rowText.ts` is shared by `session show`,
+`outline`, and `search`. A user turn's, an error's, and an interrupt's
+header ends with the first non-blank line of its text, which can be a whole
+paragraph, so `outline` and `search` cut headers to `HEADER_CHARS` with
+`oneLine`; `show` prints them whole. An interrupt's message tells one kind
+of action from another, as in `Interrupt · std::env · approved · Are you
+sure you want to read this environment variable?`. Which variable is in the
+interrupt's data, which the header does not show.
 
 ## The story outline
 

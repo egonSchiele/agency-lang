@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -307,6 +308,7 @@ return runtimeFailure(__error, {
 export const isStamp = __AgencyFunction.create({
   name: "isStamp",
   module: "bangParamDefault.agency",
+  sourceFile: __sourceFile,
   fn: __isStamp_impl,
   params: [{
     name: "value",
@@ -476,6 +478,7 @@ return runtimeFailure(__error, {
 export const schedule = __AgencyFunction.create({
   name: "schedule",
   module: "bangParamDefault.agency",
+  sourceFile: __sourceFile,
   fn: __schedule_impl,
   params: [{
     name: "label",

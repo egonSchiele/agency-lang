@@ -24,7 +24,13 @@ import {
 } from "../keymap.js";
 import { payloadFor } from "../payload.js";
 import { fmtDuration } from "../spanText.js";
-import { outlineRows, rowEvents, threadComplete, type StoryRow } from "../story.js";
+import {
+  hiddenByDefault,
+  outlineRows,
+  rowEvents,
+  threadComplete,
+  type StoryRow,
+} from "../story.js";
 import { THEME, costTone, durationTone, hotMark, toneStyle } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { parseRoundId } from "../timeline/rounds.js";
@@ -328,8 +334,7 @@ export class TraceScreen implements Screen {
   }
   private matches(row: StoryRow): boolean {
     if (
-      row.kind === "interrupt" &&
-      row.interrupt.outcome === "approved" &&
+      hiddenByDefault(row) &&
       !this.showApprovals &&
       !this.machinery &&
       !this.admin &&

@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -299,6 +300,7 @@ return runtimeFailure(__error, {
 export const test = __AgencyFunction.create({
   name: "test",
   module: "function.agency",
+  sourceFile: __sourceFile,
   fn: __test_impl,
   params: [],
   toolDefinition: {
@@ -435,6 +437,7 @@ return runtimeFailure(__error, {
 export const add = __AgencyFunction.create({
   name: "add",
   module: "function.agency",
+  sourceFile: __sourceFile,
   fn: __add_impl,
   params: [{
     name: "a",

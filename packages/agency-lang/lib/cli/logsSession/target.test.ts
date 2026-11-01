@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { ProbedRecord } from "@/logsViewer/session/registry.js";
 import type { CommentsStore } from "@/runDirectory/commentsStore.js";
 
-import { resolveTarget, type TargetDeps } from "./target.js";
+import {
+  chooseLog,
+  liveSessions,
+  NO_LOG_GIVEN,
+  resolveTarget,
+  type LogDeps,
+  type TargetDeps,
+} from "./target.js";
 
 const author = { kind: "agent" as const, id: "claude" };
 const deps: TargetDeps = {
@@ -17,6 +24,8 @@ const deps: TargetDeps = {
       : absolutePath.endsWith(".jsonl")
         ? "file"
         : "directory",
+  childRunDirectories: () => [],
+  configuredLog: () => undefined,
 };
 
 function live(pid: number, logPath: string, commentsPath?: string): ProbedRecord {
@@ -122,6 +131,106 @@ describe("resolveTarget", () => {
         traceId: undefined,
         rowRef: "round:s1:2",
       });
+    });
+  });
+});
+
+describe("chooseLog", () => {
+  const files: Record<string, "file" | "directory"> = {
+    "/work/log.jsonl": "file",
+    "/work/runs/today": "directory",
+    "/work/runs/today/statelog.jsonl": "file",
+    "/work/runs": "directory",
+    "/work/empty": "directory",
+  };
+  function logDeps(configured: string | undefined): LogDeps {
+    return {
+      cwd: "/work",
+      pathKind: (absolutePath) => files[absolutePath] ?? "missing",
+      childRunDirectories: (dir) => (dir === "/work/runs" ? ["/work/runs/today"] : []),
+      configuredLog: () => configured,
+    };
+  }
+  const viewer = (pid: number, logPath: string) =>
+    liveSessions([live(pid, logPath)], (record) => `/s/${record.pid}.sock`);
+
+  it("--log wins over the configured log", () => {
+    expect(chooseLog("runs/today", [], logDeps("log.jsonl"))).toEqual({
+      kind: "files",
+      logPath: "/work/runs/today/statelog.jsonl",
+    });
+  });
+
+  it("does not read the config when --log is given", () => {
+    const deps: LogDeps = {
+      ...logDeps(undefined),
+      configuredLog: () => {
+        throw new Error("agency.json is broken");
+      },
+    };
+    expect(chooseLog("log.jsonl", [], deps)).toEqual({ kind: "files", logPath: "/work/log.jsonl" });
+  });
+
+  it("the one open viewer wins over the configured log", () => {
+    const live = viewer(1, "/work/runs/today/statelog.jsonl");
+    expect(chooseLog(undefined, live, logDeps("log.jsonl"))).toMatchObject({
+      kind: "session",
+      session: { record: { pid: 1 } },
+    });
+  });
+
+  it("uses the configured log, resolved against cwd, when no viewer is open", () => {
+    expect(chooseLog(undefined, [], logDeps("log.jsonl"))).toEqual({
+      kind: "files",
+      logPath: "/work/log.jsonl",
+    });
+  });
+
+  it("two open viewers still need --log, whatever the config says", () => {
+    const live = [...viewer(1, "/a.jsonl"), ...viewer(2, "/b.jsonl")];
+    const choice = chooseLog(undefined, live, logDeps("log.jsonl"));
+    expect(choice).toMatchObject({ kind: "refused" });
+    if (choice.kind === "refused") {
+      expect(choice.reason).toContain("2 viewers are open");
+    }
+  });
+
+  it("an empty logFile counts as unset", () => {
+    expect(chooseLog(undefined, [], logDeps(""))).toEqual({
+      kind: "refused",
+      reason: NO_LOG_GIVEN,
+    });
+  });
+
+  it("a configured log that is not on disk is refused, naming agency.json", () => {
+    expect(chooseLog(undefined, [], logDeps("gone.jsonl"))).toEqual({
+      kind: "refused",
+      reason: "no log at /work/gone.jsonl (log.logFile in agency.json)",
+    });
+  });
+
+  it("a directory of run directories is refused with a pointer to the explorer", () => {
+    const choice = chooseLog("runs", [], logDeps(undefined));
+    expect(choice).toMatchObject({ kind: "refused" });
+    if (choice.kind === "refused") {
+      expect(choice.reason).toContain("agency logs /work/runs --csv");
+    }
+  });
+
+  it("a directory with no statelog and no runs is refused as missing", () => {
+    expect(chooseLog("empty", [], logDeps(undefined))).toEqual({
+      kind: "refused",
+      reason: "no log at /work/empty/statelog.jsonl",
+    });
+  });
+
+  it("with nothing to go on, the refusal names all three ways forward", () => {
+    expect(NO_LOG_GIVEN).toContain("--log <file>");
+    expect(NO_LOG_GIVEN).toContain("log.logFile in agency.json");
+    expect(NO_LOG_GIVEN).toContain("agency logs <file>");
+    expect(chooseLog(undefined, [], logDeps(undefined))).toEqual({
+      kind: "refused",
+      reason: NO_LOG_GIVEN,
     });
   });
 });

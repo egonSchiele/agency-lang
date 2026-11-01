@@ -1,0 +1,95 @@
+// The catalog of tools a workflow may call: what describe and each
+// tool's parameter schema say, in the tool list's order. No node here
+// calls a model.
+import { catalog, CatalogEntry, CatalogParam } from "std::workflow"
+import { add, round } from "std::math"
+import { searchNotes } from "./fixtures/tools/notes.agency"
+import { Json } from "std::validation"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+const DIR = __dirname + "/fixtures/tools"
+
+/** One parameter as a row: name, type, default, description. */
+def paramRow(param: CatalogParam): Json {
+  return [param.name, param.type, param.default, param.description]
+}
+
+/** Lists `tools`, recording every effect raised in "effects". A true
+  `rejectRead` rejects `std::read`. */
+def runCatalog(tools: any[], rejectRead: boolean = false): Result<CatalogEntry[]> {
+  setMutable("effects", [])
+  handle {
+    return catalog(tools, DIR)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    if (rejectRead && intr.effect == "std::read") {
+      return reject("not this file")
+    }
+    return approve()
+  }
+}
+
+node stdToolEntry(): Json {
+  const listed = runCatalog([round])
+  if (listed is failure(err)) {
+    return "failed: ${err}"
+  }
+  const entry = listed.value[0]
+  return [
+    entry.module,
+    entry.name,
+    entry.description.startsWith("Round a number"),
+    entry.description.includes("@param"),
+    map(entry.params, paramRow),
+    entry.params[1].schema.description,
+    entry.returns,
+    getMutable("effects", [])
+  ]
+}
+
+node localToolEntry(): Json {
+  const listed = runCatalog([searchNotes])
+  if (listed is failure(err)) {
+    return "failed: ${err}"
+  }
+  const entry = listed.value[0]
+  return [
+    entry.module,
+    entry.description,
+    map(entry.params, paramRow),
+    entry.params[0].schema,
+    entry.returns,
+    getMutable("effects", [])
+  ]
+}
+
+node entriesFollowTheToolList(): Json {
+  const listed = runCatalog([searchNotes, add, round])
+  return map(listed catch [], \entry -> entry.name)
+}
+
+node refusedLikeCheckWorkflow(): Json {
+  const listed = runCatalog([round.partial(precision: 2), add.rename("plus")])
+  if (listed is success) {
+    return "listed"
+  }
+  const messages = map(listed.data.problems, \problem -> problem.message)
+  return [messages, getMutable("effects", [])]
+}
+
+node repeatedToolRefused(): Json {
+  const listed = runCatalog([add, add])
+  if (listed is success) {
+    return "listed"
+  }
+  return map(listed.data.problems, \problem -> problem.message)
+}
+
+node rejectedReadKeepsTheRejection(): Json {
+  const listed = runCatalog([searchNotes], true)
+  return [isFailure(listed), listed.rejected, listed.data.problems == null]
+}
+
+node emptyToolList(): Json {
+  return runCatalog([]) catch "failed"
+}

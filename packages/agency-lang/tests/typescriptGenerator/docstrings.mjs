@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -308,6 +309,7 @@ return runtimeFailure(__error, {
 export const add = __AgencyFunction.create({
   name: "add",
   module: "docstrings.agency",
+  sourceFile: __sourceFile,
   fn: __add_impl,
   params: [{
     name: "a",
@@ -453,6 +455,7 @@ return runtimeFailure(__error, {
 export const greet = __AgencyFunction.create({
   name: "greet",
   module: "docstrings.agency",
+  sourceFile: __sourceFile,
   fn: __greet_impl,
   params: [{
     name: "name",
@@ -593,6 +596,7 @@ return runtimeFailure(__error, {
 export const calculateArea = __AgencyFunction.create({
   name: "calculateArea",
   module: "docstrings.agency",
+  sourceFile: __sourceFile,
   fn: __calculateArea_impl,
   params: [{
     name: "width",
@@ -737,6 +741,7 @@ return runtimeFailure(__error, {
 export const processData = __AgencyFunction.create({
   name: "processData",
   module: "docstrings.agency",
+  sourceFile: __sourceFile,
   fn: __processData_impl,
   params: [],
   toolDefinition: {
@@ -861,6 +866,7 @@ return runtimeFailure(__error, {
 export const versionedTool = __AgencyFunction.create({
   name: "versionedTool",
   module: "docstrings.agency",
+  sourceFile: __sourceFile,
   fn: __versionedTool_impl,
   params: [],
   toolDefinition: {

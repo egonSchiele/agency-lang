@@ -19,6 +19,7 @@ import {
   _toolRefs,
   _workflowFailure,
   _workflowNameProblem,
+  _catalogEntries,
 } from "agency-lang/stdlib-lib/workflow/index.js"
 
 /** @module
@@ -48,6 +49,9 @@ import {
 
   `writeWorkflow` saves a checked workflow as `<dir>/workflows/<name>.json`;
   `loadWorkflow` and `listWorkflows` read saved workflows back.
+
+  `catalog` lists the tools a workflow may call, with their parameters and
+  return types, for a GUI or a person writing a workflow.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
@@ -237,6 +241,54 @@ export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: strin
     return failure(checked.error, checked.data)
   }
   return success(checked.value.warnings)
+}
+
+/** One parameter a workflow step can pass to a tool. */
+export type CatalogParam = {
+  name: string;
+  /** The declared type as Agency text, such as `string[]` or `Note`. Null when none is declared. */
+  type: string | null;
+  /** The default as Agency source, such as `0` or `null`. Null when the parameter has none, so a step must pass a value. */
+  default: string | null;
+  /** The text of the docstring's `@param` entry for this parameter, or null. */
+  description: string | null;
+  /** The JSON Schema a model sees for this parameter. */
+  schema: Json
+}
+
+/** One tool a workflow may call. */
+export type CatalogEntry = {
+  /** What a step's `module` field says: `std::math`, or `./notes.agency` relative to `dir`. */
+  module: string;
+  name: string;
+  /** The docstring without its `@param` entries, or the empty string. */
+  description: string;
+  /** The parameters a step can pass. A function-typed parameter is left out. */
+  params: CatalogParam[];
+  /** The declared return type as Agency text. Null when none is declared. */
+  returns: string | null
+}
+
+/** The catalog starts with the same two steps as `checkWorkflow`, so it
+  refuses the same tool lists and raises the same `std::read` prompts. */
+@capabilities(fileRead)
+export idempotent def catalog(tools: any[], dir: string = ""): Result<CatalogEntry[]> {
+  """
+  List the tools a workflow may call, in the order given: each tool's module and name as a step names them, its description, its parameters with their types, defaults, descriptions, and JSON Schemas, and its return type. Reading a local tool's module raises `std::read`. A refused tool list fails with every problem in `data.problems`, as `checkWorkflow` does. A refused or failed read of a module fails with the read's own failure, which has no problems.
+
+  @param tools - The functions the workflow may call
+  @param dir - The directory a workflow's local modules are named relative to
+  """
+  const refs = _toolRefs(tools, dir)
+  if (refs is failure) {
+    return failure(refs.error, refs.data)
+  }
+  const signatures = _signatures(refs.value, dir)
+  if (signatures is failure) {
+    // Returned as it came, so a rejected read keeps its `rejected` flag.
+    return signatures
+  }
+  return success(_catalogEntries(tools, refs.value, signatures.value))
 }
 
 /** Check, ask, run. The check compiles the program and the run uses it. The

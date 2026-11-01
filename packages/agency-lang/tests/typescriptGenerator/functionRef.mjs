@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -307,6 +308,7 @@ return runtimeFailure(__error, {
 export const greet = __AgencyFunction.create({
   name: "greet",
   module: "functionRef.agency",
+  sourceFile: __sourceFile,
   fn: __greet_impl,
   params: [{
     name: "name",
@@ -449,6 +451,7 @@ return runtimeFailure(__error, {
 export const double = __AgencyFunction.create({
   name: "double",
   module: "functionRef.agency",
+  sourceFile: __sourceFile,
   fn: __double_impl,
   params: [{
     name: "x",
@@ -608,6 +611,7 @@ return runtimeFailure(__error, {
 export const applyToAll = __AgencyFunction.create({
   name: "applyToAll",
   module: "functionRef.agency",
+  sourceFile: __sourceFile,
   fn: __applyToAll_impl,
   params: [{
     name: "items",

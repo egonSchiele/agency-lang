@@ -67,9 +67,14 @@ describe("logs extract", () => {
     expect(out.join("").split("\n")[0]).toBe(first);
   });
 
-  it("needs --trace when several traces exist, and lists them", () => {
+  it("needs --trace when several traces exist, and points at agency logs traces", () => {
     const log = statelogFile(agentStartLine("abc123"), agentStartLine("abd456"));
-    expect(() => logsExtract({ log }, { writeStdout: () => {} })).toThrow(/abc123[\s\S]*abd456/);
+    expect(() => logsExtract({ log }, { writeStdout: () => {} })).toThrow(
+      `${log} holds 2 traces; say which with --trace <id>. List them with: agency logs traces --log ${log}`,
+    );
+    expect(() => logsExtract({ log, trace: "zzz" }, { writeStdout: () => {} })).toThrow(
+      `No trace in ${log} matches "zzz". List them with: agency logs traces --log ${log}`,
+    );
     const out = path.join(tempDir(), "nested", "trace.jsonl");
     logsExtract({ log, trace: "abd", out }, { writeStdout: () => {} });
     expect(fs.readFileSync(out, "utf8").split("\n").filter(Boolean)).toHaveLength(1);

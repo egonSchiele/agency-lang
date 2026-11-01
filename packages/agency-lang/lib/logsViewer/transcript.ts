@@ -49,7 +49,14 @@ type BlockBase = {
 };
 export type TranscriptBlock = BlockBase &
   (
-    | { kind: "system"; text: string }
+    | {
+        kind: "system";
+        text: string;
+        /** The LLM call that first carried this prompt. `roundId` stays
+         *  undefined on a system block, because the screen reads it to
+         *  decide focus; this field is for finding the block's row. */
+        ownerRoundId: string;
+      }
     /** A thread group, one per `llmCall` span, named as the trace names
      *  it: `calls` counts the span's own LLM calls, `tool` is the tool
      *  that started it (undefined for a top-level thread), and `complete`
@@ -243,7 +250,15 @@ function turnMessagesOf(trace: TreeNode): string[] | undefined {
     .filter((message): message is string => typeof message === "string");
   return messages.length === 0 ? undefined : messages;
 }
+/** A trace's transcript, with the story outline it was built from, so a
+ *  caller that maps blocks to rows (`blockRowId`) reuses it. */
+export type Transcript = { blocks: TranscriptBlock[]; story: StoryRow[] };
+
 export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
+  return transcriptOf(trace).blocks;
+}
+
+export function transcriptOf(trace: TreeNode): Transcript {
   const index = buildTreeIndex(trace);
   const rounds = roundsOf(trace, index);
   const story = storyOutline(trace, { admin: false });
@@ -252,28 +267,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
   // or works on a copy (a subthread), so both match against the same
   // record of what has been shown.
   const conversations: Record<string, ThreadHistory> = Object.create(null);
-  // Errors inside a tool call show in that tool's block. The rest get a
-  // block of their own, placed by time on the thread they happened in.
-  const loose: LooseBlock[] = [
-    ...traceErrors(trace, index)
-      .filter((error) => error.toolId === undefined)
-      .map((error) => ({
-        at: error.at,
-        thread: blockThread(error.node, rounds, index),
-        block: { kind: "error" as const, id: `error:${error.id}`, error },
-      })),
-    ...runPauses(trace).map((pause) => ({
-      at: pause.pausedAt,
-      thread: blockThread(pause.node, rounds, index),
-      block: {
-        kind: "pause" as const,
-        id: `pause:${pause.node.id}`,
-        pausedMs: pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
-        resumed: pause.resumedAt !== undefined,
-      },
-    })),
-    ...turnBlocks(trace, rounds),
-  ];
+  const loose = looseBlocks(trace, rounds, index);
   const turnMessages = turnMessagesOf(trace);
   const compactions = walkNodes(trace)
     .filter((node) => node.event?.data.type === "memoryCompaction")
@@ -338,6 +332,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
             id: `system:${round.id}:${position}`,
             kind: "system",
             text,
+            ownerRoundId: round.id,
           });
         }
       } else if (message.role === "user") {
@@ -403,7 +398,10 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     state.previousEnd = round.end;
     return blocks;
   });
-  return withGroupDividers(withLooseBlocks(roundBlocks, loose), rounds, index);
+  return {
+    blocks: withGroupDividers(withLooseBlocks(roundBlocks, loose), rounds, index),
+    story,
+  };
 }
 /** The `llmCall` spans a round sits in, outermost first, ending with its own. */
 function groupPathOf(round: Round, index: TreeIndex): string[] {
@@ -511,6 +509,32 @@ type BlockThread = {
  *  or before the first later block anywhere when its thread is unknown,
  *  so the transcript reads in time order. One after every block goes at
  *  the end. */
+/** The blocks that belong to no LLM call: errors outside a tool call,
+ *  pauses, and turns, each placed later by time on its thread. */
+function looseBlocks(trace: TreeNode, rounds: Round[], index: TreeIndex): LooseBlock[] {
+  // Errors inside a tool call show in that tool's block. The rest get a
+  // block of their own, placed by time on the thread they happened in.
+  return [
+    ...traceErrors(trace, index)
+      .filter((error) => error.toolId === undefined)
+      .map((error) => ({
+        at: error.at,
+        thread: blockThread(error.node, rounds, index),
+        block: { kind: "error" as const, id: `error:${error.id}`, error },
+      })),
+    ...runPauses(trace).map((pause) => ({
+      at: pause.pausedAt,
+      thread: blockThread(pause.node, rounds, index),
+      block: {
+        kind: "pause" as const,
+        id: `pause:${pause.node.id}`,
+        pausedMs: pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
+        resumed: pause.resumedAt !== undefined,
+      },
+    })),
+    ...turnBlocks(trace, rounds),
+  ];
+}
 type LooseBlockBody =
   | { kind: "error"; id: string; error: TraceError }
   | { kind: "pause"; id: string; pausedMs: number | undefined; resumed: boolean }
@@ -662,6 +686,55 @@ function requestFor(
   }
   const sameName = tools.filter((other) => other.name === tool.name);
   return requests.filter((request) => request.name === tool.name)[sameName.indexOf(tool)];
+}
+/** How a block finds its story row: the block's own id (a tool or hosted
+ *  block is a story row), the LLM call the block sits in, the call that
+ *  first carried a system prompt, that call's user row, or the row built
+ *  from the same node as an error. */
+type RowRule = "own" | "round" | "ownerRound" | "roundUser" | "sameNode";
+
+/** A kind with no entry has no row: a thread divider, a turn, a pause.
+ *  Adding a block kind means adding one entry here and nowhere else. */
+const BLOCK_ROWS: Partial<Record<TranscriptBlock["kind"], RowRule>> = {
+  tool: "own",
+  hosted: "own",
+  assistant: "round",
+  history: "round",
+  rewrite: "round",
+  system: "ownerRound",
+  user: "roundUser",
+  handback: "roundUser",
+  error: "sameNode",
+};
+
+/** The story row a block stands for, or undefined for a block with no
+ *  row. `roundUser` falls back to the call when the outline has no user
+ *  row for it. Ids are looked up in `story`, never parsed (see "Row IDs
+ *  are a contract" in docs/dev/cli/logs-viewer.md). The transcript
+ *  screen's `A` and `agency logs search` both use this. */
+export function blockRowId(block: TranscriptBlock, story: readonly StoryRow[]): string | undefined {
+  const rule = BLOCK_ROWS[block.kind];
+  switch (rule) {
+    case undefined:
+      return undefined;
+    case "own":
+      return block.id;
+    case "round":
+      return block.roundId;
+    case "ownerRound":
+      return block.kind === "system" ? block.ownerRoundId : undefined;
+    case "roundUser": {
+      if (block.roundId === undefined) {
+        return undefined;
+      }
+      const userRowId = `${block.roundId}:user`;
+      return story.some((row) => row.id === userRowId) ? userRowId : block.roundId;
+    }
+    case "sameNode":
+      return block.kind === "error"
+        ? story.find((row) => row.kind === "error" && row.node.id === block.error.node.id)?.id
+        : undefined;
+  }
 }
 export function messageText(message: WireMessage): string {
   const requests = (message.toolCalls ?? []).map(

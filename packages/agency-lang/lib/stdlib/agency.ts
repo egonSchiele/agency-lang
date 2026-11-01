@@ -17,6 +17,7 @@ import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js"
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
 import { walkNodesArray } from "../utils/node.js";
 import { docCommentText, docStringText } from "../utils/docStringText.js";
+import { paramDocs } from "../runtime/paramDocs.js";
 import { isHidden } from "../utils/hiddenTag.js";
 import type { Tag } from "../types/tag.js";
 import { moduleDescription } from "../utils/moduleDoc.js";
@@ -201,6 +202,16 @@ export function _getEffects(source: string): Record<string, string[]> {
 
 export type ExportKind = "def" | "node" | "type" | "const" | "reexport";
 
+/** One parameter of an exported def or node. `type` and `default` are
+ *  Agency text, printed the way the signature prints them, and null when
+ *  absent. `description` is the text of the docstring's `@param` entry. */
+export type ExportParam = {
+  name: string;
+  type: string | null;
+  default: string | null;
+  description: string | null;
+};
+
 export type ExportInfo = {
   name: string;
   kind: ExportKind;
@@ -216,6 +227,9 @@ export type ExportInfo = {
   handoff: boolean;
   /** The module path this export was re-exported from, else null. */
   reexportedFrom: string | null;
+  /** Each parameter of a def or node. Empty for every other kind, and for
+   *  a re-export that cannot be read from a source string. */
+  params: ExportParam[];
 };
 
 export type ModuleInfo = {
@@ -331,6 +345,22 @@ function returnsResult(
   return node.returnType != null && safeResolveType(node.returnType, aliases).type === "resultType";
 }
 
+/** Each parameter of a def or node, with its type and default printed the
+ *  way the signature prints them and the text of its `@param` entry. */
+function exportParams(
+  node: FunctionDefinition | GraphNodeDefinition,
+  generator: AgencyGenerator,
+  docstring: string | null,
+): ExportParam[] {
+  const docs = docstring === null ? [] : paramDocs(docstring);
+  return node.parameters.map((param) => ({
+    name: param.name,
+    type: generator.paramTypeOf(param),
+    default: generator.paramDefaultOf(param),
+    description: docs.find((doc) => doc.name === param.name)?.text || null,
+  }));
+}
+
 function localExportInfos(
   node: AgencyNode,
   generator: AgencyGenerator,
@@ -342,6 +372,7 @@ function localExportInfos(
   if (node.type === "function" && node.exported) {
     const name = declaredName(node.functionName);
     if (isInternalExport(name)) return [];
+    const docstring = node.docString ? docStringText(node.docString) : null;
     return [
       {
         name,
@@ -349,7 +380,8 @@ function localExportInfos(
         signature: generator.signatureOf(node),
         returnType: generator.returnTypeOf(node),
         returnsResult: returnsResult(node, aliases),
-        docstring: node.docString ? docStringText(node.docString) : null,
+        docstring,
+        params: exportParams(node, generator, docstring),
         effects: effects[name] ?? [],
         destructive: node.markers?.destructive === true,
         idempotent: node.markers?.idempotent === true,
@@ -361,6 +393,7 @@ function localExportInfos(
   if (node.type === "graphNode" && node.exported) {
     const name = declaredName(node.nodeName);
     if (isInternalExport(name)) return [];
+    const docstring = node.docString ? docStringText(node.docString) : null;
     return [
       {
         name,
@@ -368,7 +401,8 @@ function localExportInfos(
         signature: generator.signatureOf(node),
         returnType: generator.returnTypeOf(node),
         returnsResult: returnsResult(node, aliases),
-        docstring: node.docString ? docStringText(node.docString) : null,
+        docstring,
+        params: exportParams(node, generator, docstring),
         effects: effects[name] ?? [],
         // Nodes carry no tool markers; only defs can be declared
         // destructive or idempotent.
@@ -389,6 +423,7 @@ function localExportInfos(
         returnType: null,
         returnsResult: false,
         docstring: node.docComment ? docCommentText(node.docComment) : null,
+        params: [],
         effects: [],
         destructive: false,
         idempotent: false,
@@ -413,6 +448,7 @@ function localExportInfos(
         returnType: null,
         returnsResult: false,
         docstring: null,
+        params: [],
         effects: [],
         destructive: false,
         idempotent: false,
@@ -527,6 +563,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
     returnType: null,
     returnsResult: false,
     docstring: null,
+    params: [],
     effects: ["unknown"],
     destructive: false,
     idempotent: false,

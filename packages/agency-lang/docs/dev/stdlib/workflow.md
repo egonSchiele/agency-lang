@@ -184,10 +184,44 @@ The generated program is ordinary Agency, and it runs in a child process. Each s
 
 ## Tool modules
 
-`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`. Any other path is rewritten relative to the workflow's `dir`, resolved against the working directory at run time, so a host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
+`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value whose module id is under `stdlib/` becomes `std::<name>`. Any other tool is local. Its import path comes from its source file, the absolute path of the `.agency` file it was defined in (`sourceFile`, see [agency-function.md](../language/agency-function.md)), written relative to the workflow's `dir`:
+
+```
+dir:         /proj/agent
+sourceFile:  /proj/agent/tools/notes.agency
+module text: ./tools/notes.agency
+```
+
+A relative `dir` is read against the working directory at run time. The source file does not depend on the working directory, so a host finds its tools wherever it runs from. A local tool whose source file is outside `dir` is refused. A tool with no source file is refused too. Four kinds of function value reach this check with none: one from a module compiled by an older Agency, which recompiling fixes; one from a program `run` compiled for a subprocess; a block; and the stub a checkpoint revives for a function whose module the process never loaded.
 
 The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. Two tools with the same name are refused next, in a problem that names both modules: an import line names a tool by its name, and renaming is refused, so the fix is to rename one def in its file.
 
+## The catalog
+
+`catalog(tools, dir)` describes each tool a workflow may call. Here is the entry for `round` from `std::math`:
+
+```json
+{
+  "module": "std::math",
+  "name": "round",
+  "description": "Round a number to a given number of decimal places. With no precision it\n  rounds to a whole number.",
+  "params": [
+    { "name": "num", "type": "number", "default": null,
+      "description": "The number to round", "schema": { "type": "number" } },
+    { "name": "precision", "type": "number", "default": "0",
+      "description": "The number of decimal places. Defaults to 0.",
+      "schema": { "anyOf": [{ "type": "number" }, { "type": "null" }], "description": "Default: 0" } }
+  ],
+  "returns": "number"
+}
+```
+
+The entry joins two sources. `describe` reads the tool's module. It gives the description, the return type, and each parameter's `type`, `default`, and `description`, which is the text of the parameter's `@param` entry. The tool's function value gives each parameter's `schema`, the JSON Schema a model sees for it.
+
+`type`, `default`, and `returns` are Agency text, written the way the signature writes them, so a reader can compare one tool's `returns` with another tool's parameter `type`. A `default` of null means a step must pass the parameter. A function-typed parameter, such as a block, is not in the tool's schema, and the catalog leaves it out, because a step's arguments are JSON values. The entry's `description` is the docstring with every `@param` entry removed, including one whose name matches no parameter.
+
+`catalog` starts with the same two steps as `checkWorkflow`: `_toolRefs`, then `_signatures`. So it refuses the same tool lists, with every problem in `data.problems`, and it raises one `std::read` for each local module and nothing for a `std::` module. A failed or rejected read is returned as it came. It keeps its `rejected` flag and has no `data.problems`, which is how a caller tells it from a refused tool list. Entries keep the tool list's order.
+
 ## Not built yet
 
-The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`) and `catalog`.
+The spec covers this: offering a workflow as a tool (`workflowTool`, `workflowTools`).

@@ -62,9 +62,10 @@ export function expandRow(
   };
 }
 
-/** The one-line summary of where a row sits, new here: the viewer spreads
- *  these facts over the outline and the token line. */
-function headerLine(row: StoryRow, trace: TreeNode): string {
+/** The one-line summary of where a row sits: the viewer spreads these
+ *  facts over the outline and the token line. `session show` prints it
+ *  whole; `agency logs outline` and `search` cut it to a width. */
+export function headerLine(row: StoryRow, trace: TreeNode): string {
   switch (row.kind) {
     case "round": {
       const total = roundsOf(trace).length;
@@ -77,7 +78,7 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
       ].join(" · ");
     }
     case "user":
-      return `User turn · ${row.text.split("\n")[0]}`;
+      return `User turn · ${firstLine(row.text)}`;
     case "tool":
       return [
         `Tool · ${row.name}`,
@@ -91,9 +92,14 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
         `inside LLM call ${row.round.index + 1}`,
       ].join(" · ");
     case "interrupt":
-      return `Interrupt · ${row.interrupt.effect} · ${row.interrupt.outcome}`;
+      return [
+        "Interrupt",
+        row.interrupt.effect,
+        row.interrupt.outcome,
+        ...(row.interrupt.message === "" ? [] : [firstLine(row.interrupt.message)]),
+      ].join(" · ");
     case "error":
-      return `Error · ${row.message.split("\n")[0]}`;
+      return `Error · ${firstLine(row.message)}`;
     case "llmGroup":
       return row.title;
     case "subagent":
@@ -103,6 +109,11 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
     case "machinery":
       return row.text;
   }
+}
+
+/** The first line with text on it: a prompt often opens with a blank line. */
+function firstLine(text: string): string {
+  return text.trim().split("\n")[0];
 }
 
 /** A thread whose row no longer resolves is listed by its anchor and marked

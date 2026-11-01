@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { event, sampleRunForest } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 import { completionMessageOf } from "../statelog/wireAccessors.js";
-import { represents, transcriptBlocks, transcriptText } from "./transcript.js";
+import { blockRowId, represents, transcriptBlocks, transcriptText } from "./transcript.js";
+import { findRow } from "./detailTarget.js";
+import { storyOutline } from "./story.js";
 import { transcriptPayload } from "./transcriptPayload.js";
 import type { WireMessage } from "./messageDelta.js";
 const system = { role: "system", content: "write code" };
@@ -941,5 +943,51 @@ it("counts the LLM calls a thread divider opens", () => {
   ]);
   expect(transcriptPayload(dividers[0], false)[0]).toMatchObject({
     text: "══ THREAD · main · 2 LLM calls ══",
+  });
+});
+
+describe("blockRowId", () => {
+  it("maps every block of a recorded run to no row or a row findRow resolves", () => {
+    const trace = sampleRunForest()[0];
+    const story = storyOutline(trace, { admin: true });
+    const unresolved = transcriptBlocks(trace)
+      .map((block) => ({ id: block.id, row: blockRowId(block, story) }))
+      .filter(({ row }) => row !== undefined && findRow(trace, row) === undefined);
+    expect(unresolved).toEqual([]);
+  });
+
+  it("puts a system prompt on the call that first carried it, and the rest on their rows", () => {
+    const trace = conversation();
+    const story = storyOutline(trace, { admin: true });
+    const blocks = transcriptBlocks(trace);
+    const rowOf = (kind: string) => {
+      const block = blocks.find((candidate) => candidate.kind === kind)!;
+      return blockRowId(block, story);
+    };
+    expect(blocks.find((block) => block.kind === "system")).toMatchObject({
+      ownerRoundId: "round:L:0",
+      roundId: undefined,
+    });
+    expect(rowOf("system")).toBe("round:L:0");
+    expect(rowOf("user")).toBe("round:L:0:user");
+    expect(rowOf("assistant")).toBe("round:L:0");
+    expect(rowOf("tool")).toBe("tool");
+    expect(findRow(trace, rowOf("system")!)).toBeDefined();
+  });
+
+  it("puts an error outside a tool on the story's error row", () => {
+    const trace = buildForest([
+      event("promptCompletion", 100, "L", null, {
+        threadIdentity: "main",
+        messages: [user],
+        completion: { output: "answer" },
+      }),
+      event("error", 150, "L", null, { message: "validator failed", errorType: "runtimeError" }),
+    ])[0];
+    const story = storyOutline(trace, { admin: true });
+    const error = transcriptBlocks(trace).find((block) => block.kind === "error")!;
+    const rowId = blockRowId(error, story);
+    expect(rowId).toBeDefined();
+    expect(findRow(trace, rowId!)).toMatchObject({ kind: "error", message: "validator failed" });
   });
 });

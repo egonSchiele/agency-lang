@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripBoundParams } from "./stripBoundParams.js";
+import { paramDocs, stripBoundParams, withoutParamDocs } from "./paramDocs.js";
 
 describe("stripBoundParams", () => {
   it("strips single @param line for bound param", () => {
@@ -75,5 +75,50 @@ See also: writeFile`);
   it("handles empty boundParamNames array (no-op)", () => {
     const description = `@param dir - The directory`;
     expect(stripBoundParams(description, [])).toBe(description);
+  });
+});
+
+describe("paramDocs", () => {
+  it("reads each entry's name and text, in order, with or without the dash", () => {
+    const description = `Read a file.
+@param dir - The directory
+@param filename The file name`;
+    expect(paramDocs(description)).toEqual([
+      { name: "dir", text: "The directory" },
+      { name: "filename", text: "The file name" },
+    ]);
+  });
+
+  it("joins an entry's continuation lines with a space, up to a blank line", () => {
+    const description = `Read a file.
+  @param dir - The directory to read from.
+      Must be an absolute path.
+
+See also: writeFile`;
+    expect(paramDocs(description)).toEqual([
+      { name: "dir", text: "The directory to read from. Must be an absolute path." },
+    ]);
+  });
+
+  it("gives an empty text to an entry with nothing after its name", () => {
+    expect(paramDocs("@param flag")).toEqual([{ name: "flag", text: "" }]);
+  });
+
+  it("finds no entries in a description without @param lines", () => {
+    expect(paramDocs("Read a file from a directory.")).toEqual([]);
+  });
+});
+
+describe("withoutParamDocs", () => {
+  it("removes every entry, whatever its name, with the blank line that ends it", () => {
+    const description = `Read a file.
+
+@param dir - The directory to read from.
+@param fielname - A misspelled entry
+
+See also: writeFile`;
+    expect(withoutParamDocs(description)).toBe(`Read a file.
+
+See also: writeFile`);
   });
 });

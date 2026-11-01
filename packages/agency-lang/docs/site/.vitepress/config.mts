@@ -178,7 +178,6 @@ export default defineConfig({
             { text: "Template Agency", link: "/guide/template-agency" },
             { text: "Splices", link: "/guide/splices" },
             { text: "Memory", link: "/guide/memory" },
-            { text: "Capabilities", link: "/guide/capabilities" },
           ],
         },
         {
@@ -227,6 +226,7 @@ export default defineConfig({
               text: "Cross-Thread Context Sharing",
               link: "/guide/cross-thread-context",
             },
+            { text: "Capabilities", link: "/guide/capabilities" },
           ],
         },
       ],

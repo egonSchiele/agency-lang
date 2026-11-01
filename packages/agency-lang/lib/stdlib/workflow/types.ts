@@ -40,6 +40,8 @@ export type Workflow = {
   steps: Step[];
   result?: unknown;
   limits?: Limits | null;
+  /** The effects the workflow may raise. Absent or null means any. */
+  raises?: string[] | null;
 };
 
 /** A tool the host passed, as an import line spells it: `module` is
@@ -50,6 +52,10 @@ export type ToolRef = { module: string; name: string };
 /** A reference path: a root, a name, then `.field` and `[n]` segments. */
 export const REF_PATH =
   /^(inputs|steps)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
+
+/** An effect name as a `raises` entry spells it: `std::read`, a set name
+ *  such as `FileRead`, or a bare effect such as `unknown`. */
+export const EFFECT_NAME = /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$/;
 
 /** Exactly `{ "$ref": "<string>" }`. Any other object is a plain value. */
 export function isRef(value: unknown): value is Ref {

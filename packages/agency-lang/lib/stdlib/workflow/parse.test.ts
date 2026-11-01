@@ -363,3 +363,33 @@ describe("_workflowNameProblem", () => {
     expect(_workflowNameProblem("__x")).toMatch(/reserved/);
   });
 });
+
+describe("parseWorkflow raises", () => {
+  it("accepts a workflow with no raises", () => {
+    expect(parseWorkflow(mealPlan).problems).toEqual([]);
+  });
+
+  it("accepts an empty list, a star, effect names, set names, and unknown", () => {
+    for (const raises of [[], ["*"], ["std::read", "FileRead"], ["unknown"]]) {
+      expect(parseWorkflow(withFields(mealPlan, { raises })).problems).toEqual([]);
+    }
+  });
+
+  it("keeps raises on the parsed workflow", () => {
+    const raises = ["std::read", "test::lists::add"];
+    expect(parseWorkflow(withFields(mealPlan, { raises })).workflow?.raises).toEqual(raises);
+  });
+
+  it("refuses a raises that is not a list, a non-string entry, and a malformed name", () => {
+    const cases: [unknown, string][] = [
+      ["std::read", 'raises must be a list of effect names, got "std::read"'],
+      [[5], 'raises[0] must be an effect name or "*", got 5'],
+      [["std read"], 'raises[0] must be an effect name or "*", got "std read"'],
+    ];
+    for (const [raises, message] of cases) {
+      expect(parseWorkflow(withFields(mealPlan, { raises })).problems).toEqual([
+        { step: null, field: "raises", message },
+      ]);
+    }
+  });
+});

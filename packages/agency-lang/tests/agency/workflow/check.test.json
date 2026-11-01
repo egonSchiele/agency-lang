@@ -109,6 +109,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "raisesLeavesOutAStepsEffect",
+      "description": "a step whose tool raises an effect the workflow's raises leaves out is a problem on that step's tool",
+      "input": "",
+      "expectedOutput": "[\"add/tool\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

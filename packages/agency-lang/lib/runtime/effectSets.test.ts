@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { builtinEffectSets } from "./effectSets.js";
+import { builtinEffectSets, expandEffectNames } from "./effectSets.js";
 import { parseEffectSets } from "./effectSetsParse.js";
 import { readFileSync } from "fs";
 import path from "path";
@@ -102,5 +102,19 @@ describe("effectSets.data.ts", () => {
     const file = path.join(getPackageRoot(), "stdlib", "effectSets.agency");
     const fresh = parseEffectSets(readFileSync(file, "utf-8"), file);
     expect(builtinEffectSets()).toEqual(fresh);
+  });
+});
+
+describe("expandEffectNames", () => {
+  it("expands a nested set to the members of both sets it is made of", () => {
+    const sets = builtinEffectSets();
+    expect(expandEffectNames(["FileSystem"])).toEqual([
+      ...sets.FileRead.members,
+      ...sets.FileWrite.members,
+    ]);
+  });
+
+  it("keeps an effect name and a bare name that is not a set", () => {
+    expect(expandEffectNames(["std::read", "unknown"])).toEqual(["std::read", "unknown"]);
   });
 });

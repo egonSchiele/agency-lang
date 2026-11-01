@@ -74,7 +74,9 @@ export type Workflow = {
   inputs: string;
   steps: Json[];
   result?: Json;
-  limits?: WorkflowLimits
+  limits?: WorkflowLimits;
+  /** The effects the workflow may raise, as in an Agency function's `raises` clause (docs/site/guide/effects-and-raises.md). Left out means anything. `[]` means nothing. A built-in set name such as `FileRead` stands for its members, and `"*"` means anything. `checkWorkflow` reports each step that raises an effect not listed. */
+  raises?: string[]
 }
 
 /** One thing wrong with a workflow, named by step and field. `step` and

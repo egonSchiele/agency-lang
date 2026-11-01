@@ -53,7 +53,7 @@ import * as renderBuiltinToolRegistration from "../templates/backends/typescript
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 
-import { AgencyConfig, DEFAULT_MODEL, DEFAULT_PROVIDER } from "@/config/config.js";
+import { AgencyConfig, DEFAULT_MODEL, DEFAULT_PROVIDER, defaultRoute } from "@/config/config.js";
 import { parseDurationMs } from "@/duration.js";
 import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -4508,10 +4508,14 @@ export class TypeScriptBuilder {
         ? ts.str(configured)
         : ts.binOp(ts.env(PROVIDER_KEY_VARIABLES[slot]), "||", ts.str(""));
     }
+    // The provider: the configured one; else, when the model is the built-in
+    // default too, its built-in provider; else unset, so smoltalk's normal
+    // model→provider registry lookup applies to the model the user named.
+    const route = defaultRoute(cfg.client, { model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER });
     const smoltalkFields: Record<string, TsNode> = {
       apiKey: ts.obj(apiKeyFields),
       baseUrl: ts.obj(baseUrlFields),
-      model: ts.str(cfg.client?.defaultModel || DEFAULT_MODEL),
+      model: ts.str(route.model),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),
     };
     // smoltalk sends LLM-call logs whenever it gets a statelog config with an
@@ -4526,13 +4530,8 @@ export class TypeScriptBuilder {
         traceId: $(ts.id("nanoid")).call().done(),
       });
     }
-    // The provider: the configured one; else, when the model is the built-in
-    // default too, its built-in provider; else unset, so smoltalk's normal
-    // model→provider registry lookup applies to the model the user named.
-    const provider =
-      cfg.client?.defaultProvider || (cfg.client?.defaultModel ? undefined : DEFAULT_PROVIDER);
-    if (provider) {
-      smoltalkFields.provider = ts.str(provider);
+    if (route.provider) {
+      smoltalkFields.provider = ts.str(route.provider);
     }
     // smoltalk-llama-cpp reads the draft model and the chat wrapper from
     // `config.metadata`, and the baked fields reach smoltalk as top-level

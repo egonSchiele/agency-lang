@@ -931,3 +931,26 @@ node inputRedirectIsARead() {
     grepNames("git status | grep hello < one.txt"),
   ]
 }
+
+node filtersInAPipe() {
+  return [
+    grepNames("git log | sort | uniq -c"),
+    grepNames("cat one.txt | sort -u"),
+    grepNames("cat one.txt | cut -d : -f 1"),
+    grepNames("cat one.txt | tr a b"),
+    grepNames("cat one.txt | tr -d x"),
+    grepNames("cat one.txt | tr -s a b"),
+    grepNames("cat one.txt | tr a"),
+    grepNames("cat one.txt | sort two.txt"),
+    grepNames("cat one.txt | sort -o out.txt"),
+    grepNames("sort one.txt"),
+    grepNames("git log | tee log.txt"),
+    grepNames("git log | xargs echo"),
+    grepNames("git log | sort > sorted.txt"),
+    grepNames("git log | tac"),
+    grepNames("cut -d, -f1 one.txt"),
+    grepNames("tr a b"),
+    grepNames("cat one.txt | tr a $B"),
+    grepNames("cat one.txt | tr -dd x"),
+  ]
+}

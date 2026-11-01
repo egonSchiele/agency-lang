@@ -415,6 +415,9 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
   verb asks std::read for each file it names, and reading its stdin from
   a pipe adds nothing. Any other verb is unrecognized.
   """
+  if (verb == "tr") {
+    return trEffects(command, readsStdin, redirects)
+  }
   const spec = READ_VERBS[verb]
   if (spec == null) {
     return failure("no rule for `${verb}`")
@@ -1146,6 +1149,58 @@ type ReadPath = {
 
 /** What a read verb reads: the files it names, or its stdin. */
 type FileRead = { kind: "stdin" } | { kind: "files"; paths: ReadPath[]; split: SplitArgs }
+
+/** tr reads only its stdin; its positionals are character sets, not
+ * paths. optionsFirst stays true: BSD tr reads `tr a b -d` as three
+ * operands and prints a usage error, GNU reads -d as a flag. */
+static const TR_FLAGS: FlagSpec = {
+  plain: ["d", "s"],
+  valued: [],
+  optionsFirst: true
+}
+
+/** The least and the most sets tr takes with some flags. */
+type SetCount = {
+  least: number;
+  most: number
+}
+
+/** How many sets tr takes, by its plain flags sorted and joined. `tr -s
+ * a b` squeezes after translating, so -s takes one set or two. */
+static const TR_SET_COUNTS: Record<string, SetCount> = {
+  "": { least: 2, most: 2 },
+  d: { least: 1, most: 1 },
+  s: { least: 1, most: 2 },
+  ds: { least: 2, most: 2 }
+}
+
+def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  """
+  tr in a pipe translates the previous stage's output and reads no file,
+  so it adds nothing beyond its redirects. Its sets must be literal, and
+  as many as its flags take.
+  """
+  const split = splitFlags("tr", command, TR_FLAGS)
+  if (isFailure(split)) {
+    return split
+  }
+  const key = [...split.value.plain].sort().join("")
+  const counts = TR_SET_COUNTS[key]
+  if (counts == null) {
+    return failure("tr takes `-d` and `-s` once each")
+  }
+  for (word in split.value.positionals) {
+    const text = literalWordText(word)
+    if (text is failure(why)) {
+      return failure("a tr set is not literal")
+    }
+  }
+  const given = split.value.positionals.length
+  if (given < counts.least || given > counts.most) {
+    return failure("tr takes ${counts.least} to ${counts.most} sets here")
+  }
+  return stdinStage("tr", readsStdin, redirects)
+}
 
 /** Whether a flag word uses the word after it as its value: `-n` does,
  * `-n5` does not. Mirrors how `readFlagWord` reads a short flag. */

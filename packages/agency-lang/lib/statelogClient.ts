@@ -700,7 +700,10 @@ export class StatelogClient {
           : completion,
       model,
       timeTaken,
-      tools,
+      // Names only. Every call offers the whole tool list, so its
+      // descriptions and schemas were most of each event, and readers use
+      // only the names (`toolsOf`).
+      tools: tools?.map((tool) => tool.name),
       responseFormat,
       usage,
       cost,

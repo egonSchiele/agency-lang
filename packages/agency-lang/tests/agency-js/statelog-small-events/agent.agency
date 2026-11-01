@@ -1,0 +1,24 @@
+// A picture goes into an llm() call that offers one tool, then on to a
+// second node that stops on an interrupt nobody answers. test.js reads the
+// statelog this run writes and checks that no line holds the picture's
+// bytes, the runtime's state, or a tool schema.
+import { Attachment } from "std::thread"
+
+effect test::confirm { note: string }
+
+def describePicture(): string {
+  """
+  Describe the picture in a few words.
+  """
+  return "a red square"
+}
+
+node confirm(attachment: Attachment, reply: string) {
+  interrupt test::confirm("Keep this description?", { note: reply })
+  return reply
+}
+
+node main(attachment: Attachment) {
+  const reply: string = llm([attachment, "What is in this picture?"], { tools: [describePicture] })
+  return confirm(attachment, reply)
+}

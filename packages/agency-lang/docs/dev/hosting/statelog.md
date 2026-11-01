@@ -328,6 +328,12 @@ Esc / timeout — deliberately not an error). Pairing is by span + order: the
 nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
 is a hung/killed-mid-call run.
 
+`promptCompletion.tools` lists the offered tools by name. Every call offers
+the whole tool list, so its descriptions and schemas were most of each event:
+251 MB of a 591 MB log from BMO. Readers use only the names (`toolsOf` in
+`lib/statelog/wireAccessors.ts`). An `llmError` still logs the full
+definitions, since a bad schema can be the reason a request failed.
+
 Both prompt events carry `usageKind`: `"completion"` for a text model and
 `"decision"` for a decision model such as Jev or Laya (the
 `ProviderUsageKind` names from `lib/runtime/invocationUsage.ts`). A

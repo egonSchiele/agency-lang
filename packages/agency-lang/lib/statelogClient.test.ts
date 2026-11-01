@@ -5,6 +5,7 @@ import * as path from "path";
 import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogClient.js";
 import { flushPendingStatelogPosts } from "./statelogSender.js";
 import { GlobalStore } from "./runtime/state/globalStore.js";
+import { toolsOf } from "./statelog/wireAccessors.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -793,6 +794,22 @@ describe("StatelogClient", () => {
       expect(evt.data.stream).toBe(false);
       expect(evt.data.threadIdentity).toBe("message-thread-1");
       expect(evt.data.threadLabel).toBe("worker");
+    });
+
+    it("promptCompletion logs the offered tools by name only", async () => {
+      const file = newLogFile("prompt-tool-names");
+      const client = fileClient(file);
+      await client.promptCompletion({
+        messages: [],
+        completion: {},
+        tools: [
+          { name: "read", description: "Read a file.", schema: { type: "object" } },
+          { name: "grep", description: "Search files.", schema: { type: "object" } },
+        ],
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.tools).toEqual(["read", "grep"]);
+      expect(toolsOf(evt)).toEqual(["read", "grep"]);
     });
 
     it("promptCompletion writes null thread metadata when absent", async () => {

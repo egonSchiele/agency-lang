@@ -112,6 +112,22 @@ describe("traceDigest", () => {
     expect(traceDigest([event({ a: 2 }), event({ a: 1 })])).not.toBe(base);
   });
 
+  it("is the same for two serializations of the same events", () => {
+    const compact = line("aaa", "agentStart", { a: 1, b: 2 });
+    const reordered = JSON.stringify({
+      data: { b: 2, a: 1, timestamp: "2026-08-18T00:00:00Z", type: "agentStart" },
+      parent_span_id: null,
+      span_id: null,
+      project_id: "p",
+      trace_id: "aaa",
+      format_version: 1,
+    }).replaceAll(',"', ', "');
+    const [first] = readTraces(writeLog(compact + "\n")).traces;
+    const [second] = readTraces(writeLog(reordered + "\n")).traces;
+    expect(first.lines[0]).not.toBe(second.lines[0]);
+    expect(first.digest).toBe(second.digest);
+  });
+
   it("is the digest readTraces records", () => {
     const { traces } = readTraces(writeLog(line("aaa", "agentStart") + "\n"));
     expect(traces[0].digest).toBe(traceDigest(traces[0].events));

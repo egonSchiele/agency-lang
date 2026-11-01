@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { writeLines } from "./durableWrite.js";
 import { matchTrace, readTraces, type Trace, type TraceMatch } from "./traces.js";
 
 /** Find one trace in a statelog by full id or unique prefix. */
@@ -35,15 +36,25 @@ export function writeTraceFile(args: WriteTraceFileArgs): void {
     );
   }
   fs.mkdirSync(path.dirname(resolvedOut), { recursive: true });
-  const text = args.trace.lines.join("\n") + "\n";
+  const handle = openTraceFile(resolvedOut, args);
+  try {
+    // One line at a time, so a large trace never becomes one string.
+    writeLines(handle, args.trace.lines);
+  } finally {
+    fs.closeSync(handle);
+  }
+}
+
+function openTraceFile(resolvedOut: string, args: WriteTraceFileArgs): number {
   if (args.overwrite === true) {
-    fs.writeFileSync(resolvedOut, text);
-    return;
+    return fs.openSync(resolvedOut, "w");
   }
   try {
-    fs.writeFileSync(resolvedOut, text, { flag: "wx" });
+    return fs.openSync(resolvedOut, "wx");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
     throw new Error(`${args.outPath} already exists; pass --overwrite to replace it.`);
   }
 }

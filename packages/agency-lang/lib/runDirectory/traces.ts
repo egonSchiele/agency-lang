@@ -23,10 +23,13 @@ export type Trace = {
 
 export type ReadTracesResult = { traces: Trace[]; errors: ParseError[] };
 
-/** sha256 over the canonicalized events in order, so two serializations of the
- *  same events (different key order, different whitespace) share a digest. */
+/** sha256 over the sha256 of each canonicalized event, in order, so two
+ *  serializations of the same events (different key order, different
+ *  whitespace) share a digest. Each event is hashed on its own, so no string
+ *  ever holds a whole trace. The digest is only compared in memory (the merge
+ *  planner, the run directory's snapshot check), never stored. */
 export function traceDigest(events: readonly EventEnvelope[]): string {
-  return sha256Text(events.map((event) => canonicalize(event)).join("\n"));
+  return sha256Text(events.map((event) => sha256Text(canonicalize(event))).join("\n"));
 }
 
 /**
@@ -86,6 +89,8 @@ type TraceGrouper = {
   traces(): Trace[];
 };
 
+/** `seen` holds a hash of each line already kept, so a long line is not also
+ *  an object key. */
 type TraceGroup = { events: EventEnvelope[]; lines: string[]; seen: Record<string, true> };
 
 function makeTraceGrouper(): TraceGrouper {
@@ -100,10 +105,11 @@ function makeTraceGrouper(): TraceGrouper {
         byId[traceId] = group;
         order.push(traceId);
       }
-      if (group.seen[entry.raw]) {
+      const lineHash = sha256Text(entry.raw);
+      if (group.seen[lineHash]) {
         return;
       }
-      group.seen[entry.raw] = true;
+      group.seen[lineHash] = true;
       group.events.push(entry.event);
       group.lines.push(entry.raw);
     },

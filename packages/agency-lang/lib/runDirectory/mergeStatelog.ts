@@ -1,4 +1,4 @@
-import { appendDurably } from "./durableWrite.js";
+import { appendLinesDurably } from "./durableWrite.js";
 
 import type { RunDirectoryPaths } from "./runDir.js";
 import type { Trace } from "./traces.js";
@@ -68,6 +68,9 @@ export function applyStatelogMerge(paths: RunDirectoryPaths, plan: StatelogMerge
     throw new Error("applyStatelogMerge: refusing to apply a plan with conflicts");
   }
   if (plan.add.length === 0) return;
-  const text = plan.add.map((trace) => trace.lines.join("\n") + "\n").join("");
-  appendDurably(paths.statelog, text);
+  // One line at a time, so a large trace never becomes one string.
+  appendLinesDurably(
+    paths.statelog,
+    plan.add.flatMap((trace) => trace.lines),
+  );
 }

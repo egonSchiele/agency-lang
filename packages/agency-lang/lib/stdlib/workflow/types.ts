@@ -40,6 +40,8 @@ export type Workflow = {
   steps: Step[];
   result?: unknown;
   limits?: Limits | null;
+  /** The effects the workflow may raise. Absent or null means any. */
+  raises?: string[] | null;
 };
 
 /** A tool the host passed, as an import line spells it: `module` is
@@ -51,6 +53,10 @@ export type ToolRef = { module: string; name: string };
 export const REF_PATH =
   /^(inputs|steps)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
 
+/** An effect name as a `raises` entry spells it: `std::read`, a set name
+ *  such as `FileRead`, or a bare effect such as `unknown`. */
+export const EFFECT_NAME = /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$/;
+
 /** Exactly `{ "$ref": "<string>" }`. Any other object is a plain value. */
 export function isRef(value: unknown): value is Ref {
   if (!isObject(value)) {
@@ -58,6 +64,11 @@ export function isRef(value: unknown): value is Ref {
   }
   const keys = Object.keys(value);
   return keys.length === 1 && keys[0] === "$ref" && typeof (value as Ref).$ref === "string";
+}
+
+/** How a tool's signature is keyed: by its module and its name. */
+export function signatureKey(module: string, name: string): string {
+  return `${module}.${name}`;
 }
 
 /** A name the parser accepts as a variable name. Reserved `__` names are
@@ -98,6 +109,8 @@ export type Signature = {
   docstring: string | null;
   /** What `describe` says about each parameter. */
   params: ExportParam[];
+  /** What `describe` reports the tool can raise. */
+  effects: string[];
 };
 
 /** A checked reference. `path` is the text after the root name, such as
@@ -177,6 +190,12 @@ export type Lowered = {
   body: Fragment[];
   result: Code;
   guard: Limits | null;
+  /** The label of the guard around the whole body: the workflow's name. */
+  guardLabel: string;
+  /** The label of every guard the workflow itself writes: the workflow's
+   *  name when it has limits, and each step with limits by its id. The
+   *  scaffold's handler rejects a trip with one of these labels. */
+  guardLabels: string[];
 };
 
 /** Source lines `from` to `to` (1-based, inclusive) belong to `owner`. */

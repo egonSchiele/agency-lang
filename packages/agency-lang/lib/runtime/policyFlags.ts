@@ -1,5 +1,5 @@
 import type { Policy, PolicyRule } from "./policy.js";
-import { builtinEffectSets } from "./effectSets.js";
+import { builtinEffectSets, expandEffectNames } from "./effectSets.js";
 
 /** Split a flag's effect list on commas and/or whitespace, so
  *  `--approve "std::read, std::ls"`, `--approve std::read,std::ls`, and
@@ -31,15 +31,8 @@ function expandSetNames(names: string[], flag: string): string[] {
     return names;
   }
   const sets = builtinEffectSets();
-  const expanded: string[] = [];
   for (const name of names) {
-    if (name.includes("::")) {
-      expanded.push(name);
-      continue;
-    }
-    const set = sets[name];
-    if (set !== undefined) {
-      expanded.push(...set.members);
+    if (name.includes("::") || sets[name] !== undefined) {
       continue;
     }
     const near = nearMissSetName(name, Object.keys(sets));
@@ -48,9 +41,8 @@ function expandSetNames(names: string[], flag: string): string[] {
         `Warning: "${name}" in ${flag} matches no built-in effect set. Did you mean ${near}? It was kept as a plain effect name.`,
       );
     }
-    expanded.push(name);
   }
-  return expanded;
+  return expandEffectNames(names);
 }
 
 /** A set name this one probably meant: a case-only mismatch, or one edit

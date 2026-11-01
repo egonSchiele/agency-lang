@@ -176,7 +176,67 @@ Both guards write their limits through `guardArgs` in `shapes.ts`, the one place
 
 A guard always gives a `Result`: a `Result` the block returns passes through, and any other value is wrapped in `success(...)`. So a step with limits holds a `Result` whatever its tool returns. Resolve records this as `holdsResult`, true when the tool returns a `Result` or the step has limits, and lower reads a reference into such a step through `.value`. A trip raises `std::guard` first. A rejection makes the guard return a failure, and the step's ordinary check turns that into the workflow's failure, naming the step and carrying the guard's failure as `cause`.
 
+### Every limit is hard
+
+A trip raises `std::guard`, and a handler that approves it gives the guard more budget. So without anything else, a caller's handler or policy could raise a workflow's limits. The scaffold prevents that. It labels the guard around the body with the workflow's name, and wraps `main`'s body in a handler that rejects a trip from any of the workflow's own guards:
+
+```
+export node main(inputs: Inputs!): Result {
+  handle {
+    return guard(label: "updateMealPlanFromNote", time: 300000, cost: 1) {
+      ...the steps...
+    }
+  } with (guardTrip) {
+    if (guardTrip.effect == "std::guard" && ["updateMealPlanFromNote", "add"].includes(guardTrip.data.label)) {
+      return reject()
+    }
+    return pass()
+  }
+}
+```
+
+`lower` writes the list as `guardLabels`: the workflow's name when it has limits, and the id of each step with limits, which is its guard's label. Both are identifiers, so render writes them with `JSON.stringify` as Agency string literals.
+
+Every handler in the chain is consulted, and a rejection wins over any approval. So no caller can extend the workflow's guard or a step's. This is what the `@guarded` decorator does for the function it wraps: it rejects a trip with its own label and passes on every other. A `return` inside a `handle` block returns from the enclosing function, so the steps' checks and the final `return success(...)` work unchanged. `guardTrip`, `reject`, and `pass` are in `PROGRAM_NAMES`, so no tool can shadow them.
+
+The handler passes on a trip from a guard inside a tool. A tool's guard sits inside the step's guard and the workflow's, so a caller who extends it is still stopped at the workflow's limits. What a caller can extend is only the tool's own budget, up to the workflow's, which is what they can do when they call that tool directly. A tool that extends its own guard keeps working too. `supervise()` does that at each check:
+
+```
+supervise(every: 5m, maxTime: 30m, check: myCheck) {
+  return codingAgent(task, maxTime: 30m)
+}
+```
+
+A tool's own trip still travels up the chain, so a caller whose policy rejects `std::guard`, as the catch-all in `agency workflow run` does, stops the tool at its first check. A tool guard whose label matches a step id is rejected too, which is the safe direction for a collision. An earlier version rejected every `std::guard`, which stopped `supervise` at its first check and bought nothing.
+
+The tests are in `tests/agency/workflow/runMealPlan.agency`. In `stepLimitIsHard` and `workflowLimitIsHard`, the caller approves every trip with more time, and the workflow still stops. In `toolExtendsItsOwnGuard`, a tool extends its own 100 ms guard, and the workflow finishes. Their tool is `busyEcho`, which works for a second without sleeping. A time trip during `sleep()` skips every handler (ADI-137), so a tool that sleeps passes these tests with or without the scaffold's handler.
+
+### Guarded LLM steps
+
 A guarded LLM step is the same `thread` block inside the guard, with `return <reply>` as its last line instead of an assignment: a `return` inside the thread returns from the guard block, so the guard's `Result` holds the typed reply. The last line is a checked text token on the `llmThread` shape, because a code hole filled with code that names the reply would make template hygiene rename the binder.
+
+## What a workflow may raise
+
+A workflow may list the effects it is allowed to raise, in a `raises` field. It works like an Agency function's `raises` clause (`docs/site/guide/effects-and-raises.md`):
+
+| `raises` | Meaning |
+| --- | --- |
+| left out, or null | The workflow may raise anything. |
+| `[]` | It may raise nothing. |
+| `["std::read", "FileWrite"]` | It may raise at most these. |
+| `["*"]` | It may raise anything. |
+
+A name of a built-in set from `std::effectSets` stands for every effect in the set. `expandEffectNames` in `lib/runtime/effectSets.ts` does that expansion, and the `--approve` and `--reject` flags use the same function. A bare `interrupt("...")` raises the effect named `unknown`, so a workflow that calls a tool with one allows it by listing `"unknown"`. Only the built-in sets expand. A set a user declared with `effectSet` is read as one effect name, because a workflow does not name the module that declares it.
+
+Parse checks the shape: a list whose entries are `*` or effect names (`EFFECT_NAME` in `types.ts`). The check itself is a rule in `resolve.ts`. The effects of each tool step come from `stepEffects` in `effects.ts`, which reads each tool's `effects` as `describe` reports them and drops `std::guard`, since the program rejects its own guard trips. Each effect outside the list is a problem on that step's `tool` field, the field the author would change:
+
+```text
+step add, tool: addListItems raises "test::lists::add", which the workflow's raises does not allow
+```
+
+The check lives in `resolve`, not in the type checker's AG3013, for two reasons. AG3013 would point at `main`, not at the step. And it would count `std::guard`, which `stepEffects` leaves out.
+
+Like Agency's own `raises`, this is static analysis made before the workflow runs. It can miss an effect, such as one raised through a function passed as a value (`docs/dev/compiler/effect-propagation.md`). It never reports an effect the tool cannot raise. The safety while running comes from the caller's handlers and policy.
 
 ## Interrupts and checkpoints
 
@@ -196,6 +256,10 @@ module text: ./tools/notes.agency
 
 A relative `dir` is read against the working directory at run time. The source file does not depend on the working directory, so a host finds its tools wherever it runs from. A local tool whose source file is outside `dir` is refused. A tool with no source file is refused too. Four kinds of function value reach this check with none: one from a module compiled by an older Agency, which recompiling fixes; one from a program `run` compiled for a subprocess; a block; and the stub a checkpoint revives for a function whose module the process never loaded.
 
+A tool's module may import other local `.agency` files inside `dir`. `_signatures` reads the module with `read`, which raises the one `std::read` prompt, and then calls `describe(text, dir: dir, filename: module)`. With a path, `describe` checks the module's imports as a sandboxed compile checks them, and then resolves them against the module's own folder, so effects that come through a local helper are counted. The imported files are read without prompts of their own, as `_checked`'s type check already reads them. Text with no path cannot resolve a relative import, and before this a tool whose module imported a helper could not be used in any workflow.
+
+One limit remains. A return type that names a type alias imported from another file is not recognized as a `Result`, because `describe` resolves aliases only in the module's own file. The strict type check in `_checked` catches the mistakes this causes.
+
 The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. Two tools with the same name are refused next, in a problem that names both modules: an import line names a tool by its name, and renaming is refused, so the fix is to rename one def in its file.
 
 ## The catalog
@@ -214,11 +278,14 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
       "description": "The number of decimal places. Defaults to 0.",
       "schema": { "anyOf": [{ "type": "number" }, { "type": "null" }], "description": "Default: 0" } }
   ],
-  "returns": "number"
+  "returns": "number",
+  "effects": []
 }
 ```
 
 The entry joins two sources. `describe` reads the tool's module. It gives the description, the return type, and each parameter's `type`, `default`, and `description`, which is the text of the parameter's `@param` entry. The tool's function value gives each parameter's `schema`, the JSON Schema a model sees for it.
+
+`effects` is what the tool can raise, as `describe` reports it. It keeps `std::guard` for a tool that uses `guard`, because an entry describes the tool, not a workflow. `stepEffects` drops `std::guard`, because a guard trip is a question about budget, not a permission. So `agency workflow tools` can list `std::guard` for a tool that `agency workflow check` never lists for a workflow that calls it.
 
 `type`, `default`, and `returns` are Agency text, written the way the signature writes them, so a reader can compare one tool's `returns` with another tool's parameter `type`. A `default` of null means a step must pass the parameter. A function-typed parameter, such as a block, is not in the tool's schema, and the catalog leaves it out, because a step's arguments are JSON values. The entry's `description` is the docstring with every `@param` entry removed, including one whose name matches no parameter.
 

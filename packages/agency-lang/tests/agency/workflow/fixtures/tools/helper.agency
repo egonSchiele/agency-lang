@@ -1,0 +1,10 @@
+/** A helper that a tool module imports, so a test can describe a module
+  whose imports are local files. */
+export def shout(text: string): string {
+  """
+  Return the text in capitals, with an exclamation mark.
+
+  @param text - The text to shout
+  """
+  return "${text.toUpperCase()}!"
+}

@@ -21,6 +21,10 @@ export type CatalogEntry = {
   description: string;
   params: CatalogParam[];
   returns: string | null;
+  /** What the tool can raise, as `describe` reports it. A tool that uses
+   *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard
+   *  trip is a question about budget, not a permission. */
+  effects: string[];
 };
 
 /** The JSON Schema of each parameter in the tool's definition, by name.
@@ -50,6 +54,7 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
     description,
     params,
     returns: signature.returnType,
+    effects: signature.effects,
   };
 }
 

@@ -224,11 +224,29 @@ export function getEffectsFromSource(source: string, config: AgencyConfig = {}):
  * and `typecheckEffects.test.ts` are the only callers, and it is not part of
  * the package's public API. The parameter is defaulted so those keep
  * working, and so the next production caller does not inherit the hole
- * silently.
+ * silently. The production path that reads a real path is
+ * `getEffectsFromSourceAt` below, which `_describe` calls with splices
+ * refused.
  */
 export function getEffectsFromFile(filePath: string, config: AgencyConfig = {}): EffectsByExport {
   const absolute = path.resolve(filePath);
   return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute, config);
+}
+
+/**
+ * The same map for source text that lives at `sourcePath`, so its relative
+ * imports resolve against that file's folder. The entry's own text is
+ * `source`, not what is on disk. With a real path the pipeline can expand
+ * splices, which runs their generators, so a caller holding text it does
+ * not trust checks the imports first and passes `refuseSplices`, as
+ * `_describe` does.
+ */
+export function getEffectsFromSourceAt(
+  source: string,
+  sourcePath: string,
+  config: AgencyConfig = {},
+): EffectsByExport {
+  return effectsVia(source, sourcePath, config, { [sourcePath]: source });
 }
 
 /**
@@ -263,6 +281,7 @@ function effectsVia(
   source: string,
   sourcePath: string | undefined,
   config: AgencyConfig,
+  overrides: Record<string, string> = {},
 ): EffectsByExport {
   return runCheckerPipeline(
     source,
@@ -280,5 +299,6 @@ function effectsVia(
       }
       return out;
     },
+    overrides,
   );
 }

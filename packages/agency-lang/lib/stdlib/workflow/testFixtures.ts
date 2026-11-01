@@ -92,8 +92,8 @@ export const mealRefs: ToolRef[] = [
   { module: "./lists.agency", name: "addListItems" },
 ];
 
-function signature(text: string, returnType: string | null): Signature {
-  return { signature: text, returnType, returnsResult: true, docstring: null, params: [] };
+function signature(text: string, returnType: string | null, effects: string[] = []): Signature {
+  return { signature: text, returnType, returnsResult: true, docstring: null, params: [], effects };
 }
 
 export const mealSignatures: Record<string, Signature> = {
@@ -101,7 +101,9 @@ export const mealSignatures: Record<string, Signature> = {
     "searchNotes(query: string): Result<Note[]>",
     "Result<Note[]>",
   ),
-  "./notes.agency.readNote": signature("readNote(id: string): Result<Note>", "Result<Note>"),
+  "./notes.agency.readNote": signature("readNote(id: string): Result<Note>", "Result<Note>", [
+    "std::read",
+  ]),
   "./lists.agency.findLists": signature(
     "findLists(query: string): Result<ListSummary[]>",
     "Result<ListSummary[]>",
@@ -109,5 +111,6 @@ export const mealSignatures: Record<string, Signature> = {
   "./lists.agency.addListItems": signature(
     "addListItems(listId: string, items: string[], section: string): Result<string>",
     "Result<string>",
+    ["test::lists::add"],
   ),
 };

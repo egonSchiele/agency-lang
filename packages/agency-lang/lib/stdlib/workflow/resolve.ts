@@ -5,10 +5,13 @@
  * semantic problem is found here: a tool the host did not pass, a reference
  * that points forward or at nothing, and two generated names that coincide.
  */
+import { expandEffectNames } from "../../runtime/effectSets.js";
+import { stepEffects } from "./effects.js";
 import { inputNames } from "./typeText.js";
 import {
   isRef,
   refsIn,
+  signatureKey,
   type Binding,
   type ImportGroup,
   type Limits,
@@ -45,6 +48,9 @@ const PROGRAM_NAMES = [
   "schema",
   "JSON",
   "guard",
+  "guardTrip",
+  "reject",
+  "pass",
 ];
 
 /** Types that tell the typechecker nothing about a value. */
@@ -81,9 +87,7 @@ export function names(id: string) {
   };
 }
 
-export function signatureKey(module: string, name: string): string {
-  return `${module}.${name}`;
-}
+export { signatureKey };
 
 function toolSteps(workflow: Workflow): ToolStep[] {
   return workflow.steps.filter((step): step is ToolStep => step.kind === "tool");
@@ -271,7 +275,28 @@ const collisionRule: Rule = ({ workflow }) => {
   });
 };
 
-const RULES: Rule[] = [toolRule, referenceRule, collisionRule];
+/** A workflow's `raises` lists what it may raise; every effect a tool step
+ *  raises must be on it. A set name stands for its members, as in an
+ *  Agency `raises` clause. No `raises`, or one holding `*`, allows anything.
+ *  The problem is on the step's `tool`, the field the author would change. */
+const raisesRule: Rule = ({ workflow, signatures }) => {
+  const raises = workflow.raises ?? null;
+  if (raises === null || raises.includes("*")) {
+    return [];
+  }
+  const allowed = expandEffectNames(raises);
+  return stepEffects(workflow, signatures).flatMap(({ step, tool, effects }) =>
+    effects
+      .filter((effect) => !allowed.includes(effect))
+      .map((effect) => ({
+        step,
+        field: "tool",
+        message: `${tool} raises "${effect}", which the workflow's raises does not allow`,
+      })),
+  );
+};
+
+const RULES: Rule[] = [toolRule, referenceRule, collisionRule, raisesRule];
 
 function untypedWarnings({ workflow, signatures }: Context): Problem[] {
   return toolSteps(workflow).flatMap((step) => {

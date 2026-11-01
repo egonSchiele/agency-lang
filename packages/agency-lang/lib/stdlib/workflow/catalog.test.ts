@@ -38,13 +38,14 @@ const searchSignature: Signature = {
     { name: "query", type: "string", default: null, description: "Text to match" },
     { name: "each", type: "(string) -> any", default: null, description: "Called once per note" },
   ],
+  effects: ["std::read", "std::guard"],
 };
 
 const ref = { module: "./notes.agency", name: "searchNotes" };
 const signatures = { [signatureKey(ref.module, ref.name)]: searchSignature };
 
 describe("catalogEntries", () => {
-  it("builds an entry from the signature and the parameter schema, leaving out a block and every @param entry", () => {
+  it("builds an entry from the signature and the parameter schema, leaving out a block and every @param entry, and keeps every effect, std::guard included", () => {
     expect(catalogEntries([searchNotes], [ref], signatures)).toEqual([
       {
         module: "./notes.agency",
@@ -60,6 +61,7 @@ describe("catalogEntries", () => {
           },
         ],
         returns: "Result<Note[]>",
+        effects: ["std::read", "std::guard"],
       },
     ]);
   });

@@ -87,6 +87,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "toolWithLocalImportRuns",
+      "description": "a tool whose module imports another local file runs in the workflow's program",
+      "input": "",
+      "expectedOutput": "\"HELLO ADA!\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -28,3 +28,15 @@ export function builtinEffectSets(): Record<string, EffectSetInfo> {
   }
   return sets;
 }
+
+/** Each name as the effects it stands for: a built-in set's members, or
+ *  the name itself. This is Agency's rule for a bare name in `raises`, and
+ *  the one the `--approve` and `--reject` flags use. A name with `::` is
+ *  always a plain effect. */
+export function expandEffectNames(names: string[]): string[] {
+  const sets = builtinEffectSets();
+  return names.flatMap((name) => {
+    const set = name.includes("::") ? undefined : sets[name];
+    return set === undefined ? [name] : set.members;
+  });
+}

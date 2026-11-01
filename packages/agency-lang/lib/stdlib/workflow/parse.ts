@@ -9,7 +9,15 @@ import { z } from "zod";
 import { isReservedInternalName } from "../../reservedNames.js";
 import { MAX_TIME, PLAIN_DECIMAL } from "./limits.js";
 import { parseTypeText } from "./typeText.js";
-import { isIdentifier, isObject, REF_PATH, refsIn, type Problem, type Workflow } from "./types.js";
+import {
+  EFFECT_NAME,
+  isIdentifier,
+  isObject,
+  REF_PATH,
+  refsIn,
+  type Problem,
+  type Workflow,
+} from "./types.js";
 
 export type ParseResult =
   { workflow: Workflow; problems: [] } | { workflow: null; problems: Problem[] };
@@ -225,6 +233,32 @@ function stepLimitMessage(key: string, stepLimit: number, workflowLimit: unknown
   return null;
 }
 
+/** The messages for a `raises` value: one per wrong entry, or one for a
+ *  value that is not a list. A missing or null `raises` allows anything. */
+function raisesMessages(value: unknown): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    return [`raises must be a list of effect names, got ${JSON.stringify(value)}`];
+  }
+  return value.flatMap((entry, index) =>
+    entry === "*" || (typeof entry === "string" && EFFECT_NAME.test(entry))
+      ? []
+      : [`raises[${index}] must be an effect name or "*", got ${JSON.stringify(entry)}`],
+  );
+}
+
+const raises = z
+  .unknown()
+  .superRefine((value, ctx) => {
+    for (const message of raisesMessages(value)) {
+      ctx.addIssue({ code: "custom", message });
+    }
+  })
+  .transform((value) => value as string[] | null | undefined)
+  .optional();
+
 const workflow = z
   .object({
     format: z.literal(1, {
@@ -236,6 +270,7 @@ const workflow = z
     steps,
     result: value.optional(),
     limits,
+    raises,
   })
   .superRefine((parsed, ctx) => {
     parsed.steps.forEach((step, index) => {

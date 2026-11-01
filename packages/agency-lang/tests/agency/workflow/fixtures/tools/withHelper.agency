@@ -1,0 +1,10 @@
+import { shout } from "./helper.agency"
+
+export def greet(name: string): string {
+  """
+  Greet someone loudly, through a helper in another local file.
+
+  @param name - Who to greet
+  """
+  return shout("hello ${name}")
+}

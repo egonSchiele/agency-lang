@@ -35,6 +35,10 @@ export type RenderDiffOpts = {
   // each line's body is produced by this function (syntax highlighting +
   // background tint for changed lines), padded to `width` columns.
   renderBody?: (code: string, kind: DiffLine["kind"], width: number) => string;
+  // The full width of one output line, gutter included. Changed-line bars
+  // stop there instead of padding past the terminal's edge. Undefined
+  // means no cap.
+  maxWidth?: number;
 };
 
 // Collapse runs of whitespace and trim, for comparison only (the original
@@ -264,14 +268,19 @@ function blockWidth(hunks: Hunk[]): number {
   return max;
 }
 
-// Gutter for the highlighted path: line number (per side) + the -/+/space
-// marker, colored by change kind (sits on the default background, left of the
-// tinted code).
-function highlightGutter(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
+// Gutter text for the highlighted path, before it is colored: line number
+// (per side) + the -/+/space marker.
+function gutterText(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
   const marker = line.kind === "delete" ? "-" : line.kind === "insert" ? "+" : " ";
   const num = line.kind === "delete" ? line.oldNum : line.newNum;
   const numStr = lineNumbers ? `${(num === null ? "" : String(num)).padStart(numWidth)} ` : "";
-  const cell = `${numStr}${marker} `;
+  return `${numStr}${marker} `;
+}
+
+// The gutter, colored by change kind (sits on the default background, left
+// of the tinted code).
+function highlightGutter(line: DiffLine, numWidth: number, lineNumbers: boolean): string {
+  const cell = gutterText(line, numWidth, lineNumbers);
   if (line.kind === "delete") return color.red(cell);
   if (line.kind === "insert") return color.green(cell);
   return color.dim(cell);
@@ -299,6 +308,14 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
   const useHighlight = colored && !!opts.renderBody;
   const numWidth = opts.lineNumbers ? gutterWidth(hunks) : 0;
   const blockW = useHighlight ? blockWidth(hunks) : 0;
+  // Bars pad to the widest line so they line up, but stop at maxWidth.
+  const barWidth = (line: DiffLine): number => {
+    if (opts.maxWidth === undefined) {
+      return blockW;
+    }
+    const gutterWidth = gutterText(line, numWidth, opts.lineNumbers ?? false).length;
+    return Math.max(0, Math.min(blockW, opts.maxWidth - gutterWidth));
+  };
 
   const gutter = (l: DiffLine): string => {
     if (!opts.lineNumbers) return "";
@@ -316,7 +333,7 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
       for (const line of h.lines) {
         out.push(
           highlightGutter(line, numWidth, opts.lineNumbers ?? false) +
-            opts.renderBody!(line.text, line.kind, blockW),
+            opts.renderBody!(line.text, line.kind, barWidth(line)),
         );
       }
     } else {

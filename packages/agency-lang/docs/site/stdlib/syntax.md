@@ -248,7 +248,7 @@ Produce a human-readable diff of two strings and return it as a string.
   @param ignoreWhitespace - Treat whitespace-only changes as equal
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
-  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring. Use "auto" to auto-detect the language once from the full text (heuristic).
+  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring. Use "auto" to auto-detect the language once from the full text (heuristic). Changed-line backgrounds stop at the terminal's width.
   @param theme - When `language` is set, the syntax-highlighting color scheme using a named scheme (e.g. "dracula")
 
 **Parameters:**

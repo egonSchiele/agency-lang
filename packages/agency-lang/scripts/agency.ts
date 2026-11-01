@@ -162,6 +162,7 @@ import {
   workflowCheck,
   workflowCompile,
   workflowList,
+  workflowRun,
   workflowTools,
   type WorkflowIo,
 } from "@/cli/workflow/commands.js";
@@ -1422,6 +1423,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     err: (text) => console.error(text),
     config: getConfig(),
     runDriver: (call) => runDriver(call),
+    // The question goes to stderr, so `run --json` keeps stdout for the result.
+    confirm: process.stdin.isTTY
+      ? (question: string) => confirmQuestion(question, process.stderr)
+      : null,
   });
   const workflowCmd = program
     .command("workflow")
@@ -1453,6 +1458,37 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (target: string) => {
       process.exit(await workflowCompile(target, workflowIo()));
     });
+
+  // The flags from `agency run` that reach a workflow: the policy, the
+  // model, the budget, and the log. See docs/site/cli/workflow.md for why
+  // the others are left out.
+  const workflowRunCmd = workflowCmd
+    .command("run")
+    .description("Run a saved workflow, after approving the interrupts your policy does not cover")
+    .argument("<workflow>", "A workflow's name, or the path to workflows/<name>.json")
+    .option("--inputs <json>", "The workflow's inputs as JSON (default: {})")
+    .option("--json", 'Print { "success": ..., "value" or "error": ... } as JSON');
+  addPolicyOptions(workflowRunCmd);
+  addModelOptions(workflowRunCmd);
+  addBudgetOptions(workflowRunCmd);
+  addLogOptions(workflowRunCmd);
+  workflowRunCmd.action(
+    async (target: string, opts: RunOptions & { inputs?: string; json?: boolean }) => {
+      const options = await withLocalModel(opts);
+      const settings = runSettings(options, target);
+      const code = await workflowRun(
+        target,
+        { inputs: options.inputs, json: options.json },
+        {
+          config: settings.config,
+          person: settings.runPolicy?.policy ?? {},
+          budget: settings.budget,
+        },
+        workflowIo(),
+      );
+      process.exit(code);
+    },
+  );
 
   workflowCmd
     .command("list")

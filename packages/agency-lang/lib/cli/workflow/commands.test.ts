@@ -8,9 +8,11 @@ import {
   workflowCheck,
   workflowCompile,
   workflowList,
+  workflowRun,
   workflowTools,
   type WorkflowIo,
 } from "./commands.js";
+import { NO_TERMINAL } from "./output.js";
 import type { DriverCall, DriverOutcome } from "./runDriver.js";
 
 const FIXTURES = path.resolve("tests/agency/workflow/fixtures/tools");
@@ -92,6 +94,8 @@ describe("the commands", () => {
   let err: string[];
   let calls: DriverCall[];
   let answer: DriverOutcome;
+  let confirm: WorkflowIo["confirm"];
+  let asked: string[];
 
   const io = (): WorkflowIo => ({
     cwd: project,
@@ -102,6 +106,7 @@ describe("the commands", () => {
       calls.push(call);
       return answer;
     },
+    confirm,
   });
 
   const save = (name: string, workflow: unknown) =>
@@ -117,6 +122,8 @@ describe("the commands", () => {
     err = [];
     calls = [];
     answer = { ok: true, data: success([]) };
+    asked = [];
+    confirm = null;
   });
 
   afterEach(() => {
@@ -220,5 +227,98 @@ describe("the commands", () => {
     expect(await workflowList(undefined, {}, io())).toBe(0);
     expect(calls[0]).toMatchObject({ node: "wfListNode", args: [project], imports: [] });
     expect(out).toEqual(["addOne { noteTitle: string }\n  Find a list and add soup to it."]);
+  });
+
+  describe("run", () => {
+    const settings = (person = {}) => ({ config: {}, person });
+    const inputs = JSON.stringify({ noteTitle: "Groceries" });
+    const answering = (yes: boolean) => async (question: string) => {
+      asked.push(question);
+      return yes;
+    };
+
+    it("runs on a yes, with the effects it accepted in the policy", async () => {
+      confirm = answering(true);
+      answer = { ok: true, data: success("added 1 items to l1/Meals") };
+      expect(await workflowRun("addOne", { inputs }, settings(), io())).toBe(0);
+      expect(asked).toEqual(["Approve all of them for this run?"]);
+      expect(err[0]).toBe(
+        "Your policy does not cover these interrupts:\n  test::lists::add   step add (addListItems)",
+      );
+      expect(out).toEqual(["added 1 items to l1/Meals"]);
+      expect(calls[0].node).toBe("wfRunNode");
+      expect(calls[0].args).toEqual(["addOne", project, { noteTitle: "Groceries" }]);
+      const policy = JSON.parse(calls[0].carriers!.policy!.policyJson);
+      expect(policy["test::lists::add"]).toEqual([{ action: "approve" }]);
+      expect(policy["*"]).toEqual([{ action: "reject" }]);
+      expect(Object.keys(policy)).toContain("std::workflow::scan");
+      expect(calls[0].carriers!.policy!.interactive).toBe(false);
+    });
+
+    it("does not run on a no", async () => {
+      confirm = answering(false);
+      expect(await workflowRun("addOne", {}, settings(), io())).toBe(1);
+      expect(err).toContain("Did not run.");
+      expect(calls).toEqual([]);
+    });
+
+    it("does not run without a terminal, and says how to cover the effects", async () => {
+      expect(await workflowRun("addOne", {}, settings(), io())).toBe(1);
+      expect(err).toContain(NO_TERMINAL);
+      expect(calls).toEqual([]);
+    });
+
+    it("never asks when the policy covers every effect", async () => {
+      confirm = answering(false);
+      answer = { ok: true, data: success({ added: 1 }) };
+      const person = { "test::lists::add": [{ action: "approve" as const }] };
+      expect(await workflowRun("addOne", {}, settings(person), io())).toBe(0);
+      expect(asked).toEqual([]);
+      expect(out).toEqual(['{\n  "added": 1\n}']);
+    });
+
+    it("prints a failed step and exits 1", async () => {
+      const person = { "test::lists::add": [{ action: "reject" as const }] };
+      answer = { ok: true, data: failure("step add (addListItems): rejected", { step: "add" }) };
+      expect(await workflowRun("addOne", {}, settings(person), io())).toBe(1);
+      expect(err).toEqual(["step add (addListItems): rejected"]);
+    });
+
+    it("prints a prompt that a propagate rule left unanswered", async () => {
+      const person = { "test::lists::add": [{ action: "propagate" as const }] };
+      confirm = answering(true);
+      answer = { ok: true, data: [{ effect: "test::lists::add" }] };
+      expect(await workflowRun("addOne", {}, settings(person), io())).toBe(1);
+      expect(asked).toEqual([]);
+      expect(err).toEqual(["stopped at a prompt nobody answered: test::lists::add"]);
+    });
+
+    it("keeps stdout for the JSON alone with --json", async () => {
+      confirm = answering(true);
+      answer = { ok: true, data: success("done") };
+      expect(await workflowRun("addOne", { json: true }, settings(), io())).toBe(0);
+      expect(out).toHaveLength(1);
+      expect(JSON.parse(out[0])).toEqual({ success: true, value: "done" });
+      expect(err[0]).toMatch(/^Your policy does not cover/);
+    });
+
+    it("prints a failure as JSON with its step", async () => {
+      const person = { "test::lists::add": [{ action: "reject" as const }] };
+      answer = { ok: true, data: failure("no", { step: "add" }) };
+      expect(await workflowRun("addOne", { json: true }, settings(person), io())).toBe(1);
+      expect(JSON.parse(out[0])).toEqual({ success: false, error: "no", step: "add" });
+    });
+
+    it("exits 2 for --inputs that is not JSON", async () => {
+      expect(await workflowRun("addOne", { inputs: "nope" }, settings(), io())).toBe(2);
+      expect(calls).toEqual([]);
+    });
+
+    it("leaves a person's * policy as it is", async () => {
+      const person = { "*": [{ action: "approve" as const }] };
+      answer = { ok: true, data: success("done") };
+      expect(await workflowRun("addOne", {}, settings(person), io())).toBe(0);
+      expect(JSON.parse(calls[0].carriers!.policy!.policyJson)).toEqual(person);
+    });
   });
 });

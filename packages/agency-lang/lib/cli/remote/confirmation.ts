@@ -31,8 +31,14 @@ export async function confirmDeployWithoutExports(
 }
 
 /** The raw readline yes/no lifecycle, policy-free. */
-export async function confirmQuestion(question: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+/** `output` is where the question is written. A command whose standard
+ *  output must hold only its result, such as `agency workflow run --json`,
+ *  passes stderr. */
+export async function confirmQuestion(
+  question: string,
+  output: NodeJS.WritableStream = process.stdout,
+): Promise<boolean> {
+  const rl = readline.createInterface({ input: process.stdin, output });
   try {
     const answer = (await rl.question(`${question} [y/N] `)).trim().toLowerCase();
     return answer === "y" || answer === "yes";

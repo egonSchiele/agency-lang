@@ -150,7 +150,7 @@ node main() {
 | `hostedTools` | `string[]` | Provider tools to enable (e.g. `["web_search"]`). |
 | `memory` | `boolean` | Enable [memory](/guide/memory). |
 | `maxToolResultChars` | `number` | The most characters from one tool result that are sent back to the model (`0` for no limit). A longer result is cut at the limit, unless the call sets `spillToolResultsOver`. |
-| `spillToolResultsOver` | `number` | Save a tool result in the run when it is longer than this many characters or longer than `maxToolResultChars`, and send the model a short preview and a name to read the rest with. The preview fits under `maxToolResultChars`. This applies to a tool's error messages too. The call's tools must include `readSpill` from `std::spill`, or the call fails before it starts. Unset or `0`: nothing is saved. |
+| `spillToolResultsOver` | `number` | Save a tool result in the run when it is longer than this many characters or longer than `maxToolResultChars`, and send the model a short preview and a name to read the rest with. The LLM then uses the `readSpill` tool from `std::spill` to read the rest of the result. |
 
 ### Resilience
 

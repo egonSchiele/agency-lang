@@ -30,9 +30,11 @@ When you want an agent to do the same task the same way every time, a
 
   A workflow's `limits` are hard: the program rejects a trip from its own
   guards, so no caller can give it more budget. A tool's own guard is left
-  to the tool, so a tool that uses `supervise()` keeps working. A
-  workflow's optional `raises` lists the effects it may raise, and
-  `checkWorkflow` reports each step that raises another.
+  to the tool, so a tool that uses `supervise()` keeps working, unless the
+  caller's policy rejects `std::guard`, as the catch-all in
+  `agency workflow run` does. A workflow's optional `raises` lists the
+  effects it may raise, and `checkWorkflow` reports each step that raises
+  another.
 
   `writeWorkflow` saves a checked workflow as `<dir>/workflows/<name>.json`;
   `loadWorkflow` and `listWorkflows` read saved workflows back.

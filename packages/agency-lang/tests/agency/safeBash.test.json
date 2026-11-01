@@ -390,7 +390,7 @@
       "nodeName": "newShapes",
       "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],null,\"git status | git log\"]",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::exec\"]],null,\"git status | git log\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -449,9 +449,9 @@
     },
     {
       "nodeName": "grepUnrecognized",
-      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path outside a pipe, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, two paths, a directory through bash, a flag after the first positional, and rg.",
+      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path outside a pipe, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, two paths, a directory through bash, a flag after the first positional. rg is not grep and has no row, so it asks std::exec like any other program.",
       "input": "",
-      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter=x`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `rg`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--include=*.txt`\"}]]",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter=x`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--include=*.txt`\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -695,7 +695,7 @@
       "nodeName": "filtersInAPipe",
       "description": "A filter in a later pipe stage reads the previous stage's output and adds nothing; a filter that names a file asks std::read for it, in a pipe or not. tr takes only literal sets, as many as its flags allow. tee and xargs have no rule, sort -o is refused, and a comma joined to a flag does not parse yet.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `tee`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"-d, -f1 one.txt\\\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
+      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`tee` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"-d, -f1 one.txt\\\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1126,6 +1126,67 @@
           "expectedMessage": "Are you sure you want to glob files?"
         }
       ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "programsAskStdExec",
+      "description": "A program safeBash has no rule for asks std::exec, the question the exec tool asks. A verb a rule owns (git, find, tail) keeps its own answer, a bash builtin or a program that runs other programs asks std::bash, and so does a program fed by a pipe or an input redirect.",
+      "input": "",
+      "expectedOutput": "[[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\",\"std::write\"],null],[[\"std::exec\"],null],[[\"std::git::status\",\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `git push`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sh`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `env`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sudo`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a leading assignment changes what the command does\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the pnpm arguments are not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the command word is not a literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`python3` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads an input redirect, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `agency`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`cd` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`hash` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`export` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`true` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `npx`\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads a pipe, and std::exec cannot say what it reads\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "execPayloadFields",
+      "description": "The std::exec payload carries the exec tool's fields: the program, its arguments as written (a flag as typed, a glob unexpanded), the first argument as the subcommand, the resolved cwd, no timeout, and no stdin.",
+      "input": "",
+      "expectedOutput": "[[[\"pnpm\",[\"run\",\"build\",\"--filter=web\"],\"run\",true,0,\"\"]],[[\"make\",[],\"\",true,0,\"\"]],[[\"pytest\",[\"tests/*.py\",\"-k\",\"fast\"],\"tests/*.py\",true,0,\"\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "programAsksOneQuestion",
+      "description": "A program line asks one std::exec question and no shell question.",
+      "input": "",
+      "expectedOutput": "true",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "programUnderRecommendedIsUndecided",
+      "description": "recommended has no std::exec rule for an ordinary program, so the question goes to a person until one is saved.",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "programUnderASavedRuleRuns",
+      "description": "The rule approve always here saves for a program, keyed on command and subcommand, also runs that program's bash spelling with no prompt.",
+      "input": "",
+      "expectedOutput": "true",
       "evaluationCriteria": [
         {
           "type": "exact"

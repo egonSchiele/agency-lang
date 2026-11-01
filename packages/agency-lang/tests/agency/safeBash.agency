@@ -1477,3 +1477,102 @@ node findAsksOneQuestion() {
   }
   return [line for line in result.value.split("\n") if line != ""].sort()
 }
+
+node programsAskStdExec() {
+  return [
+    grepNames("pnpm test"),
+    grepNames("pnpm run build"),
+    grepNames("tsc --noEmit"),
+    grepNames("pytest tests/*.py"),
+    grepNames("pnpm test > out.log"),
+    grepNames("make 2>&1 | tail -100"),
+    grepNames("git status && pnpm test"),
+    grepNames("git push --force"),
+    grepNames("find . -delete"),
+    grepNames("tail -f one.txt"),
+    grepNames("sh -c x"),
+    grepNames("env FOO=1 pnpm test"),
+    grepNames("sudo make install"),
+    grepNames("FOO=1 pnpm test"),
+    grepNames("pnpm test $X"),
+    grepNames("./gradlew test"),
+    grepNames("git log | python3 count.py"),
+    grepNames("pnpm test < one.txt"),
+    grepNames("echo a; agency --version"),
+    grepNames("cd .. && cat one.txt"),
+    grepNames("hash -p /tmp/x git; git status"),
+    grepNames("export X=1; pnpm test"),
+    grepNames("true"),
+    grepNames("npx -y foo"),
+    grepNames("pnpm test | grep -v warn"),
+    grepNames("cat one.txt | pnpm test"),
+  ]
+}
+
+/** The payloads of the effects named `name` in the plan for `source`.
+ * Read through an `any` local, as payloadValuesAreCorrect does: a name
+ * held in a variable does not narrow the Effect union. */
+def payloadsNamed(source: string, name: string): any[] {
+  let out: any[] = []
+  for (effect in planFor(source, FIXTURES).effects) {
+    const each: any = effect
+    if (each.name == name) {
+      out.push(each.payload)
+    }
+  }
+  return out
+}
+
+def execFields(source: string): any {
+  return [[p.command, p.args, p.subcommand, p.cwd == FIXTURES, p.timeout, p.stdin] for p in payloadsNamed(source, "std::exec")]
+}
+
+node execPayloadFields() {
+  return [
+    execFields("pnpm run build --filter=web"),
+    execFields("make"),
+    execFields("pytest tests/*.py -k fast"),
+  ]
+}
+
+node programAsksOneQuestion() {
+  // One std::exec question, approved by the test file. A std::bash prompt
+  // would fail the run on an unmatched interrupt.
+  const result = safeBash("node --version", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.startsWith("v")
+}
+
+node programUnderRecommendedIsUndecided() {
+  const plan = planFor("pnpm test", FIXTURES)
+  for (effect in plan.effects) {
+    if (effect.name == "std::exec") {
+      const intr = { effect: effect.name, data: effect.payload }
+      return checkPolicy(recommendedAutoApprovePolicy, intr).type
+    }
+  }
+  return "NO EXEC EFFECT"
+}
+
+/** The rule "approve always here" saves for `node --version`. */
+const NODE_VERSION_POLICY = {
+  "std::exec": [
+    { "match": { "command": "node", "subcommand": "--version" }, "action": "approve" }
+  ]
+}
+
+node programUnderASavedRuleRuns() {
+  // No interruptHandlers entry: the saved rule must answer the question.
+  let ran = false
+  handle {
+    const result = safeBash("node --version", cwd: FIXTURES)
+    if (result is success(text)) {
+      ran = text.startsWith("v")
+    }
+  } with (intr) {
+    return checkPolicy(NODE_VERSION_POLICY, intr)
+  }
+  return ran
+}

@@ -1,6 +1,6 @@
 # `agency workflow`
 
-The `agency workflow` commands (`tools`, `check`, `compile`, and `list`) call `std::workflow` from the command line. The user page is `docs/site/cli/workflow.md`. The workflow format and the functions themselves are in `docs/dev/stdlib/workflow.md`.
+The `agency workflow` commands (`tools`, `check`, `compile`, `list`, and `run`) call `std::workflow` from the command line. The user page is `docs/site/cli/workflow.md`. The workflow format and the functions themselves are in `docs/dev/stdlib/workflow.md`.
 
 ## Why a driver exists
 
@@ -55,6 +55,41 @@ A sandboxed compile records no source file on a function, and `std::workflow` re
 
 `runDriver` clears `distDir` from the config. With `distDir` set, `runAgencyNode` skips compiling and looks for a precompiled file there, and the driver is never precompiled.
 
+## `run` and its policy
+
+`run` runs the driver's `wfRunNode`, which loads the workflow and calls `runWorkflow` with no handler around it. The run's policy decides each of its interrupts. It reaches the driver as a root carrier, `rootCarriers.policy`, which the runtime installs as one handler in the chain. `runPolicy.ts` builds it from three parts, per effect and in this order:
+
+1. The person's rules, unchanged. A policy's first matching rule wins, so they decide first.
+2. The start rules, from `startRules`. They approve the prompts the run node raises before the first step: `loadWorkflow`'s `std::workflow::scan`, `std::read` for each local tool module, `std::workflow::run` for this workflow, and `std::run` for node `main` at depth 1. Each value goes through `escapeGlob`, so a directory such as `/p/v*1` matches only itself.
+3. One approve rule for each effect the person accepted at the prompt.
+
+Then a `"*"` rule rejects everything else.
+
+The start rules come after the person's rules because "a policy approves exactly what it says". A person whose policy rejects every read has said so, and the run stops at the check. Putting the start rules first would quietly approve reads they rejected.
+
+Each start rule spells its data the way the prompt does. `loadWorkflow` names the real folder (`_realDir`), so the scan rule uses `fs.realpathSync`. `read` names the real root and the path below it, so the CLI asks `prepareContainedPath` for the same answer. `runWorkflow` names `path.resolve(dir)` with no realpath. On macOS a temp folder under `/var` is really under `/private/var`, so the wrong spelling fails there and passes on Linux.
+
+The `with approve` on `wfLoad` does not approve the scan by itself. The run's `"*"` reject is another handler in the same chain, and a rejection wins. That is why the scan needs a start rule.
+
+A person's own `"*"` rule turns all of this off: no start rules, no prompt, and no catch-all. They wrote a rule for everything and meant it.
+
+An effect is "covered" when the person's policy has any rule for it. A rule that propagates counts. At run time it propagates, `interactive` is false, nothing can answer, and the driver returns the interrupt unanswered, which the command prints.
+
+The table, the question, and every message go to stderr, so `--json` keeps stdout for the result. `confirmQuestion` takes the stream to write its question to for this reason.
+
+### Why there is no `-i` yet
+
+`runAgencyNode` captures the driver's output, so the program cannot own the terminal to ask a question in the middle of a run. `-i` needs a runner that gives it the terminal.
+
+### Which flags reach the child
+
+`run` takes four groups of `agency run`'s flags. `addRunOptions` in `scripts/agency.ts` is split into groups so it can, and `runSettings` turns them into config, a policy, and a budget for both commands.
+
+- `--policy`, `--approve`, and `--reject` build the person's part of the policy.
+- `--model` and `--local` become config the driver is compiled with. The workflow's child gets the driver's model and provider.
+- `--max-cost` and `--max-time` become the driver's root budget. A root time budget does not stop a run that is waiting on its subprocess, so `--max-time` cannot end a workflow mid-step. `agency run` has the same gap when its program calls `runWorkflow`. A budget stop that does happen exits 1, because the evaluate script `runAgencyNode` writes does not catch it the way `agency run`'s entry block does, which exits 3.
+- `--log-file` and `--observability` set the driver's log, and the child writes its events there too.
+
 ## The temp folder
 
 The driver goes in `<project>/.agency-tmp/workflow-<id>/`, which `makeAgencyTempDir` makes. It has to be inside the project, so Node resolves the driver's imports of `agency-lang` through the project's own `node_modules`. The spawn tests make their project inside the package for the same reason.
@@ -72,6 +107,7 @@ The driver compiles each tool module it imports. A type error in a tool makes `c
 - `lib/cli/workflow/driver.ts`: the fixed text, `DRIVER_NAMES`, and `DRIVER_NODES`.
 - `lib/cli/workflow/runDriver.ts`: the temp folder and the `runAgencyNode` call.
 - `lib/cli/workflow/output.ts`: the formatters.
-- `lib/cli/workflow/commands.ts`: the commands, `prepareWorkflow`, and `readDriverResult`.
+- `lib/cli/workflow/commands.ts`: the commands, `prepareWorkflow`, `readDriverResult`, and `workflowRun`.
+- `lib/cli/workflow/runPolicy.ts`: the run's policy.
 - `lib/cli/workflow/workflow.spawn.test.ts`: the end-to-end tests against the built CLI.
 - `scripts/agency.ts`: the `workflow` command group.

@@ -15,14 +15,33 @@ export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record
  *  a hole inside `node main(inputs: Inputs)` with statements that mention
  *  `inputs` would rename the parameter (template hygiene). `inputsSchema`
  *  asks for the input form: a key with a default is optional there, so an
- *  optional input is optional in the tool a workflow becomes. */
+ *  optional input is optional in the tool a workflow becomes.
+ *
+ *  The handler around the body is what makes every limit hard. A guard trip
+ *  raises `std::guard`, and an approval would give the guard more budget.
+ *  This handler rejects every trip, and a rejection wins over any approval,
+ *  so no caller can extend the workflow's limits or a step's.
+ *
+ *  It rejects a tool's own guards too. So `supervise()` inside a tool stops
+ *  at its first check: `supervise` extends its own guard by approving
+ *  `std::guard` (stdlib/supervise.agency), and this rejection wins over that
+ *  approval. A handler cannot tell a tool's own approval from a caller's, so
+ *  keeping `supervise` working would let callers extend a tool's guard too.
+ *  That limitation is accepted. */
 const SCAFFOLD = `import { Json } from "std::validation"
 {{imports}}
 
 {{types}}
 
 export node main(inputs: Inputs!): Result {
+  handle {
 {{body}}
+  } with (guardTrip) {
+    if (guardTrip.effect == "std::guard") {
+      return reject()
+    }
+    return pass()
+  }
 }
 
 export node inputsSchema(): Json {
@@ -30,14 +49,22 @@ export node inputsSchema(): Json {
 }
 `;
 
+/** SCAFFOLD with the workflow's own limits as a guard, inside the same handler. */
 const GUARDED_SCAFFOLD = `import { Json } from "std::validation"
 {{imports}}
 
 {{types}}
 
 export node main(inputs: Inputs!): Result {
-  return guard({{guardArgs}}) {
+  handle {
+    return guard({{guardArgs}}) {
 {{body}}
+    }
+  } with (guardTrip) {
+    if (guardTrip.effect == "std::guard") {
+      return reject()
+    }
+    return pass()
   }
 }
 
@@ -101,7 +128,7 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
   const limits = lowered.guard;
   const args = limits === null ? "" : guardArgs(limits).join(", ");
   const scaffold = args === "" ? SCAFFOLD : GUARDED_SCAFFOLD;
-  const depth = args === "" ? 1 : 2;
+  const depth = args === "" ? 2 : 3;
   const prints = lowered.body.map((fragment) => printLines(fragment.code));
   const resultLines = printLines(lowered.result);
   resultLines[0] = `return success(${resultLines[0]}`;

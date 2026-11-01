@@ -45,6 +45,9 @@ const PROGRAM_NAMES = [
   "schema",
   "JSON",
   "guard",
+  "guardTrip",
+  "reject",
+  "pass",
 ];
 
 /** Types that tell the typechecker nothing about a value. */

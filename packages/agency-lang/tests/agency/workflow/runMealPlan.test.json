@@ -76,6 +76,28 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "stepLimitIsHard",
+      "description": "a caller that approves std::guard with more time cannot extend a step's limit; the workflow still fails at the step",
+      "input": "",
+      "expectedOutput": "[\"slow\",\"timeoutFailure\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "workflowLimitIsHard",
+      "description": "a caller that approves std::guard with more time cannot extend the workflow's own limit",
+      "input": "",
+      "expectedOutput": "[\"timeoutFailure\",100]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

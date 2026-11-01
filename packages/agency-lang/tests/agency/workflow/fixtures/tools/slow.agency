@@ -1,3 +1,5 @@
+import { now } from "std::date"
+
 export def slowEcho(text: string): string {
   """
   Return the text after two seconds. It exists to outlast a step's time
@@ -7,5 +9,21 @@ export def slowEcho(text: string): string {
   @param text - The text to return
   """
   sleep(2s)
+  return text
+}
+
+export def busyEcho(text: string): string {
+  """
+  Return the text after about a second of work, without sleeping. A time
+  guard that trips during `sleep()` skips every handler (ADI-137), so a test
+  that needs a handler to answer the trip uses this instead of slowEcho.
+
+  @param text - The text to return
+  """
+  const until = now() + 1000
+  let spins = 0
+  while (now() < until) {
+    spins = spins + 1
+  }
   return text
 }

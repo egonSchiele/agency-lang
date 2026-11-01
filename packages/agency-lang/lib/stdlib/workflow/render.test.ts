@@ -41,11 +41,18 @@ describe("renderWorkflow", () => {
         "}",
         "",
         "export node main(inputs: Inputs!): Result {",
-        "  const a = 1",
-        "  if (a is failure) {",
-        "    return a",
+        "  handle {",
+        "    const a = 1",
+        "    if (a is failure) {",
+        "      return a",
+        "    }",
+        "    return success(a)",
+        "  } with (guardTrip) {",
+        '    if (guardTrip.effect == "std::guard") {',
+        "      return reject()",
+        "    }",
+        "    return pass()",
         "  }",
-        "  return success(a)",
         "}",
         "",
         "export node inputsSchema(): Json {",
@@ -58,32 +65,11 @@ describe("renderWorkflow", () => {
 
   it("renders the body and the ranges from the same prints", () => {
     const r = renderWorkflow(lowered);
-    expect(r.source!.split("\n").slice(8, 12)).toEqual([
-      "  const a = 1",
-      "  if (a is failure) {",
-      "    return a",
-      "  }",
-    ]);
-    expect(r.ranges).toEqual([
-      { from: 4, to: 6, owner: inputsOwner },
-      { from: 9, to: 9, owner: oa },
-      { from: 10, to: 12, owner: ob },
-      { from: 13, to: 13, owner: resultOwner },
-    ]);
-  });
-
-  it("indents the body by four under a guard and shifts the ranges by one", () => {
-    const r = renderWorkflow({ ...lowered, guard: { maxTime: 300000, maxCost: 1 } });
-    const lines = r.source!.split("\n");
-    expect(lines.slice(7, 15)).toEqual([
-      "export node main(inputs: Inputs!): Result {",
-      "  return guard(time: 300000, cost: 1) {",
+    expect(r.source!.split("\n").slice(9, 13)).toEqual([
       "    const a = 1",
       "    if (a is failure) {",
       "      return a",
       "    }",
-      "    return success(a)",
-      "  }",
     ]);
     expect(r.ranges).toEqual([
       { from: 4, to: 6, owner: inputsOwner },
@@ -93,16 +79,39 @@ describe("renderWorkflow", () => {
     ]);
   });
 
+  it("indents the body by six under a guard and shifts the ranges by one more", () => {
+    const r = renderWorkflow({ ...lowered, guard: { maxTime: 300000, maxCost: 1 } });
+    const lines = r.source!.split("\n");
+    expect(lines.slice(7, 17)).toEqual([
+      "export node main(inputs: Inputs!): Result {",
+      "  handle {",
+      "    return guard(time: 300000, cost: 1) {",
+      "      const a = 1",
+      "      if (a is failure) {",
+      "        return a",
+      "      }",
+      "      return success(a)",
+      "    }",
+      "  } with (guardTrip) {",
+    ]);
+    expect(r.ranges).toEqual([
+      { from: 4, to: 6, owner: inputsOwner },
+      { from: 11, to: 11, owner: oa },
+      { from: 12, to: 14, owner: ob },
+      { from: 15, to: 15, owner: resultOwner },
+    ]);
+  });
+
   it("writes only the limits that are set", () => {
     expect(renderWorkflow({ ...lowered, guard: { maxCost: 0.5 } }).source).toContain(
-      "  return guard(cost: 0.5) {",
+      "    return guard(cost: 0.5) {",
     );
-    expect(renderWorkflow({ ...lowered, guard: {} }).source).not.toContain("guard");
+    expect(renderWorkflow({ ...lowered, guard: {} }).source).not.toContain("return guard(");
   });
 
   it("does not read $ patterns in a print as replacement syntax", () => {
     const r = renderWorkflow({ ...lowered, result: _parseExpr('"$& $1 $$"') });
-    expect(r.source).toContain('  return success("$& $1 $$")');
+    expect(r.source).toContain('    return success("$& $1 $$")');
   });
 
   it("canonicalizes a type", () => {

@@ -142,7 +142,7 @@ node generatedProgramCompiles(): boolean {
 
 node noLimitsTypechecks(): boolean {
   const source = sourceOf(withoutLimits(standardPlan()))
-  return !source.includes("guard") && typechecks(source)
+  return !source.includes("guard(") && typechecks(source)
 }
 
 node plainReturnHasNoValue(): boolean {

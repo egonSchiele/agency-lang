@@ -44,13 +44,15 @@ Today `echoPlan` and `writePlan` refuse any flag (`flagNames(command).length > 0
 
 **Files:**
 - Modify: `lib/host/node/nodeSubprocess.ts` (`spawnCommand`, the `locate` body)
-- Modify: `lib/stdlib/abortable.ts` (`abortableShell`: the two `"sh"` labels)
+- Modify: `lib/stdlib/abortable.ts` (`abortableShell`: the two `"sh"` labels and its comment)
+- Modify: `lib/host/host.ts` (the `Command` type's comment), `lib/stdlib/shell.ts` (the comment above `bashImpl`), `lib/host/node/nodeHost.ts` if the clean-copy loop moves into a shared helper
 - Create: `lib/host/node/nodeSubprocess.test.ts`
 
 **Interfaces:**
 - Produces: `locateProgramSync(program: string, searchPath: string): string | null` in `nodeSubprocess.ts`: the body of today's `locate` with the search path as an argument and `fs.statSync`/`fs.accessSync` in place of the promises. `nodeSubprocess.locate(program)` becomes a call to it with `process.env.PATH ?? ""`. Synchronous on purpose: `startChild` returns `child` and `kill` at once, and `nodeSubprocess.start` hands `kill` to its caller before `ended` settles, so the spawn cannot wait on a promise. Skip a search-path entry that is not absolute: `path.resolve(".", "bash")` would point into the parent's working directory, which an agent writes into.
-- Produces: `shellEnvironment(env: Record<string, string>): Record<string, string>`, a copy with these removed: `BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`, and every name that starts with `BASH_FUNC_`. The list is one constant, `SHELL_ENV_REMOVED: string[]` for the exact names and `SHELL_ENV_REMOVED_PREFIX = "BASH_FUNC_"`, with a comment per entry: `BASH_ENV` and `ENV` name a file bash sources before the script; `BASH_FUNC_*` carries an exported function that shadows a program; `BASHOPTS` (bash 4.1 and later read it) could turn on `xpg_echo` and change what `echo` prints; `SHELLOPTS` likewise.
-- Produces: for `{ kind: "shell" }`, `spawnCommand` takes `options.env ?? process.env`, resolves `bash` through `locateProgramSync("bash", env.PATH ?? "")`, and spawns the absolute path with `["-c", script]` and `shellEnvironment(env)` as the child's environment. When bash is not found it throws `new Error("bash was not found on the PATH. safeBash and the bash tool run their commands with bash.")`; `run` and `start` turn that throw into a rejected promise (wrap the `startChild` call in a try, or make `startChild` catch the throw from `spawnCommand` and return a rejected `ended`; say which in the ledger). The `{ kind: "program" }` branch is unchanged, so `exec` and `locate` behave as before.
+- Produces: `shellEnvironment(env: Record<string, string>): Record<string, string>`, a copy with these removed: `BASH_ENV`, `POSIXLY_CORRECT`, `SHELLOPTS`, `BASHOPTS`, `CDPATH`, `GLOBIGNORE`, and every name that starts with `BASH_FUNC_`. The list is one constant, `SHELL_ENV_REMOVED: string[]` for the exact names and `SHELL_ENV_REMOVED_PREFIX = "BASH_FUNC_"`, with a comment per entry: `BASH_ENV` names a file bash sources before the script; `POSIXLY_CORRECT` starts bash in POSIX mode, where macOS bash 3.2 prints `echo -n hi` as `-n hi` and reads backslash escapes (checked: `POSIXLY_CORRECT=1 /bin/bash -c 'echo -n hi'` prints `-n hi`, and `+o posix` on the command line does not undo it); `BASH_FUNC_*` carries an exported function that shadows a program; `BASHOPTS` (bash 4.1 and later read it) could turn on `xpg_echo` and change what `echo` prints; `SHELLOPTS` likewise; `CDPATH` sends `cd target` to `$CDPATH/target` and prints the folder, which ADI-245 will depend on; `GLOBIGNORE` drops names from a glob, which ADI-247 will depend on. `ENV` is not on the list: a non-interactive `bash -c` never reads it (checked, in and out of POSIX mode). Removing `POSIXLY_CORRECT` also means GNU programs in the child stop reading options in POSIX order; that changes nothing in safeBash's plans, because every flag table that cares already sets `optionsFirst`. Say so in the dev doc beside the list.
+- The copy is built from `options.env ?? process.env`. `process.env` is not a `Record<string, string>` (its values may be `undefined`), and `nodeHost.ts` already builds a clean copy for `env.all()` by skipping undefined values (`lib/host/node/nodeHost.ts:79-86`). Move that loop into a helper both call, or call the same one; do not write a second copy.
+- Produces: for `{ kind: "shell" }`, `spawnCommand` resolves `bash` through `locateProgramSync("bash", env.PATH ?? "")` over that clean copy, and spawns the absolute path with `["-c", script]` and `shellEnvironment(env)` as the child's environment. When bash is not found it throws `new Error("bash was not found on the PATH. safeBash and the bash tool run their commands with bash.")`. `start` is already `async`, so the throw becomes a rejection there; make `run` `async` too (`nodeSubprocess.ts:187` is a plain arrow today), and both reject with no `try`. The `{ kind: "program" }` branch is unchanged, so `exec` and `locate` behave as before.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -97,15 +99,20 @@ describe("the shell a script runs under", () => {
     const result = await shell("git --version", { env });
     expect(result.stdout).toMatch(/^git version/);
   });
+
+  it("ignores POSIXLY_CORRECT: echo -n still drops the newline", async () => {
+    const env = { ...process.env, POSIXLY_CORRECT: "1" };
+    expect((await shell("echo -n hi", { env })).stdout).toBe("hi");
+  });
 });
 ```
 
-Under dash the first test prints `hi` to stdout and leaves `out.txt` empty; under macOS `sh` the second prints `-n hi`. On the owner's machine today `/bin/sh` is bash in POSIX mode, so the first test may pass before the change there; the third, fourth, and fifth fail everywhere before the change (the fourth and fifth because bash does read those variables).
+Under dash the first test prints `hi` to stdout and leaves `out.txt` empty; under macOS `sh` the second prints `-n hi`. On the owner's machine today `/bin/sh` is bash in POSIX mode, so the first test may pass before the change there; the third, fourth, and fifth fail everywhere before the change (the fourth and fifth because bash does read those variables); the sixth fails on macOS and passes on Linux before the change, because a GNU build of bash keeps `echo -n` in POSIX mode.
 
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `pnpm vitest run lib/host/node/nodeSubprocess.test.ts > $SCRATCH/t1.txt 2>&1; tail -30 $SCRATCH/t1.txt`
-Expected: the third, fourth, and fifth tests fail; on Linux the first two fail too.
+Expected: the third, fourth, and fifth tests fail everywhere; on macOS the sixth fails too; on Linux the first two fail too.
 
 - [ ] **Step 3: Implement**
 
@@ -113,11 +120,13 @@ In `nodeSubprocess.ts`: `locateProgramSync`, `shellEnvironment` with its constan
 
 In `abortable.ts`, `abortableShell` passes the string `"sh"` twice (to `spawnResultOf` and to `runCancellable`). Read what each uses it for (a label in failure text) and change both to `"bash"`.
 
-Check `lib/stdlib/shell.ts` near line 41: it maps `spawn <command> ENOENT` to a missing-cwd message. A missing bash now rejects before spawn with its own message, so that mapping is not reached for it; confirm by reading the code path, and leave the mapping as it is.
+`resolveSpawnCwd` in `lib/stdlib/shell.ts` checks that the working directory exists before anything is spawned, so a missing cwd never reaches `spawnCommand`, and a missing bash rejects with its own message before spawn. The two failures cannot be confused; nothing there changes.
+
+Text that still describes the old shell, to change in this task: the header comment of `lib/host/node/nodeSubprocess.ts` (lines 5-7 say a program that cannot start rejects with Node's own error, now true of a `program` command only); the `Command` type's comment in `lib/host/host.ts` ("a script for the platform's shell" becomes "a script bash runs"); `abortableShell`'s comment in `lib/stdlib/abortable.ts` ("the platform's shell"); and the comment above `bashImpl` in `lib/stdlib/shell.ts` ("routes the command through `sh -c`").
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: the same command. Expected: 5 passed. Then `pnpm vitest run lib/stdlib/abortable.test.ts lib/stdlib/shell.test.ts > $SCRATCH/t1b.txt 2>&1` (if `shell.test.ts` does not exist, run only `abortable.test.ts`). Expected: all pass. Then `pnpm run typecheck && pnpm run lint:structure` and prettier on the three files.
+Run: the same command. Expected: 6 passed. Then `pnpm vitest run lib/stdlib/abortable.test.ts lib/stdlib/shell.test.ts > $SCRATCH/t1b.txt 2>&1` (if `shell.test.ts` does not exist, run only `abortable.test.ts`). Expected: all pass. Then `pnpm run typecheck && pnpm run lint:structure` and prettier on the three files.
 
 - [ ] **Step 5: Commit**
 
@@ -134,6 +143,7 @@ Message: `host: a shell script runs under bash, and a missing bash is a failure 
 
 **Files:**
 - Modify: `stdlib/shell.agency` (the `bash` tool's docstring, "via sh -c")
+- Modify: `tests/integration/stdlib-sandbox/fs.agency` (the comment at lines 18-20 explains `printf` by saying `_bash` uses `sh -c`; say bash, and keep `printf`, which is still the portable spelling)
 - Modify: `stdlib/safeBash/actions.agency` (`runBash` docstring: add the missing-bash sentence)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 - Modify: `docs/dev/stdlib/safe-bash.md`, `docs/dev/runtime/host.md`
@@ -166,9 +176,12 @@ node ampersandRedirectWritesTheFile() {
 node echoIsTheSameAloneAndInAChain() {
   // bash's echo does not read backslash escapes, alone or in a chain. The
   // lone echo asks nothing; the chain asks std::bash, which is the one
-  // question the test file approves.
+  // question the test file approves. The trailing `true` has no rule, so
+  // the chain stays on the bash path even after chains of echoes run in
+  // process (the cat-and-chains plan); without it this node would compare
+  // the in-process echo with itself.
   const alone = safeBash("echo 'a\\tb'")
-  const chain = safeBash("echo 'a\\tb'; echo x")
+  const chain = safeBash("echo 'a\\tb'; echo x; true")
   return [alone, chain]
 }
 
@@ -249,7 +262,7 @@ and change the expectation for the existing `echo -n hi` row from `["bash","",["
 
 Find the node that checks a shell-free write's payload (grep the test file for `"write"` and `content`) and add a row for `echo -n hi > out.txt` expecting content `"hi"` with the same `dir` and `filename` shape its neighbors use.
 
-Generalize the existing exact parity helper instead of copying it. The test file has two: `parityOf(source)` for grep, which compares sorted lines in `FIXTURES`, and `readParityOf(source)`, which plans in `READ_FIXTURES`, requires `execution.kind == "read"`, and compares exactly. Leave the grep one alone. Rename the second `exactParityOf(source: string, kind: string, cwd: string): any` with the kind and folder as arguments, change the `shellFreeReadMatchesRealTools` rows to `exactParityOf("cat one.txt", "read", READ_FIXTURES)` and so on, and add:
+Generalize the existing exact parity helper instead of copying it. The test file has two: `parityOf(source)` for grep, which compares sorted lines in `FIXTURES`, and `readParityOf(source)`, which plans in `READ_FIXTURES`, requires `execution.kind == "read"`, and compares exactly. Leave the grep one alone. Rename the second `exactParityOf(source: string, kind: string, cwd: string): any` with the kind and folder as arguments, and fix one hole while renaming: today it sets `ours` only when `safeBash` succeeds, so a row where safeBash fails and the real command prints nothing compares `""` with `""` and passes. Return `"FAILED: ${why}"` when `safeBash` fails. Change the `shellFreeReadMatchesRealTools` rows to `exactParityOf("cat one.txt", "read", READ_FIXTURES)` and so on, and add:
 
 ```agency
 node shellFreeEchoMatchesBash() {

@@ -56,16 +56,16 @@ Bash's rule for a chain, which the runner copies: commands run left to right; `;
 
 **Files:**
 - Modify: `stdlib/safeBash/actions.agency` (`ReadExec`, `readExecution`, `runRead`)
-- Modify: `stdlib/safeBash.agency` (`shellFreeReadPlan`, `SHELL_FREE_READ_VERBS`, `tryShellFreeRead`)
+- Modify: `stdlib/safeBash.agency` (`shellFreeReadPlan`, `readViewFor`)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 - Modify: `docs/dev/stdlib/safe-bash.md`
 
 **Interfaces:**
 - Produces: `ReadExec = { kind: "read"; payloads: ReadPayload[]; view: ReadView }` and `readExecution(payloads: ReadPayload[], view: ReadView): ReadExec`.
-- Produces: `static const SHELL_FREE_READ_PATHS: Record<string, CountRange> = { cat: { least: 1, most: null }, head: { least: 1, most: 1 }, tail: { least: 1, most: 1 } }`, replacing `SHELL_FREE_READ_VERBS`; the keys are the verbs the shell-free path prints. `head` and `tail` stay at one because each prints a `==> name <==` header per file when given several.
+- Path counts stay in `READ_VERBS`, which already gives `head` and `tail` at most one path (`AT_MOST_ONE`) and refuses `head a b` in `readFileVerb` before any shell-free code sees it; `shellFreeReadOf`'s `stdin` arm already refuses a read with no path. So the only change `shellFreeReadPlan` needs is to delete its `paths.length != 1` check. `SHELL_FREE_READ_VERBS` stays as it is. No second table, and no second message to keep in step.
 - Produces: in `readViewFor`, beside the count-of-0 rule, a rule that the `numbered` view takes one file: `cat -n a b` is refused shell-free with `"cat -n of several files is refused shell-free"`. GNU `cat -n` numbers the two files as one stream (1 to 4), BSD starts again at 1 for each file (checked on this Mac: `cat -n noeol.txt one.txt` prints `1, 2, 1, 2, 3`), so no one rendering is right everywhere. `readViewFor` needs the path count for this; pass `paths.length`.
-- Produces: `runRead(exec: ReadExec, command: string): Result<string>` reads each payload with `_read` in order, joins the texts, renders the joined text once with `_renderReadView`, and wraps with `keepOutput`. With only the `whole` view allowed for several files, the joined text is what plain `cat` prints, including a first file with no final newline running into the second.
-- Produces (used by Task 2): `printRead(exec: ReadExec): Result<string>`, the raw text before `keepOutput`; `runRead` is `printRead` plus `keepOutput`.
+- Produces: `runRead(exec: ReadExec, command: string): Result<string>` reads each payload with `_read` in order, joins the texts, renders the joined text once with `_renderReadView`, and wraps with `keepOutput`. With only the `whole` view allowed for several files, the joined text is what plain `cat` prints, including a first file with no final newline running into the second. When a read fails, the result is `_read`'s own failure, as it is for one file today, and the text already read is dropped. A failure here means a file went missing or unreadable between planning and running, since the plan refused a missing file. Real `cat a b` would have printed `a` before complaining about `b`; that difference goes in the dev doc's left-out list.
+- Produces (used by Task 2): `printRead(exec: ReadExec): Result<string>`, the raw text before `keepOutput`, with the same failure rule; `runRead` is `printRead` plus `keepOutput`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -104,7 +104,7 @@ Run: `pnpm run agency test tests/agency/safeBash.agency > $SCRATCH/t1.txt 2>&1`,
 
 - [ ] **Step 3: Implement**
 
-The interface items. `shellFreeReadPlan` takes `paths: ReadPath[]` and checks `countFits(paths.length, SHELL_FREE_READ_PATHS[verb])`; the message for a miss is `"the shell-free ${verb} takes ${describeCount(range, "path")}"`, so it comes from the same table as the check. `tryShellFreeRead` looks the verb up in `SHELL_FREE_READ_PATHS` instead of the list. These messages are internal: a failed shell-free plan falls through to the general rules.
+The interface items: `ReadExec.payloads`, the one-file rule for the numbered view, the deleted length check in `shellFreeReadPlan`, and `printRead` with `runRead` over it. The numbered-view message is internal: a failed shell-free plan falls through to the general rules.
 
 - [ ] **Step 4: `make`, run, verify pass**
 
@@ -112,7 +112,7 @@ The interface items. `shellFreeReadPlan` takes `paths: ReadPath[]` and checks `c
 
 - [ ] **Step 5: Dev doc**
 
-"A lone cat, head, or tail runs the read tool's read": the first sentence covers `cat` of any number of files and `head`/`tail` of one, with the header reason. Beside the count-of-0 sentence, one on `cat -n` of several files: GNU numbers them as one stream and BSD starts over per file. The "These are left out" list loses "More than one file in process" and gains "`head` and `tail` of more than one file: each prints a header per file" and "`cat -n` of more than one file". The `READ_TOOL_FOR_VERB` comment and the "In process when it translates" table need no change.
+"A lone cat, head, or tail runs the read tool's read": the first sentence covers `cat` of any number of files and `head`/`tail` of one, with the header reason. Beside the count-of-0 sentence, one on `cat -n` of several files: GNU numbers them as one stream and BSD starts over per file. The "These are left out" list loses "More than one file in process" and gains "`head` and `tail` of more than one file: each prints a header per file", "`cat -n` of more than one file", and "the text of the files before one that failed to read: real `cat` prints them, the shell-free read returns the failure alone". The `READ_TOOL_FOR_VERB` comment and the "In process when it translates" table need no change.
 
 - [ ] **Step 6: Commit**
 
@@ -129,7 +129,7 @@ Message: `safeBash: a lone cat of several files runs in process`.
 
 **Files:**
 - Modify: `stdlib/safeBash/actions.agency` (`Execution`, new `ChainExec`, `ChainStep`, `StepExec`, `printGrep`, `runChain`)
-- Modify: `stdlib/safeBash.agency` (`planFor`, new `tryShellFreeChain`, `chainLinks`, `linksOf`, `tryShellFreeStep`, `outcomeOf`, `safeBash` dispatch)
+- Modify: `stdlib/safeBash.agency` (`planFor`, new `tryShellFreeChain`, `chainLinks`, `linksOf`, `tryShellFreeStep`, `stepExecOf`, `outcomeOf`, `safeBash` dispatch)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 - Modify: `docs/dev/stdlib/safe-bash.md`, the spec's Part 5 departures, `CLAUDE.md`, `.claude/skills/agency-stdlib-docs/SKILL.md`
 
@@ -190,13 +190,19 @@ This is a second walk over the tree beside `flattenOne`, on purpose: `flattenOne
 def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<Plan>
 ```
 
-Tries `trySeeIfShellFree`, `tryShellFreeGrep`, `tryShellFreeRead` in that order and returns the first success; not `tryAgencyPlan`. This is the one list of in-process planners: `planFor`'s single-command block today spells the same three out after `tryAgencyPlan`, so change that block to `tryAgencyPlan` then `tryShellFreeStep`, and a planner added later is added in one place. The returned plan's `execution` is one of the four `StepExec` kinds by construction; narrow it with a match over `Execution` that is exhaustive with no `_` arm, the step kinds returning the step and every other kind returning a failure, so a future in-process kind is a type error until someone decides whether chains may hold it.
+Tries `trySeeIfShellFree`, `tryShellFreeGrep`, `tryShellFreeRead` in that order and returns the first success; not `tryAgencyPlan`. This is the one list of in-process planners: `planFor`'s single-command block today spells the same three out after `tryAgencyPlan`, so change that block to `tryAgencyPlan` then `tryShellFreeStep`, and a planner added later is added in one place. It returns a `Plan`, because the lone-command path uses it as one.
+
+```agency
+def stepExecOf(exec: Execution): Result<StepExec>
+```
+
+The narrowing lives here, called from `tryShellFreeChain` on each step plan's `execution`, not in `tryShellFreeStep` (where the lone-command path would have to undo it). A match over `Execution` that is exhaustive with no `_` arm: the four step kinds return the step, and every other kind (`bash`, `agency`, `refuse`, `chain`) returns a failure, so a future in-process kind is a type error until someone decides whether chains may hold it.
 
 ```agency
 def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan>
 ```
 
-Fails unless `chainLinks` succeeds and there are at least two links. Runs `tryShellFreeStep` on every link; any failure is the chain's failure. Builds `ChainExec` from the steps, `effects` as the concatenation of every step plan's effects, `broadReason: null`, `verbs: verbNames(the commands)`. `planFor` calls it after the single-command block and before `flattenCommands`; a success is returned as the plan.
+Fails unless `chainLinks` succeeds and there are at least two links. Runs `tryShellFreeStep` then `stepExecOf` on every link; any failure is the chain's failure. Builds `ChainExec` from the steps, `effects` as the concatenation of every step plan's effects, `broadReason: null`, `verbs: verbNames(the commands)`. `planFor` calls it after the single-command block and before `flattenCommands`; a success is returned as the plan.
 
 `outcomeOf`: `"chain" => "shellFree"`. `safeBash`'s dispatch: `{ kind: "chain" } => runChain(exec, command)`.
 
@@ -250,6 +256,8 @@ node chainMatchesBash() {
 }
 ```
 
+Expected: all `true`. (`exactParityOf` returns `"FAILED: ..."` when `safeBash` fails, a fix the bash plan made while renaming it, so a row cannot pass by comparing an empty failure with empty output.)
+
 The write region, in a scratch folder of its own (the pattern of `LINK_FIXTURE`: `remove`, `mkdir`, copy `one.txt` in with `bash` under `with approve`, work, `remove`):
 
 ```agency
@@ -265,9 +273,7 @@ node chainFailureAfterAWriteIsDestructive() {
 
 where `destructiveFlag(result)` returns `result.destructiveRan` for a failure (see `tests/agency/destructive-block.agency:12` for the field) and `"UNEXPECTEDLY SUCCEEDED"` otherwise. Expected `[true, false]`, with the `.test.json` approving `std::write` and `std::grep` as many times as the two lines ask.
 
-Expected: all `true`. (`FIXTURES` is the grep fixtures folder; `one.txt` holds `hello world` on its first line.)
-
-Exit status:
+Exit status (`FIXTURES` is the grep fixtures folder; `one.txt` holds `hello world` on its first line and no `zzz`):
 
 ```agency
 node chainFailsLikeBash() {
@@ -275,7 +281,7 @@ node chainFailsLikeBash() {
   // || runs it and the chain succeeds. Approved by the test file.
   const skipped = safeBash("grep zzz one.txt && echo yes", cwd: FIXTURES)
   const ran = safeBash("grep zzz one.txt || echo no", cwd: FIXTURES)
-  return [skipped is failure(why), ran]
+  return [skipped is failure, ran]
 }
 ```
 
@@ -283,12 +289,14 @@ Expected `[true, {"success":true,"value":"no\n"}]` in whatever shape a `Result` 
 
 The owner's line end to end, with two `std::read` approvals, returning the output: `chainOfReadsAsksOnlyTheReads`. Expected value is the exact text; copy it from the parity row's `theirs` on a first run if needed, after confirming it is what `bash` printed.
 
-Rows that change meaning: `wholeStringPlans` has `echo hi; echo bye` expecting `["bash",["std::bash"]]`; it becomes `["chain",[]]`. `shellFreeEcho` has `echo hi; echo bye` expecting bash; it becomes `["chain","",[]]` (its `content` is only read for `echo`). Two end-to-end tests use such strings and each proves something about the bash path, so each gets a string the chain planner refuses for a reason that keeps the plan on the same path:
+Rows that change meaning: `wholeStringPlans` has `echo hi; echo bye` expecting `["bash",["std::bash"]]`; it becomes `["chain",[]]`. `shellFreeEcho` has `echo hi; echo bye` expecting bash; it becomes `["chain","",[]]` (its `content` is only read for `echo`). Four other rows use such strings to prove something about the bash path, so each gets a string the chain planner refuses for a reason that keeps the plan on the same path:
 
-- `rejectedAuditSaysWhy` uses `echo hi; echo bye` to get the `noEffects` sentence. Use `echo hi | cat`: recognized, no effects, and a pipeline, so still `noEffects` and broad.
+- `planReasons` has `echo hi; echo bye` expecting `["noEffects",""]`, and `planOutcomes` has it expecting `"broad"`. These are the only rows that pin the `noEffects` reason and an all-echo line's `broad` outcome. Both become `echo hi | cat`: recognized, no effects, and a pipeline, so the reason stays `noEffects` and the outcome `broad`.
+- `rejectedAuditSaysWhy` uses `echo hi; echo bye` to get the `noEffects` sentence. Same swap, `echo hi | cat`.
 - `sequenceRunsThroughBash` uses `echo hi && echo bye` to show a sequence runs in one bash call and prints what bash prints. A pipe is not a sequence, so use `echo hi && echo bye && true`: `true` has no rule, the line stays broad, runs through bash, and prints `hi\nbye\n`.
+- `echoIsTheSameAloneAndInAChain`, from the bash plan, already ends its chain with `; true` for this reason. Check that it does; if the bash plan was executed from an earlier revision, add the `true` here.
 
-Grep the test file for any other string made only of echoes, greps, and lone reads joined by `;`, `&&`, or `||` whose row expects `std::bash`, and record each swap in the ledger with the old and new string.
+Grep the test file for any other string made only of echoes, greps, and lone reads joined by `;`, `&&`, or `||`, whatever its row expects, and record each swap in the ledger with the old and new string.
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -308,7 +316,7 @@ The interfaces above. Keep `tryShellFreeChain` and its helpers next to `tryShell
 
 - "Outcomes", `shellFree`: add "A chain of such commands joined by `;`, `&&`, or `||` runs them in process in order (see "Chains in process")."
 - "In process when it translates": the rule's first sentence becomes "A lone command, or a chain of them, whose flags and arguments translate exactly runs the matching stdlib tools in process." Add a table row: `echo "== a =="; cat a.txt` runs `_read` and the echo in process, raises `std::read`.
-- New section "Chains in process" after "The read family": what a chain is (the top-level list and `And`/`Or` nodes, flattened to links with a join each, left to right); which commands may be steps (the three lone planners, not `agency`); why a `Parens` or a `Pipeline` is refused (`a && (b || c)` skips the group as a whole; a pipeline is ADI-261); the all-or-nothing rule (one refused command sends the whole line down the bash path, where the wall runs); the run rule (bash's `;`, `&&`, `||`, status of the last command run, a failed step adds no text); why a write step runs in a `destructive` region of `runChain`'s own; why effects may be empty (no shell spawns); that a shell-free directory grep's skipped-folders note lands in the chain's output where that step's text goes, so `grep -rn TODO src; echo done` prints the note before `done`, which real bash would not; and the plan-to-run gap: a write step changes a file a later read step reads, and each read was resolved at plan time, so `echo x > f; cat f` with `f` present reads whatever the write left, under a `std::read` that named `f`. Point at "Resolving the path when the plan is made".
+- New section "Chains in process" after "The read family": what a chain is (the top-level list and `And`/`Or` nodes, flattened to links with a join each, left to right); which commands may be steps (the three lone planners, not `agency`); why a `Parens` or a `Pipeline` is refused (`a && (b || c)` skips the group as a whole; a pipeline is ADI-261); the all-or-nothing rule (one refused command sends the whole line down the bash path, where the wall runs); the run rule (bash's `;`, `&&`, `||`, status of the last command run, a failed step adds no text); why a write step runs in a `destructive` region of `runChain`'s own, and that the region is entered before `_write` runs, so a write that fails before writing anything still reports `destructiveRan: true`, which is the safe direction; why effects may be empty (no shell spawns); that a shell-free directory grep's skipped-folders note lands in the chain's output where that step's text goes, so `grep -rn TODO src; echo done` prints the note before `done`, which real bash would not; and the plan-to-run gap: a write step changes a file a later read step reads, and each read was resolved at plan time, so `echo x > f; cat f` with `f` present reads whatever the write left, under a `std::read` that named `f`. Point at "Resolving the path when the plan is made".
 - "Why the executors call `_bash`, `_write`, `_grep`, and `_read`": add `runChain` to the list of executors that reach them.
 - "Files and tests": the new nodes.
 
@@ -332,4 +340,4 @@ Messages: `safeBash: a chain of in-process commands runs in process` and `docs i
 ### Task 3: Checks and PR
 
 - [ ] **Step 1:** `pnpm run typecheck`, `pnpm run lint:structure`, `pnpm vitest run lib/stdlibCapabilities.test.ts lib/stdlib/readDialect.test.ts`, and the safeBash agency test, each saved to a file and green.
-- [ ] **Step 2:** Push and open the PR with the body in a file: a before/after table (`cat a.txt b.txt`; `cat -n a.txt b.txt`; the owner's five-command line; `grep x f || echo none`; `a && (b || c)`; `echo a; cat a.txt | head`), where to look (`SHELL_FREE_READ_PATHS`, `chainLinks`, `runChain` and its write region), departures from this plan if any, what is left out (pipelines, ADI-261; `agency` as a step; a write step whose target a later read reads is planned against the file as it was; the bash path has the same `destructiveRan` gap for `echo hi >> f && false`, which is a ticket to file, not this PR). Link ADI-264 and ADI-262. End with the attribution line. The owner merges.
+- [ ] **Step 2:** Push and open the PR with the body in a file: a before/after table (`cat a.txt b.txt`; `cat -n a.txt b.txt`; the owner's five-command line; `grep x f || echo none`; `a && (b || c)`; `echo a; cat a.txt | head`), where to look (`readViewFor`'s one-file rule for `-n`, `chainLinks`, `stepExecOf`, `runChain` and its write region), departures from this plan if any, what is left out (pipelines, ADI-261; `agency` as a step; a write step whose target a later read reads is planned against the file as it was; the bash path has the same `destructiveRan` gap for `echo hi >> f && false`, which is a ticket to file, not this PR). Link ADI-264 and ADI-262. End with the attribution line. The owner merges.

@@ -267,22 +267,24 @@ export type ReadView =
 
 ### ReadExec
 
-A lone cat, head, or tail of one file, run through the read tool's
-own read with no shell. The read covers only what `payload` names, so
-the approval means what the read tool's approval means.
+A lone cat of one or more files, or a head or tail of one, run
+through the read tool's own read with no shell. The read covers only
+what `payloads` names, so the approval means what the read tool's
+approval means.
 
 ```ts
-/** A lone cat, head, or tail of one file, run through the read tool's
- * own read with no shell. The read covers only what `payload` names, so
- * the approval means what the read tool's approval means. */
+/** A lone cat of one or more files, or a head or tail of one, run
+ * through the read tool's own read with no shell. The read covers only
+ * what `payloads` names, so the approval means what the read tool's
+ * approval means. */
 export type ReadExec = {
   kind: "read";
-  payload: ReadPayload;
+  payloads: ReadPayload[];
   view: ReadView
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L188))
 
 ### RefuseExec
 
@@ -293,7 +295,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L203))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L204))
 
 ### BroadReason
 
@@ -317,7 +319,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L212))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L213))
 
 ### Plan
 
@@ -336,7 +338,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L219))
 
 ## Functions
 
@@ -430,22 +432,22 @@ the search run cannot disagree.
 ### readExecution
 
 ```ts
-readExecution(payload: ReadPayload, view: ReadView): ReadExec
+readExecution(payloads: ReadPayload[], view: ReadView): ReadExec
 ```
 
-Both plan sides derive from one ReadPayload, so the question asked and
-the file read cannot disagree.
+Both plan sides derive from the same ReadPayloads, so the questions
+asked and the files read cannot disagree.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| payload | [ReadPayload](#readpayload) |  |
+| payloads | `ReadPayload[]` |  |
 | view | [ReadView](#readview) |  |
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L196))
 
 ### runBash
 
@@ -481,7 +483,7 @@ Run a command string through bash and return what it printed.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L230))
 
 ### runGrep
 
@@ -503,7 +505,7 @@ Run a lone grep through the grep tool's own search and print what grep
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L292))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L293))
 
 ### runRead
 
@@ -511,8 +513,8 @@ Run a lone grep through the grep tool's own search and print what grep
 runRead(exec: ReadExec, command: string): Result<string>
 ```
 
-Run a lone cat, head, or tail of one file through the read tool's own
-  read and print what the program would print.
+Run a lone cat, head, or tail through the read tool's own read and
+  print what the program would print.
 
 **Parameters:**
 
@@ -525,7 +527,30 @@ Run a lone cat, head, or tail of one file through the read tool's own
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L326))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L327))
+
+### printRead
+
+```ts
+printRead(exec: ReadExec): Result<string>
+```
+
+What a shell-free read prints, before long output is saved: each file
+  read in order, the texts joined, and the joined text rendered once. A
+  first file with no final newline runs into the second, as real cat
+  prints it.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| exec | [ReadExec](#readexec) |  |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L339))
 
 ### runWrite
 
@@ -550,4 +575,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L359))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L378))

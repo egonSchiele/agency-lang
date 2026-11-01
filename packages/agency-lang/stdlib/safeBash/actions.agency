@@ -181,21 +181,22 @@ export type ReadView =
   | { kind: "head"; lines: number }
   | { kind: "tail"; lines: number }
 
-/** A lone cat, head, or tail of one file, run through the read tool's
- * own read with no shell. The read covers only what `payload` names, so
- * the approval means what the read tool's approval means. */
+/** A lone cat of one or more files, or a head or tail of one, run
+ * through the read tool's own read with no shell. The read covers only
+ * what `payloads` names, so the approval means what the read tool's
+ * approval means. */
 export type ReadExec = {
   kind: "read";
-  payload: ReadPayload;
+  payloads: ReadPayload[];
   view: ReadView
 }
 
-/** Both plan sides derive from one ReadPayload, so the question asked and
- * the file read cannot disagree. */
-export def readExecution(payload: ReadPayload, view: ReadView): ReadExec {
+/** Both plan sides derive from the same ReadPayloads, so the questions
+ * asked and the files read cannot disagree. */
+export def readExecution(payloads: ReadPayload[], view: ReadView): ReadExec {
   return {
     kind: "read",
-    payload: payload,
+    payloads: payloads,
     view: view
   }
 }
@@ -325,21 +326,39 @@ export def runGrep(exec: GrepExec, command: string): Result<string> {
 @capabilities(fileRead)
 export def runRead(exec: ReadExec, command: string): Result<string> {
   """
-  Run a lone cat, head, or tail of one file through the read tool's own
-  read and print what the program would print.
+  Run a lone cat, head, or tail through the read tool's own read and
+  print what the program would print.
+  """
+  return match(printRead(exec)) {
+    success(text) => success(keepOutput(text, 0, command))
+    failure(why) => failure(why)
+  }
+}
+
+@capabilities(fileRead)
+export def printRead(exec: ReadExec): Result<string> {
+  """
+  What a shell-free read prints, before long output is saved: each file
+  read in order, the texts joined, and the joined text rendered once. A
+  first file with no final newline runs into the second, as real cat
+  prints it.
   """
   // `_read`, NOT `read`, for the reason `runBash` gives: the `read` tool
   // raises its own std::read, and the caller already raised one carrying
-  // this same payload. The only path here runs through `raiseAll`.
+  // each of these payloads. The only path here runs through `raiseAll`.
   //
   // The plan refused a missing file or a folder before anything ran, so
   // a failure here is a race or a permission error, and `_read`'s own
-  // message says which.
-  const text = try _read(exec.payload.dir, exec.payload.filename)
-  if (isFailure(text)) {
-    return text
+  // message says which. The text of the files read before it is dropped.
+  let joined = ""
+  for (payload in exec.payloads) {
+    const text = try _read(payload.dir, payload.filename)
+    if (isFailure(text)) {
+      return text
+    }
+    joined = joined + text.value
   }
-  return success(keepOutput(_renderReadView(text.value, exec.view), 0, command))
+  return success(_renderReadView(joined, exec.view))
 }
 
 /** The lines safeBash adds to a shell-free grep's output: which folders

@@ -1319,8 +1319,8 @@ static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
 @capabilities(fileRead)
 def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  A lone cat, head, or tail of one file, run through the read tool's own
-  read instead of the program, so its approval means what the read
+  A lone cat of one or more files, or a head or tail of one, run through
+  the read tool's own read instead of the program, so its approval means what the read
   tool's approval means. Applies only to the flags `_renderReadView`
   prints exactly. A failure means "not this path"; the general rules
   then decide.
@@ -1351,36 +1351,37 @@ def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Resu
 }
 
 def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command: SimpleCommand): Result<Plan> {
-  if (paths.length != 1) {
-    return failure("the shell-free path reads one file")
-  }
-  const view = readViewFor(verb, split)
+  // How many paths each verb takes is READ_VERBS' rule, already applied
+  // by readFileVerb: head and tail take at most one.
+  const view = readViewFor(verb, split, paths.length)
   if (isFailure(view)) {
     return view
   }
-  const payload: ReadPayload = {
-    dir: paths[0].dir,
-    filename: paths[0].filename
-  }
+  const payloads: ReadPayload[] = [{ dir: path.dir, filename: path.filename } for path in paths]
   return success({
-    effects: [readEffect(payload)],
-    execution: readExecution(payload, view.value),
+    effects: [readEffect(payload) for payload in payloads],
+    execution: readExecution(payloads, view.value),
     broadReason: null,
     verbs: verbNames([command])
   })
 }
 
-def readViewFor(verb: string, split: SplitArgs): Result<ReadView> {
+def readViewFor(verb: string, split: SplitArgs, pathCount: number): Result<ReadView> {
   """
   How the shell-free path prints this command, or a failure for a flag it
-  does not print. cat takes only -n; head and tail take only -n with a
-  count of at least 1. BSD `head -n 0` prints an error and exits 1 while
-  GNU prints nothing, so no one rendering of 0 is right everywhere.
+  does not print. cat takes only -n, and -n of one file only: GNU numbers
+  several files as one stream and BSD starts again at 1 for each. head
+  and tail take only -n with a count of at least 1. BSD `head -n 0`
+  prints an error and exits 1 while GNU prints nothing, so no one
+  rendering of 0 is right everywhere.
   """
   if (verb == "cat") {
     const others = [letter for letter in split.plain if letter != "n"]
     if (others.length > 0) {
       return failure("not rendered shell-free")
+    }
+    if (split.plain.length > 0 && pathCount > 1) {
+      return failure("cat -n of several files is refused shell-free")
     }
     if (split.plain.length > 0) {
       return success({ kind: "numbered" })

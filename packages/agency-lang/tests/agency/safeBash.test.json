@@ -755,7 +755,7 @@
       "nodeName": "loneReadIsShellFree",
       "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
       "input": "",
-      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\"]",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -764,9 +764,30 @@
     },
     {
       "nodeName": "shellFreeReadMatchesRealTools",
-      "description": "Each row runs the shell-free path and the real program on the same command and compares the output exactly, including a file with no final newline, an empty file, and a file with Windows line endings. Each row first checks that its command really runs shell-free.",
+      "description": "Each row runs the shell-free path and the real program on the same command and compares the output exactly, including a file with no final newline, an empty file, and a file with Windows line endings. Each row first checks that its command really runs shell-free. Several files are read in order and joined, so a first file with no final newline runs into the second, as real cat prints it.",
       "input": "",
-      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "catOfTwoFilesAsksTwoQuestions",
+      "description": "A lone cat of two files asks one std::read per file and no shell question, and prints the two files joined.",
+      "input": "",
+      "expectedOutput": "[\"read\",\"hello world\\nfoo bar baz\\nhello again\\ngoodbye cruel world\\nHELLO uppercase\\n\"]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"

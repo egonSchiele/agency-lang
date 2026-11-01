@@ -1031,6 +1031,8 @@ node loneReadIsShellFree() {
     outcomeOf(planFor("head -n 1 -n 2 one.txt", FIXTURES)),
     outcomeOf(planFor("head -2 -n 1 one.txt", FIXTURES)),
     outcomeOf(planFor("tail -n 1 -n 2 one.txt", FIXTURES)),
+    outcomeOf(planFor("head one.txt two.txt", FIXTURES)),
+    outcomeOf(planFor("cat -n one.txt two.txt", FIXTURES)),
   ]
 }
 
@@ -1086,7 +1088,23 @@ node shellFreeReadMatchesRealTools() {
     exactParityOf("cat -n empty.txt", "read", READ_FIXTURES),
     exactParityOf("cat crlf.txt", "read", READ_FIXTURES),
     exactParityOf("tail -1 crlf.txt", "read", READ_FIXTURES),
+    exactParityOf("cat one.txt noeol.txt", "read", READ_FIXTURES),
+    exactParityOf("cat noeol.txt one.txt", "read", READ_FIXTURES),
+    exactParityOf("cat empty.txt one.txt", "read", READ_FIXTURES),
+    exactParityOf("cat one.txt one.txt", "read", READ_FIXTURES),
   ]
+}
+
+node catOfTwoFilesAsksTwoQuestions() {
+  // Two std::read approvals, one per file, and no shell. The plan's kind
+  // comes first, because the bash path asks the same two questions and
+  // prints the same text; only the kind tells the two apart.
+  const kind = planFor("cat one.txt two.txt", FIXTURES).execution.kind
+  const result = safeBash("cat one.txt two.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return [kind, result.value]
 }
 
 node loneReadAsksOneQuestion() {

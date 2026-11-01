@@ -539,10 +539,15 @@ same flags with a space (`cut -d : -f 1`) parse.
 
 ### A lone cat, head, or tail runs the read tool's read
 
-`tryShellFreeRead` applies to a lone `cat`, `cat -n`, `head -n N`, or
-`tail -n N` of one file, with no redirect, where N is at least 1. It
-raises `std::read` and runs `runRead`, which reads the file with `_read`
-and prints it with `_renderReadView` (`lib/stdlib/readDialect.ts`):
+`tryShellFreeRead` applies to a lone `cat` of any number of files, and
+to a lone `cat -n`, `head -n N`, or `tail -n N` of one file, with no
+redirect, where N is at least 1. `head` and `tail` take one file because
+each prints a `==> name <==` header per file when given several;
+`READ_VERBS` says so, and `readFileVerb` applies it. The plan raises one
+`std::read` per file and runs `runRead`, which reads the files in order
+with `_read`, joins the texts, and prints the joined text once with
+`_renderReadView` (`lib/stdlib/readDialect.ts`). A first file with no
+final newline runs into the second, as real `cat` prints it. The views:
 
 - `whole`: the text as it is.
 - `numbered`: each line after its number, right-aligned in six columns,
@@ -553,7 +558,9 @@ and prints it with `_renderReadView` (`lib/stdlib/readDialect.ts`):
 
 Only `\n` ends a line, so a `\r` stays inside its line. A count of 0 is
 refused, because BSD `head -n 0` prints an error and exits 1 while GNU
-prints nothing. `cat -b`, `cat -s`, and `-c` go through bash.
+prints nothing. `cat -n` of more than one file is refused too: GNU
+numbers the files as one stream and BSD starts again at 1 for each.
+`cat -b`, `cat -s`, and `-c` go through bash.
 
 A count given twice never reaches the renderer. `splitFlags` takes a
 valued flag once, so `head -n 1 -n 2` and `head -2 -n 1` are refused on
@@ -563,7 +570,8 @@ answer would be right.
 
 `runRead` returns `_read`'s own failure. The plan already refused a
 missing file or a folder, so a failure there is a race or a permission
-error, and `_read`'s message says which.
+error, and `_read`'s message says which. The text of the files read
+before the one that failed is dropped.
 
 `shellFreeReadMatchesRealTools` runs each shell-free row and the real
 program over `tests/agency/stdlib/read-fixtures/`, and compares the
@@ -573,7 +581,10 @@ empty file, and a file with Windows line endings.
 These are left out:
 
 - `wc` in process. GNU and BSD pad the count column differently.
-- More than one file in process. `head` prints a header per file.
+- `head` and `tail` of more than one file: each prints a header per file.
+- `cat -n` of more than one file.
+- The text of the files before one that failed to read: real `cat`
+  prints them, and the shell-free read returns the failure alone.
 - `file`, `stat`, `md5sum`, `shasum`, `column`, `xxd`, and `hexdump`.
 
 ## Why the executors call `_bash`, `_write`, `_grep`, and `_read`

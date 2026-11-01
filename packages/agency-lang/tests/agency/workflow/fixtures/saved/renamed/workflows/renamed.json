@@ -1,0 +1,28 @@
+{
+  "workflow": {
+    "format": 1,
+    "name": "original",
+    "description": "Add two numbers and double the sum.",
+    "inputs": "{ a: number; b: number }",
+    "steps": [
+      {
+        "id": "sum",
+        "kind": "tool",
+        "module": "std::math",
+        "tool": "add",
+        "args": {
+          "a": {
+            "$ref": "inputs.a"
+          },
+          "b": {
+            "$ref": "inputs.b"
+          }
+        }
+      }
+    ]
+  },
+  "meta": {
+    "savedAt": "2026-10-30T00:00:00.000Z",
+    "savedBy": "writeWorkflow"
+  }
+}

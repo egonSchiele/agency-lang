@@ -14,6 +14,8 @@ import { resolveWorkflow, signatureKey } from "./resolve.js";
 import { toolRefs } from "./tools.js";
 import type { Owner, Problem, Range, Signature, ToolRef } from "./types.js";
 
+export { _workflowNameProblem } from "./parse.js";
+
 export type Compiled = {
   source: string;
   ranges: Range[];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWorkflow } from "./parse.js";
+import { _workflowNameProblem, parseWorkflow } from "./parse.js";
 import { isIdentifier, refsIn } from "./types.js";
 import { mealPlan, withArg, withFields, withStep } from "./testFixtures.js";
 
@@ -353,5 +353,13 @@ describe("refsIn", () => {
       { $ref: "inputs.x" },
       { $ref: "steps.y" },
     ]);
+  });
+});
+
+describe("_workflowNameProblem", () => {
+  it("accepts an identifier and refuses anything else with parse's message", () => {
+    expect(_workflowNameProblem("updateMealPlan")).toBeNull();
+    expect(_workflowNameProblem("../x")).toBe('name "../x" is not an identifier');
+    expect(_workflowNameProblem("__x")).toMatch(/reserved/);
   });
 });

@@ -26,6 +26,14 @@ function nameMessage(label: string, text: string): string | null {
   return isIdentifier(text) ? null : `${label} "${text}" is not an identifier`;
 }
 
+/** The rule parse gives a workflow's `name`, for `loadWorkflow`, which
+ *  takes a name from its caller and builds a file name from it. Null for
+ *  an identifier; otherwise parse's message, so `../x` is refused before
+ *  anything is read. */
+export function _workflowNameProblem(name: string): string | null {
+  return nameMessage("name", name);
+}
+
 function identifier(label: string) {
   return z.string({ error: `${label} must be a string` }).superRefine((text, ctx) => {
     const message = nameMessage(label, text);

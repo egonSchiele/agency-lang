@@ -1,0 +1,220 @@
+// Saving a workflow: the full check runs first, one std::workflow::save
+// prompt gates the write, and a saved workflow loads and lists back.
+// No node here calls a model.
+import { writeWorkflow, loadWorkflow, listWorkflows, runWorkflow, Workflow, WorkflowEntry } from "std::workflow"
+import { add, multiply } from "std::math"
+import { mkdir, remove } from "std::fs"
+import { exists } from "std::shell"
+import { resolve } from "std::path"
+import { Json } from "std::validation"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+const OUT = __dirname + "/test-output"
+const TOOLS = [add, multiply]
+
+def doubleSum(name: string): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Add two numbers and double the sum.",
+    inputs: "{ a: number; b: number }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: { "$ref": "inputs.b" } } },
+      { id: "doubled", kind: "tool", module: "std::math", tool: "multiply", args: { a: { "$ref": "steps.sum" }, b: 2 } }
+    ],
+    result: { "$ref": "steps.doubled" }
+  }
+}
+
+/** A workflow the check refuses: `subtract` is not in TOOLS. */
+def badWorkflow(name: string): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Subtract.",
+    inputs: "{ a: number }",
+    steps: [{ id: "diff", kind: "tool", module: "std::math", tool: "subtract", args: { a: { "$ref": "inputs.a" }, b: 1 } }]
+  }
+}
+
+def cleanup(name: string) {
+  remove(OUT + "/workflows/${name}.json") with approve
+}
+
+def hasEntry(listed: Result<WorkflowEntry[]>, name: string): number {
+  return filter(listed catch [], \entry -> entry.name == name).length
+}
+
+/** The failure's message, or "" for a success. */
+def errorOf(result: Result<any>): string {
+  if (result is failure(err)) {
+    return "${err}"
+  }
+  return ""
+}
+
+/** Saves `workflow`, recording every effect raised in "effects" and each
+  payload under its effect's name. A null `saveVerdict` rejects the save. */
+def runSave(workflow: Workflow, saveVerdict: string | null = "approve"): Result<WorkflowEntry> {
+  mkdir(OUT) with approve
+  setMutable("effects", [])
+  handle {
+    return writeWorkflow(workflow, TOOLS, OUT)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    setMutable(intr.effect, intr.data)
+    if (intr.effect == "std::workflow::save" && saveVerdict == null) {
+      return reject("cancelled by the test")
+    }
+    return approve()
+  }
+}
+
+node saveThenLoadAndList(): Json {
+  cleanup("doubleSum")
+  const saved = runSave(doubleSum("doubleSum"))
+  const loaded = loadWorkflow("doubleSum", OUT) with approve
+  const listed = listWorkflows(OUT) with approve
+  const written = exists("workflows/doubleSum.json", OUT)
+  cleanup("doubleSum")
+  if (saved is failure || loaded is failure || listed is failure) {
+    return ["failed", errorOf(saved), errorOf(loaded), errorOf(listed)]
+  }
+  return [
+    saved.value.name,
+    saved.value.path == resolve(OUT) + "/workflows/doubleSum.json",
+    saved.value.meta.savedBy,
+    loaded.value.workflow.steps.length,
+    loaded.value.workflow.result,
+    loaded.value.meta.savedAt == saved.value.meta.savedAt,
+    hasEntry(listed, "doubleSum"),
+    written
+  ]
+}
+
+/** A loaded workflow runs and returns its last step, like the one saved. */
+node loadedWorkflowRuns(): Json {
+  cleanup("reloaded")
+  runSave(doubleSum("reloaded"))
+  const loaded = loadWorkflow("reloaded", OUT) with approve
+  cleanup("reloaded")
+  if (loaded is failure(err)) {
+    return "failed: ${err}"
+  }
+  const ran = runWorkflow(loaded.value.workflow, { a: 2, b: 3 }, TOOLS, OUT) with approve
+  return ran catch "run failed"
+}
+
+node savePayload(): Json {
+  cleanup("shown")
+  runSave(doubleSum("shown"))
+  cleanup("shown")
+  const payload = getMutable("std::workflow::save", null)
+  return [payload.dir == resolve(OUT) + "/workflows", payload.name, payload.workflow.description]
+}
+
+node effectsInOrder(): Json {
+  cleanup("ordered")
+  runSave(doubleSum("ordered"))
+  cleanup("ordered")
+  return getMutable("effects", [])
+}
+
+node badWorkflowAsksNothingAndWritesNothing(): Json {
+  cleanup("bad")
+  const result = runSave(badWorkflow("bad"))
+  const written = exists("workflows/bad.json", OUT)
+  return [isFailure(result), getMutable("effects", []), written]
+}
+
+node rejectedSaveWritesNothing(): Json {
+  cleanup("rejected")
+  const result = runSave(doubleSum("rejected"), null)
+  const written = exists("workflows/rejected.json", OUT)
+  return [isFailure(result), written]
+}
+
+node saveTwiceOverwrites(): Json {
+  cleanup("twice")
+  runSave(doubleSum("twice"))
+  const second: Workflow = { ...doubleSum("twice"), description: "Second save." }
+  const saved = runSave(second)
+  const loaded = loadWorkflow("twice", OUT) with approve
+  const listed = listWorkflows(OUT) with approve
+  cleanup("twice")
+  const count = hasEntry(listed, "twice")
+  let description = ""
+  if (loaded is success(entry)) {
+    description = entry.workflow.description
+  }
+  return [isSuccess(saved), description, count]
+}
+
+node emptyDirIsRefused(): boolean {
+  const result = writeWorkflow(doubleSum("x"), TOOLS, "") with approve
+  return errorOf(result) =~ re/dir/
+}
+
+node missingDirIsRefused(): Json {
+  setMutable("effects", [])
+  let result: Result<WorkflowEntry> = failure("not run")
+  handle {
+    result = writeWorkflow(doubleSum("x"), TOOLS, __dirname + "/no-such-dir")
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    return approve()
+  }
+  return [errorOf(result) =~ re/does not exist/, getMutable("effects", [])]
+}
+
+node missingDirListsNothing(): Json {
+  const listed = listWorkflows(__dirname + "/no-such-dir") with approve
+  return [isSuccess(listed), (listed catch []).length]
+}
+
+node badNameIsRefusedBeforeAsking(): Json {
+  setMutable("effects", [])
+  let result: Result<WorkflowEntry> = failure("not run")
+  handle {
+    result = loadWorkflow("../x", OUT)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    return approve()
+  }
+  return [isFailure(result), errorOf(result) =~ re/not an identifier/, getMutable("effects", [])]
+}
+
+node missingWorkflowFails(): boolean {
+  const result = loadWorkflow("noSuchWorkflow", OUT) with approve
+  return errorOf(result) =~ re/noSuchWorkflow/
+}
+
+node notAWorkflowFailsToLoadAndList(): Json {
+  const saved = __dirname + "/fixtures/saved/notAWorkflow"
+  const loaded = loadWorkflow("notAWorkflow", saved) with approve
+  const listed = listWorkflows(saved) with approve
+  return [isFailure(loaded), isFailure(listed), errorOf(listed) =~ re/notAWorkflow/]
+}
+
+node renamedFileFailsToLoadAndList(): Json {
+  const saved = __dirname + "/fixtures/saved/renamed"
+  const loaded = loadWorkflow("renamed", saved) with approve
+  const listed = listWorkflows(saved) with approve
+  return [errorOf(loaded) =~ re/named original/, errorOf(listed) =~ re/named original/]
+}
+
+// Compares against resolve(OUT), which equals _realDir(OUT) only when no
+// path segment is a symlink. run.agency relies on the same thing for the
+// run payload.
+node scanPayloadIsTheWorkflowsFolder(): Json {
+  cleanup("scanned")
+  runSave(doubleSum("scanned"))
+  handle {
+    loadWorkflow("scanned", OUT)
+  } with (intr) {
+    setMutable(intr.effect, intr.data)
+    return approve()
+  }
+  cleanup("scanned")
+  return getMutable("std::workflow::scan", null).dir == resolve(OUT) + "/workflows"
+}

@@ -87,7 +87,7 @@ These came out of the design conversation and are settled. Each one records the 
 
 **23. Saving runs the full check, and the workflow's own `name` names its directory.** `writeWorkflow(workflow, tools, dir)` compiles and typechecks the workflow before anything is written. *Why:* a saved workflow should be one that compiles. The check needs the tool list, because the program imports the tools and the generator reads their signatures. A separate `name` parameter would be a second name that could disagree with the workflow's.
 
-**24. A saved workflow's inputs schema is computed when it is saved and stored in `meta.json`.** *Why:* only compiled code can turn the `inputs` type into a JSON Schema, which means a subprocess and a `std::run` prompt. Computing it at save time means `workflowTools` reads files instead of starting one subprocess per workflow each time a host builds its tool list. The toolbox stores its request schema the same way.
+**24. A saved workflow's inputs schema is computed when it is saved and stored in the saved file's `meta`.** *Why:* only compiled code can turn the `inputs` type into a JSON Schema, which means a subprocess and a `std::run` prompt. Computing it at save time means `workflowTools` reads files instead of starting one subprocess per workflow each time a host builds its tool list. The toolbox stores its request schema the same way.
 
 **25. A child process inherits the host's config.** Today only environment variables, the log settings, and `client.providerModules` reach it; `client.defaultModel`, `client.baseUrl`, and the rest of `agency.json` do not, because they are written into a program when it is compiled and the child is compiled with a fixed sandbox config. The parent will send its whole resolved config when it starts the child. That is a change to `run`, in its own PR. A client set from TypeScript with `setLLMClient` is an object and cannot be copied; reaching it would mean the child sends each model call back to the parent. That waits for a host that needs it: BMO sets its client from TypeScript only in a test.
 
@@ -402,7 +402,7 @@ return runWorkflow
   .withParamSchema("inputs", inputsSchema)
 ```
 
-`inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. For a saved workflow it is read from `meta.json`, where `writeWorkflow` stored it (decision 24). A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
+`inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. For a saved workflow it is read from the saved file's `meta`, where `writeWorkflow` stored it (decision 24). A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
 
 A checkpoint keeps a schema set with `.withParamSchema`. The function value records each schema it was given in `paramSchemas`, and the reviver writes that record and calls `.withParamSchema` again on revive (`lib/runtime/revivers/functionRefReviver.ts`, ADI-249). So after a resume the model still sees the tool's `inputs` type, and the agent's learned tools keep their `request` type too.
 
@@ -414,16 +414,16 @@ A checkpoint keeps a schema set with `.withParamSchema`. The function value reco
 
 ## Saving a workflow
 
-A workflow lives in a directory, one subdirectory per workflow, the way a toolbox holds tools:
+A workflow is saved as one file in the project directory's `workflows` folder:
 
 ```
 <dir>/
-  updateMealPlanFromNote/
-    workflow.json
-    meta.json
+  notes.agency
+  workflows/
+    updateMealPlanFromNote.json
 ```
 
-`workflow.json` is the format above. `meta.json` holds when it was saved, by what, and the inputs schema (decision 24). The directory name is the workflow's own `name`, and there is no other.
+The file holds `{ "workflow": ..., "meta": ... }`. `workflow` is the format above. `meta` holds when it was saved, by what, and the inputs schema (decision 24). The file name is the workflow's own `name`, and a file whose workflow has another name is refused. `dir` is also the directory local tool modules are named relative to, so the `workflows` folder keeps a listing away from the project's other files.
 
 `writeWorkflow(workflow, tools, dir)` runs the full check, compile and typecheck, before it writes anything, so only a workflow that compiles is saved (decision 23). `runWorkflow` checks again at run time, because a tool may change after the save.
 
@@ -443,7 +443,7 @@ A review interrupt, where a draft is shown and feedback goes back to a model, be
 type Workflow = { format: number; name: string; description: string;
                   inputs: string; steps: Json[]; result?: Json; limits?: WorkflowLimits }
 type WorkflowProblem = { step: string | null; field: string | null; message: string }
-type WorkflowEntry = { name: string; dir: string; workflow: Workflow; meta: WorkflowMeta }
+type WorkflowEntry = { name: string; path: string; workflow: Workflow; meta: WorkflowMeta }
 type CatalogEntry = { module: string; name: string; description: string;
                       params: CatalogParam[]; returns: string }
 
@@ -480,7 +480,7 @@ The smallest version that proves the idea:
 - `compileWorkflow`, `checkWorkflow`, `runWorkflow`, `workflowTool`, `workflowTools`, `catalog`.
 - Save, load, and list, with the two gates.
 
-Cut from the MVP: writing a workflow from a log, the designer agent, the review interrupt, a use count in `meta.json`, tool schema hashes, and saving the generated source beside the JSON.
+Cut from the MVP: writing a workflow from a log, the designer agent, the review interrupt, a use count in `meta`, tool schema hashes, and saving the generated source beside the JSON.
 
 Tests:
 
@@ -497,7 +497,7 @@ The MVP ships in three parts, each its own PR. Each part needs some small langua
 
 1. **Part 1, the generator** (#1292, merged): the format, parse, resolve, lower, render, `compileWorkflow`, and `checkWorkflow`.
 2. **Part 2, running**: `runWorkflow` and `std::workflow::run`, `Inputs!`, context strings as text, step limits, every bad tool reported at once, positive limits, and the warning for a `Json` return. Before it: #1297 (nodes check `!`) and the type checker fix for a guard around a `Result` (decision 20).
-3. **Part 3, saving and offering**: `writeWorkflow`, `loadWorkflow`, `listWorkflows`, the `scan` and `save` effects, the inputs schema in `meta.json`, `workflowTool`, `workflowTools`, and `catalog`. Before it: the reviver fix for `.withParamSchema`.
+3. **Part 3, saving and offering**: `writeWorkflow`, `loadWorkflow`, `listWorkflows`, the `scan` and `save` effects, the inputs schema in `meta`, `workflowTool`, `workflowTools`, and `catalog`. Before it: the reviver fix for `.withParamSchema`.
 
 Two more changes are needed before BMO can run a workflow against its real tools, and neither is part of a workflow PR: the config a child inherits (decision 25), and `allowedImports` for TypeScript files in the import closure.
 
@@ -530,6 +530,6 @@ Marked so the owner can check them while reading:
 ## Left to the builder
 
 - The exact fragment templates and the line-to-step map.
-- The `meta.json` field names, following `std::toolbox`.
+- The `meta` field names, `savedAt` and `savedBy`.
 - The problem messages' wording, as long as each names the step and the field.
 - The shape of `CatalogParam`, following what the tool loop already builds per parameter.

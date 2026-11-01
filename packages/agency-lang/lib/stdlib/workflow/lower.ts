@@ -32,7 +32,7 @@ const REF_TAIL = /^(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
 
 type StepsById = Record<string, ResolvedStep>;
 
-function importLine({ module, names }: ImportGroup): string {
+export function importLine({ module, names }: ImportGroup): string {
   if (!MODULE_PATH.test(module) || !names.every(isIdentifier)) {
     throw new Error(`cannot write an import from "${module}"`);
   }

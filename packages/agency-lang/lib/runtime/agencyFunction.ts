@@ -1,7 +1,7 @@
 import { validNamesSentence } from "../utils/validNames.js";
 import { aliasHint, canonicalKeys, type CanonicalKeysResult } from "../utils/parameterAliases.js";
 import { z } from "zod";
-import { stripBoundParams } from "./stripBoundParams.js";
+import { stripBoundParams } from "./paramDocs.js";
 import { approve, pass } from "./interrupts.js";
 import {
   assertUsable,

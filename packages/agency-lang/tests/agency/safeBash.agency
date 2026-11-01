@@ -148,6 +148,7 @@ node shellFreeEcho() {
     planDetail("echo \"a b\" c"),
     planDetail("echo -n hi"),
     planDetail("echo hi; echo bye"),
+    planDetail("echo hi < one.txt"),
   ]
 }
 
@@ -917,4 +918,16 @@ node readPayloadNamesTheRealParent(): any {
   }
   remove(LINK_FIXTURE) with approve
   return [dir == LINK_FIXTURE + "/outside", filename]
+}
+
+node inputRedirectIsARead() {
+  return [
+    grepNames("git status < one.txt"),
+    grepNames("cat < one.txt"),
+    grepNames("echo hi < one.txt > copy.txt"),
+    grepNames("git status < $F"),
+    grepNames("git status < one.txt < two.txt"),
+    grepNames("git status < ."),
+    grepNames("git status | grep hello < one.txt"),
+  ]
 }

@@ -21,6 +21,7 @@ import {
   grepEffect,
   grepExecution,
   readEffect,
+  ReadPayload,
   runGrep,
   GrepRender,
   GrepFileNames,
@@ -256,10 +257,11 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   status` would classify as a git read and ride along under whatever
   approves git reads.
 
-  Anything other than a plain `>` or `>>` to a literal target is a
-  failure, which sends the whole string to `std::bash`. An input redirect
-  is a read the effect set would otherwise never mention, and a variable
-  target cannot fill the payload without expanding it ourselves.
+  A `<` redirect reads its target, so it raises std::read, the mirror of
+  `>` raising std::write. One input redirect and one output redirect may
+  both appear. Anything else, or a target that is not literal, is a
+  failure, which sends the whole string to `std::bash`. A variable target
+  cannot fill the payload without expanding it ourselves.
   """
   // A dup redirect (`2>&1`) moves a stream and writes no file, so it
   // contributes nothing; it is the only `>&` form the parser accepts.
@@ -267,18 +269,58 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   // path computes the bytes it writes, and a dup changes which stream
   // echo's output goes to.
   const fileRedirects = [redirect for redirect in redirects if redirect.op != ">&"]
-  if (fileRedirects.length == 0) {
-    return success([])
+  const inputs = [redirect for redirect in fileRedirects if redirect.op == "<"]
+  const outputs = [redirect for redirect in fileRedirects if redirect.op != "<"]
+  if (inputs.length > 1) {
+    return failure("more than one input redirect")
   }
-  if (fileRedirects.length > 1) {
+  if (outputs.length > 1) {
     return failure("more than one redirect")
   }
-  const only = fileRedirects[0]
-  const prepared = prepareRedirectWrite(only, cwd, "")
-  if (isFailure(prepared)) {
-    return prepared
+  let effects: Effect[] = []
+  for (redirect in inputs) {
+    const read = inputRedirectRead(redirect, cwd)
+    if (isFailure(read)) {
+      return read
+    }
+    effects.push(readEffect(read.value))
   }
-  return success([writeEffect(prepared.value)])
+  for (redirect in outputs) {
+    const prepared = prepareRedirectWrite(redirect, cwd, "")
+    if (isFailure(prepared)) {
+      return prepared
+    }
+    effects.push(writeEffect(prepared.value))
+  }
+  return success(effects)
+}
+
+@capabilities(fileRead)
+def inputRedirectRead(redirect: Redirect, cwd: string): Result<ReadPayload> {
+  """
+  The file a `<` redirect reads, under the rules a read verb's path
+  follows: literal, and a regular file. A folder, a FIFO, or a missing
+  file is a failure.
+  """
+  if (redirect.fd != null) {
+    return failure("redirect with an explicit file descriptor")
+  }
+  const target = literalTarget(redirect.target)
+  if (isFailure(target)) {
+    return target
+  }
+  const found = try _searchTargetIn(target.value, cwd, tildeModeFor(redirect.target))
+  if (isFailure(found)) {
+    return found
+  }
+  const file = found.value.file
+  if (file == null) {
+    return failure("an input redirect would read a directory")
+  }
+  return success({
+    dir: found.value.dir,
+    filename: file
+  })
 }
 
 def literalTarget(word: Word): Result<string> {

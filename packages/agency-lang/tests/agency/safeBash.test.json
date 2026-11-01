@@ -57,9 +57,9 @@
     },
     {
       "nodeName": "shellFreeEcho",
-      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a flag, or a sequence sends it to bash.",
+      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a flag, or a sequence sends it to bash. An input redirect is never shell-free.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -663,6 +663,17 @@
       "description": "A read of a symlink names the directory of the file it points to, so the policy judges where the bytes really are.",
       "input": "",
       "expectedOutput": "[true,\"target.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "inputRedirectIsARead",
+      "description": "A < redirect reads its target, so it asks std::read beside the command's own question. A stdin reader with only an input redirect stays unrecognized, and so does a variable target, two input redirects, or a folder. A pipe-fed grep with an input redirect reads the file, so the line asks for it.",
+      "input": "",
+      "expectedOutput": "[[[\"std::git::status\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat with no path reads stdin\"}],[[\"std::read\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`variable` is not fully literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"more than one input redirect\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an input redirect would read a directory\"}],[[\"std::git::status\",\"std::read\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"

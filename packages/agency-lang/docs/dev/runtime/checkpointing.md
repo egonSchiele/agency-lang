@@ -160,6 +160,43 @@ both sides compare, and `markRepaired()` is its only writer.
 
 ---
 
+## Function values in a checkpoint
+
+A function value in a local or global, such as a tool list built with
+`.partial()` and `.describe()`, is written by `FunctionRefReviver.serialize`
+(`lib/runtime/revivers/functionRefReviver.ts`) as a small record. The record
+names the function and lists the changes made to it. The function's code is
+never written. `revive` finds the function in the registry and makes the same
+changes again, in this order:
+
+1. `rename`, when `registeredName` differs from `name`.
+2. `partial`, from the bound values in `params`.
+3. `describe`, from `toolDescription`.
+4. `withParamSchema`, once for each entry of `paramSchemas`.
+5. `preapprove`, when `isPreapproved` is set.
+
+`paramSchemas` holds the JSON Schema each `.withParamSchema(name, schema)` call
+was given, keyed by parameter name. For example, a saved toolbox tool is
+`runTool.partial(...).describe(...).withParamSchema("request", schema)`, and
+after a resume the model still sees the `request` type and not "any JSON
+value". The record holds JSON Schema and not the zod schema built from it,
+because zod values do not serialize. A JSON Schema is plain JSON, so
+`nativeTypeReplacer` never mistakes anything inside it for a native type.
+
+`partial` drops the entry of each parameter it binds, the same way it drops
+that parameter from the zod shape. `withParamSchema` refuses a bound
+parameter, so step 4 runs after step 2 and only sees unbound names. A
+function with no `.withParamSchema` call has no `paramSchemas` key.
+
+When the registry has no such function, `revive` returns a stub that throws if
+called (`makeUnresolvedFunctionStub`). The stub keeps every field `serialize`
+writes, `paramSchemas` included, so `serialize(revive(x))` equals `x`. It
+builds no zod schema from the record, because a stub is never shown to a
+model. A field added to `serialize` must be added to the stub and to the
+round-trip tests in `functionRefReviver.test.ts` in the same change.
+
+---
+
 ## Configuration
 
 In `agency.json`:

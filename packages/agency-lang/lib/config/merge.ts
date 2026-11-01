@@ -1,4 +1,5 @@
-import { isPlainObject, matchesConfigPath } from "./paths.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
+import { matchesConfigPath } from "./paths.js";
 
 /** A config path whose value the local file replaces whole. Each rule must
  *  also be listed in docs/site/guide/agency-config-file.md. */

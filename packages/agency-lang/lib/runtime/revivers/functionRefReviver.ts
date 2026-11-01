@@ -5,6 +5,7 @@ import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
 import { currentRun, currentRunOrNone, type Run } from "../asyncContext.js";
 import type { StatelogClient } from "../../statelogClient.js";
 import { restoreCreatedTool } from "../createdTool.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -41,6 +42,10 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // Serialize full tool definition (may have reduced schema/description)
     if (value.toolDefinition) {
       result.toolDescription = value.toolDefinition.description;
+    }
+    // Omitted when empty.
+    if (Object.keys(value.paramSchemas).length > 0) {
+      result.paramSchemas = value.paramSchemas;
     }
     if (value.isPreapproved) {
       result.isPreapproved = true;
@@ -107,6 +112,10 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       result = original.describe(value.toolDescription);
     } else {
       result = original;
+    }
+
+    if (isPlainObject(value.paramSchemas)) {
+      result = applyParamSchemas(result, value.paramSchemas);
     }
 
     // Restore preapproved state
@@ -192,6 +201,16 @@ function lookupInRegistry(
   return undefined;
 }
 
+/** Re-applies each saved `.withParamSchema` call. Runs after `partial`:
+ *  `withParamSchema` refuses a bound parameter, and `partial` already
+ *  dropped the bound names from the record before it was serialized. */
+function applyParamSchemas(fn: AgencyFunction, record: Record<string, unknown>): AgencyFunction {
+  return Object.entries(record).reduce(
+    (shaped, [name, schema]) => shaped.withParamSchema(name, schema),
+    fn,
+  );
+}
+
 /** A lazy tripwire for an unregistered block reference: a real
  *  AgencyFunction (so restore succeeds and the frame slot is filled) whose
  *  body throws a precise error IF anything invokes it. In every correct
@@ -273,8 +292,8 @@ function makeLazyCallbackRef(
 }
 
 /** A serialization-preserving tripwire for a ref whose function is in no
- *  loaded module: params, tool description, preapproval, and registeredName
- *  are rebuilt from the serialized fields so serialize(revive(x)) === x —
+ *  loaded module: params, tool description, param schemas, preapproval,
+ *  and registeredName are rebuilt from the serialized fields so serialize(revive(x)) === x —
  *  the ref can ride through this process (a parent holding an embedded
  *  child checkpoint, #652) and revive intact in the process that owns the
  *  module. Unlike callbacks, nothing fires these spontaneously, so the
@@ -311,6 +330,9 @@ function makeUnresolvedFunctionStub(
       typeof value.toolDescription === "string"
         ? { name, description: value.toolDescription, schema: null }
         : null,
+    // Kept only to re-serialize; a stub is never shown to a model, so no
+    // zod schema is built from it.
+    paramSchemas: isPlainObject(value.paramSchemas) ? value.paramSchemas : undefined,
     isPreapproved: value.isPreapproved === true,
   });
 }

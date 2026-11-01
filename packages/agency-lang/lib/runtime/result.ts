@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isAbortError, readCause, RunControlSignal } from "./errors.js";
 import { truncate } from "./truncate.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 import { isAborted, type AbortLog } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
 import { currentRunOrNone } from "./asyncContext.js";
@@ -144,10 +145,6 @@ function coerceMessage(error: unknown): string {
     return error.message;
   }
   return truncate(error);
-}
-
-function isPlainObject(value: unknown): boolean {
-  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 /** Data is always an object, so a reader can write `err.data.status` without

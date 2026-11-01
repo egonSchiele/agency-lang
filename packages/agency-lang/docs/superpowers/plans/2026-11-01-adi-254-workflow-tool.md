@@ -87,7 +87,7 @@ Each is a place the spec or the ticket leaves open. The owner can object to any 
 2. **The change lands at save time.** `meta.inputsSchema` holds the input form from now on, so every reader of the file sees an optional key, not only the tool. A workflow saved before this change keeps its stored schema, with the optional key required; saving it again fixes it. `workflowTools` does not rewrite a stored schema.
 3. **`workflowTool` returns `Result<any>`, not `any`.** It runs the check and the schema subprocess, and either can fail or be rejected. A failure returned as the tool would be a tool that fails on every call with no way to see why. The spec's Public API changes to match.
 4. **A saved workflow with no stored schema is refused by `workflowTools`,** with a message naming it and saying to save it again with `writeWorkflow`. Starting a subprocess to compute it is what the ticket rules out.
-5. **Both functions refuse a workflow whose name is one of the `tools` argument's names.** Two saved workflows cannot share a name, since each is one file. The check is one private helper, `nameTaken`, that `workflowTool` and `workflowTools` both call, so the two cannot disagree about a workflow. It compares against `tools`, the functions the workflow may call, which is often but not always the list the host hands `llm()`; the tool loop's `assertUniqueToolNames` (`lib/runtime/toolInvocation.ts:323`) stays the last guard for that list, and the docstrings say so. Refusing here returns a failure the host can read instead of a throw later.
+5. **Both functions refuse a workflow whose name is one of the `tools` argument's names.** Two saved workflows cannot share a name, since each is one file. The check and its message are one private helper, `nameClashProblem`, that `workflowTool` and `workflowTools` both call, so the two cannot disagree about a workflow. It compares against `tools`, the functions the workflow may call, which is often but not always the list the host hands `llm()`; the tool loop's `assertUniqueToolNames` (`lib/runtime/toolInvocation.ts:323`) stays the last guard for that list, and the docstrings say so. Refusing here returns a failure the host can read instead of a throw later.
 6. **The tool's `dir` is `resolve(dir)`,** the same absolute path `runWorkflow` names in its `std::workflow::run` payload, so an "always" answer given to a direct `runWorkflow` call covers the tool's calls too.
 7. **The tool's description is `workflow.description`, unchanged.** The model reads the inputs from the schema; the description says what the workflow does.
 8. **A stale saved workflow fails when it is called, not when it is listed.** `workflowTools` does not check a saved workflow's steps against `tools`, so a workflow whose tool was renamed or removed since it was saved still becomes a tool. Each call runs `_checked` before its prompt, so the call fails with the problems listed and starts nothing. Checking at listing time would cost one compile per saved workflow and a `std::read` per local module. The docstring and the dev doc say which it is. The owner can rule the other way; the change would be one `_checked` call per entry in `workflowTools`.
@@ -161,7 +161,7 @@ In `save.agency`, `savedMetaHasInputsSchema` keeps its five values. Change the c
 ### Task 2: `workflowTool` and `workflowTools`
 
 **Files:**
-- Modify: `stdlib/workflow.agency` (two exported defs, one private def, the module doc comment)
+- Modify: `stdlib/workflow.agency` (two exported defs, three private defs, the module doc comment)
 - Create: `tests/agency/workflow/tool.agency` and `tests/agency/workflow/tool.test.json`
 
 **Interfaces:**
@@ -169,9 +169,13 @@ In `save.agency`, `savedMetaHasInputsSchema` keeps its five values. Change the c
 - Produces, in `stdlib/workflow.agency`:
 
 ```
-/** The name of a tool in `tools` that `name` would collide with, or null.
-  A model cannot be handed two tools with one name. */
-def nameTaken(name: string, tools: any[]): string | null
+/** Why a workflow named `name` cannot be handed to a model beside `tools`,
+  or null when it can: two tools with one name are refused at the model
+  call. Named like `_workflowNameProblem`: the message is the rule. */
+def nameClashProblem(name: string, tools: any[]): string | null
+
+/** One saved workflow as a tool, or the reason it cannot be one. */
+def toolForEntry(entry: WorkflowEntry, tools: any[], dir: string): Result<any>
 
 /** The tool: runWorkflow with the workflow, the tools, and the directory
   bound, under the workflow's name and description, with the inputs schema
@@ -429,15 +433,15 @@ The order in `savedWorkflowsBecomeTools` is the listing's order, which Step 2 ma
 
 Run `make`, then the test. It fails to compile because `workflowTool` and `workflowTools` are not exported.
 
-- [ ] **Step 2: Implement the three defs**
+- [ ] **Step 2: Implement the five defs**
 
 After `catalog` and before the saving section in `workflow.agency`:
 
 `toolFor(workflow, tools, dir, inputsSchema)` is the chain in the background, in two statements as the probe wrote it. Its doc comment is the one in Interfaces.
 
-`nameTaken(name, tools)`: `find(tools, \tool -> tool.name == name)`, and that tool's name or null. The refusal both callers build from it: `` `workflow "${name}" has the same name as a tool the host passed; rename one of them` ``.
+`nameClashProblem(name, tools)`: null when `some(tools, \tool -> tool.name == name)` is false, else `` `workflow "${name}" has the same name as a tool the host passed; rename one of them` ``. Both callers return `failure(problem)` when it is not null, so the message lives here and nowhere else.
 
-`workflowTool`: `const where = resolve(dir)`; the clash check first, since it needs no read; `_checked(workflow, tools, where)`, returning `failure(checked.error, checked.data)` on failure as `runWorkflow` does; `_inputsSchema(checked.value.program)`, returned as it came on failure; then `success(toolFor(workflow, tools, where, inputsSchema.value))`. Its docstring is a tool description, so write it for a model:
+`workflowTool`: `const where = resolve(dir)`; `nameClashProblem` first, since it needs no read; `_checked(workflow, tools, where)`, returning `failure(checked.error, checked.data)` on failure as `runWorkflow` does; `_inputsSchema(checked.value.program)`, returned as it came on failure; then `success(toolFor(workflow, tools, where, inputsSchema.value))`. Its docstring is a tool description, so write it for a model:
 
 ```
 """
@@ -449,7 +453,9 @@ Make one tool that runs a workflow when called. The tool has the workflow's name
 """
 ```
 
-`workflowTools`: `listWorkflows(dir)`, returned as it came on failure. Then, with `const where = resolve(dir)`, one entry at a time: an entry whose `meta.inputsSchema` is null fails with `` `${entry.name} was saved before inputs schemas were recorded; save it again with writeWorkflow` ``; an entry `nameTaken` refuses fails with the refusal above; otherwise it becomes `toolFor(entry.workflow, tools, where, entry.meta.inputsSchema)`. Build the list with `map` over the entries to a `Result<any>` each and `find(..., isFailure)` for the first failure, as `listWorkflows` does with its entries; no loop that pushes. Its docstring:
+`toolForEntry(entry, tools, dir)`: `failure(` `` `${entry.name} was saved before inputs schemas were recorded; save it again with writeWorkflow` `` `)` when `entry.meta.inputsSchema` is null; `failure(problem)` when `nameClashProblem(entry.name, tools)` gives one; else `success(toolFor(entry.workflow, tools, dir, entry.meta.inputsSchema))`.
+
+`workflowTools`: `listWorkflows(dir)`, returned as it came on failure. Then, with `const where = resolve(dir)`: `const built = map(listed.value, \entry -> toolForEntry(entry, tools, where))`, `find(built, \tool -> isFailure(tool))` returned when not null, else `success(map(built, \tool -> tool.value))`, the shape `listWorkflows` already uses for its entries. Its docstring:
 
 ```
 """
@@ -515,6 +521,7 @@ Commit the four files with the message `docs: a workflow as one tool`.
 
 - Ticket tests: "a model call, mocked, picks the workflow tool and the workflow runs with the given inputs" is `modelCallsTheTool`, which checks the `std::workflow::run` payload's name and inputs. "The tool's inputs schema is still there after a pause and resume" is `schemaSurvivesACheckpoint`; the pattern, a live local across a raise the runner answers, is the one `tests/agency/renamed-ref-checkpoint.agency` uses for the same reviver. "A workflow named like a host tool is refused by `workflowTools`" is `nameClashIsRefused`.
 - Spec coverage: the chain (Task 2), the schema from the stored file for a saved workflow (Task 2), the clash refusal in both functions (Task 2), the checkpoint (Task 2 test), and the owner's optional-input ruling (Task 1).
+- Anti-pattern pass (2026-11-01): the clash message is built in one helper, `nameClashProblem`, which returns the message as `_workflowNameProblem` does, so neither caller spells it; the per-entry rules of `workflowTools` are one def, `toolForEntry`, mapped over the listing, so the function reads as a description. The test file repeats `doubleSum`, `badWorkflow`, `cleanup`, and `errorOf` from `save.agency`; `run.agency` and `save.agency` already repeat each other the same way, and a shared fixture module for the three is a cleanup outside this ticket.
 - Review round 1 (2026-11-01) applied: the `modelCallsTheTool` effects list, the test's own output folder and name-ordered listing, the `index.test.ts` scaffold line, the clash helper shared by both functions, the stale-workflow rule stated rather than checked, the `additionalProperties` note, "at most one" scan prompt, the output-form comment in the test, and the older-saves note for the PR body.
 - Type consistency: `toolFor` takes `(workflow, tools, dir, inputsSchema)` in every call; `inputsSchemaOf` reads `properties.inputs` of the tool's schema, which the probe showed is where `.withParamSchema("inputs", ...)` puts it.
 - Every Agency snippet's shape was checked against a probe on a current build: the chain, `tool.name` on an `any[]`, `schema(T).toJSONSchema("input")`, and a custom effect with one field.

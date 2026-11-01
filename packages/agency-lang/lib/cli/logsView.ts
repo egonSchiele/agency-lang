@@ -408,7 +408,7 @@ export async function parseStatelogStream(
  *  tree `x` extract-a-trace action; stdin does not (no local file to read). */
 async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<void> {
   // The viewer checks --trace-id against the log once it has read it, so no
-  // path here reads the log just to check the id. Under --follow the named
+  // path here reads the log only to check the id. Under --follow the named
   // trace may not have started yet, and the viewer waits for it.
   if (file === "-") {
     const parsed = await parseStatelogStream(process.stdin);

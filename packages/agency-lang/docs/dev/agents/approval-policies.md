@@ -232,6 +232,18 @@ cannot hold it. So the handler prints the whole change above the prompt,
 as a syntax-highlighted unified diff, and the prompt's own body drops the
 source and keeps the metadata that names the change.
 
+A skill review (`std::skills::review`) works the same way, without a
+diff: its interrupt carries no earlier draft, so the handler prints the
+whole draft above the prompt (the name, the description, and the body as
+highlighted markdown), and the prompt's table keeps `dir` and `name`.
+`PROMPT_HIDDEN_FIELDS` lists, for each of these effects, the fields the
+prompt's table leaves out because they are printed above it. An effect
+that starts printing something above the prompt adds a row there.
+
+The prompt's table is drawn at `interruptBodyWidth()`, the width the
+footer wraps its body to. A table drawn at the terminal's width is two
+columns too wide for the footer and gets wrapped a second time.
+
 `renderInterruptDiff` in `stdlib/policy.agency` decides whether an
 interrupt has a diff and builds it; `printInterruptDiff` prints it. There
 are exactly two callers, which is the part that is easy to get wrong:

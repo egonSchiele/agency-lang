@@ -6,8 +6,8 @@ import { tmpdir } from "os";
 const dir = mkdtempSync(join(tmpdir(), "policy-code-diffs-"));
 const policyFile = join(dir, "policy.json");
 
-// "a" approves each of the two interrupts at the menu.
-const answers = ["a", "a"];
+// "a" approves each of the three interrupts at the menu.
+const answers = ["a", "a", "a"];
 let asked = 0;
 const inputOverride = async () => {
   asked += 1;
@@ -86,4 +86,9 @@ writeFileSync("__result.json", JSON.stringify({
   // pipe here, so that width is 78 on every machine.
   tablesFitPrompt: tableLines.length > 0 && tableLines.every((line) => line.length <= 78),
   longDirKept: tableLines.join("").replace(/[│\s]/g, "").includes("a".repeat(200)),
+  // A skill draft prints above the prompt, like a diff: its name, its
+  // description, and its body, the body once and not again in the table.
+  skillHeader: plain.includes("⏺ Skill: tv-tables"),
+  skillShowsDescription: plain.includes("Show tables in tv when the user asks"),
+  skillBodyShownOnce: (plain.match(/Run tv agent new yourself/g) || []).length === 1,
 }, null, 2));

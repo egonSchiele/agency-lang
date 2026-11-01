@@ -6,7 +6,7 @@
   "sourceShownOnce": true,
   "autoApprovedHeader": true,
   "autoApprovedShowsSource": true,
-  "promptsDrawn": 2,
+  "promptsDrawn": 3,
   "controlCharsStripped": true,
   "carriageReturnStripped": true,
   "bidiOverrideStripped": true,
@@ -18,5 +18,8 @@
   "survivedNullPayload": "survived",
   "titleReached": true,
   "tablesFitPrompt": true,
-  "longDirKept": true
+  "longDirKept": true,
+  "skillHeader": true,
+  "skillShowsDescription": true,
+  "skillBodyShownOnce": true
 }

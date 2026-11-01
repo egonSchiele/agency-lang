@@ -24,7 +24,7 @@ describe("driverSource", () => {
   it("writes the imports relative to the driver's folder and lists the tools", () => {
     const source = driverSource(MEAL_IMPORTS, PROJECT, DRIVER_DIR);
     expect(source.split("\n").slice(0, 4)).toEqual([
-      'import { catalog as wfCatalog, loadWorkflow as wfLoad, checkWorkflow as wfCheck, compileWorkflow as wfCompile, listWorkflows as wfList } from "std::workflow"',
+      'import { catalog as wfCatalog, loadWorkflow as wfLoad, checkWorkflow as wfCheck, compileWorkflow as wfCompile, listWorkflows as wfList, runWorkflow as wfRun } from "std::workflow"',
       'import { searchNotes, readNote } from "../../notes.agency"',
       'import { round } from "std::math"',
       "",

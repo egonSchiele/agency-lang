@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import path from "path";
 import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 
@@ -78,6 +86,10 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     const broken = addOne("steps.lists[0].id");
     broken.workflow.name = "broken";
     save("broken", broken);
+    writeFileSync(
+      path.join(project, "reject-add.json"),
+      JSON.stringify({ "test::lists::add": [{ action: "reject" }] }),
+    );
   });
 
   afterAll(() => {
@@ -151,5 +163,78 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     const r = await runCli(project, ["check", "tools/x.json"]);
     expect(r.code).toBe(2);
     noDriverLeft();
+  });
+
+  describe("run", () => {
+    const INPUTS = ["--inputs", JSON.stringify({ noteTitle: "Groceries" })];
+    const runAddOne = (...flags: string[]) =>
+      runCli(project, ["run", "addOne", ...INPUTS, ...flags]);
+
+    it("runs with the step's effect approved, and approves the start prompts itself", async () => {
+      const r = await runAddOne("--approve", "test::lists::add");
+      expect(r.stderr).toBe("");
+      expect(r.code).toBe(0);
+      expect(r.stdout.trim()).toBe("added 1 items to l1/Meals");
+      noDriverLeft();
+    });
+
+    it("runs nothing without a terminal when the policy does not cover an effect", async () => {
+      const r = await runAddOne();
+      expect(r.code).toBe(1);
+      expect(r.stderr).toMatch(/test::lists::add\s+step add \(addListItems\)/);
+      expect(r.stderr).toContain("Run this in a terminal to approve them");
+      expect(r.stdout).toBe("");
+      noDriverLeft();
+    });
+
+    it("lets the person's rejection of a start prompt win", async () => {
+      const r = await runAddOne("--approve", "test::lists::add", "--reject", "std::workflow::run");
+      expect(r.code).toBe(1);
+      expect(r.stdout + r.stderr).not.toContain("added");
+      noDriverLeft();
+    });
+
+    it("stops at a step the person's policy rejects, without asking", async () => {
+      const r = await runAddOne("--policy", "reject-add.json");
+      expect(r.code).toBe(1);
+      expect(r.stderr).not.toContain("does not cover");
+      expect(r.stderr).toMatch(/step add/);
+      noDriverLeft();
+    });
+
+    it("prints the result as JSON with --json", async () => {
+      const r = await runAddOne("--approve", "test::lists::add", "--json");
+      expect(r.code).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual({ success: true, value: "added 1 items to l1/Meals" });
+    });
+
+    it("exits 2 for --inputs that is not JSON", async () => {
+      const r = await runCli(project, ["run", "addOne", "--inputs", "nope"]);
+      expect(r.code).toBe(2);
+    });
+
+    // A --max-time that trips while the run waits on the workflow's child
+    // does not stop it today: `agency run --max-time` has the same gap when
+    // its program calls runWorkflow. So this checks only that the budget
+    // flags reach the run's settings, where a malformed one is refused.
+    it("refuses a --max-time with no unit, as agency run does", async () => {
+      const r = await runAddOne("--approve", "test::lists::add", "--max-time", "300");
+      expect(r.code).toBe(2);
+      expect(r.stderr).toMatch(/max-time/);
+    });
+
+    it("writes the child's log events to --log-file", async () => {
+      const log = path.join(project, "run.jsonl");
+      const r = await runAddOne("--approve", "test::lists::add", "--log-file", log);
+      expect(r.code).toBe(0);
+      // The child's own run starts at the workflow's main node.
+      expect(readFileSync(log, "utf-8")).toContain('"entryNode":"main"');
+    });
+
+    it("refuses --draft, which a workflow run does not take", async () => {
+      const r = await runAddOne("--draft", "x");
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toMatch(/unknown option '--draft'/);
+    });
   });
 });

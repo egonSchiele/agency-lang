@@ -312,17 +312,13 @@ def inputRedirectRead(redirect: Redirect, cwd: string): Result<ReadPayload> {
   if (isFailure(target)) {
     return target
   }
-  const found = try _searchTargetIn(target.value, cwd, tildeModeFor(redirect.target))
-  if (isFailure(found)) {
-    return found
-  }
-  const file = found.value.file
-  if (file == null) {
-    return failure("an input redirect would read a directory")
+  const path = resolveReadPath(target.value, redirect.target, cwd, "an input redirect")
+  if (isFailure(path)) {
+    return path
   }
   return success({
-    dir: found.value.dir,
-    filename: file
+    dir: path.value.dir,
+    filename: path.value.filename
   })
 }
 
@@ -407,6 +403,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
       }
       return success([...git.value, ...redirect.value])
     }
+    "tr" => trEffects(command, readsStdin, redirect.value)
     _ => otherVerbEffects(name.text, command, cwd, readsStdin, redirect.value)
   }
 }
@@ -418,9 +415,6 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
   verb asks std::read for each file it names, and reading its stdin from
   a pipe adds nothing. Any other verb is unrecognized.
   """
-  if (verb == "tr") {
-    return trEffects(command, readsStdin, redirects)
-  }
   const spec = READ_VERBS[verb]
   if (spec == null) {
     return failure("no rule for `${verb}`")
@@ -431,10 +425,14 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
   }
 }
 
+def readEffects(paths: ReadPath[]): Effect[] {
+  return [readEffect({ dir: path.dir, filename: path.filename }) for path in paths]
+}
+
 def fileReadEffects(verb: string, found: FileRead, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   return match(found) {
     { kind: "stdin" } => stdinStage(verb, readsStdin, redirects)
-    { kind: "files", paths } => success([...[readEffect({ dir: path.dir, filename: path.filename }) for path in paths], ...redirects])
+    { kind: "files", paths } => success([...readEffects(paths), ...redirects])
   }
 }
 
@@ -519,7 +517,11 @@ export type FlagSpec = {
   /** Every flag must come before the first positional word. True for a
    * command real grep will run: BSD grep, and GNU grep with
    * POSIXLY_CORRECT set, read a later `-s` as a file to search. */
-  optionsFirst: boolean
+  optionsFirst: boolean;
+  /** The valued flag a bare digit flag stands for: with `n`, head's `-20`
+   * is `-n 20`. A digit flag after a valued flag is that flag's value,
+   * so `head -n -5` stays a refused value. */
+  digitFlag?: string
 }
 
 /** One valued flag and its value. `flag` is the letter for a short flag
@@ -626,6 +628,15 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   """
   if (word.flagName.startsWith("--")) {
     return readLongFlag(verb, word, next, spec)
+  }
+  const digitFlag = spec.digitFlag
+  const digits = word.flagName.slice(1)
+  if (digitFlag != null && word.flagValue == null && isDigits(digits)) {
+    return success({
+      plain: [],
+      values: [{ flag: digitFlag, value: digits }],
+      consumed: 1
+    })
   }
   if (word.flagValue != null) {
     return failure("${verb} does not take `${renderFlag(word)}`")
@@ -1056,17 +1067,52 @@ def grepFileNames(letters: string[]): GrepFileNames {
   return "default"
 }
 
-/** A read verb's flags, how many paths it takes, and whether a bare
- * digit flag (`-20`) means `-n 20`. */
+/** How many of something a command takes: at least `least`, and at most
+ * `most`, or any number when `most` is null. */
+type CountRange = {
+  least: number;
+  most: number | null
+}
+
+static const ANY_NUMBER: CountRange = { least: 0, most: null }
+static const AT_MOST_ONE: CountRange = { least: 0, most: 1 }
+static const EXACTLY_TWO: CountRange = { least: 2, most: 2 }
+
+def countFits(given: number, range: CountRange): boolean {
+  const most = range.most
+  if (given < range.least) {
+    return false
+  }
+  return most == null || given <= most
+}
+
+/** How many `noun`s a range allows, for a message: `2 paths`, `at most 1
+ * path`, `1 to 2 sets`. */
+def describeCount(range: CountRange, noun: string): string {
+  const most = range.most
+  if (most == null) {
+    return "at least ${range.least} ${noun}s"
+  }
+  const nouns = if (most == 1) then noun else "${noun}s"
+  if (range.least == most) {
+    return "${most} ${nouns}"
+  }
+  if (range.least == 0) {
+    return "at most ${most} ${nouns}"
+  }
+  return "${range.least} to ${most} ${nouns}"
+}
+
+/** A read verb's flags, how many paths it takes, and which of its valued
+ * flags hold a count. */
 export type ReadVerb = {
   flags: FlagSpec;
-  /** 0 for any number; 1 for head and tail (several files print headers)
-   * and uniq (a second positional is its output file); 2 for diff and
-   * cmp, which need exactly two. */
-  maxPaths: number;
-  /** True for head and tail, where `-20` is `-n 20`, and the value of
-   * `-n` or `-c` is a count. */
-  digitFlagIsCount: boolean
+  /** head and tail take one path, because several files print headers;
+   * uniq takes one, because a second positional is its output file; diff
+   * and cmp compare exactly two. */
+  paths: CountRange;
+  /** The valued flags whose value must be digits, such as `-n` on head. */
+  countFlags: string[]
 }
 
 /** The verbs that read the files they name, or their stdin when they
@@ -1082,63 +1128,63 @@ export type ReadVerb = {
 export static const READ_VERBS: Record<string, ReadVerb> = {
   cat: {
     flags: { plain: ["n", "b", "s"], valued: [], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   head: {
-    flags: { plain: [], valued: ["n", "c"], optionsFirst: true },
-    maxPaths: 1,
-    digitFlagIsCount: true
+    flags: { plain: [], valued: ["n", "c"], optionsFirst: true, digitFlag: "n" },
+    paths: AT_MOST_ONE,
+    countFlags: ["n", "c"]
   },
   tail: {
-    flags: { plain: [], valued: ["n", "c"], optionsFirst: true },
-    maxPaths: 1,
-    digitFlagIsCount: true
+    flags: { plain: [], valued: ["n", "c"], optionsFirst: true, digitFlag: "n" },
+    paths: AT_MOST_ONE,
+    countFlags: ["n", "c"]
   },
   wc: {
     flags: { plain: ["l", "w", "c", "m"], valued: [], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   diff: {
     flags: { plain: ["u", "q", "N", "w", "b", "B", "--color=never"], valued: ["U"], optionsFirst: true },
-    maxPaths: 2,
-    digitFlagIsCount: false
+    paths: EXACTLY_TWO,
+    countFlags: ["U"]
   },
   cmp: {
     flags: { plain: [], valued: [], optionsFirst: true },
-    maxPaths: 2,
-    digitFlagIsCount: false
+    paths: EXACTLY_TWO,
+    countFlags: []
   },
   sort: {
     flags: { plain: ["n", "r", "u", "f", "b"], valued: ["k", "t"], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   uniq: {
     flags: { plain: ["c", "d", "u", "i"], valued: [], optionsFirst: true },
-    maxPaths: 1,
-    digitFlagIsCount: false
+    paths: AT_MOST_ONE,
+    countFlags: []
   },
   cut: {
     flags: { plain: [], valued: ["d", "f", "c"], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   nl: {
     flags: { plain: [], valued: ["b"], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   tac: {
     flags: { plain: [], valued: [], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   rev: {
     flags: { plain: [], valued: [], optionsFirst: true },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   }
 }
 
@@ -1162,15 +1208,9 @@ static const TR_FLAGS: FlagSpec = {
   optionsFirst: true
 }
 
-/** The least and the most sets tr takes with some flags. */
-type SetCount = {
-  least: number;
-  most: number
-}
-
 /** How many sets tr takes, by its plain flags sorted and joined. `tr -s
  * a b` squeezes after translating, so -s takes one set or two. */
-static const TR_SET_COUNTS: Record<string, SetCount> = {
+static const TR_SET_COUNTS: Record<string, CountRange> = {
   "": { least: 2, most: 2 },
   d: { least: 1, most: 1 },
   s: { least: 1, most: 2 },
@@ -1198,105 +1238,55 @@ def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]):
       return failure("a tr set is not literal")
     }
   }
-  const given = split.value.positionals.length
-  if (given < counts.least || given > counts.most) {
-    return failure("tr takes ${counts.least} to ${counts.most} sets here")
+  if (!countFits(split.value.positionals.length, counts)) {
+    return failure("tr takes ${describeCount(counts, "set")} here")
   }
   return stdinStage("tr", readsStdin, redirects)
 }
 
-/** Whether a flag word uses the word after it as its value: `-n` does,
- * `-n5` does not. Mirrors how `readFlagWord` reads a short flag. */
-def flagTakesNextWord(word: FlagWord, valued: string[]): boolean {
-  if (word.flagName.startsWith("--")) {
-    return word.flagValue == null && valued.includes(word.flagName)
-  }
-  const letters = word.flagName.slice(1)
-  let position = 0
-  while (position < letters.length) {
-    if (valued.includes(letters.charAt(position))) {
-      return position == letters.length - 1
-    }
-    position = position + 1
-  }
-  return false
-}
-
-def countFlagAsN(args: Word[], valued: string[]): Word[] {
+@capabilities(fileRead)
+def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Result<ReadPath> {
   """
-  head and tail read `-20` as `-n 20`. The parser hands it over as one
-  flag named `-20`, so it is rewritten here into `-n` and the literal
-  `20`. A digit flag that is the value of the flag before it stays as it
-  is: in `head -n -5`, GNU reads `-5` as "all but the last five", and
-  left alone it is refused as a value that is not literal.
+  A path a command reads, resolved with `_searchTargetIn` to a regular
+  file. A folder is refused because the program would read what no
+  payload names (`diff a b` of two folders reads every file under both,
+  links followed). A FIFO or a device is refused because a read of it may
+  never return. A missing path is refused too, so any doubt asks
+  std::bash. `subject` names the reader in the folder message.
   """
-  let out: Word[] = []
-  let previousTakesValue = false
-  for (word in args) {
-    if (word is { tag: "flag" }) {
-      const letters = word.flagName.slice(1)
-      const isCount = !word.flagName.startsWith("--") && word.flagValue == null && isDigits(letters)
-      if (isCount && !previousTakesValue) {
-        out.push({ tag: "flag", flagName: "-n" })
-        out.push({ tag: "literal", text: letters })
-        previousTakesValue = false
-        continue
-      }
-      previousTakesValue = flagTakesNextWord(word, valued)
-      out.push(word)
-      continue
-    }
-    previousTakesValue = false
-    out.push(word)
+  const target = try _searchTargetIn(text, cwd, tildeModeFor(word))
+  if (isFailure(target)) {
+    return target
   }
-  return out
-}
-
-/** The path count a read verb needs, or a failure naming it. */
-def checkPathCount(verb: string, count: number, maxPaths: number): Result {
-  if (maxPaths == 2 && count != 2) {
-    return failure("${verb} takes two paths")
+  const file = target.value.file
+  if (file == null) {
+    return failure("${subject} would read a directory")
   }
-  if (maxPaths == 1 && count > 1) {
-    return failure("${verb} takes one path")
-  }
-  return success(null)
+  return success({
+    dir: target.value.dir,
+    filename: file,
+    argument: target.value.argument
+  })
 }
 
 @capabilities(fileRead)
 def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVerb): Result<FileRead> {
   """
   A read verb's command checked against its row: the files it reads,
-  each resolved to a regular file, or its stdin when it names none. A
-  folder is refused because the program would read what no payload
-  names (`diff a b` of two folders reads every file under both, links
-  followed). A FIFO or a device is refused because a read of it may
-  never return. A missing path is refused too, so any doubt asks
-  std::bash.
+  each resolved to a regular file, or its stdin when it names none.
   """
-  const args = if (spec.digitFlagIsCount) then countFlagAsN(command.args, spec.flags.valued) else command.args
-  const checked: SimpleCommand = {
-    tag: "simpleCommand",
-    assignments: command.assignments,
-    command: command.command,
-    args: args,
-    redirects: command.redirects
-  }
-  const split = splitFlags(verb, checked, spec.flags)
+  const split = splitFlags(verb, command, spec.flags)
   if (isFailure(split)) {
     return split
   }
-  if (spec.digitFlagIsCount) {
-    for (entry in split.value.values) {
-      if (!isDigits(entry.value)) {
-        return failure("the value of `-${entry.flag}` is not a number")
-      }
+  for (entry in split.value.values) {
+    if (spec.countFlags.includes(entry.flag) && !isDigits(entry.value)) {
+      return failure("the value of `-${entry.flag}` is not a number")
     }
   }
   const positionals = split.value.positionals
-  const count = checkPathCount(verb, positionals.length, spec.maxPaths)
-  if (isFailure(count)) {
-    return count
+  if (!countFits(positionals.length, spec.paths)) {
+    return failure("${verb} takes ${describeCount(spec.paths, "path")}")
   }
   if (positionals.length == 0) {
     return success({ kind: "stdin" })
@@ -1307,19 +1297,11 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
     if (text is failure(why)) {
       return failure("the ${verb} path is not literal")
     }
-    const target = try _searchTargetIn(text.value, cwd, tildeModeFor(word))
-    if (isFailure(target)) {
-      return target
+    const path = resolveReadPath(text.value, word, cwd, verb)
+    if (isFailure(path)) {
+      return path
     }
-    const file = target.value.file
-    if (file == null) {
-      return failure("${verb} would read a directory")
-    }
-    paths.push({
-      dir: target.value.dir,
-      filename: file,
-      argument: target.value.argument
-    })
+    paths.push(path.value)
   }
   return success({
     kind: "files",
@@ -1327,6 +1309,9 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
     split: split.value
   })
 }
+
+/** How many lines head and tail print when no count is given. */
+static const DEFAULT_LINE_COUNT = 10
 
 /** The read verbs the shell-free path prints itself. */
 static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
@@ -1407,7 +1392,7 @@ def readViewFor(verb: string, split: SplitArgs): Result<ReadView> {
     return failure("not rendered shell-free")
   }
   const counts = [entry.value for entry in split.values if entry.flag == "n"]
-  const lines = if (counts.length == 0) then 10 else digitsValue(counts[0])
+  const lines = if (counts.length == 0) then DEFAULT_LINE_COUNT else digitsValue(counts[0])
   if (lines == 0) {
     return failure("a count of 0 is refused shell-free")
   }

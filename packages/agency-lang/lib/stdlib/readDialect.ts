@@ -24,10 +24,13 @@ function linesOf(text: string): string[] {
   return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
 }
 
-/** A line with its number right-aligned in six columns and a tab, the
- * format GNU and BSD `cat -n` share. */
+/** The width `cat -n` right-aligns a line number in, on GNU and BSD. */
+const LINE_NUMBER_WIDTH = 6;
+
+/** A line after its number and a tab, the format GNU and BSD `cat -n`
+ * share. */
 function numbered(line: string, index: number): string {
-  return `${String(index + 1).padStart(6, " ")}\t${line}`;
+  return `${String(index + 1).padStart(LINE_NUMBER_WIDTH, " ")}\t${line}`;
 }
 
 /** What cat, cat -n, head -n, or tail -n prints for `text`. */

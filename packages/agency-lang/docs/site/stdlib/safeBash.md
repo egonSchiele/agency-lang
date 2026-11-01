@@ -307,11 +307,15 @@ export type FlagSpec = {
   /** Every flag must come before the first positional word. True for a
    * command real grep will run: BSD grep, and GNU grep with
    * POSIXLY_CORRECT set, read a later `-s` as a file to search. */
-  optionsFirst: boolean
+  optionsFirst: boolean;
+  /** The valued flag a bare digit flag stands for: with `n`, head's `-20`
+   * is `-n 20`. A digit flag after a valued flag is that flag's value,
+   * so `head -n -5` stays a refused value. */
+  digitFlag?: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L512))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L510))
 
 ### FlagValue
 
@@ -327,7 +331,7 @@ export type FlagValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L527))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L529))
 
 ### SplitArgs
 
@@ -342,29 +346,28 @@ export type SplitArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L533))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L535))
 
 ### ReadVerb
 
-A read verb's flags, how many paths it takes, and whether a bare
-digit flag (`-20`) means `-n 20`.
+A read verb's flags, how many paths it takes, and which of its valued
+flags hold a count.
 
 ```ts
-/** A read verb's flags, how many paths it takes, and whether a bare
- * digit flag (`-20`) means `-n 20`. */
+/** A read verb's flags, how many paths it takes, and which of its valued
+ * flags hold a count. */
 export type ReadVerb = {
   flags: FlagSpec;
-  /** 0 for any number; 1 for head and tail (several files print headers)
-   * and uniq (a second positional is its output file); 2 for diff and
-   * cmp, which need exactly two. */
-  maxPaths: number;
-  /** True for head and tail, where `-20` is `-n 20`, and the value of
-   * `-n` or `-c` is a count. */
-  digitFlagIsCount: boolean
+  /** head and tail take one path, because several files print headers;
+   * uniq takes one, because a second positional is its output file; diff
+   * and cmp compare exactly two. */
+  paths: CountRange;
+  /** The valued flags whose value must be digits, such as `-n` on head. */
+  countFlags: string[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1061))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1108))
 
 ### FlatCommand
 
@@ -382,7 +385,7 @@ export type FlatCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1505))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1490))
 
 ## Constants
 
@@ -413,7 +416,7 @@ export static const GREP_FLAGS: FlagSpec = {
 
 **Type:** [FlagSpec](#flagspec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L562))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L564))
 
 ### READ_VERBS
 
@@ -425,26 +428,28 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: [],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   head: {
     flags: {
       plain: [],
       valued: ["n", "c"],
-      optionsFirst: true
+      optionsFirst: true,
+      digitFlag: "n"
     },
-    maxPaths: 1,
-    digitFlagIsCount: true
+    paths: AT_MOST_ONE,
+    countFlags: ["n", "c"]
   },
   tail: {
     flags: {
       plain: [],
       valued: ["n", "c"],
-      optionsFirst: true
+      optionsFirst: true,
+      digitFlag: "n"
     },
-    maxPaths: 1,
-    digitFlagIsCount: true
+    paths: AT_MOST_ONE,
+    countFlags: ["n", "c"]
   },
   wc: {
     flags: {
@@ -452,8 +457,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: [],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   diff: {
     flags: {
@@ -461,8 +466,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: ["U"],
       optionsFirst: true
     },
-    maxPaths: 2,
-    digitFlagIsCount: false
+    paths: EXACTLY_TWO,
+    countFlags: ["U"]
   },
   cmp: {
     flags: {
@@ -470,8 +475,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: [],
       optionsFirst: true
     },
-    maxPaths: 2,
-    digitFlagIsCount: false
+    paths: EXACTLY_TWO,
+    countFlags: []
   },
   sort: {
     flags: {
@@ -479,8 +484,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: ["k", "t"],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   uniq: {
     flags: {
@@ -488,8 +493,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: [],
       optionsFirst: true
     },
-    maxPaths: 1,
-    digitFlagIsCount: false
+    paths: AT_MOST_ONE,
+    countFlags: []
   },
   cut: {
     flags: {
@@ -497,8 +502,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: ["d", "f", "c"],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   nl: {
     flags: {
@@ -506,8 +511,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: ["b"],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   tac: {
     flags: {
@@ -515,8 +520,8 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: [],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   },
   rev: {
     flags: {
@@ -524,15 +529,15 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
       valued: [],
       optionsFirst: true
     },
-    maxPaths: 0,
-    digitFlagIsCount: false
+    paths: ANY_NUMBER,
+    countFlags: []
   }
 }
 ```
 
 **Type:** `Record<string, ReadVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1082))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1128))
 
 ## Functions
 
@@ -568,7 +573,7 @@ Which interrupts this one command needs raised.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L354))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L350))
 
 ### outcomeOf
 
@@ -587,7 +592,7 @@ Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1479))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1464))
 
 ### planFor
 
@@ -615,7 +620,7 @@ Decide everything about a call before any of it happens.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1785))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1770))
 
 ### isRefused
 
@@ -640,7 +645,7 @@ True when this command must not run, whatever anyone approves.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1889))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1874))
 
 ### bashParser
 
@@ -658,7 +663,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1965))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1950))
 
 ### resolveCwd
 
@@ -681,7 +686,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1989))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1974))
 
 ### safeBash
 
@@ -726,4 +731,4 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2010))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1995))

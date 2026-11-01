@@ -878,6 +878,7 @@ node readVerbsReadFiles() {
     readOf("cat one.txt -n"),
     readOf("cut -c 1-3 one.txt"),
     readOf("diff"),
+    readOf("diff -U x one.txt two.txt"),
   ]
 }
 

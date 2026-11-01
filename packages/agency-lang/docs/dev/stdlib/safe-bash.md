@@ -411,8 +411,8 @@ following a final link and checks it is the regular file it resolved.
 
 `READ_VERBS` is a table of the verbs that read the files they name, or
 their stdin when they name none. Each row is a `ReadVerb`: a `FlagSpec`,
-how many paths the verb takes, and whether a bare digit flag is a line
-count.
+how many paths the verb takes as a `CountRange`, and which valued flags
+hold a count.
 
 | Verbs | Flags | Paths |
 |---|---|---|
@@ -450,16 +450,18 @@ reports it missing. `sort` may spill a large input to files under
 when it names no path. It never sees the pipe flag. A `stdin` answer goes
 to `stdinStage`, so `git log | head -20` asks only the git question.
 
-`head -20` parses as one flag named `-20`. `countFlagAsN` rewrites it as
-`-n 20` for the rows with `digitFlagIsCount`. A digit flag that is the
-value of the flag before it stays as it is. GNU reads `head -n -5` as
-"all but the last five", and left alone, `-5` is refused as a value that
-is not literal. The value of `-n` and `-c` must be digits, so `tail -n +5`
-is refused too.
+`head -20` parses as one flag named `-20`. The head and tail rows set
+`digitFlag: "n"` on their `FlagSpec`, so `readFlagWord` reads a bare digit
+flag as the value of `-n`. A digit flag after `-n` is read as `-n`'s
+value, the way any next word is, so `head -n -5` is refused as a value
+that is not literal. GNU reads that as "all but the last five". A row's
+`countFlags` must have digit values, so `tail -n +5` and `diff -U x` are
+refused too.
 
-Every path must be literal, and it must name a regular file. `readFileVerb`
-resolves each one with `_searchTargetIn`, the resolver grep uses, which
-realpaths the path and stats it:
+Every path must be literal, and it must name a regular file.
+`resolveReadPath` resolves each one with `_searchTargetIn`, the resolver
+grep uses, which realpaths the path and stats it. An input redirect's
+target goes through the same function:
 
 - A folder is refused. With folders, `diff a b` reads every file under
   both, following links, under two questions that name only `a` and `b`.
@@ -485,8 +487,9 @@ redirect (`cat < one.txt`) names no path and is not in a pipe, so it
 stays unrecognized.
 
 `tr` is the one filter whose positionals are not paths. They are
-character sets. `trEffects` checks the sets are literal and that there
-are as many as its flags take (`TR_SET_COUNTS`), then calls
+character sets, so `tr` has its own arm in `effectsFor`. `trEffects`
+checks the sets are literal and that there are as many as its flags take
+(`TR_SET_COUNTS`, a `CountRange` per flag set), then calls
 `stdinStage`.
 
 The bash parser refuses a comma joined to a flag, so `sort -t, -k2`,

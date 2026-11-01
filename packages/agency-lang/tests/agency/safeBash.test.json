@@ -635,6 +635,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "readVerbsReadFiles",
+      "description": "Each read verb's row says what a command reads: the files it names, each a regular file, or its stdin when it names none. A digit flag on head or tail is a line count unless it is the value of -n. A folder, a missing file, a variable or a glob, a flag the row does not list, or the wrong number of paths is unrecognized.",
+      "input": "",
+      "expectedOutput": "[[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],\"stdin\",\"stdin\",\"head takes one path\",\"uniq takes one path\",\"the value of `-n` is not a number\",\"the value of `-n` is not literal\",\"tail does not take `-f`\",\"cat does not take `-A`\",\"the cat path is not literal\",\"the cat path is not literal\",\"diff takes two paths\",\"diff does not take `-r`\",\"cat would read a directory\",true,\"sort does not take `-o`\",\"an option after the first argument is a file name to some versions of cat\",[\"one.txt\"],\"diff takes two paths\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

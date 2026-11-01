@@ -983,6 +983,226 @@ def grepFileNames(letters: string[]): GrepFileNames {
   return "default"
 }
 
+/** A read verb's flags, how many paths it takes, and whether a bare
+ * digit flag (`-20`) means `-n 20`. */
+export type ReadVerb = {
+  flags: FlagSpec;
+  /** 0 for any number; 1 for head and tail (several files print headers)
+   * and uniq (a second positional is its output file); 2 for diff and
+   * cmp, which need exactly two. */
+  maxPaths: number;
+  /** True for head and tail, where `-20` is `-n 20`, and the value of
+   * `-n` or `-c` is a count. */
+  digitFlagIsCount: boolean
+}
+
+/** The verbs that read the files they name, or their stdin when they
+ * name none. Every letter means the same thing in GNU, BSD, and busybox
+ * coreutils. Left out: cat -A -e -t -v (GNU and BSD spell the escapes
+ * differently); tail -f (never returns); tail -r (BSD only); wc -L (GNU
+ * only); diff -r (reads a whole tree under a question that names one
+ * folder) and -y (column width depends on the terminal); sort -o
+ * (writes a file), -m, -c; uniq's second positional. tac is not on
+ * macOS; the line is recognized and the shell reports it missing. sort
+ * may spill a large input to files under $TMPDIR, which no payload
+ * names. */
+export static const READ_VERBS: Record<string, ReadVerb> = {
+  cat: {
+    flags: { plain: ["n", "b", "s"], valued: [], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  head: {
+    flags: { plain: [], valued: ["n", "c"], optionsFirst: true },
+    maxPaths: 1,
+    digitFlagIsCount: true
+  },
+  tail: {
+    flags: { plain: [], valued: ["n", "c"], optionsFirst: true },
+    maxPaths: 1,
+    digitFlagIsCount: true
+  },
+  wc: {
+    flags: { plain: ["l", "w", "c", "m"], valued: [], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  diff: {
+    flags: { plain: ["u", "q", "N", "w", "b", "B", "--color=never"], valued: ["U"], optionsFirst: true },
+    maxPaths: 2,
+    digitFlagIsCount: false
+  },
+  cmp: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    maxPaths: 2,
+    digitFlagIsCount: false
+  },
+  sort: {
+    flags: { plain: ["n", "r", "u", "f", "b"], valued: ["k", "t"], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  uniq: {
+    flags: { plain: ["c", "d", "u", "i"], valued: [], optionsFirst: true },
+    maxPaths: 1,
+    digitFlagIsCount: false
+  },
+  cut: {
+    flags: { plain: [], valued: ["d", "f", "c"], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  nl: {
+    flags: { plain: [], valued: ["b"], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  tac: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  rev: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  }
+}
+
+/** One resolved path of a read verb. `argument` is the path as bash hands
+ * it to the program. */
+type ReadPath = {
+  dir: string;
+  filename: string;
+  argument: string
+}
+
+/** What a read verb reads: the files it names, or its stdin. */
+type FileRead = { kind: "stdin" } | { kind: "files"; paths: ReadPath[]; split: SplitArgs }
+
+/** Whether a flag word uses the word after it as its value: `-n` does,
+ * `-n5` does not. Mirrors how `readFlagWord` reads a short flag. */
+def flagTakesNextWord(word: FlagWord, valued: string[]): boolean {
+  if (word.flagName.startsWith("--")) {
+    return word.flagValue == null && valued.includes(word.flagName)
+  }
+  const letters = word.flagName.slice(1)
+  let position = 0
+  while (position < letters.length) {
+    if (valued.includes(letters.charAt(position))) {
+      return position == letters.length - 1
+    }
+    position = position + 1
+  }
+  return false
+}
+
+def countFlagAsN(args: Word[], valued: string[]): Word[] {
+  """
+  head and tail read `-20` as `-n 20`. The parser hands it over as one
+  flag named `-20`, so it is rewritten here into `-n` and the literal
+  `20`. A digit flag that is the value of the flag before it stays as it
+  is: in `head -n -5`, GNU reads `-5` as "all but the last five", and
+  left alone it is refused as a value that is not literal.
+  """
+  let out: Word[] = []
+  let previousTakesValue = false
+  for (word in args) {
+    if (word is { tag: "flag" }) {
+      const letters = word.flagName.slice(1)
+      const isCount = !word.flagName.startsWith("--") && word.flagValue == null && isDigits(letters)
+      if (isCount && !previousTakesValue) {
+        out.push({ tag: "flag", flagName: "-n" })
+        out.push({ tag: "literal", text: letters })
+        previousTakesValue = false
+        continue
+      }
+      previousTakesValue = flagTakesNextWord(word, valued)
+      out.push(word)
+      continue
+    }
+    previousTakesValue = false
+    out.push(word)
+  }
+  return out
+}
+
+/** The path count a read verb needs, or a failure naming it. */
+def checkPathCount(verb: string, count: number, maxPaths: number): Result {
+  if (maxPaths == 2 && count != 2) {
+    return failure("${verb} takes two paths")
+  }
+  if (maxPaths == 1 && count > 1) {
+    return failure("${verb} takes one path")
+  }
+  return success(null)
+}
+
+@capabilities(fileRead)
+def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVerb): Result<FileRead> {
+  """
+  A read verb's command checked against its row: the files it reads,
+  each resolved to a regular file, or its stdin when it names none. A
+  folder is refused because the program would read what no payload
+  names (`diff a b` of two folders reads every file under both, links
+  followed). A FIFO or a device is refused because a read of it may
+  never return. A missing path is refused too, so any doubt asks
+  std::bash.
+  """
+  const args = if (spec.digitFlagIsCount) then countFlagAsN(command.args, spec.flags.valued) else command.args
+  const checked: SimpleCommand = {
+    tag: "simpleCommand",
+    assignments: command.assignments,
+    command: command.command,
+    args: args,
+    redirects: command.redirects
+  }
+  const split = splitFlags(verb, checked, spec.flags)
+  if (isFailure(split)) {
+    return split
+  }
+  if (spec.digitFlagIsCount) {
+    for (entry in split.value.values) {
+      if (!isDigits(entry.value)) {
+        return failure("the value of `-${entry.flag}` is not a number")
+      }
+    }
+  }
+  const positionals = split.value.positionals
+  const count = checkPathCount(verb, positionals.length, spec.maxPaths)
+  if (isFailure(count)) {
+    return count
+  }
+  if (positionals.length == 0) {
+    return success({ kind: "stdin" })
+  }
+  let paths: ReadPath[] = []
+  for (word in positionals) {
+    const text = literalWordText(word)
+    if (text is failure(why)) {
+      return failure("the ${verb} path is not literal")
+    }
+    const target = try _searchTargetIn(text.value, cwd, tildeModeFor(word))
+    if (isFailure(target)) {
+      return target
+    }
+    const file = target.value.file
+    if (file == null) {
+      return failure("${verb} would read a directory")
+    }
+    paths.push({
+      dir: target.value.dir,
+      filename: file,
+      argument: target.value.argument
+    })
+  }
+  return success({
+    kind: "files",
+    paths: paths,
+    split: split.value
+  })
+}
+
 static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }

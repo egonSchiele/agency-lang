@@ -344,6 +344,28 @@ export type SplitArgs = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L460))
 
+### ReadVerb
+
+A read verb's flags, how many paths it takes, and whether a bare
+digit flag (`-20`) means `-n 20`.
+
+```ts
+/** A read verb's flags, how many paths it takes, and whether a bare
+ * digit flag (`-20`) means `-n 20`. */
+export type ReadVerb = {
+  flags: FlagSpec;
+  /** 0 for any number; 1 for head and tail (several files print headers)
+   * and uniq (a second positional is its output file); 2 for diff and
+   * cmp, which need exactly two. */
+  maxPaths: number;
+  /** True for head and tail, where `-20` is `-n 20`, and the value of
+   * `-n` or `-c` is a count. */
+  digitFlagIsCount: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L988))
+
 ### FlatCommand
 
 One simple command from a flattened line, and whether a pipe feeds
@@ -360,7 +382,7 @@ export type FlatCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1061))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1281))
 
 ## Constants
 
@@ -392,6 +414,125 @@ export static const GREP_FLAGS: FlagSpec = {
 **Type:** [FlagSpec](#flagspec)
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L489))
+
+### READ_VERBS
+
+```ts
+export static const READ_VERBS: Record<string, ReadVerb> = {
+  cat: {
+    flags: {
+      plain: ["n", "b", "s"],
+      valued: [],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  head: {
+    flags: {
+      plain: [],
+      valued: ["n", "c"],
+      optionsFirst: true
+    },
+    maxPaths: 1,
+    digitFlagIsCount: true
+  },
+  tail: {
+    flags: {
+      plain: [],
+      valued: ["n", "c"],
+      optionsFirst: true
+    },
+    maxPaths: 1,
+    digitFlagIsCount: true
+  },
+  wc: {
+    flags: {
+      plain: ["l", "w", "c", "m"],
+      valued: [],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  diff: {
+    flags: {
+      plain: ["u", "q", "N", "w", "b", "B", "--color=never"],
+      valued: ["U"],
+      optionsFirst: true
+    },
+    maxPaths: 2,
+    digitFlagIsCount: false
+  },
+  cmp: {
+    flags: {
+      plain: [],
+      valued: [],
+      optionsFirst: true
+    },
+    maxPaths: 2,
+    digitFlagIsCount: false
+  },
+  sort: {
+    flags: {
+      plain: ["n", "r", "u", "f", "b"],
+      valued: ["k", "t"],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  uniq: {
+    flags: {
+      plain: ["c", "d", "u", "i"],
+      valued: [],
+      optionsFirst: true
+    },
+    maxPaths: 1,
+    digitFlagIsCount: false
+  },
+  cut: {
+    flags: {
+      plain: [],
+      valued: ["d", "f", "c"],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  nl: {
+    flags: {
+      plain: [],
+      valued: ["b"],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  tac: {
+    flags: {
+      plain: [],
+      valued: [],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  },
+  rev: {
+    flags: {
+      plain: [],
+      valued: [],
+      optionsFirst: true
+    },
+    maxPaths: 0,
+    digitFlagIsCount: false
+  }
+}
+```
+
+**Type:** `Record<string, ReadVerb>`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1009))
 
 ## Functions
 
@@ -446,7 +587,7 @@ Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1036))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1256))
 
 ### planFor
 
@@ -474,7 +615,7 @@ Decide everything about a call before any of it happens.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1341))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1561))
 
 ### isRefused
 
@@ -499,7 +640,7 @@ True when this command must not run, whatever anyone approves.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1441))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1661))
 
 ### bashParser
 
@@ -517,7 +658,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1517))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1737))
 
 ### resolveCwd
 
@@ -540,7 +681,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1541))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1761))
 
 ### safeBash
 
@@ -585,4 +726,4 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1562))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1782))

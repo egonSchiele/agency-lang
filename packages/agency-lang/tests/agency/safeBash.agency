@@ -8,8 +8,9 @@ import {
   safeBash,
   resolveCwd,
   GREP_FLAGS,
+  READ_VERBS,
  } from "std::safeBash"
-import test { splitFlags, flattenCommands } from "std::safeBash"
+import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
@@ -812,5 +813,67 @@ node grepFilterStages() {
     grepNames("echo hi | grep h"),
     grepNames("git status | grep hello -i"),
     grepNames("git status | grep -e hello"),
+  ]
+}
+
+def filesOf(found: any): any {
+  return match(found) {
+    { kind: "stdin" } => "stdin"
+    { kind: "files", paths } => [p.filename for p in paths]
+  }
+}
+
+def readOf(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const first = parsed.value[0]
+  if (first is { tag: "simpleCommand" }) {
+    const verb = verbName(first)
+    const spec = READ_VERBS[verb]
+    if (spec == null) {
+      return "NOT A READ VERB"
+    }
+    return match(readFileVerb(verb, first, FIXTURES, spec)) {
+      success(found) => filesOf(found)
+      failure(why) => why
+    }
+  }
+  return "NOT-SIMPLE"
+}
+
+node readVerbsReadFiles() {
+  return [
+    readOf("cat one.txt"),
+    readOf("cat one.txt two.txt"),
+    readOf("cat -n one.txt"),
+    readOf("head one.txt"),
+    readOf("head -n 20 one.txt"),
+    readOf("head -20 one.txt"),
+    readOf("tail -n5 one.txt"),
+    readOf("wc -l one.txt"),
+    readOf("diff one.txt two.txt"),
+    readOf("sort -u one.txt"),
+    readOf("uniq -c one.txt"),
+    readOf("cat"),
+    readOf("head -n 3"),
+    readOf("head one.txt two.txt"),
+    readOf("uniq one.txt out.txt"),
+    readOf("tail -n +5 one.txt"),
+    readOf("head -n -5 one.txt"),
+    readOf("tail -f one.txt"),
+    readOf("cat -A one.txt"),
+    readOf("cat $F"),
+    readOf("cat *.txt"),
+    readOf("diff one.txt"),
+    readOf("diff -r one.txt two.txt"),
+    readOf("cat ."),
+    // The message names an absolute path, which differs per machine.
+    readOf("cat nope.txt").startsWith("No file or directory at"),
+    readOf("sort -o out.txt one.txt"),
+    readOf("cat one.txt -n"),
+    readOf("cut -c 1-3 one.txt"),
+    readOf("diff"),
   ]
 }

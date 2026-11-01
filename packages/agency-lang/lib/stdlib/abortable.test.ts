@@ -248,7 +248,7 @@ describe("__internal_exec / __internal_bash", () => {
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
-  it("__internal_bash: kills sh -c on ctx.cancel and rejects with AgencyCancelledError", async () => {
+  it("__internal_bash: kills bash -c on ctx.cancel and rejects with AgencyCancelledError", async () => {
     const ctx = makeMockCtx();
     const stack = new StateStack();
     const threads = new ThreadStore();

@@ -764,7 +764,7 @@
     },
     {
       "nodeName": "loneReadIsShellFree",
-      "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
+      "description": "A lone cat of any number of files, or a lone cat -n, head -n N, or tail -n N of one file, runs shell-free. Another flag, a count of 0, cat -n or head of two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
       "input": "",
       "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
       "evaluationCriteria": [

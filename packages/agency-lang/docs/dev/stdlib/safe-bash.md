@@ -504,7 +504,9 @@ to `stdinStage`, so `git log | head -20` asks only the git question.
 `digitFlag: "n"` on their `FlagSpec`, so `readFlagWord` reads a bare digit
 flag as the value of `-n`. A digit flag after `-n` is read as `-n`'s
 value, the way any next word is, so `head -n -5` is refused as a value
-that is not literal. GNU reads that as "all but the last five". A row's
+that starts with a dash. GNU reads that as "all but the last five". The
+same rule refuses `find . -size -1M`, because the parser makes `-1M` a
+flag word. A row's
 `countFlags` must have digit values, so `tail -n +5` and `diff -U x` are
 refused too.
 

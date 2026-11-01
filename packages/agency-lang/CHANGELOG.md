@@ -1,3 +1,13 @@
+## Unreleased
+
+### Breaking
+
+- **Serving an image model now needs torchvision.** `agency local serve` checks for it with the other image packages, so a Python environment set up before this release stops with "cannot import torchvision" until you install it: `~/.agency-agent/mlx-env/bin/pip install torchvision==0.29.2`. Qwen-Image-Edit-2511 needs it, and the image packages are pinned as one set.
+
+### Local models
+
+- **The image server serves Qwen-Image-Edit-2511,** an editing model: pass `images` to `generateImageLocal`. It refuses a prompt with no picture.
+
 ## Oct 26 2026 — v0.34.0
 
 ### Breaking

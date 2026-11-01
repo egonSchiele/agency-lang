@@ -224,7 +224,7 @@ the required packages into the Python environment used by
 `agency local serve`:
 
 ```bash
-~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
+~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 torchvision==0.29.2 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
 ```
 
 These are the package versions used by the server. It requires diffusers
@@ -711,9 +711,34 @@ Each picture raises its own `std::readImage` interrupt. Every picture is
 approved before any of them is read. Each extra picture makes the edit
 slower and uses more memory.
 
-Only FLUX.2 [klein] takes `images`. Another model refuses the request
-with a message naming the models that take them. You cannot combine
-`images` with a ControlNet in one call.
+Only FLUX.2 [klein] and Qwen-Image-Edit take `images`. Another model
+refuses the request with a message naming the models that take them.
+You cannot combine `images` with a ControlNet in one call.
+
+### Edit with Qwen-Image-Edit
+
+Qwen-Image-Edit-2511 is a larger editing model. It is not in the
+catalog, so name it by its Hugging Face repository:
+
+```bash
+agency local download diffusers:Qwen/Qwen-Image-Edit-2511
+agency local serve diffusers:Qwen/Qwen-Image-Edit-2511
+```
+
+Then pass the same name to `generateImageLocal`:
+
+```ts
+const result = generateImageLocal(
+  "make the fox's fur white, as in winter",
+  "diffusers:Qwen/Qwen-Image-Edit-2511",
+  images: ["fox.png"],
+)
+```
+
+Qwen-Image-Edit only edits. A call with no picture fails with
+"Qwen-Image-Edit cannot generate from a prompt alone. Send at least one
+picture in images." It takes 40 steps by default, so an edit takes
+longer than one from klein.
 
 ### Redraw a picture in a new style
 
@@ -749,11 +774,11 @@ These numbers come from one picture and one prompt, so use them as a
 place to start. Keep the seed fixed and try a few strengths to find the
 one that suits your picture.
 
-Use `images` with FLUX.2 [klein] to change one thing and keep the rest,
-such as "add a hat to the fox". Use `startImage` with any other model to
-keep the layout and change everything else, such as turning a photo into
-a watercolor. Only FLUX.2 [klein] takes `images`, and every other model
-takes `startImage`.
+Use `images` with FLUX.2 [klein] or Qwen-Image-Edit to change one thing
+and keep the rest, such as "add a hat to the fox". Use `startImage` with
+any other model to keep the layout and change everything else, such as
+turning a photo into a watercolor. Only FLUX.2 [klein] and
+Qwen-Image-Edit take `images`, and every other model takes `startImage`.
 
 As with `images`, leaving `size` empty keeps the picture's shape. When
 you pass a size of another shape, the picture is scaled to cover it and
@@ -809,7 +834,7 @@ shape of the vase.
 
 A mask always goes with `startImage`, and a call with a mask alone is
 refused. Every model that takes `startImage` takes a mask, so FLUX.2
-[klein] does not. Reading the mask raises its own `std::readImage`
+[klein] and Qwen-Image-Edit do not. Reading the mask raises its own `std::readImage`
 interrupt, after the one for the start image, and both are approved
 before either file is read. When you pass a `size` of another shape,
 the mask is cropped the same way as the picture, so the white part still

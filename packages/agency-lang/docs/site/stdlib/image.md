@@ -238,11 +238,12 @@ Generate an image on this machine with a local image model. The model
   The scribble ControlNet reads white lines on black. For a drawing made
   with dark lines on white paper, pass `invertControlImage: true`.
 
-  FLUX.2 [klein] edits pictures. Pass up to 4 paths in `images` and say in
-  the prompt what to change: `generateImageLocal("add a hat to the
-  character", "flux2-klein-4b", images: ["cat.png"])`. Each picture is read
-  from this machine, under std::readImage, and never uploaded. With `size`
-  left empty, the result keeps the first picture's shape.
+  FLUX.2 [klein] and Qwen-Image-Edit edit pictures. Pass up to 4 paths in
+  `images` and say in the prompt what to change: `generateImageLocal("add
+  a hat to the character", "flux2-klein-4b", images: ["cat.png"])`. Each
+  picture is read from this machine, under std::readImage, and never
+  uploaded. With `size` left empty, the result keeps the first picture's
+  shape. Qwen-Image-Edit only edits: it refuses a call with no picture.
 
   Every other model redraws a picture instead: pass its path in
   `startImage` and say in the prompt what it should become,
@@ -269,10 +270,10 @@ Generate an image on this machine with a local image model. The model
   @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
   @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
-  @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
-  @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] takes one
+  @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] and Qwen-Image-Edit take them, and at most 4. Qwen-Image-Edit needs at least one
+  @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] and Qwen-Image-Edit takes one
   @param strength - How much of startImage to redraw, above 0 and up to 1. Low keeps it close, high changes more. Null uses the model's default, which can change when a mask is added: for Z-Image Turbo it goes from 0.6 to 1.0, which redraws the white part from scratch
-  @param mask - A black-and-white picture the same size as startImage, as a path to a file on this machine. White is redrawn and black is kept. Goes with startImage. Every model but FLUX.2 [klein] takes one
+  @param mask - A black-and-white picture the same size as startImage, as a path to a file on this machine. White is redrawn and black is kept. Goes with startImage. Every model but FLUX.2 [klein] and Qwen-Image-Edit takes one
 
 Redrawing part of a picture: pass a `mask` with `startImage`. The mask
 is a picture the same size as the start image. White marks the part to
@@ -364,7 +365,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L276))
 
 ### imageSize
 
@@ -388,7 +389,7 @@ The width and height of an image in pixels.
 
 **Needs:** `fileRead`, `subprocess`, `env`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L312))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L313))
 
 ### pasteImages
 
@@ -423,4 +424,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L330))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L331))

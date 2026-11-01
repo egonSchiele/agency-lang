@@ -61,6 +61,7 @@ pipeline classes and their defaults:
 | `QwenImagePipeline` | 50 | 80 | 4.0 | yes |
 | `Flux2KleinPipeline` | 4 | 50 | 1.0 | no |
 | `StableDiffusionXLPipeline` | 28 | 80 | 5.5 | yes |
+| `QwenImageEditPlusPipeline` | 40 | 80 | 4.0 | yes |
 
 Each row lists the component libraries and classes allowed in
 `model_index.json`. Most components allow exactly one class. SDXL's
@@ -75,14 +76,16 @@ The table also specifies required settings. FLUX.2 klein requires
 inference requirements. SDXL requires `force_zeros_for_empty_prompt: true`.
 
 `pipeline_args` translates validated requests into pipeline arguments.
-Qwen-Image uses `true_cfg_scale` for guidance and needs a negative prompt
-to enable it. Its default negative prompt is a single space.
+Qwen-Image and Qwen-Image-Edit use `true_cfg_scale` for guidance and need
+a negative prompt to enable it. Their default negative prompt is a single
+space.
 
 Only SDXL enables `takes_lora`. Each row's `pipelines` key names the
 diffusers class for each mode the family takes, as described in
 [Modes](#modes). When adding a family, define its components, settings,
-defaults, pipelines, and supported options in the table. Verify them against a model's
-`model_index.json` and test generation on a Mac before adding a catalog entry.
+defaults, the class it loads, its pipelines, and supported options in the
+table. Verify them against a model's `model_index.json` and test
+generation on a Mac before adding a catalog entry.
 
 All components must be available in the model directory. Models that
 fetch a component from another repository cannot run on this server.
@@ -102,16 +105,21 @@ which:
 
 | Mode | Image field | Other fields of the mode | Families |
 |---|---|---|---|
-| plain | none | none | all five |
+| plain | none | none | every family but Qwen-Image-Edit |
 | control | `control_image` | `controlnet`, `control_scale`, `control_invert` | SDXL |
-| reference | `images` | none | FLUX.2 [klein] |
-| img2img | `start_image` | `strength` | the other four |
+| reference | `images` | none | FLUX.2 [klein] and Qwen-Image-Edit |
+| img2img | `start_image` | `strength` | Z-Image Turbo, Chroma, Qwen-Image, and SDXL |
 | inpaint | `start_image` and `mask_image` | `strength` | the same four as img2img |
 
 In reference mode, klein draws a new image from pure noise and reads
 each reference as extra tokens on every step. It copies from the
 reference instead of repainting it, so an edit keeps the character.
 There is no `strength`.
+
+Qwen-Image-Edit works the same way, and reference is its only mode. It
+cannot draw from a prompt alone. Its pipeline resizes each picture to
+about 384×384 for its text encoder and to about 1024×1024 for its VAE,
+whatever the output size.
 
 In img2img mode, the model starts from the start image with noise added,
 instead of from pure noise. `strength` says how much noise, and so how
@@ -148,6 +156,9 @@ refusals:
    `start_image`.
 4. A mode the family has no pipeline for. The message comes from the
    image field's `refusal` and names the families that take the mode.
+   Plain mode has no image field, so a plain request to Qwen-Image-Edit
+   gets `PLAIN_REFUSAL`: "Qwen-Image-Edit cannot generate from a prompt
+   alone. Send at least one picture in images."
 
 A LoRA works in every mode. It is loaded into the shared weights, so
 every pipeline of the family sees it.
@@ -220,12 +231,23 @@ A family takes a mode when it has a class for it:
 | Qwen-Image | `QwenImagePipeline` | | | `QwenImageImg2ImgPipeline` | `QwenImageInpaintPipeline` |
 | FLUX.2 [klein] | `Flux2KleinPipeline` | | `Flux2KleinPipeline` | | |
 | SDXL | `StableDiffusionXLPipeline` | `StableDiffusionXLControlNetPipeline` | | `StableDiffusionXLImg2ImgPipeline` | `StableDiffusionXLInpaintPipeline` |
+| Qwen-Image-Edit | | | `QwenImageEditPlusPipeline` | | |
 
-The server loads the `plain` class. `pipeline_for` returns the loaded
-pipeline when a mode's class is the plain class, as klein's reference
-class is. Otherwise it builds the mode's class once from the loaded
-pipeline's components and keeps it. The two pipelines share weights, so
-the second one costs no extra memory or load time. A mode that needs a
+Each row's `loads` key names the class the server loads. It is one of the
+row's `pipelines` values. For the five families that draw from a prompt
+alone, it is the plain class. Qwen-Image-Edit has no plain class, so it
+loads its reference class. A test checks that every row's `loads` is one
+of its `pipelines` values.
+
+`EDIT_ONLY_IMAGE_FAMILIES` in `localServe.ts` lists the rows with no
+plain class, so the `serve` banner's example passes a picture to them. A
+test compares it with `FAMILIES`.
+
+`pipeline_for` returns the loaded pipeline when a mode's class is the
+`loads` class, as klein's reference class is. Otherwise it builds the
+mode's class once from the loaded pipeline's components and keeps it.
+The two pipelines share weights, so the second one costs no extra memory
+or load time. A mode that needs a
 model on top of those components names its request fields in the
 server's `MODE_MODELS`. Control mode names `controlnet`, which
 `load_controlnet` loads. Img2img and inpaint mode need no extra model.
@@ -319,8 +341,10 @@ SDXL, which keeps a trace of the start image under the mask.
 The inpaint pipeline runs on the family's ordinary weights. An SDXL
 checkpoint trained for inpainting, with a 9-channel UNet and
 `StableDiffusionXLInpaintPipeline` as its `_class_name`, blends better
-at the mask's edge. The server refuses one, because a family must have a
-plain mode to load.
+at the mask's edge. The server refuses one, because no `FAMILIES` row is
+keyed by that class. Such a row is possible: its `loads` would be the
+inpaint class. It would also need an inpaint warm-up in
+`WARM_UP_INPUTS`, or `warm_up_mode` refuses it.
 
 ### Adding a mode
 
@@ -330,7 +354,7 @@ plain mode to load.
    `FIELDS`, and to `SETTINGS` in `mlxImage.ts`.
 3. Add the mode's class to the `pipelines` key of each family that takes
    it. Check in the diffusers source that the class can be built from
-   the plain pipeline's components.
+   the components of the family's `loads` class.
 4. Add a fit to `FITS`, a step to `PREPARES`, or a check to `CHECKS` if
    the existing ones do not fit the mode. A mode with a second image
    that only comes with another names it in `goes_with`, as inpaint's
@@ -647,15 +671,26 @@ asks for, which is more than an img2img request runs.
 
 The server requires diffusers 0.40.0. `DIFFUSERS_VERSION` in
 `localServe.ts` must agree with the Python constant. The setup instructions
-also pin torch, transformers, and accelerate. `serve` checks that the
-required packages are installed.
+also pin torch, torchvision, transformers, and accelerate. `serve` checks
+that the required packages are installed. torchvision is there for
+Qwen-Image-Edit: its processor folder includes a video processor, and
+transformers 5.17 builds the processor, and its image processor, only with
+torchvision installed.
 
 Image processes use the Python selected by `--python`, `client.mlx.python`,
 `AGENCY_MLX_PYTHON`, or the default `~/.agency-agent/mlx-env/bin/python`,
 in that order.
 
 Before opening its port, the server loads the model and generates a
-512×512 warm-up image in two steps. `waitUntilLoaded` probes `GET /health`.
+512×512 warm-up image in two steps. `warm_up_mode` picks the first mode
+in `WARM_UP_INPUTS` whose class is the row's `loads` class: plain for
+the five families that draw from a prompt alone, and reference for
+Qwen-Image-Edit. `WARM_UP_INPUTS` holds the image fields of each mode's
+warm-up. The reference warm-up sends `WARM_UP_PICTURE`, a 64×64 grey PNG,
+which is the smallest reference allowed. The picture is a base64 constant,
+so the rules module still runs without Pillow. A family whose `loads`
+class runs in none of those modes stops the server at start-up with a
+message naming the family. `waitUntilLoaded` probes `GET /health`.
 
 The generation callback checks for a disconnected client after every
 step. It calls `torch.mps.synchronize()` first so the GPU finishes the
@@ -716,4 +751,6 @@ It generates a small image, checks cancellation, and redraws a start
 image, then checks that the next plain request makes the same image as
 before. Set
 `AGENCY_KLEIN_MODEL_DIR` to a FLUX.2 [klein] directory to also run an
-edit with one reference.
+edit with one reference. Set `AGENCY_QWEN_EDIT_MODEL_DIR` to a
+Qwen-Image-Edit-2511 directory to edit a grey picture it builds in the
+test, and to check that a prompt alone is refused.

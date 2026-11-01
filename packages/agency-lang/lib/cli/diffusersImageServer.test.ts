@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { DIFFUSERS_VERSION, imageServerScript } from "./localServe.js";
+import { DIFFUSERS_VERSION, EDIT_ONLY_IMAGE_FAMILIES, imageServerScript } from "./localServe.js";
 import { MAX_STEPS } from "../stdlib/mlxImage.js";
 import { LOCAL_IMAGE_FIELDS, localBodyBytes } from "../stdlib/localImageInputs.js";
 
@@ -90,12 +90,25 @@ const KLEIN_INDEX = {
   vae: ["diffusers", "AutoencoderKLFlux2"],
 };
 
+// Qwen-Image-Edit-2511's model_index.json, as downloaded.
+const QWEN_EDIT_INDEX = {
+  _class_name: "QwenImageEditPlusPipeline",
+  _diffusers_version: "0.36.0.dev0",
+  processor: ["transformers", "Qwen2VLProcessor"],
+  scheduler: ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+  text_encoder: ["transformers", "Qwen2_5_VLForConditionalGeneration"],
+  tokenizer: ["transformers", "Qwen2Tokenizer"],
+  transformer: ["diffusers", "QwenImageTransformer2DModel"],
+  vae: ["diffusers", "AutoencoderKLQwenImage"],
+};
+
 type Family =
   | "ZImagePipeline"
   | "ChromaPipeline"
   | "QwenImagePipeline"
   | "Flux2KleinPipeline"
-  | "StableDiffusionXLPipeline";
+  | "StableDiffusionXLPipeline"
+  | "QwenImageEditPlusPipeline";
 
 /** The family label for a model_index.json, or the refusal message. */
 function familyOf(index: Record<string, unknown>): string {
@@ -172,6 +185,7 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     expect(familyOf(QWEN_IMAGE_INDEX)).toBe("Qwen-Image");
     expect(familyOf(KLEIN_INDEX)).toBe("FLUX.2 [klein]");
     expect(familyOf(SDXL_INDEX)).toBe("SDXL");
+    expect(familyOf(QWEN_EDIT_INDEX)).toBe("Qwen-Image-Edit");
   });
 
   it("refuses a FLUX.2 [klein] model that is not step-distilled", () => {
@@ -194,7 +208,7 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
 
   it("refuses a pipeline class it does not serve", () => {
     expect(familyOf({ ...ZIMAGE_INDEX, _class_name: "StableDiffusionPipeline" })).toBe(
-      'REFUSED diffusersImageServer.py serves ChromaPipeline, Flux2KleinPipeline, QwenImagePipeline, StableDiffusionXLPipeline, and ZImagePipeline models. This model_index.json names "StableDiffusionPipeline".',
+      'REFUSED diffusersImageServer.py serves ChromaPipeline, Flux2KleinPipeline, QwenImageEditPlusPipeline, QwenImagePipeline, StableDiffusionXLPipeline, and ZImagePipeline models. This model_index.json names "StableDiffusionPipeline".',
     );
   });
 
@@ -494,15 +508,36 @@ print(adapter_names(os.path.join(d, "missing")))
     }
   });
 
-  it("gives every family row the same keys, and a plain pipeline and only known modes", () => {
+  it("gives every family row the same keys, a loaded class among its pipelines, a warm-up mode, and only known modes", () => {
     const out = rules(`
 keys = [sorted(row) for row in FAMILIES.values()]
 print(all(k == keys[0] for k in keys))
 modes = ["plain"] + [row["mode"] for row in INPUT_IMAGES.values()]
 print(all(mode in modes for row in FAMILIES.values() for mode in row["pipelines"]))
-print(all("plain" in row["pipelines"] for row in FAMILIES.values()))
+print(all(row["loads"] in row["pipelines"].values() for row in FAMILIES.values()))
+print(all(warm_up_mode(row) in WARM_UP_INPUTS for row in FAMILIES.values()))
 `);
-    expect(out.split("\n")).toEqual(["True", "True", "True"]);
+    expect(out.split("\n")).toEqual(["True", "True", "True", "True"]);
+  });
+
+  it("lists the same edit-only families as the serve banner", () => {
+    const out = rules(`
+print(*sorted(name for name, row in FAMILIES.items() if "plain" not in row["pipelines"]))
+`);
+    expect(out).toBe([...EDIT_ONLY_IMAGE_FAMILIES].sort().join(" "));
+  });
+
+  it("names the family when its loaded class runs in no warm-up mode", () => {
+    const out = rules(`
+inpaint_only = {**FAMILIES["StableDiffusionXLPipeline"], "loads": "StableDiffusionXLInpaintPipeline"}
+try:
+    warm_up_mode(inpaint_only)
+except ValueError as e:
+    print(e)
+`);
+    expect(out).toBe(
+      "SDXL loads StableDiffusionXLInpaintPipeline, which runs in none of the warm-up modes (plain and reference). Add its mode to WARM_UP_INPUTS.",
+    );
   });
 
   it("decides a request's mode from its image field, and refuses what does not fit the mode", () => {
@@ -585,7 +620,7 @@ print(check_request(rules, {"prompt": "add a hat", "size": "", "images": ["${ref
     expect(out).toBe("None");
   });
 
-  it("refuses references for a family other than FLUX.2 [klein], naming klein", () => {
+  it("refuses references for a family that takes none, naming the families that do", () => {
     const reference = Buffer.from("png").toString("base64");
     const out = rules(`
 try:
@@ -594,7 +629,7 @@ except RequestError as e:
     print(e)
 `);
     expect(out).toBe(
-      "Z-Image Turbo does not take reference images. Only FLUX.2 [klein] takes them.",
+      "Z-Image Turbo does not take reference images. FLUX.2 [klein] and Qwen-Image-Edit can.",
     );
   });
 
@@ -1110,15 +1145,89 @@ print(use("style.v2", [2, 11]))
     );
   });
 
-  it("builds a small warm-up request that passes its own checks", () => {
+  it("builds a small warm-up request for each family that passes its own checks", () => {
+    const out = rules(`
+for name, family in FAMILIES.items():
+    r = check_request(family, warm_up_request(family))
+    print(name, r["mode"], *r["size"], r["steps"], len(r["input_images"].get("images", [])))
+`);
+    expect(out.split("\n")).toEqual([
+      "ZImagePipeline plain 512 512 2 0",
+      "ChromaPipeline plain 512 512 2 0",
+      "QwenImagePipeline plain 512 512 2 0",
+      "Flux2KleinPipeline plain 512 512 2 0",
+      "StableDiffusionXLPipeline plain 512 512 2 0",
+      "QwenImageEditPlusPipeline reference 512 512 2 1",
+    ]);
+  });
+
+  it("warms up in the first mode that runs the loaded class", () => {
+    const out = rules(`
+for name, family in FAMILIES.items():
+    print(name, warm_up_mode(family))
+`);
+    expect(out.split("\n")).toEqual([
+      "ZImagePipeline plain",
+      "ChromaPipeline plain",
+      "QwenImagePipeline plain",
+      "Flux2KleinPipeline plain",
+      "StableDiffusionXLPipeline plain",
+      "QwenImageEditPlusPipeline reference",
+    ]);
+  });
+
+  it("warms up with a picture whose PNG header passes the reference check", () => {
+    // The header holds the width and height at bytes 16 to 24, so this
+    // needs no Pillow.
+    const out = rules(`
+import base64, struct
+data = base64.b64decode(WARM_UP_PICTURE)
+width, height = struct.unpack(">II", data[16:24])
+print(data[:8] == b"\\x89PNG\\r\\n\\x1a\\n", width, height, reference_problem(width, height))
+`);
+    expect(out).toBe("True 64 64 None");
+  });
+
+  it("refuses a prompt alone for Qwen-Image-Edit, which has no plain pipeline", () => {
+    expect(check("QwenImageEditPlusPipeline", { prompt: "a cat" })).toBe(
+      "ERROR 400 Qwen-Image-Edit cannot generate from a prompt alone. Send at least one picture in images.",
+    );
+  });
+
+  it("checks a Qwen-Image-Edit request with a picture at the model card's settings", () => {
+    const picture = Buffer.from("png").toString("base64");
     const out = rules(`
 import json
-body = warm_up_request()
-for family in FAMILIES.values():
-    r = check_request(family, body)
-    print(*r["size"], r["steps"])
+rules = FAMILIES["QwenImageEditPlusPipeline"]
+request = check_request(rules, {"prompt": "make the jacket red", "size": "512x512", "images": ["${picture}"]})
+print(request["mode"], request["steps"], request["guidance"])
+print(json.dumps(pipeline_args(rules, request, 512, 512), sort_keys=True))
 `);
-    expect(out.split("\n")).toEqual(Array(5).fill("512 512 2"));
+    const [summary, args] = out.split("\n");
+    expect(summary).toBe("reference 40 4.0");
+    expect(JSON.parse(args)).toEqual({
+      prompt: "make the jacket red",
+      height: 512,
+      width: 512,
+      num_inference_steps: 40,
+      true_cfg_scale: 4.0,
+      negative_prompt: " ",
+    });
+  });
+
+  it("refuses a start image and a ControlNet for Qwen-Image-Edit", () => {
+    const picture = Buffer.from("png").toString("base64");
+    expect(check("QwenImageEditPlusPipeline", { prompt: "a cat", start_image: picture })).toBe(
+      "ERROR 400 Qwen-Image-Edit does not redraw a start image. Z-Image Turbo, Chroma, Qwen-Image, and SDXL do.",
+    );
+    expect(
+      check(
+        "QwenImageEditPlusPipeline",
+        { prompt: "a cat", controlnet: "scribble", control_image: picture },
+        null,
+        "/c",
+      ),
+    ).toBe("ERROR 400 Qwen-Image-Edit does not take a ControlNet. Leave controlnet empty.");
   });
 
   it("passes guidance to the argument each family's pipeline reads", () => {
@@ -1368,5 +1477,15 @@ print(fitted(large, "images", 512, 512).size)
 print(fitted(small, "images", 512, 512).size)
 `);
     expect(out.split("\n")).toEqual(["(1182, 886)", "(400, 300)"]);
+  });
+
+  it("decodes the warm-up picture as a 64x64 grey reference", () => {
+    const out = images(`
+import base64
+from diffusersImageRules import WARM_UP_PICTURE
+picture = decoded(base64.b64decode(WARM_UP_PICTURE), "images")
+print(picture.size, picture.mode, picture.getpixel((0, 0)))
+`);
+    expect(out).toBe("(64, 64) RGB (128, 128, 128)");
   });
 });

@@ -251,10 +251,10 @@ class Generator:
         except ValueError as err:
             fail(str(err))
         self.adapters = LoadedAdapters()
-        # The pipelines built so far for modes other than plain, keyed by
-        # the mode and the names of the extra models it takes. Each shares
-        # the loaded pipeline's components, so a LoRA applied to the UNet
-        # applies to all of them.
+        # The pipelines built so far for modes whose class is not the
+        # loaded one, keyed by the mode and the names of the extra models
+        # it takes. Each shares the loaded pipeline's components, so a LoRA
+        # applied to the UNet applies to all of them.
         self.mode_pipes = {}
         self.loaders = {"controlnet": self.load_controlnet}
         # Never fetch anything while serving. Set before diffusers and
@@ -269,7 +269,7 @@ class Generator:
         if not torch.backends.mps.is_available():
             fail("diffusersImageServer.py needs the Mac GPU (torch's mps device), and it is not available.")
         # The class comes from the family table, never from the file.
-        pipeline_class = getattr(diffusers, self.rules["pipelines"]["plain"])
+        pipeline_class = getattr(diffusers, self.rules["loads"])
         # use_safetensors: a .bin weight loads through pickle, which runs
         # code. trust_remote_code and custom_pipeline are never passed.
         self.pipe = pipeline_class.from_pretrained(
@@ -358,12 +358,12 @@ class Generator:
 
     def pipeline_for(self, request):
         """The pipeline for the request's mode. The loaded pipeline when the
-        mode's class is the plain class; otherwise the mode's class, built
+        mode's class is the loaded class; otherwise the mode's class, built
         the first time it is asked for from the loaded pipeline's parts plus
         the models the request names, and kept. Called under the lock."""
         mode = request["mode"]
         class_name = self.rules["pipelines"][mode]
-        if class_name == self.rules["pipelines"]["plain"]:
+        if class_name == self.rules["loads"]:
             return self.pipe
         fields = MODE_MODELS.get(mode, [])
         key = (mode, *[request[field] for field in fields])
@@ -422,10 +422,11 @@ class Generator:
         """One small generation before the port opens. A model that loads
         but cannot generate fails here, and `agency local serve` reports the
         exit instead of the user's first call finding it."""
-        self.generate(
-            check_request(self.rules, warm_up_request(), self.adapters_dir, self.controlnets_dir),
-            None,
-        )
+        try:
+            body = warm_up_request(self.rules)
+        except ValueError as err:
+            fail(str(err))
+        self.generate(check_request(self.rules, body, self.adapters_dir, self.controlnets_dir), None)
 
 
 def encode(image, fmt):

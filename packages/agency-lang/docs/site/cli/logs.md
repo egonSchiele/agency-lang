@@ -35,9 +35,10 @@ list and open one trace directly, name it:
 agency logs run.jsonl --trace-id k3Pq9abc   # a full id, or a unique prefix
 ```
 
-The other traces stay reachable with `t`. Under `--follow` the trace may
-not have started yet; the viewer then waits on it and shows it when its
-first event arrives.
+The other traces stay reachable with `t`. When no trace matches, or a
+prefix matches several, the viewer says so and lists the traces it found.
+Under `--follow` the trace may not have started yet; the viewer then waits
+on it and shows it when its first event arrives.
 
 ## Labeling a trace from the viewer
 

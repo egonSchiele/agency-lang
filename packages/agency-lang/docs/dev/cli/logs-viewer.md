@@ -136,16 +136,22 @@ Rounds compare the recorded `MessageThread.id`, which survives serialization. Or
 
 ## Follow mode
 
-`makeFollowWatcher` in `run.ts` owns one `makeAppendReader(path, 0)` from `lib/statelog/appendReader.ts`. Its first read supplies the boot text. `f` toggles polling while retaining the reader and byte offset. Appends between boot and the first poll remain available, and toggling follow does not reset accumulated text.
+`makeFollowWatcher` in `run.ts` owns one `makeLineReader(path, 0)` from `lib/statelog/lineReader.ts` and the log parsed from it: the events, the parse errors, and a line count. Its first read is the boot read. `f` toggles polling while retaining the reader, its byte offset, and the log, so appends between boot and the first poll remain available and toggling follow loses nothing.
 
-On growth the shell re-parses the accumulated text, rebuilds the forest, and calls
+The shell never sees text. Each poll parses only the lines appended since the last one, numbering them from the line count so a parse error names its line in the file, and hands the shell a new log that holds the old event objects plus the new ones. The shell rebuilds the forest from it and calls
 `setData(roots)` on every numbered screen and every open overlay. Cursor and drill state is stored as IDs. An id that no longer resolves
 falls back to the nearest ancestor, then to the first row. A zoomed window stays put while
-an unzoomed one tracks the live end. A shrunken file, from rotation or truncation, resets
-the reader and the accumulator, and the fallback path absorbs the renumbering. Running spans draw to the window end with a `⋯` cap.
+an unzoomed one tracks the live end. A shrunken file, from rotation or truncation, gets a new
+reader and an empty log, and the fallback path absorbs the renumbering. Running spans draw to the window end with a `⋯` cap.
 
-End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
-`lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
+The reader returns complete lines only. A file opened without `--follow` is treated as finished at boot, so a last line with no newline is parsed into the boot log. Polls leave a partial last line alone, since the writer may be in the middle of it; the reader keeps those bytes, so a later poll completes the line and no parse error flashes in the meantime.
+
+Stdin and `agency remote logs` hand the viewer a parsed log (`RunViewerOpts.parsed`) instead of a file: `parseStatelogStream` in `lib/cli/logsView.ts` parses stdin as it arrives, and `traceLogsToEvents` checks the fetched records with `parseStatelogRecords`.
+
+`--trace-id` is checked by the viewer, against the log it already read, never by a separate read of the file. When the id names no single trace and the log will not grow (no `--follow`), the viewer shows the message `resolveTraceIdArgument` builds and returns `"back"`. Under `--follow` it waits for the trace instead. Inside the runs explorer the focus comes from the explorer's own rows, so the check is skipped.
+
+End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation, a last line with no newline, a half-written line under follow, and the watcher keeping its parsed events) and
+`lib/statelog/lineReader.test.ts` (UTF-8 split across chunks, lines longer than a chunk, offset rewind).
 
 ## Comments
 

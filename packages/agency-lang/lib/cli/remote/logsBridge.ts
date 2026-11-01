@@ -1,8 +1,10 @@
 // The one owner of the normalized statelog log representation shared by
-// `remote logs --json` and the viewer. The viewer parser (lib/statelog/parse.ts)
-// requires a truthy `trace_id` and a `data` object with a string `type`, so the
-// normalized record carries `trace_id`; JSONL is that same record, one per line.
+// `remote logs --json` and the viewer. The viewer's checks
+// (lib/statelog/parse.ts) require a truthy `trace_id` and a `data` object with
+// a string `type`, so the normalized record carries `trace_id`. The viewer gets
+// those same records, checked the way a line from a file is.
 
+import { parseStatelogRecords, type ParseResult } from "@/statelog/parse.js";
 import type { TraceLog } from "../statelog/projectClient.js";
 
 export type ViewerTraceLog = {
@@ -21,8 +23,8 @@ export function normalizeTraceLogs(logs: TraceLog[]): ViewerTraceLog[] {
   }));
 }
 
-export function traceLogsToJsonl(logs: TraceLog[]): string {
-  return normalizeTraceLogs(logs)
-    .map((log) => JSON.stringify(log))
-    .join("\n");
+/** The fetched logs as the viewer's parsed log, with no round trip through
+ *  text. */
+export function traceLogsToEvents(logs: TraceLog[]): ParseResult {
+  return parseStatelogRecords(normalizeTraceLogs(logs));
 }

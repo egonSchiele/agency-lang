@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
-import { runViewer } from "./run.js";
+import { makeFollowWatcher, runViewer } from "./run.js";
+import type { ParseResult } from "../statelog/parse.js";
 import { commentsPathFor } from "../runDirectory/commentsPath.js";
 import { openCommentsStore } from "../runDirectory/commentsStore.js";
 
@@ -75,7 +76,6 @@ describe("follow mode", () => {
   function start(input: ScriptedInput, out: FrameRecorder) {
     input.feedKey({ key: "2" });
     return runViewer({
-      jsonl: fs.readFileSync(file, "utf8"),
       followPath: file,
       followIntervalMs: 20,
       input,
@@ -219,6 +219,103 @@ describe("follow mode", () => {
     await done;
     expect(out.lastText()).not.toContain("beforeTruncate");
   });
+
+  it("shows a last line with no newline when the file is opened without --follow", async () => {
+    const lastLine = envelope("s2", "toolCallStart", 1_000, { toolName: "lastTool" });
+    fs.writeFileSync(file, bootLine + lastLine.trimEnd());
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = start(input, out);
+    await until(() => out.frames.length > 0 && out.lastText().includes("lastTool"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("lastTool");
+  });
+
+  it("under --follow, a line still being written waits for its newline", async () => {
+    // A poll can land in the middle of a line the writer has not finished.
+    // That line must not show as a parse error while it waits.
+    const lastLine = envelope("s2", "toolCallStart", 1_000, { toolName: "slowTool" });
+    fs.writeFileSync(file, bootLine + lastLine.slice(0, 30));
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    input.feedKey({ key: "2" });
+    const done = runViewer({
+      followPath: file,
+      initialFollow: true,
+      followIntervalMs: 20,
+      input,
+      output: out,
+      viewport: { rows: 20, cols: 100 },
+    });
+    await until(() => out.frames.length > 0);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(out.lastText()).not.toContain("parse error");
+    fs.appendFileSync(file, lastLine.slice(30));
+    await until(() => out.lastText().includes("slowTool"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("slowTool");
+    expect(out.lastText()).not.toContain("parse error");
+  });
+});
+
+describe("makeFollowWatcher", () => {
+  let dir: string;
+  let file: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "follow-watcher-"));
+    file = path.join(dir, "statelog.jsonl");
+    fs.writeFileSync(file, bootLine);
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("parses only what was appended and keeps the events it already had", async () => {
+    const watcher = makeFollowWatcher({
+      followPath: file,
+      followIntervalMs: 20,
+      input: new ScriptedInput([]),
+      output: new FrameRecorder(),
+      viewport: { rows: 20, cols: 100 },
+    });
+    expect(watcher.boot.events).toHaveLength(1);
+    const logs: ParseResult[] = [];
+    watcher.start((log) => logs.push(log));
+    try {
+      fs.appendFileSync(file, toolLines("s2", "appended", 1_000));
+      await until(() => logs.length > 0);
+    } finally {
+      watcher.stop();
+    }
+    expect(logs[0].events.map((event) => event.data.type)).toEqual([
+      "agentStart",
+      "toolCallStart",
+      "toolCall",
+    ]);
+    // The same object, not a parse of the same line again.
+    expect(logs[0].events[0]).toBe(watcher.boot.events[0]);
+  });
+
+  it("numbers a parse error by its line in the file across polls", async () => {
+    const watcher = makeFollowWatcher({
+      followPath: file,
+      followIntervalMs: 20,
+      input: new ScriptedInput([]),
+      output: new FrameRecorder(),
+      viewport: { rows: 20, cols: 100 },
+    });
+    const logs: ParseResult[] = [];
+    watcher.start((log) => logs.push(log));
+    try {
+      fs.appendFileSync(file, toolLines("s2", "first", 1_000) + "not json\n");
+      await until(() => logs.length > 0);
+    } finally {
+      watcher.stop();
+    }
+    expect(logs.at(-1)!.errors).toEqual([expect.objectContaining({ line: 4 })]);
+  });
 });
 
 describe("follow mode with a trace asked for by id", () => {
@@ -237,7 +334,6 @@ describe("follow mode with a trace asked for by id", () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();
     const done = runViewer({
-      jsonl: fs.readFileSync(file, "utf8"),
       followPath: file,
       followIntervalMs: 20,
       initialFollow: true,
@@ -265,7 +361,6 @@ describe("follow mode with a trace asked for by id", () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();
     const done = runViewer({
-      jsonl: fs.readFileSync(file, "utf8"),
       followPath: file,
       followIntervalMs: 20,
       initialFollow: true,
@@ -313,7 +408,6 @@ describe("follow mode and comments", () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();
     const done = runViewer({
-      jsonl: fs.readFileSync(file, "utf8"),
       followPath: file,
       followIntervalMs: 20,
       initialFollow: true,

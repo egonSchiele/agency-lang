@@ -4,6 +4,7 @@ import * as path from "path";
 
 import { describe, it, expect } from "vitest";
 import { runViewer } from "./run.js";
+import { parseStatelogJsonl } from "./parse.js";
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 
@@ -40,7 +41,7 @@ describe("runViewer", () => {
   it("renders, navigates with j, expands with Enter, quits with q", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["2", "m", "j", "Enter", "q"]),
       output: out,
       viewport: { rows: 10, cols: 100 },
@@ -52,7 +53,7 @@ describe("runViewer", () => {
   it("shows a run directory's annotation summary in the shell header", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["2", "q"]),
       output: out,
       viewport: { rows: 10, cols: 100 },
@@ -73,7 +74,7 @@ describe("runViewer", () => {
     input.feedLine(path.join(dir, "picked.jsonl"));
     input.feedKey({ key: "q" });
     await runViewer({
-      jsonl: sample + second,
+      parsed: parseStatelogJsonl(sample + second),
       input,
       output: out,
       viewport: { rows: 12, cols: 100 },
@@ -93,7 +94,7 @@ describe("runViewer", () => {
     input.feedKey({ key: "q" });
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input,
       output: out,
       viewport: { rows: 12, cols: 100 },
@@ -114,7 +115,7 @@ describe("runViewer", () => {
     input.feedKey({ key: "q" });
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input,
       output: out,
       viewport: { rows: 12, cols: 100 },
@@ -127,7 +128,7 @@ describe("runViewer", () => {
   it("x does nothing without a local source", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["2", "x", "q"]),
       output: out,
       viewport: { rows: 12, cols: 100 },
@@ -138,12 +139,38 @@ describe("runViewer", () => {
   it("shows a helpful message when the file is empty", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: "",
+      parsed: parseStatelogJsonl(""),
       input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 5, cols: 40 },
     });
     expect(out.textAt(0).toLowerCase()).toMatch(/no events/);
+  });
+
+  it("a --trace-id that names no trace shows why and goes back", async () => {
+    const out = new FrameRecorder();
+    const resolution = await runViewer({
+      parsed: parseStatelogJsonl(sample),
+      focusTraceId: "nope",
+      input: new ScriptedInput(["q"]),
+      output: out,
+      viewport: { rows: 5, cols: 120 },
+    });
+    expect(resolution).toBe("back");
+    expect(out.textAt(0)).toContain("No trace matches --trace-id nope (found: abc)");
+  });
+
+  it("a --trace-id prefix opens the trace it names", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      parsed: parseStatelogJsonl(sample),
+      focusTraceId: "ab",
+      input: new ScriptedInput(["q"]),
+      output: out,
+      viewport: { rows: 20, cols: 120 },
+    });
+    expect(out.textAt(0)).not.toContain("No trace matches");
+    expect(out.textAt(0)).toContain("abc");
   });
 
   it("clamps scrollTop after collapsing reduces the visible row count", async () => {
@@ -163,7 +190,7 @@ describe("runViewer", () => {
     const keys = ["2", "m", ...Array.from({ length: 20 }, () => "j"), "g", "Enter", "q"];
     const out = new FrameRecorder();
     await runViewer({
-      jsonl,
+      parsed: parseStatelogJsonl(jsonl),
       input: new ScriptedInput(keys),
       output: out,
       viewport: { rows: 5, cols: 100 },
@@ -178,7 +205,7 @@ describe("runViewer", () => {
   it("machinery leaves show complete JSON in the payload pane", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["2", "m", "j", "q"]),
       output: out,
       viewport: { rows: 20, cols: 100 },
@@ -194,7 +221,7 @@ describe("runViewer", () => {
     scripted.feedLine("agentEnd");
     scripted.feedKey({ key: "q" });
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: scripted,
       output: out,
       viewport: { rows: 10, cols: 100 },
@@ -209,7 +236,7 @@ describe("runViewer", () => {
   it("? opens the help overlay; a non-navigation key closes it", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["?", "x", "q"]),
       output: out,
       viewport: { rows: 20, cols: 100 },
@@ -225,7 +252,7 @@ describe("runViewer", () => {
     const out = new FrameRecorder();
     const bad = sample + "this is not json\n";
     await runViewer({
-      jsonl: bad,
+      parsed: parseStatelogJsonl(bad),
       input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 10, cols: 100 },

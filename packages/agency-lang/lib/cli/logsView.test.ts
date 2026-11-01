@@ -3,11 +3,21 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { logsView, createViewerHost, resolveFocusTrace, type LogsViewDeps } from "./logsView.js";
+import {
+  logsView,
+  createViewerHost,
+  parseStatelogStream,
+  resolveFocusTrace,
+  type LogsViewDeps,
+} from "./logsView.js";
 import type { InputSource } from "@/tui/input/types.js";
 import type { OutputTarget } from "@/tui/output/types.js";
 import { writeGradedRun, writeMultiTraceStatelog } from "../runsExplorer/testFixtures.js";
 import { runRow } from "../runsExplorer/views/viewTestUtils.js";
+import { parseStatelogJsonl } from "@/statelog/parse.js";
+import { statelogLine } from "@/runDirectory/testFixtures.js";
+
+const EMPTY_LOG = { events: [], errors: [] };
 
 type Calls = {
   viewed: { file: string; follow: boolean }[];
@@ -197,15 +207,23 @@ describe("createViewerHost lifecycle", () => {
       runViewer: vi.fn().mockResolvedValue("quit"),
       viewport,
     };
-    await createViewerHost(base)({ kind: "text", jsonl: "{}", terminalInput: "current-stdin" });
+    await createViewerHost(base)({
+      kind: "events",
+      parsed: EMPTY_LOG,
+      terminalInput: "current-stdin",
+    });
     expect(swap).not.toHaveBeenCalled();
 
-    await createViewerHost(base)({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" });
+    await createViewerHost(base)({
+      kind: "events",
+      parsed: EMPTY_LOG,
+      terminalInput: "controlling-tty",
+    });
     expect(swap).toHaveBeenCalledTimes(1);
     expect(restore).toHaveBeenCalledTimes(1);
   });
 
-  it("passes jsonl for text and followPath/initialFollow for file", async () => {
+  it("passes the parsed log for events and followPath/initialFollow for file", async () => {
     const runViewer = vi.fn().mockResolvedValue("quit");
     const host = createViewerHost({
       createInput: () => fakeInput().input,
@@ -214,14 +232,15 @@ describe("createViewerHost lifecycle", () => {
       runViewer,
       viewport,
     });
+    const parsed = parseStatelogJsonl(statelogLine("t1", "agentStart"));
     await host({
-      kind: "text",
-      jsonl: "L",
+      kind: "events",
+      parsed,
       terminalInput: "current-stdin",
       thresholds: { expensiveUsd: 2 },
     });
     expect(runViewer).toHaveBeenCalledWith(
-      expect.objectContaining({ jsonl: "L", thresholds: { expensiveUsd: 2 } }),
+      expect.objectContaining({ parsed, thresholds: { expensiveUsd: 2 } }),
     );
     // Stdin has no file to register a session on.
     expect(runViewer.mock.calls[0][0].session).toBeUndefined();
@@ -254,7 +273,7 @@ describe("createViewerHost lifecycle", () => {
         swapStdinToTty: () => restore,
         runViewer: vi.fn().mockRejectedValue(new Error("boom")),
         viewport,
-      })({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" }),
+      })({ kind: "events", parsed: EMPTY_LOG, terminalInput: "controlling-tty" }),
     ).rejects.toThrow("boom");
     expect(input.destroy).toHaveBeenCalledTimes(1);
     expect(output.destroy).toHaveBeenCalledTimes(1);
@@ -273,7 +292,7 @@ describe("createViewerHost lifecycle", () => {
         swapStdinToTty: () => restore,
         runViewer: vi.fn(),
         viewport,
-      })({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" }),
+      })({ kind: "events", parsed: EMPTY_LOG, terminalInput: "controlling-tty" }),
     ).rejects.toThrow("no output");
     expect(input.destroy).toHaveBeenCalledTimes(1);
     expect(restore).toHaveBeenCalledTimes(1);
@@ -290,7 +309,7 @@ describe("createViewerHost lifecycle", () => {
         swapStdinToTty: () => restore,
         runViewer: vi.fn(),
         viewport,
-      })({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" }),
+      })({ kind: "events", parsed: EMPTY_LOG, terminalInput: "controlling-tty" }),
     ).rejects.toThrow("no input");
     expect(restore).toHaveBeenCalledTimes(1);
   });
@@ -316,7 +335,7 @@ describe("createViewerHost lifecycle", () => {
       }),
       viewport,
     });
-    await host({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" });
+    await host({ kind: "events", parsed: EMPTY_LOG, terminalInput: "controlling-tty" });
 
     expect(exit).toHaveBeenCalledWith(130);
     // release-once: each resource torn down exactly once, from the signal path.
@@ -340,7 +359,9 @@ describe("createViewerHost lifecycle", () => {
       swapStdinToTty: () => vi.fn(),
       runViewer: vi.fn().mockRejectedValue(new Error("primary")),
       viewport,
-    })({ kind: "text", jsonl: "{}", terminalInput: "current-stdin" }).catch((caught) => caught);
+    })({ kind: "events", parsed: EMPTY_LOG, terminalInput: "current-stdin" }).catch(
+      (caught) => caught,
+    );
     expect(error).toBeInstanceOf(AggregateError);
     expect((error as AggregateError).errors.map((e) => (e as Error).message)).toEqual(
       expect.arrayContaining(["primary", "cleanup"]),
@@ -417,5 +438,27 @@ describe("--trace-id", () => {
     const named = [{ traceId: "missing", events: [], lines: [], digest: "" }];
     expect(resolveFocusTrace(named, "missing", onError)).toEqual({ kind: "trace", id: "missing" });
     expect(errors[1]).toContain("k3Pq9abc, k3Pzzzzz");
+  });
+});
+
+describe("parseStatelogStream", () => {
+  async function* chunks(...parts: Buffer[]): AsyncGenerator<Buffer> {
+    for (const part of parts) {
+      yield part;
+    }
+  }
+
+  it("parses lines split across chunks, numbers errors, and keeps a last line with no newline", async () => {
+    const first = statelogLine("t1", "agentStart", { note: "café" });
+    const last = statelogLine("t1", "agentEnd");
+    const bytes = Buffer.from(`${first}\nnot json\n${last}`);
+    // Cut inside the "é" (two bytes in UTF-8) and inside the second line.
+    const cut = Buffer.from(first).indexOf(Buffer.from("é")) + 1;
+    const parsed = await parseStatelogStream(
+      chunks(bytes.subarray(0, cut), bytes.subarray(cut, cut + 40), bytes.subarray(cut + 40)),
+    );
+    expect(parsed.events.map((event) => event.data.type)).toEqual(["agentStart", "agentEnd"]);
+    expect(parsed.events[0].data.note).toBe("café");
+    expect(parsed.errors).toEqual([expect.objectContaining({ line: 2, kind: "invalid_json" })]);
   });
 });

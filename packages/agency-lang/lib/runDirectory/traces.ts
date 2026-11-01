@@ -81,17 +81,6 @@ export function readTracesOrThrow(statelogPath: string): Trace[] {
   return traces;
 }
 
-export function tracesFromText(text: string): ReadTracesResult {
-  const lines = text.split("\n");
-  // The text after the last newline: empty when the text ends with one.
-  const last = lines.pop();
-  const grouper = makeTraceGrouper();
-  const errors: ParseError[] = [];
-  addParsedLines(parseStatelogLines(lines, 1), grouper, errors);
-  addLastLine(last === "" ? undefined : last, lines.length + 1, grouper, errors);
-  return { traces: grouper.traces(), errors };
-}
-
 type TraceGrouper = {
   add(entry: ParsedEventLine): void;
   traces(): Trace[];
@@ -191,4 +180,26 @@ export function matchTraceId(ids: readonly string[], idOrPrefix: string): TraceI
   if (matches.length === 1) return { kind: "one", id: matches[0] };
   if (matches.length === 0) return { kind: "none" };
   return { kind: "ambiguous", ids: matches };
+}
+
+export type TraceIdArgument = { kind: "one"; id: string } | { kind: "problem"; message: string };
+
+/** The trace a `--trace-id` value names, or the message to show when it
+ *  names none or several. The CLI prints the message; the viewer shows it. */
+export function resolveTraceIdArgument(
+  ids: readonly string[],
+  idOrPrefix: string,
+): TraceIdArgument {
+  const match = matchTraceId(ids, idOrPrefix);
+  if (match.kind === "one") {
+    return match;
+  }
+  if (match.kind === "ambiguous") {
+    return {
+      kind: "problem",
+      message: `--trace-id ${idOrPrefix} is ambiguous: ${match.ids.join(", ")}`,
+    };
+  }
+  const found = ids.length === 0 ? "the log holds no traces" : `found: ${ids.join(", ")}`;
+  return { kind: "problem", message: `No trace matches --trace-id ${idOrPrefix} (${found})` };
 }

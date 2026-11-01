@@ -1,6 +1,6 @@
 import { createProjectClient } from "../../statelog/projectClient.js";
 import type { ProjectClient } from "../../statelog/projectClient.js";
-import { normalizeTraceLogs, traceLogsToJsonl } from "../logsBridge.js";
+import { normalizeTraceLogs, traceLogsToEvents } from "../logsBridge.js";
 import { openViewer } from "../../logsView.js";
 import { renderTraceList } from "../render.js";
 import { resolveProjectTarget, failProjectCommand, printJson } from "./util.js";
@@ -34,7 +34,7 @@ export async function runLogs(
       return;
     }
     await openViewer({
-      jsonl: traceLogsToJsonl(logs),
+      parsed: traceLogsToEvents(logs),
       terminalInput: "current-stdin",
       thresholds: context.config.viewer,
     });

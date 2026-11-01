@@ -13,7 +13,9 @@ import { runViewer } from "@/logsViewer/run.js";
 import type { ViewerThresholds } from "@/logsViewer/thresholds.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
-import { matchTrace, readTraces, tracesFromText, type Trace } from "@/runDirectory/traces.js";
+import { resolveTraceIdArgument, type Trace } from "@/runDirectory/traces.js";
+import { makeLineSplitter } from "@/statelog/lineReader.js";
+import { parseStatelogLines, type ParseResult } from "@/statelog/parse.js";
 import { commentsPathFor, commentsSourceForStatelog } from "@/runDirectory/commentsPath.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { sessionsDir } from "@/logsViewer/session/registry.js";
@@ -119,11 +121,13 @@ const TRACE_ID_USAGE =
   "--trace-id opens the viewer on one trace: it needs exactly one statelog file or run directory and cannot combine with --csv";
 
 /**
- * The full id of the trace `--trace-id` names, checked before the terminal is
- * set up so a miss prints as plain text instead of flashing the viewer. A
- * unique prefix is accepted, as `agency logs extract` accepts one. Returns
- * undefined when the flag was not given; reports and returns `"missing"` when
- * no trace matches, so the caller can stop. Exported for its test.
+ * The full id of the trace `--trace-id` names in a run directory, whose traces
+ * are already read, checked before the terminal is set up so a miss prints as
+ * plain text instead of flashing the viewer. A unique prefix is accepted, as
+ * `agency logs extract` accepts one. Returns `"none"` when the flag was not
+ * given; reports and returns `"missing"` when no trace matches, so the caller
+ * can stop. A statelog file is not read twice for this: the viewer checks the
+ * id once it has read the file. Exported for its test.
  */
 export type FocusTrace =
   | { kind: "none" }
@@ -139,17 +143,14 @@ export function resolveFocusTrace(
   if (idOrPrefix === undefined) {
     return { kind: "none" };
   }
-  const match = matchTrace(traces, idOrPrefix);
-  if (match.kind === "one") {
-    return { kind: "trace", id: match.trace.traceId };
+  const resolved = resolveTraceIdArgument(
+    traces.map((trace) => trace.traceId),
+    idOrPrefix,
+  );
+  if (resolved.kind === "one") {
+    return { kind: "trace", id: resolved.id };
   }
-  const known = traces.map((trace) => trace.traceId);
-  if (match.kind === "ambiguous") {
-    onError(`--trace-id ${idOrPrefix} is ambiguous: ${match.ids.join(", ")}`);
-    return { kind: "missing" };
-  }
-  const found = known.length === 0 ? "the log holds no traces" : `found: ${known.join(", ")}`;
-  onError(`No trace matches --trace-id ${idOrPrefix} (${found})`);
+  onError(resolved.message);
   return { kind: "missing" };
 }
 
@@ -201,10 +202,10 @@ async function runExplorerOnTerminal(options: ExplorerTerminalOptions): Promise<
 
 export type ViewerTerminalInput = "current-stdin" | "controlling-tty";
 
-/** What the one viewer host runs: in-memory text (with the input-source choice)
- *  or a local file with follow. */
+/** What the one viewer host runs: a parsed log held in memory (with the
+ *  input-source choice) or a local file with follow. */
 type ViewerSource = (
-  | { kind: "text"; jsonl: string; terminalInput: ViewerTerminalInput }
+  | { kind: "events"; parsed: ParseResult; terminalInput: ViewerTerminalInput }
   | {
       kind: "file";
       followPath: string;
@@ -264,7 +265,7 @@ export function createViewerHost(
     let operation: ViewerLifecycleResult = { ok: true };
     try {
       // Only the drained-stdin case reopens the controlling TTY for keys.
-      if (source.kind === "text" && source.terminalInput === "controlling-tty") {
+      if (source.kind === "events" && source.terminalInput === "controlling-tty") {
         restoreStdin = dependencies.swapStdinToTty();
       }
       input = dependencies.createInput();
@@ -290,9 +291,9 @@ function viewerOptions(
     const info = _hostedModelInfo(model);
     return info !== null && info.contextWindow > 0 ? info.contextWindow : undefined;
   };
-  if (source.kind === "text") {
+  if (source.kind === "events") {
     return {
-      jsonl: source.jsonl,
+      parsed: source.parsed,
       input,
       output,
       viewport,
@@ -366,39 +367,62 @@ const defaultViewerHost = createViewerHost({
   viewport: () => ({ rows: process.stdout.rows ?? 24, cols: process.stdout.columns ?? 80 }),
 });
 
-/** Open the interactive statelog viewer on already-in-memory JSONL. `remote logs`
- *  passes `current-stdin` (stdin is intact after an HTTP fetch); the piped local
- *  `view -` passes `controlling-tty` (stdin was drained for the data). */
+/** Open the interactive statelog viewer on a log already parsed in memory.
+ *  `remote logs` passes `current-stdin` (stdin is intact after an HTTP fetch);
+ *  the piped local `view -` passes `controlling-tty` (stdin was drained for the
+ *  data). */
 export function openViewer(opts: {
-  jsonl: string;
+  parsed: ParseResult;
   terminalInput: ViewerTerminalInput;
   thresholds?: Partial<ViewerThresholds>;
 }): Promise<void> {
-  return defaultViewerHost({ kind: "text", ...opts });
+  return defaultViewerHost({ kind: "events", ...opts });
+}
+
+/** Parse a statelog as it streams in, one chunk of lines at a time, so its
+ *  text is never one string. The stream has ended when this returns, so a
+ *  last line with no newline is a line. */
+export async function parseStatelogStream(
+  stream: AsyncIterable<Buffer | string>,
+): Promise<ParseResult> {
+  const splitter = makeLineSplitter();
+  const log: ParseResult = { events: [], errors: [] };
+  let lineCount = 0;
+  const addLines = (lines: string[]): void => {
+    const parsed = parseStatelogLines(lines, lineCount + 1);
+    lineCount += lines.length;
+    parsed.lines.forEach((entry) => log.events.push(entry.event));
+    parsed.errors.forEach((error) => log.errors.push(error));
+  };
+  for await (const chunk of stream) {
+    addLines(splitter.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
+  }
+  const last = splitter.tail();
+  if (last !== undefined) {
+    addLines([last]);
+  }
+  return log;
 }
 
 /** The original single-file viewer path. A LOCAL file additionally enables the
  *  tree `x` extract-a-trace action; stdin does not (no local file to read). */
 async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<void> {
+  // The viewer checks --trace-id against the log once it has read it, so no
+  // path here reads the log just to check the id. Under --follow the named
+  // trace may not have started yet, and the viewer waits for it.
   if (file === "-") {
-    const chunks: Buffer[] = [];
-    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-    const jsonl = Buffer.concat(chunks).toString("utf8");
+    const parsed = await parseStatelogStream(process.stdin);
     if (cliOpts.follow) {
       console.error("--follow ignored when reading from stdin");
-    }
-    const focus = resolveFocusTrace(tracesFromText(jsonl).traces, cliOpts.traceId, exitWithError);
-    if (focusIsMissing(focus)) {
-      return;
     }
     // Piped stdin was drained for the data, so keys come from the controlling TTY.
     // No extract: stdin has no local file to read a trace back from.
     await defaultViewerHost({
-      kind: "text",
-      jsonl,
+      kind: "events",
+      parsed,
       terminalInput: "controlling-tty",
       thresholds: cliOpts.config?.viewer,
-      focusTraceId: focusIdOf(focus),
+      focusTraceId: cliOpts.traceId,
     });
     return;
   }
@@ -406,21 +430,12 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     console.error(`File not found: ${file}`);
     process.exit(1);
   }
-  // Under --follow the named trace may not have started yet, so the viewer
-  // waits for it instead of this check refusing it.
-  const focus: FocusChoice =
-    cliOpts.follow === true
-      ? cliOpts.traceId
-      : resolveFocusTrace(readTraces(file).traces, cliOpts.traceId, exitWithError);
-  if (focusIsMissing(focus)) {
-    return;
-  }
   await defaultViewerHost({
     kind: "file",
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
     thresholds: cliOpts.config?.viewer,
-    focusTraceId: focusIdOf(focus),
+    focusTraceId: cliOpts.traceId,
     // A run directory's statelog opened by path (always the case under
     // --follow) keeps its comments in the directory, like every other route.
     comments: openCommentsStore(

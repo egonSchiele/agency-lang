@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import { matchTrace, matchTraceId, readTraces, traceDigest, tracesFromText } from "./traces.js";
+import {
+  matchTrace,
+  matchTraceId,
+  readTraces,
+  resolveTraceIdArgument,
+  traceDigest,
+} from "./traces.js";
 
 function line(traceId: string, type: string, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -42,20 +48,22 @@ describe("readTraces", () => {
 
   it("drops a duplicated identical line", () => {
     const first = line("aaa", "agentStart");
-    const { traces } = tracesFromText([first, first, line("aaa", "agentEnd")].join("\n") + "\n");
+    const { traces } = readTraces(
+      writeLog([first, first, line("aaa", "agentEnd")].join("\n") + "\n"),
+    );
     expect(traces[0].events).toHaveLength(2);
   });
 
   it("ignores a torn last line and keeps the rest", () => {
-    const { traces, errors } = tracesFromText(
-      line("aaa", "agentStart") + "\n" + line("aaa", "agentEnd").slice(0, 20),
+    const { traces, errors } = readTraces(
+      writeLog(line("aaa", "agentStart") + "\n" + line("aaa", "agentEnd").slice(0, 20)),
     );
     expect(errors).toEqual([]);
     expect(traces[0].events).toHaveLength(1);
   });
 
   it("returns nothing for an empty file", () => {
-    expect(tracesFromText("")).toEqual({ traces: [], errors: [] });
+    expect(readTraces(writeLog(""))).toEqual({ traces: [], errors: [] });
   });
 
   it("keeps a complete last line that has no newline", () => {
@@ -64,13 +72,6 @@ describe("readTraces", () => {
     expect(errors).toEqual([]);
     expect(traces[0].events.map((event) => event.data.type)).toEqual(["agentStart", "agentEnd"]);
     expect(traces[0].lines[1]).toBe(line("aaa", "agentEnd"));
-  });
-
-  it("ignores a torn last line in a file", () => {
-    const file = writeLog(line("aaa", "agentStart") + "\n" + line("aaa", "agentEnd").slice(0, 20));
-    const { traces, errors } = readTraces(file);
-    expect(errors).toEqual([]);
-    expect(traces[0].events).toHaveLength(1);
   });
 
   it("numbers a bad line by its place in the file across read chunks", () => {
@@ -112,16 +113,18 @@ describe("traceDigest", () => {
   });
 
   it("is the digest readTraces records", () => {
-    const { traces } = tracesFromText(line("aaa", "agentStart") + "\n");
+    const { traces } = readTraces(writeLog(line("aaa", "agentStart") + "\n"));
     expect(traces[0].digest).toBe(traceDigest(traces[0].events));
   });
 });
 
 describe("matchTrace", () => {
-  const { traces } = tracesFromText(
-    [line("abc123", "agentStart"), line("abd456", "agentStart"), line("zzz", "agentStart")].join(
-      "\n",
-    ) + "\n",
+  const { traces } = readTraces(
+    writeLog(
+      [line("abc123", "agentStart"), line("abd456", "agentStart"), line("zzz", "agentStart")].join(
+        "\n",
+      ) + "\n",
+    ),
   );
 
   it("matches a full id, a unique prefix, and reports ambiguity", () => {
@@ -140,5 +143,29 @@ describe("matchTraceId", () => {
     expect(matchTraceId(ids, "k3Pz")).toEqual({ kind: "one", id: "k3Pzzzzz" });
     expect(matchTraceId(ids, "k3")).toEqual({ kind: "ambiguous", ids });
     expect(matchTraceId(ids, "zz")).toEqual({ kind: "none" });
+  });
+});
+
+describe("resolveTraceIdArgument", () => {
+  const ids = ["k3Pq9abc", "k3Pzzzzz"];
+
+  it("names the one trace a full id or a unique prefix matches", () => {
+    expect(resolveTraceIdArgument(ids, "k3Pzzzzz")).toEqual({ kind: "one", id: "k3Pzzzzz" });
+    expect(resolveTraceIdArgument(ids, "k3Pq")).toEqual({ kind: "one", id: "k3Pq9abc" });
+  });
+
+  it("explains an ambiguous prefix, a miss, and a log with no traces", () => {
+    expect(resolveTraceIdArgument(ids, "k3P")).toEqual({
+      kind: "problem",
+      message: "--trace-id k3P is ambiguous: k3Pq9abc, k3Pzzzzz",
+    });
+    expect(resolveTraceIdArgument(ids, "nope")).toEqual({
+      kind: "problem",
+      message: "No trace matches --trace-id nope (found: k3Pq9abc, k3Pzzzzz)",
+    });
+    expect(resolveTraceIdArgument([], "nope")).toEqual({
+      kind: "problem",
+      message: "No trace matches --trace-id nope (the log holds no traces)",
+    });
   });
 });

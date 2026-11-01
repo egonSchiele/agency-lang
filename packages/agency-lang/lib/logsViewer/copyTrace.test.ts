@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { runViewer } from "./run.js";
+import { parseStatelogJsonl } from "./parse.js";
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 
@@ -37,7 +38,7 @@ describe("Y copies the whole focused trace", () => {
     written.length = 0;
     const out = new FrameRecorder();
     await runViewer({
-      jsonl,
+      parsed: parseStatelogJsonl(jsonl),
       focusTraceId: "abc",
       input: new ScriptedInput(["2", "Y", "q"]),
       output: out,
@@ -52,7 +53,7 @@ describe("Y copies the whole focused trace", () => {
   it("y still copies only the focused node", async () => {
     written.length = 0;
     await runViewer({
-      jsonl,
+      parsed: parseStatelogJsonl(jsonl),
       focusTraceId: "abc",
       input: new ScriptedInput(["2", "y", "q"]),
       output: new FrameRecorder(),

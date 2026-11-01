@@ -9,7 +9,8 @@ import type { Element } from "../tui/elements.js";
 import { formatKey } from "../tui/input/format.js";
 import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
-import { currentFileSize, makeAppendReader } from "../statelog/appendReader.js";
+import { currentFileSize, makeLineReader } from "../statelog/lineReader.js";
+import { parseStatelogLines, type ParseResult } from "../statelog/parse.js";
 import type { CommentsStore } from "../runDirectory/commentsStore.js";
 import { formatAddress } from "./address.js";
 import { findRow } from "./detailTarget.js";
@@ -18,7 +19,6 @@ import { anchorFor, marksFrom } from "./marks.js";
 import type { Focus, NavigateResult, SessionPort } from "./session/port.js";
 import { isUnavailable, startSessionServer, type SessionServer } from "./session/server.js";
 import { detectClipboard } from "./clipboard.js";
-import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import { buildForest } from "./tree.js";
 import { DetailScreen } from "./views/detailScreen.js";
@@ -36,14 +36,14 @@ import { OccurrencesView } from "./views/occurrencesView.js";
 import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
-import { matchTraceId } from "../runDirectory/traces.js";
+import { matchTraceId, resolveTraceIdArgument } from "../runDirectory/traces.js";
+import { wrapLine } from "./wrapLine.js";
 
 export type RunViewerOpts = {
-  // The statelog text. Optional when `followPath` is given — the shell
-  // then reads the file itself through ONE append reader whose first
-  // read() IS the boot read, so nothing can land in a gap between a
-  // separate boot read and the watcher start (the old design's bug).
-  jsonl?: string;
+  // The parsed log, for a source that is not a local file (stdin, a remote
+  // trace). Ignored when `followPath` is given: the follow watcher then
+  // reads the file itself, and its first read IS the boot read.
+  parsed?: ParseResult;
   input: InputSource;
   output: OutputTarget;
   viewport: { rows: number; cols: number };
@@ -97,7 +97,7 @@ async function handleTraceExtract(args: {
   traceId: string;
   following: boolean;
   watcher: FollowWatcher;
-  onNewText: (text: string) => void;
+  onNewLog: (log: ParseResult) => void;
   render: () => void;
   notify: (message: string) => void;
 }): Promise<void> {
@@ -118,7 +118,7 @@ async function handleTraceExtract(args: {
     args.notify(`Extract failed: ${(error as Error).message}`);
   } finally {
     if (args.following) {
-      args.watcher.start(args.onNewText);
+      args.watcher.start(args.onNewLog);
     }
     args.render();
   }
@@ -174,10 +174,9 @@ function parseErrorNotice(parseErrors: ReadonlyArray<{ line: number }>): Element
 
 export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> {
   const watcher = makeFollowWatcher(opts);
-  const parsed = parseStatelogJsonl(watcher.bootText);
-  const roots = buildForest(parsed.events);
-  const parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
-  const allEvents: readonly EventEnvelope[] = parsed.events; // `Y` copies these verbatim
+  const roots = buildForest(watcher.boot.events);
+  const parseErrors: ReadonlyArray<{ line: number }> = watcher.boot.errors;
+  const allEvents: readonly EventEnvelope[] = watcher.boot.events; // `Y` copies these verbatim
 
   const screen = new Screen({
     input: opts.input,
@@ -186,16 +185,45 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     height: opts.viewport.rows,
   });
 
+  // A --trace-id that names no trace in a log that will not grow: say so and
+  // go back. Under --follow the trace may not have started yet.
+  const focusProblem = focusProblemAtBoot(opts, roots);
+  if (focusProblem !== undefined) {
+    screen.render(lines(wrapLine(focusProblem, opts.viewport.cols)));
+    await opts.input.nextKey();
+    return "back";
+  }
+
   // Empty log: exit — EXCEPT under --follow, where an empty (or not yet
   // created) file is the most useful case: keep polling and render as
   // events arrive.
-  if (roots.length === 0 && !(opts.followPath !== undefined && opts.initialFollow)) {
+  if (roots.length === 0 && !followsAtBoot(opts)) {
     screen.render(lines(["No events found."]));
     await opts.input.nextKey();
     return "back";
   }
 
   return runSession(opts, screen, watcher, roots, parseErrors, allEvents);
+}
+
+function followsAtBoot(opts: RunViewerOpts): boolean {
+  return opts.followPath !== undefined && opts.initialFollow === true;
+}
+
+/** The message for a `--trace-id` that names no single trace, when the log
+ *  read at boot is all there will be. Undefined when there is no focus id,
+ *  when it names one trace, under --follow, where the trace may still arrive,
+ *  and inside the runs explorer, whose focus comes from its own rows and not
+ *  from the flag. */
+function focusProblemAtBoot(opts: RunViewerOpts, roots: TreeNode[]): string | undefined {
+  if (opts.focusTraceId === undefined || followsAtBoot(opts) || opts.embedded === true) {
+    return undefined;
+  }
+  const resolved = resolveTraceIdArgument(
+    roots.map((root) => root.traceId),
+    opts.focusTraceId,
+  );
+  return resolved.kind === "problem" ? resolved.message : undefined;
 }
 
 type ParseErrors = ReadonlyArray<{ line: number }>;
@@ -238,11 +266,10 @@ async function runSession(
     render: () => render(),
     notify,
   });
-  const onNewText = (text: string): void => {
-    const reparsed = parseStatelogJsonl(text);
-    roots = buildForest(reparsed.events);
-    parseErrors = reparsed.errors;
-    allEvents = reparsed.events;
+  const onNewLog = (log: ParseResult): void => {
+    roots = buildForest(log.events);
+    parseErrors = log.errors;
+    allEvents = log.events;
     host.setData(roots, fallbackTraceId(roots, host.currentTraceId(), opts.focusTraceId));
     render();
   };
@@ -254,7 +281,7 @@ async function runSession(
     followOn = !followOn;
     host.setFollowIndicator(followOn);
     if (followOn) {
-      watcher.start(onNewText, commentsSource.refreshIfChanged);
+      watcher.start(onNewLog, commentsSource.refreshIfChanged);
     } else {
       watcher.stop();
     }
@@ -276,7 +303,7 @@ async function runSession(
             sourcePath: opts.extract.sourcePath,
             following: () => followOn,
             watcher,
-            onNewText,
+            onNewLog,
           },
     prompt,
   });
@@ -319,7 +346,7 @@ async function runSession(
   if (opts.initialFollow && opts.followPath !== undefined) {
     followOn = true;
     host.setFollowIndicator(true);
-    watcher.start(onNewText, commentsSource.refreshIfChanged);
+    watcher.start(onNewLog, commentsSource.refreshIfChanged);
   }
   let session: SessionServer | undefined;
   try {
@@ -512,7 +539,7 @@ type ActionDeps = {
     sourcePath: string;
     following: () => boolean;
     watcher: FollowWatcher;
-    onNewText: (text: string) => void;
+    onNewLog: (log: ParseResult) => void;
   };
   /** Told when a line prompt opens and closes, so the shell can defer redraws. */
   prompt: { open: () => void; close: () => void };
@@ -544,7 +571,7 @@ function makeActions(deps: ActionDeps): {
       traceId,
       following: deps.extract.following(),
       watcher: deps.extract.watcher,
-      onNewText: deps.extract.onNewText,
+      onNewLog: deps.extract.onNewLog,
       render: deps.render,
       notify,
     });
@@ -942,66 +969,122 @@ function rowBindings(
 }
 
 /**
- * The follow watcher. One reader, one offset cursor, alive for the whole
- * session: its first read() IS the boot read, so nothing can land in a
- * gap between a separate boot read and the watcher start, and `f`
- * toggles POLLING only — the reader persists, so there is no accumulator
- * to rewind (the two bugs that made the old follow dead on arrival). A
- * file that SHRANK was rotated/truncated: start over from offset 0 with
- * an empty accumulator; view setData cursor-fallback absorbs it.
+ * The follow watcher. It owns the one line reader for the file and the log
+ * parsed from it, alive for the whole session. The reader's first read IS the
+ * boot read, so nothing can land in a gap between a separate boot read and the
+ * watcher start, and `f` toggles POLLING only: the reader and the log persist.
+ * Each poll parses only the lines appended since the last one and hands the
+ * shell a new log with the old events in it. A file that SHRANK was rotated or
+ * truncated: start over from offset 0 with an empty log; view setData
+ * cursor-fallback absorbs it.
+ *
+ * A file opened without `--follow` is treated as finished at boot, so a last
+ * line with no newline shows. Polls show complete lines only, since a live
+ * writer may be in the middle of one; the reader keeps that partial line, so
+ * a later poll can complete it.
+ *
+ * @internal Exported for its test.
  */
-function makeFollowWatcher(opts: RunViewerOpts): {
-  bootText: string;
-  /** `onTick` runs on every poll, grown or not: the comments file can change
-   *  while the log is idle. */
-  start(onText: (accum: string) => void, onTick?: () => void): void;
+export function makeFollowWatcher(opts: RunViewerOpts): {
+  /** The log as the boot read found it. */
+  boot: ParseResult;
+  /** `onLog` gets the whole log after every poll that changed it. `onTick`
+   *  runs on every poll, grown or not: the comments file can change while
+   *  the log is idle. */
+  start(onLog: (log: ParseResult) => void, onTick?: () => void): void;
   stop(): void;
 } {
-  let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
-  let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
-  let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");
+  const followPath = opts.followPath;
+  let reader = followPath !== undefined ? makeLineReader(followPath, 0) : undefined;
+  let lastSize = followPath !== undefined ? currentFileSize(followPath) : 0;
+  let log: ParseResult = { events: [], errors: [] };
+  let lineCount = 0;
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   // The callback is bound at start(), never at construction — so the
   // watcher cannot reach into the shell before the shell finishes wiring
   // itself up (a temporal-dead-zone hazard otherwise).
-  let onText: (accum: string) => void = () => {};
+  let onLog: (log: ParseResult) => void = () => {};
   let onTick: () => void = () => {};
+
+  // Parse what was appended since the last read; true when the log changed.
+  const readAppended = (): boolean => {
+    const appended: ParseResult = { events: [], errors: [] };
+    reader?.readToEnd((lines) => {
+      const parsed = parseStatelogLines(lines, lineCount + 1);
+      lineCount += lines.length;
+      parsed.lines.forEach((entry) => appended.events.push(entry.event));
+      parsed.errors.forEach((error) => appended.errors.push(error));
+    });
+    if (appended.events.length === 0 && appended.errors.length === 0) {
+      return false;
+    }
+    log = {
+      events: log.events.concat(appended.events),
+      errors: log.errors.concat(appended.errors),
+    };
+    return true;
+  };
+
   const poll = (): void => {
-    if (reader === undefined || opts.followPath === undefined) return;
+    if (reader === undefined || followPath === undefined) {
+      return;
+    }
     onTick();
-    const size = currentFileSize(opts.followPath);
+    const size = currentFileSize(followPath);
     const truncated = size < lastSize;
     if (truncated) {
-      reader = makeAppendReader(opts.followPath, 0);
-      accum = "";
+      reader = makeLineReader(followPath, 0);
+      log = { events: [], errors: [] };
+      lineCount = 0;
     }
     lastSize = size;
-    const chunk = reader.read();
-    if (chunk.length > 0) {
-      accum += chunk;
-      onText(accum);
-    } else if (truncated) {
-      // A shrink to empty (or whitespace) still changes what is on screen.
-      // Notify with the reset accumulator so the views clear rather than keep a
-      // trace no longer in the file — a chunk-only trigger would miss this.
-      onText(accum);
+    // A shrink to empty (or whitespace) still changes what is on screen, so
+    // a truncation notifies even when nothing new was read.
+    if (readAppended() || truncated) {
+      onLog(log);
     }
   };
+
+  const bootLog = (): ParseResult => {
+    if (reader === undefined) {
+      return opts.parsed ?? { events: [], errors: [] };
+    }
+    return opts.initialFollow ? log : withLastLine(log, reader.tail(), lineCount + 1);
+  };
+
+  readAppended();
   return {
-    bootText: accum,
+    boot: bootLog(),
     start: (callback, tick) => {
-      onText = callback;
+      onLog = callback;
       // A restart that names no tick (the extract prompt's) keeps the one
       // it had, so comments keep appearing while follow stays on.
       onTick = tick ?? onTick;
-      if (opts.followPath === undefined || pollTimer !== undefined) return;
+      if (followPath === undefined || pollTimer !== undefined) {
+        return;
+      }
       pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
     },
     stop: () => {
-      if (pollTimer === undefined) return;
+      if (pollTimer === undefined) {
+        return;
+      }
       clearInterval(pollTimer);
       pollTimer = undefined;
     },
+  };
+}
+
+/** `log` with a finished file's last line, when it has no newline, parsed
+ *  onto the end. */
+function withLastLine(log: ParseResult, last: string | undefined, lineNumber: number): ParseResult {
+  if (last === undefined) {
+    return log;
+  }
+  const parsed = parseStatelogLines([last], lineNumber);
+  return {
+    events: log.events.concat(parsed.lines.map((entry) => entry.event)),
+    errors: log.errors.concat(parsed.errors),
   };
 }
 

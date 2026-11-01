@@ -70,7 +70,7 @@ const sample = events.join("\n") + "\n";
 it("merges partial threshold overrides with the defaults", async () => {
   const output = new FrameRecorder();
   await runViewer({
-    jsonl: sample,
+    parsed: parseStatelogJsonl(sample),
     input: new ScriptedInput(["2", "q"]),
     output,
     viewport: { rows: 20, cols: 120 },
@@ -84,7 +84,7 @@ it("merges partial threshold overrides with the defaults", async () => {
 async function drive(keys: (string | { key: string; ctrl?: boolean })[]): Promise<FrameRecorder> {
   const out = new FrameRecorder();
   await runViewer({
-    jsonl: sample,
+    parsed: parseStatelogJsonl(sample),
     input: new ScriptedInput([...keys, "q"]),
     output: out,
     viewport: { rows: 20, cols: 120 },
@@ -119,7 +119,7 @@ async function driveJsonl(
 ): Promise<FrameRecorder> {
   const output = new FrameRecorder();
   await runViewer({
-    jsonl,
+    parsed: parseStatelogJsonl(jsonl),
     input: new ScriptedInput([...keys, "q"]),
     output,
     viewport: { rows: 20, cols: 130 },
@@ -128,7 +128,7 @@ async function driveJsonl(
 }
 async function driveEmbedded(keys: (string | { key: string })[]) {
   return runViewer({
-    jsonl: sample,
+    parsed: parseStatelogJsonl(sample),
     input: new ScriptedInput(keys),
     output: new FrameRecorder(),
     viewport: { rows: 20, cols: 120 },
@@ -258,7 +258,7 @@ describe("traces list navigation", () => {
   it("returns to the embedding app after backing out to the traces list", async () => {
     const out = new FrameRecorder();
     const resolution = await runViewer({
-      jsonl: twoTraceSample,
+      parsed: parseStatelogJsonl(twoTraceSample),
       input: new ScriptedInput([enter, esc, esc, "q"]),
       output: out,
       viewport: { rows: 20, cols: 130 },
@@ -297,7 +297,7 @@ describe("the viewer shell", () => {
 
   it("standalone: Esc never ends the session", async () => {
     const resolution = await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["1", esc, esc, esc, "q"]),
       output: new FrameRecorder(),
       viewport: { rows: 20, cols: 120 },
@@ -308,7 +308,7 @@ describe("the viewer shell", () => {
   it("below 100 columns it says so, and q still quits", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 20, cols: 78 },
@@ -318,7 +318,7 @@ describe("the viewer shell", () => {
 
   it("below 100 columns, embedded, Esc still returns to the host", async () => {
     const resolution = await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input: new ScriptedInput([esc]),
       output: new FrameRecorder(),
       viewport: { rows: 20, cols: 78 },
@@ -354,7 +354,7 @@ describe("the viewer shell", () => {
   it("a trace asked for by id opens on it, with no picker in the way", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: twoTraceSample,
+      parsed: parseStatelogJsonl(twoTraceSample),
       input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 20, cols: 120 },
@@ -438,7 +438,7 @@ describe("the viewer shell", () => {
     const input = new ScriptedInput(["2", "/", "q"]);
     input.feedLine("add two numbers");
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       input,
       output: out,
       viewport: { rows: 20, cols: 120 },
@@ -556,7 +556,7 @@ it("help paging reaches screen bindings and Escape closes it", async () => {
 it("embedded focused traces return to their host on the first Esc", async () => {
   const output = new FrameRecorder();
   const resolution = await runViewer({
-    jsonl: sample,
+    parsed: parseStatelogJsonl(sample),
     input: new ScriptedInput([esc, "q"]),
     output,
     viewport: { rows: 20, cols: 120 },
@@ -657,7 +657,7 @@ async function driveWithStore(
   const input = new ScriptedInput([...keys, "q"]);
   lines.forEach((line) => input.feedLine(line));
   await runViewer({
-    jsonl,
+    parsed: parseStatelogJsonl(jsonl),
     input,
     output: out,
     viewport: { rows: 24, cols: 130 },
@@ -791,7 +791,7 @@ describe("the session", () => {
   it("a viewer opened without a session writes nothing", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       followPath: logFile,
       input: new ScriptedInput(["q"]),
       output: out,
@@ -806,7 +806,7 @@ describe("the session", () => {
     const out = new FrameRecorder();
     const input = new ScriptedInput([]);
     const done = runViewer({
-      jsonl: sample,
+      parsed: parseStatelogJsonl(sample),
       followPath: logFile,
       session: { dir: sessions },
       comments: store,

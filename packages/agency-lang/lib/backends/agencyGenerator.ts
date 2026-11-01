@@ -749,7 +749,8 @@ export class AgencyGenerator {
       // `baseUrl | url`: the aliases a runtime caller may use, printed back
       // as written.
       const name = [p.name, ...(p.aliases ?? [])].join(" | ");
-      const defaultSuffix = p.defaultValue ? ` = ${this.processNode(p.defaultValue).trim()}` : "";
+      const defaultText = this.paramDefaultOf(p);
+      const defaultSuffix = defaultText === null ? "" : ` = ${defaultText}`;
       if (p.typeHint) {
         const typeStr = this.renderType(p.typeHint, policy);
         const bang = p.validated ? "!" : "";
@@ -1284,6 +1285,18 @@ export class AgencyGenerator {
    *  `signatureOf` prints it, or null when none is declared. */
   returnTypeOf(node: FunctionDefinition | GraphNodeDefinition): string | null {
     return node.returnType ? this.renderType(node.returnType, "display") : null;
+  }
+
+  /** A parameter's declared type, printed the way `signatureOf` prints
+   *  it, or null when none is declared. */
+  paramTypeOf(param: FunctionParameter): string | null {
+    return param.typeHint ? this.renderType(param.typeHint, "display") : null;
+  }
+
+  /** A parameter's default as Agency source, such as `0` or `null`, or
+   *  null when it has none. */
+  paramDefaultOf(param: FunctionParameter): string | null {
+    return param.defaultValue ? this.processNode(param.defaultValue).trim() : null;
   }
 
   /** Render the annotations that precede a type alias declaration. */

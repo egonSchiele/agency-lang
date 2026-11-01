@@ -18,6 +18,12 @@ import { effectSteps, type EffectSteps } from "./output.js";
 
 const WILDCARD = "*";
 
+/** What a step rejected by the run's catch-all says, so the person knows
+ *  the rejection came from `agency workflow run` and not from a rule of
+ *  theirs. */
+export const CATCH_ALL_MESSAGE =
+  "rejected by agency workflow run: no rule in your policy approves this, and it was not approved at the prompt";
+
 /** One effect the person's policy does not cover, and the steps that raise it. */
 export type Uncovered = EffectSteps;
 
@@ -83,6 +89,6 @@ export function runPolicy(person: Policy, start: Policy, accepted: string[]): Po
       ...(accepted.includes(effect) ? [{ action: "approve" as const }] : []),
     ];
   }
-  policy[WILDCARD] = [{ action: "reject" }];
+  policy[WILDCARD] = [{ action: "reject", rejectMessage: CATCH_ALL_MESSAGE }];
   return policy;
 }

@@ -310,22 +310,12 @@ async function startPromptsFor(prepared: PreparedWorkflow): Promise<StartPrompts
   };
 }
 
-/** The `--json` form of a run's result. */
-function runJson(result: DriverResult): Record<string, unknown> {
-  switch (result.kind) {
-    case "value":
-      return { success: true, value: result.value };
-    case "failed":
-      return { success: false, error: result.message, step: result.step };
-    case "problems":
-      return { success: false, error: formatProblems("the workflow", result.problems), step: null };
-    case "unanswered":
-      return {
-        success: false,
-        error: `stopped at a prompt nobody answered: ${result.effects.join(", ")}`,
-        step: null,
-      };
-  }
+/** What `run` says when a rule in the person's policy propagated a prompt
+ *  and there was nobody to answer it. The child saved a checkpoint, but the
+ *  command does not keep it, so the run cannot go on from there. */
+function unansweredRunMessage(effects: string[]): string {
+  const names = effects.join(", ");
+  return `${unansweredMessage(effects)}. This run cannot be resumed. Cover ${names} with --policy, --approve, or --reject, and run it again.`;
 }
 
 /** Run a saved workflow. Before anything runs, the person sees every effect
@@ -359,7 +349,11 @@ export async function workflowRun(
       io.err(NO_TERMINAL);
       return 1;
     }
-    if (!(await io.confirm("Approve all of them for this run?"))) {
+    // A yes approves each effect for the whole run, whatever step raises it,
+    // the same as --approve. The question says so.
+    const flag = `--approve ${uncovered.map((entry) => entry.effect).join(",")}`;
+    const question = `Approve these effects for the whole run? This is the same as ${flag}`;
+    if (!(await io.confirm(question))) {
       io.err("Did not run.");
       return 1;
     }
@@ -384,9 +378,13 @@ export async function workflowRun(
       budget: settings.budget,
     },
   });
-  const result = readDriverResult(outcome);
+  const read = readDriverResult(outcome);
+  const result: DriverResult =
+    read.kind === "unanswered"
+      ? { kind: "failed", message: unansweredRunMessage(read.effects), step: null }
+      : read;
   if (options.json) {
-    io.out(JSON.stringify(runJson(result), null, 2));
+    io.out(resultJson(result, prepared.label));
     return result.kind === "value" ? 0 : 1;
   }
   if (result.kind !== "value") {

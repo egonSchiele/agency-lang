@@ -47,6 +47,18 @@ describe("runDriver", () => {
     expect(leftovers()).toEqual([]);
   });
 
+  it("keeps only the abort's line when the runtime stopped the run", async () => {
+    const stderr =
+      "file:///x/abortedResult.js:173\n  return new AgencyAbort(...)\n\nAgencyAbort: Guard exceeded its cost budget: spent 0.000002 of limit 0.000001\n    at AbortedResult.toError (file:///x)\n";
+    const run: NodeRunner = async () => {
+      throw Object.assign(new Error("Command failed"), { stderr });
+    };
+    expect(await runDriver(call(), run)).toEqual({
+      ok: false,
+      message: "Guard exceeded its cost budget: spent 0.000002 of limit 0.000001",
+    });
+  });
+
   it("clears distDir, since the driver is never precompiled", async () => {
     let distDir: string | undefined = "x";
     const run: NodeRunner = async (args) => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkPolicyExplicit, type Policy } from "../../runtime/policy.js";
-import { runPolicy, startRules, uncoveredEffects } from "./runPolicy.js";
+import { CATCH_ALL_MESSAGE, runPolicy, startRules, uncoveredEffects } from "./runPolicy.js";
 
 const steps = [
   { step: "note", tool: "searchNotes", effects: [] },
@@ -53,8 +53,11 @@ describe("runPolicy", () => {
   it("gives an accepted effect one approve rule with no match, and rejects the rest", () => {
     const policy = runPolicy({}, start, ["test::lists::add"]);
     expect(policy["test::lists::add"]).toEqual([{ action: "approve" }]);
-    expect(policy["*"]).toEqual([{ action: "reject" }]);
-    expect(decide(policy, "std::write", { dir: "/p" })).toEqual({ type: "reject" });
+    expect(policy["*"]).toEqual([{ action: "reject", rejectMessage: CATCH_ALL_MESSAGE }]);
+    expect(decide(policy, "std::write", { dir: "/p" })).toMatchObject({
+      type: "reject",
+      message: CATCH_ALL_MESSAGE,
+    });
   });
 
   it("returns a policy with its own * rule unchanged", () => {
@@ -75,7 +78,7 @@ describe("runPolicy", () => {
     expect(decide(policy, "std::workflow::scan", { dir: "/real/p/proj/workflows" })).toEqual({
       type: "approve",
     });
-    expect(decide(policy, "std::workflow::scan", { dir: "/other/workflows" })).toEqual({
+    expect(decide(policy, "std::workflow::scan", { dir: "/other/workflows" })).toMatchObject({
       type: "reject",
     });
   });
@@ -83,11 +86,15 @@ describe("runPolicy", () => {
   it("approves the start prompts and the module read, and nothing else of those effects", () => {
     const policy = runPolicy({}, start, []);
     expect(decide(policy, "std::run", { node: "main", depth: 1 })).toEqual({ type: "approve" });
-    expect(decide(policy, "std::run", { node: "main", depth: 2 })).toEqual({ type: "reject" });
+    expect(decide(policy, "std::run", { node: "main", depth: 2 })).toMatchObject({
+      type: "reject",
+    });
     expect(
       decide(policy, "std::read", { dir: "/real/p/proj", filename: "tools/lists.agency" }),
     ).toEqual({ type: "approve" });
-    expect(decide(policy, "std::read", { dir: "/real/p/proj", filename: "secret.txt" })).toEqual({
+    expect(
+      decide(policy, "std::read", { dir: "/real/p/proj", filename: "secret.txt" }),
+    ).toMatchObject({
       type: "reject",
     });
   });

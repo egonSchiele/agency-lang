@@ -75,9 +75,15 @@ Each start rule spells its data the way the prompt does. `loadWorkflow` names th
 
 The `with approve` on `wfLoad` does not approve the scan by itself. The run's `"*"` reject is another handler in the same chain, and a rejection wins. That is why the scan needs a start rule.
 
+The `std::run` rule pins the node and the depth, not the module, because the compiled program's path is not known before the run. The only depth-1 `run` the driver makes is `runWorkflow`'s. A tool module's top-level code runs in the driver, also at depth 1, so a module that called `run(..., node: "main")` at its top level would be approved. That is contrived, and there is nothing to pin it to.
+
+The catch-all reject carries a `rejectMessage`, `CATCH_ALL_MESSAGE` in `runPolicy.ts`, so a step it rejects says the rejection came from `agency workflow run` and not from a rule of the person's.
+
 A person's own `"*"` rule turns all of this off: no start rules, no prompt, and no catch-all. They wrote a rule for everything and meant it.
 
-An effect is "covered" when the person's policy has any rule for it. A rule that propagates counts. At run time it propagates, `interactive` is false, nothing can answer, and the driver returns the interrupt unanswered, which the command prints.
+An effect is "covered" when the person's policy has any rule for it. A rule that propagates counts. At run time it propagates, `interactive` is false, nothing can answer, and the driver returns the interrupt unanswered. The child saved a checkpoint, but the command does not keep it, so it says the run cannot be resumed and how to cover the effect.
+
+The question says what a yes does: `Approve these effects for the whole run? This is the same as --approve <effects>`. A yes adds one approve rule with no `match` per effect, so it approves the effect wherever it is raised, and the flag it names is the way to skip the prompt next time.
 
 The table, the question, and every message go to stderr, so `--json` keeps stdout for the result. `confirmQuestion` takes the stream to write its question to for this reason.
 
@@ -91,7 +97,8 @@ The table, the question, and every message go to stderr, so `--json` keeps stdou
 
 - `--policy`, `--approve`, and `--reject` build the person's part of the policy.
 - `--model` and `--local` become config the driver is compiled with. The workflow's child gets the driver's model and provider.
-- `--max-cost` and `--max-time` become the driver's root budget. A root time budget does not stop a run that is waiting on its subprocess, so `--max-time` cannot end a workflow mid-step. `agency run` has the same gap when its program calls `runWorkflow`. A budget stop that does happen exits 1, because the evaluate script `runAgencyNode` writes does not catch it the way `agency run`'s entry block does, which exits 3.
+- `--max-cost` becomes the driver's root cost budget. It stops a run while the workflow's program is still running: a spawn test runs a model step and then a two-second tool under a tiny cap, and the run stops before the tool finishes. The stop exits 1, because the evaluate script `runAgencyNode` writes does not catch it the way `agency run`'s entry block does, which exits 3. Its stderr carries a stack trace, so `runDriver` keeps only the `AgencyAbort:` line.
+- `--max-time` is left out. A root time budget does not stop a run that is waiting on its subprocess, so it could not end a workflow mid-step. `agency run --max-time` has the same gap when its program calls `runWorkflow`. `addBudgetOptions` is split into `addMaxCostOption` and `addMaxTimeOption` so `run` can take only the first.
 - `--log-file` and `--observability` set the driver's log, and the child writes its events there too.
 
 ## JSON output

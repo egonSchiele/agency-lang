@@ -13,6 +13,7 @@ import {
   type WorkflowIo,
 } from "./commands.js";
 import { NO_TERMINAL } from "./output.js";
+import { CATCH_ALL_MESSAGE } from "./runPolicy.js";
 import type { DriverCall, DriverOutcome } from "./runDriver.js";
 
 const FIXTURES = path.resolve("tests/agency/workflow/fixtures/tools");
@@ -253,7 +254,9 @@ describe("the commands", () => {
       confirm = answering(true);
       answer = { ok: true, data: success("added 1 items to l1/Meals") };
       expect(await workflowRun("addOne", { inputs }, settings(), io())).toBe(0);
-      expect(asked).toEqual(["Approve all of them for this run?"]);
+      expect(asked).toEqual([
+        "Approve these effects for the whole run? This is the same as --approve test::lists::add",
+      ]);
       expect(err[0]).toBe(
         "Your policy does not cover these interrupts:\n  test::lists::add   step add (addListItems)",
       );
@@ -262,7 +265,7 @@ describe("the commands", () => {
       expect(calls[0].args).toEqual(["addOne", project, { noteTitle: "Groceries" }]);
       const policy = JSON.parse(calls[0].carriers!.policy!.policyJson);
       expect(policy["test::lists::add"]).toEqual([{ action: "approve" }]);
-      expect(policy["*"]).toEqual([{ action: "reject" }]);
+      expect(policy["*"]).toEqual([{ action: "reject", rejectMessage: CATCH_ALL_MESSAGE }]);
       expect(Object.keys(policy)).toContain("std::workflow::scan");
       expect(calls[0].carriers!.policy!.interactive).toBe(false);
     });
@@ -302,7 +305,9 @@ describe("the commands", () => {
       answer = { ok: true, data: [{ effect: "test::lists::add" }] };
       expect(await workflowRun("addOne", {}, settings(person), io())).toBe(1);
       expect(asked).toEqual([]);
-      expect(err).toEqual(["stopped at a prompt nobody answered: test::lists::add"]);
+      expect(err).toEqual([
+        "stopped at a prompt nobody answered: test::lists::add. This run cannot be resumed. Cover test::lists::add with --policy, --approve, or --reject, and run it again.",
+      ]);
     });
 
     it("keeps stdout for the JSON alone with --json", async () => {

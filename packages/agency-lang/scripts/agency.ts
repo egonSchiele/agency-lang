@@ -36,7 +36,8 @@ import {
   runSecretsRm,
   runSecretsImport,
 } from "@/cli/remote/commands/secrets.js";
-import { confirmQuestion, promptSecretValue } from "@/cli/remote/confirmation.js";
+import { confirmQuestion } from "@/cli/confirmQuestion.js";
+import { promptSecretValue } from "@/cli/remote/confirmation.js";
 import type { PullOptions } from "@/cli/remote/commands/pull.js";
 import { runLogs } from "@/cli/remote/commands/logs.js";
 import {
@@ -353,8 +354,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   /** Config, run policy, and budget from a run's flags, after
    *  `withLocalModel`. A bad policy or budget flag exits 2. `input` names
-   *  the default trace file, and is unused when no trace flag is set. */
-  function runSettings(options: RunOptions, input: string) {
+   *  the default trace file, so a command with no trace flag leaves it out. */
+  function runSettings(options: RunOptions, input?: string) {
     // applyCliFlags takes one field: a path, or `true` for the default path.
     // The CLI splits that across two flags so neither swallows the filename.
     const config = applyCliFlags(
@@ -602,15 +603,26 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   /** The run's cost and time budget. */
   function addBudgetOptions(cmd: Command) {
-    return cmd
-      .option(
-        "--max-cost <dollars>",
-        "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
-      )
-      .option(
-        "--max-time <duration>",
-        "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
-      );
+    addMaxCostOption(cmd);
+    addMaxTimeOption(cmd);
+    return cmd;
+  }
+
+  /** The run's cost budget. */
+  function addMaxCostOption(cmd: Command) {
+    return cmd.option(
+      "--max-cost <dollars>",
+      "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
+    );
+  }
+
+  /** The run's time budget. `workflow run` leaves it out: a root time
+   *  budget does not stop a run that is waiting on a subprocess. */
+  function addMaxTimeOption(cmd: Command) {
+    return cmd.option(
+      "--max-time <duration>",
+      "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+    );
   }
 
   /** Refusing anything in the import closure that is not Agency source. */
@@ -1460,7 +1472,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   // The flags from `agency run` that reach a workflow: the policy, the
-  // model, the budget, and the log. See docs/site/cli/workflow.md for why
+  // model, the cost budget, and the log. See docs/site/cli/workflow.md for why
   // the others are left out.
   const workflowRunCmd = workflowCmd
     .command("run")
@@ -1470,12 +1482,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--json", 'Print { "success": ..., "value" or "error": ... } as JSON');
   addPolicyOptions(workflowRunCmd);
   addModelOptions(workflowRunCmd);
-  addBudgetOptions(workflowRunCmd);
+  addMaxCostOption(workflowRunCmd);
   addLogOptions(workflowRunCmd);
   workflowRunCmd.action(
     async (target: string, opts: RunOptions & { inputs?: string; json?: boolean }) => {
       const options = await withLocalModel(opts);
-      const settings = runSettings(options, target);
+      const settings = runSettings(options);
       const code = await workflowRun(
         target,
         { inputs: options.inputs, json: options.json },

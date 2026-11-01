@@ -4,8 +4,8 @@
 // mechanics only — each command keeps its own policy (when to ask, what a
 // decline means).
 
-import * as readline from "node:readline/promises";
 import prompts from "prompts";
+import { confirmQuestion } from "../confirmQuestion.js";
 import { terminalSafe } from "./secretsInput.js";
 
 export type ConfirmDeployOptions = {
@@ -28,23 +28,6 @@ export async function confirmDeployWithoutExports(
   }
   const prompt = options.prompt ?? confirmQuestion;
   return prompt("Upload anyway?");
-}
-
-/** The raw readline yes/no lifecycle, policy-free. */
-/** `output` is where the question is written. A command whose standard
- *  output must hold only its result, such as `agency workflow run --json`,
- *  passes stderr. */
-export async function confirmQuestion(
-  question: string,
-  output: NodeJS.WritableStream = process.stdout,
-): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output });
-  try {
-    const answer = (await rl.question(`${question} [y/N] `)).trim().toLowerCase();
-    return answer === "y" || answer === "yes";
-  } finally {
-    rl.close();
-  }
 }
 
 /** Hidden-input prompt for a secret value. Resolves undefined on cancellation

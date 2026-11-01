@@ -52,11 +52,12 @@ const addOne = (listId: string) => ({
   },
 });
 
-async function runCli(dir: string, args: string[]) {
+async function runCli(dir: string, args: string[], env: Record<string, string> = {}) {
   try {
     const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, "workflow", ...args], {
       cwd: dir,
       timeout: 120_000,
+      env: { ...process.env, ...env },
     });
     return { stdout, stderr, code: 0 };
   } catch (e: any) {
@@ -74,7 +75,7 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     project = makeAgencyTempDir("wf-spawn");
     mkdirSync(path.join(project, "tools"));
     mkdirSync(path.join(project, "workflows"));
-    for (const file of ["notes.agency", "lists.agency"]) {
+    for (const file of ["notes.agency", "lists.agency", "slow.agency"]) {
       cpSync(path.join(FIXTURES, file), path.join(project, "tools", file));
     }
     const save = (name: string, value: unknown) =>
@@ -90,6 +91,33 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
       path.join(project, "reject-add.json"),
       JSON.stringify({ "test::lists::add": [{ action: "reject" }] }),
     );
+    // Covers test::lists::add, so there is no prompt, but approves only a
+    // section the workflow never uses.
+    writeFileSync(
+      path.join(project, "other-section.json"),
+      JSON.stringify({
+        "test::lists::add": [{ match: { section: "Other" }, action: "approve" }],
+      }),
+    );
+    // A model step, then a two-second tool, for the cost budget.
+    save("costly", {
+      workflow: {
+        format: 1,
+        name: "costly",
+        description: "Ask a model, then echo the reply slowly.",
+        inputs: "{ text: string }",
+        steps: [
+          { id: "ask", kind: "llm", prompt: "Say something.", context: [], output: "string" },
+          {
+            id: "slow",
+            kind: "tool",
+            module: "./tools/slow.agency",
+            tool: "slowEcho",
+            args: { text: { $ref: "steps.ask" } },
+          },
+        ],
+      },
+    });
   });
 
   afterAll(() => {
@@ -188,9 +216,33 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     });
 
     it("lets the person's rejection of a start prompt win", async () => {
-      const r = await runAddOne("--approve", "test::lists::add", "--reject", "std::workflow::run");
+      const log = path.join(project, "rejected-start.jsonl");
+      const r = await runAddOne(
+        "--approve",
+        "test::lists::add",
+        "--reject",
+        "std::workflow::run",
+        "--log-file",
+        log,
+      );
       expect(r.code).toBe(1);
       expect(r.stdout + r.stderr).not.toContain("added");
+      // The log records each handler's answer; std::workflow::run was rejected.
+      const rejected = readFileSync(log, "utf-8")
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .map((line) => JSON.parse(line).data)
+        .filter((data) => data.type === "handlerDecision" && data.decision === "reject")
+        .map((data) => data.interrupt.effect);
+      expect(rejected).toContain("std::workflow::run");
+      noDriverLeft();
+    });
+
+    it("says a step the run's catch-all rejected was not approved", async () => {
+      const r = await runAddOne("--policy", "other-section.json");
+      expect(r.code).toBe(1);
+      expect(r.stderr).not.toContain("does not cover");
+      expect(r.stderr).toContain("rejected by agency workflow run");
       noDriverLeft();
     });
 
@@ -213,14 +265,24 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
       expect(r.code).toBe(2);
     });
 
-    // A --max-time that trips while the run waits on the workflow's child
-    // does not stop it today: `agency run --max-time` has the same gap when
-    // its program calls runWorkflow. So this checks only that the budget
-    // flags reach the run's settings, where a malformed one is refused.
-    it("refuses a --max-time with no unit, as agency run does", async () => {
-      const r = await runAddOne("--approve", "test::lists::add", "--max-time", "300");
-      expect(r.code).toBe(2);
-      expect(r.stderr).toMatch(/max-time/);
+    it("stops a run whose model spend passes --max-cost, with one line and no stack trace", async () => {
+      const r = await runCli(
+        project,
+        ["run", "costly", "--inputs", JSON.stringify({ text: "x" }), "--max-cost", "0.000001"],
+        { AGENCY_USE_TEST_LLM_PROVIDER: "1", AGENCY_LLM_MOCKS: JSON.stringify([{ return: "hi" }]) },
+      );
+      expect(r.code).toBe(1);
+      expect(r.stderr).toMatch(/exceeded its cost budget/);
+      expect(r.stderr).not.toMatch(/^\s+at /m);
+      noDriverLeft();
+    });
+
+    // A root time budget does not stop a run that is waiting on a
+    // subprocess, so `workflow run` does not take --max-time yet.
+    it("refuses --max-time, which cannot stop a workflow mid-step yet", async () => {
+      const r = await runAddOne("--max-time", "1m");
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toMatch(/unknown option '--max-time'/);
     });
 
     it("writes the child's log events to --log-file", async () => {

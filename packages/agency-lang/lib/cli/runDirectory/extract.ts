@@ -61,8 +61,8 @@ export function pickTrace(options: { log: string; trace?: string }): Trace {
   );
 }
 
-/** Where a refusal points instead of printing its own table: one trace
- *  listing, `agency logs traces`, for the whole CLI. */
+/** Where a refusal points: `agency logs traces`, the CLI's one trace
+ *  listing. */
 function listTraces(log: string): string {
   return `List them with: agency logs traces --log ${log}`;
 }

@@ -31,7 +31,7 @@ describe("logsOutline", () => {
     expect(result.text).not.toContain("older-run");
     // The approved read in loopEvents is hidden; the rejected grep shows.
     expect(result.text).not.toContain("std::read · approved");
-    expect(result.text).toContain("std::grep · rejected");
+    expect(result.text).toContain("Interrupt · std::grep · rejected · Search?");
   });
 
   it("--approvals shows the approved interrupt", async () => {

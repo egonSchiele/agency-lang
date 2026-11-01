@@ -92,7 +92,12 @@ export function headerLine(row: StoryRow, trace: TreeNode): string {
         `inside LLM call ${row.round.index + 1}`,
       ].join(" · ");
     case "interrupt":
-      return `Interrupt · ${row.interrupt.effect} · ${row.interrupt.outcome}`;
+      return [
+        "Interrupt",
+        row.interrupt.effect,
+        row.interrupt.outcome,
+        ...(row.interrupt.message === "" ? [] : [firstLine(row.interrupt.message)]),
+      ].join(" · ");
     case "error":
       return `Error · ${firstLine(row.message)}`;
     case "llmGroup":

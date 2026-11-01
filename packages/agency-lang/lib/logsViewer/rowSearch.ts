@@ -5,13 +5,7 @@
 // So a word in the first user message matches the user row once, not every
 // later LLM call that carried it again as history.
 import { headerLine } from "./rowText.js";
-import { storyOutline } from "./story.js";
-import {
-  blockRowId,
-  transcriptBlocks,
-  transcriptText,
-  type TranscriptBlock,
-} from "./transcript.js";
+import { blockRowId, transcriptOf, transcriptText, type TranscriptBlock } from "./transcript.js";
 import type { TreeNode } from "./types.js";
 
 export type SearchKind = "user" | "call" | "tool" | "hosted" | "error";
@@ -78,9 +72,9 @@ export function searchTrace(
   matcher: Matcher,
   options: { context: number; kinds: SearchKind[] | undefined },
 ): RowHit[] {
-  const story = storyOutline(trace, { admin: true });
+  const { blocks, story } = transcriptOf(trace);
   const hits: RowHit[] = [];
-  for (const block of transcriptBlocks(trace)) {
+  for (const block of blocks) {
     const kind = SEARCHED_BLOCKS[block.kind];
     if (kind === undefined || (options.kinds !== undefined && !options.kinds.includes(kind))) {
       continue;

@@ -250,7 +250,15 @@ function turnMessagesOf(trace: TreeNode): string[] | undefined {
     .filter((message): message is string => typeof message === "string");
   return messages.length === 0 ? undefined : messages;
 }
+/** A trace's transcript, with the story outline it was built from, so a
+ *  caller that maps blocks to rows (`blockRowId`) reuses it. */
+export type Transcript = { blocks: TranscriptBlock[]; story: StoryRow[] };
+
 export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
+  return transcriptOf(trace).blocks;
+}
+
+export function transcriptOf(trace: TreeNode): Transcript {
   const index = buildTreeIndex(trace);
   const rounds = roundsOf(trace, index);
   const story = storyOutline(trace, { admin: false });
@@ -259,28 +267,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
   // or works on a copy (a subthread), so both match against the same
   // record of what has been shown.
   const conversations: Record<string, ThreadHistory> = Object.create(null);
-  // Errors inside a tool call show in that tool's block. The rest get a
-  // block of their own, placed by time on the thread they happened in.
-  const loose: LooseBlock[] = [
-    ...traceErrors(trace, index)
-      .filter((error) => error.toolId === undefined)
-      .map((error) => ({
-        at: error.at,
-        thread: blockThread(error.node, rounds, index),
-        block: { kind: "error" as const, id: `error:${error.id}`, error },
-      })),
-    ...runPauses(trace).map((pause) => ({
-      at: pause.pausedAt,
-      thread: blockThread(pause.node, rounds, index),
-      block: {
-        kind: "pause" as const,
-        id: `pause:${pause.node.id}`,
-        pausedMs: pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
-        resumed: pause.resumedAt !== undefined,
-      },
-    })),
-    ...turnBlocks(trace, rounds),
-  ];
+  const loose = looseBlocks(trace, rounds, index);
   const turnMessages = turnMessagesOf(trace);
   const compactions = walkNodes(trace)
     .filter((node) => node.event?.data.type === "memoryCompaction")
@@ -411,7 +398,10 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     state.previousEnd = round.end;
     return blocks;
   });
-  return withGroupDividers(withLooseBlocks(roundBlocks, loose), rounds, index);
+  return {
+    blocks: withGroupDividers(withLooseBlocks(roundBlocks, loose), rounds, index),
+    story,
+  };
 }
 /** The `llmCall` spans a round sits in, outermost first, ending with its own. */
 function groupPathOf(round: Round, index: TreeIndex): string[] {
@@ -519,6 +509,32 @@ type BlockThread = {
  *  or before the first later block anywhere when its thread is unknown,
  *  so the transcript reads in time order. One after every block goes at
  *  the end. */
+/** The blocks that belong to no LLM call: errors outside a tool call,
+ *  pauses, and turns, each placed later by time on its thread. */
+function looseBlocks(trace: TreeNode, rounds: Round[], index: TreeIndex): LooseBlock[] {
+  // Errors inside a tool call show in that tool's block. The rest get a
+  // block of their own, placed by time on the thread they happened in.
+  return [
+    ...traceErrors(trace, index)
+      .filter((error) => error.toolId === undefined)
+      .map((error) => ({
+        at: error.at,
+        thread: blockThread(error.node, rounds, index),
+        block: { kind: "error" as const, id: `error:${error.id}`, error },
+      })),
+    ...runPauses(trace).map((pause) => ({
+      at: pause.pausedAt,
+      thread: blockThread(pause.node, rounds, index),
+      block: {
+        kind: "pause" as const,
+        id: `pause:${pause.node.id}`,
+        pausedMs: pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
+        resumed: pause.resumedAt !== undefined,
+      },
+    })),
+    ...turnBlocks(trace, rounds),
+  ];
+}
 type LooseBlockBody =
   | { kind: "error"; id: string; error: TraceError }
   | { kind: "pause"; id: string; pausedMs: number | undefined; resumed: boolean }

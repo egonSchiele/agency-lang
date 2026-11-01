@@ -15,13 +15,13 @@ import {
 } from "../keymap.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
-import { storyOutline, TOOL_STATUS_MARK, type StoryRow, type ToolStatus } from "../story.js";
+import { TOOL_STATUS_MARK, type StoryRow, type ToolStatus } from "../story.js";
 import { hostedCallShortLabel, owningRowId } from "../hostedCalls.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import {
   blockRowId,
   threadKey,
-  transcriptBlocks,
+  transcriptOf,
   transcriptText,
   type TranscriptBlock,
 } from "../transcript.js";
@@ -200,8 +200,9 @@ export class TranscriptScreen implements Screen {
   private derive(): void {
     const old = this.selected();
     const trace = this.trace();
-    this.blocks = trace ? transcriptBlocks(trace) : [];
-    this.story = trace ? storyOutline(trace, { admin: true }) : [];
+    const transcript = trace ? transcriptOf(trace) : { blocks: [], story: [] };
+    this.blocks = transcript.blocks;
+    this.story = transcript.story;
     this.times = trace ? traceTimes(trace) : { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
     this.paintCache = Object.create(null);
     this.expanded = this.expanded.filter((id) => this.blocks.some((block) => block.id === id));

@@ -81,6 +81,8 @@ describe("selectTraces", () => {
     [{ trace: "ddd", last: 1, since: "1h" }, "--trace names one trace"],
     [{ all: true, last: 3 }, "--all and --last disagree"],
     [{ all: true, since: "1h" }, "--all and --since disagree"],
+    [{ all: true, last: 3, since: "1h" }, "--all and --last disagree"],
+    [{ trace: "ddd", last: 1, since: "1h", all: true }, "--trace names one trace"],
   ])("refuses %o", (flags, reason) => {
     const selection = selectTraces(traces, flags, options);
     expect(selection.kind).toBe("refused");
@@ -139,5 +141,18 @@ describe("parseCount", () => {
     expect(parseCount("--limit", text)).toEqual({
       error: `--limit needs a positive whole number, not "${text}"`,
     });
+  });
+});
+
+describe("the combinations table", () => {
+  it("has a row for each of the sixteen sets of flags", () => {
+    const names = ["trace", "last", "since", "all"] as const;
+    const values = { trace: "ddd", last: 1, since: "1h", all: true };
+    for (let mask = 0; mask < 16; mask++) {
+      const flags = Object.fromEntries(
+        names.filter((_, bit) => (mask & (1 << bit)) !== 0).map((name) => [name, values[name]]),
+      );
+      expect(() => selectTraces(traces, flags, options)).not.toThrow();
+    }
   });
 });

@@ -26,38 +26,32 @@ type FlagName = keyof TraceSelectionFlags;
 const FLAG_NAMES: FlagName[] = ["trace", "last", "since", "all"];
 
 const TRACE_ALONE = "--trace names one trace; drop --last, --since, and --all";
+const ALL_AND_LAST = "--all and --last disagree about how many";
+const ALL_AND_SINCE =
+  "--all and --since disagree: --since alone already means every trace that matches";
 
 type Rule = "default" | "trace" | "last" | "since" | "lastSince" | "all";
 
-/** The spec's combinations table, as data. Rows are checked in order. A
- *  refusal row matches when every flag it lists is given; a selection row
- *  matches when exactly its flags are given. */
-const COMBINATIONS: {
-  given: FlagName[];
-  exact: boolean;
-  outcome: { rule: Rule } | { refused: string };
-}[] = [
-  { given: ["trace", "last"], exact: false, outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "since"], exact: false, outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "all"], exact: false, outcome: { refused: TRACE_ALONE } },
-  {
-    given: ["all", "last"],
-    exact: false,
-    outcome: { refused: "--all and --last disagree about how many" },
-  },
-  {
-    given: ["all", "since"],
-    exact: false,
-    outcome: {
-      refused: "--all and --since disagree: --since alone already means every trace that matches",
-    },
-  },
-  { given: [], exact: true, outcome: { rule: "default" } },
-  { given: ["trace"], exact: true, outcome: { rule: "trace" } },
-  { given: ["last"], exact: true, outcome: { rule: "last" } },
-  { given: ["since"], exact: true, outcome: { rule: "since" } },
-  { given: ["last", "since"], exact: true, outcome: { rule: "lastSince" } },
-  { given: ["all"], exact: true, outcome: { rule: "all" } },
+/** The spec's combinations table, one row for each set of the four flags.
+ *  `given` lists a row's flags in `FLAG_NAMES` order, and a row matches
+ *  when exactly those flags are given. */
+const COMBINATIONS: { given: FlagName[]; outcome: { rule: Rule } | { refused: string } }[] = [
+  { given: [], outcome: { rule: "default" } },
+  { given: ["trace"], outcome: { rule: "trace" } },
+  { given: ["last"], outcome: { rule: "last" } },
+  { given: ["since"], outcome: { rule: "since" } },
+  { given: ["last", "since"], outcome: { rule: "lastSince" } },
+  { given: ["all"], outcome: { rule: "all" } },
+  { given: ["trace", "last"], outcome: { refused: TRACE_ALONE } },
+  { given: ["trace", "since"], outcome: { refused: TRACE_ALONE } },
+  { given: ["trace", "all"], outcome: { refused: TRACE_ALONE } },
+  { given: ["trace", "last", "since"], outcome: { refused: TRACE_ALONE } },
+  { given: ["trace", "last", "all"], outcome: { refused: TRACE_ALONE } },
+  { given: ["trace", "since", "all"], outcome: { refused: TRACE_ALONE } },
+  { given: ["trace", "last", "since", "all"], outcome: { refused: TRACE_ALONE } },
+  { given: ["last", "all"], outcome: { refused: ALL_AND_LAST } },
+  { given: ["last", "since", "all"], outcome: { refused: ALL_AND_LAST } },
+  { given: ["since", "all"], outcome: { refused: ALL_AND_SINCE } },
 ];
 
 const SINCE_UNITS: Record<string, number> = {
@@ -107,13 +101,9 @@ export function selectTraces<T extends Pickable>(
   options: { defaultLast: number; now: number },
 ): TraceSelection<T> {
   const given = FLAG_NAMES.filter((name) => flags[name] !== undefined && flags[name] !== false);
-  const row = COMBINATIONS.find(
-    (candidate) =>
-      candidate.given.every((name) => given.includes(name)) &&
-      (!candidate.exact || candidate.given.length === given.length),
-  );
+  const row = COMBINATIONS.find((candidate) => candidate.given.join() === given.join());
   if (row === undefined) {
-    // Every combination of the four flags matches a row above.
+    // The table has a row for each of the sixteen sets of flags.
     throw new Error(`no selection rule for flags: ${given.join(", ")}`);
   }
   if ("refused" in row.outcome) {

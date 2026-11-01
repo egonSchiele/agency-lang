@@ -10,10 +10,8 @@ import {
   countOf,
   logLine,
   traceRecord,
-  openQueryLog,
-  pickTraces,
-  refusal,
-  type OpenedLog,
+  withPickedTraces,
+  type OpenedTrace,
   type QueryDeps,
   type QueryResult,
 } from "./shared.js";
@@ -25,40 +23,38 @@ export const ASK_COLUMN_CHARS = 60;
 
 export type TracesOptions = TraceSelectionFlags & { log?: string; json: boolean; errors: boolean };
 
-export async function logsTraces(options: TracesOptions, deps: QueryDeps): Promise<QueryResult> {
-  const opened = await openQueryLog(options.log, deps);
-  if ("refused" in opened) {
-    return refusal(opened.refused);
-  }
-  const log: OpenedLog = options.errors
-    ? { ...opened, traces: opened.traces.filter((trace) => trace.summary.hasError) }
-    : opened;
-  const selection = pickTraces(log, options, DEFAULT_TRACES_SHOWN, deps);
-  if (selection.kind === "refused") {
-    return refusal(selection.reason);
-  }
-  const summaries = selection.picked.map((trace) => trace.summary);
-  const counted = `${countOf(opened.traces.length, "trace")}${options.errors ? ` · ${countOf(log.traces.length, "with an error", "with errors")}` : ""}`;
-  const lines = [logLine(opened, `${counted} · showing ${summaries.length}, newest first`)];
-  if (summaries.length > 0) {
-    lines.push("", tracesTable(summaries));
-  }
-  if (selection.older > 0) {
-    lines.push(
-      "",
-      `${countOf(selection.older, "older trace")}. Pass --all to list them, or --since to pick by time.`,
-    );
-  }
-  return {
-    text: lines.join("\n"),
-    json: {
-      log: opened.logPath,
-      total: opened.traces.length,
-      older: selection.older,
-      traces: summaries.map(traceRecord),
-    },
-    exitCode: 0,
-  };
+export function logsTraces(options: TracesOptions, deps: QueryDeps): Promise<QueryResult> {
+  const keep = options.errors ? (trace: OpenedTrace) => trace.summary.hasError : undefined;
+  return withPickedTraces(options, { defaultLast: DEFAULT_TRACES_SHOWN, keep }, deps, (found) => {
+    const { log, picked, older } = found;
+    const summaries = picked.map((trace) => trace.summary);
+    const withErrors = log.traces.filter((trace) => trace.summary.hasError).length;
+    const counted = [
+      countOf(log.traces.length, "trace"),
+      ...(options.errors ? [countOf(withErrors, "with an error", "with errors")] : []),
+      `showing ${summaries.length}, newest first`,
+    ].join(" · ");
+    const lines = [logLine(log, counted)];
+    if (summaries.length > 0) {
+      lines.push("", tracesTable(summaries));
+    }
+    if (older > 0) {
+      lines.push(
+        "",
+        `${countOf(older, "older trace")}. Pass --all to list them, or --since to pick by time.`,
+      );
+    }
+    return {
+      text: lines.join("\n"),
+      json: {
+        log: log.logPath,
+        total: log.traces.length,
+        older,
+        traces: summaries.map(traceRecord),
+      },
+      exitCode: 0,
+    };
+  });
 }
 
 function tracesTable(summaries: TraceSummary[]): string {

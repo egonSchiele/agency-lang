@@ -8,11 +8,7 @@ import { chooseLog, type LiveSession, type LogDeps } from "@/cli/logsSession/tar
 import { traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
 import { buildForest } from "@/logsViewer/tree.js";
 import type { TreeNode } from "@/logsViewer/types.js";
-import {
-  selectTraces,
-  type TraceSelection,
-  type TraceSelectionFlags,
-} from "@/runDirectory/traceSelection.js";
+import { selectTraces, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
 import type { Trace } from "@/runDirectory/traces.js";
 
 /** `outline` and `search` read the most recent trace when no flag picks. */
@@ -63,16 +59,36 @@ export async function openQueryLog(
   return { logPath, shown, traces };
 }
 
-/** `selectTraces` over the opened traces' summaries. Every command's
- *  selection goes through this. */
-export function pickTraces(
-  log: OpenedLog,
-  flags: TraceSelectionFlags,
-  defaultLast: number,
+/** What a command works on once its log is open and its traces picked. */
+export type PickedTraces = { log: OpenedLog; picked: OpenedTrace[]; older: number };
+
+/**
+ * Open the log, pick the traces, and hand them to `body`; a refusal from
+ * either step is the command's answer. `keep` narrows the traces before
+ * picking (`traces --errors`), so `--last` counts only the kept ones. Every
+ * command's selection goes through here.
+ */
+export async function withPickedTraces(
+  options: TraceSelectionFlags & { log?: string },
+  pick: { defaultLast: number; keep?: (trace: OpenedTrace) => boolean },
   deps: QueryDeps,
-): TraceSelection<OpenedTrace & { startedAt: number | undefined }> {
-  const pickable = log.traces.map((trace) => ({ ...trace, startedAt: trace.summary.startedAt }));
-  return selectTraces(pickable, flags, { defaultLast, now: deps.now() });
+  body: (picked: PickedTraces) => QueryResult,
+): Promise<QueryResult> {
+  const log = await openQueryLog(options.log, deps);
+  if ("refused" in log) {
+    return refusal(log.refused);
+  }
+  const pickable = log.traces
+    .filter(pick.keep ?? (() => true))
+    .map((trace) => ({ ...trace, startedAt: trace.summary.startedAt }));
+  const selection = selectTraces(pickable, options, {
+    defaultLast: pick.defaultLast,
+    now: deps.now(),
+  });
+  if (selection.kind === "refused") {
+    return refusal(selection.reason);
+  }
+  return body({ log, picked: selection.picked, older: selection.older });
 }
 
 /** The line every command prints first: the log it read, then the rest. */

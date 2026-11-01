@@ -263,9 +263,9 @@ records), and `lib/logsViewer/rowSearch.ts` (the search over one trace).
 one place any logs command finds its log: `--log`, else the one open
 viewer, else `log.logFile` from `agency.json` when no viewer is open, else
 a refusal naming all three. Several open viewers are refused even when the
-config names a log. The new commands probe the viewer registry the way the
-`session` commands do, so an address `search` prints is one `session show`
-finds in the same file. `configuredLog` is a function, called only on the
+config names a log. `traces`, `outline`, and `search` probe the viewer
+registry the way the `session` commands do, so an address `search` prints
+is one `session show` finds in the same file. `configuredLog` is a function, called only on the
 branch that needs it, so a broken `agency.json` cannot stop a command that
 passed `--log`. An empty `logFile` counts as unset, because `--log stdout`
 writes `""` there to cancel a configured file. A directory with no
@@ -276,20 +276,24 @@ writes `""` there to cancel a configured file. A directory with no
 `startedAt`, which `TraceSummary` has, so start time is computed once, in
 `traceSummaries`. Traces sort newest first by start time and not by file
 position, because concurrent runs interleave their lines. The flag
-combinations are a table of rows (`COMBINATIONS`), checked in order. The
-viewer's trace picker still lists traces in file order; `--csv` and these
-commands sort by start time.
+combinations are a table (`COMBINATIONS`) with one row for each of the
+sixteen sets of the four flags, matched exactly. The viewer's trace picker
+lists traces in file order; `--csv` and these commands sort by start time.
 
 **Building a trace.** Each trace's forest is built from its own events,
 the way `session show` builds it, and not in one pass over the file as the
-viewer does. That keeps every printed address resolvable by `show`.
+viewer does. That keeps every printed address resolvable by `show`. Every
+command builds every trace's forest, even `outline --trace X`, because the
+start times that `--trace`, `--last`, and `--since` pick by come from
+`traceSummaries`, which needs the forest. On a 70 MB log of 89 traces,
+reading the file takes about 0.35 s and building every transcript about
+0.85 s, so each command finishes in under two seconds.
 
 **The outline.** `outlineLines` is `storyOutline` with one more filter:
 `hiddenByDefault` in `story.ts`, the rule the trace screen's `matches()`
 also calls, hides approved interrupts unless `--approvals` (or `--admin`,
-which needs them as parents for its handler decisions). In the
-repository's 70 MB `log.jsonl`, approvals were 418 of 1,317 rows. There is
-no flag for the `m` view, whose rows and ids differ from the story's.
+which needs them as parents for its handler decisions). There is no flag
+for the `m` view, whose rows and ids differ from the story's.
 
 **Search is a filter over transcript blocks.** The transcript already
 decides which block a message belongs to: it keeps, per thread, a record of
@@ -310,13 +314,13 @@ prompt as `ownerRoundId`. An error block finds the story row built from the
 same node. The mapping looks ids up in the story and never parses one.
 
 **Headers.** `headerLine` in `rowText.ts` is shared by `session show`,
-`outline`, and `search`. A user turn's header is the first line of its
-message, which can be a paragraph, so `outline` and `search` cut headers to
-`HEADER_CHARS` with `oneLine`; `show` prints them whole.
-
-**Cost.** On the 70 MB `log.jsonl`, reading the file took 0.35 s and
-building every trace's transcript blocks 0.85 s, so `search --all` is about
-a second.
+`outline`, and `search`. A user turn's, an error's, and an interrupt's
+header ends with the first non-blank line of its text, which can be a whole
+paragraph, so `outline` and `search` cut headers to `HEADER_CHARS` with
+`oneLine`; `show` prints them whole. An interrupt's message tells one kind
+of action from another, as in `Interrupt · std::env · approved · Are you
+sure you want to read this environment variable?`. Which variable is in the
+interrupt's data, which the header does not show.
 
 ## The story outline
 

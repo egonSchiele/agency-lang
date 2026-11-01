@@ -12,10 +12,8 @@ import {
   countOf,
   logLine,
   MOST_RECENT_ONLY,
-  openQueryLog,
-  pickTraces,
-  refusal,
   traceRecord,
+  withPickedTraces,
   type QueryDeps,
   type QueryResult,
 } from "./shared.js";
@@ -26,35 +24,29 @@ export const HEADER_CHARS = 120;
 
 export type OutlineOptions = TraceSelectionFlags & OutlineFlags & { log?: string; json: boolean };
 
-export async function logsOutline(options: OutlineOptions, deps: QueryDeps): Promise<QueryResult> {
-  const log = await openQueryLog(options.log, deps);
-  if ("refused" in log) {
-    return refusal(log.refused);
-  }
-  const selection = pickTraces(log, options, MOST_RECENT_ONLY, deps);
-  if (selection.kind === "refused") {
-    return refusal(selection.reason);
-  }
-  const traces = selection.picked.map((trace) => ({
-    summary: trace.summary,
-    lines: outlineLines(trace.root, options).map((line) => ({
-      ...line,
-      header: oneLine(line.header, HEADER_CHARS),
-    })),
-  }));
-  const shown = `outline of ${countOf(traces.length, "trace")} · ${countOf(log.traces.length, "trace")} in the log`;
-  const text = [
-    logLine(log, shown),
-    ...traces.flatMap((trace) => ["", summaryLine(trace.summary), "", ...rowLines(trace.lines)]),
-  ].join("\n");
-  return {
-    text,
-    json: {
-      log: log.logPath,
-      traces: traces.map((trace) => ({ ...traceRecord(trace.summary), rows: trace.lines })),
-    },
-    exitCode: 0,
-  };
+export function logsOutline(options: OutlineOptions, deps: QueryDeps): Promise<QueryResult> {
+  return withPickedTraces(options, { defaultLast: MOST_RECENT_ONLY }, deps, ({ log, picked }) => {
+    const traces = picked.map((trace) => ({
+      summary: trace.summary,
+      lines: outlineLines(trace.root, options).map((line) => ({
+        ...line,
+        header: oneLine(line.header, HEADER_CHARS),
+      })),
+    }));
+    const shown = `outline of ${countOf(traces.length, "trace")} · ${countOf(log.traces.length, "trace")} in the log`;
+    const text = [
+      logLine(log, shown),
+      ...traces.flatMap((trace) => ["", summaryLine(trace.summary), "", ...rowLines(trace.lines)]),
+    ].join("\n");
+    return {
+      text,
+      json: {
+        log: log.logPath,
+        traces: traces.map((trace) => ({ ...traceRecord(trace.summary), rows: trace.lines })),
+      },
+      exitCode: 0,
+    };
+  });
 }
 
 /** `<trace id> · <started> · N LLM calls · <working time> · <cost> · error` */

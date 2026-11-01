@@ -4,7 +4,13 @@
 // call's history is found once, where it first appeared.
 import { oneLine } from "@/cli/runDirectory/table.js";
 import { formatAddress } from "@/logsViewer/address.js";
-import { matcherFor, searchTrace, SEARCH_KINDS, type SearchKind } from "@/logsViewer/rowSearch.js";
+import {
+  matcherFor,
+  searchTrace,
+  SEARCH_KINDS,
+  type Matcher,
+  type SearchKind,
+} from "@/logsViewer/rowSearch.js";
 import { parseCount, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
 
 import { HEADER_CHARS } from "./outline.js";
@@ -12,9 +18,8 @@ import {
   countOf,
   logLine,
   MOST_RECENT_ONLY,
-  openQueryLog,
-  pickTraces,
   refusal,
+  withPickedTraces,
   type QueryDeps,
   type QueryResult,
 } from "./shared.js";
@@ -45,71 +50,86 @@ type PrintedHit = {
   snippet: string;
 };
 
-export async function logsSearch(options: SearchOptions, deps: QueryDeps): Promise<QueryResult> {
+/** The search's own flags, parsed: how many rows, how wide a snippet,
+ *  which kinds, and the matcher. */
+type SearchFlags = {
+  limit: number;
+  context: number;
+  kinds: SearchKind[] | undefined;
+  matcher: Matcher;
+};
+
+function searchFlagsFrom(options: SearchOptions): SearchFlags | { error: string } {
   const limit = parseCount("--limit", options.limit);
-  if ("error" in limit) {
-    return refusal(limit.error);
-  }
   const context = parseCount("--context", options.context);
-  if ("error" in context) {
-    return refusal(context.error);
-  }
   const kinds = kindsFrom(options.kind);
-  if ("error" in kinds) {
-    return refusal(kinds.error);
-  }
   const matcher = matcherFor(options.pattern, options);
+  if ("error" in limit) {
+    return limit;
+  }
+  if ("error" in context) {
+    return context;
+  }
+  if ("error" in kinds) {
+    return kinds;
+  }
   if ("error" in matcher) {
-    return refusal(matcher.error);
-  }
-  const log = await openQueryLog(options.log, deps);
-  if ("refused" in log) {
-    return refusal(log.refused);
-  }
-  const selection = pickTraces(log, options, MOST_RECENT_ONLY, deps);
-  if (selection.kind === "refused") {
-    return refusal(selection.reason);
-  }
-  const hits: PrintedHit[] = selection.picked.flatMap((trace) =>
-    searchTrace(trace.root, matcher, {
-      context: context.value ?? DEFAULT_SNIPPET_CONTEXT,
-      kinds: kinds.value,
-    }).map((hit) => ({
-      address: formatAddress(trace.traceId, hit.rowId),
-      traceId: trace.traceId,
-      ...hit,
-      header: oneLine(hit.header, HEADER_CHARS),
-    })),
-  );
-  const shown = hits.slice(0, limit.value ?? DEFAULT_SEARCH_LIMIT);
-  const omitted = hits.length - shown.length;
-  const counts = `searched ${countOf(selection.picked.length, "trace")} · ${countOf(hits.length, "row")} matched`;
-  const lines = [
-    logLine(log, hits.length === 0 ? counts : `${counts} · showing ${shown.length}`),
-    "",
-  ];
-  if (hits.length === 0) {
-    lines.push("no rows matched");
-  }
-  lines.push(...shown.flatMap(hitLines));
-  if (omitted > 0) {
-    lines.push(
-      "",
-      `${countOf(omitted, "more row")} matched. Narrow with --trace, --kind, or a longer pattern, or raise --limit.`,
-    );
+    return matcher;
   }
   return {
-    text: lines.join("\n"),
-    json: {
-      log: log.logPath,
-      pattern: options.pattern,
-      tracesSearched: selection.picked.length,
-      matched: hits.length,
-      omitted,
-      hits: shown,
-    },
-    exitCode: 0,
+    limit: limit.value ?? DEFAULT_SEARCH_LIMIT,
+    context: context.value ?? DEFAULT_SNIPPET_CONTEXT,
+    kinds: kinds.value,
+    matcher,
   };
+}
+
+export async function logsSearch(options: SearchOptions, deps: QueryDeps): Promise<QueryResult> {
+  const flags = searchFlagsFrom(options);
+  if ("error" in flags) {
+    return refusal(flags.error);
+  }
+  return withPickedTraces(options, { defaultLast: MOST_RECENT_ONLY }, deps, ({ log, picked }) => {
+    const hits: PrintedHit[] = picked.flatMap((trace) =>
+      searchTrace(trace.root, flags.matcher, { context: flags.context, kinds: flags.kinds }).map(
+        (hit) => ({
+          address: formatAddress(trace.traceId, hit.rowId),
+          traceId: trace.traceId,
+          ...hit,
+          header: oneLine(hit.header, HEADER_CHARS),
+        }),
+      ),
+    );
+    const shown = hits.slice(0, flags.limit);
+    const omitted = hits.length - shown.length;
+    const counts = `searched ${countOf(picked.length, "trace")} · ${countOf(hits.length, "row")} matched`;
+    const lines = [
+      logLine(log, hits.length === 0 ? counts : `${counts} · showing ${shown.length}`),
+      "",
+    ];
+    if (hits.length === 0) {
+      lines.push("no rows matched");
+    }
+    lines.push(...shown.flatMap(hitLines));
+    if (omitted > 0) {
+      lines.push(
+        "",
+        `${countOf(omitted, "more row")} matched. Narrow with --trace, --kind, or a longer pattern, or raise --limit.`,
+      );
+    }
+    return {
+      text: lines.join("\n"),
+      json: {
+        log: log.logPath,
+        pattern: options.pattern,
+        tracesSearched: picked.length,
+        matched: hits.length,
+        omitted,
+        hits: shown,
+      },
+      exitCode: 0,
+    };
+  });
 }
 
 function hitLines(hit: PrintedHit): string[] {

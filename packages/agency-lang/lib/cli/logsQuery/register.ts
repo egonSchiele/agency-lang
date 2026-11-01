@@ -38,135 +38,161 @@ export function defaultLogsQueryDeps(configuredLog: () => string | undefined): L
   };
 }
 
-type CommonOptions = {
-  log?: string;
-  json?: boolean;
-  trace?: string;
-  last?: string;
-  since?: string;
-  all?: boolean;
+/** What commander hands an action: every flag by its camelCase name. */
+type ParsedOptions = Record<string, string | boolean | undefined>;
+
+/** The options every query command shares, parsed. */
+type CommonOptions = TraceSelectionFlags & { log?: string; json: boolean };
+
+type OptionSpec = { flags: string; description: string };
+
+/** One query command: its name, help, positional argument, own flags, and
+ *  how it runs on the shared options and its own. Adding a command is
+ *  adding a row. */
+type QueryCommand = {
+  name: string;
+  description: string;
+  argument?: OptionSpec;
+  options: OptionSpec[];
+  run(
+    common: CommonOptions,
+    own: ParsedOptions,
+    argument: string | undefined,
+    deps: QueryDeps,
+  ): Promise<QueryResult>;
 };
 
-function withCommonOptions(command: Command): Command {
-  return command
-    .option(
-      "--log <file>",
+const COMMON_OPTIONS: OptionSpec[] = [
+  {
+    flags: "--log <file>",
+    description:
       "The statelog or run directory to read (default: the open viewer's, else log.logFile)",
-    )
-    .option("--json", "Print JSON for a program to read instead of text")
-    .option("--trace <id>", "The trace to read, a full id or unique prefix")
-    .option("--last <n>", "The n traces that started most recently")
-    .option("--since <when>", "Traces that started since a time: 30m, 2h, 3d, or an ISO date")
-    .option("--all", "Every trace in the log");
+  },
+  { flags: "--json", description: "Print JSON for a program to read instead of text" },
+  { flags: "--trace <id>", description: "The trace to read, a full id or unique prefix" },
+  { flags: "--last <n>", description: "The n traces that started most recently" },
+  {
+    flags: "--since <when>",
+    description: "Traces that started since a time: 30m, 2h, 3d, or an ISO date",
+  },
+  { flags: "--all", description: "Every trace in the log" },
+];
+
+const QUERY_COMMANDS: QueryCommand[] = [
+  {
+    name: "traces",
+    description: "List the traces in a log, newest first",
+    options: [{ flags: "--errors", description: "Only traces that logged an error" }],
+    run: (common, own, _argument, deps) =>
+      logsTraces({ ...common, errors: own.errors === true }, deps),
+  },
+  {
+    name: "outline",
+    description: "Print every row of a trace with its address (default: the most recent trace)",
+    options: [
+      {
+        flags: "--approvals",
+        description: "Show approved interrupts, which are hidden by default",
+      },
+      {
+        flags: "--admin",
+        description:
+          "Show the handler decisions under each interrupt, and with them the approved interrupts they decided",
+      },
+    ],
+    run: (common, own, _argument, deps) =>
+      logsOutline(
+        { ...common, approvals: own.approvals === true, admin: own.admin === true },
+        deps,
+      ),
+  },
+  {
+    name: "search",
+    description:
+      "Find the rows whose own text matches, with their addresses (default: the most recent trace). " +
+      "Use `--` before a pattern that starts with a dash.",
+    argument: {
+      flags: "<pattern>",
+      description: "The text to find; a regular expression with --regex",
+    },
+    options: [
+      {
+        flags: "--kind <kinds>",
+        description: "Only these kinds, comma separated: user,call,tool,hosted,error",
+      },
+      { flags: "--regex", description: "Treat the pattern as a JavaScript regular expression" },
+      { flags: "--case-sensitive", description: "Match case (the default ignores it)" },
+      {
+        flags: "--limit <n>",
+        description: `Print at most n rows (default ${DEFAULT_SEARCH_LIMIT})`,
+      },
+      {
+        flags: "--context <n>",
+        description: `Characters of snippet on each side of the match (default ${DEFAULT_SNIPPET_CONTEXT})`,
+      },
+    ],
+    run: (common, own, pattern, deps) =>
+      logsSearch(
+        {
+          ...common,
+          pattern: pattern ?? "",
+          kind: textOf(own.kind),
+          regex: own.regex === true,
+          caseSensitive: own.caseSensitive === true,
+          limit: textOf(own.limit),
+          context: textOf(own.context),
+        },
+        deps,
+      ),
+  },
+];
+
+function textOf(value: string | boolean | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
-/** The trace-picking flags as `selectTraces` takes them, or why not. */
-function selectionFrom(options: CommonOptions): TraceSelectionFlags | { error: string } {
-  const last = parseCount("--last", options.last);
+/** The shared options as the commands take them, or why not. */
+function commonFrom(options: ParsedOptions): CommonOptions | { error: string } {
+  const last = parseCount("--last", textOf(options.last));
   if ("error" in last) {
     return last;
   }
-  return { trace: options.trace, last: last.value, since: options.since, all: options.all };
+  return {
+    log: textOf(options.log),
+    json: options.json === true,
+    trace: textOf(options.trace),
+    last: last.value,
+    since: textOf(options.since),
+    all: options.all === true ? true : undefined,
+  };
 }
 
 export function addLogsQueryCommands(logs: Command, deps: () => LogsQueryDeps): void {
-  const run = async (
-    options: CommonOptions,
-    query: (selection: TraceSelectionFlags, queryDeps: QueryDeps) => Promise<QueryResult>,
-  ): Promise<void> => {
-    const queryDeps = deps();
-    const selection = selectionFrom(options);
-    const result =
-      "error" in selection ? refusal(selection.error) : await query(selection, queryDeps);
-    queryDeps.writeStdout(
-      (options.json === true ? JSON.stringify(result.json, null, 2) : result.text) + "\n",
-    );
-    if (result.exitCode !== 0) {
-      process.exitCode = result.exitCode;
+  for (const query of QUERY_COMMANDS) {
+    const command = logs.command(query.name).description(query.description);
+    if (query.argument !== undefined) {
+      command.argument(query.argument.flags, query.argument.description);
     }
-  };
-
-  withCommonOptions(logs.command("traces").description("List the traces in a log, newest first"))
-    .option("--errors", "Only traces that logged an error")
-    .action((options: CommonOptions & { errors?: boolean }) =>
-      run(options, (selection, queryDeps) =>
-        logsTraces(
-          {
-            ...selection,
-            log: options.log,
-            json: options.json === true,
-            errors: options.errors === true,
-          },
-          queryDeps,
-        ),
-      ),
-    );
-
-  withCommonOptions(
-    logs
-      .command("outline")
-      .description("Print every row of a trace with its address (default: the most recent trace)"),
-  )
-    .option("--approvals", "Show approved interrupts, which are hidden by default")
-    .option("--admin", "Show the handler decisions under each interrupt")
-    .action((options: CommonOptions & { approvals?: boolean; admin?: boolean }) =>
-      run(options, (selection, queryDeps) =>
-        logsOutline(
-          {
-            ...selection,
-            log: options.log,
-            json: options.json === true,
-            approvals: options.approvals === true,
-            admin: options.admin === true,
-          },
-          queryDeps,
-        ),
-      ),
-    );
-
-  withCommonOptions(
-    logs
-      .command("search")
-      .description(
-        "Find the rows whose own text matches, with their addresses (default: the most recent trace). " +
-          "Use `--` before a pattern that starts with a dash.",
-      )
-      .argument("<pattern>", "The text to find; a regular expression with --regex"),
-  )
-    .option("--kind <kinds>", "Only these kinds, comma separated: user,call,tool,hosted,error")
-    .option("--regex", "Treat the pattern as a JavaScript regular expression")
-    .option("--case-sensitive", "Match case (the default ignores it)")
-    .option("--limit <n>", `Print at most n rows (default ${DEFAULT_SEARCH_LIMIT})`)
-    .option(
-      "--context <n>",
-      `Characters of snippet on each side of the match (default ${DEFAULT_SNIPPET_CONTEXT})`,
-    )
-    .action(
-      (
-        pattern: string,
-        options: CommonOptions & {
-          kind?: string;
-          regex?: boolean;
-          caseSensitive?: boolean;
-          limit?: string;
-          context?: string;
-        },
-      ) =>
-        run(options, (selection, queryDeps) =>
-          logsSearch(
-            {
-              ...selection,
-              pattern,
-              log: options.log,
-              json: options.json === true,
-              kind: options.kind,
-              regex: options.regex === true,
-              caseSensitive: options.caseSensitive === true,
-              limit: options.limit,
-              context: options.context,
-            },
-            queryDeps,
-          ),
-        ),
-    );
+    for (const option of [...COMMON_OPTIONS, ...query.options]) {
+      command.option(option.flags, option.description);
+    }
+    // Commander passes the positional argument (when there is one), then
+    // the parsed options, then the command.
+    command.action(async (...args: unknown[]) => {
+      const options = args[args.length - 2] as ParsedOptions;
+      const argument = query.argument === undefined ? undefined : (args[0] as string);
+      const queryDeps = deps();
+      const common = commonFrom(options);
+      const result =
+        "error" in common
+          ? refusal(common.error)
+          : await query.run(common, options, argument, queryDeps);
+      queryDeps.writeStdout(
+        (options.json === true ? JSON.stringify(result.json, null, 2) : result.text) + "\n",
+      );
+      if (result.exitCode !== 0) {
+        process.exitCode = result.exitCode;
+      }
+    });
+  }
 }

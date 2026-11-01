@@ -305,7 +305,7 @@ def writeMode(op: string): WriteMode {
   }
 }
 
-export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
+export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean = false): Result<Effect[]> {
   """
   Which interrupts this one command needs raised.
 
@@ -315,6 +315,7 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
 
   @param command - One simple command from the parsed AST
   @param cwd - The resolved working directory, for payloads that need it
+  @param readsStdin - True when a pipe feeds this command its stdin
   """
   const name = command.command
   if (name == null) {
@@ -1016,7 +1017,15 @@ def bashOutcome(plan: Plan): string {
   return "broad"
 }
 
-def flattenCommands(commands: Command[]): SimpleCommand[] {
+/** One simple command from a flattened line, and whether a pipe feeds
+ * it its stdin. Not named `Stage`: `PipelineStage` is a parsed pipe
+ * stage, which may be a whole parenthesized group. */
+export type FlatCommand = {
+  command: SimpleCommand;
+  readsStdin: boolean
+}
+
+def flattenCommands(commands: Command[]): FlatCommand[] {
   """
   Every simple command in the string, including the halves of a chain.
 
@@ -1025,25 +1034,37 @@ def flattenCommands(commands: Command[]): SimpleCommand[] {
   (`true && rm -rf /`), and a classifier that only looks at the top level
   demotes every chained invocation to the broad question.
   """
-  let out: SimpleCommand[] = []
+  let out: FlatCommand[] = []
   for (command in commands) {
     out = [...out, ...flattenOne(command)]
   }
   return out
 }
 
-def flattenOne(command: Command): SimpleCommand[] {
+def flattenOne(command: Command): FlatCommand[] {
   // Exhaustive with no catch-all, so a fifth command shape becomes a type
   // error here instead of silently flattening to nothing — this feeds the
   // refuse wall, where silently-empty is the one result that must never
   // happen.
   return match(command) {
-    { tag: "simpleCommand" } => [command]
-    { tag: "pipeline", stages } => flattenCommands(stages)
+    { tag: "simpleCommand" } => [{ command: command, readsStdin: false }]
+    { tag: "pipeline", stages } => pipelineCommands(stages)
     { tag: "and", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "or", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "parens", command as inner } => flattenOne(inner)
   }
+}
+
+/** A pipe's commands: the first stage as it is, and every command in a
+ * later stage marked as reading the pipe. In `a | (b && c)`, both `b`
+ * and `c` read it, because the group's stdin is the pipe. */
+def pipelineCommands(stages: PipelineStage[]): FlatCommand[] {
+  let out: FlatCommand[] = flattenOne(stages[0])
+  for (stage in stages.slice(1)) {
+    const fed = [{ command: flat.command, readsStdin: true } for flat in flattenOne(stage)]
+    out = [...out, ...fed]
+  }
+  return out
 }
 
 def rebuild(commands: Command[]): Result<string> {
@@ -1319,13 +1340,14 @@ export def planFor(source: string, cwd: string): Plan {
   // Flatten first. A chain hides its halves inside `and`/`or`/`parens`
   // nodes, and `true && rm -rf /` has no top-level simple command at all —
   // without this walk the wall never sees the `rm`.
-  const simple = flattenCommands(commands)
-  const verbs = verbNames(simple)
+  const flat = flattenCommands(commands)
+  const verbs = verbNames([entry.command for entry in flat])
 
   let narrow: Effect[] = []
   let firstMiss = ""
   let allRecognized = true
-  for (command in simple) {
+  for (entry in flat) {
+    const command = entry.command
     if (isRefused(command)) {
       const name = command.command
       if (name == null) {
@@ -1333,7 +1355,7 @@ export def planFor(source: string, cwd: string): Plan {
       }
       return refusePlan("`${name.text}` is not allowed", verbs)
     }
-    const effects = effectsFor(command, cwd)
+    const effects = effectsFor(command, cwd, entry.readsStdin)
     if (effects is failure(why)) {
       if (firstMiss == "") {
         firstMiss = why

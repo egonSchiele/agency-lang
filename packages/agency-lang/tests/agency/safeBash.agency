@@ -9,7 +9,7 @@ import {
   resolveCwd,
   GREP_FLAGS,
  } from "std::safeBash"
-import test { splitFlags } from "std::safeBash"
+import test { splitFlags, flattenCommands } from "std::safeBash"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
@@ -778,4 +778,24 @@ node grepOfPartlyIgnoredFolder() {
   // `**/*.js`) but not all of them, so the tool's search still finds the
   // rest and the grep runs shell-free.
   return planFor("grep -rn hello stdlib", PACKAGE_DIR).execution.kind
+}
+
+def stdinFlags(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const flat = flattenCommands(parsed.value)
+  return [entry.readsStdin for entry in flat]
+}
+
+node stagesReadStdin() {
+  return [
+    stdinFlags("git status"),
+    stdinFlags("a | b | c"),
+    stdinFlags("a | b && c"),
+    stdinFlags("(a | b) | c"),
+    stdinFlags("a; b | c"),
+    stdinFlags("a | (b && c)"),
+  ]
 }

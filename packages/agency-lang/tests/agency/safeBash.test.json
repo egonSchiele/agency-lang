@@ -68,7 +68,7 @@
     },
     {
       "nodeName": "shellFreeWrite",
-      "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is still recognized and goes to bash raising std::write with no content \u2014 approval of the destination, not the bytes. Non-write plans report only the fields their Execution variant carries.",
+      "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is still recognized and goes to bash raising std::write with no content — approval of the destination, not the bytes. Non-write plans report only the fields their Execution variant carries.",
       "input": "",
       "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]]]",
       "evaluationCriteria": [
@@ -140,7 +140,7 @@
     },
     {
       "nodeName": "sequenceRunsThroughBash",
-      "description": "A sequence runs in one bash call, so its output is bash's \u2014 including the newline behavior v2 got wrong.",
+      "description": "A sequence runs in one bash call, so its output is bash's — including the newline behavior v2 got wrong.",
       "input": "",
       "expectedOutput": "\"hi\\nbye\\n\"",
       "interruptHandlers": [
@@ -608,6 +608,17 @@
       "description": "A lone grep of a folder where .gitignore ignores only some entries (dot files, compiled .js files) still runs the tool's search, because the search finds the rest.",
       "input": "",
       "expectedOutput": "\"grep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stagesReadStdin",
+      "description": "Every flattened command says whether it reads a pipe: the first stage of a pipe does not, every command in a later stage does, and a command outside the pipe does not.",
+      "input": "",
+      "expectedOutput": "[[false],[false,true,true],[false,true,false],[false,true,true],[false,false,true],[false,true,true]]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -5,7 +5,7 @@ import { runInTestContext } from "../../runtime/asyncContext.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
 import { type ResultFailure } from "../../runtime/result.js";
 import { safeStatelogValue } from "../../runtime/runner.js";
-import { makeRedactReplacer } from "../../runtime/redactForStatelog.js";
+import { makeScrubReplacer, redactRule } from "../../runtime/redactForStatelog.js";
 import { _s3Get, _s3GetBinary, _s3Put, _s3PutBinary, _createBucket, _s3PresignGet } from "./s3.js";
 import { asRootRun, callHelper, testRun } from "../../runtime/__tests__/testHelpers.js";
 
@@ -278,7 +278,9 @@ describe("S3 presigned URLs", () => {
       const email = `Good morning! Today's image: ${url} — enjoy.`;
       const { globals } = testRun();
 
-      const posted = JSON.parse(JSON.stringify({ email }, makeRedactReplacer(globals)));
+      const posted = JSON.parse(
+        JSON.stringify({ email }, makeScrubReplacer([redactRule(globals)])),
+      );
       expect(posted.email).toBe(
         "Good morning! Today's image: [presigned S3 URL redacted] — enjoy.",
       );

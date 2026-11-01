@@ -5,6 +5,7 @@ import * as path from "path";
 import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogClient.js";
 import { flushPendingStatelogPosts } from "./statelogSender.js";
 import { GlobalStore } from "./runtime/state/globalStore.js";
+import { toolsOf } from "./statelog/wireAccessors.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -676,6 +677,57 @@ describe("StatelogClient", () => {
   });
 
   describe("event method shapes", () => {
+    it("node events log the node's state without ctx and run", async () => {
+      const file = newLogFile("node-state");
+      const client = fileClient(file);
+      const state = {
+        messages: { threads: {} },
+        data: { answer: 42 },
+        ctx: { stateStack: { stack: ["a large stack"] } },
+        isResume: false,
+        run: { ctx: {}, stack: {} },
+      };
+      await client.enterNode({ nodeId: "main", data: state });
+      await client.followEdge({
+        fromNodeId: "main",
+        toNodeId: "next",
+        isConditionalEdge: false,
+        data: state,
+      });
+      await client.exitNode({ nodeId: "next", data: state });
+      const events = readEvents(file);
+      expect(events.map((evt) => evt.data.type)).toEqual(["enterNode", "followEdge", "exitNode"]);
+      for (const evt of events) {
+        expect(evt.data.data).toEqual({
+          messages: { threads: {} },
+          data: { answer: 42 },
+          isResume: false,
+        });
+      }
+    });
+
+    it("omits picture bytes from an event when nothing is tagged for redaction", async () => {
+      const file = newLogFile("picture");
+      const client = fileClient(file);
+      const base64 = Buffer.alloc(6000, 7).toString("base64");
+      const attachment = {
+        type: "image",
+        source: { kind: "base64", base64, mimeType: "image/png" },
+      };
+      await client.agentStart({ entryNode: "main", args: { attachment } });
+      const [evt] = readEvents(file);
+      expect(JSON.stringify(evt)).not.toContain(base64);
+      expect(evt.data.args.attachment.source.base64).toBe("[image/png: 6000 bytes omitted]");
+    });
+
+    it("a node event whose state is not an object logs it as it is", async () => {
+      const file = newLogFile("node-state-primitive");
+      const client = fileClient(file);
+      await client.exitNode({ nodeId: "main", data: 5 });
+      const [evt] = readEvents(file);
+      expect(evt.data.data).toBe(5);
+    });
+
     it("agentStart emits the right type and entryNode", async () => {
       const file = newLogFile("agent-start");
       const client = fileClient(file);
@@ -740,6 +792,22 @@ describe("StatelogClient", () => {
       expect(evt.data.stream).toBe(false);
       expect(evt.data.threadIdentity).toBe("message-thread-1");
       expect(evt.data.threadLabel).toBe("worker");
+    });
+
+    it("promptCompletion logs the offered tools by name only", async () => {
+      const file = newLogFile("prompt-tool-names");
+      const client = fileClient(file);
+      await client.promptCompletion({
+        messages: [],
+        completion: {},
+        tools: [
+          { name: "read", description: "Read a file.", schema: { type: "object" } },
+          { name: "grep", description: "Search files.", schema: { type: "object" } },
+        ],
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.tools).toEqual(["read", "grep"]);
+      expect(toolsOf(evt)).toEqual(["read", "grep"]);
     });
 
     it("promptCompletion writes null thread metadata when absent", async () => {

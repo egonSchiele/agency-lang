@@ -7,7 +7,7 @@ import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
 import type { DecisionLog } from "./statelog/wireTypes.js";
 import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
-import { makeRedactReplacer } from "./runtime/redactForStatelog.js";
+import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { sendStatelogPost } from "./statelogSender.js";
 import { savedSpanIdFor, saveSpan, spanSlot } from "./statelog/spanSlot.js";
@@ -150,6 +150,20 @@ function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
     cacheCreationInputTokens: usage.cacheCreationInputTokens as number | undefined,
     totalTokens: usage.totalTokens as number | undefined,
   };
+}
+
+/** Fields of the graph's node state that hold the runtime, not the node's data. */
+const RUNTIME_STATE_KEYS = ["ctx", "run"];
+
+/** A node event's state without the runtime. The graph hands each node
+ *  `{ messages, data, ctx, isResume, run }`, and `ctx` and `run` both hold
+ *  the whole state stack, which no reader of the log uses. */
+function nodeStateForLog(state: unknown): unknown {
+  if (state === null || typeof state !== "object") {
+    return state;
+  }
+  const kept = Object.entries(state).filter(([key]) => !RUNTIME_STATE_KEYS.includes(key));
+  return Object.fromEntries(kept);
 }
 
 // === Client ===
@@ -444,7 +458,7 @@ export class StatelogClient {
     await this.post({
       type: "enterNode",
       nodeId,
-      data,
+      data: nodeStateForLog(data),
     });
   }
 
@@ -460,7 +474,7 @@ export class StatelogClient {
     await this.post({
       type: "exitNode",
       nodeId,
-      data,
+      data: nodeStateForLog(data),
       timeTaken,
     });
   }
@@ -522,7 +536,7 @@ export class StatelogClient {
       fromNodeId,
       toNodeId,
       isConditionalEdge,
-      data,
+      data: nodeStateForLog(data),
     });
   }
 
@@ -684,7 +698,10 @@ export class StatelogClient {
           : completion,
       model,
       timeTaken,
-      tools,
+      // Names only. Every call offers the whole tool list, so its
+      // descriptions and schemas would repeat in every event, and readers
+      // use only the names (`toolsOf`).
+      tools: tools?.map((tool) => tool.name),
       responseFormat,
       usage,
       cost,
@@ -1667,37 +1684,27 @@ export class StatelogClient {
     }
 
     const span = this.currentSpan;
-    // Single redaction chokepoint: every statelog event flows through post().
-    // Redaction is a JSON.stringify *replacer* applied to the `data` payload
-    // ONLY, so it never touches infra fields (format_version, trace_id, span
-    // ids) — a pathological `redact(1)` can't blank out `format_version: 1`.
-    // We scope it by redacting `data` on its own (stringify with the replacer,
-    // then parse back), then serialize the whole envelope normally with the
-    // already-redacted payload. This preserves Date/URL/toJSON values (the
-    // replacer runs inside a real stringify) and keeps envelope handling as
-    // ordinary object construction — no string surgery.
+    // The one place every statelog event is serialized, so the scrub rules
+    // (the redact tag, then binary data such as pictures) run here, inside
+    // the single JSON.stringify of the event, on `data` only.
     //
     // A run's logger redacts with its own branch's tag store, so each branch
     // redacts using its own tags (see docs/dev/runtime/globalstore.md on
     // per-branch isolation). The client itself redacts with the execution's
     // top-level store: the result-bearing agentEnd event posts after the run
-    // has ended and must still redact. hasAnyTags() skips the whole
-    // redaction pass when nothing is tagged, so the common case is one
-    // stringify.
+    // has ended and must still redact.
     const globals = this.boundGlobals ?? this.fallbackGlobals?.();
-    const rawData = { ...body, timestamp: new Date().toISOString() };
-    const data =
-      globals && globals.hasAnyTags()
-        ? JSON.parse(JSON.stringify(rawData, makeRedactReplacer(globals)))
-        : rawData;
-    const postBody = JSON.stringify({
-      format_version: STATELOG_FORMAT_VERSION,
-      trace_id: this.traceId,
-      project_id: this.projectId,
-      span_id: span?.spanId ?? null,
-      parent_span_id: span?.parentSpanId ?? null,
-      data,
-    });
+    const postBody = stringifyStatelogEvent(
+      {
+        format_version: STATELOG_FORMAT_VERSION,
+        trace_id: this.traceId,
+        project_id: this.projectId,
+        span_id: span?.spanId ?? null,
+        parent_span_id: span?.parentSpanId ?? null,
+        data: { ...body, timestamp: new Date().toISOString() },
+      },
+      statelogScrubRules(globals),
+    );
 
     // File sink: one JSON object per line.
     if (this.logFileSink !== null) {

@@ -79,7 +79,7 @@ describe("runLogs", () => {
     expect(logs).toEqual([]);
   });
 
-  it("fetch viewer for an explicit trace opens the viewer with the mapped JSONL", async () => {
+  it("fetch viewer for an explicit trace opens the viewer with the mapped events", async () => {
     hoisted.client.traceLogs.mockResolvedValue([
       { traceId: "t1", spanId: null, parentSpanId: null, data: { type: "debug", message: "x" } },
     ]);
@@ -87,12 +87,19 @@ describe("runLogs", () => {
     await runLogs({ kind: "fetch", traceId: "t1", output: "viewer" }, opts, viewerContext);
     expect(hoisted.client.traceLogs).toHaveBeenCalledWith("t1");
     expect(viewMocks.openViewer).toHaveBeenCalledWith({
-      jsonl: JSON.stringify({
-        trace_id: "t1",
-        span_id: null,
-        parent_span_id: null,
-        data: { type: "debug", message: "x" },
-      }),
+      parsed: {
+        events: [
+          {
+            format_version: 1,
+            trace_id: "t1",
+            project_id: "",
+            span_id: null,
+            parent_span_id: null,
+            data: { type: "debug", message: "x" },
+          },
+        ],
+        errors: [],
+      },
       terminalInput: "current-stdin",
       thresholds: { expensiveUsd: 2 },
     });

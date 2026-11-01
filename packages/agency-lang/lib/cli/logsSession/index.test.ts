@@ -75,7 +75,6 @@ describe("agency logs session against a headless viewer", () => {
     const out = new FrameRecorder();
     const input = new ScriptedInput([]);
     const done = runViewer({
-      jsonl: fs.readFileSync(logPath, "utf8"),
       followPath: logPath,
       session: { dir: sessions },
       comments: store,

@@ -1,9 +1,11 @@
 import * as fs from "fs";
 
+import { makeLineReader } from "@/statelog/lineReader.js";
 import {
-  parseStatelogJsonlWithLines,
+  parseStatelogLines,
   type ParsedEventLine,
   type ParseError,
+  type ParseWithLinesResult,
 } from "@/statelog/parse.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 import { canonicalize } from "@/utils/canonicalize.js";
@@ -20,10 +22,13 @@ export type Trace = {
 
 export type ReadTracesResult = { traces: Trace[]; errors: ParseError[] };
 
-/** sha256 over the canonicalized events in order, so two serializations of the
- *  same events (different key order, different whitespace) share a digest. */
+/** sha256 over the sha256 of each canonicalized event, in order, so two
+ *  serializations of the same events (different key order, different
+ *  whitespace) share a digest. Each event is hashed on its own, so no string
+ *  ever holds a whole trace. The digest is only compared in memory (the merge
+ *  planner, the run directory's snapshot check), never stored. */
 export function traceDigest(events: readonly EventEnvelope[]): string {
-  return sha256Text(events.map((event) => canonicalize(event)).join("\n"));
+  return sha256Text(events.map((event) => sha256Text(canonicalize(event))).join("\n"));
 }
 
 /**
@@ -31,18 +36,33 @@ export function traceDigest(events: readonly EventEnvelope[]): string {
  *
  * This is the many-trace, byte-preserving reader; `StatelogParser`
  * (lib/eval/statelogParser.ts) is the one-trace, one-file view for graders.
- * Both parse lines with `parseStatelogJsonlWithLines`, and a trace's eval
- * record is still `extractEvalRecord` (see `evalRecord.ts`). What is new here
- * is only grouping by id, keeping raw lines for merging, and the digest.
+ * Both parse lines with `parseStatelogLine`, and a trace's eval record is
+ * still `extractEvalRecord` (see `evalRecord.ts`). What is new here is only
+ * grouping by id, keeping raw lines for merging, and the digest.
  *
- * A trailing line without its newline is a torn write and is ignored. A line
+ * The file is read one chunk of lines at a time, so its text is never one
+ * string, and its partial last line follows the line reader's rule for a
+ * finished file (`LineReader.finish`). A line
  * byte-identical to one already seen for its trace is dropped: that is the
  * harmless result of `cat`-ing two copies of one trace. Nothing more is
  * checked here — two different streams sharing an id cannot be told apart once
  * concatenated; `mergeStatelog` refuses that while they are still separate.
  */
 export function readTraces(statelogPath: string): ReadTracesResult {
-  return tracesFromText(fs.readFileSync(statelogPath, "utf8"));
+  // The line reader reads a missing file as empty; a missing statelog is an
+  // error here.
+  fs.statSync(statelogPath);
+  const reader = makeLineReader(statelogPath, 0);
+  const grouper = makeTraceGrouper();
+  const errors: ParseError[] = [];
+  let lineCount = 0;
+  const addLines = (lines: string[]): void => {
+    addParsedLines(parseStatelogLines(lines, lineCount + 1), grouper, errors);
+    lineCount += lines.length;
+  };
+  reader.readToEnd(addLines);
+  addLines(reader.finish());
+  return { traces: grouper.traces(), errors };
 }
 
 /** For writers: a statelog with any unparseable line is refused whole, since a
@@ -64,40 +84,60 @@ export function readTracesOrThrow(statelogPath: string): Trace[] {
   return traces;
 }
 
-export function tracesFromText(text: string): ReadTracesResult {
-  const parsed = parseStatelogJsonlWithLines(dropTornTail(text));
-  return { traces: groupByTrace(parsed.lines), errors: parsed.errors };
-}
+type TraceGrouper = {
+  add(entry: ParsedEventLine): void;
+  traces(): Trace[];
+};
 
-function dropTornTail(text: string): string {
-  if (text.length === 0 || text.endsWith("\n")) return text;
-  const lastNewline = text.lastIndexOf("\n");
-  return lastNewline === -1 ? "" : text.slice(0, lastNewline + 1);
-}
+/** `seen` holds a hash of each line already kept, so a long line is not also
+ *  an object key. */
+type TraceGroup = { events: EventEnvelope[]; lines: string[]; seen: Record<string, true> };
 
-function groupByTrace(lines: readonly ParsedEventLine[]): Trace[] {
-  const byId: Record<
-    string,
-    { events: EventEnvelope[]; lines: string[]; seen: Record<string, true> }
-  > = Object.create(null);
+function makeTraceGrouper(): TraceGrouper {
+  const byId: Record<string, TraceGroup> = Object.create(null);
   const order: string[] = [];
-  for (const entry of lines) {
-    const traceId = entry.event.trace_id;
-    let group = byId[traceId];
-    if (group === undefined) {
-      group = { events: [], lines: [], seen: Object.create(null) };
-      byId[traceId] = group;
-      order.push(traceId);
-    }
-    if (group.seen[entry.raw]) continue;
-    group.seen[entry.raw] = true;
-    group.events.push(entry.event);
-    group.lines.push(entry.raw);
+  return {
+    add(entry: ParsedEventLine): void {
+      const traceId = entry.event.trace_id;
+      let group = byId[traceId];
+      if (group === undefined) {
+        group = { events: [], lines: [], seen: Object.create(null) };
+        byId[traceId] = group;
+        order.push(traceId);
+      }
+      const lineHash = sha256Text(entry.raw);
+      if (group.seen[lineHash]) {
+        return;
+      }
+      group.seen[lineHash] = true;
+      group.events.push(entry.event);
+      group.lines.push(entry.raw);
+    },
+    traces(): Trace[] {
+      return order.map((traceId) => {
+        const group = byId[traceId];
+        return {
+          traceId,
+          events: group.events,
+          lines: group.lines,
+          digest: traceDigest(group.events),
+        };
+      });
+    },
+  };
+}
+
+function addParsedLines(
+  parsed: ParseWithLinesResult,
+  grouper: TraceGrouper,
+  errors: ParseError[],
+): void {
+  for (const entry of parsed.lines) {
+    grouper.add(entry);
   }
-  return order.map((traceId) => {
-    const group = byId[traceId];
-    return { traceId, events: group.events, lines: group.lines, digest: traceDigest(group.events) };
-  });
+  for (const error of parsed.errors) {
+    errors.push(error);
+  }
 }
 
 export type TraceMatch =
@@ -126,4 +166,26 @@ export function matchTraceId(ids: readonly string[], idOrPrefix: string): TraceI
   if (matches.length === 1) return { kind: "one", id: matches[0] };
   if (matches.length === 0) return { kind: "none" };
   return { kind: "ambiguous", ids: matches };
+}
+
+export type TraceIdArgument = { kind: "one"; id: string } | { kind: "problem"; message: string };
+
+/** The trace a `--trace-id` value names, or the message to show when it
+ *  names none or several. The CLI prints the message; the viewer shows it. */
+export function resolveTraceIdArgument(
+  ids: readonly string[],
+  idOrPrefix: string,
+): TraceIdArgument {
+  const match = matchTraceId(ids, idOrPrefix);
+  if (match.kind === "one") {
+    return match;
+  }
+  if (match.kind === "ambiguous") {
+    return {
+      kind: "problem",
+      message: `--trace-id ${idOrPrefix} is ambiguous: ${match.ids.join(", ")}`,
+    };
+  }
+  const found = ids.length === 0 ? "the log holds no traces" : `found: ${ids.join(", ")}`;
+  return { kind: "problem", message: `No trace matches --trace-id ${idOrPrefix} (${found})` };
 }

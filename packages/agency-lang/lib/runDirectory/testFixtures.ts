@@ -3,7 +3,7 @@ import * as os from "os";
 import * as path from "path";
 
 import type { CodeIdentity } from "./codeIdentity.js";
-import { tracesFromText, type Trace } from "./traces.js";
+import { readTraces, type Trace } from "./traces.js";
 
 /** Test helpers for run-directory modules: statelog lines, traces, temp dirs. */
 export function statelogLine(
@@ -28,7 +28,9 @@ export function agentStartLine(traceId: string, code?: CodeIdentity): string {
 }
 
 export function tracesOf(...lines: string[]): Trace[] {
-  return tracesFromText(lines.join("\n") + "\n").traces;
+  const file = path.join(tempDir("traces-"), "statelog.jsonl");
+  fs.writeFileSync(file, lines.join("\n") + "\n");
+  return readTraces(file).traces;
 }
 
 export function tempDir(prefix = "rundir-"): string {

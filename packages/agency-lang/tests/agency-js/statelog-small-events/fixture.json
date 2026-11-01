@@ -1,0 +1,16 @@
+{
+  "paused": true,
+  "noLineHoldsThePicture": true,
+  "markerIn": {
+    "agentStart": true,
+    "enterNode": true,
+    "followEdge": true,
+    "exitNode": true
+  },
+  "checkpointHoldsTheMarker": true,
+  "nodeEventsHoldNoRuntime": true,
+  "nodeEventCount": 5,
+  "toolsLogged": [
+    "describePicture"
+  ]
+}

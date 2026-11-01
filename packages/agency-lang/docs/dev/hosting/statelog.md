@@ -153,19 +153,46 @@ the user quits, and the second never runs an Agency program.
 
 ## Redaction
 
-`post()` is the single redaction chokepoint. Redaction is a `JSON.stringify`
-replacer (`makeRedactReplacer`, `lib/runtime/redactForStatelog.ts`) applied to
-the **`data` payload only**, so it can never blank out envelope infra fields
-(`format_version`, `trace_id`, span ids). The replacer matches whole tagged
-values and also scrubs redacted strings **contained inside** larger strings
-(`GlobalStore.redactContainedStrings`), because a tagged string interpolated
-into a new string would otherwise log verbatim. The pass is skipped entirely
-when the caller's `GlobalStore.hasAnyTags()` is false, so the common case is
-byte-identical to no redaction. Events posted outside an AsyncLocalStorage frame (e.g.
-`agentEnd`, resume-path finalization) fall back to the execution's top-level
-store via `setFallbackGlobals`. Prompt/embed/image previews are capped at
-`PROMPT_PREVIEW_MAX = 200` chars; embedding vectors and generated image bytes
-are never logged.
+`post()` is the one place an event is serialized, so it is where the event is
+scrubbed. `lib/runtime/redactForStatelog.ts` holds the scrub rules. A rule
+takes a value and the object holding it, and returns the text to log in its
+place, or undefined to leave the value to the next rule.
+`statelogScrubRules(globals)` lists them in order:
+
+1. `redactRule(globals)` swaps a value tagged `redact` for its marker. It also
+   scrubs a redacted string **contained inside** a larger string
+   (`GlobalStore.redactContainedStrings`), because a tagged string
+   interpolated into a new string would otherwise log verbatim.
+2. `omitBinaryRule` replaces picture bytes, and any other binary data sent as
+   base64, with a marker such as `[image/png: 6000 bytes omitted]`. It matches
+   a string over 4,096 characters that is a base64 `data:` URI, or that is
+   all base64 or base64url characters with both upper- and lowercase letters
+   among them. The two-case test keeps hex, long numbers, and one-letter
+   filler. The mime type comes from the `data:` header, or from a string
+   `mimeType` on the object holding the bytes, which is where Agency's
+   attachment shape `{ kind: "base64", base64, mimeType }` keeps it.
+
+`stringifyStatelogEvent` serializes the envelope in one `JSON.stringify`
+with `makeScrubReplacer(rules)`. The replacer returns the envelope's own
+fields unchanged, so a pathological redaction such as a tag on the number 1
+can never blank `format_version` or the ids. The rules run on every event,
+tags or not, because pictures arrive without tags. That has a cost: any
+replacer takes `JSON.stringify` off V8's fast path, which makes a large event
+about three times slower to serialize. Keeping events small keeps that cost
+small, which is one reason node events leave out the runtime and prompt events
+log tool names only.
+
+`safeStatelogValue` (`lib/runtime/runner.ts`) runs the same rules while it
+clones a fork branch's value, before it truncates an oversized one into a
+string that `post()` cannot look inside.
+
+Prompt messages reach the client already redacted: `redactMessagesForLog`
+runs smoltalk's `redactAttachments` over them, which writes its own marker,
+`[redacted N base64 chars]`. Events posted outside an AsyncLocalStorage frame
+(e.g. `agentEnd`, resume-path finalization) fall back to the execution's
+top-level store via `setFallbackGlobals`. Prompt/embed/image previews are
+capped at `PROMPT_PREVIEW_MAX = 200` chars; embedding vectors and generated
+image bytes are never logged.
 
 ## Span model
 
@@ -281,12 +308,29 @@ that let a trace stand on its own as "a run":
 Graph & nodes: `graph`, `enterNode`, `exitNode`, `beforeHook`, `afterHook`,
 `followEdge`.
 
+The graph logs a node's state on `enterNode`, `exitNode`, and `followEdge`.
+Agency hands every node this state:
+
+```ts
+{ messages, data, ctx, isResume, run }
+```
+
+`nodeStateForLog` in the client drops `ctx` and `run` before posting. Both
+hold the whole state stack, since `run` carries `ctx` again and the same stack
+as `run.stack`, and no reader uses them.
+
 LLM: `promptStart` (request shape, before dispatch) → terminated by exactly one
 of `promptCompletion` (full redacted messages + completion + usage/cost),
 an `error` with `errorType: "llmError"`, or `promptCancelled` (race loser /
 Esc / timeout — deliberately not an error). Pairing is by span + order: the
 nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
 is a hung/killed-mid-call run.
+
+`promptCompletion.tools` lists the offered tools by name. Every call offers
+the whole tool list, so logging the descriptions and schemas would repeat them
+in every event, and readers use only the names (`toolsOf` in
+`lib/statelog/wireAccessors.ts`). An `llmError` logs the full definitions,
+since a bad schema can be the reason a request failed.
 
 Both prompt events carry `usageKind`: `"completion"` for a text model and
 `"decision"` for a decision model such as Jev or Laya (the

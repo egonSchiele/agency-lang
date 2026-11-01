@@ -29,6 +29,27 @@ export function appendDurably(filePath: string, line: string): void {
   }
 }
 
+/** Write each line and its newline through an open file, one line at a time,
+ *  so no string ever holds more than one line. */
+export function writeLines(handle: number, lines: readonly string[]): void {
+  for (const line of lines) {
+    fs.writeSync(handle, line);
+    fs.writeSync(handle, "\n");
+  }
+}
+
+/** `appendDurably` for many lines: one open, one line at a time, one flush to
+ *  disk at the end. */
+export function appendLinesDurably(filePath: string, lines: readonly string[]): void {
+  const handle = fs.openSync(filePath, "a");
+  try {
+    writeLines(handle, lines);
+    fs.fsyncSync(handle);
+  } finally {
+    fs.closeSync(handle);
+  }
+}
+
 /**
  * Flush a directory entry, so a rename or creation survives a power loss.
  *

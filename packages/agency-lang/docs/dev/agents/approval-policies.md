@@ -360,6 +360,19 @@ approval means the same thing as for the tool. A grep elsewhere in a line
 (`lib/runtime/effectSets.data.ts`), and an "approve always here" answer.
 See `docs/dev/stdlib/safe-bash.md`, "grep".
 
+A `std::exec` rule for a program also covers that program's bash
+spelling through safeBash, because safeBash raises `std::exec` for a
+program it has no other rule for. From safeBash, `args` may carry an
+unexpanded glob or `~`. A rule for an interpreter (`node`, `python3`)
+should be keyed on `subcommand`, because `node -e '...'` runs anything.
+"Approve always here" pins only `command` and `subcommand`, so approving
+`pnpm test` in one folder alone needs a hand-written rule with a `cwd`
+glob. From safeBash, `cwd` is always the resolved absolute folder, while
+from the exec tool it's whatever the model passed, often `""`. So a
+`cwd` rule written for safeBash matches the exec tool only when the
+model passes an absolute cwd. See `docs/dev/stdlib/safe-bash.md`,
+"Programs with no rule".
+
 `std::read` has one more rule than the others: `settings.json` in the
 agent home, by name (`settingsReadRule`). The tree-searching effects
 carry no `filename`, so a rule that names one cannot match them.

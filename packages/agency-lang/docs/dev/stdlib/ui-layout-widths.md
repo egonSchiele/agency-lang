@@ -18,7 +18,9 @@ The shrinking columns all come down to one shared width, the largest that makes 
 
 No column goes below its `minWidth`, or below 1. When even every column at its floor is too wide, the table overflows.
 
-A raw cell never wraps. A content-sized column holding one gets its natural width as its `minWidth` (`planColumns`), so it never shrinks and the row's right border stays in line.
+A raw cell never wraps. A content-sized column holding one gets its natural width as its `minWidth` (`planColumns`), so it never shrinks and the other columns give up the width instead.
+
+Some cells cannot be narrowed even when their column is. A `row` cell gives each child the whole column, so the row is still wider than the column. `_computeColumnLayouts` makes each column at least as wide as its widest rendered cell. A table holding such a cell overflows, but its frame stays intact.
 
 A long title or caption still widens the table past the limit. This rule only covers the columns.
 
@@ -29,3 +31,5 @@ The TUI table in `lib/tui/table.ts` also calls `resolveColumnWidths`, and its co
 ## Diffs
 
 `diff()` in `std::syntax` gives each changed line a colored background padded to the widest line in the diff, so the bars line up. `renderDiff` in `lib/utils/diff.ts` caps that padding at `maxWidth` minus the width of the line's gutter, which it measures from the gutter text itself (`gutterText`). `_diff` passes the terminal width as `maxWidth`. With no terminal there is no cap. A changed line longer than the bar still prints whole and wraps with its background.
+
+A tab counts as one character but takes several screen columns, so a bar padded by character count would still run past the edge. The highlighted path expands tabs to spaces (`expandTabs`, 4 columns per stop) before it measures or pads a line. Wide characters, such as CJK text, still count as one column each, as they do everywhere in the layout library.

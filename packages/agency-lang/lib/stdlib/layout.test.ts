@@ -1159,6 +1159,18 @@ describe("table — fits its width", () => {
     expect((resolved.attrs.resolvedColumnWidths as number[])[1]).toBe(60);
   });
 
+  test("a row cell that cannot shrink widens its column and keeps the frame", () => {
+    const rowCell = node("row", { gap: 1 }, [
+      node("text", { content: "alpha beta gamma delta" }),
+      node("text", { content: "epsilon zeta eta theta iota" }),
+    ]);
+    const lines = stripAnsi(render(tableNode({ body: [["k", rowCell]] }), viewport)).split("\n");
+    // Lines are padded with spaces, so compare where each line's right
+    // border actually lands.
+    const widths = lines.map((line) => visualWidth(line.trimEnd()));
+    expect(widths.every((width) => width === widths[0])).toBe(true);
+  });
+
   test("a fixed column holding a raw cell keeps its declared width", () => {
     const raw = node("raw", { content: "r".repeat(10) });
     const tree = tableNode({ columns: [{}, { width: 6 }], body: [["k", raw]] });

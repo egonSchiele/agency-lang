@@ -201,8 +201,13 @@ function _computeColumnLayouts(
     const measured = cellBlocks.reduce((m, row) => Math.max(m, row[c].width), 0);
     const spec = columns[c] ?? {};
     const resolved = resolvedColumnWidths?.[c];
+    // A cell that cannot wrap to its column (a row, raw text) widens the
+    // column, so the table overflows with its frame intact.
     layouts.push({
-      width: resolved ?? Math.max(measured, spec.minWidth ?? 0),
+      width:
+        resolved === undefined
+          ? Math.max(measured, spec.minWidth ?? 0)
+          : Math.max(resolved, measured),
       align: spec.align ?? "start",
       cellPadding,
       fgColor: spec.fgColor ?? "",

@@ -260,11 +260,30 @@ function gutterWidth(hunks: Hunk[]): number {
   return String(max).length;
 }
 
-// Widest raw line in display columns (line text is ANSI-free, so length is the
-// visible width). Changed-line backgrounds pad to this so the bars align.
+// Columns a tab advances to in the highlighted path's code.
+const TAB_WIDTH = 4;
+
+// A tab counts as one character but takes several screen columns, so a
+// bar padded by character count would run past the terminal's edge. The
+// highlighted path expands tabs to spaces before it measures or pads.
+function expandTabs(text: string): string {
+  let out = "";
+  for (const char of text) {
+    out += char === "\t" ? " ".repeat(TAB_WIDTH - (out.length % TAB_WIDTH)) : char;
+  }
+  return out;
+}
+
+// Widest line in display columns, tabs expanded (line text is ANSI-free, so
+// length is the visible width). Changed-line backgrounds pad to this so the
+// bars align.
 function blockWidth(hunks: Hunk[]): number {
   let max = 0;
-  for (const h of hunks) for (const l of h.lines) max = Math.max(max, l.text.length);
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) {
+      max = Math.max(max, expandTabs(line.text).length);
+    }
+  }
   return max;
 }
 
@@ -333,7 +352,7 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
       for (const line of h.lines) {
         out.push(
           highlightGutter(line, numWidth, opts.lineNumbers ?? false) +
-            opts.renderBody!(line.text, line.kind, barWidth(line)),
+            opts.renderBody!(expandTabs(line.text), line.kind, barWidth(line)),
         );
       }
     } else {

@@ -76,7 +76,8 @@ const scheduleLocalMocks = vi.hoisted(() => {
 vi.mock("@/cli/schedule/index.js", () => scheduleLocalMocks);
 
 import { createProgram, parseNonNegativeInt, parsePositiveInt, runCli } from "./agency.js";
-import { confirmQuestion, promptSecretValue } from "@/cli/remote/confirmation.js";
+import { confirmQuestion } from "@/cli/confirmQuestion.js";
+import { promptSecretValue } from "@/cli/remote/confirmation.js";
 
 const execFileAsync = promisify(execFile);
 

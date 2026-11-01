@@ -8,6 +8,8 @@
 import fs from "fs";
 import path from "path";
 import type { AgencyConfig } from "../../config/config.js";
+import type { Policy } from "../../runtime/policy.js";
+import { prepareContainedPath } from "../../stdlib/prepareContainedPath.js";
 import type { CatalogEntry } from "../../stdlib/workflow/catalog.js";
 import { stepEffects } from "../../stdlib/workflow/effects.js";
 import { parseWorkflow } from "../../stdlib/workflow/parse.js";
@@ -20,8 +22,12 @@ import {
   formatChecked,
   formatList,
   formatProblems,
+  formatRunValue,
+  formatUncovered,
+  NO_TERMINAL,
   type ListedWorkflow,
 } from "./output.js";
+import { runPolicy, startRules, uncoveredEffects, type StartPrompts } from "./runPolicy.js";
 import type { DriverCall, DriverOutcome } from "./runDriver.js";
 import { importsForSources, importsForSteps, type ImportPlan } from "./toolImports.js";
 
@@ -31,6 +37,8 @@ export type WorkflowIo = {
   err: (text: string) => void;
   config: AgencyConfig;
   runDriver: (call: DriverCall) => Promise<DriverOutcome>;
+  /** Asks a yes-or-no question, or null when there is no terminal to ask in. */
+  confirm: ((question: string) => Promise<boolean>) | null;
 };
 
 export type PreparedWorkflow = {
@@ -271,5 +279,117 @@ export async function workflowList(
   io.out(
     options.json ? resultJson(result, dir) : formatList(dir, result.value as ListedWorkflow[]),
   );
+  return 0;
+}
+
+export type RunCommandOptions = { inputs?: string; json?: boolean };
+export type RunCommandSettings = {
+  config: AgencyConfig;
+  /** The person's policy, from --policy, --approve, and --reject. */
+  person: Policy;
+  budget?: { maxCost?: string; maxTime?: string };
+};
+
+/** The prompts the run node raises before the first step, spelled the way
+ *  each one spells its data. loadWorkflow names the real folder, `read`
+ *  names the real root and the path below it, and runWorkflow names
+ *  `path.resolve(dir)` with no realpath. On macOS a temp folder under `/var`
+ *  is really under `/private/var`, so the wrong spelling fails there only. */
+async function startPromptsFor(prepared: PreparedWorkflow): Promise<StartPrompts> {
+  const dir = path.resolve(prepared.found.dir);
+  const local = prepared.plan.imports.filter((entry) => !entry.module.startsWith("std::"));
+  const moduleReads = [];
+  for (const entry of local) {
+    moduleReads.push(await prepareContainedPath(dir, entry.module, "read"));
+  }
+  return {
+    name: prepared.found.name,
+    dir,
+    workflowsDir: path.join(fs.realpathSync(dir), "workflows"),
+    moduleReads,
+  };
+}
+
+/** What `run` says when a rule in the person's policy propagated a prompt
+ *  and there was nobody to answer it. The child saved a checkpoint, but the
+ *  command does not keep it, so the run cannot go on from there. */
+function unansweredRunMessage(effects: string[]): string {
+  const names = effects.join(", ");
+  return `${unansweredMessage(effects)}. This run cannot be resumed. Cover ${names} with --policy, --approve, or --reject, and run it again.`;
+}
+
+/** Run a saved workflow. Before anything runs, the person sees every effect
+ *  their policy does not cover and approves or declines them all at once.
+ *  The table, the question, and every message go to `err`, so `out` holds
+ *  only the result. */
+export async function workflowRun(
+  target: string,
+  options: RunCommandOptions,
+  settings: RunCommandSettings,
+  io: WorkflowIo,
+): Promise<number> {
+  let inputs: unknown = {};
+  if (options.inputs !== undefined) {
+    try {
+      inputs = JSON.parse(options.inputs);
+    } catch (error) {
+      io.err(`--inputs is not JSON: ${(error as Error).message}`);
+      return 2;
+    }
+  }
+  const prepared = prepareWorkflow(target, io);
+  if ("exitCode" in prepared) {
+    return prepared.exitCode;
+  }
+  const steps = stepEffects(prepared.workflow, prepared.plan.signatures);
+  const uncovered = uncoveredEffects(steps, settings.person);
+  if (uncovered.length > 0) {
+    io.err(formatUncovered(uncovered));
+    if (io.confirm === null) {
+      io.err(NO_TERMINAL);
+      return 1;
+    }
+    // A yes approves each effect for the whole run, whatever step raises it,
+    // the same as --approve. The question says so.
+    const flag = `--approve ${uncovered.map((entry) => entry.effect).join(",")}`;
+    const question = `Approve these effects for the whole run? This is the same as ${flag}`;
+    if (!(await io.confirm(question))) {
+      io.err("Did not run.");
+      return 1;
+    }
+  }
+  let start: StartPrompts;
+  try {
+    start = await startPromptsFor(prepared);
+  } catch (error) {
+    io.err(stripControlCharacters((error as Error).message));
+    return 1;
+  }
+  const accepted = uncovered.map((entry) => entry.effect);
+  const policy = runPolicy(settings.person, startRules(start), accepted);
+  const outcome = await io.runDriver({
+    dir: start.dir,
+    imports: prepared.plan.imports,
+    node: DRIVER_NODES.run,
+    args: [start.name, start.dir, inputs],
+    config: settings.config,
+    carriers: {
+      policy: { policyJson: JSON.stringify(policy), interactive: false },
+      budget: settings.budget,
+    },
+  });
+  const read = readDriverResult(outcome);
+  const result: DriverResult =
+    read.kind === "unanswered"
+      ? { kind: "failed", message: unansweredRunMessage(read.effects), step: null }
+      : read;
+  if (options.json) {
+    io.out(resultJson(result, prepared.label));
+    return result.kind === "value" ? 0 : 1;
+  }
+  if (result.kind !== "value") {
+    return report(result, prepared.label, false, io);
+  }
+  io.out(formatRunValue(result.value));
   return 0;
 }

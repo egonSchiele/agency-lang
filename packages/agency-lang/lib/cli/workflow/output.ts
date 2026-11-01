@@ -113,3 +113,17 @@ export function formatList(dir: string, entries: ListedWorkflow[]): string {
     ])
     .join("\n");
 }
+
+/** A run's value: a string as itself, anything else as indented JSON. */
+export function formatRunValue(value: unknown): string {
+  return clean(typeof value === "string" ? value : JSON.stringify(value, null, 2));
+}
+
+/** The effects a person's policy does not cover, before the run asks. */
+export function formatUncovered(list: EffectSteps[]): string {
+  return ["Your policy does not cover these interrupts:", ...effectTable(list)].join("\n");
+}
+
+/** What `run` says when it has no terminal to ask in. */
+export const NO_TERMINAL =
+  "Run this in a terminal to approve them, or cover them with --policy, --approve, or --reject.";

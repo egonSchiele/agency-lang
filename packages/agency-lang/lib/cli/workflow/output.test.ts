@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogEntry } from "../../stdlib/workflow/catalog.js";
-import { formatCatalog, formatChecked, formatList, formatProblems } from "./output.js";
+import {
+  formatCatalog,
+  formatChecked,
+  formatList,
+  formatProblems,
+  formatRunValue,
+  formatUncovered,
+} from "./output.js";
 
 const param = (name: string, type: string | null, def: string | null = null) => ({
   name,
@@ -135,5 +142,33 @@ describe("formatList", () => {
 
   it("says when there are none", () => {
     expect(formatList("/p", [])).toBe("no saved workflows in /p/workflows");
+  });
+});
+
+describe("formatRunValue", () => {
+  it("prints a string as itself and anything else as indented JSON", () => {
+    expect(formatRunValue("added 1 items")).toBe("added 1 items");
+    expect(formatRunValue({ added: 1 })).toBe('{\n  "added": 1\n}');
+  });
+
+  it("strips control characters", () => {
+    expect(formatRunValue("a\u001b[31mb")).not.toContain("\u001b");
+  });
+});
+
+describe("formatUncovered", () => {
+  it("prints the spec's table", () => {
+    expect(
+      formatUncovered([
+        { effect: "test::lists::add", steps: ["add (addListItems)"] },
+        { effect: "std::read", steps: ["text (readNote)"] },
+      ]),
+    ).toBe(
+      [
+        "Your policy does not cover these interrupts:",
+        "  test::lists::add   step add (addListItems)",
+        "  std::read          step text (readNote)",
+      ].join("\n"),
+    );
   });
 });

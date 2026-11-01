@@ -5,6 +5,9 @@
  * person's `.agency` file. So the driver imports the tools and calls
  * `std::workflow`, and the command runs one of its nodes.
  *
+ * `wfRunNode` has no handler around `wfRun`: the run's policy, passed as a
+ * root carrier, decides each of its interrupts.
+ *
  * Every node returns a `Result`. `readDriverResult` depends on that: it reads
  * a bare list as interrupts that nothing answered.
  *
@@ -16,7 +19,7 @@ import path from "path";
 import { importLine } from "../../stdlib/workflow/lower.js";
 import type { ToolImport } from "./toolImports.js";
 
-const DRIVER = `import { catalog as wfCatalog, loadWorkflow as wfLoad, checkWorkflow as wfCheck, compileWorkflow as wfCompile, listWorkflows as wfList } from "std::workflow"
+const DRIVER = `import { catalog as wfCatalog, loadWorkflow as wfLoad, checkWorkflow as wfCheck, compileWorkflow as wfCompile, listWorkflows as wfList, runWorkflow as wfRun } from "std::workflow"
 {{imports}}
 
 const wfTools = [{{tools}}]
@@ -48,6 +51,15 @@ node wfListNode(dir: string) {
   const wfResult = wfList(dir) with approve
   return wfResult
 }
+
+node wfRunNode(name: string, dir: string, inputs: any) {
+  const wfEntry = wfLoad(name, dir) with approve
+  if (wfEntry is failure) {
+    return wfEntry
+  }
+  const wfResult = wfRun(wfEntry.value.workflow, inputs, wfTools, dir)
+  return wfResult
+}
 `;
 
 /** The driver's node for each command, so a command names its node by kind. */
@@ -56,6 +68,7 @@ export const DRIVER_NODES = {
   check: "wfCheckNode",
   compile: "wfCompileNode",
   list: "wfListNode",
+  run: "wfRunNode",
 } as const;
 
 /** Every name the driver binds. A tool with one of these names would clash.
@@ -67,11 +80,13 @@ export const DRIVER_NAMES = [
   "wfCheck",
   "wfCompile",
   "wfList",
+  "wfRun",
   "wfTools",
   "wfToolsNode",
   "wfCheckNode",
   "wfCompileNode",
   "wfListNode",
+  "wfRunNode",
   "wfEntry",
   "wfResult",
 ];

@@ -217,7 +217,7 @@ Your policy does not cover these interrupts:
   test::lists::add   step add (addListItems)
   std::read          step text (readNote)
 
-Approve all of them for this run? [y/N]
+Approve these effects for the whole run? This is the same as --approve test::lists::add,std::read [y/N]
 ```
 
 If the person answers no, nothing runs. If there is no terminal to ask in, the command prints the list, says to cover these effects in a policy, and exits without running. The list and the question go to stderr, so `--json` output stays parseable.
@@ -240,7 +240,7 @@ The analysis can miss an effect. An interrupt it missed matches no approval and 
 
 A rule in the person's policy that propagates leaves its interrupt unanswered, because no one can answer it without a terminal. The run stops and prints the interrupt.
 
-A budget trip from `--max-cost` or `--max-time` exits 1, with the child's error on stderr. `agency run` exits 3 for the same trip. Matching it means changing the evaluate script that `runAgencyNode` and every agency test share, which is an open question for the owner.
+A budget trip from `--max-cost` exits 1, with the one line that says which budget ran out. `agency run` exits 3 for the same trip. Matching it means changing the evaluate script that `runAgencyNode` and every agency test share, so `run` keeps exit 1.
 
 A tool that calls `run` shows up as `std::run`. Its child's own interrupts are not listed. They reach the same policy, so anything not approved is rejected.
 
@@ -252,12 +252,13 @@ A tool that calls `run` shows up as `std::run`. Its child's own interrupts are n
 | --- | --- |
 | `--policy`, `--approve`, `--reject` | They build the person's part of the run's policy. |
 | `--model`, `--local` | They become config the driver is compiled with. Since ADI-256, the workflow's child gets the driver's model and provider. |
-| `--max-cost`, `--max-time` | They become the driver's budget, which counts the child's spending and time. |
+| `--max-cost` | It becomes the driver's budget, which counts the child's spending, and stops the run while the child is still running. |
 | `--log-file`, `--observability` | The child writes its log events to the driver's log. |
 
 `run` leaves out the rest:
 
 - `-i`, which is later work.
+- `--max-time`. A root time budget does not stop a run that is waiting on a subprocess, so it could not end a workflow mid-step. It comes back when that runtime gap is fixed.
 - `--trace` and `--trace-file`. A trace covers one process, and the driver's trace would show one step.
 - `--max-tool-call-rounds`. The child never receives it.
 - `--max-tool-result-chars`. It only affects an `llm()` call with tools, and LLM steps have none.

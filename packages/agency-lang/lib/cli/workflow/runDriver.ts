@@ -26,11 +26,17 @@ export type DriverOutcome = { ok: true; data: unknown } | { ok: false; message: 
 
 export type NodeRunner = typeof runAgencyNode;
 
-/** What went wrong in the child: its stderr when the error carries it. */
+/** A stop the runtime threw, such as a budget, as one line: the evaluate
+ *  script does not catch it, so stderr holds it with a stack trace. */
+const ABORT_LINE = /^AgencyAbort: (.+)$/m;
+
+/** What went wrong in the child: its stderr when the error carries it, or
+ *  just the abort's line when the runtime stopped the run. */
 function messageOf(error: unknown): string {
   const stderr = (error as { stderr?: unknown }).stderr;
   if (typeof stderr === "string" && stderr.trim() !== "") {
-    return stderr.trim();
+    const abort = ABORT_LINE.exec(stderr);
+    return abort === null ? stderr.trim() : abort[1];
   }
   return error instanceof Error ? error.message : String(error);
 }

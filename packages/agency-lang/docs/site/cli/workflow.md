@@ -1,6 +1,6 @@
 ---
 title: Workflow
-description: Documents the `agency workflow` commands, which list the tools a workflow may call, check a saved workflow, print the program it becomes, and list a project's saved workflows.
+description: Documents the `agency workflow` commands, which list the tools a workflow may call, check a saved workflow, print the program it becomes, list a project's saved workflows, and run one.
 ---
 
 # Workflow
@@ -96,15 +96,68 @@ With `--json`, every command prints one shape. On success:
 
 `problems` is there only when the workflow has problems, each with its `step`, `field`, and `message`.
 
+## `run`
+
+Runs a saved workflow:
+
+```
+agency workflow run updateMealPlanFromNote --inputs '{"noteTitle": "Groceries"}' --policy ./mine.json
+```
+
+`--inputs` is the workflow's inputs as JSON, `{}` when left out. On success the command prints the workflow's value: a string as itself, anything else as indented JSON. On failure it prints the failure, which names the step that stopped the workflow. `--json` prints `{ "success": true, "value": ... }` or `{ "success": false, "error": ..., "step": ... }`, and nothing else goes to standard output.
+
+### What `run` asks you
+
+Before anything runs, the command works out which effects the workflow's steps can raise. An effect is covered when your policy has any rule for it, or a `"*"` rule. The command lists the effects your policy does not cover and asks once:
+
+```text
+Your policy does not cover these interrupts:
+  test::lists::add   step add (addListItems)
+  std::read          step text (readNote)
+Approve these effects for the whole run? This is the same as --approve test::lists::add,std::read [y/N]
+```
+
+A yes approves each effect for the whole run, whatever step raises it and whatever its data, just as `--approve` does. If you answer no, nothing runs. If there is no terminal to ask in, the command prints the list, then this, and runs nothing:
+
+```text
+Run this in a terminal to approve them, or cover them with --policy, --approve, or --reject.
+```
+
+There is no `--yes` flag. To run without a prompt, cover the effects in your policy.
+
+### How the run's policy is built
+
+1. **Your policy, unchanged.** It approves exactly what it says. If it approves reads from one folder only, a read from any other folder is rejected.
+2. **The start prompts.** Typing the command is consent to start the workflow, so the command approves the prompts raised before the first step: reading the saved workflow, reading each tool's module, `std::workflow::run` for this workflow, and `std::run` for its program. These rules come after your rules for each effect, so your rules decide first. A policy that rejects every read therefore stops the run before it starts.
+3. **What you accepted.** Each effect you approved at the prompt is approved for this run.
+
+Then everything else is rejected, with the message `rejected by agency workflow run: no rule in your policy approves this, and it was not approved at the prompt`. That happens, for example, when your policy has a rule for an effect whose `match` the step's data does not satisfy: the effect counts as covered, so there is no prompt, and the step is rejected. An interrupt the analysis missed matches no approval, so it is rejected and its step fails. It is never approved without you having seen it.
+
+If your policy has a `"*"` rule, the command adds nothing and does not ask. You wrote a rule for everything, so it decides everything.
+
+### Flags
+
+| Flag | What it does for a workflow |
+| --- | --- |
+| `--policy`, `--approve`, `--reject` | Your part of the run's policy. |
+| `--model`, `--local` | The model the workflow's LLM steps use. |
+| `--max-cost` | The run's spending limit, which counts the workflow program's model calls. |
+| `--log-file`, `--observability` | Where the run's log events go, including the workflow program's own. |
+
+The other `agency run` flags are left out. `--max-time` cannot stop a run while it waits on the workflow's program, which runs in its own process, so `run` does not take it yet. To cap a workflow's time, set `limits.maxTime` in the workflow itself. `-i` needs the program to own the terminal, which a workflow run does not give it yet. A trace covers one process, and the workflow's program runs in another. The workflow's program always compiles strictly and in the sandbox, so `--strict`, `--agency-only`, and `--refuse-splices` would change nothing.
+
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | 0 | The command did what it was asked. |
-| 1 | The workflow has problems, or `std::workflow` refused. |
-| 2 | The command line is wrong: a missing file, a path not under `workflows`, or a `tools` source that cannot be read. |
+| 1 | The workflow has problems, `std::workflow` refused, the run failed, or you declined to run it. |
+| 2 | The command line is wrong: a missing file, a path not under `workflows`, a `tools` source that cannot be read, or `--inputs` that is not JSON. |
 
 ## Limits
 
 - A tool's module may import other local `.agency` files in the project. It may not import a TypeScript file, because a workflow's program runs in the sandbox, which refuses them. The commands report such a module on the step's `module` field.
 - The commands compile each tool's module, which writes a `.js` file beside it, as `agency run` does. After `agency workflow check`, you will see `src/agent/lists.js` beside `src/agent/lists.agency`.
+- The run's catch-all rejects every interrupt your policy and the prompt did not approve, and that includes a tool's own `std::guard`. A tool that extends its own guard, as `supervise()` does, stops at its first check under `run`. Give the step time with `limits.maxTime` in the workflow instead.
+- A run stopped by `--max-cost` exits 1 and prints one line, such as `Guard exceeded its cost budget: spent 0.000002 of limit 0.000001`. `agency run` exits 3 for the same stop.
+

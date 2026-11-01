@@ -5,6 +5,9 @@
  * person's `.agency` file. So the driver imports the tools and calls
  * `std::workflow`, and the command runs one of its nodes.
  *
+ * Every node returns a `Result`. `readDriverResult` depends on that: it reads
+ * a bare list as interrupts that nothing answered.
+ *
  * The text is fixed. Only the import lines and the tool list are written
  * into it. Every value reaches it as a node argument, so nothing a person
  * typed lands in its source.

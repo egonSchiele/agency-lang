@@ -114,6 +114,35 @@ export function readDriverResult(outcome: DriverOutcome): DriverResult {
   return { kind: "failed", message: String(data.error), step };
 }
 
+/** One line for a prompt nobody answered. */
+function unansweredMessage(effects: string[]): string {
+  return `stopped at a prompt nobody answered: ${effects.join(", ")}`;
+}
+
+/** The `--json` form every command prints: `{ success: true, value }`, or
+ *  `{ success: false, error, step }` with the problems when there are some.
+ *  One shape, so a script reads every command the same way. */
+export function resultJson(result: DriverResult, label: string): string {
+  const body = ((): Record<string, unknown> => {
+    switch (result.kind) {
+      case "value":
+        return { success: true, value: result.value };
+      case "failed":
+        return { success: false, error: result.message, step: result.step };
+      case "problems":
+        return {
+          success: false,
+          error: formatProblems(label, result.problems),
+          step: null,
+          problems: result.problems,
+        };
+      case "unanswered":
+        return { success: false, error: unansweredMessage(result.effects), step: null };
+    }
+  })();
+  return JSON.stringify(body, null, 2);
+}
+
 /** Prints a result that is not a value, and returns exit code 1. Each
  *  command prints a value its own way. */
 function report(
@@ -123,7 +152,7 @@ function report(
   io: WorkflowIo,
 ): number {
   if (json) {
-    io.out(JSON.stringify(result, null, 2));
+    io.out(resultJson(result, label));
     return 1;
   }
   if (result.kind === "problems") {
@@ -131,9 +160,7 @@ function report(
   } else if (result.kind === "failed") {
     io.err(stripControlCharacters(result.message));
   } else {
-    io.err(
-      `stopped at a prompt nobody answered: ${stripControlCharacters(result.effects.join(", "))}`,
-    );
+    io.err(stripControlCharacters(unansweredMessage(result.effects)));
   }
   return 1;
 }
@@ -168,7 +195,7 @@ export async function workflowCheck(
     return report(result, prepared.label, options.json ?? false, io);
   }
   if (options.json) {
-    io.out(JSON.stringify(result.value, null, 2));
+    io.out(resultJson(result, prepared.label));
     return 0;
   }
   const warnings = Array.isArray(result.value) ? (result.value as Problem[]) : [];
@@ -218,7 +245,7 @@ export async function workflowTools(
   }
   io.out(
     options.json
-      ? JSON.stringify(result.value, null, 2)
+      ? resultJson(result, sources.join(", "))
       : formatCatalog(result.value as CatalogEntry[]),
   );
   return 0;
@@ -242,9 +269,7 @@ export async function workflowList(
     return report(result, dir, options.json ?? false, io);
   }
   io.out(
-    options.json
-      ? JSON.stringify(result.value, null, 2)
-      : formatList(dir, result.value as ListedWorkflow[]),
+    options.json ? resultJson(result, dir) : formatList(dir, result.value as ListedWorkflow[]),
   );
   return 0;
 }

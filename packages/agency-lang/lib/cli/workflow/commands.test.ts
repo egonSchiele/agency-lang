@@ -169,7 +169,19 @@ describe("the commands", () => {
 
   it("check prints the value as JSON with --json", async () => {
     expect(await workflowCheck("addOne", { json: true }, io())).toBe(0);
-    expect(JSON.parse(out[0])).toEqual([]);
+    expect(JSON.parse(out[0])).toEqual({ success: true, value: [] });
+  });
+
+  it("check prints problems as JSON with --json, in the shape every command uses", async () => {
+    const problems = [{ step: "add", field: "args.listId", message: "no" }];
+    answer = { ok: true, data: failure("bad", { problems }) };
+    expect(await workflowCheck("addOne", { json: true }, io())).toBe(1);
+    expect(JSON.parse(out[0])).toEqual({
+      success: false,
+      error: "workflows/addOne.json has 1 problem:\n  step add, args.listId: no",
+      step: null,
+      problems,
+    });
   });
 
   it("check prints a failed driver's message and exits 1", async () => {

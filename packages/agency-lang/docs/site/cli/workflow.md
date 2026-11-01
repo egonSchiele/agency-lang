@@ -38,7 +38,7 @@ $ agency workflow tools ./src/agent/lists.agency
     raises test::lists::add
 ```
 
-`--dir` names the project directory a local module is relative to, `.` by default. `--json` prints `std::workflow`'s `catalog` value as it is.
+`--dir` names the project directory a local module is relative to, `.` by default. `--json` prints the catalog as JSON (see [JSON output](#json-output)).
 
 ## `check`
 
@@ -58,7 +58,7 @@ workflows/broken.json has 1 problem:
   step text, args.id: reference "steps.notes[0].id" names no step
 ```
 
-`--json` prints `checkWorkflow`'s value, the list of warnings, as it is.
+`--json` prints `checkWorkflow`'s value, the list of warnings, as JSON (see [JSON output](#json-output)).
 
 ## `compile`
 
@@ -78,7 +78,23 @@ updateMealPlanFromNote { noteTitle: string }
   Copy this week's meal plan from the groceries note to the weekly meal plan list.
 ```
 
-`--json` prints `listWorkflows`'s value as it is.
+`--json` prints `listWorkflows`'s value as JSON (see [JSON output](#json-output)).
+
+## JSON output
+
+With `--json`, every command prints one shape. On success:
+
+```json
+{ "success": true, "value": ... }
+```
+
+`value` is the `std::workflow` function's value: the catalog for `tools`, the warnings for `check`, and the saved workflows for `list`. On failure:
+
+```json
+{ "success": false, "error": "workflows/broken.json has 1 problem: ...", "step": null, "problems": [ ... ] }
+```
+
+`problems` is there only when the workflow has problems, each with its `step`, `field`, and `message`.
 
 ## Exit codes
 

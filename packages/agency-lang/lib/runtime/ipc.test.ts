@@ -1103,6 +1103,15 @@ describe("parentConfigOverrides", () => {
     expect("defaultProvider" in client).toBe(false);
   });
 
+  it("sends only the keys and base URLs the parent has a value for", () => {
+    const parent = parentSettings();
+    parent.smoltalkDefaults.apiKey = { google: "k", openAi: "", anthropic: undefined };
+    parent.smoltalkDefaults.baseUrl = { openAiCompat: "", liteLlm: "" };
+    const client = parentConfigOverrides(parent).client ?? {};
+    expect(client.apiKey).toEqual({ google: "k" });
+    expect("baseUrl" in client).toBe(false);
+  });
+
   it("never sets log or providerModules", () => {
     const sent = parentConfigOverrides(parentSettings());
     expect(sent.log).toBeUndefined();
@@ -1149,6 +1158,24 @@ describe("withParentConfig", () => {
       client: { defaultModel: "m", defaultProvider: "p" },
       maxCallDepth: 7,
     });
+  });
+
+  it("an override naming a model alone drops the parent's provider", () => {
+    expect(
+      withParentConfig(
+        { client: { defaultModel: "mine" } },
+        { client: { defaultModel: "theirs", defaultProvider: "google", apiKey: { google: "k" } } },
+      ),
+    ).toEqual({ client: { defaultModel: "mine", apiKey: { google: "k" } } });
+  });
+
+  it("an override naming a model and a provider replaces both", () => {
+    expect(
+      withParentConfig(
+        { client: { defaultModel: "mine", defaultProvider: "p" } },
+        { client: { defaultModel: "theirs", defaultProvider: "google" } },
+      ).client,
+    ).toEqual({ defaultModel: "mine", defaultProvider: "p" });
   });
 
   it("an explicit override wins over an inherited field, key by key", () => {

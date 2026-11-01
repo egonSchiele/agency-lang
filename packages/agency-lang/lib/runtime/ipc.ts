@@ -1446,20 +1446,25 @@ export type ParentSettings = Pick<
   | "maxRestores"
 >;
 
+/** The entries of a per-provider record that hold a value. A baked key or
+ *  base URL slot whose environment variable was unset is `""`, and a child
+ *  reads the same environment itself. */
+function nonEmptyEntries<T extends Record<string, string | undefined>>(record: T): T | undefined {
+  const kept = Object.entries(record).filter(([, value]) => value !== undefined && value !== "");
+  return kept.length === 0 ? undefined : (Object.fromEntries(kept) as T);
+}
+
 /**
- * The parent's settings as the config a child should start with. A child
- * compiled in the sandbox baked the built-in model and provider, so it is
- * handed the parent's smoltalk defaults, tool caps, and limits. These are
- * the parent context's own fields, which already hold the baked config with
- * the environment, IPC, and per-invocation overrides merged in, so a
- * grandchild gets the root's values through a child compiled the same way.
- * A parent that named a model with no provider has no `provider` here, and
- * the child's merge then clears its own. `log`, `trace*`, `budget`,
- * `memory`, and `client.providerModules` are not sent: the parent's
- * effective statelog sink and its provider modules are forwarded by
- * `withParentStatelog` and `withParentProviderModules`, a trace file
- * belongs to one process, the parent's budget already counts a child's
- * spend, and a memory store is one process's.
+ * The parent's settings as the config a child starts with. A child compiled
+ * in the sandbox baked the built-in model and provider, so it is handed the
+ * parent's smoltalk defaults, tool caps, and limits. They are read from the
+ * parent context's fields, which hold the baked config with the environment,
+ * IPC, and per-invocation overrides merged in, so a grandchild gets the
+ * root's values through a child compiled the same way. A parent with no
+ * `provider` sends none, and the child's merge then clears its own. Only the
+ * API keys and base URLs the parent has a value for are sent. `log`,
+ * `trace*`, `budget`, `memory`, and `client.providerModules` are not sent;
+ * see "What a child inherits" in docs/dev/runtime/subprocess-ipc.md.
  */
 export function parentConfigOverrides(parent: ParentSettings): Partial<AgencyConfig> {
   const defaults = parent.smoltalkDefaults;
@@ -1470,11 +1475,13 @@ export function parentConfigOverrides(parent: ParentSettings): Partial<AgencyCon
   if (defaults.provider !== undefined) {
     client.defaultProvider = defaults.provider;
   }
-  if (defaults.apiKey !== undefined) {
-    client.apiKey = defaults.apiKey;
+  const apiKey = defaults.apiKey === undefined ? undefined : nonEmptyEntries(defaults.apiKey);
+  if (apiKey !== undefined) {
+    client.apiKey = apiKey;
   }
-  if (defaults.baseUrl !== undefined) {
-    client.baseUrl = defaults.baseUrl;
+  const baseUrl = defaults.baseUrl === undefined ? undefined : nonEmptyEntries(defaults.baseUrl);
+  if (baseUrl !== undefined) {
+    client.baseUrl = baseUrl;
   }
   if (defaults.logLevel !== undefined) {
     client.logLevel = defaults.logLevel;
@@ -1496,12 +1503,24 @@ export function parentConfigOverrides(parent: ParentSettings): Partial<AgencyCon
   };
 }
 
-/** The parent's config under the caller's explicit overrides, key by key. */
+/** The parent's config under the caller's explicit overrides, key by key,
+ *  except that a model and its provider go together: an override that names
+ *  `client.defaultModel` without `client.defaultProvider` drops the parent's
+ *  provider, so smoltalk picks one from the model name. This is the rule
+ *  `applyCliFlags` applies to a bare `--model`. */
 export function withParentConfig(
   overrides: Partial<AgencyConfig> | undefined,
   parentConfig: Partial<AgencyConfig>,
 ): Partial<AgencyConfig> {
-  return mergeConfig(parentConfig, overrides ?? {}) as Partial<AgencyConfig>;
+  const explicit = overrides ?? {};
+  const bareModel =
+    explicit.client?.defaultModel !== undefined && explicit.client.defaultProvider === undefined;
+  let base = parentConfig;
+  if (bareModel && parentConfig.client !== undefined) {
+    const { defaultProvider: _dropped, ...client } = parentConfig.client;
+    base = { ...parentConfig, client };
+  }
+  return mergeConfig(base, explicit) as Partial<AgencyConfig>;
 }
 
 /**

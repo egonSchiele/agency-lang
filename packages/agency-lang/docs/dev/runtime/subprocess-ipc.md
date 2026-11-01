@@ -139,7 +139,7 @@ the nesting cap down the tree.
 
 A child's program is compiled in the sandbox with no `agency.json`, so its header bakes the built-in model and provider (`gpt-5-mini` through `openai-responses`). The parent fixes that by sending its own settings in the `configOverrides` of the `run` and `resume` instructions. `_runFor` in `lib/runtime/ipc.ts` builds them in three steps:
 
-1. `parentConfigOverrides` turns the parent's settings into a config, and `withParentConfig` puts the caller's explicit overrides over it, key by key. `run(logFile:)` is such an override, so it still wins.
+1. `parentConfigOverrides` turns the parent's settings into a config, and `withParentConfig` puts the caller's explicit overrides over it, key by key. `run(logFile:)` is such an override, so it still wins. The model and its provider are the one exception to key by key: an override that names `client.defaultModel` without `client.defaultProvider` drops the parent's provider, the rule `applyCliFlags` applies to a bare `--model`, so the child does not run the override's model on the parent's provider.
 2. `withParentProviderModules` adds the parent's provider modules, with each path made absolute so it resolves under any `run(cwd:)`.
 3. `withParentStatelog` adds the parent's effective statelog sink.
 
@@ -152,7 +152,7 @@ The settings come from the parent context's own fields, not from a copy of its `
 
 What is sent:
 
-- the smoltalk defaults: the model, the provider, the API keys, the base URLs, `client.logLevel`, and the OpenRouter preferences;
+- the smoltalk defaults: the model, the provider, the API keys and base URLs the parent has a value for, `client.logLevel`, and the OpenRouter preferences;
 - the two tool caps, `client.maxToolResultChars` and `client.maxToolSchemaChars`;
 - `maxCallDepth`, `failurePropagation`, and `checkpoints.maxRestores`.
 
@@ -166,11 +166,11 @@ What is not sent, and why:
 - The top-level `logLevel`, for the runtime's own loggers, and `verbose` are debugging settings for one process. `client.logLevel`, smoltalk's, is a different setting, and it is sent.
 - A client set from TypeScript with `setLLMClient` is an object in the parent's process, so it cannot be sent.
 
-The message carries the API keys the parent read from its environment as well as the ones its config names. The child already has the parent's whole environment (`buildForkOptions`), so it learns nothing new. The message is not logged.
+The message carries the API keys the parent read from its environment as well as the ones its config names. The child already has the parent's whole environment (`buildForkOptions`), so it learns nothing new. An empty key slot is left out, so a parent whose environment lacks a key never blanks one the child reads itself. The message is not logged.
 
 The model and provider follow `defaultRoute` in `lib/config/config.ts`, the rule the code generator uses: a model named without a provider has no provider, so smoltalk picks one from the model name. A parent that names `gemini-3.8-flash` with no provider sends the model alone, and the child's merge clears its baked `openai-responses`. This is the compile-time rule. The rule for a single `llm(model:)` call is `modelProviderOverride` in `lib/runtime/llmConfig.ts`, and it is different.
 
-Nothing new is raised, and nothing new is checkpointed. The overrides are rebuilt for every `run` and `resume` instruction and never stored, so a resumed child gets them again from the instruction.
+The overrides are rebuilt for every `run` and `resume` instruction and never checkpointed, so a resumed child gets them again from the instruction.
 
 ## Limits
 

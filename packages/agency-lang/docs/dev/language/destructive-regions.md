@@ -53,6 +53,17 @@ The decorator case is `tests/agency/decorators/destructive-region-in-body.agency
 
 The tool loop keeps the names of tools it has removed from the conversation in `__removedTools`, a list the `llm()` codegen hands to `runPrompt` by reference. It used to live on `__self`, which inside a block argument is the block frame. A decorated body or a retry block that calls `llm()` more than once got a fresh, empty list each time, so a tool removed for failing destructively on one run of the block was offered to the model again on the next. The list now lives on `__activation` as well, so every run of the block sees the same list.
 
+## A tool marks only the work it does
+
+A function enters a region around work it does itself and can see. A
+tool that hands work to a program it cannot see into does not guess.
+safeBash is the example: its in-process write enters a region, and a
+line it runs through bash enters none, because a bash failure is any
+non-zero exit and a failure flagged `destructiveRan` removes the tool
+from the conversation. The decision and the alternatives set aside are
+in `docs/dev/stdlib/safe-bash.md`, "Why a bash call is never
+destructive".
+
 ## Regions inside `parallel`
 
 A `destructive { }` region is allowed inside a `parallel` block, directly as an arm or nested in a `seq` arm. The parallel desugar (`lib/preprocessors/parallelDesugar.ts`) keeps the region's flip when it inlines the region, and when the region is itself an arm, it puts the flip at the start of the arm's statements. The flip is written to `__activation`, so it marks the calling function, exactly as a destructive call in an arm does. Both are conservative: a failure that leaves the function after the `parallel` block says `destructiveRan: true` whichever arm did the work. The refusal that used to guard this case existed because the flip landed on the fork frame, and went away with that bug.

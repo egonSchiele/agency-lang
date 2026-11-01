@@ -83,13 +83,15 @@ zod has the notion already. Its *input* form describes what a caller may send, a
 
 Each is a place the spec or the ticket leaves open. The owner can object to any of them.
 
-1. **An optional input becomes optional through zod's input form, not a rewrite.** `Schema.toJSONSchema` gains an optional argument, `"input"` or `"output"`, passed to `z.toJSONSchema` as `io`. The generated `inputsSchema` node passes `"input"`. The alternative, a helper that drops from `required` every key whose schema has `default: null`, would hand-roll a rule zod already has. The key keeps `default: null` and its `anyOf` with `null`, so a model may still send `null`, and the program accepts both.
+1. **An optional input becomes optional through zod's input form, not a rewrite.** `Schema.toJSONSchema` gains an optional argument, `"input"` or `"output"`, passed to `z.toJSONSchema` as `io`. The generated `inputsSchema` node passes `"input"`. The alternative, a helper that drops from `required` every key whose schema has `default: null`, would hand-roll a rule zod already has. The key keeps `default: null` and its `anyOf` with `null`, so a model may still send `null`, and the program accepts both. The input form also leaves out `additionalProperties: false`, so the model is no longer told that an extra key is refused. Nothing parses a tool call's arguments against the tool's zod schema, and `main(inputs: Inputs!)` drops an unknown key as it did before, so what runs does not change; the `std::workflow::run` payload shows the extra key to whoever approves it, and the program ignores it.
 2. **The change lands at save time.** `meta.inputsSchema` holds the input form from now on, so every reader of the file sees an optional key, not only the tool. A workflow saved before this change keeps its stored schema, with the optional key required; saving it again fixes it. `workflowTools` does not rewrite a stored schema.
 3. **`workflowTool` returns `Result<any>`, not `any`.** It runs the check and the schema subprocess, and either can fail or be rejected. A failure returned as the tool would be a tool that fails on every call with no way to see why. The spec's Public API changes to match.
 4. **A saved workflow with no stored schema is refused by `workflowTools`,** with a message naming it and saying to save it again with `writeWorkflow`. Starting a subprocess to compute it is what the ticket rules out.
-5. **The clash check compares workflow names with the host's tool names only.** Two saved workflows cannot share a name, since each is one file. A workflow whose name equals a `tools[i].name` is refused with a message naming both. The tool loop's `assertUniqueToolNames` (`lib/runtime/toolInvocation.ts:323`) would catch the clash later and throw; refusing here returns a failure the host can read.
+5. **Both functions refuse a workflow whose name is one of the `tools` argument's names.** Two saved workflows cannot share a name, since each is one file. The check is one private helper, `nameTaken`, that `workflowTool` and `workflowTools` both call, so the two cannot disagree about a workflow. It compares against `tools`, the functions the workflow may call, which is often but not always the list the host hands `llm()`; the tool loop's `assertUniqueToolNames` (`lib/runtime/toolInvocation.ts:323`) stays the last guard for that list, and the docstrings say so. Refusing here returns a failure the host can read instead of a throw later.
 6. **The tool's `dir` is `resolve(dir)`,** the same absolute path `runWorkflow` names in its `std::workflow::run` payload, so an "always" answer given to a direct `runWorkflow` call covers the tool's calls too.
 7. **The tool's description is `workflow.description`, unchanged.** The model reads the inputs from the schema; the description says what the workflow does.
+8. **A stale saved workflow fails when it is called, not when it is listed.** `workflowTools` does not check a saved workflow's steps against `tools`, so a workflow whose tool was renamed or removed since it was saved still becomes a tool. Each call runs `_checked` before its prompt, so the call fails with the problems listed and starts nothing. Checking at listing time would cost one compile per saved workflow and a `std::read` per local module. The docstring and the dev doc say which it is. The owner can rule the other way; the change would be one `_checked` call per entry in `workflowTools`.
+9. **`listWorkflows` lists in name order.** `_glob` returns files in the file system's order, which differs between macOS and Linux. Sorting the names makes the tools `workflowTools` hands a model the same on every machine, and makes the listing test deterministic.
 
 ## Not in this ticket
 
@@ -114,6 +116,7 @@ These are the inputs the spec implies but no test in the ticket exercises. Each 
 - Modify: `lib/runtime/schema.ts` (`toJSONSchema`, lines 26-35)
 - Modify: `lib/stdlib/workflow/render.ts` (both scaffolds, lines 27 and 43)
 - Modify: `lib/stdlib/workflow/render.test.ts` (the scaffold expectation at line 52)
+- Modify: `lib/stdlib/workflow/index.test.ts` (`MEAL_PLAN_SOURCE` spells out the whole generated program; its `inputsSchema` node at lines 80-81)
 - Modify: `tests/agency/workflow/save.agency` and `save.test.json` (`savedMetaHasInputsSchema`)
 - Test: `lib/runtime/schema.test.ts`
 
@@ -143,7 +146,7 @@ Run `pnpm test:run lib/runtime/schema.test.ts`. The test fails: `toJSONSchema` t
 
 - [ ] **Step 3: Ask for the input form from the generated program**
 
-In `render.ts`, both scaffolds' `inputsSchema` node returns `schema(Inputs).toJSONSchema("input")`. Update the expected line in `render.test.ts:52`. Put one comment above the first scaffold's node: a key with a default is optional in the input form, so an optional input is optional in the tool a workflow becomes.
+In `render.ts`, both scaffolds' `inputsSchema` node returns `schema(Inputs).toJSONSchema("input")`. Update the expected line in `render.test.ts:52` and in `index.test.ts:81`. Put one comment above the first scaffold's node: a key with a default is optional in the input form, so an optional input is optional in the tool a workflow becomes.
 
 - [ ] **Step 4: Pin the stored schema's new shape**
 
@@ -151,7 +154,7 @@ In `save.agency`, `savedMetaHasInputsSchema` keeps its five values. Change the c
 
 - [ ] **Step 5: Run, typecheck, commit**
 
-`make`, then `pnpm test:run lib/runtime/schema.test.ts lib/stdlib/workflow/render.test.ts` and `pnpm run agency test tests/agency/workflow/save.test.json`. Also run `pnpm run agency test tests/agency/validation/jsonSchemaWithDescription.test.json`, a caller of the no-argument form. All pass. Typecheck, prettier on the two TypeScript files, and commit with the message in a file: `Schema.toJSONSchema takes the form: an optional input is optional in a workflow's schema`.
+`make`, then `pnpm test:run lib/runtime/schema.test.ts lib/stdlib/workflow/render.test.ts lib/stdlib/workflow/index.test.ts` and `pnpm run agency test tests/agency/workflow/save.test.json`. Also run `pnpm run agency test tests/agency/validation/jsonSchemaWithDescription.test.json`, a caller of the no-argument form. All pass. Typecheck, prettier on the two TypeScript files, and commit with the message in a file: `Schema.toJSONSchema takes the form: an optional input is optional in a workflow's schema`.
 
 ---
 
@@ -166,6 +169,10 @@ In `save.agency`, `savedMetaHasInputsSchema` keeps its five values. Change the c
 - Produces, in `stdlib/workflow.agency`:
 
 ```
+/** The name of a tool in `tools` that `name` would collide with, or null.
+  A model cannot be handed two tools with one name. */
+def nameTaken(name: string, tools: any[]): string | null
+
 /** The tool: runWorkflow with the workflow, the tools, and the directory
   bound, under the workflow's name and description, with the inputs schema
   as the type of its one parameter. */
@@ -193,7 +200,9 @@ import { keys } from "std::object"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
-const OUT = __dirname + "/test-output"
+// Its own folder: CI runs test files in parallel, and save.agency writes
+// under test-output too.
+const OUT = __dirname + "/test-output/tool"
 const TOOLS = [add, multiply]
 
 /** A checkpoint is written when this is raised with no handler in the
@@ -252,7 +261,10 @@ def errorOf(result: Result<any>): string {
   return ""
 }
 
-/** The JSON Schema the model sees for the tool's `inputs` parameter. */
+/** The JSON Schema the model sees for the tool's `inputs` parameter. This
+  is the output form of the tool's own schema, which is what the tool loop
+  sends; `b` is still not required there, because `fromJSONSchema` read the
+  input form the workflow stored. */
 def inputsSchemaOf(tool: any): Json {
   return tool.toolDefinition.schema.toJSONSchema().properties.inputs
 }
@@ -298,6 +310,13 @@ node optionalInputIsOptional(): Json {
 node badWorkflowIsRefused(): Json {
   const built = buildTool(badWorkflow("bad"))
   return [isFailure(built), errorOf(built) =~ re/subtract/, getMutable("effects", [])]
+}
+
+/** A workflow named like one of its tools cannot be handed to a model
+  beside it, so workflowTool refuses it as workflowTools does. */
+node workflowToolRefusesAClash(): Json {
+  const built = buildTool(doubleSum("add"))
+  return [isFailure(built), errorOf(built) =~ re/"add"/, getMutable("effects", [])]
 }
 
 node modelCallsTheTool(): Json {
@@ -398,14 +417,15 @@ node emptyProjectHasNoTools(): Json {
 | `toolShape` | `["doubleSum","Add two numbers and double the sum.",["inputs"],["a","b"],["std::run"]]` | |
 | `optionalInputIsOptional` | `[["a"],["a","b"]]` | |
 | `badWorkflowIsRefused` | `[true,true,[]]` | |
-| `modelCallsTheTool` | `["done",["std::run","std::workflow::run","std::run"],"doubleSum",{"a":2,"b":3}]` | `"useTestLLMProvider": true`, `"llmMocks": [{ "toolCalls": [{ "name": "doubleSum", "args": { "inputs": { "a": 2, "b": 3 } } }] }, { "return": "done" }]` |
+| `workflowToolRefusesAClash` | `[true,true,[]]` | |
+| `modelCallsTheTool` | `["done",["std::workflow::run","std::run"],"doubleSum",{"a":2,"b":3}]` | `"useTestLLMProvider": true`, `"llmMocks": [{ "toolCalls": [{ "name": "doubleSum", "args": { "inputs": { "a": 2, "b": 3 } } }] }, { "return": "done" }]` |
 | `schemaSurvivesACheckpoint` | `["a","b"]` | `"interruptHandlers": [{ "action": "approve" }]` |
 | `savedWorkflowsBecomeTools` | `[["toolDoubleSum","toolOptional"],["a"],["std::workflow::scan"]]` | |
 | `nameClashIsRefused` | `[true,true]` | |
 | `olderSaveIsRefused` | `[true,true,true]` | |
 | `emptyProjectHasNoTools` | `[]` | |
 
-The order in `savedWorkflowsBecomeTools` is the listing's order, which is the glob's; if the glob returns the two files the other way round, sort the names in the node and say so in a comment. `tests/agency/workflow/test-output/` is gitignored already.
+The order in `savedWorkflowsBecomeTools` is the listing's order, which Step 2 makes name order. The effects list in `modelCallsTheTool` starts after `buildTool` cleared it: a call of the tool raises `std::workflow::run` and then `run`'s `std::run`, and `_checked` raises nothing for a workflow over `std::math`. `tests/agency/workflow/test-output/` is gitignored already.
 
 Run `make`, then the test. It fails to compile because `workflowTool` and `workflowTools` are not exported.
 
@@ -415,11 +435,13 @@ After `catalog` and before the saving section in `workflow.agency`:
 
 `toolFor(workflow, tools, dir, inputsSchema)` is the chain in the background, in two statements as the probe wrote it. Its doc comment is the one in Interfaces.
 
-`workflowTool`: `const where = resolve(dir)`; `_checked(workflow, tools, where)`, returning `failure(checked.error, checked.data)` on failure as `runWorkflow` does; `_inputsSchema(checked.value.program)`, returned as it came on failure; then `success(toolFor(workflow, tools, where, inputsSchema.value))`. Its docstring is a tool description, so write it for a model:
+`nameTaken(name, tools)`: `find(tools, \tool -> tool.name == name)`, and that tool's name or null. The refusal both callers build from it: `` `workflow "${name}" has the same name as a tool the host passed; rename one of them` ``.
+
+`workflowTool`: `const where = resolve(dir)`; the clash check first, since it needs no read; `_checked(workflow, tools, where)`, returning `failure(checked.error, checked.data)` on failure as `runWorkflow` does; `_inputsSchema(checked.value.program)`, returned as it came on failure; then `success(toolFor(workflow, tools, where, inputsSchema.value))`. Its docstring is a tool description, so write it for a model:
 
 ```
 """
-Make one tool that runs a workflow when called. The tool has the workflow's name and description, and its one parameter, `inputs`, has the workflow's inputs type. Checks the workflow first, then runs its program's `inputsSchema` node once in a subprocess, which raises `std::run`. A workflow with problems fails with every problem and starts nothing.
+Make one tool that runs a workflow when called. The tool has the workflow's name and description, and its one parameter, `inputs`, has the workflow's inputs type. Checks the workflow first, then runs its program's `inputsSchema` node once in a subprocess, which raises `std::run`. A workflow with problems fails with every problem and starts nothing. A workflow named like one of `tools` is refused, since a model cannot be handed both; the tool loop still refuses a name clash with any other tool at the model call.
 
 @param workflow - The workflow the tool runs
 @param tools - The functions the workflow may call
@@ -427,22 +449,24 @@ Make one tool that runs a workflow when called. The tool has the workflow's name
 """
 ```
 
-`workflowTools`: `listWorkflows(dir)`, returned as it came on failure. Then, with `const where = resolve(dir)` and `const taken = map(tools, \tool -> tool.name)`, one entry at a time: an entry whose `meta.inputsSchema` is null fails with `` `${entry.name} was saved before inputs schemas were recorded; save it again with writeWorkflow` ``; an entry whose name is in `taken` fails with `` `workflow "${entry.name}" has the same name as a tool the host passed; rename one of them` ``; otherwise it becomes `toolFor(entry.workflow, tools, where, entry.meta.inputsSchema)`. Build the list with `map` over the entries to a `Result<any>` each and `find(..., isFailure)` for the first failure, as `listWorkflows` does with its entries; no loop that pushes. Its docstring:
+`workflowTools`: `listWorkflows(dir)`, returned as it came on failure. Then, with `const where = resolve(dir)`, one entry at a time: an entry whose `meta.inputsSchema` is null fails with `` `${entry.name} was saved before inputs schemas were recorded; save it again with writeWorkflow` ``; an entry `nameTaken` refuses fails with the refusal above; otherwise it becomes `toolFor(entry.workflow, tools, where, entry.meta.inputsSchema)`. Build the list with `map` over the entries to a `Result<any>` each and `find(..., isFailure)` for the first failure, as `listWorkflows` does with its entries; no loop that pushes. Its docstring:
 
 ```
 """
-One tool per workflow saved under a project directory, each built as `workflowTool` builds it, from the inputs schema saved with the workflow. Starts no subprocess. Raises one `std::workflow::scan` prompt. Refuses a workflow whose name is already a tool's name in `tools`, and one saved before inputs schemas were recorded.
+One tool per workflow saved under a project directory, in name order, each built as `workflowTool` builds it, from the inputs schema saved with the workflow. Starts no subprocess, and does not check a saved workflow against `tools`: a workflow whose tools changed since it was saved fails when it is called, with the problems listed, and starts nothing. Raises one `std::workflow::scan` prompt, or none for a project with no `workflows` folder. Refuses a workflow whose name is already a tool's name in `tools`, and one saved before inputs schemas were recorded.
 
 @param dir - The project directory the workflows were saved under
 @param tools - The functions the workflows may call. A workflow may not share a name with one of them
 """
 ```
 
+In `listWorkflows`, sort the names before building entries: `const names = sortBy(map(filter(fileNames.value, isVisible), workflowName), \name -> name)`, and add "in name order" to its docstring. `sortBy` is in `std::index` (`stdlib/index.agency:550`).
+
 Add one sentence to the module doc comment after the `writeWorkflow` sentence: "`workflowTool` makes a workflow one tool a model can call, and `workflowTools` makes one per saved workflow."
 
 - [ ] **Step 3: Build, run, check, commit**
 
-`make`, then the Agency test, with `AGENCY_USE_TEST_LLM_PROVIDER=1`. All nine cases pass. Run `pnpm test:run lib/stdlibCapabilities.test.ts`: `workflowTool` reaches `_inputsSchema`, so it carries `fileWrite` and `subprocess` as `writeWorkflow` does; `workflowTools` reaches only reads. Then `pnpm run agency test tests/agency/workflow/save.test.json` once more, since the file changed in Task 1 and this task shares its fixtures. Typecheck, `pnpm run lint:structure`, and commit: `std::workflow: workflowTool and workflowTools`.
+`make`, then the Agency test, with `AGENCY_USE_TEST_LLM_PROVIDER=1`. All ten cases pass. Run `pnpm test:run lib/stdlibCapabilities.test.ts`: `workflowTool` reaches `_inputsSchema`, so it carries `fileWrite` and `subprocess` as `writeWorkflow` does; `workflowTools` reaches only reads. Then `pnpm run agency test tests/agency/workflow/save.test.json` once more, since the file changed in Task 1 and this task shares its fixtures. Typecheck, `pnpm run lint:structure`, and commit: `std::workflow: workflowTool and workflowTools`.
 
 ---
 
@@ -459,15 +483,16 @@ State the mechanism and the rules, and leave out the history:
 
 - the chain, and that the tool's one parameter `inputs` has the workflow's inputs type, nested, so a model sends `{ "inputs": { ... } }`;
 - `workflowTool` runs the check and the schema subprocess, so it raises what `writeWorkflow` raises before its write, and fails as `runWorkflow` fails;
-- `workflowTools` reads the stored schema and starts no subprocess; the two refusals, and why the clash is refused here rather than left to the tool loop;
+- `workflowTools` reads the stored schema and starts no subprocess; the two refusals, that both functions make the clash check against the `tools` argument through one helper and the tool loop remains the last guard for the list the host builds, and that a stale saved workflow fails when called, not when listed;
+- the listing is in name order, so the tool list is the same on every machine;
 - `dir` is `resolve(dir)`, the path `runWorkflow` pins, so one "always" answer covers both;
 - the schema survives a checkpoint through `paramSchemas` (one sentence, pointing at checkpointing.md).
 
-Replace the "Saving and loading" paragraph that begins "An optional input becomes a required key that may be null" with the new rule: the node asks for zod's input form, where a key with a default is not required, so `required` is `["a"]` for `{ a: number; b?: number }` and `b` keeps `default: null` and may be null. Say which form `Schema.toJSONSchema()` gives with no argument. Remove "Not built yet"; every function in the spec's MVP now exists.
+Replace the "Saving and loading" paragraph that begins "An optional input becomes a required key that may be null" with the new rule: the node asks for zod's input form, where a key with a default is not required, so `required` is `["a"]` for `{ a: number; b?: number }` and `b` keeps `default: null` and may be null. Say which form `Schema.toJSONSchema()` gives with no argument, and that the input form carries no `additionalProperties: false`, with the consequence from call 1. In the paragraph above it, the node now "returns `schema(Inputs).toJSONSchema("input")`". Remove "Not built yet"; every function in the spec's MVP now exists.
 
 - [ ] **Step 2: Update the spec**
 
-In "Public API", `workflowTool(...)` returns `Result<any>`. In "Offering a workflow as a tool", add one sentence: an optional input is optional in the tool's schema, through the input form of the stored schema (ADI-254).
+In "Public API", `workflowTool(...)` returns `Result<any>`. In "Offering a workflow as a tool", add one sentence: an optional input is optional in the tool's schema, through the input form of the stored schema (ADI-254). In "The generated program", the scaffold's `inputsSchema` node (line 259) calls `toJSONSchema("input")`.
 
 - [ ] **Step 3: Update the index line**
 
@@ -483,12 +508,13 @@ Commit the four files with the message `docs: a workflow as one tool`.
 
 - [ ] **Step 1: Check the diff against `docs/dev/contributing/anti-patterns.md`.** Watch for a loop that pushes where `map` and `find` do, and a second place that builds the chain.
 - [ ] **Step 2: Reread every comment and doc line you added.** Cut implementation notes and history.
-- [ ] **Step 3: Push and open the PR**, with its body written to a file. Title: `std::workflow: a workflow as one tool (ADI-254)`. The body shows the tool's schema for `doubleSum`, explains the input-form change in one paragraph with the before and after `required` lists, lists the seven calls above so the owner can object to each, and the tests.
+- [ ] **Step 3: Push and open the PR**, with its body written to a file. Title: `std::workflow: a workflow as one tool (ADI-254)`. The body shows the tool's schema for `doubleSum`, explains the input-form change in one paragraph with the before and after `required` lists, says that a file saved between ADI-251 (2026-10-31) and this change keeps the optional key in `required` until it is saved again, lists the nine calls above so the owner can object to each, and the tests.
 - [ ] **Step 4: Link the PR on ADI-254,** and fix the ticket's `meta.json` wording. The owner merges.
 
 ## Self-review notes
 
 - Ticket tests: "a model call, mocked, picks the workflow tool and the workflow runs with the given inputs" is `modelCallsTheTool`, which checks the `std::workflow::run` payload's name and inputs. "The tool's inputs schema is still there after a pause and resume" is `schemaSurvivesACheckpoint`; the pattern, a live local across a raise the runner answers, is the one `tests/agency/renamed-ref-checkpoint.agency` uses for the same reviver. "A workflow named like a host tool is refused by `workflowTools`" is `nameClashIsRefused`.
-- Spec coverage: the chain (Task 2), the schema from the stored file for a saved workflow (Task 2), the clash refusal (Task 2), the checkpoint (Task 2 test), and the owner's optional-input ruling (Task 1).
+- Spec coverage: the chain (Task 2), the schema from the stored file for a saved workflow (Task 2), the clash refusal in both functions (Task 2), the checkpoint (Task 2 test), and the owner's optional-input ruling (Task 1).
+- Review round 1 (2026-11-01) applied: the `modelCallsTheTool` effects list, the test's own output folder and name-ordered listing, the `index.test.ts` scaffold line, the clash helper shared by both functions, the stale-workflow rule stated rather than checked, the `additionalProperties` note, "at most one" scan prompt, the output-form comment in the test, and the older-saves note for the PR body.
 - Type consistency: `toolFor` takes `(workflow, tools, dir, inputsSchema)` in every call; `inputsSchemaOf` reads `properties.inputs` of the tool's schema, which the probe showed is where `.withParamSchema("inputs", ...)` puts it.
 - Every Agency snippet's shape was checked against a probe on a current build: the chain, `tool.name` on an `any[]`, `schema(T).toJSONSchema("input")`, and a custom effect with one field.

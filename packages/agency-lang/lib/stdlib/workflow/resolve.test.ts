@@ -403,3 +403,41 @@ describe("resolveWorkflow", () => {
     expect(r.limits).toBe(null);
   });
 });
+
+describe("resolveWorkflow raises", () => {
+  // mealSignatures gives readNote std::read and addListItems test::lists::add.
+  const problemsWith = (raises: string[] | null, signatures = mealSignatures) =>
+    resolve(withFields(mealPlan, { raises }), mealRefs, signatures).problems;
+
+  it("reports an effect a step raises that raises does not allow, on the step's tool", () => {
+    expect(problemsWith(["test::lists::add"])).toEqual([
+      {
+        step: "text",
+        field: "tool",
+        message: `readNote raises "std::read", which the workflow's raises does not allow`,
+      },
+    ]);
+  });
+
+  it("expands a set name to its members", () => {
+    expect(problemsWith(["FileRead", "test::lists::add"])).toEqual([]);
+  });
+
+  it("allows anything with no raises, a null one, or a star", () => {
+    expect(problemsWith(null)).toEqual([]);
+    expect(problemsWith(["*"])).toEqual([]);
+  });
+
+  it("reports every effect of every step under an empty raises", () => {
+    expect(problemsWith([]).map((problem) => problem.step)).toEqual(["text", "add"]);
+  });
+
+  it("never reports std::guard, which the program rejects itself", () => {
+    const key = "./notes.agency.searchNotes";
+    const signatures = {
+      ...mealSignatures,
+      [key]: { ...mealSignatures[key], effects: ["std::guard"] },
+    };
+    expect(problemsWith(["std::read", "test::lists::add"], signatures)).toEqual([]);
+  });
+});

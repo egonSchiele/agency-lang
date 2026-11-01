@@ -1,4 +1,4 @@
-import { compile, describe, run, typecheck, CompiledProgram, ExportInfo } from "std::agency"
+import { compile, describe, run, typecheck, CompiledProgram, ExportInfo, ModuleInfo } from "std::agency"
 import { now, format } from "std::date"
 import { read } from "std::index"
 import { filterEntries } from "std::object"
@@ -47,13 +47,21 @@ import {
   runs the program in a subprocess. Each step's interrupts reach the
   caller's handlers, so a policy decides what the workflow may do.
 
+  A workflow's `limits` are hard: the program rejects a trip from its own
+  guards, so no caller can give it more budget. A tool's own guard is left
+  to the tool, so a tool that uses `supervise()` keeps working, unless the
+  caller's policy rejects `std::guard`, as the catch-all in
+  `agency workflow run` does. A workflow's optional `raises` lists the
+  effects it may raise, and `checkWorkflow` reports each step that raises
+  another.
+
   `writeWorkflow` saves a checked workflow as `<dir>/workflows/<name>.json`;
   `loadWorkflow` and `listWorkflows` read saved workflows back.
   `workflowTool` makes a workflow one tool a model can call, and
   `workflowTools` makes one per saved workflow.
 
-  `catalog` lists the tools a workflow may call, with their parameters and
-  return types, for a GUI or a person writing a workflow.
+  `catalog` lists the tools a workflow may call, with their parameters,
+  return types, and effects, for a GUI or a person writing a workflow.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
@@ -74,7 +82,9 @@ export type Workflow = {
   inputs: string;
   steps: Json[];
   result?: Json;
-  limits?: WorkflowLimits
+  limits?: WorkflowLimits;
+  /** The effects the workflow may raise, as in an Agency function's `raises` clause (docs/site/guide/effects-and-raises.md). Left out means anything. `[]` means nothing. A built-in set name such as `FileRead` stands for its members, and `"*"` means anything. `checkWorkflow` reports each step that raises an effect not listed. */
+  raises?: string[]
 }
 
 /** One thing wrong with a workflow, named by step and field. `step` and
@@ -129,23 +139,37 @@ effect std::workflow::run {
   inputs: Json
 }
 
-/** What `describe` says about each tool, keyed by module and name. A
-  `std::` module is described from a re-export line; a local module is
-  read from `dir`, which asks for approval. */
+/** The tools one module provides, as `_signatureSources` groups them. */
+type SignatureSource = {
+  module: string;
+  names: string[];
+  reExport: string | null
+}
+
+/** What `describe` says about one module. A `std::` module is described
+  from its re-export line. A local module is read from `dir`, which asks
+  for approval, and described with its path, so its own imports of other
+  local files resolve. Those files are read without prompts of their own,
+  as `_checked`'s type check already reads them. */
+@capabilities(fileRead)
+def describeGroup(group: SignatureSource, dir: string): Result<ModuleInfo> {
+  if (group.reExport != null) {
+    return describe(group.reExport)
+  }
+  const text = read(group.module, dir)
+  if (text is failure) {
+    return text
+  }
+  return describe(text.value, dir: dir, filename: group.module)
+}
+
+/** What `describe` says about each tool, keyed by module and name. */
 @hidden
 @capabilities(fileRead)
 export def _signatures(refs: ToolRef[], dir: string): Result<Record<string, ExportInfo>> {
   let signatures: Record<string, ExportInfo> = {}
   for (group in _signatureSources(refs)) {
-    let source = group.reExport
-    if (source == null) {
-      const text = read(group.module, dir)
-      if (text is failure) {
-        return text
-      }
-      source = text.value
-    }
-    const info = describe(source)
+    const info = describeGroup(group, dir)
     if (info is failure) {
       return info
     }
@@ -268,7 +292,9 @@ export type CatalogEntry = {
   /** The parameters a step can pass. A function-typed parameter is left out. */
   params: CatalogParam[];
   /** The declared return type as Agency text. Null when none is declared. */
-  returns: string | null
+  returns: string | null;
+  /** What the tool can raise, as `describe` reports it. A tool that uses `guard` lists `std::guard`. `checkWorkflow`'s `raises` check leaves it out, since a guard trip is a question about budget, not a permission. */
+  effects: string[]
 }
 
 /** The catalog starts with the same two steps as `checkWorkflow`, so it

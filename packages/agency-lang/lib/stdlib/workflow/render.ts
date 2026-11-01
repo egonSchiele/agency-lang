@@ -15,14 +15,34 @@ export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record
  *  a hole inside `node main(inputs: Inputs)` with statements that mention
  *  `inputs` would rename the parameter (template hygiene). `inputsSchema`
  *  asks for the input form: a key with a default is optional there, so an
- *  optional input is optional in the tool a workflow becomes. */
+ *  optional input is optional in the tool a workflow becomes.
+ *
+ *  The handler around the body is what makes every limit hard. A guard trip
+ *  raises `std::guard`, and an approval would give the guard more budget.
+ *  The handler rejects a trip from the workflow's own guards, the one around
+ *  the body and each step's, and a rejection wins over any approval. So no
+ *  caller can extend the workflow's limits or a step's.
+ *
+ *  It passes on every other trip, as the `@guarded` decorator does. A tool's
+ *  own guard sits inside the step's guard and the workflow's, so a caller
+ *  who extends it is still stopped at the workflow's limits. And a tool that
+ *  extends its own guard, as `supervise()` does, keeps working. A tool guard
+ *  whose label matches a step id is rejected too, which is the safe way for
+ *  a collision to go. */
 const SCAFFOLD = `import { Json } from "std::validation"
 {{imports}}
 
 {{types}}
 
 export node main(inputs: Inputs!): Result {
+  handle {
 {{body}}
+  } with (guardTrip) {
+    if (guardTrip.effect == "std::guard" && {{guardLabels}}.includes(guardTrip.data.label)) {
+      return reject()
+    }
+    return pass()
+  }
 }
 
 export node inputsSchema(): Json {
@@ -30,14 +50,22 @@ export node inputsSchema(): Json {
 }
 `;
 
+/** SCAFFOLD with the workflow's own limits as a guard, inside the same handler. */
 const GUARDED_SCAFFOLD = `import { Json } from "std::validation"
 {{imports}}
 
 {{types}}
 
 export node main(inputs: Inputs!): Result {
-  return guard({{guardArgs}}) {
+  handle {
+    return guard(label: {{guardLabel}}, {{guardArgs}}) {
 {{body}}
+    }
+  } with (guardTrip) {
+    if (guardTrip.effect == "std::guard" && {{guardLabels}}.includes(guardTrip.data.label)) {
+      return reject()
+    }
+    return pass()
   }
 }
 
@@ -47,7 +75,7 @@ export node inputsSchema(): Json {
 `;
 
 const INDENT = "  ";
-const TOKEN = /\{\{(imports|types|guardArgs|body)\}\}/g;
+const TOKEN = /\{\{(imports|types|guardArgs|guardLabel|guardLabels|body)\}\}/g;
 const BODY_TOKEN = "{{body}}";
 const TYPES_TOKEN = "{{types}}";
 
@@ -101,7 +129,7 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
   const limits = lowered.guard;
   const args = limits === null ? "" : guardArgs(limits).join(", ");
   const scaffold = args === "" ? SCAFFOLD : GUARDED_SCAFFOLD;
-  const depth = args === "" ? 1 : 2;
+  const depth = args === "" ? 2 : 3;
   const prints = lowered.body.map((fragment) => printLines(fragment.code));
   const resultLines = printLines(lowered.result);
   resultLines[0] = `return success(${resultLines[0]}`;
@@ -111,6 +139,10 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
     imports: lowered.imports.join("\n"),
     types: typeLines.join("\n"),
     guardArgs: args,
+    // Labels are the workflow's name and step ids, which parse proved are
+    // identifiers, so JSON writes them as plain Agency string literals.
+    guardLabel: JSON.stringify(lowered.guardLabel),
+    guardLabels: JSON.stringify(lowered.guardLabels),
     body: indent([...prints.flat(), ...resultLines], depth).join("\n"),
   };
   const typeBlocks = lowered.types.map((decl, index) => ({

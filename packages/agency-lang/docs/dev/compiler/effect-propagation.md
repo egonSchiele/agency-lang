@@ -280,3 +280,18 @@ ever reading `sym.interruptEffects`, so comparing the two is a real second
 opinion rather than reading back what the pass just wrote. See
 `lib/analysis/effectsOracle.test.ts`, which also explains why comparing against
 `getEffectsFromFile` proves nothing for an imported function.
+
+## Effects for source text with a path
+
+`getEffectsFromSource` takes text and no path, so a relative import in the
+text cannot resolve, and the analysis throws `Cannot find module`.
+`getEffectsFromSourceAt(source, sourcePath, config)` runs the same analysis
+with the text placed at a real path, so the module's own imports resolve
+against its folder.
+
+A real path lets the pipeline expand splices, which runs their generators.
+Its one production caller, `_describe` in `lib/stdlib/agency.ts`, first checks
+the module's imports with `validateClosure`, the check a sandboxed compile
+makes, and then passes `{ refuseSplices: true }`. `std::workflow` describes
+each local tool module this way (`docs/dev/stdlib/workflow.md`, "Tool modules").
+

@@ -1,3 +1,5 @@
+import { now } from "std::date"
+
 export def slowEcho(text: string): string {
   """
   Return the text after two seconds. It exists to outlast a step's time
@@ -9,3 +11,44 @@ export def slowEcho(text: string): string {
   sleep(2s)
   return text
 }
+
+export def busyEcho(text: string): string {
+  """
+  Return the text after about a second of work, without sleeping. A time
+  guard that trips during `sleep()` skips every handler (ADI-137), so a test
+  that needs a handler to answer the trip uses this instead of slowEcho.
+
+  @param text - The text to return
+  """
+  const until = now() + 1000
+  let spins = 0
+  while (now() < until) {
+    spins = spins + 1
+  }
+  return text
+}
+
+export def selfExtending(text: string): string {
+  """
+  Return the text after busyEcho's second of work, under a 100 ms guard of
+  its own that it extends when it trips, the way supervise() does.
+
+  @param text - The text to return
+  """
+  let result: Result<string> = failure("not run")
+  handle {
+    result = guard(time: 100, label: "selfExtending") {
+      return busyEcho(text)
+    }
+  } with (trip) {
+    if (trip.effect == "std::guard" && trip.data.label == "selfExtending") {
+      return approve({ maxTime: 60000 })
+    }
+    return pass()
+  }
+  if (result is failure) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+

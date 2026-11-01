@@ -4,8 +4,8 @@
 // mechanics only — each command keeps its own policy (when to ask, what a
 // decline means).
 
-import * as readline from "node:readline/promises";
 import prompts from "prompts";
+import { confirmQuestion } from "../confirmQuestion.js";
 import { terminalSafe } from "./secretsInput.js";
 
 export type ConfirmDeployOptions = {
@@ -28,17 +28,6 @@ export async function confirmDeployWithoutExports(
   }
   const prompt = options.prompt ?? confirmQuestion;
   return prompt("Upload anyway?");
-}
-
-/** The raw readline yes/no lifecycle, policy-free. */
-export async function confirmQuestion(question: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = (await rl.question(`${question} [y/N] `)).trim().toLowerCase();
-    return answer === "y" || answer === "yes";
-  } finally {
-    rl.close();
-  }
 }
 
 /** Hidden-input prompt for a secret value. Resolves undefined on cancellation

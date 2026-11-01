@@ -738,9 +738,9 @@ failure built later in `runChain` (`echo started >> log.txt; grep zzz
 one.txt`) would otherwise say nothing destructive ran, so the tool loop
 could retry and append twice. The region is entered before `_write`
 runs, so a write that fails before writing anything still reports
-`destructiveRan: true`, which is the safe direction. The bash path has
-the same gap for `echo hi >> f && false`, because `runBash` enters no
-region.
+`destructiveRan: true`, which is the safe direction. A line that runs
+through bash is never marked; see "Why a bash call is never
+destructive".
 
 A chain's effects may be empty. A chain of echoes raises nothing, as a
 lone echo raises nothing: the audit rule is about shell spawns, and a
@@ -754,6 +754,60 @@ goes, so `grep -rn TODO src; echo finished` prints the note before
 left, under a `std::read` that named `f` (see "Resolving the path when
 the plan is made"). With `f` missing, `cat f` is refused at plan time,
 and the line goes to bash.
+
+## Why a bash call is never destructive
+
+This is a decision, made after the alternatives below were weighed. Do
+not add a `destructive { }` region around `runBash` without reading it.
+
+The rule: safeBash marks destructive work only where Agency code does
+the work. `runWrite` wraps `_write` in a `destructive { }` region, as
+the `write` tool does, and `runChain` enters one around each write step.
+`runBash` enters none, so a failure from a line that ran through bash
+always carries `destructiveRan: false`. safeBash is treated like any
+other tool: the Agency functions it runs mark their own work, and
+nothing in the `destructive` logic or the tool loop has a case for it.
+
+The reasons:
+
+1. **safeBash cannot see what bash did.** `make` may have written half
+   its outputs before it failed. `echo hi > /missing/dir/f` failed
+   before writing anything. Any region around `runBash` is a guess about
+   the whole line.
+2. **A bash failure is any non-zero exit, and those are routine.**
+   `runBash` fails on every non-zero exit: a failing test run, a `grep`
+   that finds nothing, a `diff` of two files that differ, a compile
+   error. Most of them changed nothing.
+3. **The flag removes the tool.** `failureTier`
+   (`lib/runtime/toolInvocation.ts`) puts a failure with
+   `destructiveRan: true` in the destructive tier, and the model is told
+   "This tool can no longer be called in this conversation." The tool
+   loop also marks the function that called `llm()`
+   (`lib/runtime/prompt.ts`, the `destructiveSink`), so an agent that is
+   itself a tool can be removed from its parent. Marking every bash
+   failure, or every broad one, would take the shell away after the
+   first failed test run.
+
+The cost of the rule: after `echo started >> log.txt && false`, the model
+is told it may call safeBash again. If a policy approves the write with
+no prompt, as `recommended` does inside the launch directory, a retry
+appends the line twice. That is accepted. The `destructive` flag is
+something Agency offers on top of what most agents have, and a shell is
+a black box it cannot see into.
+
+The alternatives that were set aside:
+
+- **A region around `runBash` for every plan, or every broad plan or
+  plan with a write.** This removes the shell after any failed command.
+- **A region only for narrow plans that raise `std::write`.** It is
+  still a guess (a write that failed before writing reports `true`), and
+  it is a safeBash-only case in how the flag is set.
+- **A softer tier for "may have changed files"** that keeps the tool and
+  tells the model to check before running again. That changes the tool
+  loop's tiers for every tool, to serve one.
+- **Comparing the named write targets before and after the run.** It
+  only covers narrow writes, adds reads around each one, and misses a
+  write that leaves the size and time unchanged.
 
 ## Why the executors call `_bash`, `_write`, `_grep`, and `_read`
 

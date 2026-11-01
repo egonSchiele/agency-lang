@@ -947,3 +947,86 @@ export type Page = { url: string }
     ]);
   });
 });
+
+describe("_describe with a file path", () => {
+  let dir: string;
+
+  const write = (name: string, text: string) => {
+    writeFileSync(join(dir, name), text, "utf-8");
+    return text;
+  };
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-describe-"));
+    write(
+      "helper.agency",
+      `effect test::helper::ask { q: string }
+export def helper(q: string): string {
+  return interrupt test::helper::ask("ask?", { q: q })
+  return q
+}
+`,
+    );
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const MAIN = `import { helper } from "./helper.agency"
+export def wrapped(q: string): string {
+  return helper(q)
+}
+`;
+
+  it("resolves a local import from the file's folder and counts the helper's effects", () => {
+    const source = write("main.agency", MAIN);
+    const wrapped = _describe(source, dir, "main.agency").exports.find(
+      (entry) => entry.name === "wrapped",
+    );
+    expect(wrapped?.kind).toBe("def");
+    expect(wrapped?.effects).toContain("test::helper::ask");
+  });
+
+  it("still cannot resolve a local import without a path", () => {
+    const source = write("main.agency", MAIN);
+    expect(() => _describe(source)).toThrow(/Cannot find module/);
+  });
+
+  it("refuses a module that imports a TypeScript file", () => {
+    write("helper.ts", "export const x = 1;\n");
+    const source = write(
+      "main.agency",
+      `import { x } from "./helper.ts"
+export def f(): number {
+  return 1
+}
+`,
+    );
+    expect(() => _describe(source, dir, "main.agency")).toThrow(/describe refused main.agency/);
+  });
+
+  it("refuses a module that imports a file outside dir", () => {
+    mkdirSync(join(dir, "inner"));
+    const source = `import { helper } from "../helper.agency"
+export def f(q: string): string {
+  return helper(q)
+}
+`;
+    writeFileSync(join(dir, "inner", "main.agency"), source, "utf-8");
+    expect(() => _describe(source, join(dir, "inner"), "main.agency")).toThrow(
+      /describe refused main.agency/,
+    );
+  });
+
+  it("refuses text that is not the file's contents", () => {
+    write("main.agency", MAIN);
+    expect(() => _describe(MAIN + "\n// changed\n", dir, "main.agency")).toThrow(
+      /not the contents of main.agency/,
+    );
+  });
+
+  it("needs both dir and filename", () => {
+    expect(() => _describe(MAIN, dir)).toThrow(/both dir and filename/);
+  });
+});

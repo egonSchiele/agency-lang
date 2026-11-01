@@ -76,6 +76,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "effectsListed",
+      "description": "each entry lists what its tool can raise: the local tool's own effect, and nothing for round",
+      "input": "",
+      "expectedOutput": "[[\"test::lists::add\"],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

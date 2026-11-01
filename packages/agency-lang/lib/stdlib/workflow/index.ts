@@ -54,7 +54,8 @@ export function compileWorkflowSource(
   return { compiled, problems: [] };
 }
 
-function describeProblem({ step, field, message }: Problem): string {
+/** One problem as a line: `step add, args.listId: <message>`. */
+export function describeProblem({ step, field, message }: Problem): string {
   const where = [step === null ? "" : `step ${step}`, field ?? ""].filter((part) => part !== "");
   return where.length === 0 ? message : `${where.join(", ")}: ${message}`;
 }
@@ -112,13 +113,14 @@ export function _pickSignatures(
         `"${source.module}" re-exports "${name}" from another file; pass a def the module itself defines`,
       );
     }
-    const { signature, returnType, returnsResult, docstring, params } = found;
+    const { signature, returnType, returnsResult, docstring, params, effects } = found;
     signatures[signatureKey(source.module, name)] = {
       signature,
       returnType,
       returnsResult,
       docstring,
       params,
+      effects,
     };
   }
   return success(signatures);

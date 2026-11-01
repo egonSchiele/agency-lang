@@ -1,7 +1,8 @@
 import { checkWorkflow, Workflow, WorkflowProblem } from "std::workflow"
 import { Json } from "std::validation"
 import { searchNotes, readNote, untyped } from "./fixtures/tools/notes.agency"
-import { findLists } from "./fixtures/tools/lists.agency"
+import { findLists, addListItems } from "./fixtures/tools/lists.agency"
+import { greet } from "./fixtures/tools/withHelper.agency"
 
 const DIR = __dirname + "/fixtures/tools"
 const TOOLS = [searchNotes, readNote, untyped]
@@ -148,4 +149,45 @@ node everyBadToolIsReported(): string {
     messages.push(problem.message)
   }
   return messages.join(" | ")
+}
+
+/** A workflow whose `raises` leaves out what its last step raises. The
+  problem is on that step's tool, from the effects `describe` reports. */
+node raisesLeavesOutAStepsEffect(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "addOne",
+    description: "Find a list and add soup to it.",
+    inputs: "{ query: string }",
+    raises: ["std::read"],
+    steps: [
+      { id: "list", kind: "tool", module: "./lists.agency", tool: "findLists", args: { query: { "$ref": "inputs.query" } } },
+      { id: "add", kind: "tool", module: "./lists.agency", tool: "addListItems", args: { listId: { "$ref": "steps.list[0].id" }, items: ["soup"], section: "Meals" } }
+    ]
+  }
+  const checked = checkWorkflow(workflow, [findLists, addListItems], DIR) with approve
+  if (checked is success) {
+    return "no problems"
+  }
+  return map(checked.data.problems, \problem -> "${problem.step}/${problem.field}")
+}
+
+/** One step whose tool's
+  module imports another local file. */
+def greetWorkflow(): Workflow {
+  return {
+    format: 1,
+    name: "greetOne",
+    description: "Greet someone loudly.",
+    inputs: "{ name: string }",
+    steps: [{ id: "greeting", kind: "tool", module: "./withHelper.agency", tool: "greet", args: { name: { "$ref": "inputs.name" } } }]
+  }
+}
+
+node toolWithLocalImportChecks(): Json {
+  const checked = checkWorkflow(greetWorkflow(), [greet], DIR) with approve
+  if (checked is failure) {
+    return checked.error
+  }
+  return checked.value
 }

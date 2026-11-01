@@ -121,7 +121,8 @@ node mealPlanCompiles(): boolean {
     "let step_meals: Step_meals_output = null as Step_meals_output",
     "const step_meals_reply: Step_meals_output = llm(",
     "step_meals = step_meals_reply",
-    "return guard(time: 300000, cost: 1)",
+    "return guard(label: \"updateMealPlanFromNote\", time: 300000, cost: 1)",
+    "if (guardTrip.effect == \"std::guard\" && [\"updateMealPlanFromNote\"].includes(guardTrip.data.label))",
     "return success(step_add.value)"
   ])
   return ok && source.includes("type Inputs = {") && !source.includes("__hyg")
@@ -142,7 +143,7 @@ node generatedProgramCompiles(): boolean {
 
 node noLimitsTypechecks(): boolean {
   const source = sourceOf(withoutLimits(standardPlan()))
-  return !source.includes("guard") && typechecks(source)
+  return !source.includes("guard(") && typechecks(source)
 }
 
 node plainReturnHasNoValue(): boolean {

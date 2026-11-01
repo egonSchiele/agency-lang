@@ -4,6 +4,7 @@
 import { catalog, CatalogEntry, CatalogParam } from "std::workflow"
 import { add, round } from "std::math"
 import { searchNotes } from "./fixtures/tools/notes.agency"
+import { addListItems } from "./fixtures/tools/lists.agency"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
@@ -92,4 +93,12 @@ node rejectedReadKeepsTheRejection(): Json {
 
 node emptyToolList(): Json {
   return runCatalog([]) catch "failed"
+}
+
+node effectsListed(): Json {
+  const listed = runCatalog([addListItems, round])
+  if (listed is failure(err)) {
+    return "failed: ${err}"
+  }
+  return map(listed.value, \entry -> entry.effects)
 }

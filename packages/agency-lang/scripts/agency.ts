@@ -36,7 +36,8 @@ import {
   runSecretsRm,
   runSecretsImport,
 } from "@/cli/remote/commands/secrets.js";
-import { confirmQuestion, promptSecretValue } from "@/cli/remote/confirmation.js";
+import { confirmQuestion } from "@/cli/confirmQuestion.js";
+import { promptSecretValue } from "@/cli/remote/confirmation.js";
 import type { PullOptions } from "@/cli/remote/commands/pull.js";
 import { runLogs } from "@/cli/remote/commands/logs.js";
 import {
@@ -158,6 +159,15 @@ import { startServer } from "@/lsp/index.js";
 import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
+import {
+  workflowCheck,
+  workflowCompile,
+  workflowList,
+  workflowRun,
+  workflowTools,
+  type WorkflowIo,
+} from "@/cli/workflow/commands.js";
+import { runDriver } from "@/cli/workflow/runDriver.js";
 
 // Per-run flags for `agency run`, `agency resume`, and the hidden default
 // command. CliFlags are mapped onto config by applyCliFlags in config.ts.
@@ -342,14 +352,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     }
   }
 
-  async function runWithOptions(
-    input: string,
-    options: RunOptions,
-    nodeArgs: string[] = [],
-    resume?: ResumeCarrier,
-    entryNode?: string,
-  ) {
-    options = await withLocalModel(options);
+  /** Config, run policy, and budget from a run's flags, after
+   *  `withLocalModel`. A bad policy or budget flag exits 2. `input` names
+   *  the default trace file, so a command with no trace flag leaves it out. */
+  function runSettings(options: RunOptions, input?: string) {
     // applyCliFlags takes one field: a path, or `true` for the default path.
     // The CLI splits that across two flags so neither swallows the filename.
     const config = applyCliFlags(
@@ -381,6 +387,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
+    return { config, runPolicy, budget };
+  }
+
+  async function runWithOptions(
+    input: string,
+    options: RunOptions,
+    nodeArgs: string[] = [],
+    resume?: ResumeCarrier,
+    entryNode?: string,
+  ) {
+    options = await withLocalModel(options);
+    const { config, runPolicy, budget } = runSettings(options, input);
     run(
       config,
       input,
@@ -509,9 +527,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   }
 
-  /** The flags that shape a run, shared by `run`, `resume`, and `debug`:
-   *  the policy, the budget, the model, and the compile settings. */
-  function addRunOptions(cmd: Command) {
+  /** Where a run's statelog events go. */
+  function addLogOptions(cmd: Command) {
     return cmd
       .option(
         "--log-file <path>",
@@ -520,7 +537,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--observability",
         "Enable statelog observability for this run (use with a configured host, or --log-file)",
-      )
+      );
+  }
+
+  /** How a run's program is compiled, and its tool-loop caps. */
+  function addCompileOptions(cmd: Command) {
+    return cmd
       .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
       .option("--refuse-splices", DESC_REFUSE_SPLICES)
       .option(
@@ -532,7 +554,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--max-tool-result-chars <n>",
         "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
         parseNonNegativeInt,
-      )
+      );
+  }
+
+  /** The model a run's LLM calls use. */
+  function addModelOptions(cmd: Command) {
+    return cmd
       .option(
         "--model <name>",
         "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
@@ -544,11 +571,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--local <model>",
         "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
-      )
-      .option(
-        "--draft <model>",
-        "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
-      )
+      );
+  }
+
+  /** A draft model for speculative decoding with --local. */
+  function addDraftOption(cmd: Command) {
+    return cmd.option(
+      "--draft <model>",
+      "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
+    );
+  }
+
+  /** The interrupt policy: a policy file or name, and --approve and --reject. */
+  function addPolicyOptions(cmd: Command) {
+    return cmd
       .option(
         "--policy <name|path>",
         "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
@@ -562,19 +598,55 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--reject <effects>",
         "Comma-separated interrupt effects or capability set names to auto-reject",
         joinEffectFlags,
-      )
-      .option(
-        "--max-cost <dollars>",
-        "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
-      )
-      .option(
-        "--max-time <duration>",
-        "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
-      )
-      .option(
-        "--agency-only",
-        "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
       );
+  }
+
+  /** The run's cost and time budget. */
+  function addBudgetOptions(cmd: Command) {
+    addMaxCostOption(cmd);
+    addMaxTimeOption(cmd);
+    return cmd;
+  }
+
+  /** The run's cost budget. */
+  function addMaxCostOption(cmd: Command) {
+    return cmd.option(
+      "--max-cost <dollars>",
+      "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
+    );
+  }
+
+  /** The run's time budget. `workflow run` leaves it out: a root time
+   *  budget does not stop a run that is waiting on a subprocess. */
+  function addMaxTimeOption(cmd: Command) {
+    return cmd.option(
+      "--max-time <duration>",
+      "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+    );
+  }
+
+  /** Refusing anything in the import closure that is not Agency source. */
+  function addAgencyOnlyOption(cmd: Command) {
+    return cmd.option(
+      "--agency-only",
+      "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
+    );
+  }
+
+  /** The flags that shape a run, shared by `run`, `resume`, and `debug`:
+   *  the policy, the budget, the model, and the compile settings. The
+   *  groups are separate so `workflow run` can take only the ones that
+   *  reach a workflow. */
+  function addRunOptions(cmd: Command) {
+    // Each group adds its options to `cmd` itself, in this order.
+    addLogOptions(cmd);
+    addCompileOptions(cmd);
+    addModelOptions(cmd);
+    addDraftOption(cmd);
+    addPolicyOptions(cmd);
+    addBudgetOptions(cmd);
+    addAgencyOnlyOption(cmd);
+    return cmd;
   }
 
   addRunAndRecordingOptions(
@@ -1354,6 +1426,90 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   };
   addOptimizeCommand(program);
+
+  // `agency workflow`: check and inspect saved workflows from the command
+  // line. Each command runs a small Agency driver (lib/cli/workflow).
+  const workflowIo = (): WorkflowIo => ({
+    cwd: process.cwd(),
+    out: (text) => console.log(text),
+    err: (text) => console.error(text),
+    config: getConfig(),
+    runDriver: (call) => runDriver(call),
+    // The question goes to stderr, so `run --json` keeps stdout for the result.
+    confirm: process.stdin.isTTY
+      ? (question: string) => confirmQuestion(question, process.stderr)
+      : null,
+  });
+  const workflowCmd = program
+    .command("workflow")
+    .description("Inspect, check, and compile saved workflows (std::workflow)");
+
+  workflowCmd
+    .command("tools")
+    .description("Print what each tool in a module takes, returns, and can raise")
+    .argument("<sources...>", "A .agency file, or a std:: module such as std::math")
+    .option("--dir <dir>", "The project directory a tool's module is relative to (default: .)")
+    .option("--json", "Print the catalog as JSON")
+    .action(async (sources: string[], opts: { dir?: string; json?: boolean }) => {
+      process.exit(await workflowTools(sources, opts, workflowIo()));
+    });
+
+  workflowCmd
+    .command("check")
+    .description("Check a saved workflow, and print the effects it can raise")
+    .argument("<workflow>", "A workflow's name, or the path to workflows/<name>.json")
+    .option("--json", "Print checkWorkflow's value as JSON")
+    .action(async (target: string, opts: { json?: boolean }) => {
+      process.exit(await workflowCheck(target, opts, workflowIo()));
+    });
+
+  workflowCmd
+    .command("compile")
+    .description("Print the Agency program a saved workflow turns into")
+    .argument("<workflow>", "A workflow's name, or the path to workflows/<name>.json")
+    .action(async (target: string) => {
+      process.exit(await workflowCompile(target, workflowIo()));
+    });
+
+  // The flags from `agency run` that reach a workflow: the policy, the
+  // model, the cost budget, and the log. See docs/site/cli/workflow.md for why
+  // the others are left out.
+  const workflowRunCmd = workflowCmd
+    .command("run")
+    .description("Run a saved workflow, after approving the interrupts your policy does not cover")
+    .argument("<workflow>", "A workflow's name, or the path to workflows/<name>.json")
+    .option("--inputs <json>", "The workflow's inputs as JSON (default: {})")
+    .option("--json", 'Print { "success": ..., "value" or "error": ... } as JSON');
+  addPolicyOptions(workflowRunCmd);
+  addModelOptions(workflowRunCmd);
+  addMaxCostOption(workflowRunCmd);
+  addLogOptions(workflowRunCmd);
+  workflowRunCmd.action(
+    async (target: string, opts: RunOptions & { inputs?: string; json?: boolean }) => {
+      const options = await withLocalModel(opts);
+      const settings = runSettings(options);
+      const code = await workflowRun(
+        target,
+        { inputs: options.inputs, json: options.json },
+        {
+          config: settings.config,
+          person: settings.runPolicy?.policy ?? {},
+          budget: settings.budget,
+        },
+        workflowIo(),
+      );
+      process.exit(code);
+    },
+  );
+
+  workflowCmd
+    .command("list")
+    .description("List the workflows saved in a project")
+    .argument("[dir]", "The project directory (default: .)")
+    .option("--json", "Print the saved workflows as JSON")
+    .action(async (dir: string | undefined, opts: { json?: boolean }) => {
+      process.exit(await workflowList(dir, opts, workflowIo()));
+    });
 
   program
     .command("format")

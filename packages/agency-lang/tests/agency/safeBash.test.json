@@ -789,6 +789,51 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "ampersandRedirectWritesTheFile",
+      "description": "`&>` sends both streams to the file, because the text runs under bash, which is how the person who approved it read it.",
+      "input": "",
+      "expectedOutput": "[\"\",{\"__type\":\"resultType\",\"success\":true,\"value\":\"hi\\n\"}]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "echoIsTheSameAloneAndInAChain",
+      "description": "bash's echo keeps a backslash, alone in process and in a chain through bash, so the two paths print the same bytes.",
+      "input": "",
+      "expectedOutput": "[{\"__type\":\"resultType\",\"success\":true,\"value\":\"a\\\\tb\\n\"},{\"__type\":\"resultType\",\"success\":true,\"value\":\"a\\\\tb\\nx\\n\"}]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bashOnlyFormsStayUnparseable",
+      "description": "`|&` and `&>>` stay unparseable, because bash 3.2 rejects them.",
+      "input": "",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"|& tail\\\"\"}],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"&>> log\\\"\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

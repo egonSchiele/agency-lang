@@ -1083,3 +1083,41 @@ node loneReadAsksOneQuestion() {
   }
   return result.value
 }
+
+/** A folder of its own for the tests that write through bash. */
+static const SHELL_FIXTURE = __dirname + "/stdlib/__safebash_shell__"
+
+node ampersandRedirectWritesTheFile() {
+  // `&>` is a redirect of both streams in bash. Under dash it would be
+  // `echo hi &` and then `> out.txt`, which empties the file and prints to
+  // stdout. The test file approves the std::bash question.
+  remove(SHELL_FIXTURE) with approve
+  mkdir(SHELL_FIXTURE) with approve
+  const ran = safeBash("echo hi &> out.txt", cwd: SHELL_FIXTURE)
+  const written = read("out.txt", SHELL_FIXTURE) with approve
+  remove(SHELL_FIXTURE) with approve
+  return match(ran) {
+    success(out) => [out, written]
+    failure(why) => "FAILED: ${why}"
+  }
+}
+
+node echoIsTheSameAloneAndInAChain() {
+  // bash's echo does not read backslash escapes, alone or in a chain. The
+  // lone echo asks nothing; the chain asks std::bash, which is the one
+  // question the test file approves. The trailing `true` has no rule, so
+  // the chain stays on the bash path even when chains of echoes run in
+  // process; without it this node would compare the in-process echo with
+  // itself.
+  const alone = safeBash("echo 'a\\tb'")
+  const chain = safeBash("echo 'a\\tb'; echo x; true")
+  return [alone, chain]
+}
+
+node bashOnlyFormsStayUnparseable() {
+  // The parser accepts what bash 3.2 accepts, because macOS ships that
+  // version. `|&` and `&>>` are bash 4 forms; 3.2 rejects both with a
+  // syntax error, so a parser that accepted them would make a narrow plan
+  // fail there. Pinned so a tarsec release cannot widen this unnoticed.
+  return [grepNames("make |& tail"), grepNames("echo hi &>> log")]
+}

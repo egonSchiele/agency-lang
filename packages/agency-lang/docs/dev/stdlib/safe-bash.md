@@ -101,6 +101,39 @@ The rule is not a defense against a trojaned program on the user's
 containment floor in `docs/dev/security/goal.md` is the defense against
 that.
 
+## Which shell runs the text
+
+Every command that reaches a shell runs under `bash -c`. The Node host
+finds `bash` on the search path, skipping relative entries, which would
+resolve inside the working directory an agent writes into. The `bash`
+tool takes the same path.
+
+The reason is that the parser is a bash parser and the rebuilt text is
+bash. `sh` is a different program on each platform: dash on Ubuntu, bash
+3.2 in POSIX mode on macOS, busybox ash on Alpine. They disagree on
+`&>` (a redirect of both streams in bash, a background job and a
+truncating redirect in dash), on `echo -n` and backslashes in `echo`,
+on braces, and on `$'...'`. A narrow plan must never run under a shell
+other than the one it was classified for.
+
+The host removes the variables that would make bash run something the
+text does not say: `BASH_ENV` (a file bash sources before the script),
+every `BASH_FUNC_*` (an exported function that shadows a program, so
+`git status` could run a function named `git`), `POSIXLY_CORRECT` (POSIX
+mode, where macOS bash prints `echo -n hi` as `-n hi`), `SHELLOPTS` and
+`BASHOPTS` (shell options at startup, such as `xpg_echo`), `CDPATH`
+(sends `cd target` somewhere else), and `GLOBIGNORE` (drops names from a
+glob). The list is `SHELL_ENV_REMOVED` in
+`lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
+programs in the child read options anywhere on the line. No plan
+changes, because the flag tables that care set `optionsFirst`.
+
+When there is no bash, the command fails with a message that names bash.
+Nothing falls back to `sh`. The in-process paths still work on such a
+host. The parser accepts what bash 3.2 accepts, because macOS ships that
+version: `|&` and `&>>` are bash 4 forms, and both are unparseable
+(`bashOnlyFormsStayUnparseable` pins them).
+
 ## Why a plan went broad
 
 `Plan.broadReason` is null for a narrow, refused, shell-free, or agency

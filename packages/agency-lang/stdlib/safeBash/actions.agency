@@ -230,6 +230,10 @@ export def runBash(command: string, cwd: string, source: string = ""): Result<st
   """
   Run a command string through bash and return what it printed.
 
+  The script runs under bash, found on the search path. When there is no
+  bash the result is a failure that says so; nothing falls back to
+  another shell.
+
   On success the value is bash's stdout, raw — nothing added, nothing
   stripped. stderr is discarded on success and reported on failure: two
   captured pipes cannot interleave the way a terminal does, so this is a

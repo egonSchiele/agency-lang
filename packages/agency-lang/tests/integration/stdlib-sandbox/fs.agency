@@ -15,9 +15,9 @@ node main() {
       return "mkdir failed"
     }
 
-    // Create a test file using bash. printf is portable across `sh`
-    // implementations (the underlying _bash uses `sh -c`, where `echo -n`
-    // is non-portable: dash treats `-n` as a literal argument).
+    // Create a test file using bash. The underlying _bash runs `bash -c`;
+    // printf is used because it writes the text with no newline in any
+    // shell.
     const testFile = join(base, "hello.txt")
     bash("printf 'hello world' > " + testFile)
 

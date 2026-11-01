@@ -6,7 +6,6 @@ import * as fs from "fs";
 import * as net from "net";
 
 import { nodeHost } from "@/host/node/nodeHost.js";
-import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
 import { lineChannel } from "@/debugger/attach/lineChannel.js";
 import type { Channel } from "@/debugger/attach/channel.js";
 import {
@@ -17,7 +16,7 @@ import {
   sessionsDir,
   type AttachRecord,
 } from "@/debugger/attach/registry.js";
-import { CONNECT_RETRY_MS, checkedRecord, connectWithRetry } from "../attach.js";
+import { CONNECT_RETRY_MS, checkedRecord, connectWithRetry, missingSocket } from "../attach.js";
 
 import {
   EXIT,
@@ -59,8 +58,6 @@ export type SessionCliDeps = {
   cwd: string;
   commandDeps: CommandDeps;
   checked(dir: string, pid: number): AttachRecord | { refused: string };
-  /** Send the attach signal to a program whose socket is not open. */
-  signal(pid: number): void;
   connect(pid: number, sock: string): Promise<Channel>;
   probeTimeoutMs: number;
   writeStdout(text: string): void;
@@ -76,7 +73,6 @@ export function defaultSessionCliDeps(): SessionCliDeps {
     cwd,
     commandDeps: defaultCommandDeps(cwd),
     checked: checkedRecord,
-    signal: (pid) => process.kill(pid, ATTACH_SIGNAL),
     connect: (pid, sock) => connectWithRetry(pid, sock, CONNECT_RETRY_MS),
     probeTimeoutMs: PROBE_TIMEOUT_MS,
     writeStdout: (text) => process.stdout.write(text),
@@ -203,14 +199,11 @@ async function attach(pid: number, deps: SessionCliDeps): Promise<CommandResult>
   if ("refused" in record) {
     return refused(record.refused);
   }
-  const sock = recordPaths(deps.sessionsDir, pid).sock;
-  if (!fs.existsSync(sock)) {
-    try {
-      deps.signal(pid);
-    } catch (error) {
-      return refused(`could not signal pid ${pid}: ${(error as Error).message}`);
-    }
+  const missing = missingSocket(deps.sessionsDir, pid);
+  if (missing !== null) {
+    return refused(missing);
   }
+  const sock = recordPaths(deps.sessionsDir, pid).sock;
   return withVisit(record, sock, deps, async (visit) => {
     // A fresh session stops at the program's next statement; the visit
     // waits for that stop so the summary is of the stop, not of the

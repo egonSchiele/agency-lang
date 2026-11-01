@@ -9,10 +9,9 @@ import * as os from "os";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
-import { sessionsDir } from "@/debugger/attach/registry.js";
+import { recordPaths, sessionsDir } from "@/debugger/attach/registry.js";
 import { fixtureDir } from "@/debugger/testHelpers.js";
 import { RunStrategy } from "@/importStrategy.js";
-import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
 import { checkedRecord, connectWithRetry } from "../attach.js";
 import { defaultCommandDeps } from "./commands.js";
 import { debugSession, type SessionCliCommand, type SessionCliDeps } from "./index.js";
@@ -38,7 +37,6 @@ describe("agency debug session against a program in another process", () => {
       cwd: packageRoot,
       commandDeps: { ...defaultCommandDeps(packageRoot), moveWaitMs: 10_000 },
       checked: checkedRecord,
-      signal: (pid) => process.kill(pid, ATTACH_SIGNAL),
       connect: (pid, sock) => connectWithRetry(pid, sock, 2_000),
       probeTimeoutMs: 1_000,
       writeStdout: (text) => out.push(text),
@@ -68,11 +66,14 @@ describe("agency debug session against a program in another process", () => {
     });
     child.stdout!.on("data", (chunk: Buffer) => (childOutput += chunk.toString()));
     child.stderr!.on("data", (chunk: Buffer) => (childOutput += chunk.toString()));
-    const record = path.join(sessionsDir(nodeHost()), `${child.pid}.json`);
-    for (let i = 0; i < 400 && !fs.existsSync(record); i++) {
+    // The record is written first and the socket opened a tick later;
+    // the CLI refuses at once on a missing socket, so wait for both.
+    const paths = recordPaths(sessionsDir(nodeHost()), child.pid!);
+    const registered = (): boolean => fs.existsSync(paths.json) && fs.existsSync(paths.sock);
+    for (let i = 0; i < 400 && !registered(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    expect(fs.existsSync(record), childOutput).toBe(true);
+    expect(registered(), childOutput).toBe(true);
     return child;
   }
 

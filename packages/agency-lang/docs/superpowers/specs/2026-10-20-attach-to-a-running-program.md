@@ -2,6 +2,8 @@
 
 Linear: ADI-10, in the project "Attach to a running Agency program".
 
+> **Superseded in part (2026-11-01).** The `SIGUSR2` trigger described below was replaced by opening the socket at registration: see `docs/superpowers/plans/2026-11-01-attach-without-signal.md` and the "Why there is no signal" section of `docs/dev/cli/debugger-attach.md`. A program under `nodemon`, which restarts a child with `SIGUSR2`, opened its debugger instead of restarting. The rest of this spec describes the design as it shipped.
+
 ## The problem
 
 Today the debugger can only see a program it started. `agency debug` loads

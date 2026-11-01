@@ -60,6 +60,11 @@ export function isRef(value: unknown): value is Ref {
   return keys.length === 1 && keys[0] === "$ref" && typeof (value as Ref).$ref === "string";
 }
 
+/** How a tool's signature is keyed: by its module and its name. */
+export function signatureKey(module: string, name: string): string {
+  return `${module}.${name}`;
+}
+
 /** A name the parser accepts as a variable name. Reserved `__` names are
  *  refused here, before the parser would throw on them. */
 export function isIdentifier(text: string): boolean {

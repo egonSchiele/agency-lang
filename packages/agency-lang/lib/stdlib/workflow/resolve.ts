@@ -9,6 +9,7 @@ import { inputNames } from "./typeText.js";
 import {
   isRef,
   refsIn,
+  signatureKey,
   type Binding,
   type ImportGroup,
   type Limits,
@@ -84,9 +85,7 @@ export function names(id: string) {
   };
 }
 
-export function signatureKey(module: string, name: string): string {
-  return `${module}.${name}`;
-}
+export { signatureKey };
 
 function toolSteps(workflow: Workflow): ToolStep[] {
   return workflow.steps.filter((step): step is ToolStep => step.kind === "tool");

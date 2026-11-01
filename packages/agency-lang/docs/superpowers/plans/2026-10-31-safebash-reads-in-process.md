@@ -76,12 +76,15 @@ Each line names an input and what a person expects. The task that owns it has th
 Produces, in `stdlib/safeBash.agency`:
 
 ```
-/** A read verb's flags, and how many paths it takes. */
+/** A read verb's flags, how many paths it takes, and whether a bare
+ * digit flag (`-20`) means `-n 20`. */
 export type ReadVerb = {
   flags: FlagSpec;
   /** 0 for any number; 1 for head and tail (several files print headers)
    * and uniq (a second positional is its OUTPUT file); 2 for diff and cmp. */
-  maxPaths: number
+  maxPaths: number;
+  /** True for head and tail, where `-20` is `-n 20`. */
+  digitFlagIsCount: boolean
 }
 
 /** The verbs that read the files they name, or their stdin when they
@@ -95,18 +98,18 @@ export type ReadVerb = {
  * may spill a large input to files under $TMPDIR, which no payload
  * names; the dev doc says so. */
 export static const READ_VERBS: Record<string, ReadVerb> = {
-  cat: { flags: { plain: ["n", "b", "s"], valued: [], optionsFirst: true }, maxPaths: 0 },
-  head: { flags: { plain: [], valued: ["n", "c"], optionsFirst: true }, maxPaths: 1 },
-  tail: { flags: { plain: [], valued: ["n", "c"], optionsFirst: true }, maxPaths: 1 },
-  wc: { flags: { plain: ["l", "w", "c", "m"], valued: [], optionsFirst: true }, maxPaths: 0 },
-  diff: { flags: { plain: ["u", "q", "N", "w", "b", "B", "--color=never"], valued: ["U"], optionsFirst: true }, maxPaths: 2 },
-  cmp: { flags: { plain: [], valued: [], optionsFirst: true }, maxPaths: 2 },
-  sort: { flags: { plain: ["n", "r", "u", "f", "b"], valued: ["k", "t"], optionsFirst: true }, maxPaths: 0 },
-  uniq: { flags: { plain: ["c", "d", "u", "i"], valued: [], optionsFirst: true }, maxPaths: 1 },
-  cut: { flags: { plain: [], valued: ["d", "f", "c"], optionsFirst: true }, maxPaths: 0 },
-  nl: { flags: { plain: [], valued: ["b"], optionsFirst: true }, maxPaths: 0 },
-  tac: { flags: { plain: [], valued: [], optionsFirst: true }, maxPaths: 0 },
-  rev: { flags: { plain: [], valued: [], optionsFirst: true }, maxPaths: 0 }
+  cat: { flags: { plain: ["n", "b", "s"], valued: [], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false },
+  head: { flags: { plain: [], valued: ["n", "c"], optionsFirst: true }, maxPaths: 1, digitFlagIsCount: true },
+  tail: { flags: { plain: [], valued: ["n", "c"], optionsFirst: true }, maxPaths: 1, digitFlagIsCount: true },
+  wc: { flags: { plain: ["l", "w", "c", "m"], valued: [], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false },
+  diff: { flags: { plain: ["u", "q", "N", "w", "b", "B", "--color=never"], valued: ["U"], optionsFirst: true }, maxPaths: 2, digitFlagIsCount: false },
+  cmp: { flags: { plain: [], valued: [], optionsFirst: true }, maxPaths: 2, digitFlagIsCount: false },
+  sort: { flags: { plain: ["n", "r", "u", "f", "b"], valued: ["k", "t"], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false },
+  uniq: { flags: { plain: ["c", "d", "u", "i"], valued: [], optionsFirst: true }, maxPaths: 1, digitFlagIsCount: false },
+  cut: { flags: { plain: [], valued: ["d", "f", "c"], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false },
+  nl: { flags: { plain: [], valued: ["b"], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false },
+  tac: { flags: { plain: [], valued: [], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false },
+  rev: { flags: { plain: [], valued: [], optionsFirst: true }, maxPaths: 0, digitFlagIsCount: false }
 }
 
 /** One resolved path of a read verb. `argument` is the path as bash hands
@@ -124,7 +127,7 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
 
 `readFileVerb`:
 
-- For `head` and `tail` only, first rewrites a short flag whose letters are all digits (`-20`) into the valued flag `-n` followed by the literal `20`, because `head -20 f` parses as the flag `-20` and the table has no letter `2`. Write this as `countFlagAsN(args: Word[]): Word[]`. It must not rewrite a digit flag that is the value of the flag before it: `head -n -5 a` parses as `-n`, `-5`, `a`, and GNU reads it as "all but the last five"; left alone, `-5` reaches `nextWordValue` as a flag word and is refused as not literal, which is the refusal we want. So the rewrite applies only when the previous word is not a flag in `spec.flags.valued`. Build the command to check as a new record, field by field (`tag`, `assignments`, `command`, `args: countFlagAsN(command.args)`, `redirects`), not with a spread.
+- When the row has `digitFlagIsCount`, first rewrites a short flag whose letters are all digits (`-20`) into the valued flag `-n` followed by the literal `20`, because `head -20 f` parses as the flag `-20` and the table has no letter `2`. Write this as `countFlagAsN(args: Word[], valued: string[]): Word[]`; `readFileVerb` reads the row, never the verb's name. It must not rewrite a digit flag that is the value of the flag before it: `head -n -5 a` parses as `-n`, `-5`, `a`, and GNU reads it as "all but the last five"; left alone, `-5` reaches `nextWordValue` as a flag word and is refused as not literal, which is the refusal we want. So the rewrite applies only when the previous word is not a flag in `valued`. Build the command to check as a new record, field by field (`tag`, `assignments`, `command`, `args: countFlagAsN(command.args)`, `redirects`), not with a spread.
 - Runs `splitFlags(verb, <that command>, spec.flags)`.
 - The value of `-n` and `-c` must be digits (`isDigits`), so `tail -n +5` and `head -n -5` are unrecognized with `"the value of \`-n\` is not a number"`.
 - Each positional must be literal, or the command is unrecognized with `"the ${verb} path is not literal"`. No positional is `{ kind: "stdin" }`. More than `maxPaths` positionals (when `maxPaths` is not 0) is unrecognized: `"${verb} takes one path"` for 1, `"${verb} takes two paths"` for 2. `diff` and `cmp` with fewer than two is unrecognized with the same `"${verb} takes two paths"`.
@@ -375,10 +378,19 @@ git commit -F /tmp/msg.txt   # "safeBash: an input redirect asks std::read"
  * operands and prints a usage error, GNU reads -d as a flag. */
 static const TR_FLAGS: FlagSpec = { plain: ["d", "s"], valued: [], optionsFirst: true }
 
+/** How many sets tr takes, by the plain flags given (sorted, joined):
+ * the least and the most. `tr -s a b` squeezes after translating. */
+static const TR_SET_COUNTS: Record<string, { least: number; most: number }> = {
+  "": { least: 2, most: 2 },
+  d: { least: 1, most: 1 },
+  s: { least: 1, most: 2 },
+  ds: { least: 2, most: 2 }
+}
+
 def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]): Result<Effect[]>
 ```
 
-`trEffects` runs `splitFlags("tr", command, TR_FLAGS)`, then checks the positionals, each of which must be literal: with `-d` and no `-s`, exactly one; with `-d` and `-s`, exactly two; with `-s` alone, one or two; with no flag, exactly two. Any other count is `"tr takes <N> set(s) here"` with the expected count spelled out (`one set`, `two sets`, `one or two sets`). Then `stdinStage("tr", readsStdin, redirects)`.
+`trEffects` runs `splitFlags("tr", command, TR_FLAGS)`, looks the sorted plain flags up in `TR_SET_COUNTS`, and checks that the positionals, each literal, number between `least` and `most`. Any other count is `"tr takes ${least} to ${most} sets here"` (so `tr takes 2 to 2 sets here` for `tr a`; one wording, no spelled-out variants). Then `stdinStage("tr", readsStdin, redirects)`.
 
 In `otherVerbEffects`, after the `READ_VERBS` lookup misses: `"tr"` goes to `trEffects`.
 
@@ -406,7 +418,7 @@ node filtersInAPipe() {
 }
 ```
 
-`expectedOutput`: `[["std::git::log"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::bash"],{"kind":"unrecognized","detail":"tr takes two sets here"}]`, `[["std::read","std::read"],null]`, ``[["std::bash"],{"kind":"unrecognized","detail":"sort does not take `-o`"}]``, `[["std::read"],null]`, ``[["std::bash"],{"kind":"unrecognized","detail":"no rule for `tee`"}]``, ``[["std::bash"],{"kind":"unrecognized","detail":"no rule for `xargs`"}]``, `[["std::git::log","std::write"],null]`, `[["std::git::log"],null]`, `[["std::bash"],{"kind":"unparseable","detail":<the parser's message, pinned from one run>}]`.
+`expectedOutput`: `[["std::git::log"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::read"],null]`, `[["std::bash"],{"kind":"unrecognized","detail":"tr takes 2 to 2 sets here"}]`, `[["std::read","std::read"],null]`, ``[["std::bash"],{"kind":"unrecognized","detail":"sort does not take `-o`"}]``, `[["std::read"],null]`, ``[["std::bash"],{"kind":"unrecognized","detail":"no rule for `tee`"}]``, ``[["std::bash"],{"kind":"unrecognized","detail":"no rule for `xargs`"}]``, `[["std::git::log","std::write"],null]`, `[["std::git::log"],null]`, `[["std::bash"],{"kind":"unparseable","detail":<the parser's message, pinned from one run>}]`.
 
 The last row pins the comma limit: `cut -d, -f1`, `sort -t, -k2`, and `sort -k2,2n` are unparseable today (checked against the built parser on 2026-10-31; the space-separated `cut -d : -f 1` parses as flag, literal, flag, literal).
 

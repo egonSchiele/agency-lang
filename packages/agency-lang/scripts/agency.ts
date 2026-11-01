@@ -158,6 +158,14 @@ import { startServer } from "@/lsp/index.js";
 import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
+import {
+  workflowCheck,
+  workflowCompile,
+  workflowList,
+  workflowTools,
+  type WorkflowIo,
+} from "@/cli/workflow/commands.js";
+import { runDriver } from "@/cli/workflow/runDriver.js";
 
 // Per-run flags for `agency run`, `agency resume`, and the hidden default
 // command. CliFlags are mapped onto config by applyCliFlags in config.ts.
@@ -1354,6 +1362,55 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   };
   addOptimizeCommand(program);
+
+  // `agency workflow`: check and inspect saved workflows from the command
+  // line. Each command runs a small Agency driver (lib/cli/workflow).
+  const workflowIo = (): WorkflowIo => ({
+    cwd: process.cwd(),
+    out: (text) => console.log(text),
+    err: (text) => console.error(text),
+    config: getConfig(),
+    runDriver: (call) => runDriver(call),
+  });
+  const workflowCmd = program
+    .command("workflow")
+    .description("Inspect, check, and compile saved workflows (std::workflow)");
+
+  workflowCmd
+    .command("tools")
+    .description("Print what each tool in a module takes, returns, and can raise")
+    .argument("<sources...>", "A .agency file, or a std:: module such as std::math")
+    .option("--dir <dir>", "The project directory a tool's module is relative to (default: .)")
+    .option("--json", "Print the catalog as JSON")
+    .action(async (sources: string[], opts: { dir?: string; json?: boolean }) => {
+      process.exit(await workflowTools(sources, opts, workflowIo()));
+    });
+
+  workflowCmd
+    .command("check")
+    .description("Check a saved workflow, and print the effects it can raise")
+    .argument("<workflow>", "A workflow's name, or the path to workflows/<name>.json")
+    .option("--json", "Print checkWorkflow's value as JSON")
+    .action(async (target: string, opts: { json?: boolean }) => {
+      process.exit(await workflowCheck(target, opts, workflowIo()));
+    });
+
+  workflowCmd
+    .command("compile")
+    .description("Print the Agency program a saved workflow turns into")
+    .argument("<workflow>", "A workflow's name, or the path to workflows/<name>.json")
+    .action(async (target: string) => {
+      process.exit(await workflowCompile(target, workflowIo()));
+    });
+
+  workflowCmd
+    .command("list")
+    .description("List the workflows saved in a project")
+    .argument("[dir]", "The project directory (default: .)")
+    .option("--json", "Print the saved workflows as JSON")
+    .action(async (dir: string | undefined, opts: { json?: boolean }) => {
+      process.exit(await workflowList(dir, opts, workflowIo()));
+    });
 
   program
     .command("format")

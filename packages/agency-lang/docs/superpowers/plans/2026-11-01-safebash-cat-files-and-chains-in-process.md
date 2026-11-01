@@ -70,14 +70,14 @@ Bash's rule for a chain, which the runner copies: commands run left to right; `;
 
 In `loneReadIsShellFree`, the `cat one.txt two.txt` row changes from `narrow` to `shellFree`. Add rows `head one.txt two.txt` (`broad`: `READ_VERBS` gives head one path) and `cat -n one.txt two.txt` (`shellFree`).
 
-In `shellFreeReadMatchesRealTools` add:
+In `shellFreeReadMatchesRealTools` add (the helper is `parityOf(source, kind, cwd)` after the bash plan):
 
 ```agency
-    readParityOf("cat one.txt noeol.txt"),
-    readParityOf("cat noeol.txt one.txt"),
-    readParityOf("cat -n noeol.txt one.txt"),
-    readParityOf("cat empty.txt one.txt"),
-    readParityOf("cat one.txt one.txt"),
+    parityOf("cat one.txt noeol.txt", "read", READ_FIXTURES),
+    parityOf("cat noeol.txt one.txt", "read", READ_FIXTURES),
+    parityOf("cat -n noeol.txt one.txt", "read", READ_FIXTURES),
+    parityOf("cat empty.txt one.txt", "read", READ_FIXTURES),
+    parityOf("cat one.txt one.txt", "read", READ_FIXTURES),
 ```
 
 Add a node:
@@ -179,11 +179,13 @@ def chainLinks(commands: Command[]): Result<ChainLink[]>
 
 The top-level list joins with `"seq"`; `linksOf(command: Command, join: Join): Result<ChainLink[]>` matches: a `simpleCommand` is one link; `and` is `linksOf(left, join)` followed by `linksOf(right, "and")`; `or` the same with `"or"`; `parens` and `pipeline` are failures (`"a parenthesized group is not run in process"`, `"a pipeline is not run in process"`). Because the parser is left-associative, this flat list with per-link joins gives the same order bash uses for `a && b || c`.
 
+This is a second walk over the tree beside `flattenOne`, on purpose: `flattenOne` feeds the refuse wall, so it must see through parentheses and pipelines, while the chain must stop at them. Making one walk answer both questions would give the wall a reason to skip a node. Say this in a comment on `linksOf`.
+
 ```agency
 def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<Plan>
 ```
 
-Tries `trySeeIfShellFree`, `tryShellFreeGrep`, `tryShellFreeRead` in that order and returns the first success; not `tryAgencyPlan`. The returned plan's `execution` is one of the four `StepExec` kinds by construction; narrow it with a match that returns a failure for any other kind, so a future in-process kind must opt in.
+Tries `trySeeIfShellFree`, `tryShellFreeGrep`, `tryShellFreeRead` in that order and returns the first success; not `tryAgencyPlan`. This is the one list of in-process planners: `planFor`'s single-command block today spells the same three out after `tryAgencyPlan`, so change that block to `tryAgencyPlan` then `tryShellFreeStep`, and a planner added later is added in one place. The returned plan's `execution` is one of the four `StepExec` kinds by construction; narrow it with a match that returns a failure for any other kind, so a future in-process kind must opt in to chains.
 
 ```agency
 def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan>
@@ -228,19 +230,17 @@ node chainsOfInProcessCommands() {
 
 Expected, row by row: `["shellFree","chain",[]]`; `["shellFree","chain",["std::read","std::read"]]`; `["shellFree","chain",["std::read","std::read"]]`; `["shellFree","chain",["std::grep"]]`; `["shellFree","chain",[]]`; `["narrow","bash",["std::git::status"]]`; `["broad","bash",["std::bash"]]`; `["broad","bash",["std::bash"]]` (the parens row: today's path, every command recognized, no effects, so the audit rule asks `std::bash`); `["broad","bash",["std::bash"]]` (pipeline, same reason); `["broad","bash",["std::bash"]]` (missing file); `["broad","bash",["std::bash"]]` (`out.txt` missing at plan time); `["refuse","refuse",[]]`; `["broad","bash",["std::bash"]]` (`agency` is not a step). Check the exact `outcomeOf` word for a refused plan against `outcomeOf`'s arms before pinning.
 
-Parity, using `readParityOf`'s shape but requiring `execution.kind == "chain"`:
+Parity, through the `parityOf(source, kind, cwd)` helper the bash plan generalized:
 
 ```agency
-def chainParityOf(source: string): any   // same body as readParityOf with "chain"
-
 node chainMatchesBash() {
   return [
-    chainParityOf("echo \"=== one ===\"; cat one.txt; echo; echo \"=== two ===\"; cat two.txt"),
-    chainParityOf("cat one.txt && echo done"),
-    chainParityOf("grep hello one.txt || echo none"),
-    chainParityOf("grep zzz one.txt || echo none"),
-    chainParityOf("echo a && echo b || echo c"),
-    chainParityOf("cat -n one.txt; cat -n two.txt"),
+    parityOf("echo \"=== one ===\"; cat one.txt; echo; echo \"=== two ===\"; cat two.txt", "chain", FIXTURES),
+    parityOf("cat one.txt && echo done", "chain", FIXTURES),
+    parityOf("grep hello one.txt || echo none", "chain", FIXTURES),
+    parityOf("grep zzz one.txt || echo none", "chain", FIXTURES),
+    parityOf("echo a && echo b || echo c", "chain", FIXTURES),
+    parityOf("cat -n one.txt; cat -n two.txt", "chain", FIXTURES),
   ]
 }
 ```

@@ -98,7 +98,7 @@ Message: `safeBash: a short flag listed whole in a flag table matches whole`.
 
 **Files:**
 - Modify: `stdlib/safeBash/actions.agency` (`Effect`, `LsPayload`, `lsEffect`)
-- Modify: `stdlib/safeBash.agency` (`LIST_VERBS`, `ListVerb`, `listEffects`, `resolveListPath`, `effectsFor`, `raiseOne`, `safeBash`'s `raises` clause, `READ_TOOL_FOR_VERB`)
+- Modify: `stdlib/safeBash.agency` (`LIST_VERBS`, `ListVerb`, `listEffects`, `checkCountFlags` and `resolveTargets` pulled out of `readFileVerb`, `foldersOnly`, `otherVerbEffects`, `raiseOne`, `safeBash`'s `raises` clause, `READ_TOOL_FOR_VERB`)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
@@ -144,23 +144,31 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
 }
 ```
 
-`optionsFirst` is true for all three: BSD `ls src -la` reads `-la` as a file name. `tree -L N` and `du -d N` must be digits: give `ListVerb` a `countFlags: string[]` like `ReadVerb` (`["L"]`, `["d"]`, `[]` for ls) and check it the way `readFileVerb` does. `-I pat` on `tree` takes a literal pattern; a glob word there is refused by `nextWordValue` already.
+`optionsFirst` is true for all three: BSD `ls src -la` reads `-la` as a file name. `tree -L N` and `du -d N` must be digits: give `ListVerb` a `countFlags: string[]` like `ReadVerb` (`["L"]`, `["d"]`, `[]` for ls). `-I pat` on `tree` takes a literal pattern; a glob word there is refused by `nextWordValue` already.
+
+Two pieces of `readFileVerb` are needed again here and in Task 3, so they move out of it into helpers both call. Do the extraction in this task and keep `readVerbsReadFiles` green as the proof that `readFileVerb` still behaves.
 
 ```agency
+/** The valued flags whose value must be digits, checked once for every
+ * verb table: head's -n, tree's -L, find's -maxdepth. */
+def checkCountFlags(split: SplitArgs, countFlags: string[]): Result
+
+/** Every positional as a literal path resolved against the cwd. The
+ * caller decides whether it wanted files or folders. */
 @capabilities(fileRead)
-def resolveListPath(text: string, word: Word, cwd: string, verb: string): Result<string>
+def resolveTargets(verb: string, words: Word[], cwd: string): Result<GrepTarget[]>
 ```
 
-The realpath of a directory, through `_searchTargetIn`; `file != null` is the failure `"${verb} of a file is not a listing"`; a missing or special path is the resolver's own failure.
+`checkCountFlags` is the loop in `readFileVerb` that returns `"the value of `-${flag}` is not a number"`. `resolveTargets` is `readFileVerb`'s loop over positionals (`literalWordText`, the failure `"the ${verb} path is not literal"`, `try _searchTargetIn(text, cwd, tildeModeFor(word))`), returning the targets. `readFileVerb` then keeps only its own rule: every target must have `file != null`, else `"${verb} would read a directory"`. The listings keep the opposite: every target must have `file == null`, else `"${verb} of a file is not a listing"`. `GrepTarget` is the type `_searchTargetIn` returns (`{ dir, file, argument }`); check how `safeBash.agency` names it today and use that name.
 
 ```agency
 @capabilities(fileRead)
 def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVerb, redirects: Effect[]): Result<Effect[]>
 ```
 
-`splitFlags`, the count check, then the paths: every positional must be literal (`"the ${verb} path is not literal"`), and `.` when there are none. One `lsEffect({ dir, recursive, maxResults: 0 })` per path, `recursive` true when the row says `always` or the split's `plain` includes `R`; then the redirects. `readsStdin` is not consulted: a listing ignores its stdin, so `git log | ls` is a listing of `.`.
+`splitFlags`, `checkCountFlags`, then `resolveTargets` over the positionals, or over a literal `.` word when there are none (build the `Word` as `{ tag: "literal", text: "." }`; check the `Word` type for the exact shape). One `lsEffect({ dir, recursive, maxResults: 0 })` per target, `recursive` true when the row says `always` or the split's `plain` includes `R`; then the redirects. `readsStdin` is not consulted: a listing ignores its stdin, so `git log | ls` is a listing of `.`.
 
-`effectsFor`: `"ls" | "tree" | "du"` is not a pattern Agency has; add three arms that call `listEffects` with `LIST_VERBS[name.text]`, or look the table up in `otherVerbEffects` before `READ_VERBS` and dispatch there. Pick the second: `otherVerbEffects` already is "the verb with no arm of its own", and a table lookup is one line per table. Write it as two lookups with a match on which found a row, not an if chain that repeats the failure.
+Dispatch: `otherVerbEffects` is already "the verb with no arm of its own in `effectsFor`". It looks the verb up in `LIST_VERBS` first and returns `listEffects` when a row exists, then in `READ_VERBS` as today, then fails with `"no rule for `${verb}`"`. Two lookups, each an `if (row != null) { return ... }`, one failure at the end.
 
 `raiseOne` gains a `"std::ls"` arm raising `std::ls("Are you sure you want to list this directory?", { dir, recursive, maxResults, command: fullCommand })`. `safeBash`'s `raises` clause gains `std::ls`. `READ_TOOL_FOR_VERB` gains `ls: "ls"`, `tree: "ls"`, `du: "ls"`.
 
@@ -282,7 +290,7 @@ static const FIND_COUNT_FLAGS: string[] = ["-maxdepth", "-mindepth"]
 def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Result<Effect[]>
 ```
 
-`splitFlags("find", command, FIND_FLAGS)`; the count check over `FIND_COUNT_FLAGS`; `positionals.length == 0` is `"find needs a path before its tests"`; `leadingPositionals(command) != positionals.length` is `"find takes its paths before its tests"`, where `leadingPositionals` counts the args before the first flag word. Each positional resolves through `resolveListPath(text, word, cwd, "find")`. The pattern is the `-name` value, else the `-iname` value, else `"*"`. One `globEffect({ pattern, dir, maxResults: 0 })` per path, then the redirects. (`maxResults: 0` is the spec's value: the payload describes a search with no cap. It is never handed to `_glob`, which would return nothing for 0.)
+`splitFlags("find", command, FIND_FLAGS)`; `checkCountFlags(split, FIND_COUNT_FLAGS)`; `positionals.length == 0` is `"find needs a path before its tests"`; `leadingPositionals(command) != positionals.length` is `"find takes its paths before its tests"`, where `leadingPositionals` counts the args before the first flag word. `resolveTargets("find", positionals, cwd)`, and every target must be a folder (`"find of a file is not a listing"`), the same check `listEffects` makes; put that check in one def, `foldersOnly(verb, targets): Result<string[]>`, returning the `dir` of each, and call it from both. The pattern is the `-name` value, else the `-iname` value, else `"*"`. One `globEffect({ pattern, dir, maxResults: 0 })` per folder, then the redirects. (`maxResults: 0` is the spec's value: the payload describes a search with no cap. It is never handed to `_glob`, which would return nothing for 0.)
 
 `effectsFor` gains a `"find"` arm. `raiseOne` gains `"std::glob"` raising `std::glob("Are you sure you want to glob files?", { pattern, dir, maxResults, command: fullCommand })`. `raises` gains `std::glob`. `READ_TOOL_FOR_VERB` gains `find: "glob"`.
 

@@ -200,9 +200,7 @@ Message: `safeBash: the text runs under bash, and two tests pin what bash does`.
 
 **Interfaces:**
 - Produces: `static const ECHO_FLAGS: FlagSpec = { plain: ["n"], valued: [], optionsFirst: true }`.
-- Produces: `echoWords(positionals: Word[]): Result<string[]>`, the same literal check over the positionals `splitFlags` returned instead of over `command.args`.
-- Produces: `echoOutput(words: string[], newline: boolean): string`, `words.join(" ")` plus `"\n"` when `newline` is true.
-- Both `echoPlan` and `writePlan` call `splitFlags("echo", command, ECHO_FLAGS)`; a failure is their failure. `newline` is `!split.value.plain.includes("n")`.
+- Produces: `echoText(command: SimpleCommand): Result<string>`, the one place that says what an echo prints: `splitFlags("echo", command, ECHO_FLAGS)`, then `echoWords` over the split's positionals, then the words joined by single spaces, with a trailing `"\n"` unless the split's `plain` includes `"n"`. Today `echoPlan` and `writePlan` each call `flagNames`, `echoWords`, and `echoOutput` themselves; both now call `echoText` and nothing else about the text, so a change to what echo prints is one edit. `echoWords` takes `positionals: Word[]`; fold `echoOutput` into `echoText`.
 
 Why `optionsFirst: true`: bash's echo takes flags only at the front, so `echo hi -n` prints `hi -n`. The table refuses the late flag, the line goes to bash as it does today, and bash prints the right thing. Why no `-e` or `-E`: `-e` turns on escape reading, which the shell-free path does not model.
 
@@ -221,38 +219,21 @@ and change the expectation for the existing `echo -n hi` row from `["bash","",["
 
 Find the node that checks a shell-free write's payload (grep the test file for `"write"` and `content`) and add a row for `echo -n hi > out.txt` expecting content `"hi"` with the same `dir` and `filename` shape its neighbors use.
 
-Add a parity node beside `shellFreeReadMatchesRealTools`, using its `readParityOf` pattern (plan must be shell-free first, then compare `safeBash` with `bash`):
+Generalize the existing parity helper instead of copying it. `readParityOf(source)` in the test file plans in `READ_FIXTURES`, requires `execution.kind == "read"`, and compares `safeBash` with `bash`. Rename it `parityOf(source: string, kind: string, cwd: string): any` with the kind and folder as arguments, change the `shellFreeReadMatchesRealTools` rows to `parityOf("cat one.txt", "read", READ_FIXTURES)` and so on, and add:
 
 ```agency
-def echoParityOf(source: string): any {
-  if (planFor(source, FIXTURES).execution.kind != "echo") {
-    return "NOT SHELL-FREE: ${source}"
-  }
-  let ours = ""
-  let theirs = ""
-  handle {
-    const shellFree = safeBash(source, cwd: FIXTURES)
-    if (shellFree is success(out)) {
-      ours = out
-    }
-    theirs = bash(source, cwd: FIXTURES).stdout
-  } with approve
-  if (ours == theirs) {
-    return true
-  }
-  return [source, ours, theirs]
-}
-
 node shellFreeEchoMatchesBash() {
   return [
-    echoParityOf("echo hi"),
-    echoParityOf("echo -n hi"),
-    echoParityOf("echo -n"),
-    echoParityOf("echo -nn a b"),
-    echoParityOf("echo 'a\\tb'"),
+    parityOf("echo hi", "echo", FIXTURES),
+    parityOf("echo -n hi", "echo", FIXTURES),
+    parityOf("echo -n", "echo", FIXTURES),
+    parityOf("echo -nn a b", "echo", FIXTURES),
+    parityOf("echo 'a\\tb'", "echo", FIXTURES),
   ]
 }
 ```
+
+The chain plan that follows this one adds `parityOf(..., "chain", FIXTURES)` rows to the same helper.
 
 Expected `[true,true,true,true,true]`.
 
@@ -262,7 +243,7 @@ Run the agency test command into `$SCRATCH/t3.txt`. Expected: `shellFreeEcho` fa
 
 - [ ] **Step 3: Implement**
 
-`ECHO_FLAGS`, the two signature changes above, and `echoPlan`/`writePlan` reading the split. `flagNames(command)` stays for its other callers; check with grep whether echo was its only caller and delete it if so.
+`ECHO_FLAGS` and `echoText`; `echoPlan` and `writePlan` each become a call to `echoText` plus what they already do with the text. `flagNames(command)` stays for its other callers; check with grep whether echo was its only caller and delete it if so.
 
 - [ ] **Step 4: `make`, run, verify pass**
 

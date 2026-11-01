@@ -26,8 +26,10 @@ function nameMessage(label: string, text: string): string | null {
   return isIdentifier(text) ? null : `${label} "${text}" is not an identifier`;
 }
 
-/** Null for a name that may name a saved workflow's folder; otherwise the
- *  message parse gives for the workflow's `name` field. */
+/** The rule parse gives a workflow's `name`, for `loadWorkflow`, which
+ *  takes a name from its caller and builds a file name from it. Null for
+ *  an identifier; otherwise parse's message, so `../x` is refused before
+ *  anything is read. */
 export function _workflowNameProblem(name: string): string | null {
   return nameMessage("name", name);
 }

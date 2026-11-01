@@ -5,7 +5,7 @@ import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
 import { currentRun, currentRunOrNone, type Run } from "../asyncContext.js";
 import type { StatelogClient } from "../../statelogClient.js";
 import { restoreCreatedTool } from "../createdTool.js";
-import { isPlainObject } from "../../config/paths.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -43,8 +43,7 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     if (value.toolDefinition) {
       result.toolDescription = value.toolDefinition.description;
     }
-    // Written only when set, so a function with no `.withParamSchema` call
-    // serializes as it always has.
+    // Omitted when empty.
     if (Object.keys(value.paramSchemas).length > 0) {
       result.paramSchemas = value.paramSchemas;
     }
@@ -185,16 +184,6 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
  *  two legacy cases — older `.js` output that keyed by bare name, and any
  *  future keying scheme collisions. Either way the function identity check
  *  is authoritative. */
-/** Re-applies each saved `.withParamSchema` call. Runs after `partial`:
- *  `withParamSchema` refuses a bound parameter, and `partial` already
- *  dropped the bound names from the record before it was serialized. */
-function applyParamSchemas(fn: AgencyFunction, record: Record<string, unknown>): AgencyFunction {
-  return Object.entries(record).reduce(
-    (shaped, [name, schema]) => shaped.withParamSchema(name, schema),
-    fn,
-  );
-}
-
 function lookupInRegistry(
   registry: FunctionRefRegistry,
   name: string,
@@ -210,6 +199,16 @@ function lookupInRegistry(
     }
   }
   return undefined;
+}
+
+/** Re-applies each saved `.withParamSchema` call. Runs after `partial`:
+ *  `withParamSchema` refuses a bound parameter, and `partial` already
+ *  dropped the bound names from the record before it was serialized. */
+function applyParamSchemas(fn: AgencyFunction, record: Record<string, unknown>): AgencyFunction {
+  return Object.entries(record).reduce(
+    (shaped, [name, schema]) => shaped.withParamSchema(name, schema),
+    fn,
+  );
 }
 
 /** A lazy tripwire for an unregistered block reference: a real

@@ -1,4 +1,4 @@
-import { isPlainObject } from "../config/paths.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 import type { Host } from "../host/host.js";
 import { currentRun } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";

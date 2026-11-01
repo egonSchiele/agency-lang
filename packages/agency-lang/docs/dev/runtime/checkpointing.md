@@ -185,9 +185,8 @@ because zod values do not serialize. A JSON Schema is plain JSON, so
 
 `partial` drops the entry of each parameter it binds, the same way it drops
 that parameter from the zod shape. `withParamSchema` refuses a bound
-parameter, so step 4 runs after step 2 and only sees unbound names. The key is
-written only when the record has an entry, so a function with no
-`.withParamSchema` call serializes as it did before the field existed.
+parameter, so step 4 runs after step 2 and only sees unbound names. A
+function with no `.withParamSchema` call has no `paramSchemas` key.
 
 When the registry has no such function, `revive` returns a stub that throws if
 called (`makeUnresolvedFunctionStub`). The stub keeps every field `serialize`

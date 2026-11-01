@@ -1,0 +1,43 @@
+{
+  "workflow": {
+    "format": 1,
+    "name": "olderOne",
+    "description": "Add two numbers and double the sum.",
+    "inputs": "{ a: number; b: number }",
+    "steps": [
+      {
+        "id": "sum",
+        "kind": "tool",
+        "module": "std::math",
+        "tool": "add",
+        "args": {
+          "a": {
+            "$ref": "inputs.a"
+          },
+          "b": {
+            "$ref": "inputs.b"
+          }
+        }
+      },
+      {
+        "id": "doubled",
+        "kind": "tool",
+        "module": "std::math",
+        "tool": "multiply",
+        "args": {
+          "a": {
+            "$ref": "steps.sum"
+          },
+          "b": 2
+        }
+      }
+    ],
+    "result": {
+      "$ref": "steps.doubled"
+    }
+  },
+  "meta": {
+    "savedAt": "2026-10-30T00:00:00.000Z",
+    "savedBy": "writeWorkflow"
+  }
+}

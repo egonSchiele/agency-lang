@@ -163,6 +163,41 @@ An unquoted `~` now parses, so `echo hi > ~/x` is a recognized write to
 the real home directory (`tildeModeFor` expands an unquoted word); a
 quoted `'~/x'` stays a directory literally named `~` under the cwd.
 
+## Stages that read a pipe
+
+A command in a later stage of a pipe reads the previous stage's output
+on its stdin. `grep fix` with no file named searches that output and
+reads no file, so `git log | grep fix` needs only the git question. The
+same command as the first stage, or outside a pipe, reads the shell's
+stdin, which safeBash closes (`_bash` is called with `stdin: ""`), so it
+does nothing useful and stays unrecognized.
+
+Two pieces carry this, each with one job:
+
+- **Where a command sits.** `flattenCommands` returns a `FlatCommand`
+  per simple command: the command and `readsStdin`. `pipelineCommands`
+  sets the flag in one place: the first stage keeps it false, and every
+  command in a later stage is true, including both halves of a
+  parenthesized group (`a | (b && c)`). `planFor` hands the flag to
+  `effectsFor`.
+- **What a command reads.** A verb's rule says what the command reads
+  and nothing about where it sits. `readGrep` answers with a `GrepRead`:
+  `{ kind: "search", call }` for a path, or `{ kind: "stdin" }` when it
+  names none. The verb rule never sees the pipe flag.
+
+`stdinStage(verb, readsStdin, redirects)` joins them, and it is the only
+place that reads the flag. A stdin reader fed by a pipe contributes only
+its redirects; anywhere else it is unrecognized, with the message `grep
+with no path reads stdin`. The read family's filters (`head`, `tail`,
+`wc`, `cat` with no file) call the same helper, so adding a filter verb
+means writing its "reads stdin" answer and nothing else.
+
+A grep in a pipe still goes through the flag table, so `-R` or
+`--filter` is still refused, and so is a flag after the pattern (`git
+log | grep fix -i` makes BSD grep read a file named `-i`). The stdin
+claim holds for GNU grep, BSD grep, and ugrep: ugrep searches the
+working directory only when stdin is a terminal, which a pipe never is.
+
 ## grep
 
 There are two greps, and safeBash uses both.
@@ -190,7 +225,9 @@ is approving what the tool does. So a grep is handled one of two ways:
 | `grep -n "a+b" one.txt` | does not translate; one file through bash: `std::grep`, then real grep runs |
 | `grep -c hello one.txt` | the tool has no `-c`; one file through bash: `std::grep`, then real grep runs |
 | `grep -rn hello src \| head -20` | not lone; a directory through bash: `std::bash` |
-| `git status \| grep hello` | no path and no `-r`: `std::bash` |
+| `git status \| grep hello` | fed by a pipe, no path: a filter, only the git question |
+| `git status \| grep -rn hello` | `-r` reads the working directory, pipe or not; a directory through bash: `std::bash` |
+| `grep hello` | no path and no pipe: reads a closed stdin, `std::bash` |
 | `grep -R hello .`, `grep --filter=x hello .` | not in the flag table: `std::bash` |
 
 ### The flag table
@@ -224,8 +261,11 @@ Four more refusals:
   GNU grep with `POSIXLY_CORRECT` set, read `-s` in `grep -n x f -s` as a
   second file. The shell-free path sets `optionsFirst: false`, because no
   real grep reads its arguments.
-- **No path without `-r`.** grep reads its stdin. With `-r`, the path is
-  `.` and grep prints bare names.
+- **No path, outside a pipe.** grep reads the shell's closed stdin.
+  Fed by a pipe it is a filter (see "Stages that read a pipe"). The `-r`
+  check comes first either way: with `-r` the path is `.`, grep prints
+  bare names, and a pipe does not stop it reading files, so `git status
+  | grep -rn hello` asks `std::bash` for the directory.
 
 ### A lone grep runs the tool's search
 
@@ -304,8 +344,8 @@ change the output, not what is read:
 
 ### Any other grep runs real grep, narrow for one file only
 
-`grepEffects` is the `effectsFor` arm. It raises `std::grep` only when the
-path names one file, which real grep and the tool read the same way. A
+`grepSearchEffects` is the `effectsFor` arm for a grep of a path. It
+raises `std::grep` only when the path names one file, which real grep and the tool read the same way. A
 directory search through bash reads files the tool skips, so it asks
 `std::bash`. `readGrep` resolves the path with `_searchTargetIn`, the same
 split the tool uses: a file gives its real parent as `dir` and its name as

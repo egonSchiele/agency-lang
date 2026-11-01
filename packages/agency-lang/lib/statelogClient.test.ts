@@ -705,6 +705,20 @@ describe("StatelogClient", () => {
       }
     });
 
+    it("omits picture bytes from an event when nothing is tagged for redaction", async () => {
+      const file = newLogFile("picture");
+      const client = fileClient(file);
+      const base64 = Buffer.alloc(6000, 7).toString("base64");
+      const attachment = {
+        type: "image",
+        source: { kind: "base64", base64, mimeType: "image/png" },
+      };
+      await client.agentStart({ entryNode: "main", args: { attachment } });
+      const [evt] = readEvents(file);
+      expect(JSON.stringify(evt)).not.toContain(base64);
+      expect(evt.data.args.attachment.source.base64).toBe("[image/png: 6000 bytes omitted]");
+    });
+
     it("a node event whose state is not an object logs it as it is", async () => {
       const file = newLogFile("node-state-primitive");
       const client = fileClient(file);

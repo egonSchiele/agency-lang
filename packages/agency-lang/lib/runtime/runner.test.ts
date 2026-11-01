@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it as baseIt, expect, vi } from "vitest";
 import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
-import { makeRedactReplacer } from "./redactForStatelog.js";
+import { makeScrubReplacer, redactRule } from "./redactForStatelog.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -1326,7 +1326,10 @@ describe("custom redaction markers across both statelog paths", () => {
     const secret = { value: `${SECRET_PREFIX}value` };
     runtimeContext.globals.markRedacted(secret, replacement);
 
-    const ordinaryOutput = JSON.stringify({ secret }, makeRedactReplacer(runtimeContext.globals));
+    const ordinaryOutput = JSON.stringify(
+      { secret },
+      makeScrubReplacer([redactRule(runtimeContext.globals)]),
+    );
     if (ordinaryOutput === undefined) {
       throw new Error("Expected the redaction fixture to serialize");
     }
@@ -1354,7 +1357,10 @@ describe("custom redaction markers across both statelog paths", () => {
     const runtimeContext = makeMockCtx();
     const secret = { value: `${SECRET_PREFIX}plain` };
     runtimeContext.globals.markRedacted(secret);
-    const output = JSON.stringify({ secret }, makeRedactReplacer(runtimeContext.globals));
+    const output = JSON.stringify(
+      { secret },
+      makeScrubReplacer([redactRule(runtimeContext.globals)]),
+    );
     expect(JSON.parse(output as string)).toEqual({ secret: "[REDACTED]" });
   });
 });

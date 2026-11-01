@@ -11,6 +11,7 @@ import { checkpointInterrupts, hasInterrupts } from "./interrupts.js";
 import { pauseAtStep } from "./pause.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
+import { makeScrubReplacer, statelogScrubRules } from "./redactForStatelog.js";
 import { runBatch } from "./runBatch.js";
 import { DecisionCollector } from "./decision/collector.js";
 import { repairReopenedThread } from "./threadRepair.js";
@@ -64,34 +65,19 @@ const FORK_VALUE_CHAR_CAP = 4000;
  *  - a truncated string for oversized values;
  *  - `"[unserializable]"` when (de)serialization throws (e.g. a cycle).
  *
- *  Redaction happens HERE, during the stringify — not only at post() time.
- *  The truncation branch returns a plain string, and post()'s redaction
- *  replacer cannot see inside a string, so an oversized redact()ed branch
- *  value would otherwise leak its first FORK_VALUE_CHAR_CAP chars into the
- *  event. The redact check composes with the shared nativeTypeReplacer
- *  (like deepClone) so untagged natives and non-redact tags still round-trip
- *  intact for the small path. `globals` is the tag store of the run that
- *  logs the value: both call sites run at the fork join and pass the
- *  parent's. With none this degrades to tag-preserving cloning, which
+ *  The statelog scrub rules run HERE, during the stringify, not only at
+ *  post() time. The truncation branch returns a plain string, and post()'s
+ *  rules cannot see inside a string, so an oversized redact()ed branch value
+ *  would otherwise leak its first FORK_VALUE_CHAR_CAP chars into the event,
+ *  and so would a picture. The rules compose with the shared
+ *  nativeTypeReplacer (like deepClone) so untagged natives and non-redact
+ *  tags still round-trip intact for the small path. `globals` is the tag
+ *  store of the run that logs the value: both call sites run at the fork
+ *  join and pass the parent's. With none, only the binary rule runs, and
  *  post() still redacts on the un-truncated path. */
 export function safeStatelogValue(value: unknown, globals: GlobalStore | undefined): unknown {
   if (value === undefined) return undefined;
-  // Fast path: only consult the redaction table when something is tagged.
-  const hasTags = globals !== undefined && globals.hasAnyTags();
-  const replacer = function (this: unknown, key: string, val: unknown): unknown {
-    if (hasTags && globals) {
-      const raw = key === "" ? val : (this as Record<string, unknown>)[key];
-      const replacement = globals.redactionReplacement(raw);
-      if (replacement !== undefined) return replacement;
-      // A redacted string interpolated into a larger string is a new,
-      // untagged value; scrub it by containment or the secret logs verbatim.
-      if (typeof raw === "string") {
-        const scrubbed = globals.redactContainedStrings(raw);
-        if (scrubbed !== undefined) return scrubbed;
-      }
-    }
-    return nativeTypeReplacer.call(this, key, val);
-  };
+  const replacer = makeScrubReplacer(statelogScrubRules(globals), nativeTypeReplacer);
   let json: string | undefined;
   try {
     json = JSON.stringify(value, replacer);

@@ -53,6 +53,8 @@ If any of the three is missing, Agency sends nothing and still writes to your ot
 
 Every event is sent, including prompts, model replies, and tool arguments and results. Values you marked for redaction are blanked first.
 
+Pictures and other binary data are never logged. Any string over 4,096 characters that holds base64 data, such as a picture attached to a message, is replaced with a marker that gives its type and size, like `[image/png: 6000 bytes omitted]`. This happens for every event and every sink. Your program, its checkpoints, and its message threads keep the real bytes.
+
 Logs are sent in the background. A node never waits for them before returning. A run from the command line waits for the last few to finish before it exits, at most 1.5 seconds per request (set `log.requestTimeoutMs` to change that).
 
 If you call a node from TypeScript and then call `process.exit()` yourself, wait for the logs first. Otherwise the last few are lost:

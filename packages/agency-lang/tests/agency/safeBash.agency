@@ -796,6 +796,7 @@ node stagesReadStdin() {
     stdinFlags("(a | b) | c"),
     stdinFlags("a; b | c"),
     stdinFlags("a | (b && c)"),
+    stdinFlags("a | (b | c)"),
   ]
 }
 

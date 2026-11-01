@@ -616,9 +616,9 @@
     },
     {
       "nodeName": "stagesReadStdin",
-      "description": "Every flattened command says whether it reads a pipe: the first stage of a pipe does not, every command in a later stage does, and a command outside the pipe does not.",
+      "description": "Every flattened command says whether it reads a pipe: the first stage of a pipe does not, every command in a later stage does, and a command outside the pipe does not. A pipe nested inside a later stage is fed by the outer pipe, so its first command reads stdin too.",
       "input": "",
-      "expectedOutput": "[[false],[false,true,true],[false,true,false],[false,true,true],[false,false,true],[false,true,true]]",
+      "expectedOutput": "[[false],[false,true,true],[false,true,false],[false,true,true],[false,false,true],[false,true,true],[false,true,true]]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -188,9 +188,10 @@ Two pieces carry this, each with one job:
 `stdinStage(verb, readsStdin, redirects)` joins them, and it is the only
 place that reads the flag. A stdin reader fed by a pipe contributes only
 its redirects; anywhere else it is unrecognized, with the message `grep
-with no path reads stdin`. The read family's filters (`head`, `tail`,
-`wc`, `cat` with no file) call the same helper, so adding a filter verb
-means writing its "reads stdin" answer and nothing else.
+with no path reads stdin`. grep is the one caller today. A verb that can
+also read its stdin (`head`, `tail`, `wc`, `cat` with no file) is added
+by writing its "reads stdin" answer and calling the same helper; the
+plan for that is `docs/superpowers/plans/2026-10-31-safebash-reads-in-process.md`.
 
 A grep in a pipe still goes through the flag table, so `-R` or
 `--filter` is still refused, and so is a flag after the pattern (`git

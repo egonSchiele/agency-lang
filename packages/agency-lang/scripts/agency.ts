@@ -67,6 +67,7 @@ import {
   runDirectoryCommandDependencies,
 } from "@/cli/runDirectory/commands.js";
 import { addLogsSessionCommands } from "@/cli/logsSession/register.js";
+import { addLogsQueryCommands, defaultLogsQueryDeps } from "@/cli/logsQuery/register.js";
 import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
@@ -1022,7 +1023,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
       await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
 
-  addLogsSessionCommands(logsCmd);
+  // `log.logFile`, read when a logs command runs and only when it gave no
+  // `--log`, so a broken agency.json cannot stop a command that named its log.
+  const configuredLog = (): string | undefined => getConfig().log?.logFile;
+  addLogsSessionCommands(logsCmd, configuredLog);
+  addLogsQueryCommands(logsCmd, () => defaultLogsQueryDeps(configuredLog));
 
   const runDirectoryDeps = runDirectoryCommandDependencies();
   addLogsExtractCommand(logsCmd, runDirectoryDeps);

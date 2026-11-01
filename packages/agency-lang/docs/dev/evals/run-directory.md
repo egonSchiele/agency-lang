@@ -212,7 +212,8 @@ different path.
 One file per command; none imports the lock or the append helpers.
 
 - `agency logs extract <log> [--trace <id>] [-o <file>] [--overwrite]` — copy
-  one trace out of a statelog (a single-trace log needs no `--trace`). Lines
+  one trace out of a statelog (a single-trace log needs no `--trace`; with
+  several, the refusal points at `agency logs traces` to list them). Lines
   are copied as they appear, except the two things `readTraces` drops: a torn
   final line and a byte-identical repeat of an earlier line in the same trace.
   An existing `--out` file is refused unless `--overwrite` is passed, and the

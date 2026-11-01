@@ -12,6 +12,7 @@ import {
   sampleRunForest,
 } from "./storyFixture.js";
 import {
+  hiddenByDefault,
   outlineRows,
   classifyTool,
   type ToolEvidence,
@@ -20,6 +21,23 @@ import {
 } from "./story.js";
 const STORY = { machinery: false, admin: false };
 const RAW = { machinery: true, admin: true };
+describe("hiddenByDefault", () => {
+  it("hides an approved interrupt and keeps rejected and pending ones and tools", () => {
+    const rows = outlineRows(agentLoopTrace(), STORY);
+    const interrupts = rows.filter((row) => row.kind === "interrupt");
+    const approved = interrupts.find((row) => row.interrupt.outcome === "approved")!;
+    const rejected = interrupts.find((row) => row.interrupt.outcome === "rejected")!;
+    const pending = {
+      ...rejected,
+      interrupt: { ...rejected.interrupt, outcome: "pending" as const },
+    };
+    expect(hiddenByDefault(approved)).toBe(true);
+    expect(hiddenByDefault(rejected)).toBe(false);
+    expect(hiddenByDefault(pending)).toBe(false);
+    expect(hiddenByDefault(rows.find((row) => row.kind === "tool")!)).toBe(false);
+  });
+});
+
 describe("story outline", () => {
   it("places tools and interrupts under their asking round without inventing errors", () => {
     const rows = outlineRows(agentLoopTrace(), STORY);

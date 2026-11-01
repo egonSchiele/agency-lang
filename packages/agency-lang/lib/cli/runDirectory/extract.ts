@@ -1,8 +1,6 @@
 import { writeTraceFile } from "@/runDirectory/extractTrace.js";
 import { matchTrace, readTraces, type Trace } from "@/runDirectory/traces.js";
 
-import { describeTraces } from "./traceListing.js";
-
 export type LogsExtractOptions = { log: string; trace?: string; out?: string; overwrite?: boolean };
 
 export type LogsExtractDependencies = { writeStdout(text: string): void };
@@ -46,15 +44,14 @@ export function pickTrace(options: { log: string; trace?: string }): Trace {
   if (options.trace === undefined) {
     if (traces.length === 1) return traces[0];
     throw new Error(
-      `${options.log} holds ${traces.length} traces; say which with --trace <id>.\n` +
-        describeTraces(traces, options.log),
+      `${options.log} holds ${traces.length} traces; say which with --trace <id>. ${listTraces(options.log)}`,
     );
   }
   const match = matchTrace(traces, options.trace);
   if (match.kind === "one") return match.trace;
   if (match.kind === "none") {
     throw new Error(
-      `No trace in ${options.log} matches "${options.trace}".\n${describeTraces(traces, options.log)}`,
+      `No trace in ${options.log} matches "${options.trace}". ${listTraces(options.log)}`,
     );
   }
   throw new Error(
@@ -62,4 +59,10 @@ export function pickTrace(options: { log: string; trace?: string }): Trace {
       match.ids.map((id) => `  ${id}`).join("\n") +
       "\nUse more characters to pick one.",
   );
+}
+
+/** Where a refusal points instead of printing its own table: one trace
+ *  listing, `agency logs traces`, for the whole CLI. */
+function listTraces(log: string): string {
+  return `List them with: agency logs traces --log ${log}`;
 }

@@ -49,7 +49,14 @@ type BlockBase = {
 };
 export type TranscriptBlock = BlockBase &
   (
-    | { kind: "system"; text: string }
+    | {
+        kind: "system";
+        text: string;
+        /** The LLM call that first carried this prompt. `roundId` stays
+         *  undefined on a system block, because the screen reads it to
+         *  decide focus; this field is for finding the block's row. */
+        ownerRoundId: string;
+      }
     /** A thread group, one per `llmCall` span, named as the trace names
      *  it: `calls` counts the span's own LLM calls, `tool` is the tool
      *  that started it (undefined for a top-level thread), and `complete`
@@ -338,6 +345,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
             id: `system:${round.id}:${position}`,
             kind: "system",
             text,
+            ownerRoundId: round.id,
           });
         }
       } else if (message.role === "user") {
@@ -662,6 +670,55 @@ function requestFor(
   }
   const sameName = tools.filter((other) => other.name === tool.name);
   return requests.filter((request) => request.name === tool.name)[sameName.indexOf(tool)];
+}
+/** How a block finds its story row: the block's own id (a tool or hosted
+ *  block is a story row), the LLM call the block sits in, the call that
+ *  first carried a system prompt, that call's user row, or the row built
+ *  from the same node as an error. */
+type RowRule = "own" | "round" | "ownerRound" | "roundUser" | "sameNode";
+
+/** A kind with no entry has no row: a thread divider, a turn, a pause.
+ *  Adding a block kind means adding one entry here and nowhere else. */
+const BLOCK_ROWS: Partial<Record<TranscriptBlock["kind"], RowRule>> = {
+  tool: "own",
+  hosted: "own",
+  assistant: "round",
+  history: "round",
+  rewrite: "round",
+  system: "ownerRound",
+  user: "roundUser",
+  handback: "roundUser",
+  error: "sameNode",
+};
+
+/** The story row a block stands for, or undefined for a block with no
+ *  row. `roundUser` falls back to the call when the outline has no user
+ *  row for it. Ids are looked up in `story`, never parsed (see "Row IDs
+ *  are a contract" in docs/dev/cli/logs-viewer.md). The transcript
+ *  screen's `A` and `agency logs search` both use this. */
+export function blockRowId(block: TranscriptBlock, story: readonly StoryRow[]): string | undefined {
+  const rule = BLOCK_ROWS[block.kind];
+  switch (rule) {
+    case undefined:
+      return undefined;
+    case "own":
+      return block.id;
+    case "round":
+      return block.roundId;
+    case "ownerRound":
+      return block.kind === "system" ? block.ownerRoundId : undefined;
+    case "roundUser": {
+      if (block.roundId === undefined) {
+        return undefined;
+      }
+      const userRowId = `${block.roundId}:user`;
+      return story.some((row) => row.id === userRowId) ? userRowId : block.roundId;
+    }
+    case "sameNode":
+      return block.kind === "error"
+        ? story.find((row) => row.kind === "error" && row.node.id === block.error.node.id)?.id
+        : undefined;
+  }
 }
 export function messageText(message: WireMessage): string {
   const requests = (message.toolCalls ?? []).map(

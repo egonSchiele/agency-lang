@@ -4,7 +4,12 @@
 // is `--trace` (as `logs extract` has it) and not the `--trace-id` of `logs`.
 import type { Command } from "@/vendor/commander/index.js";
 
-import { logsSession, type SessionCliOptions, type SessionCommand } from "./index.js";
+import {
+  defaultSessionCliDeps,
+  logsSession,
+  type SessionCliOptions,
+  type SessionCommand,
+} from "./index.js";
 
 type LeafOptions = { json?: boolean; log?: string; trace?: string; author?: string };
 
@@ -25,14 +30,18 @@ function optionsFrom(options: LeafOptions, row?: string): SessionCliOptions {
   };
 }
 
-async function exitWith(command: SessionCommand, options: SessionCliOptions): Promise<void> {
-  const code = await logsSession(command, options);
-  if (code !== 0) {
-    process.exitCode = code;
-  }
-}
-
-export function addLogsSessionCommands(logs: Command): void {
+/** `configuredLog` reads `log.logFile` from `agency.json` when a command
+ *  runs, never at registration. */
+export function addLogsSessionCommands(
+  logs: Command,
+  configuredLog: () => string | undefined,
+): void {
+  const exitWith = async (command: SessionCommand, options: SessionCliOptions): Promise<void> => {
+    const code = await logsSession(command, options, defaultSessionCliDeps(configuredLog));
+    if (code !== 0) {
+      process.exitCode = code;
+    }
+  };
   const session = logs
     .command("session")
     .description("Talk to an open logs viewer, or to a log's comments on disk");

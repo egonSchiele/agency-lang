@@ -476,6 +476,12 @@ export function rowEvents(row: StoryRow): EventEnvelope[] {
   }
   return row.node.children.flatMap((child) => (child.event ? [child.event] : []));
 }
+/** The trace screen's default: an approved interrupt is hidden until the
+ *  person asks for approvals (`p`). Rejected and pending ones always show.
+ *  The screen and `agency logs outline` both apply this. */
+export function hiddenByDefault(row: StoryRow): boolean {
+  return row.kind === "interrupt" && row.interrupt.outcome === "approved";
+}
 export function outlineRows(trace: TreeNode, options: OutlineOptions): StoryRow[] {
   return (options.machinery ? forestOutline : storyOutline)(trace, options);
 }

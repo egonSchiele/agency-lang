@@ -31,7 +31,7 @@ import {
 import { Cell, ColumnSpec, LayoutNode, parseWidth } from "./nodes.js";
 import { growToWidth, renderNode, resolveNode } from "./render.js";
 import { NodeHandler, SizingContext, resolveOwnWidth } from "./sizing.js";
-import { resolveColumnWidths, type ColumnPlan } from "../../utils/columnWidths.js";
+import { fitColumnWidths, resolveColumnWidths, type ColumnPlan } from "../../utils/columnWidths.js";
 
 export { Cell, ColumnSpec };
 
@@ -250,9 +250,13 @@ type TableSections = {
   footer: LayoutNode[][];
 };
 
+// `maxWidth` is the space the table sits in (the terminal, or its
+// container). A table with no width of its own shrinks its widest
+// columns to fit it, but never pads out to it.
 export function _resolveTableWidths(
   node: LayoutNode,
   resolvedWidth: number | undefined,
+  maxWidth: number | undefined,
 ): LayoutNode {
   const attrs = node.attrs;
   const { header, body, footer, columnCount } = _validateTable(attrs);
@@ -274,7 +278,12 @@ export function _resolveTableWidths(
   const available = resolvedWidth !== undefined ? Math.max(0, resolvedWidth - chrome) : undefined;
 
   const plan = planColumns(columns, columnCount, sections);
-  const resolvedColumnWidths = resolveColumnWidths(plan, available, "std::ui/layout");
+  const declaredWidths = resolveColumnWidths(plan, available, "std::ui/layout");
+  const limit = resolvedWidth ?? maxWidth;
+  const resolvedColumnWidths =
+    limit === undefined
+      ? declaredWidths
+      : fitColumnWidths(declaredWidths, plan, Math.max(0, limit - chrome));
   const annotated = annotateCellsWithWrap(sections, resolvedColumnWidths);
 
   return {
@@ -296,12 +305,24 @@ function planColumns(
   sections: TableSections,
 ): ColumnPlan[] {
   const natural = measureNaturalColumnWidths(sections, columnCount);
-  return Array.from({ length: columnCount }, (_, index) => ({
-    index,
-    parsed: parseWidth(columns[index]?.width),
-    natural: natural[index],
-    minWidth: columns[index]?.minWidth ?? 0,
-  }));
+  return Array.from({ length: columnCount }, (_, index) => {
+    const parsed = parseWidth(columns[index]?.width);
+    const declaredMin = columns[index]?.minWidth ?? 0;
+    // A raw cell never wraps, so a column sized by its content must not
+    // shrink below it.
+    const keepNatural = parsed === null && columnHoldsRaw(sections, index);
+    return {
+      index,
+      parsed,
+      natural: natural[index],
+      minWidth: keepNatural ? Math.max(declaredMin, natural[index]) : declaredMin,
+    };
+  });
+}
+
+function columnHoldsRaw(sections: TableSections, index: number): boolean {
+  const rows = [sections.header, ...sections.body, ...sections.footer];
+  return rows.some((row) => row[index]?.type === "raw");
 }
 
 function measureNaturalColumnWidths(sections: TableSections, columnCount: number): number[] {
@@ -616,7 +637,7 @@ export function composeTable(node: LayoutNode): Block {
 function sizeTable(node: LayoutNode, ctx: SizingContext): LayoutNode {
   // Tables have a custom column-width distribution; delegate to the
   // table module after resolving the table's own outer width.
-  return _resolveTableWidths(node, resolveOwnWidth(node, ctx));
+  return _resolveTableWidths(node, resolveOwnWidth(node, ctx), ctx.availableWidth);
 }
 
 export const table: NodeHandler = { size: sizeTable, render: composeTable };

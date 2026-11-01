@@ -1130,6 +1130,43 @@ describe("table — width resolution", () => {
   });
 });
 
+describe("table — fits its width", () => {
+  const viewport = { cols: 40, rows: 24 };
+  const long = "word ".repeat(40).trim();
+  const widest = (tree: LayoutNode): number =>
+    Math.max(...stripAnsi(render(tree, viewport)).split("\n").map(visualWidth));
+
+  test("an unsized table wider than the viewport shrinks its widest column", () => {
+    const tree = tableNode({
+      body: [
+        ["dir", "/a"],
+        ["description", long],
+      ],
+    });
+    const resolved = _internal.resolveSizes(tree, viewport);
+    expect(resolved.attrs.resolvedColumnWidths).toEqual([11, 22]);
+    expect(widest(tree)).toBe(40);
+  });
+
+  test("a table that fits keeps its natural width", () => {
+    expect(widest(tableNode({ body: [["a", "b"]] }))).toBe(9);
+  });
+
+  test("a column holding a raw cell does not shrink", () => {
+    const raw = node("raw", { content: "r".repeat(60) });
+    const tree = tableNode({ body: [["k", raw]] });
+    const resolved = _internal.resolveSizes(tree, viewport);
+    expect((resolved.attrs.resolvedColumnWidths as number[])[1]).toBe(60);
+  });
+
+  test("a fixed column holding a raw cell keeps its declared width", () => {
+    const raw = node("raw", { content: "r".repeat(10) });
+    const tree = tableNode({ columns: [{}, { width: 6 }], body: [["k", raw]] });
+    const resolved = _internal.resolveSizes(tree, viewport);
+    expect((resolved.attrs.resolvedColumnWidths as number[])[1]).toBe(6);
+  });
+});
+
 describe("table — composeTable rendering", () => {
   test("2-col header + 2-row body, default settings", () => {
     expect(

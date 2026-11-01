@@ -410,7 +410,7 @@ A checkpoint keeps a schema set with `.withParamSchema`. The function value reco
 
 ## The catalog
 
-`catalog(tools)` returns, for each tool the host passed: its module, name, description, each parameter with its type and description, and its return type. This is what a GUI's tool dropdown reads, what lets a GUI offer `note[0].id` as a wire endpoint and refuse a wire from a string to a number, and what a person reads before writing a workflow by hand. It is built from `describe` and the tool's parameter schema, the same data the tool loop sends to a model.
+`catalog(tools)` returns, for each tool the host passed: its module, name, description, each parameter with its type and description, and its return type. This is what a GUI's tool dropdown reads, what lets a GUI offer `note[0].id` as a wire endpoint and refuse a wire from a string to a number, and what a person reads before writing a workflow by hand. It is built from `describe` and the tool's parameter schema, the same data the tool loop sends to a model. Each parameter carries its name, its type and default as Agency text, the text of its `@param` entry, and its JSON Schema (ADI-252).
 
 ## Saving a workflow
 
@@ -444,8 +444,10 @@ type Workflow = { format: number; name: string; description: string;
                   inputs: string; steps: Json[]; result?: Json; limits?: WorkflowLimits }
 type WorkflowProblem = { step: string | null; field: string | null; message: string }
 type WorkflowEntry = { name: string; path: string; workflow: Workflow; meta: WorkflowMeta }
+type CatalogParam = { name: string; type: string | null; default: string | null;
+                      description: string | null; schema: Json }
 type CatalogEntry = { module: string; name: string; description: string;
-                      params: CatalogParam[]; returns: string }
+                      params: CatalogParam[]; returns: string | null }
 
 type WorkflowFailure = { problems: WorkflowProblem[] }
 
@@ -532,4 +534,3 @@ Marked so the owner can check them while reading:
 - The exact fragment templates and the line-to-step map.
 - The `meta` field names, `savedAt` and `savedBy`.
 - The problem messages' wording, as long as each names the step and the field.
-- The shape of `CatalogParam`, following what the tool loop already builds per parameter.

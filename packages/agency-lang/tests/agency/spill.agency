@@ -6,8 +6,10 @@ import { keepOutput, readSpill, grepSpill } from "std::spill"
 import { getThread, currentThreadId } from "std::thread"
 import { getMutable, setMutable } from "../helpers/mutableVar.js"
 
+// One string method, not a comprehension: a comprehension over 300,000
+// items is 300,000 block calls, which took the CI runner minutes.
 def big(fill: string): string {
-  return [fill for i in range(300000)].join("")
+  return fill.repeat(300000)
 }
 
 def spilledName(notice: string): string {

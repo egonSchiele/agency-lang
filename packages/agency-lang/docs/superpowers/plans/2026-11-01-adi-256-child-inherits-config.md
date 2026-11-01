@@ -388,9 +388,8 @@ In `lib/runtime/state/context.ts`:
     args = applyRuntimeConfigOverridesToContextArgs(args, envOverrides);
     args = applyRuntimeConfigOverridesToContextArgs(args, ipcOverrides);
     ...
-    this.config = inheritedConfig(
-      mergeConfig(mergeConfig(args.config ?? {}, envOverrides), ipcOverrides ?? {}),
-    );
+    const withEnv = mergeConfig(args.config ?? {}, envOverrides);
+    this.config = inheritedConfig(mergeConfig(withEnv, ipcOverrides ?? {}));
 ```
 
 `mergeConfig` is in `lib/config/merge.ts`; it takes and returns `Record<string, any>`, so the result goes through `inheritedConfig`, which both narrows the type and drops anything outside the inherited keys.
@@ -447,16 +446,15 @@ Message: `runtime: a program keeps its inheritable config, and the override merg
 
 **Interfaces:**
 - Consumes: `RuntimeContext.config` from Task 2; `mergeConfig`.
-- Produces: `export function withParentConfig(overrides: Partial<AgencyConfig> | undefined, parentConfig: InheritedConfig): Partial<AgencyConfig> | undefined` — the parent's inheritable config with the caller's overrides merged over it, field by field. Returns `overrides` unchanged when the parent config is empty, so a program with nothing to pass on keeps sending exactly what it sends today.
+- Produces: `export function withParentConfig(overrides: Partial<AgencyConfig> | undefined, parentConfig: InheritedConfig): Partial<AgencyConfig>` — the parent's inheritable config with the caller's overrides merged over it, field by field. With an empty parent config the result is the overrides' own fields; a program with nothing to pass on then sends `{}` where it sent nothing, which the child's merge treats the same.
 
 - [ ] **Step 1: Write the failing tests in `lib/runtime/ipc.test.ts`**
 
 ```ts
 describe("withParentConfig", () => {
-  it("returns the overrides unchanged when the parent has nothing to pass on", () => {
-    const overrides = { observability: true };
-    expect(withParentConfig(overrides, {})).toBe(overrides);
-    expect(withParentConfig(undefined, {})).toBeUndefined();
+  it("is the overrides alone when the parent has nothing to pass on", () => {
+    expect(withParentConfig({ observability: true }, {})).toEqual({ observability: true });
+    expect(withParentConfig(undefined, {})).toEqual({});
   });
 
   it("fills in the parent's config under the overrides", () => {
@@ -505,8 +503,7 @@ The helper, beside `withParentProviderModules`:
 export function withParentConfig(
   overrides: Partial<AgencyConfig> | undefined,
   parentConfig: InheritedConfig,
-): Partial<AgencyConfig> | undefined {
-  if (Object.keys(parentConfig).length === 0) return overrides;
+): Partial<AgencyConfig> {
   return mergeConfig(parentConfig, overrides ?? {}) as Partial<AgencyConfig>;
 }
 ```
@@ -514,10 +511,9 @@ export function withParentConfig(
 In `_runFor`, the chain becomes:
 
 ```ts
-  const mergedConfigOverrides = withParentStatelog(
-    withParentProviderModules(withParentConfig(configOverrides, ctx.config), ctx.providerModules),
-    ctx.getStatelogSink(),
-  );
+  const inherited = withParentConfig(configOverrides, ctx.config);
+  const withModules = withParentProviderModules(inherited, ctx.providerModules);
+  const mergedConfigOverrides = withParentStatelog(withModules, ctx.getStatelogSink());
 ```
 
 Rewrite the comment above it: it currently explains only the provider modules. Say in a few sentences that the child's own compile baked the sandbox config, so the parent sends its inheritable config, its provider modules with absolute paths, and its effective statelog sink, and that an explicit `run(logFile:)` wins.

@@ -60,8 +60,10 @@ without one output redirect, never spawns a shell. The output is computed in Age
 returned, or written with `_write` under a `std::write` whose payload
 carries the bytes. A lone `grep` that translates exactly runs the grep
 tool's own search (see "grep" below). A lone `cat`, `head`, or `tail` of
-one file runs the read tool's own read (see "The read family" below). An
-`agency <sub> <file>` line runs in-process through `std::agency`.
+one file runs the read tool's own read (see "The read family" below). A
+chain of such commands joined by `;`, `&&`, or `||` runs them in process
+in order (see "Chains in process" below). An `agency <sub> <file>` line
+runs in-process through `std::agency`.
 
 `bash`: everything else. Narrow when every command was recognized
 (`git status`, `git log`, `git diff`, `git diff --staged`, a grep of one
@@ -75,8 +77,8 @@ or `std::read`), broad otherwise.
 ## In process when it translates
 
 The shell-free grep and the shell-free read follow one rule. A lone
-command whose flags and arguments translate exactly runs the matching
-stdlib tool in process, under that tool's effect. Any other command runs
+command, or a chain of them, whose flags and arguments translate exactly
+runs the matching stdlib tools in process, under each tool's effect. Any other command runs
 through bash, with a narrow effect only when the payload describes what
 bash will do, and `std::bash` otherwise.
 
@@ -84,6 +86,7 @@ bash will do, and `std::bash` otherwise.
 |---|---|---|
 | `grep -rn hello src` | `_grep` | `std::grep`, as the grep tool does |
 | `cat one.txt` | `_read` | `std::read`, as the read tool does |
+| `echo "== a =="; cat a.txt` | the echo and `_read`, in order | `std::read` for `a.txt` |
 | `grep -c hello one.txt` | real grep, through bash | `std::grep` for the one file |
 | `wc -l one.txt` | real wc, through bash | `std::read` for the one file |
 
@@ -539,10 +542,15 @@ same flags with a space (`cut -d : -f 1`) parse.
 
 ### A lone cat, head, or tail runs the read tool's read
 
-`tryShellFreeRead` applies to a lone `cat`, `cat -n`, `head -n N`, or
-`tail -n N` of one file, with no redirect, where N is at least 1. It
-raises `std::read` and runs `runRead`, which reads the file with `_read`
-and prints it with `_renderReadView` (`lib/stdlib/readDialect.ts`):
+`tryShellFreeRead` applies to a lone `cat` of any number of files, and
+to a lone `cat -n`, `head -n N`, or `tail -n N` of one file, with no
+redirect, where N is at least 1. `head` and `tail` take one file because
+each prints a `==> name <==` header per file when given several;
+`READ_VERBS` says so, and `readFileVerb` applies it. The plan raises one
+`std::read` per file and runs `runRead`, which reads the files in order
+with `_read`, joins the texts, and prints the joined text once with
+`_renderReadView` (`lib/stdlib/readDialect.ts`). A first file with no
+final newline runs into the second, as real `cat` prints it. The views:
 
 - `whole`: the text as it is.
 - `numbered`: each line after its number, right-aligned in six columns,
@@ -553,7 +561,9 @@ and prints it with `_renderReadView` (`lib/stdlib/readDialect.ts`):
 
 Only `\n` ends a line, so a `\r` stays inside its line. A count of 0 is
 refused, because BSD `head -n 0` prints an error and exits 1 while GNU
-prints nothing. `cat -b`, `cat -s`, and `-c` go through bash.
+prints nothing. `cat -n` of more than one file is refused too: GNU
+numbers the files as one stream and BSD starts again at 1 for each.
+`cat -b`, `cat -s`, and `-c` go through bash.
 
 A count given twice never reaches the renderer. `splitFlags` takes a
 valued flag once, so `head -n 1 -n 2` and `head -2 -n 1` are refused on
@@ -563,7 +573,8 @@ answer would be right.
 
 `runRead` returns `_read`'s own failure. The plan already refused a
 missing file or a folder, so a failure there is a race or a permission
-error, and `_read`'s message says which.
+error, and `_read`'s message says which. The text of the files read
+before the one that failed is dropped.
 
 `shellFreeReadMatchesRealTools` runs each shell-free row and the real
 program over `tests/agency/stdlib/read-fixtures/`, and compares the
@@ -573,8 +584,77 @@ empty file, and a file with Windows line endings.
 These are left out:
 
 - `wc` in process. GNU and BSD pad the count column differently.
-- More than one file in process. `head` prints a header per file.
+- `head` and `tail` of more than one file: each prints a header per file.
+- `cat -n` of more than one file.
+- The text of the files before one that failed to read: real `cat`
+  prints them, and the shell-free read returns the failure alone.
 - `file`, `stat`, `md5sum`, `shasum`, `column`, `xxd`, and `hexdump`.
+
+## Chains in process
+
+`tryShellFreeChain` plans a line whose commands are joined by `;`, `&&`,
+or `||`, such as
+
+```
+echo "=== a.txt ==="; cat a.txt; echo; echo "=== b.txt ==="; cat b.txt
+```
+
+`chainLinks` flattens the parse into links, each a simple command with
+the join before it: the top-level list is joined by `;`, and an `And` or
+`Or` node joins its right side with `&&` or `||`. The parser is
+left-associative, so `a && b || c` is `Or(And(a, b), c)`, and the flat
+list runs in bash's order.
+
+Each link must plan through `tryShellFreeStep`, the one list of
+in-process planners that a lone command also uses: an echo with or
+without one redirect, a grep that translates, or a cat, head, or tail
+that translates. An `agency` line is not a step. `stepExecOf` turns each
+step's plan into a `StepExec`, with an exhaustive match that makes a new
+execution kind a type error until someone decides whether a chain may
+hold it. The chain raises every step's effects, in order, and runs no
+shell.
+
+A parenthesized group or a pipeline refuses the chain. Bash skips
+`(b || c)` in `a && (b || c)` as a whole, which a flat list cannot say,
+and a pipeline needs a runner of its own (ADI-261). `linksOf` is a
+second walk beside `flattenOne` for this reason: `flattenOne` feeds the
+refuse wall and must see through both.
+
+The chain is all or nothing. One command the step planners refuse sends
+the whole line down the general path, where the refuse wall runs on
+every command and the line goes to bash. So `cat a.txt && rm a.txt` is
+still refused.
+
+`runChain` copies bash's run rule. `;` runs the next step whatever
+happened, `&&` runs it only after a success, and `||` only after a
+failure. A skipped step changes nothing. The chain fails when the last
+step that ran failed, with the joined text as stdout and that step's
+message as stderr. A failed step adds no text, the way a failing
+program's complaint goes to stderr. `grep` with no match is a failure,
+as its exit code 1 is.
+
+A write step runs inside a `destructive { }` region of `runChain`'s own.
+`runWrite` enters one, but that marks `runWrite`'s activation, and a
+failure built later in `runChain` (`echo started >> log.txt; grep zzz
+one.txt`) would otherwise say nothing destructive ran, so the tool loop
+could retry and append twice. The region is entered before `_write`
+runs, so a write that fails before writing anything still reports
+`destructiveRan: true`, which is the safe direction. The bash path has
+the same gap for `echo hi >> f && false`, because `runBash` enters no
+region.
+
+A chain's effects may be empty. A chain of echoes raises nothing, as a
+lone echo raises nothing: the audit rule is about shell spawns, and a
+chain spawns none.
+
+Two outputs differ from bash. A shell-free directory grep's
+skipped-folders note lands in the chain's output where that step's text
+goes, so `grep -rn TODO src; echo finished` prints the note before
+`finished`. And every read is resolved when the plan is made, so in
+`echo x > f; cat f` with `f` present, the read prints whatever the write
+left, under a `std::read` that named `f` (see "Resolving the path when
+the plan is made"). With `f` missing, `cat f` is refused at plan time,
+and the line goes to bash.
 
 ## Why the executors call `_bash`, `_write`, `_grep`, and `_read`
 
@@ -582,7 +662,8 @@ The `bash`, `write`, `grep`, and `read` tools raise their own interrupts. Callin
 after `raiseAll` would ask the broad question a second time. The bypass
 is correct for one reason: the only path to an executor runs through a
 `raiseAll` that raised every effect in the plan and returned success, and
-every plan raises at least one effect.
+every plan raises at least one effect. `runChain` reaches the same
+internals through each step's executor.
 
 ## Files and tests
 
@@ -599,7 +680,10 @@ every plan raises at least one effect.
 - `lib/stdlib/statelog.ts`: `_debug`.
 - `tests/agency/safeBash.agency`: plan tests (`planReasons`,
   `planVerbs`, `planOutcomes`, `wholeStringPlans`, ...), the end-to-end
-  runs with interrupt expectations, and the rejection messages.
+  runs with interrupt expectations, and the rejection messages. The
+  chain nodes are `chainsOfInProcessCommands`, `chainMatchesBash`,
+  `chainFailureAfterAWriteIsDestructive`, `chainFailsLikeBash`, and
+  `chainOfReadsAsksOnlyTheReads`.
 - `lib/stdlib/safeBash.test.ts`: `astToBash` round-trips every command
   family the classifier sees.
 - `lib/stdlib/statelog.test.ts`: `_debug`.

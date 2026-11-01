@@ -37,7 +37,7 @@
       "nodeName": "wholeStringPlans",
       "description": "The whole string gets one plan: refused if any command anywhere is refused, one std::bash if any command is unrecognized, otherwise the union of narrow effects. Chains are walked, so `true && rm -rf /tmp/x` is refused rather than approvable.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"refuse\",[]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"chain\",[]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"refuse\",[]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -59,7 +59,7 @@
       "nodeName": "shellFreeEcho",
       "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"chain\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -753,9 +753,9 @@
     },
     {
       "nodeName": "loneReadIsShellFree",
-      "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
+      "description": "A lone cat of any number of files, or a lone cat -n, head -n N, or tail -n N of one file, runs shell-free. Another flag, a count of 0, cat -n or head of two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
       "input": "",
-      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\"]",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -764,9 +764,30 @@
     },
     {
       "nodeName": "shellFreeReadMatchesRealTools",
-      "description": "Each row runs the shell-free path and the real program on the same command and compares the output exactly, including a file with no final newline, an empty file, and a file with Windows line endings. Each row first checks that its command really runs shell-free.",
+      "description": "Each row runs the shell-free path and the real program on the same command and compares the output exactly, including a file with no final newline, an empty file, and a file with Windows line endings. Each row first checks that its command really runs shell-free. Several files are read in order and joined, so a first file with no final newline runs into the second, as real cat prints it.",
       "input": "",
-      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "catOfTwoFilesAsksTwoQuestions",
+      "description": "A lone cat of two files asks one std::read per file and no shell question, and prints the two files joined.",
+      "input": "",
+      "expectedOutput": "[\"read\",\"hello world\\nfoo bar baz\\nhello again\\ngoodbye cruel world\\nHELLO uppercase\\n\"]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -840,6 +861,99 @@
       "description": "Each row runs the shell-free echo and bash's echo on the same command and compares the output exactly, with -n, a combined -nn, and a backslash. Each row first checks that its command really runs shell-free.",
       "input": "",
       "expectedOutput": "[true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainsOfInProcessCommands",
+      "description": "A line of in-process commands joined by ;, &&, or || plans as one chain that asks only the steps' own questions. A command no lone planner takes, a parenthesized group, a pipeline, a missing file, or a refused command sends the line down the general path.",
+      "input": "",
+      "expectedOutput": "[[\"shellFree\",\"chain\",[]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::grep\"]],[\"shellFree\",\"chain\",[]],[\"narrow\",\"bash\",[\"std::git::status\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"narrow\",\"bash\",[\"std::read\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainMatchesBash",
+      "description": "Each row runs a chain in process and through real bash and compares the output exactly, including && and || after a grep that finds nothing. Each row first checks that its line really runs as a chain.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainFailureAfterAWriteIsDestructive",
+      "description": "A chain that fails after its write step says destructive work ran, so the tool loop does not retry and write twice; a chain whose write was skipped says it did not.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to write to this file?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to write to this file?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainFailsLikeBash",
+      "description": "A grep with no match fails, so && skips the next command and the chain fails, while || runs it and the chain succeeds.",
+      "input": "",
+      "expectedOutput": "[true,{\"__type\":\"resultType\",\"success\":true,\"value\":\"no\\n\"}]",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to search files with grep?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainOfReadsAsksOnlyTheReads",
+      "description": "The headers-and-files line asks one std::read per file and no shell question, and prints what bash prints.",
+      "input": "",
+      "expectedOutput": "\"=== one ===\\nhello world\\nfoo bar baz\\nhello again\\n\\n=== two ===\\ngoodbye cruel world\\nHELLO uppercase\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"

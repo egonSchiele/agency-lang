@@ -241,7 +241,9 @@ node refusedNeverRuns() {
 node sequenceRunsThroughBash() {
   // The measured divergence that motivated the redesign: v2 returned
   // "hi\n\nbye\n" where bash returns "hi\nbye\n".
-  const result = safeBash("echo hi && echo bye")
+  // The trailing `true` has no rule, so the line stays on the bash path;
+  // a chain of echoes alone runs in process.
+  const result = safeBash("echo hi && echo bye && true")
   if (result is failure(why)) {
     return "FAILED: ${why}"
   }
@@ -426,7 +428,7 @@ node planReasons() {
   return [
     planReason("git status"),
     planReason("xargs rm x"),
-    planReason("echo hi; echo bye"),
+    planReason("echo hi | cat"),
     planReason("echo $(date)"),
     planReason("rm -rf build"),
     planReason("git status; xargs rm x"),
@@ -452,7 +454,7 @@ node planOutcomes() {
     planOutcome("echo hi > out.txt"),
     planOutcome("rm -rf build"),
     planOutcome("agency typecheck foo.agency"),
-    planOutcome("echo hi; echo bye"),
+    planOutcome("echo hi | cat"),
   ]
 }
 
@@ -465,7 +467,7 @@ node rejectedBroadSaysWhy() {
 }
 
 node rejectedAuditSaysWhy() {
-  const result = safeBash("echo hi; echo bye")
+  const result = safeBash("echo hi | cat")
   if (result is failure(why)) {
     return why
   }
@@ -1031,6 +1033,8 @@ node loneReadIsShellFree() {
     outcomeOf(planFor("head -n 1 -n 2 one.txt", FIXTURES)),
     outcomeOf(planFor("head -2 -n 1 one.txt", FIXTURES)),
     outcomeOf(planFor("tail -n 1 -n 2 one.txt", FIXTURES)),
+    outcomeOf(planFor("head one.txt two.txt", FIXTURES)),
+    outcomeOf(planFor("cat -n one.txt two.txt", FIXTURES)),
   ]
 }
 
@@ -1086,7 +1090,23 @@ node shellFreeReadMatchesRealTools() {
     exactParityOf("cat -n empty.txt", "read", READ_FIXTURES),
     exactParityOf("cat crlf.txt", "read", READ_FIXTURES),
     exactParityOf("tail -1 crlf.txt", "read", READ_FIXTURES),
+    exactParityOf("cat one.txt noeol.txt", "read", READ_FIXTURES),
+    exactParityOf("cat noeol.txt one.txt", "read", READ_FIXTURES),
+    exactParityOf("cat empty.txt one.txt", "read", READ_FIXTURES),
+    exactParityOf("cat one.txt one.txt", "read", READ_FIXTURES),
   ]
+}
+
+node catOfTwoFilesAsksTwoQuestions() {
+  // Two std::read approvals, one per file, and no shell. The plan's kind
+  // comes first, because the bash path asks the same two questions and
+  // prints the same text; only the kind tells the two apart.
+  const kind = planFor("cat one.txt two.txt", FIXTURES).execution.kind
+  const result = safeBash("cat one.txt two.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return [kind, result.value]
 }
 
 node loneReadAsksOneQuestion() {
@@ -1145,4 +1165,81 @@ node shellFreeEchoMatchesBash() {
     exactParityOf("echo -nn a b", "echo", FIXTURES),
     exactParityOf("echo 'a\\tb'", "echo", FIXTURES),
   ]
+}
+
+def chainSummary(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  return [outcomeOf(plan), plan.execution.kind, [e.name for e in plan.effects]]
+}
+
+node chainsOfInProcessCommands() {
+  return [
+    chainSummary("echo a; echo b"),
+    chainSummary("echo \"=== one ===\"; cat one.txt; echo; echo \"=== two ===\"; cat two.txt"),
+    chainSummary("cat one.txt && cat two.txt"),
+    chainSummary("grep hello one.txt || echo none"),
+    chainSummary("echo a && echo b || echo c"),
+    chainSummary("echo a; git status"),
+    chainSummary("echo a; true"),
+    chainSummary("echo a && (echo b || echo c)"),
+    chainSummary("echo a; cat one.txt | head"),
+    chainSummary("cat nope.txt; echo hi"),
+    chainSummary("echo hi > out.txt; cat out.txt"),
+    chainSummary("cat one.txt && rm one.txt"),
+    chainSummary("echo a; agency --version"),
+  ]
+}
+
+node chainMatchesBash() {
+  // Every grep here names one file, so no skipped-folders note appears
+  // and the comparison can be exact.
+  return [
+    exactParityOf("echo \"=== one ===\"; cat one.txt; echo; echo \"=== two ===\"; cat two.txt", "chain", FIXTURES),
+    exactParityOf("cat one.txt && echo finished", "chain", FIXTURES),
+    exactParityOf("grep hello one.txt || echo none", "chain", FIXTURES),
+    exactParityOf("grep zzz one.txt || echo none", "chain", FIXTURES),
+    exactParityOf("echo a && echo b || echo c", "chain", FIXTURES),
+    exactParityOf("cat -n one.txt; cat -n two.txt", "chain", FIXTURES),
+  ]
+}
+
+/** A folder of its own for the chain test that really writes. */
+static const CHAIN_FIXTURE = __dirname + "/stdlib/__safebash_chain__"
+
+def destructiveFlag(result: Result<string>): any {
+  if (result is failure) {
+    return result.destructiveRan
+  }
+  return "UNEXPECTEDLY SUCCEEDED"
+}
+
+node chainFailureAfterAWriteIsDestructive() {
+  remove(CHAIN_FIXTURE) with approve
+  mkdir(CHAIN_FIXTURE) with approve
+  bash("cp " + FIXTURES + "/one.txt .", cwd: CHAIN_FIXTURE) with approve
+  // The write ran, then the grep found nothing. The failure must say a
+  // destructive step ran, or the tool loop may retry and write twice.
+  const after = safeBash("echo hi > out.txt; grep zzz one.txt", cwd: CHAIN_FIXTURE)
+  // Here the grep fails first and && skips the write, so nothing ran.
+  const before = safeBash("grep zzz one.txt && echo hi > out.txt", cwd: CHAIN_FIXTURE)
+  remove(CHAIN_FIXTURE) with approve
+  return [destructiveFlag(after), destructiveFlag(before)]
+}
+
+node chainFailsLikeBash() {
+  // grep with no match exits 1, so && skips the echo and the chain fails;
+  // || runs it and the chain succeeds. Approved by the test file.
+  const skipped = safeBash("grep zzz one.txt && echo yes", cwd: FIXTURES)
+  const ran = safeBash("grep zzz one.txt || echo no", cwd: FIXTURES)
+  return [skipped is failure, ran]
+}
+
+node chainOfReadsAsksOnlyTheReads() {
+  // The two cats ask std::read each; the echoes ask nothing, and no
+  // shell runs.
+  const result = safeBash("echo \"=== one ===\"; cat one.txt; echo; echo \"=== two ===\"; cat two.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
 }

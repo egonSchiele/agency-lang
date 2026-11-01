@@ -133,6 +133,7 @@ export type Execution =
   | RefuseExec
   | GrepExec
   | ReadExec
+  | ChainExec
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
@@ -267,22 +268,77 @@ export type ReadView =
 
 ### ReadExec
 
-A lone cat, head, or tail of one file, run through the read tool's
-own read with no shell. The read covers only what `payload` names, so
-the approval means what the read tool's approval means.
+A lone cat of one or more files, or a head or tail of one, run
+through the read tool's own read with no shell. The read covers only
+what `payloads` names, so the approval means what the read tool's
+approval means.
 
 ```ts
-/** A lone cat, head, or tail of one file, run through the read tool's
- * own read with no shell. The read covers only what `payload` names, so
- * the approval means what the read tool's approval means. */
+/** A lone cat of one or more files, or a head or tail of one, run
+ * through the read tool's own read with no shell. The read covers only
+ * what `payloads` names, so the approval means what the read tool's
+ * approval means. */
 export type ReadExec = {
   kind: "read";
-  payload: ReadPayload;
+  payloads: ReadPayload[];
   view: ReadView
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L188))
+
+### Join
+
+How a chain step follows the one before it: `;` always runs it, `&&`
+only after a success, `||` only after a failure.
+
+```ts
+/** How a chain step follows the one before it: `;` always runs it, `&&`
+ * only after a success, `||` only after a failure. */
+export type Join = "seq" | "and" | "or"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L196))
+
+### StepExec
+
+The executions a chain may hold: every in-process kind, and nothing
+that spawns a shell.
+
+```ts
+/** The executions a chain may hold: every in-process kind, and nothing
+ * that spawns a shell. */
+export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L200))
+
+### ChainStep
+
+```ts
+export type ChainStep = {
+  join: Join;
+  execution: StepExec
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L202))
+
+### ChainExec
+
+Several in-process commands joined by `;`, `&&`, or `||`, run left to
+right with bash's rule for each join.
+
+```ts
+/** Several in-process commands joined by `;`, `&&`, or `||`, run left to
+ * right with bash's rule for each join. */
+export type ChainExec = {
+  kind: "chain";
+  steps: ChainStep[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L209))
 
 ### RefuseExec
 
@@ -293,7 +349,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L203))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L224))
 
 ### BroadReason
 
@@ -317,7 +373,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L212))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L233))
 
 ### Plan
 
@@ -336,7 +392,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L239))
 
 ## Functions
 
@@ -430,22 +486,22 @@ the search run cannot disagree.
 ### readExecution
 
 ```ts
-readExecution(payload: ReadPayload, view: ReadView): ReadExec
+readExecution(payloads: ReadPayload[], view: ReadView): ReadExec
 ```
 
-Both plan sides derive from one ReadPayload, so the question asked and
-the file read cannot disagree.
+Both plan sides derive from the same ReadPayloads, so the questions
+asked and the files read cannot disagree.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| payload | [ReadPayload](#readpayload) |  |
+| payloads | `ReadPayload[]` |  |
 | view | [ReadView](#readview) |  |
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L216))
 
 ### runBash
 
@@ -481,7 +537,7 @@ Run a command string through bash and return what it printed.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L250))
 
 ### runGrep
 
@@ -503,7 +559,28 @@ Run a lone grep through the grep tool's own search and print what grep
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L292))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L313))
+
+### printGrep
+
+```ts
+printGrep(exec: GrepExec): Result<string>
+```
+
+What a shell-free grep prints, before long output is saved. No match is
+  a failure carrying the notes, the text grep would write to stderr.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| exec | [GrepExec](#grepexec) |  |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L330))
 
 ### runRead
 
@@ -511,8 +588,8 @@ Run a lone grep through the grep tool's own search and print what grep
 runRead(exec: ReadExec, command: string): Result<string>
 ```
 
-Run a lone cat, head, or tail of one file through the read tool's own
-  read and print what the program would print.
+Run a lone cat, head, or tail through the read tool's own read and
+  print what the program would print.
 
 **Parameters:**
 
@@ -525,7 +602,30 @@ Run a lone cat, head, or tail of one file through the read tool's own
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L326))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L374))
+
+### printRead
+
+```ts
+printRead(exec: ReadExec): Result<string>
+```
+
+What a shell-free read prints, before long output is saved: each file
+  read in order, the texts joined, and the joined text rendered once. A
+  first file with no final newline runs into the second, as real cat
+  prints it.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| exec | [ReadExec](#readexec) |  |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L386))
 
 ### runWrite
 
@@ -550,4 +650,29 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L359))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L425))
+
+### runChain
+
+```ts
+runChain(exec: ChainExec, command: string): Result<string>
+```
+
+Run a chain of in-process commands left to right with bash's rule: `;`
+  runs the next step whatever happened, `&&` only after a success, `||`
+  only after a failure. A skipped step changes nothing. The chain fails
+  when the last step that ran failed. A failed step adds no text, the way
+  a failing program's complaint goes to stderr.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| exec | [ChainExec](#chainexec) |  |
+| command | `string` |  |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L448))

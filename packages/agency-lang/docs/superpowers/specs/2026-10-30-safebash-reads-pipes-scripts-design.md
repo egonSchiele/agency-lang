@@ -447,6 +447,9 @@ from the rows above and from "Paths" below:
   and `sort` with no path in a later pipe stage adds nothing. `tr` is the
   one filter with its own rule, because its positionals are character
   sets.
+- A chain of in-process commands joined by `;`, `&&`, or `||` runs in
+  process (ADI-262); a parenthesized group or a pipeline in the chain
+  sends the line through bash.
 
 See `docs/dev/stdlib/safe-bash.md`, "The read family".
 

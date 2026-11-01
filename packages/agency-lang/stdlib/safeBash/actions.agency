@@ -108,7 +108,7 @@ export type GitDiffPayload = {
  * fields that way needs. The dispatch in `safeBash` matches over this
  * union exhaustively, so adding a variant is a type error at the dispatch
  * rather than a silent fall-through. */
-export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec
+export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | ChainExec
 
 export type BashExec = {
   kind: "bash";
@@ -181,21 +181,42 @@ export type ReadView =
   | { kind: "head"; lines: number }
   | { kind: "tail"; lines: number }
 
-/** A lone cat, head, or tail of one file, run through the read tool's
- * own read with no shell. The read covers only what `payload` names, so
- * the approval means what the read tool's approval means. */
+/** A lone cat of one or more files, or a head or tail of one, run
+ * through the read tool's own read with no shell. The read covers only
+ * what `payloads` names, so the approval means what the read tool's
+ * approval means. */
 export type ReadExec = {
   kind: "read";
-  payload: ReadPayload;
+  payloads: ReadPayload[];
   view: ReadView
 }
 
-/** Both plan sides derive from one ReadPayload, so the question asked and
- * the file read cannot disagree. */
-export def readExecution(payload: ReadPayload, view: ReadView): ReadExec {
+/** How a chain step follows the one before it: `;` always runs it, `&&`
+ * only after a success, `||` only after a failure. */
+export type Join = "seq" | "and" | "or"
+
+/** The executions a chain may hold: every in-process kind, and nothing
+ * that spawns a shell. */
+export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
+
+export type ChainStep = {
+  join: Join;
+  execution: StepExec
+}
+
+/** Several in-process commands joined by `;`, `&&`, or `||`, run left to
+ * right with bash's rule for each join. */
+export type ChainExec = {
+  kind: "chain";
+  steps: ChainStep[]
+}
+
+/** Both plan sides derive from the same ReadPayloads, so the questions
+ * asked and the files read cannot disagree. */
+export def readExecution(payloads: ReadPayload[], view: ReadView): ReadExec {
   return {
     kind: "read",
-    payload: payload,
+    payloads: payloads,
     view: view
   }
 }
@@ -294,6 +315,36 @@ export def runGrep(exec: GrepExec, command: string): Result<string> {
   Run a lone grep through the grep tool's own search and print what grep
   would print. No match is the failure grep's exit code 1 would give.
   """
+  const found = grepResults(exec)
+  if (isFailure(found)) {
+    return found
+  }
+  const results: any[] = found.value
+  if (results.length == 0) {
+    return exitFailure(command, 1, "", grepNotes(exec.payload, 0), command)
+  }
+  return success(keepOutput(grepText(exec, results), 0, command))
+}
+
+@capabilities(fileRead)
+export def printGrep(exec: GrepExec): Result<string> {
+  """
+  What a shell-free grep prints, before long output is saved. No match is
+  a failure carrying the notes, the text grep would write to stderr.
+  """
+  const found = grepResults(exec)
+  if (isFailure(found)) {
+    return found
+  }
+  const results: any[] = found.value
+  if (results.length == 0) {
+    return failure(grepNotes(exec.payload, 0))
+  }
+  return success(grepText(exec, results))
+}
+
+@capabilities(fileRead)
+def grepResults(exec: GrepExec): Result<any[]> {
   // `_grep`, NOT `grep`, for the reason `runBash` gives: the `grep` tool
   // raises its own std::grep, and the caller already raised one carrying
   // this same payload. The only path here runs through `raiseAll`.
@@ -306,40 +357,55 @@ export def runGrep(exec: GrepExec, command: string): Result<string> {
     filesOnly: payload.filesOnly,
     invert: payload.invert
   }
-  const found = try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
-  if (isFailure(found)) {
-    return found
-  }
-  const results: any[] = found.value
-  const notes = grepNotes(payload, results.length)
-  if (results.length == 0) {
-    return exitFailure(command, 1, "", notes, command)
-  }
+  return try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
+}
+
+/** The matches as grep prints them, then the notes, if any. */
+def grepText(exec: GrepExec, results: any[]): string {
   const printed = _renderGrepOutput(results, exec.render)
+  const notes = grepNotes(exec.payload, results.length)
   if (notes == "") {
-    return success(keepOutput(printed, 0, command))
+    return printed
   }
-  return success(keepOutput(printed + notes + "\n", 0, command))
+  return printed + notes + "\n"
 }
 
 @capabilities(fileRead)
 export def runRead(exec: ReadExec, command: string): Result<string> {
   """
-  Run a lone cat, head, or tail of one file through the read tool's own
-  read and print what the program would print.
+  Run a lone cat, head, or tail through the read tool's own read and
+  print what the program would print.
+  """
+  return match(printRead(exec)) {
+    success(text) => success(keepOutput(text, 0, command))
+    failure(why) => failure(why)
+  }
+}
+
+@capabilities(fileRead)
+export def printRead(exec: ReadExec): Result<string> {
+  """
+  What a shell-free read prints, before long output is saved: each file
+  read in order, the texts joined, and the joined text rendered once. A
+  first file with no final newline runs into the second, as real cat
+  prints it.
   """
   // `_read`, NOT `read`, for the reason `runBash` gives: the `read` tool
   // raises its own std::read, and the caller already raised one carrying
-  // this same payload. The only path here runs through `raiseAll`.
+  // each of these payloads. The only path here runs through `raiseAll`.
   //
   // The plan refused a missing file or a folder before anything ran, so
   // a failure here is a race or a permission error, and `_read`'s own
-  // message says which.
-  const text = try _read(exec.payload.dir, exec.payload.filename)
-  if (isFailure(text)) {
-    return text
+  // message says which. The text of the files read before it is dropped.
+  let joined = ""
+  for (payload in exec.payloads) {
+    const text = try _read(payload.dir, payload.filename)
+    if (isFailure(text)) {
+      return text
+    }
+    joined = joined + text.value
   }
-  return success(keepOutput(_renderReadView(text.value, exec.view), 0, command))
+  return success(_renderReadView(joined, exec.view))
 }
 
 /** The lines safeBash adds to a shell-free grep's output: which folders
@@ -376,4 +442,67 @@ export def runWrite(exec: WriteExec): Result<string> {
     }
   }
   return success("")
+}
+
+@capabilities(fileRead, fileWrite)
+export def runChain(exec: ChainExec, command: string): Result<string> {
+  """
+  Run a chain of in-process commands left to right with bash's rule: `;`
+  runs the next step whatever happened, `&&` only after a success, `||`
+  only after a failure. A skipped step changes nothing. The chain fails
+  when the last step that ran failed. A failed step adds no text, the way
+  a failing program's complaint goes to stderr.
+  """
+  let out = ""
+  let ok = true
+  let lastError = ""
+  for (step in exec.steps) {
+    if (skipsStep(step.join, ok)) {
+      continue
+    }
+    let printed: Result<string> = success("")
+    if (step.execution.kind == "write") {
+      // A region of runChain's own: runWrite enters one, but that marks
+      // runWrite's activation, and a failure built here after the write
+      // (`echo started >> log.txt; grep zzz one.txt`) would otherwise say
+      // nothing destructive ran, so the tool loop could retry and write
+      // twice. Entered before `_write` runs, so a write that fails before
+      // writing still says true, which is the safe direction.
+      destructive {
+        printed = printStep(step.execution)
+      }
+    } else {
+      printed = printStep(step.execution)
+    }
+    if (printed is success(text)) {
+      out = out + text
+      ok = true
+    } else if (printed is failure(why)) {
+      ok = false
+      lastError = "${why}"
+    }
+  }
+  if (!ok) {
+    return exitFailure(command, 1, out, lastError, command)
+  }
+  return success(keepOutput(out, 0, command))
+}
+
+/** Whether bash skips a step after this join, given how the last step that
+ * ran ended. */
+def skipsStep(join: Join, ok: boolean): boolean {
+  return (join == "and" && !ok) || (join == "or" && ok)
+}
+
+@capabilities(fileRead, fileWrite)
+def printStep(exec: StepExec): Result<string> {
+  """
+  What one chain step prints, before long output is saved.
+  """
+  return match(exec) {
+    { kind: "echo", content } => success(content)
+    { kind: "write" } => runWrite(exec)
+    { kind: "grep" } => printGrep(exec)
+    { kind: "read" } => printRead(exec)
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAgency } from "../../parser.js";
+import { declaredName } from "../../types/hole.js";
 import { walkNodes } from "../../utils/node.js";
 import { DRIVER_NAMES, DRIVER_NODES, driverSource } from "./driver.js";
 
@@ -48,7 +49,7 @@ describe("driverSource", () => {
         }
       }
       if (node.type === "graphNode") {
-        bound.push(node.nodeName);
+        bound.push(declaredName(node.nodeName));
       }
       if (node.type === "assignment") {
         bound.push(node.variableName);

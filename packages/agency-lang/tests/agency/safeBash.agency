@@ -148,7 +148,6 @@ node shellFreeEcho() {
     planDetail("echo \"a b\" c"),
     planDetail("echo -n hi"),
     planDetail("echo hi; echo bye"),
-    planDetail("echo hi < one.txt"),
   ]
 }
 
@@ -879,6 +878,8 @@ node readVerbsReadFiles() {
     readOf("cut -c 1-3 one.txt"),
     readOf("diff"),
     readOf("diff -U x one.txt two.txt"),
+    readOf("head -n 1 -n 2 one.txt"),
+    readOf("head -2 -n 1 one.txt"),
   ]
 }
 
@@ -930,6 +931,7 @@ node inputRedirectIsARead() {
     grepNames("git status < one.txt < two.txt"),
     grepNames("git status < ."),
     grepNames("git status | grep hello < one.txt"),
+    grepNames("echo hi < one.txt"),
   ]
 }
 
@@ -1019,6 +1021,9 @@ node loneReadIsShellFree() {
     outcomeOf(planFor("cat one.txt | head", FIXTURES)),
     outcomeOf(planFor("wc -l one.txt", FIXTURES)),
     outcomeOf(planFor("cat nope.txt", FIXTURES)),
+    outcomeOf(planFor("head -n 1 -n 2 one.txt", FIXTURES)),
+    outcomeOf(planFor("head -2 -n 1 one.txt", FIXTURES)),
+    outcomeOf(planFor("tail -n 1 -n 2 one.txt", FIXTURES)),
   ]
 }
 

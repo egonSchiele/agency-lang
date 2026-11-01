@@ -514,6 +514,12 @@ Only `\n` ends a line, so a `\r` stays inside its line. A count of 0 is
 refused, because BSD `head -n 0` prints an error and exits 1 while GNU
 prints nothing. `cat -b`, `cat -s`, and `-c` go through bash.
 
+A count given twice never reaches the renderer. `splitFlags` takes a
+valued flag once, so `head -n 1 -n 2` and `head -2 -n 1` are refused on
+every path and ask `std::bash`. GNU head and tail take the last count,
+BSD head takes the last, and BSD tail refuses the line, so no one
+answer would be right.
+
 `runRead` returns `_read`'s own failure. The plan already refused a
 missing file or a folder, so a failure there is a race or a permission
 error, and `_read`'s message says which.

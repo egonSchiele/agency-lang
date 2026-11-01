@@ -57,9 +57,9 @@
     },
     {
       "nodeName": "shellFreeEcho",
-      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a flag, or a sequence sends it to bash. An input redirect is never shell-free.",
+      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a flag, or a sequence sends it to bash.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -638,9 +638,9 @@
     },
     {
       "nodeName": "readVerbsReadFiles",
-      "description": "Each read verb's row says what a command reads: the files it names, each a regular file, or its stdin when it names none. A digit flag on head or tail is a line count unless it is the value of -n. A folder, a missing file, a variable or a glob, a flag the row does not list, or the wrong number of paths is unrecognized.",
+      "description": "Each read verb's row says what a command reads: the files it names, each a regular file, or its stdin when it names none. A digit flag on head or tail is a line count unless it is the value of -n. A folder, a missing file, a variable or a glob, a flag the row does not list, a count given twice, or the wrong number of paths is unrecognized.",
       "input": "",
-      "expectedOutput": "[[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],\"stdin\",\"stdin\",\"head takes at most 1 path\",\"uniq takes at most 1 path\",\"the value of `-n` is not a number\",\"the value of `-n` is not literal\",\"tail does not take `-f`\",\"cat does not take `-A`\",\"the cat path is not literal\",\"the cat path is not literal\",\"diff takes 2 paths\",\"diff does not take `-r`\",\"cat would read a directory\",true,\"sort does not take `-o`\",\"an option after the first argument is a file name to some versions of cat\",[\"one.txt\"],\"diff takes 2 paths\",\"the value of `-U` is not a number\"]",
+      "expectedOutput": "[[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\"],[\"one.txt\",\"two.txt\"],[\"one.txt\"],[\"one.txt\"],\"stdin\",\"stdin\",\"head takes at most 1 path\",\"uniq takes at most 1 path\",\"the value of `-n` is not a number\",\"the value of `-n` is not literal\",\"tail does not take `-f`\",\"cat does not take `-A`\",\"the cat path is not literal\",\"the cat path is not literal\",\"diff takes 2 paths\",\"diff does not take `-r`\",\"cat would read a directory\",true,\"sort does not take `-o`\",\"an option after the first argument is a file name to some versions of cat\",[\"one.txt\"],\"diff takes 2 paths\",\"the value of `-U` is not a number\",\"head takes `-n` only once\",\"head takes `-n` only once\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -671,9 +671,9 @@
     },
     {
       "nodeName": "inputRedirectIsARead",
-      "description": "A < redirect reads its target, so it asks std::read beside the command's own question. A stdin reader with only an input redirect stays unrecognized, and so does a variable target, two input redirects, or a folder. A pipe-fed grep with an input redirect reads the file, so the line asks for it.",
+      "description": "A < redirect reads its target, so it asks std::read beside the command's own question. A stdin reader with only an input redirect stays unrecognized, and so does a variable target, two input redirects, or a folder. A pipe-fed grep with an input redirect reads the file, so the line asks for it. An echo with an input redirect is not shell-free: the shell opens the file, so it asks std::read and runs through bash.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::status\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat with no path reads stdin\"}],[[\"std::read\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`variable` is not fully literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"more than one input redirect\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an input redirect would read a directory\"}],[[\"std::git::status\",\"std::read\"],null]]",
+      "expectedOutput": "[[[\"std::git::status\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"cat with no path reads stdin\"}],[[\"std::read\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`variable` is not fully literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"more than one input redirect\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an input redirect would read a directory\"}],[[\"std::git::status\",\"std::read\"],null],[[\"std::read\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -753,9 +753,9 @@
     },
     {
       "nodeName": "loneReadIsShellFree",
-      "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash.",
+      "description": "A lone cat, cat -n, head -n N, or tail -n N of one file runs shell-free. Another flag, a count of 0, two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
       "input": "",
-      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\"]",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

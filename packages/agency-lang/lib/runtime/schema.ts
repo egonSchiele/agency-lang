@@ -24,14 +24,16 @@ export class Schema {
   }
 
   /**
-   * Convert this schema to a JSON Schema document. Picks up any
-   * `@jsonSchema(...)` metadata attached via `.meta(...)` and merges it
-   * into the output. Use this from agency code to verify that
-   * `@jsonSchema(...)` annotations actually propagate to the wire
-   * format LLMs and JSON-schema consumers see.
+   * Convert this schema to a JSON Schema document, with any
+   * `@jsonSchema(...)` metadata attached via `.meta(...)` merged in.
+   *
+   * The output form, the default, describes a parsed value: a key with a
+   * default is always present after parsing, so it is required. The input
+   * form describes what a caller may send, where such a key is optional.
+   * Agency code asks for it with `schema(T).toJSONSchema("input")`.
    */
-  toJSONSchema(): unknown {
-    return z.toJSONSchema(this.zodSchema);
+  toJSONSchema(io: "input" | "output" = "output"): unknown {
+    return z.toJSONSchema(this.zodSchema, { io });
   }
 }
 

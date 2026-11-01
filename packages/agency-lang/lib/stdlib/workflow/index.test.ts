@@ -78,7 +78,7 @@ const MEAL_PLAN_SOURCE = [
   "}",
   "",
   "export node inputsSchema(): Json {",
-  "  return schema(Inputs).toJSONSchema()",
+  '  return schema(Inputs).toJSONSchema("input")',
   "}",
   "",
 ].join("\n");

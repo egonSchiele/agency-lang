@@ -167,9 +167,9 @@
     },
     {
       "nodeName": "savedMetaHasInputsSchema",
-      "description": "meta.json holds the inputs schema; an optional input is required and nullable",
+      "description": "the saved file holds the inputs schema; an optional input is nullable and not required",
       "input": "",
-      "expectedOutput": "[\"string\",\"number\",true,[\"noteTitle\",\"a\",\"b\"],[\"noteTitle\",\"a\",\"b\"]]",
+      "expectedOutput": "[\"string\",\"number\",true,[\"noteTitle\",\"a\"],[\"noteTitle\",\"a\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"

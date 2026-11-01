@@ -50,6 +50,15 @@ describe("Schema", () => {
     expect(schema.parse("happy").success).toBe(true);
     expect(schema.parse("angry").success).toBe(false);
   });
+
+  it("toJSONSchema: a key with a default is required in the output form and optional in the input form", () => {
+    const schema = new Schema(
+      z.object({ a: z.number(), b: z.union([z.number(), z.null()]).optional().default(null) }),
+    );
+    const required = (form: unknown) => (form as { required: string[] }).required;
+    expect(required(schema.toJSONSchema())).toEqual(["a", "b"]);
+    expect(required(schema.toJSONSchema("input"))).toEqual(["a"]);
+  });
 });
 
 describe("__validateType", () => {

@@ -478,8 +478,8 @@ embeddings request, and a speech process `GET /health`.
 **Python.** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`,
 then `~/.agency-agent/mlx-env/bin/python`. `serve` imports the modules each
 planned kind needs: `mlx_lm` for a chat or embedding model, `mlx_audio` for
-a speech model, and torch, diffusers, transformers, and accelerate for an
-image model. So `mlx-env` holds the image packages too, and someone who only
+a speech model, and torch, torchvision, diffusers, transformers, and
+accelerate for an image model. So `mlx-env` holds the image packages too, and someone who only
 serves images installs no MLX in it. On failure it prints the venv commands
 for the default environment, installing what those kinds need, and exits.
 Agency does not install Python.
@@ -555,7 +555,7 @@ which answers `POST /v1/images/generations`:
 
 The flag is optional: any diffusers directory is an image model, so
 `serve` starts the image server for one named without it, and the picker
-offers downloaded image models. An image process needs torch, diffusers, transformers, and accelerate. It
+offers downloaded image models. An image process needs torch, torchvision, diffusers, transformers, and accelerate. It
 generates once before opening its port, so readiness probes `GET /health`.
 See `local-images.md`.
 

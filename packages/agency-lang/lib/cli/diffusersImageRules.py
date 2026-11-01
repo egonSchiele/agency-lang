@@ -161,7 +161,7 @@ INPUT_IMAGES = {
         # The model only looks at a reference, so it can stay any shape.
         "fit": "shrink",
         "background": "white",
-        "refusal": "{label} does not take reference images. Only {families} takes them.",
+        "refusal": "{label} does not take reference images. {families} can.",
         "check": "reference_problem",
         "arg": "image",
     },
@@ -252,11 +252,15 @@ MAX_LOADED_ADAPTERS = 2
 # What each family takes, keyed by `_class_name` in model_index.json.
 #
 #   label            how the family is named in a message
+#   loads            the diffusers class the server loads. It is one of the
+#                    classes in `pipelines`: the plain one for a family
+#                    that draws from a prompt alone.
 #   pipelines        the diffusers class for each mode the family takes.
-#                    "plain" is the class the server loads; the class of
-#                    another mode is built from the loaded one's parts. A
-#                    mode with no class here is refused. The server takes
-#                    each class from here, never from the file.
+#                    The class of a mode whose class is not `loads` is
+#                    built from the loaded pipeline's parts. A mode with
+#                    no class here is refused. A family may have no plain
+#                    class. The server takes each class from here, never
+#                    from the file.
 #   default_steps    the model card's step count
 #   max_steps        the most steps one request may ask for
 #   default_guidance the model card's guidance
@@ -297,6 +301,7 @@ MAX_LOADED_ADAPTERS = 2
 FAMILIES = {
     "ZImagePipeline": {
         "label": "Z-Image Turbo",
+        "loads": "ZImagePipeline",
         "pipelines": {
             "plain": "ZImagePipeline",
             "img2img": "ZImageImg2ImgPipeline",
@@ -324,6 +329,7 @@ FAMILIES = {
     },
     "ChromaPipeline": {
         "label": "Chroma",
+        "loads": "ChromaPipeline",
         "pipelines": {
             "plain": "ChromaPipeline",
             "img2img": "ChromaImg2ImgPipeline",
@@ -353,6 +359,7 @@ FAMILIES = {
     },
     "QwenImagePipeline": {
         "label": "Qwen-Image",
+        "loads": "QwenImagePipeline",
         "pipelines": {
             "plain": "QwenImagePipeline",
             "img2img": "QwenImageImg2ImgPipeline",
@@ -382,6 +389,7 @@ FAMILIES = {
     },
     "Flux2KleinPipeline": {
         "label": "FLUX.2 [klein]",
+        "loads": "Flux2KleinPipeline",
         # One class does both: it edits when it is given images.
         "pipelines": {"plain": "Flux2KleinPipeline", "reference": "Flux2KleinPipeline"},
         "default_steps": 4,
@@ -415,6 +423,7 @@ FAMILIES = {
     # base SDXL's card says 50 steps at 5.0, well inside the caps.
     "StableDiffusionXLPipeline": {
         "label": "SDXL",
+        "loads": "StableDiffusionXLPipeline",
         # Only SDXL takes a ControlNet: every catalog ControlNet is an SDXL one.
         "pipelines": {
             "plain": "StableDiffusionXLPipeline",
@@ -457,11 +466,56 @@ FAMILIES = {
         # encode as zeros, as the model was trained.
         "settings": {"force_zeros_for_empty_prompt": True},
     },
+    # Qwen-Image-Edit-2511. It edits the pictures it is given, so its only
+    # mode is reference, and a request with no picture is refused. The
+    # steps, guidance, and blank negative prompt are the model card's, and
+    # match Qwen-Image.
+    "QwenImageEditPlusPipeline": {
+        "label": "Qwen-Image-Edit",
+        "loads": "QwenImageEditPlusPipeline",
+        "pipelines": {"reference": "QwenImageEditPlusPipeline"},
+        "default_steps": 40,
+        "max_steps": 80,
+        "default_guidance": 4.0,
+        "takes_guidance": True,
+        # Like Qwen-Image, it ignores guidance_scale.
+        "guidance_arg": "true_cfg_scale",
+        "default_negative_prompt": " ",
+        "takes_lora": False,
+        "default_strength": None,
+        "img2img_takes_size": None,
+        "img2img_steps": None,
+        "inpaint_default_strength": None,
+        "components": {
+            "processor": [["transformers", "Qwen2VLProcessor"]],
+            "scheduler": [["diffusers", "FlowMatchEulerDiscreteScheduler"]],
+            "text_encoder": [["transformers", "Qwen2_5_VLForConditionalGeneration"]],
+            "tokenizer": [["transformers", "Qwen2Tokenizer"]],
+            "transformer": [["diffusers", "QwenImageTransformer2DModel"]],
+            "vae": [["diffusers", "AutoencoderKLQwenImage"]],
+        },
+        "settings": {},
+    },
 }
 
 # The one image the server makes before it opens its port: small and
 # short, so start-up waits seconds, not a full generation.
 WARM_UP_PROMPT = "A red apple on a wooden table."
+
+# A 64x64 grey PNG, the smallest picture a reference may be. A family
+# whose loaded class edits pictures warms up with it.
+WARM_UP_PICTURE = (
+    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAKUlEQVR42u3MQREAAAwCIKMb3RD77SAA6VEEAoFAI"
+    "BAIBAKBQCAQfA8G320AeXC6efoAAAAASUVORK5CYII="
+)
+
+# The image fields a warm-up request sends in each mode it can run in, in
+# order of preference.
+WARM_UP_INPUTS = {"plain": {}, "reference": {"images": [WARM_UP_PICTURE]}}
+
+# The refusal for a plain request to a family with no plain class. Plain
+# mode has no image field, so its refusal is not in INPUT_IMAGES.
+PLAIN_REFUSAL = "{label} cannot generate from a prompt alone. Send at least one picture in images."
 
 
 class RequestError(Exception):
@@ -916,9 +970,8 @@ def mode_of(rules, body):
             )
     if mode not in rules["pipelines"]:
         families = [row["label"] for row in FAMILIES.values() if mode in row["pipelines"]]
-        raise RequestError(
-            INPUT_IMAGES[field]["refusal"].format(label=rules["label"], families=join_names(families))
-        )
+        refusal = PLAIN_REFUSAL if field is None else INPUT_IMAGES[field]["refusal"]
+        raise RequestError(refusal.format(label=rules["label"], families=join_names(families)))
     return mode
 
 
@@ -1276,7 +1329,15 @@ def pipeline_args(rules, request, width, height):
     return args
 
 
-def warm_up_request():
+def warm_up_mode(rules):
+    """The first mode in WARM_UP_INPUTS that runs the class the server
+    loads: plain for a family that draws from a prompt alone, reference
+    for one that only edits."""
+    return next(mode for mode in WARM_UP_INPUTS if rules["pipelines"].get(mode) == rules["loads"])
+
+
+def warm_up_request(rules):
     """The body of the one request the server makes to itself before it
-    opens its port."""
-    return {"prompt": WARM_UP_PROMPT, "size": "512x512", "steps": 2, "seed": 0}
+    opens its port, with the image fields of warm_up_mode."""
+    body = {"prompt": WARM_UP_PROMPT, "size": "512x512", "steps": 2, "seed": 0}
+    return {**body, **WARM_UP_INPUTS[warm_up_mode(rules)]}

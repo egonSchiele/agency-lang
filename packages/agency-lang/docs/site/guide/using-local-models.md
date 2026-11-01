@@ -342,7 +342,7 @@ Four open image models run on this machine:
 `z-image-turbo` and `chroma1-hd` have no content filter in their weights; `flux2-klein-4b` is safety fine-tuned. They run on Hugging Face's diffusers library rather than MLX, so they need torch and diffusers in the same Python:
 
 ```bash
-~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
+~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 torchvision==0.29.2 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
 ```
 
 You can serve images without installing any MLX packages; `serve` checks only for what the models you name need.

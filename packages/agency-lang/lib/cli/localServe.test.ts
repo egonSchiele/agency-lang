@@ -430,7 +430,7 @@ describe("messages", () => {
     });
     expect(msg).toContain("/py/bin/python cannot import diffusers.");
     expect(msg).toContain(
-      "/home/me/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2",
+      "/home/me/.agency-agent/mlx-env/bin/pip install torch==2.14.0 torchvision==0.29.2 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2",
     );
     expect(msg).not.toContain("mlx-lm");
     expect(msg).not.toContain("mlx-audio");
@@ -445,7 +445,7 @@ describe("messages", () => {
     ]);
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
     expect(msg).toContain(
-      "/home/me/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2\n",
+      "/home/me/.agency-agent/mlx-env/bin/pip install torch==2.14.0 torchvision==0.29.2 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2\n",
     );
     expect(msg).not.toContain("mlx-lm");
   });
@@ -1333,6 +1333,7 @@ describe("runServe", () => {
     const handle = await runServe([], { port: 0, image: ["diffusers:org/img"] }, deps);
     expect(imports).toEqual([
       "import torch",
+      "import torchvision",
       "import diffusers",
       "import transformers",
       "import accelerate",

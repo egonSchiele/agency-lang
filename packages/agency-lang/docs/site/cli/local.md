@@ -156,7 +156,7 @@ agency local serve --image z-image-turbo                      # /v1/images/gener
 An image model is named by a catalog name, a `diffusers:` URI such as `diffusers:Tongyi-MAI/Z-Image-Turbo`, or a directory holding `model_index.json`. It needs torch and diffusers in the same Python, and no MLX packages:
 
 ```bash
-~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
+~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 torchvision==0.29.2 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
 ```
 
 Agency code calls it with `generateImageLocal` from `std::image`. On an M5 Ultra, `z-image-turbo` makes a 1024×1024 image in about 8 seconds and `chroma1-hd` in about 90. The catalog also has `qwen-image-2512`, for legible text inside an image, and `flux2-klein-4b`, a small model for Macs with less memory; neither has been timed yet.

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
+import { crc32, deflateSync } from "node:zlib";
 import { freePort, imageServerScript } from "./localServe.js";
 
 // Runs the real image server on a real model. It needs a Mac GPU, torch,
@@ -8,9 +9,12 @@ import { freePort, imageServerScript } from "./localServe.js";
 //
 //   AGENCY_IMAGE_MODEL_DIR  a Z-Image Turbo or Chroma model directory
 //   AGENCY_KLEIN_MODEL_DIR  a FLUX.2 [klein] model directory
+//   AGENCY_QWEN_EDIT_MODEL_DIR
+//                           a Qwen-Image-Edit-2511 model directory
 //   AGENCY_IMAGE_PYTHON     a Python with the pinned image packages
 const modelDir = process.env.AGENCY_IMAGE_MODEL_DIR ?? "";
 const kleinDir = process.env.AGENCY_KLEIN_MODEL_DIR ?? "";
+const qwenEditDir = process.env.AGENCY_QWEN_EDIT_MODEL_DIR ?? "";
 const python = process.env.AGENCY_IMAGE_PYTHON ?? "";
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47];
@@ -20,6 +24,36 @@ type ImageReply = { data: { b64_json: string; seed: number }[] };
 /** The width and height a PNG's header records. */
 function pngSize(bytes: Buffer): [number, number] {
   return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+}
+
+/** One PNG chunk: its length, type, data, and checksum. */
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, checksum]);
+}
+
+/** A grey PNG of width x height, as base64. A model that only edits
+ *  cannot make its own picture to edit. */
+function greyPng(width: number, height: number): string {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  // 8 bits per pixel, grayscale, and the default compression, filter, and
+  // interlace methods.
+  header.set([8, 0, 0, 0, 0], 8);
+  // Each row starts with filter type 0, then one byte per pixel.
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width, 128)]);
+  const pixels = Buffer.concat(Array(height).fill(row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(pixels)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]).toString("base64");
 }
 
 /** An image server on `dir`, started before the block's tests and stopped
@@ -142,5 +176,34 @@ describe.skipIf(kleinDir === "" || python === "")(
       expect([...bytes.subarray(0, 4)]).toEqual(PNG_SIGNATURE);
       expect(pngSize(bytes)).toEqual([512, 768]);
     }, 300_000);
+  },
+);
+
+describe.skipIf(qwenEditDir === "" || python === "")(
+  "diffusersImageServer.py on Qwen-Image-Edit",
+  () => {
+    const { post } = servedModel(qwenEditDir);
+
+    it("edits a picture, at the picture's shape when the request gives no size", async () => {
+      // The server warmed up in reference mode, since the family has no
+      // plain pipeline. Few steps keep the test short; the image is not
+      // checked.
+      const res = await post({
+        prompt: "paint a red apple in the middle",
+        size: "",
+        steps: 4,
+        seed: 1,
+        images: [greyPng(512, 768)],
+      });
+      expect(res.status).toBe(200);
+      const bytes = Buffer.from(((await res.json()) as ImageReply).data[0].b64_json, "base64");
+      expect([...bytes.subarray(0, 4)]).toEqual(PNG_SIGNATURE);
+      expect(pngSize(bytes)).toEqual([512, 768]);
+    }, 600_000);
+
+    it("refuses a prompt alone", async () => {
+      const res = await post({ prompt: "a red apple", size: "512x512" });
+      expect(res.status).toBe(400);
+    }, 60_000);
   },
 );

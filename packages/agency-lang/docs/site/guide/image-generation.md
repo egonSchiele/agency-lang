@@ -224,7 +224,7 @@ the required packages into the Python environment used by
 `agency local serve`:
 
 ```bash
-~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
+~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 torchvision==0.29.2 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
 ```
 
 These are the package versions used by the server. It requires diffusers
@@ -711,8 +711,9 @@ Each picture raises its own `std::readImage` interrupt. Every picture is
 approved before any of them is read. Each extra picture makes the edit
 slower and uses more memory.
 
-Only FLUX.2 [klein] takes `images`. Another model refuses the request
-with a message naming the models that take them. You cannot combine
+Only FLUX.2 [klein] and Qwen-Image-Edit take `images`. Another model
+refuses the request with a message naming the models that take them.
+Qwen-Image-Edit only edits: it refuses a request with no picture. You cannot combine
 `images` with a ControlNet in one call.
 
 ### Redraw a picture in a new style

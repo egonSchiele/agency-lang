@@ -338,14 +338,17 @@ export const DIFFUSERS_VERSION = "0.40.0";
 
 /** The releases the image server was tested with alongside diffusers. */
 export const TORCH_VERSION = "2.14.0";
+export const TORCHVISION_VERSION = "0.29.2";
 export const TRANSFORMERS_VERSION = "5.17.0";
 export const ACCELERATE_VERSION = "1.15.0";
 
 /** Everything the image server needs, pinned to the versions it was tested
- *  with. sentencepiece and protobuf are Chroma's T5 tokenizer. A missing
- *  image module is fixed by installing all of these at once. */
+ *  with. sentencepiece and protobuf are Chroma's T5 tokenizer. torchvision
+ *  is Qwen-Image-Edit's image processor, which transformers builds only with
+ *  it. A missing image module is fixed by installing all of these at once. */
 const IMAGE_REQUIREMENTS = [
   `torch==${TORCH_VERSION}`,
+  `torchvision==${TORCHVISION_VERSION}`,
   `diffusers==${DIFFUSERS_VERSION}`,
   `transformers==${TRANSFORMERS_VERSION}`,
   `accelerate==${ACCELERATE_VERSION}`,
@@ -389,7 +392,7 @@ const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
   speech: ["mlx_audio"],
   // accelerate is optional to diffusers, but without it a model loads
   // several times slower and with more memory.
-  image: ["torch", "diffusers", "transformers", "accelerate"],
+  image: ["torch", "torchvision", "diffusers", "transformers", "accelerate"],
   vision: [],
   controlnet: [],
 };
@@ -418,6 +421,7 @@ const PIP_FOR_MODULE: Record<string, string> = {
   llguidance: `llguidance==${LLGUIDANCE_VERSION}`,
   mlx_audio: `mlx-audio==${MLX_AUDIO_VERSION}`,
   torch: IMAGE_REQUIREMENTS,
+  torchvision: IMAGE_REQUIREMENTS,
   diffusers: IMAGE_REQUIREMENTS,
   transformers: IMAGE_REQUIREMENTS,
   accelerate: IMAGE_REQUIREMENTS,

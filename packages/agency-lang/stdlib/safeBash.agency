@@ -2399,7 +2399,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -2657,6 +2657,20 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
         dir: effect.payload.dir,
         maxResults: effect.payload.maxResults,
         command: fullCommand
+      })
+      return success(null)
+    }
+    "std::exec" => {
+      // The full line goes in `line`: std::exec already uses `command` for
+      // the program, and `@always` pins that field.
+      raise std::exec("Are you sure you want to run this command?", {
+        command: effect.payload.command,
+        args: effect.payload.args,
+        subcommand: effect.payload.subcommand,
+        cwd: effect.payload.cwd,
+        timeout: effect.payload.timeout,
+        stdin: effect.payload.stdin,
+        line: fullCommand
       })
       return success(null)
     }

@@ -35,6 +35,7 @@ export type Effect =
   | { name: "std::read"; payload: ReadPayload }
   | { name: "std::ls"; payload: LsPayload }
   | { name: "std::glob"; payload: GlobPayload }
+  | { name: "std::exec"; payload: ExecPayload }
 
 export type WritePayload = {
   dir: string;
@@ -124,6 +125,26 @@ export type GlobPayload = {
 export def globEffect(payload: GlobPayload): Effect {
   return {
     name: "std::glob",
+    payload: payload
+  }
+}
+
+/** The fields the exec tool's own std::exec interrupt carries. From
+ * safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
+ * 0 and `stdin` is empty, which is how safeBash runs the line, and an
+ * argument may be an unexpanded glob or `~` that bash expands. */
+export type ExecPayload = {
+  command: string;
+  args: string[];
+  subcommand: string;
+  cwd: string;
+  timeout: number;
+  stdin: string
+}
+
+export def execEffect(payload: ExecPayload): Effect {
+  return {
+    name: "std::exec",
     payload: payload
   }
 }

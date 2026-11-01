@@ -398,7 +398,7 @@ Check, ask, run. The check compiles the program and the run uses it. The
 workflowTool(workflow: Workflow, tools: any[], dir: string = ""): Result
 ```
 
-Make one tool that runs a workflow when called. The tool has the workflow's name and description, and its one parameter, `inputs`, has the workflow's inputs type. Checks the workflow first, then runs its program's `inputsSchema` node once in a subprocess, which raises `std::run`. A workflow with problems fails with every problem and starts nothing. A workflow named like one of `tools` is refused, since a model cannot be handed both; the tool loop still refuses a name clash with any other tool at the model call.
+Make one tool that runs a workflow when called. The tool has the workflow's name and description, and its one parameter, `inputs`, has the workflow's inputs type. Refuses a workflow named like one of `tools` before anything else, since a model cannot be handed both; the tool loop still refuses a name clash with any other tool at the model call. Then checks the workflow and runs its program's `inputsSchema` node once in a subprocess, which raises `std::run`. A workflow with problems fails with every problem and starts nothing.
 
   @param workflow - The workflow the tool runs
   @param tools - The functions the workflow may call

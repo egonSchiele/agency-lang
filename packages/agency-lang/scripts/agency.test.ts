@@ -201,6 +201,25 @@ describe("agency CLI command tree", () => {
     );
   });
 
+  it("registers traces, outline, and search under `logs` beside its own flags", () => {
+    // createProgram builds the real `logs` with --follow, --csv, and
+    // --trace-id; the vendored commander refuses a leaf flag that clashes
+    // with one of those, so a clash fails here and not in a user's shell.
+    const program = createProgram();
+    const logsCommand = program.commands.find((command) => command.name() === "logs");
+    const flagsOf = (name: string) =>
+      logsCommand?.commands
+        .find((command) => command.name() === name)
+        ?.options.map((option) => option.long)
+        .sort();
+    const common = ["--all", "--json", "--last", "--log", "--since", "--trace"];
+    expect(flagsOf("traces")).toEqual([...common, "--errors"].sort());
+    expect(flagsOf("outline")).toEqual([...common, "--admin", "--approvals"].sort());
+    expect(flagsOf("search")).toEqual(
+      [...common, "--case-sensitive", "--context", "--kind", "--limit", "--regex"].sort(),
+    );
+  });
+
   it("registers the remote command group with its subcommands", () => {
     const program = createProgram();
     const remote = program.commands.find((command) => command.name() === "remote");

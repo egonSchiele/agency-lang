@@ -416,7 +416,7 @@ function focusedRow(host: ScreenHost): { traceId: string; rowId: string | undefi
   }
   const screen = host.screen(host.activeScreen());
   // A screen that answers `selectedRowId` has the last word, including
-  // "no row here" (undefined) on a turn header or a system block. Only a
+  // "no row here" (undefined) on a turn header or a thread divider. Only a
   // screen with no such method falls back to its focus id.
   const rowId = screen.selectedRowId === undefined ? screen.focusId() : screen.selectedRowId();
   return { traceId: host.currentTraceId(), rowId };

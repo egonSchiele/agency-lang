@@ -15,12 +15,13 @@ import {
 } from "../keymap.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
-import { TOOL_STATUS_MARK, type ToolStatus } from "../story.js";
+import { TOOL_STATUS_MARK, type StoryRow, type ToolStatus } from "../story.js";
 import { hostedCallShortLabel, owningRowId } from "../hostedCalls.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import {
+  blockRowId,
   threadKey,
-  transcriptBlocks,
+  transcriptOf,
   transcriptText,
   type TranscriptBlock,
 } from "../transcript.js";
@@ -61,6 +62,8 @@ const BOXED = ["system", "user", "handback", "assistant", "tool", "hosted", "his
 export class TranscriptScreen implements Screen {
   readonly screenName = "transcript" as const;
   private blocks: TranscriptBlock[] = [];
+  /** The trace's story rows, for finding the row a block stands for. */
+  private story: StoryRow[] = [];
   /** The blocks not hidden by a folded thread group. */
   private visible: TranscriptBlock[] = [];
   /** Folded thread groups, by block id. A sub-agent's group folds on
@@ -197,7 +200,9 @@ export class TranscriptScreen implements Screen {
   private derive(): void {
     const old = this.selected();
     const trace = this.trace();
-    this.blocks = trace ? transcriptBlocks(trace) : [];
+    const transcript = trace ? transcriptOf(trace) : { blocks: [], story: [] };
+    this.blocks = transcript.blocks;
+    this.story = transcript.story;
     this.times = trace ? traceTimes(trace) : { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
     this.paintCache = Object.create(null);
     this.expanded = this.expanded.filter((id) => this.blocks.some((block) => block.id === id));
@@ -278,24 +283,12 @@ export class TranscriptScreen implements Screen {
     const block = this.selected();
     return block?.kind === "tool" || block?.kind === "hosted" ? block.id : block?.roundId;
   }
-  /** The block as a row of the trace: a tool is its span, an assistant
-   *  reply is its round, a user message is the round's user turn. A system
-   *  or history block is no row. */
+  /** The block as a row of the trace, by the one mapping `blockRowId`
+   *  that `agency logs search` uses too. A turn header or a thread divider
+   *  is no row. */
   selectedRowId(): string | undefined {
     const block = this.selected();
-    if (block === undefined) {
-      return undefined;
-    }
-    if (block.kind === "tool" || block.kind === "hosted") {
-      return block.id;
-    }
-    if (block.kind === "assistant") {
-      return block.roundId;
-    }
-    if (block.kind === "user") {
-      return block.roundId === undefined ? undefined : `${block.roundId}:user`;
-    }
-    return undefined;
+    return block === undefined ? undefined : blockRowId(block, this.story);
   }
   setFocus(id: string): void {
     const exact = this.blocks.find((block) => block.id === id);

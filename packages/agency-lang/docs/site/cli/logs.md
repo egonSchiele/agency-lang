@@ -139,13 +139,106 @@ Each prints the row the way the viewer shows it: its address, a header
 line such as `Thread · reviewer · LLM call 4 of 9 · gpt-5 · 2.1s · $0.004`,
 and the payload. `--json` gives the same facts as fields plus the row's raw
 events. With no viewer open, `show`, `comments`, and `comment add` work on
-the files when given `--log <file>`, where the file may also be a run
-directory, as for `agency logs`; `get`, `navigate`, and `pick` need the
-viewer.
+the files: the file `--log <file>` names (a run directory works too, as for
+`agency logs`), or else the log `log.logFile` names in `agency.json`.
+`get`, `navigate`, and `pick` need the viewer.
 A bare row id needs `--trace <id>`; an address carries its trace. The viewer
 registers itself under the agent home (`~/.agency-agent/log-sessions/`) and
 removes the record when it quits; nothing runs in the background on its
 own. The `debug-logs` skill teaches an agent these steps; [`agency skills install debug-logs`](/cli/skills) adds it to Claude Code or another agent.
+
+## Reading logs from a script or an agent
+
+A statelog is hard to read with `grep`. Every LLM call stores the whole
+conversation so far, so a word from the first message is on every later
+call's line, and one line can be hundreds of kilobytes. Lines from
+different runs are also mixed together in the file. These three commands
+read the log the way the viewer does and print short lines instead:
+
+```bash
+agency logs traces --last 5              # the runs in the log, newest first
+agency logs outline --trace k3Pq         # every row of one run, with its address
+agency logs search ENOENT --trace k3Pq   # the rows that mention something
+agency logs session show k3Pq/span-9c01  # one row, expanded
+```
+
+**`traces`** prints one line per run: its trace id, when it started, how
+long it worked, its cost, its LLM calls, its agent, `error` when it logged
+one, and its first user message. With no flag it lists the 20 most recent
+runs and says how many older ones it left out. `--errors` keeps only the
+runs that logged an error.
+
+**`outline`** prints every row of a run, the rows the viewer's trace screen
+shows, each with its address and a header such as
+`Thread · main · LLM call 4 of 9 · gpt-5 · 2.1s · $0.004`. Approved
+interrupts are hidden, as in the viewer; `--approvals` shows them, as `p`
+does, and `--admin` adds the handler decisions under each interrupt. With
+no flag it prints the most recent run.
+
+**`search <pattern>`** prints the rows whose own text matches: each row's
+address, its header, and a snippet around the match. A row's own text is
+what the viewer's transcript shows on it, so a word from the first user
+message is found once, on that message's row, and not on every later call
+that carried it again. A tool call's arguments are on two rows, the call
+that asked and the tool that ran, and both are found. An interrupt raised
+outside a tool call is in the outline but not in search. With no flag it
+searches the most recent run; `--all` searches every run.
+
+| Flag | What it does |
+| --- | --- |
+| `--kind <kinds>` | Only these kinds, comma separated: `user`, `call`, `tool`, `hosted`, `error` |
+| `--regex` | Read the pattern as a JavaScript regular expression |
+| `--case-sensitive` | Match case; by default case is ignored |
+| `--limit <n>` | Print at most n rows (default 30); the last line counts the rest |
+| `--context <n>` | Characters of snippet on each side of the match (default 60) |
+
+A pattern that starts with a dash goes after `--`:
+`agency logs search -- --force`. Finding nothing prints `no rows matched`
+and exits 0.
+
+### Which runs
+
+All three commands pick runs with the same flags:
+
+```bash
+--trace <id>     # one run, by full id or a unique prefix
+--last <n>       # the n runs that started most recently
+--since <when>   # runs that started since a time: 30m, 2h, 3d, or an ISO date
+--all            # every run
+```
+
+"Most recently" means by start time, since lines from different runs are
+mixed in the file. A run with no timestamp counts as the oldest, and
+`--since` never picks it.
+
+| Flags given | Runs |
+| --- | --- |
+| none | The command's default: 20 for `traces`, the newest one for `outline` and `search` |
+| `--trace` | That one run |
+| `--last n` | The n newest |
+| `--since t` | Every run since t |
+| `--last n --since t` | The n newest of the runs since t |
+| `--all` | Every run |
+| `--trace` with any other | Refused |
+| `--all` with `--last` or `--since` | Refused |
+
+### Which log
+
+Every `agency logs` command that reads one log finds it the same way:
+
+1. `--log <file or run directory>`, when given.
+2. The open viewer's log, when exactly one viewer is open. With several
+   open, pass `--log`.
+3. The file `log.logFile` names in `agency.json`, read against the
+   current directory.
+
+The first line of every command's output names the file it read. A
+directory that holds several runs is refused; open it with
+`agency logs <dir> --csv`.
+
+`agency logs extract <log> --trace <id>` copies one run's raw lines to a
+file or stdout. When the log holds several runs and no `--trace` picks one,
+it points at `agency logs traces` to list them.
 
 ## CSV export
 

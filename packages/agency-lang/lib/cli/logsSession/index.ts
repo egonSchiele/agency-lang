@@ -15,6 +15,7 @@ import {
 import type { SessionRecord } from "@/logsViewer/session/record.js";
 import type { CommentAuthor } from "@/runDirectory/comments.js";
 import { openCommentsStore } from "@/runDirectory/commentsStore.js";
+import { childRunDirectories } from "@/runDirectory/findRuns.js";
 
 import {
   commentAdd,
@@ -51,7 +52,9 @@ export type SessionCliDeps = {
 
 const AGENT_AUTHOR: CommentAuthor = { kind: "agent", id: "claude" };
 
-export function defaultSessionCliDeps(): SessionCliDeps {
+/** `configuredLog` reads `log.logFile` from `agency.json`; the CLI passes
+ *  a function so the config is read only when a command needs it. */
+export function defaultSessionCliDeps(configuredLog: () => string | undefined): SessionCliDeps {
   const dir = sessionsDir(nodeHost());
   return {
     sessionsDir: dir,
@@ -62,12 +65,14 @@ export function defaultSessionCliDeps(): SessionCliDeps {
       openStore: openCommentsStore,
       cwd: process.cwd(),
       pathKind,
+      childRunDirectories,
+      configuredLog,
     },
     writeStdout: (text) => process.stdout.write(text),
   };
 }
 
-function pathKind(absolutePath: string): "file" | "directory" | "missing" {
+export function pathKind(absolutePath: string): "file" | "directory" | "missing" {
   if (!fs.existsSync(absolutePath)) {
     return "missing";
   }
@@ -77,7 +82,7 @@ function pathKind(absolutePath: string): "file" | "directory" | "missing" {
 export async function logsSession(
   command: SessionCommand,
   options: SessionCliOptions,
-  deps: SessionCliDeps = defaultSessionCliDeps(),
+  deps: SessionCliDeps,
 ): Promise<number> {
   const probed = await deps.probe(deps.sessionsDir);
   removeStale(deps.sessionsDir, probed);

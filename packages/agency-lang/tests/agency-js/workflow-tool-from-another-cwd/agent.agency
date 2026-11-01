@@ -1,0 +1,24 @@
+// The runner compiles this file from the package root and runs test.js
+// from this folder, so the compile directory and the run directory differ.
+// The workflow must still import ./tools/shout.agency.
+import { runWorkflow, Workflow } from "std::workflow"
+import { shout } from "./tools/shout.agency"
+
+export node main(): any {
+  const workflow: Workflow = {
+    format: 1,
+    name: "loud",
+    description: "Shout the input.",
+    inputs: "{ text: string }",
+    steps: [
+      {
+        id: "s",
+        kind: "tool",
+        module: "./tools/shout.agency",
+        tool: "shout",
+        args: { text: { "$ref": "inputs.text" } }
+      }
+    ]
+  }
+  return runWorkflow(workflow, { text: "hi" }, [shout], __dirname) with approve
+}

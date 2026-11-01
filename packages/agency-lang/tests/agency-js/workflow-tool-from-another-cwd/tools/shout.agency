@@ -1,0 +1,4 @@
+/** Shout some text. */
+export def shout(text: string): string {
+  return text.toUpperCase()
+}

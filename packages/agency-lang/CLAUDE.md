@@ -383,6 +383,7 @@ Other process docs:
 - `docs/dev/cli/tui/guide/getting-started.md` — Writing a first TUI screen, and the builders available.
 - `docs/dev/cli/tui/guide/terminal-usage.md` — Running a TUI against a real terminal: input, signals, and resizing.
 - `docs/dev/cli/tui/guide/testing.md` — Testing a TUI with scripted input and recorded frames, no terminal needed.
+- `docs/dev/cli/workflow-command.md` — `agency workflow`: the driver each command writes and runs, its fixed text with `DRIVER_NAMES` and `DRIVER_NODES`, which bad steps are left for `checkWorkflow` and which the command reports, why `with approve` is safe in the driver, why the driver is not sandboxed and why `distDir` is cleared, and the temp folder with its synchronous cleanup.
 - `docs/dev/cli/vendored-commander.md` — The vendored commander fork, what was changed in it, and the rules for keeping it in sync.
 
 ### Evals and optimizers

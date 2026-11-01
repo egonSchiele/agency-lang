@@ -29,3 +29,4 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/tui/dev/rendering.md` — How a laid-out element tree becomes terminal output, HTML, or plain text.
 - `docs/dev/cli/tui/dev/input-output.md` — The injected input and output interfaces that make the TUI testable.
 - `docs/dev/cli/tui/dev/style-parser.md` — The inline `{bold}` style tag syntax, and the ANSI sequences the parser also understands.
+- `docs/dev/cli/workflow-command.md` — `agency workflow`: the driver each command writes and runs, its fixed text with `DRIVER_NAMES` and `DRIVER_NODES`, which bad steps are left for `checkWorkflow` and which the command reports, why `with approve` is safe in the driver, why the driver is not sandboxed and why `distDir` is cleared, and the temp folder with its synchronous cleanup.

@@ -147,7 +147,7 @@ workflows/broken.json has 1 problem:
   step text, args.id: reference "steps.notes[0].id" names no step
 ```
 
-`compile` prints the Agency program the workflow turns into. `list` prints the saved workflows in a project, with their inputs and descriptions. Each of `tools`, `check`, and `list` takes `--json` and prints `std::workflow`'s value as it is.
+`compile` prints the Agency program the workflow turns into. `list` prints the saved workflows in a project, with their inputs and descriptions. Each of `tools`, `check`, and `list` takes `--json`. Every command prints the same shape, which `run` uses too: `{ "success": true, "value": ... }` with `std::workflow`'s value, or `{ "success": false, "error": ..., "step": ... }`, with `problems` when there are some.
 
 ### How the commands reach `std::workflow`
 

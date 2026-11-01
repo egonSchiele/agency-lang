@@ -10,16 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-30-safebash-reads-pipes-scripts-design.md`, Part 5, the `ls`, `tree`/`du`, and `find` rows of the table and the "What the table refuses" list. Ticket ADI-246.
 
-## A decision the owner makes before this plan runs
+## A decision the owner made (2026-11-01): a recursive listing through bash is narrow
 
 The `ls` tool's recursive walk and the `glob` tool's walk skip `SKIP_DIRS` (`node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`), and `_glob` also honors `.gitignore` (`lib/stdlib/shell.ts`, the `SKIP_DIRS` set and `walkDir`). Real `ls -R`, `du`, `tree`, and `find` skip nothing. So a policy that approves `std::ls` under the launch directory approves what the tool does, and the bash spelling with the same payload lists more: the names under `.git` and `node_modules`. For grep (ADI-242) the owner chose accuracy: a directory search through bash asks `std::bash`, because real grep reads file contents the tool skips.
 
-Two honest choices:
-
-- **A. Accept the difference and say so.** A listing prints names and sizes, not contents. The dev doc states that a recursive listing through bash shows entries the tool's walk leaves out.
-- **B. Follow grep.** A recursive listing through bash (`ls -R`, `du`, `tree`, `find`) asks `std::bash`; only a listing of one folder's own entries (`ls`, `ls -la src`) is narrow. In `listEffects` this is one refusal when `recursive` is true, and `find` is then unrecognized altogether.
-
-This plan is written for **A**, because names are not the secret that decided grep. If the owner picks B, Task 2 gains the refusal, Task 3 is dropped, and the tests change to match.
+The owner chose the other way for listings: `ls -R`, `du`, `tree`, and `find` through bash raise `std::ls` or `std::glob` and are narrow. A listing prints names and sizes, not contents, and the names under `.git` and `node_modules` are not the secret that decided grep. The dev doc (Task 4) states the rule and the difference, so a policy author knows that a recursive listing through bash shows entries the tool's walk leaves out.
 
 ## Background for the implementer
 

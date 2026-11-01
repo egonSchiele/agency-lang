@@ -288,11 +288,11 @@ node toolShape(): Json {
     return "failed: ${err}"
   }
   const tool = built.value
-  const schema = tool.toolDefinition.schema.toJSONSchema()
+  const toolSchema = tool.toolDefinition.schema.toJSONSchema()
   return [
     tool.name,
     tool.toolDefinition.description,
-    schema.required,
+    toolSchema.required,
     inputsSchemaOf(tool).required,
     getMutable("effects", [])
   ]

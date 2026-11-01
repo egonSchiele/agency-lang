@@ -6,7 +6,7 @@
 
 **Architecture:** Each function value gains `sourceFile`, the absolute path of the `.agency` file it was defined in. The compiler writes the path from the compiled `.js` file to its source into the compiled module. When the module loads, it resolves that path against its own folder, which it already knows from `import.meta.url`. `toolRefs` then builds a tool's import path from `sourceFile` and stops resolving the module id against the current working directory.
 
-**Tech Stack:** TypeScript in `lib/runtime/agencyFunction.ts`, `lib/backends/`, `lib/compiler/buildSession.ts`, and `lib/stdlib/workflow/tools.ts`; one typestache template; vitest; one agency-js test.
+**Tech Stack:** TypeScript in `lib/runtime/agencyFunction.ts`, `lib/backends/typescriptBuilder.ts`, `lib/compiler/compile.ts`, and `lib/stdlib/workflow/tools.ts`; one typestache template; vitest; one agency-js test.
 
 **Spec:** `docs/superpowers/specs/2026-10-26-workflows-design.md`, section "Tools and modules". Linear ticket ADI-253. Read `docs/dev/stdlib/workflow.md` ("Tool modules") and `docs/dev/language/agency-function.md` before starting.
 
@@ -60,13 +60,13 @@ The ticket asks whether a function value can carry an absolute path for its modu
 
 - **The registry cannot.** It is one shared object keyed `${module}:${name}` (`agencyFunction.ts:719`), holding the function values themselves. It has no path beyond the module id.
 - **The compiled module knows where it is.** Every generated module declares `const __dirname = __host.system.moduleDir(import.meta.url);` in its prelude (`lib/templates/backends/typescriptGenerator/imports.mustache:46`). On Node that is the folder of the compiled `.js` file (`lib/host/node/nodeHost.ts:236`). This is how Agency code reads `__dirname`.
-- **The compiler knows where the source is relative to the output.** `buildSession.compileEntry` has both `absoluteInputFile` and `absoluteOutputFile` when it calls `generateTypeScript` (`buildSession.ts:505-514`). The output sits beside the source, or under `config.outDir` (`outputPathFor`, `buildSession.ts:743-749`).
+- **The compiler knows where the source is relative to the output.** The TypeScript builder already holds both paths. The compilation unit's `fromFile` is the absolute path of the source file (`compilationUnit.ts:365-366`). `outputFile` is the file the generated code is written to (`typescriptBuilder.ts:390-393`, `:428`). `buildSession.compileEntry` sets both: it builds the unit from `absoluteInputFile` (`buildSession.ts:462`) and passes `absoluteOutputFile` to `generateTypeScript` (`:514`). The output sits beside the source, or under `config.outDir` (`outputPathFor`, `buildSession.ts:743-749`).
 
 So a function value can carry its absolute source path. The compiler writes the path from the output to the source, and the module turns it into an absolute path when it loads. That path does not depend on the working directory at compile time or at run time.
 
 ### Programs compiled for a subprocess have no source file
 
-`run` from `std::agency` compiles a program with `compileSource` (`lib/compiler/compile.ts`). That gives every module a random id, `agency_<nanoid>` (`compile.ts:128`), and returns the code as text. The child process later writes the text to a location of its own. The sources it compiled from are mirrored into a temporary folder, which `compileValidatedClosure` deletes when it finishes. Code compiled this way has no source file it can point at, so it records none. Its function values have random ids today, so a child that passes its own local tools to a workflow already fails. This plan makes that a clear refusal instead of a confusing read error.
+`run` from `std::agency` compiles a program with `compileSource` (`lib/compiler/compile.ts`). That gives every module a random id, `agency_<nanoid>` (`compile.ts:128`), and returns the code as text. The child process later writes the text to a location of its own. The sources it compiled from are mirrored into a temporary folder, which `compileValidatedClosure` deletes when it finishes. Code compiled this way has no source file it can point at, so it records none. `compileSource` passes the builder a made-up output path, `<temp folder>/<id>.js` (`compile.ts:209`). The builder reads `outputFile` in one place, as a fallback behind `fromFile` (`typescriptBuilder.ts:1819`), so that path is never read today. This plan stops passing it. Its function values have random ids today, so a child that passes its own local tools to a workflow already fails. This plan makes that a clear refusal instead of a confusing read error.
 
 ### Paths in compiled code today
 
@@ -99,6 +99,7 @@ No compiled code uses an absolute path to find a file. Compiled code contains on
 4. **Only `def`s carry a source file.** Blocks, runtime builtins, and tools built by `createTool` get null. `toolRefs` already refuses a builtin and a `createTool` tool before it needs a path. A block passed as a tool now gets the no-source-file refusal, which is correct, because a block cannot be imported.
 5. **No symlink handling.** On Node, `import.meta.url` gives the compiled file's real path. A module imported through a symlinked folder reports the folder it really lives in, as a probe confirmed. A `dir` spelled through a symlink resolves to a different string, so its tools read as outside the workflow directory and are refused. The repository rule is to refuse symlinks, not to support them.
 6. **The "outside the workflow directory" message names the source file's absolute path** instead of the module id, since the id depends on where the compiler happened to run.
+7. **No new compiler parameter.** The builder already holds the source path, as `compilationUnit.fromFile`, and the output path, as `outputFile`. It records a source file when it has both. `outputFile` then means the file the generated code is written to and loaded from. `compileSource` loads its output from somewhere else, so it stops passing its made-up path.
 
 ## Not in this ticket
 
@@ -211,18 +212,18 @@ Both test files pass. Typecheck, prettier, and commit with the message in a file
 
 **Files:**
 - Modify: `lib/templates/backends/typescriptGenerator/imports.mustache` (one line after `__dirname`), then `pnpm run templates`
-- Modify: `lib/backends/typescriptBuilder.ts` (the constructor, the call to `renderImports.default` at line 4718, and `createProps` at line 2679)
-- Modify: `lib/backends/typescriptGenerator.ts` (`generateTypeScript` gains a parameter and passes it to the builder)
-- Modify: `lib/compiler/buildSession.ts` (the `generateTypeScript` call at line 514 passes `absoluteInputFile`)
+- Modify: `lib/backends/typescriptBuilder.ts` (the doc comment on the constructor's `outputFile` parameter at line 390, the call to `renderImports.default` at line 4718, and `createProps` at line 2679)
+- Modify: `lib/compiler/compile.ts` (remove the unused `outputPath` at line 209, and pass `undefined` in its place at line 220)
 - Create: `lib/backends/sourceFile.codegen.test.ts`
+- Test: `lib/compiler/compile.test.ts`
 - Regenerate: the fixtures, with `make fixtures`
 
 **Interfaces:**
 - Consumes: `AgencyFunctionOpts.sourceFile` from Task 1.
 - Produces:
-  - `generateTypeScript(program, config, info, moduleId, outputFile, initPlan, fingerprint, sourceFile?: string)`. The new last parameter is the absolute path of the `.agency` file being compiled, given only when the output is written to `outputFile` and loaded from there. `compile.ts` does not pass it.
-  - `TypeScriptBuilder`'s constructor takes `sourceFile?: string` after `initPlan`.
-  - Every generated module declares `const __sourceFile = path.join(__dirname, "<path from the output's folder to the source>");` right after `__dirname`. When the builder has no `sourceFile` or no `outputFile`, it declares `const __sourceFile = null;`.
+  - No new parameter on `generateTypeScript` or `TypeScriptBuilder`. The builder records a source file when it has both `outputFile` and `compilationUnit.fromFile`.
+  - The doc comment on `outputFile` says it is the file the generated code is written to and loaded from.
+  - Every generated module declares `const __sourceFile = path.join(__dirname, "<path from the output's folder to the source>");` right after `__dirname`. When the builder lacks either path, it declares `const __sourceFile = null;`.
   - Every `def`'s `__AgencyFunction.create({ ... })` gets `sourceFile: __sourceFile`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -231,76 +232,80 @@ Both test files pass. Typecheck, prettier, and commit with the message in a file
 
 ```ts
 import { describe, expect, it } from "vitest";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { parseAgency } from "../parser.js";
 import { generateTypeScript } from "./typescriptGenerator.js";
 
 const SOURCE = "export def shout(text: string): string {\n  return text\n}\n";
+const SOURCE_FILE = "/proj/agent/shout.agency";
 
-function generate(outputFile?: string, sourceFile?: string): string {
+/** The generated code for SOURCE, compiled from SOURCE_FILE to `outputFile`. */
+function generate(outputFile?: string): string {
   const parsed = parseAgency(SOURCE, {}, false);
   if (!parsed.success) {
     throw new Error(parsed.message);
   }
-  const moduleId = "agent/shout.agency";
-  return generateTypeScript(
-    parsed.result,
-    undefined,
-    undefined,
-    moduleId,
-    outputFile,
-    undefined,
-    false,
-    sourceFile,
-  );
+  const info = buildCompilationUnit(parsed.result, undefined, SOURCE_FILE);
+  return generateTypeScript(parsed.result, undefined, info, "agent/shout.agency", outputFile);
 }
 
 describe("the compiled module's source file", () => {
   it("is found beside the compiled file", () => {
-    expect(generate("/proj/agent/shout.js", "/proj/agent/shout.agency")).toContain(
+    expect(generate("/proj/agent/shout.js")).toContain(
       'const __sourceFile = path.join(__dirname, "shout.agency");',
     );
   });
 
   it("is found from an output folder elsewhere, as with outDir", () => {
-    expect(generate("/proj/dist/agent/shout.js", "/proj/agent/shout.agency")).toContain(
+    expect(generate("/proj/dist/agent/shout.js")).toContain(
       'const __sourceFile = path.join(__dirname, "../../agent/shout.agency");',
     );
   });
 
-  it("is null when the caller names no source file", () => {
-    expect(generate("/tmp/agency_abc.js")).toContain("const __sourceFile = null;");
+  it("is null when the code is not written to a known output file", () => {
+    expect(generate()).toContain("const __sourceFile = null;");
   });
 
   it("is given to every def's function value", () => {
-    const code = generate("/proj/agent/shout.js", "/proj/agent/shout.agency");
-    expect(code).toMatch(/__AgencyFunction\.create\(\{[^]*?sourceFile: __sourceFile/);
+    expect(generate("/proj/agent/shout.js")).toMatch(
+      /__AgencyFunction\.create\(\{[^]*?sourceFile: __sourceFile/,
+    );
   });
 });
 ```
 
-Run it. All four fail.
+In `lib/compiler/compile.test.ts`, inside `describe("compileSource")`:
+
+```ts
+it("records no source file for a program that runs from somewhere else", () => {
+  const result = compileSource(`export def shout(text: string): string {\n  return text\n}\n`, {});
+  expect(result.success && result.code).toContain("const __sourceFile = null;");
+});
+```
+
+Run both files. All five tests fail.
 
 - [ ] **Step 2: Emit the line and the property**
 
 In the template, after the `__dirname` line, add `const __sourceFile = {{{sourceFile:string}}};`. Run `pnpm run templates`.
 
-In the builder, compute the expression once in the method that renders the imports template. When both `sourceFile` and `outputFile` are known, build it as a TS IR call: `$.id("path").prop("join").call([ts.id("__dirname"), ts.str(rel)])`, printed with `printTs`, where `rel` is `path.relative(path.dirname(outputFile), sourceFile)`. Otherwise use `"null"`. Pass the result to `renderImports.default` beside `runtimeContextCode`. Add `sourceFile: ts.id("__sourceFile")` to `createProps`.
+In the builder, compute the expression once, in the method that renders the imports template. When `this.outputFile` and `this.compilationUnit.fromFile` are both set, build a TS IR call, `$.id("path").prop("join").call([ts.id("__dirname"), ts.str(rel)])`, and print it with `printTs`. Here `rel` is `path.relative(path.dirname(outputFile), fromFile)`. Otherwise the expression is `"null"`. Pass it to `renderImports.default` beside `runtimeContextCode`. Add `sourceFile: ts.id("__sourceFile")` to `createProps`. Put a one-line comment on the `join` call that says why it is not `resolve`.
 
 `path` in the generated module is the runtime's `path` export, which every module already imports (`imports.mustache`, `path, os`). In the browser bundle it is the portable `#path` module (`lib/runtime/agencyGlobals.browser.ts`). Use `join`. Do not use `resolve`, for the reason in Global Constraints. On Node, `__dirname` is absolute, so `join` gives the same absolute path `resolve` would. In a browser the result is a string nothing reads.
 
-- [ ] **Step 3: Pass the source from the session**
+- [ ] **Step 3: Stop `compileSource` passing a made-up output path**
 
-In `generateTypeScript`, add the trailing `sourceFile` parameter and hand it to the builder in `build`. In `buildSession.compileEntry`, pass `absoluteInputFile` as the new last argument. Leave `compile.ts` as it is: its output is not loaded from `outputPath`.
+In `compile.ts`, delete `outputPath` and pass `undefined` to `generateTypeScript` in its place. The builder read it only behind `fromFile`, so the only change in the generated code is the `null` source file. Reword the doc comment on the builder's `outputFile` parameter to say "the file the generated code is written to and loaded from".
 
 - [ ] **Step 4: Regenerate the fixtures and run everything that compiles code**
 
-Run `make fixtures`. Then run `pnpm test:run lib/backends/ lib/compiler/ > /tmp/adi253-t2.log 2>&1`. The new file passes, and so do the two fixture tests, `lib/backends/typescriptGenerator.integration.test.ts` and `lib/backends/typescriptBuilder.integration.test.ts`, against the regenerated fixtures. Check one fixture's diff by eye: the `__sourceFile = null;` line, plus `sourceFile: __sourceFile` on each create call, and nothing else.
+Run `make fixtures`. Then run `pnpm test:run lib/backends/ lib/compiler/ > /tmp/adi253-t2.log 2>&1`. The new tests pass, and so do the two fixture tests, `lib/backends/typescriptGenerator.integration.test.ts` and `lib/backends/typescriptBuilder.integration.test.ts`, against the regenerated fixtures. The fixture script passes no output file, so every fixture has `const __sourceFile = null;`. Check one fixture's diff by eye: that line, plus `sourceFile: __sourceFile` on each create call, and nothing else.
 
 Then confirm a real compile records a real path. Compile `tests/agency/workflow/fixtures/tools/notes.agency` with `node dist/scripts/agency.js compile` after `make`, and grep the `.js` beside it for `__sourceFile`. It reads `path.join(__dirname, "notes.agency")`. The `.js` is gitignored. The CI job `browser`, which loads compiled modules in a headless browser, is what catches a prelude line that reads `process`.
 
 - [ ] **Step 5: Typecheck, lint, commit**
 
-`pnpm run typecheck` and `pnpm run lint:structure`. Commit the template, the generated template module, the three TypeScript files, the new test, and the regenerated fixtures: `Compiled modules record the source file of each def`.
+`pnpm run typecheck` and `pnpm run lint:structure`. Commit the template, the generated template module, `typescriptBuilder.ts`, `compile.ts`, the two test files, and the regenerated fixtures: `Compiled modules record the source file of each def`.
 
 ---
 
@@ -389,7 +394,15 @@ export node main(): any {
     name: "loud",
     description: "Shout the input.",
     inputs: "{ text: string }",
-    steps: [{ id: "s", kind: "tool", module: "./tools/shout.agency", tool: "shout", args: { text: { "$ref": "inputs.text" } } }]
+    steps: [
+      {
+        id: "s",
+        kind: "tool",
+        module: "./tools/shout.agency",
+        tool: "shout",
+        args: { text: { "$ref": "inputs.text" } }
+      }
+    ]
   }
   return runWorkflow(workflow, { text: "hi" }, [shout], __dirname) with approve
 }
@@ -448,12 +461,12 @@ State the mechanism and the rules only:
 
 - [ ] **Step 1: Check the diff against `docs/dev/contributing/anti-patterns.md`.** Watch for logic in the builder that belongs in the runtime, and for a second place that turns a module id into a path.
 - [ ] **Step 2: Reread every comment and doc line you added.** Cut implementation notes and history.
-- [ ] **Step 3: Push and open the PR**, with its body written to a file. Title: `std::workflow: find a tool's file wherever the host runs from (ADI-253)`. The body covers the bug as reproduced in this plan, the fix, the two designs set aside, the six calls above, and the fixture churn: every generated-code fixture gains two lines, and nothing else in them changes.
+- [ ] **Step 3: Push and open the PR**, with its body written to a file. Title: `std::workflow: find a tool's file wherever the host runs from (ADI-253)`. The body covers the bug as reproduced in this plan, the fix, the two designs set aside, the seven calls above, and the fixture churn: every generated-code fixture gains two lines, and nothing else in them changes.
 - [ ] **Step 4: Link the PR on ADI-253.** The owner merges.
 
 ## Self-review notes
 
 - The ticket's test, "a tool compiled in one directory, with the workflow checked and run from another, imports the right file", is Task 4. It checks and runs, because `runWorkflow` checks before it runs.
 - The ticket's question, whether a function value can carry the path or the registry can recover it, is answered in the background: the registry cannot, and the function value can.
-- Type consistency: `sourceFile` is `string | null` on the function value and `string | undefined` on the codegen parameters, where absent means "the caller knows no source file". The generated line turns absent into `null`.
+- Type consistency: `sourceFile` is `string | null` on the function value. The builder takes the source path from `compilationUnit.fromFile` and needs no new parameter, so the only new name the codegen tasks share is `__sourceFile`.
 - This plan and ADI-252 change different sections of `docs/dev/stdlib/workflow.md`. They can merge in either order.

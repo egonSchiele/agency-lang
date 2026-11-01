@@ -177,7 +177,7 @@ Write one private function, `docSections(description: string): DocSection[]`, wi
 
 Then `stripBoundParams` keeps the sections whose `param` is null or not bound and joins their lines with `\n`. A blank line that closes a bound entry goes with it, which is what the existing test "until blank line, preserving the blank line" pins. `paramDocs` maps each section that has a `param` to its `ParamDoc`.
 
-Keep `stripBoundParams`'s two early returns, for an empty description and for an empty name list.
+Drop `stripBoundParams`'s early return. With the splitter, an empty description and a list of no bound names both come back unchanged, and the two existing tests for those cases check it.
 
 - [ ] **Step 4: Run the tests, typecheck, commit**
 
@@ -273,7 +273,7 @@ In `lib/cli/doc.ts`, replace `formatDefaultValue(node)` with a call to `generato
 
 - [ ] **Step 3: Add `params` to `describe`**
 
-In `lib/stdlib/agency.ts`, write `exportParams(node: FunctionDefinition | GraphNodeDefinition, generator: AgencyGenerator): ExportParam[]`. It maps `node.parameters` to `ExportParam`s. `description` is the text of the first `paramDocs` entry with the parameter's name, or null when there is none or its text is empty. Read the docstring text once, with the `docStringText` call `localExportInfos` already makes. Use `exportParams` for the def entry and the node entry in `localExportInfos`. Give every other entry `params: []`: the type alias and const entries near `agency.ts:389` and `:413`, and the thin re-export at `:525`. A `std::` re-export is described from its source module, so it gets the source's parameters with no change.
+In `lib/stdlib/agency.ts`, write `exportParams(node: FunctionDefinition | GraphNodeDefinition, generator: AgencyGenerator, docstring: string | null): ExportParam[]`. It maps `node.parameters` to `ExportParam`s. `description` is the text of the first `paramDocs(docstring)` entry with the parameter's name, or null when there is none or its text is empty. In `localExportInfos`, compute the docstring text once for the def entry and once for the node entry, and pass that one value to both the entry's `docstring` field and `exportParams`. Give every other entry `params: []`: the type alias and const entries near `agency.ts:389` and `:413`, and the thin re-export at `:525`. A `std::` re-export is described from its source module, so it gets the source's parameters with no change.
 
 In `stdlib/agency.agency`, add the `ExportParam` type and the `params` field, and add one sentence to `describe`'s docstring: "Each def and node lists its parameters, with the type and default as the signature writes them and the text of its `@param` entry."
 
@@ -298,7 +298,7 @@ In `stdlib/agency.agency`, add the `ExportParam` type and the `params` field, an
   - `Signature.params: ExportParam[]`.
   - In `catalog.ts`: `type CatalogParam = ExportParam & { schema: unknown }`, `type CatalogEntry = { module: string; name: string; description: string; params: CatalogParam[]; returns: string | null }`, and `catalogEntries(tools: unknown[], refs: ToolRef[], signatures: Record<string, Signature>): CatalogEntry[]`.
   - In `index.ts`: `_catalogEntries`, with the same signature, re-exported for `stdlib/workflow.agency`.
-  - `tools[i]` and `refs[i]` describe the same tool. `_toolRefs` returns refs only when every tool is accepted, one per tool, in order.
+  - `catalogEntries` makes one entry per ref, in the refs' order, which is the tool list's order. It pairs each ref with the tool of the same name. Names are unique, because `_toolRefs` refuses a repeated name.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -375,7 +375,7 @@ describe("catalogEntries", () => {
     const bare: Signature = {
       ...searchSignature,
       docstring: null,
-      params: searchSignature.params.map((p) => ({ ...p, description: null })),
+      params: searchSignature.params.map((param) => ({ ...param, description: null })),
     };
     const [entry] = catalogEntries([searchNotes], [ref], {
       [signatureKey(ref.module, ref.name)]: bare,
@@ -393,7 +393,7 @@ Add `params: ExportParam[]` to `Signature` in `types.ts`, with the comment "What
 
 - [ ] **Step 3: Implement `catalogEntries`**
 
-For each tool and its ref, look up the signature by `signatureKey(ref.module, ref.name)`. Read the parameter schemas once with a small helper, `parameterSchemas(tool: unknown): Record<string, unknown>`. It returns the `properties` of `toolDefinition.schema.toJSONSchema()`, or `{}` for a value with no zod tool definition. Then:
+For each ref, take the tool with the same name, and look up the signature by `signatureKey(ref.module, ref.name)`. Read the tool's parameter schemas once with a small helper, `parameterSchemas(tool: unknown): Record<string, unknown>`. It returns the `properties` of `toolDefinition.schema.toJSONSchema()`, or `{}` for a value with no zod tool definition. Then:
 
 - `params` is the signature's params that appear in that record, each with its `schema` added, in the signature's order.
 - `description` is `stripBoundParams(docstring, names).trim()`, where `names` is the name of every parameter in the signature, block parameters included. It is `""` when the docstring is null.
@@ -522,7 +522,8 @@ node refusedLikeCheckWorkflow(): Json {
   if (listed is success) {
     return "listed"
   }
-  return [map(listed.data.problems, \problem -> problem.message), getMutable("effects", [])]
+  const messages = map(listed.data.problems, \problem -> problem.message)
+  return [messages, getMutable("effects", [])]
 }
 
 node repeatedToolRefused(): Json {
@@ -630,4 +631,4 @@ Commit the four files with the message `docs: the workflow catalog`.
 - Ticket tests: "a `std::` tool and a local `.agency` tool both appear with the right parameters and return type" is `stdToolEntry` and `localToolEntry`. "Refused the same way `checkWorkflow` refuses it: a partial, a renamed function, or a repeated name" is `refusedLikeCheckWorkflow` and `repeatedToolRefused`.
 - Spec coverage: "The catalog" says the entry is built "from `describe` and the tool's parameter schema", which are Tasks 2 and 3. "Public API" gives the signature that Task 4 implements.
 - Type consistency: `ExportParam` is defined once in `lib/stdlib/agency.ts` and used by `Signature` and `CatalogParam`. The Agency types in `stdlib/agency.agency` and `stdlib/workflow.agency` repeat the same fields, because Agency types are declared in Agency source.
-- `catalog` reads `refs` and `tools` side by side. That holds because `_toolRefs` never drops or reorders a tool when it succeeds. The Interfaces block of Task 3 says so, and `entriesFollowTheToolList` checks the order.
+- `catalogEntries` pairs a ref with its tool by name, which is safe because `_toolRefs` refuses a repeated name. It takes the order from the refs, which `_toolRefs` returns in the tool list's order. `entriesFollowTheToolList` checks that order.

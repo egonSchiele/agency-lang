@@ -143,6 +143,77 @@ describe("applyRuntimeConfigOverridesToContextArgs — trace overrides", () => {
   });
 });
 
+/** A context's arguments as a program compiled in the sandbox bakes them. */
+const bakedSandbox = () => ({
+  statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+  smoltalkDefaults: {
+    model: "gpt-5-mini",
+    provider: "openai-responses",
+    apiKey: { openAi: "env-openai", anthropic: "" },
+    baseUrl: { liteLlm: "", openAiCompat: "" },
+    logLevel: "warn" as const,
+  },
+  dirname: "/project",
+});
+
+describe("applyRuntimeConfigOverridesToContextArgs — client settings", () => {
+  it("clears the baked provider when the override names a model alone", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(bakedSandbox(), {
+      client: { defaultModel: "gemini-3.8-flash" },
+    });
+    expect(result.smoltalkDefaults.model).toBe("gemini-3.8-flash");
+    expect("provider" in result.smoltalkDefaults).toBe(false);
+  });
+
+  it("sets the model and the provider together", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(bakedSandbox(), {
+      client: { defaultModel: "gemini-3.8-flash", defaultProvider: "google" },
+    });
+    expect(result.smoltalkDefaults).toMatchObject({
+      model: "gemini-3.8-flash",
+      provider: "google",
+    });
+  });
+
+  it("merges keys and base URLs per provider, keeping the baked rest", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(bakedSandbox(), {
+      client: { apiKey: { anthropic: "sk-a" }, baseUrl: { openAiCompat: "http://local/v1" } },
+    });
+    expect(result.smoltalkDefaults.apiKey).toEqual({ openAi: "env-openai", anthropic: "sk-a" });
+    expect(result.smoltalkDefaults.baseUrl).toEqual({
+      liteLlm: "",
+      openAiCompat: "http://local/v1",
+    });
+    expect(result.smoltalkDefaults).toMatchObject({
+      model: "gpt-5-mini",
+      provider: "openai-responses",
+    });
+  });
+
+  it("inherits logLevel, openRouter, the tool caps, and maxRestores", () => {
+    const result = applyRuntimeConfigOverridesToContextArgs(bakedSandbox(), {
+      client: {
+        logLevel: "debug",
+        openRouter: { provider: { order: ["anthropic"] } },
+        maxToolResultChars: 500,
+        maxToolSchemaChars: 0,
+      },
+      checkpoints: { maxRestores: 3 },
+    });
+    expect(result.smoltalkDefaults.logLevel).toBe("debug");
+    expect(result.smoltalkDefaults.openRouter).toEqual({ provider: { order: ["anthropic"] } });
+    expect(result.maxToolResultChars).toBe(500);
+    expect(result.maxToolSchemaChars).toBe(0);
+    expect(result.maxRestores).toBe(3);
+  });
+
+  it("leaves smoltalkDefaults alone when the override has no client", () => {
+    const baked = bakedSandbox();
+    const result = applyRuntimeConfigOverridesToContextArgs(baked, { maxCallDepth: 9 });
+    expect(result.smoltalkDefaults).toEqual(baked.smoltalkDefaults);
+  });
+});
+
 describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => {
   const saved = { ...process.env };
   afterEach(() => {
@@ -204,6 +275,15 @@ describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => 
     } finally {
       setRuntimeConfigOverrides(undefined);
     }
+  });
+
+  it("the env override sets the model too", () => {
+    process.env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides({
+      client: { defaultModel: "gemini-3.8-flash" },
+    });
+    const ctx = new RuntimeContext({ ...bakedSandbox() });
+    expect(ctx.smoltalkDefaults.model).toBe("gemini-3.8-flash");
+    expect("provider" in ctx.smoltalkDefaults).toBe(false);
   });
 });
 

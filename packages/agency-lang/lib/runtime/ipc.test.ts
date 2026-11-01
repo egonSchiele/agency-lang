@@ -15,6 +15,9 @@ import {
   handleCallbackMessage,
   handleChildMessage,
   withParentStatelog,
+  parentConfigOverrides,
+  withParentConfig,
+  type ParentSettings,
   resolveNodeCallArgs,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
@@ -26,6 +29,7 @@ import { CostGuard, isGuardExceededError } from "./guard.js";
 import { withTestFrame } from "./__tests__/testHelpers.js";
 import { runInTestContext, type Run } from "./asyncContext.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { RuntimeContext } from "./state/context.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -1055,5 +1059,131 @@ describe("materializeCompiledScript", () => {
     } finally {
       cleanup(scriptPath, 2);
     }
+  });
+});
+
+const parentSettings = (): ParentSettings => ({
+  smoltalkDefaults: {
+    model: "gemini-3.8-flash",
+    provider: "google",
+    apiKey: { google: "k" },
+    baseUrl: { openAiCompat: "http://local/v1" },
+    logLevel: "error",
+  },
+  maxToolResultChars: 500,
+  maxToolSchemaChars: 0,
+  maxCallDepth: 64,
+  failurePropagation: "warn",
+  maxRestores: 7,
+});
+
+describe("parentConfigOverrides", () => {
+  it("turns the parent's settings into the config a child starts with", () => {
+    expect(parentConfigOverrides(parentSettings())).toEqual({
+      client: {
+        defaultModel: "gemini-3.8-flash",
+        defaultProvider: "google",
+        apiKey: { google: "k" },
+        baseUrl: { openAiCompat: "http://local/v1" },
+        logLevel: "error",
+        maxToolResultChars: 500,
+        maxToolSchemaChars: 0,
+      },
+      maxCallDepth: 64,
+      failurePropagation: "warn",
+      checkpoints: { maxRestores: 7 },
+    });
+  });
+
+  it("sends the model alone when the parent has no provider", () => {
+    const parent = parentSettings();
+    delete parent.smoltalkDefaults.provider;
+    const client = parentConfigOverrides(parent).client ?? {};
+    expect(client.defaultModel).toBe("gemini-3.8-flash");
+    expect("defaultProvider" in client).toBe(false);
+  });
+
+  it("sends only the keys and base URLs the parent has a value for", () => {
+    const parent = parentSettings();
+    parent.smoltalkDefaults.apiKey = { google: "k", openAi: "", anthropic: undefined };
+    parent.smoltalkDefaults.baseUrl = { openAiCompat: "", liteLlm: "" };
+    const client = parentConfigOverrides(parent).client ?? {};
+    expect(client.apiKey).toEqual({ google: "k" });
+    expect("baseUrl" in client).toBe(false);
+  });
+
+  it("never sets log or providerModules", () => {
+    const sent = parentConfigOverrides(parentSettings());
+    expect(sent.log).toBeUndefined();
+    expect(sent.observability).toBeUndefined();
+    expect(sent.client?.providerModules).toBeUndefined();
+  });
+
+  it("a served context passes its invocation's limits on", async () => {
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: { model: "gpt-5-mini" },
+      dirname: "/project",
+      maxCallDepth: 2048,
+    });
+    const execCtx = await ctx.createExecutionContext({
+      runId: "run-1",
+      contextOverride: { maxCallDepth: 5 },
+    });
+    expect(parentConfigOverrides(execCtx).maxCallDepth).toBe(5);
+  });
+});
+
+describe("withParentConfig", () => {
+  it("is the overrides alone when the parent sends nothing", () => {
+    expect(withParentConfig({ observability: true }, {})).toEqual({ observability: true });
+    expect(withParentConfig(undefined, {})).toEqual({});
+  });
+
+  it("fills in the parent's config under the overrides", () => {
+    expect(
+      withParentConfig(
+        { observability: true, log: { logFile: "/tmp/child.jsonl" } },
+        { client: { defaultModel: "m", defaultProvider: "p" }, maxCallDepth: 7 },
+      ),
+    ).toEqual({
+      observability: true,
+      log: { logFile: "/tmp/child.jsonl" },
+      client: { defaultModel: "m", defaultProvider: "p" },
+      maxCallDepth: 7,
+    });
+  });
+
+  it("an override naming a model alone drops the parent's provider", () => {
+    expect(
+      withParentConfig(
+        { client: { defaultModel: "mine" } },
+        { client: { defaultModel: "theirs", defaultProvider: "google", apiKey: { google: "k" } } },
+      ),
+    ).toEqual({ client: { defaultModel: "mine", apiKey: { google: "k" } } });
+  });
+
+  it("an override naming a model and a provider replaces both", () => {
+    expect(
+      withParentConfig(
+        { client: { defaultModel: "mine", defaultProvider: "p" } },
+        { client: { defaultModel: "theirs", defaultProvider: "google" } },
+      ).client,
+    ).toEqual({ defaultModel: "mine", defaultProvider: "p" });
+  });
+
+  it("an explicit override wins over an inherited field, key by key", () => {
+    expect(
+      withParentConfig(
+        { client: { defaultModel: "mine" } },
+        { client: { defaultModel: "theirs", apiKey: { anthropic: "k" } } },
+      ),
+    ).toEqual({ client: { defaultModel: "mine", apiKey: { anthropic: "k" } } });
   });
 });

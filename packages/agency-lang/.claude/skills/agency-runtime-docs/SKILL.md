@@ -30,5 +30,5 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.
 - `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.
 - `docs/dev/runtime/lock.md` — A per-run mutex for serializing access to shared resources such as the terminal prompt.
-- `docs/dev/runtime/subprocess-ipc.md` — How an agent compiles and runs Agency code in a subprocess, and how the parent's handler chain extends across that boundary.
+- `docs/dev/runtime/subprocess-ipc.md` — How an agent compiles and runs Agency code in a subprocess, how the parent's handler chain extends across that boundary, and what settings a child inherits from its parent.
 - `docs/dev/runtime/config.md` — Every `AgencyConfig` option, with types and defaults, and how config is resolved.

@@ -75,6 +75,13 @@ the execution context exists and are an arbitrary-write surface.
 it is not invocation-local. Per-call model selection is deferred, since it has to
 ship with `defaultProvider`. See spec §5.
 
+The projection is what keeps `client.*` inert here. The runtime merge itself
+applies the `client` settings when they arrive through the environment variable
+or the subprocess IPC message. A served invocation's `maxCallDepth` and
+`failurePropagation` are passed on to any child the invocation starts with
+`run`, because the child's settings are read from the execution context after
+the invocation's override is applied.
+
 The projection returns `undefined` when the caller supplied nothing on the
 allow-list, so an all-inert override adds no object at all.
 

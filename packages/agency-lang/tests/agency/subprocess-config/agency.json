@@ -1,0 +1,5 @@
+{
+  "client": {
+    "defaultModel": "gpt-4o-mini"
+  }
+}

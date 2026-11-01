@@ -8,6 +8,7 @@ import {
   AgencyConfigSchema,
   applyCliFlags,
   CONFIG_OVERRIDES_ENV,
+  defaultRoute,
   readConfigOverrides,
   redactConfigSecrets,
   SECRET_CONFIG_PATHS,
@@ -556,5 +557,33 @@ describe("validateConfig", () => {
     const { error } = validateConfig({ maxToolCallRounds: "many" }, "a.json merged with b.json");
     expect(error).toContain("Invalid config in a.json merged with b.json");
     expect(error).toContain("maxToolCallRounds");
+  });
+});
+
+describe("defaultRoute", () => {
+  const fallback = { model: "fallback-model", provider: "fallback-provider" };
+
+  it("uses the fallback when the client names nothing", () => {
+    expect(defaultRoute(undefined, fallback)).toEqual(fallback);
+    expect(defaultRoute({}, fallback)).toEqual(fallback);
+  });
+
+  it("drops the provider when the client names a model alone", () => {
+    expect(defaultRoute({ defaultModel: "m" }, fallback)).toEqual({ model: "m" });
+  });
+
+  it("keeps a configured provider", () => {
+    expect(defaultRoute({ defaultModel: "m", defaultProvider: "p" }, fallback)).toEqual({
+      model: "m",
+      provider: "p",
+    });
+    expect(defaultRoute({ defaultProvider: "p" }, fallback)).toEqual({
+      model: "fallback-model",
+      provider: "p",
+    });
+  });
+
+  it("keeps a fallback with no provider as it is", () => {
+    expect(defaultRoute(undefined, { model: "m" })).toEqual({ model: "m" });
   });
 });

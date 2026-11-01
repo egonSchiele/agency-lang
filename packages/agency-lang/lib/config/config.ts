@@ -1000,6 +1000,26 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
 export const DEFAULT_MODEL = "gpt-5-mini";
 export const DEFAULT_PROVIDER = "openai-responses";
 
+/** The model and provider a `client` block selects, over a fallback. A
+ *  configured provider wins. A model named without a provider has no
+ *  provider, so smoltalk picks one from the model name. With neither, the
+ *  fallback's model and provider stand.
+ *
+ *  This is the compile-time rule: the code generator applies it with the
+ *  built-in defaults as the fallback, and the runtime merge applies it with a
+ *  program's baked values, so a child started by `run` behaves as if it had
+ *  been compiled with its parent's config. It is not the per-call rule for
+ *  `llm(model:)`, `modelProviderOverride` in `lib/runtime/llmConfig.ts`. */
+export function defaultRoute(
+  client: AgencyConfig["client"] | undefined,
+  fallback: { model: string; provider?: string },
+): { model: string; provider?: string } {
+  const model = client?.defaultModel || fallback.model;
+  const provider =
+    client?.defaultProvider || (client?.defaultModel ? undefined : fallback.provider);
+  return provider ? { model, provider } : { model };
+}
+
 /** The one env var carrying a JSON Partial<AgencyConfig> into an already-compiled
  *  process (see the source-of-truth note above, source 3). */
 export const CONFIG_OVERRIDES_ENV = "AGENCY_CONFIG_OVERRIDES";

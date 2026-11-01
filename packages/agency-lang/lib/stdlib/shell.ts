@@ -190,7 +190,7 @@ export type BashOptions = {
 };
 
 /**
- * Like {@link execImpl} but routes the command through `sh -c`. Pipes
+ * Like {@link execImpl} but routes the command through `bash -c`. Pipes
  * and subshells get torn down when SIGTERM hits the parent shell,
  * which then propagates to its children.
  */

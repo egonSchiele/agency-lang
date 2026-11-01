@@ -2,13 +2,13 @@
 //
 // `run` collects the child's output and reports how it ended; what each
 // ending means is the caller's decision (lib/stdlib/abortable.ts turns a
-// cancelled child into an AgencyCancelledError, for example). A program
-// that cannot be started rejects with Node's own error, so a caller can
-// read `code === "ENOENT"`.
+// cancelled child into an AgencyCancelledError, for example). A `program`
+// command that cannot be started rejects with Node's own error, so a caller
+// can read `code === "ENOENT"`. A `shell` command runs under bash, found on
+// the search path; with no bash it rejects with a message that names bash.
 
 import { spawn, type ChildProcess } from "child_process";
-import { constants as fsConstants } from "fs";
-import fs from "fs/promises";
+import fs from "fs";
 import path from "path";
 import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "../host.js";
 
@@ -38,19 +38,106 @@ function guardStdioStream(
   });
 }
 
+/** The variables of an environment that have a value. `process.env` can
+ *  hold undefined for a variable deleted with `delete`; a child's
+ *  environment cannot. */
+export function definedVariables(env: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** Variables removed from a shell script's environment, because each makes
+ *  bash do something the script does not say. */
+const SHELL_ENV_REMOVED = [
+  // Names a file bash sources before the script.
+  "BASH_ENV",
+  // Starts bash in POSIX mode, where macOS bash 3.2 prints `echo -n hi` as
+  // `-n hi` and reads backslash escapes. `+o posix` does not undo it. GNU
+  // programs in the child also stop reading options in POSIX order, which
+  // changes no safeBash plan: the flag tables that care set optionsFirst.
+  "POSIXLY_CORRECT",
+  // Turn on shell options at startup; `xpg_echo` would change what `echo`
+  // prints. bash reads BASHOPTS from 4.1 on.
+  "SHELLOPTS",
+  "BASHOPTS",
+  // Sends `cd target` to $CDPATH/target and prints the folder.
+  "CDPATH",
+  // Drops names from a glob's expansion.
+  "GLOBIGNORE",
+];
+
+/** An exported function arrives as `BASH_FUNC_<name>%%` (bash 4.3 and
+ *  later) or `BASH_FUNC_<name>()` (older), and shadows the program of that
+ *  name, so `git status` would run the function instead of git. */
+const SHELL_ENV_REMOVED_PREFIX = "BASH_FUNC_";
+
+/** The environment a shell script runs with: `env` without the variables
+ *  above. */
+export function shellEnvironment(env: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (!SHELL_ENV_REMOVED.includes(key) && !key.startsWith(SHELL_ENV_REMOVED_PREFIX)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** The first executable file named `program` in the folders of
+ *  `searchPath`, or null. Synchronous because a shell script's spawn uses
+ *  it, and `startChild` hands back `kill` before anything settles. A
+ *  relative entry is skipped: it would resolve against the working
+ *  directory, which an agent writes into. */
+export function locateProgramSync(program: string, searchPath: string): string | null {
+  const dirs = searchPath.split(path.delimiter).filter((d) => path.isAbsolute(d));
+  const isWindows = process.platform === "win32";
+  const extensions = isWindows ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
+  for (const dir of dirs) {
+    for (const ext of extensions) {
+      const candidate = path.join(dir, program + ext);
+      try {
+        if (!fs.statSync(candidate).isFile()) {
+          continue;
+        }
+        if (!isWindows) {
+          fs.accessSync(candidate, fs.constants.X_OK);
+        }
+        return candidate;
+      } catch {
+        // not here, or not executable: try the next one
+      }
+    }
+  }
+  return null;
+}
+
 function spawnCommand(command: Command, options: RunOptions): ChildProcess {
   const collect = options.collect ?? { stdout: true, stderr: true };
-  const spawnOptions = {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: ["pipe", collect.stdout ? "pipe" : "ignore", collect.stderr ? "pipe" : "ignore"] as (
-      "pipe" | "ignore"
-    )[],
-  };
+  const stdio = [
+    "pipe",
+    collect.stdout ? "pipe" : "ignore",
+    collect.stderr ? "pipe" : "ignore",
+  ] as ("pipe" | "ignore")[];
   if (command.kind === "shell") {
-    return spawn("sh", ["-c", command.script], spawnOptions);
+    const env = options.env ?? definedVariables(process.env);
+    const bash = locateProgramSync("bash", env.PATH ?? "");
+    if (bash === null) {
+      throw new Error(
+        "bash was not found on the PATH. safeBash and the bash tool run their commands with bash.",
+      );
+    }
+    return spawn(bash, ["-c", command.script], {
+      cwd: options.cwd,
+      env: shellEnvironment(env),
+      stdio,
+    });
   }
-  return spawn(command.program, command.args, spawnOptions);
+  return spawn(command.program, command.args, { cwd: options.cwd, env: options.env, stdio });
 }
 
 /** Collect a stream's text, keeping at most `limit` bytes when `limit`
@@ -184,30 +271,9 @@ function startChild(
 }
 
 export const nodeSubprocess: HostSubprocess = {
-  run: (command, options = {}) => startChild(command, options).ended,
-  locate: async (program) => {
-    const dirs = (process.env.PATH ?? "").split(path.delimiter).filter((d) => d.length > 0);
-    const isWindows = process.platform === "win32";
-    const extensions = isWindows ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
-    for (const dir of dirs) {
-      for (const ext of extensions) {
-        const candidate = path.resolve(dir, program + ext);
-        try {
-          const st = await fs.stat(candidate);
-          if (!st.isFile()) {
-            continue;
-          }
-          if (!isWindows) {
-            await fs.access(candidate, fsConstants.X_OK);
-          }
-          return candidate;
-        } catch {
-          // not here, or not executable: try the next one
-        }
-      }
-    }
-    return null;
-  },
+  // `async`, so a throw from `spawnCommand` (no bash) is a rejection.
+  run: async (command, options = {}) => startChild(command, options).ended,
+  locate: async (program) => locateProgramSync(program, process.env.PATH ?? ""),
   start: async (command, options = {}) => {
     const { ended, kill } = startChild(command, options);
     // A rejection with nobody waiting yet must not be unhandled; `wait`

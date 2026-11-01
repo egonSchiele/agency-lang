@@ -8,6 +8,9 @@
  * `wfRunNode` has no handler around `wfRun`: the run's policy, passed as a
  * root carrier, decides each of its interrupts.
  *
+ * Every node returns a `Result`. `readDriverResult` depends on that: it reads
+ * a bare list as interrupts that nothing answered.
+ *
  * The text is fixed. Only the import lines and the tool list are written
  * into it. Every value reaches it as a node argument, so nothing a person
  * typed lands in its source.

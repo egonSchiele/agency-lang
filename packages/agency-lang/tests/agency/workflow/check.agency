@@ -172,7 +172,7 @@ node raisesLeavesOutAStepsEffect(): Json {
   return map(checked.data.problems, \problem -> "${problem.step}/${problem.field}")
 }
 
-/** The workflow named by greetWorkflow in run.agency: one step whose tool's
+/** One step whose tool's
   module imports another local file. */
 def greetWorkflow(): Workflow {
   return {

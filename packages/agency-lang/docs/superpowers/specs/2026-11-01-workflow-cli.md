@@ -26,14 +26,14 @@ These come later, after more design discussion:
 
 A workflow's `limits`, and a step's, become a `guard` in the generated program. When a guard trips, it raises `std::guard`. A handler that approves `std::guard` gives the guard more budget (`docs/site/guide/guards.md`). So today, any caller's handler or policy can raise a workflow's limit.
 
-The generated program answers its own guard trips with a rejection. Its scaffold wraps the body of `main` in a handler:
+The generated program answers its own guard trips with a rejection. Its scaffold wraps the body of `main` in a handler, and labels the guard around the body with the workflow's name:
 
 ```
 export node main(inputs: Inputs!): Result {
   handle {
     ...the steps...
   } with (guardTrip) {
-    if (guardTrip.effect == "std::guard") {
+    if (guardTrip.effect == "std::guard" && ["updateMealPlanFromNote", "add"].includes(guardTrip.data.label)) {
       return reject()
     }
     return pass()
@@ -41,11 +41,11 @@ export node main(inputs: Inputs!): Result {
 }
 ```
 
-Any rejection wins over every other handler, so no caller can extend a limit. This is what the `@guard` decorator does for the functions it wraps. A `return` inside a `handle` block returns from the enclosing function, so the steps' `return` statements keep working.
+The list holds the label of every guard the workflow itself writes: the workflow's name for the guard around the body, when the workflow has limits, and the id of each step with limits.
 
-The handler rejects every `std::guard` raised inside the workflow, including a guard inside a tool. Inside a workflow, every limit is hard.
+Any rejection wins over every other handler, so no caller can extend a limit. This is what the `@guarded` decorator does for the functions it wraps: it rejects a trip with its own label and passes on every other. A `return` inside a `handle` block returns from the enclosing function, so the steps' `return` statements keep working.
 
-This has one accepted cost. `supervise()` keeps a long task going by approving its own guard at each check (`stdlib/supervise.agency:72-112`). Inside a workflow tool, the scaffold's rejection wins over that approval, so the task stops at its first check. A tool that wraps `codingAgent` in `supervise(every: 5m, maxTime: 30m, ...)` stops after 5 minutes when a workflow calls it. A handler cannot tell a tool's own approval from a caller's, so keeping `supervise` working would also let callers extend a tool's guard. The scaffold comment and the docs say so.
+The handler passes on a trip from a guard inside a tool. A tool's guard sits inside the step's guard and the workflow's, so a caller who extends it is still stopped at the workflow's limits. What a caller can extend is only the tool's own budget, up to the workflow's, which is what they can do when they call the tool directly. And `supervise()`, which keeps a long task going by approving its own guard at each check (`stdlib/supervise.agency:72-112`), keeps working inside a workflow tool. A tool guard whose label matches a step id is rejected too, which is the safe direction for a collision.
 
 ### `raises`
 
@@ -147,7 +147,7 @@ workflows/broken.json has 1 problem:
   step text, args.id: reference "steps.notes[0].id" names no step
 ```
 
-`compile` prints the Agency program the workflow turns into. `list` prints the saved workflows in a project, with their inputs and descriptions. Each of `tools`, `check`, and `list` takes `--json` and prints `std::workflow`'s value as it is.
+`compile` prints the Agency program the workflow turns into. `list` prints the saved workflows in a project, with their inputs and descriptions. Each of `tools`, `check`, and `list` takes `--json`. Every command prints the same shape, which `run` uses too: `{ "success": true, "value": ... }` with `std::workflow`'s value, or `{ "success": false, "error": ..., "step": ... }`, with `problems` when there are some.
 
 ### How the commands reach `std::workflow`
 
@@ -270,7 +270,7 @@ There is no `--yes` flag.
 
 ## Calls I made
 
-1. **One handler in the scaffold makes every limit hard.** It rejects every `std::guard` raised inside the workflow, including a guard inside a tool. Matching only the workflow's own guard labels would leave a tool's guard extendable by the caller, which is the hole this closes.
+1. **One handler in the scaffold makes every limit hard.** It rejects a trip from the workflow's own guards, by label, and passes on the rest. An earlier draft rejected every `std::guard`, a tool's included, which broke `supervise()` inside a tool and bought nothing: the workflow's own guards still stop a caller who extends a tool's guard.
 2. **The `raises` check is TypeScript in `resolve`, not the type checker's AG3013.** AG3013 points at `main`, not at the step, and would count `std::guard`. The check expands set names with `builtinEffectSets()`, the table the policy flags use.
 3. **A problem from `raises` is on the step's `tool` field.** That is the step the person has to change, or the effect they have to add.
 4. **The commands run their driver with `runAgencyNode`.** It already compiles a file, calls a node with arguments, and returns the value. It captures the program's output, which rules out `-i` for now.

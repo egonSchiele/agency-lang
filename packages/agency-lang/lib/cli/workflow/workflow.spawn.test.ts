@@ -119,7 +119,7 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
   it("tools prints a standard module's catalog as JSON", async () => {
     const r = await runCli(project, ["tools", "std::math", "--json"]);
     expect(r.code).toBe(0);
-    const names = JSON.parse(r.stdout).map((entry: { name: string }) => entry.name);
+    const names = JSON.parse(r.stdout).value.map((entry: { name: string }) => entry.name);
     expect(names).toContain("round");
     noDriverLeft();
   });

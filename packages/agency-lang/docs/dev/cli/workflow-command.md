@@ -45,6 +45,10 @@ Three problems are reported by the command itself, because `checkWorkflow` would
 2. Two tools with one name from different modules, in `toolRefs`'s wording.
 3. A tool named like one of `DRIVER_NAMES`.
 
+### Two describes per command
+
+The CLI describes each module to plan the driver's imports, and the driver's `checkWorkflow` describes the same modules again in the child. So for `check`, the "can raise" list comes from the CLI's describe and the problems from the child's. Both read the same files, so they agree. But they are two computations, and a change to one does not reach the other.
+
 ## Why `with approve` is safe in these nodes
 
 The `std::workflow` functions the nodes call read files and compile in the sandbox. None of them runs a tool. So every interrupt they raise is their own: `std::read` for a tool's module, and `std::workflow::scan` for the `workflows` folder. `runAgencyNode`'s child gets no run policy, because `withRootCarriers` removes it from the environment when no policy carrier is passed.
@@ -89,6 +93,10 @@ The table, the question, and every message go to stderr, so `--json` keeps stdou
 - `--model` and `--local` become config the driver is compiled with. The workflow's child gets the driver's model and provider.
 - `--max-cost` and `--max-time` become the driver's root budget. A root time budget does not stop a run that is waiting on its subprocess, so `--max-time` cannot end a workflow mid-step. `agency run` has the same gap when its program calls `runWorkflow`. A budget stop that does happen exits 1, because the evaluate script `runAgencyNode` writes does not catch it the way `agency run`'s entry block does, which exits 3.
 - `--log-file` and `--observability` set the driver's log, and the child writes its events there too.
+
+## JSON output
+
+`resultJson` in `commands.ts` writes every command's `--json` output from its `DriverResult`, as `{ success: true, value }` or `{ success: false, error, step }`, with `problems` when there are some. One shape means a script reads every command the same way, and the `DriverResult` kind names stay inside the code.
 
 ## The temp folder
 

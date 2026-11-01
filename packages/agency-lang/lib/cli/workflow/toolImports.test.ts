@@ -58,7 +58,7 @@ describe("importsForSteps", () => {
     expect(plan).toEqual({ imports: [], signatures: {}, problems: [] });
   });
 
-  it("reports two tools with one name from different modules on the second step", () => {
+  it("counts no clash for a name the module does not export, and imports one module once", () => {
     const plan = importsForSteps(
       stepsOf(["a", "./notes.agency", "searchNotes"], ["b", "std::math", "searchNotes"]),
       FIXTURES,

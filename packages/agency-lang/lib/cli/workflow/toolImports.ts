@@ -211,9 +211,10 @@ function moduleOfSource(source: string, dir: string, cwd: string): string | null
   if (source.startsWith("std::")) {
     return source;
   }
-  const relative = path.relative(dir, path.resolve(cwd, source));
-  if (!isStrictDescendant(dir, path.resolve(cwd, source))) {
+  const file = path.resolve(cwd, source);
+  if (!isStrictDescendant(dir, file)) {
     return null;
   }
+  const relative = path.relative(dir, file);
   return `./${relative.split(path.sep).join("/")}`;
 }

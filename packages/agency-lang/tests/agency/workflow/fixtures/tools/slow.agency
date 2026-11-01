@@ -27,3 +27,28 @@ export def busyEcho(text: string): string {
   }
   return text
 }
+
+export def selfExtending(text: string): string {
+  """
+  Return the text after busyEcho's second of work, under a 100 ms guard of
+  its own that it extends when it trips, the way supervise() does.
+
+  @param text - The text to return
+  """
+  let result: Result<string> = failure("not run")
+  handle {
+    result = guard(time: 100, label: "selfExtending") {
+      return busyEcho(text)
+    }
+  } with (trip) {
+    if (trip.effect == "std::guard" && trip.data.label == "selfExtending") {
+      return approve({ maxTime: 60000 })
+    }
+    return pass()
+  }
+  if (result is failure) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+

@@ -152,6 +152,22 @@ function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
   };
 }
 
+/** Fields of the graph's node state that hold the runtime, not the node's data. */
+const RUNTIME_STATE_KEYS = ["ctx", "run"];
+
+/** A node event's state without the runtime. The graph hands each node
+ *  `{ messages, data, ctx, isResume, run }`. `ctx` and `run` both hold the
+ *  whole state stack, so logging them wrote the stack three times per event,
+ *  and no reader uses them. A state that is not a plain object is returned
+ *  as it is. */
+function nodeStateForLog(state: unknown): unknown {
+  if (state === null || typeof state !== "object" || Array.isArray(state)) {
+    return state;
+  }
+  const kept = Object.entries(state).filter(([key]) => !RUNTIME_STATE_KEYS.includes(key));
+  return Object.fromEntries(kept);
+}
+
 // === Client ===
 
 // Shared empty stack returned by `snapshotStack()` when the client is
@@ -444,7 +460,7 @@ export class StatelogClient {
     await this.post({
       type: "enterNode",
       nodeId,
-      data,
+      data: nodeStateForLog(data),
     });
   }
 
@@ -460,7 +476,7 @@ export class StatelogClient {
     await this.post({
       type: "exitNode",
       nodeId,
-      data,
+      data: nodeStateForLog(data),
       timeTaken,
     });
   }
@@ -522,7 +538,7 @@ export class StatelogClient {
       fromNodeId,
       toNodeId,
       isConditionalEdge,
-      data,
+      data: nodeStateForLog(data),
     });
   }
 

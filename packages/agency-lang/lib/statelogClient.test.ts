@@ -676,6 +676,45 @@ describe("StatelogClient", () => {
   });
 
   describe("event method shapes", () => {
+    it("node events log the node's state without ctx and run", async () => {
+      const file = newLogFile("node-state");
+      const client = fileClient(file);
+      const state = {
+        messages: { threads: {} },
+        data: { answer: 42 },
+        ctx: { stateStack: { stack: ["a large stack"] } },
+        isResume: false,
+        run: { ctx: {}, stack: {} },
+      };
+      await client.enterNode({ nodeId: "main", data: state });
+      await client.followEdge({
+        fromNodeId: "main",
+        toNodeId: "next",
+        isConditionalEdge: false,
+        data: state,
+      });
+      await client.exitNode({ nodeId: "next", data: state });
+      const events = readEvents(file);
+      expect(events.map((evt) => evt.data.type)).toEqual(["enterNode", "followEdge", "exitNode"]);
+      for (const evt of events) {
+        expect(evt.data.data).toEqual({
+          messages: { threads: {} },
+          data: { answer: 42 },
+          isResume: false,
+        });
+      }
+    });
+
+    it("a node event whose state is not an object logs it as it is", async () => {
+      const file = newLogFile("node-state-primitive");
+      const client = fileClient(file);
+      await client.exitNode({ nodeId: "main", data: 5 });
+      await client.exitNode({ nodeId: "main", data: ["a", "b"] });
+      const [primitive, list] = readEvents(file);
+      expect(primitive.data.data).toBe(5);
+      expect(list.data.data).toEqual(["a", "b"]);
+    });
+
     it("agentStart emits the right type and entryNode", async () => {
       const file = newLogFile("agent-start");
       const client = fileClient(file);

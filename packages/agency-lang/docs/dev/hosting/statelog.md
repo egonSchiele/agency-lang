@@ -281,6 +281,18 @@ that let a trace stand on its own as "a run":
 Graph & nodes: `graph`, `enterNode`, `exitNode`, `beforeHook`, `afterHook`,
 `followEdge`.
 
+The graph logs a node's state on `enterNode`, `exitNode`, and `followEdge`.
+Agency hands every node this state:
+
+```ts
+{ messages, data, ctx, isResume, run }
+```
+
+`nodeStateForLog` in the client drops `ctx` and `run` before posting. Both
+hold the whole state stack: `run` carries `ctx` again and the same stack as
+`run.stack`. Logging them wrote the stack three times per event, and no
+reader uses them.
+
 LLM: `promptStart` (request shape, before dispatch) → terminated by exactly one
 of `promptCompletion` (full redacted messages + completion + usage/cost),
 an `error` with `errorType: "llmError"`, or `promptCancelled` (race loser /

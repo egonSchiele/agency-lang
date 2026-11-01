@@ -277,13 +277,18 @@ export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: stri
 const WORKFLOWS_DIR = "workflows"
 const FILE_SUFFIX = ".json"
 const MAX_WORKFLOWS = 500
+const INPUTS_SCHEMA_NODE = "inputsSchema"
 
 /** What a saved workflow's file records beside the workflow. */
 export type WorkflowMeta = {
   /** When the workflow was last saved, as ISO text. */
   savedAt: string;
   /** What saved it, such as `writeWorkflow`. */
-  savedBy: string
+  savedBy: string;
+  /** The JSON Schema of the workflow's `inputs` type, from the program's
+    own `inputsSchema` node at save time; null for a workflow saved before
+    schemas were recorded. */
+  inputsSchema: Json | null
 }
 
 /** A saved workflow: its name, the file it is saved in, the workflow, and
@@ -298,7 +303,8 @@ export type WorkflowEntry = {
 /** The meta record as written; every field may be missing. */
 type MetaFile = {
   savedAt?: string;
-  savedBy?: string
+  savedBy?: string;
+  inputsSchema?: Json
 }
 
 /** A saved file as written. */
@@ -309,7 +315,8 @@ type SavedFile = {
 
 const DEFAULT_META: WorkflowMeta = {
   savedAt: "",
-  savedBy: ""
+  savedBy: "",
+  inputsSchema: null
 }
 
 /** Raised before saved workflows are read. `dir` is the real path of the
@@ -346,10 +353,21 @@ def savedFile(name: string): string {
   return "${WORKFLOWS_DIR}/${name}${FILE_SUFFIX}"
 }
 
-@capabilities(fileRead, fileWrite)
+/** The JSON Schema of the program's `Inputs` type, from its `inputsSchema` node. */
+@hidden
+@capabilities(fileWrite, subprocess)
+export def _inputsSchema(program: CompiledProgram): Result<Json> {
+  const ran = run(compiled: program, node: INPUTS_SCHEMA_NODE)
+  if (ran is failure(runErr)) {
+    return failure("could not derive the inputs schema: ${runErr}")
+  }
+  return success(ran.value.data)
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
 export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<WorkflowEntry> {
   """
-  Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
+  Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `std::workflow::save` prompt. It then runs the program's `inputsSchema` node once in a subprocess, which raises `std::run`, and saves the schema with the workflow. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
 
   @param workflow - The workflow to save. Its `name` names the file
   @param tools - The functions the workflow may call, for the check
@@ -373,9 +391,16 @@ export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<
     name: workflow.name,
     workflow: workflow
   })
+  // After the save prompt, so a rejected save starts no process, and
+  // before the write, so a rejected `std::run` leaves nothing on disk.
+  const inputsSchema = _inputsSchema(checked.value.program)
+  if (inputsSchema is failure) {
+    return inputsSchema
+  }
   const meta: WorkflowMeta = {
     savedAt: format(now()),
-    savedBy: "writeWorkflow"
+    savedBy: "writeWorkflow",
+    inputsSchema: inputsSchema.value
   }
   const file = savedFile(workflow.name)
   destructive {

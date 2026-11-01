@@ -122,7 +122,8 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 ```json
 { "workflow": { "format": 1, "name": "mealPlan", ... },
-  "meta": { "savedAt": "2026-10-31T12:00:00.000Z", "savedBy": "writeWorkflow" } }
+  "meta": { "savedAt": "2026-10-31T12:00:00.000Z", "savedBy": "writeWorkflow",
+            "inputsSchema": { "type": "object", ... } } }
 ```
 
 `loadWorkflow(name, dir)` reads one file back and `listWorkflows(dir)` reads them all. Each returns a `WorkflowEntry`: the name, the file's path, the workflow, and `meta`.
@@ -133,7 +134,10 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 1. `_checked`, the generate, typecheck, and compile `runWorkflow` also runs. A workflow with problems fails here and raises nothing. The check also proves `name` is an identifier, so it is safe in a file name.
 2. `std::workflow::save`. A rejection writes nothing.
-3. One `_write` of the file, inside a `destructive { }` region. `_write` raises no prompt of its own.
+3. `_inputsSchema`, which runs the program's `inputsSchema` node with `run` from `std::agency`. `run` raises `std::run`, and a rejection writes nothing.
+4. One `_write` of the file, inside a `destructive { }` region. `_write` raises no prompt of its own.
+
+So a save asks twice. `std::run` has no `@always` tag, so an "always" answer to `save` does not cover it, and its prompt names the program's module and the node `inputsSchema`, not the workflow. The `recommended` policy approves `std::run`; under `minimal` or `--interactive`, every save shows both prompts.
 
 Saving a name that exists replaces it, which is how a workflow is edited. So `save` is tagged `@always(name)` as well as `@alwaysUnder(dir)`: an "always" answer covers this workflow in this folder. With only the folder pinned, a model calling `writeWorkflow` as a tool could replace any saved workflow there without a prompt.
 
@@ -142,6 +146,10 @@ Saving a name that exists replaces it, which is how a workflow is edited. So `sa
 `loadWorkflow` builds a file name from the name its caller passes, so it first checks that name with parse's rule (`_workflowNameProblem`): `../x` fails before anything is read. It then checks the file exists, so a missing workflow fails without a prompt, as `ls`, `grep`, and `glob` do (`grep-flags.md`).
 
 Every payload's `dir` is the real spelling from `_realDir`, because an "always" answer pins text.
+
+`meta.inputsSchema` is the JSON Schema of the workflow's `inputs` type. Only compiled code can turn an Agency type into a JSON Schema, so every generated program has an `inputsSchema` node that returns `schema(Inputs).toJSONSchema()`. `_inputsSchema` runs it on the program `_checked` compiled, once, at save time, so `workflowTools` can build typed tools from the files with no child process per workflow. The child gets `run`'s default limits: the node calls no tool and no model, so the workflow's `limits` do not apply. A file with no `inputsSchema` reads back as `null`. `Json` is `any`, so the load does not check the schema; `z.fromJSONSchema` refuses a bad one when `workflowTool` uses it.
+
+An optional input becomes a required key that may be null, which is how Agency compiles `?`. For `inputs: "{ a: number; b?: number }"`, `required` is `["a", "b"]` and `b` is `{ "default": null, "anyOf": [{ "type": "number" }, { "type": "null" }] }`. A model calling a tool built from this schema must send `b: null` to leave `b` out.
 
 A loaded file is checked against `{ workflow: Workflow; meta?: ... }` with `!`. Missing `meta` fields take their defaults. A file whose workflow's `name` differs from the file name is refused: `std::workflow::run` names a workflow by its own `name`, so a copied file that kept the old name would run under the old name's "always" answer. A file that fails any check fails `listWorkflows`, with a message that starts with its name.
 
@@ -170,7 +178,7 @@ A guarded LLM step is the same `thread` block inside the guard, with `return <re
 
 ## Interrupts and checkpoints
 
-The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`. `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
+The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`. `writeWorkflow` raises `std::workflow::save`, then `run` raises `std::run` for the inputs schema. `loadWorkflow` and `listWorkflows` raise `std::workflow::scan`.
 
 The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, and the resume finishes the workflow. The test does not show that the resume skipped the LLM step. Each child builds its own mock client from the full mock list, so a repeated model call would be answered too.
 
@@ -182,4 +190,4 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
 
 ## Not built yet
 
-The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, and the inputs schema in a saved file's `meta`.
+The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`) and `catalog`.

@@ -35,9 +35,9 @@
     },
     {
       "nodeName": "effectsInOrder",
-      "description": "a save raises std::workflow::save and nothing else",
+      "description": "a save raises std::workflow::save, then std::run for the inputs schema",
       "input": "",
-      "expectedOutput": "[\"std::workflow::save\"]",
+      "expectedOutput": "[\"std::workflow::save\",\"std::run\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -159,6 +159,39 @@
       "description": "loadWorkflow's scan names the project's workflows folder",
       "input": "",
       "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "savedMetaHasInputsSchema",
+      "description": "meta.json holds the inputs schema; an optional input is required and nullable",
+      "input": "",
+      "expectedOutput": "[\"string\",\"number\",true,[\"noteTitle\",\"a\",\"b\"],[\"noteTitle\",\"a\",\"b\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "olderMetaLoadsWithNullSchema",
+      "description": "a meta.json saved before the schema field loads with a null schema",
+      "input": "",
+      "expectedOutput": "[null,\"writeWorkflow\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedRunWritesNothing",
+      "description": "a rejected std::run after an approved save writes nothing",
+      "input": "",
+      "expectedOutput": "[true,false,[\"std::workflow::save\",\"std::run\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"

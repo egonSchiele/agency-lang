@@ -114,11 +114,15 @@ export type WorkflowMeta = {
   /** When the workflow was last saved, as ISO text. */
   savedAt: string;
   /** What saved it, such as `writeWorkflow`. */
-  savedBy: string
+  savedBy: string;
+  /** The JSON Schema of the workflow's `inputs` type, from the program's
+    own `inputsSchema` node at save time; null for a workflow saved before
+    schemas were recorded. */
+  inputsSchema?: Json
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L282))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L283))
 
 ### WorkflowEntry
 
@@ -136,7 +140,7 @@ export type WorkflowEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L291))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L296))
 
 ## Effects
 
@@ -168,7 +172,7 @@ effect std::workflow::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L318))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L325))
 
 ### std::workflow::save
 
@@ -191,7 +195,7 @@ effect std::workflow::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L328))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L335))
 
 ## Functions
 
@@ -322,7 +326,7 @@ writeWorkflow(
 ): Result<WorkflowEntry>
 ```
 
-Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `std::workflow::save` prompt. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
+Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `std::workflow::save` prompt. It then runs the program's `inputsSchema` node once in a subprocess, which raises `std::run`, and saves the schema with the workflow. A workflow with problems is not saved and asks nothing. Saving a name that exists replaces it.
 
   @param workflow - The workflow to save. Its `name` names the file
   @param tools - The functions the workflow may call, for the check
@@ -338,11 +342,11 @@ Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `
 
 **Returns:** `Result<WorkflowEntry>`
 
-**Throws:** `std::workflow::save`, `std::read`
+**Throws:** `std::workflow::save`, `std::run`, `std::guard`, `std::read`
 
-**Needs:** `fileRead`, `fileWrite`
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L350))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L368))
 
 ### loadWorkflow
 
@@ -368,7 +372,7 @@ Load a saved workflow by name. Raises one `std::workflow::scan` prompt before re
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L448))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L473))
 
 ### listWorkflows
 
@@ -392,4 +396,4 @@ List the workflows saved under a project directory. Raises one `std::workflow::s
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L486))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L511))

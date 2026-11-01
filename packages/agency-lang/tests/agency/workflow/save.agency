@@ -218,3 +218,66 @@ node scanPayloadIsTheWorkflowsFolder(): Json {
   cleanup("scanned")
   return getMutable("std::workflow::scan", null).dir == resolve(OUT) + "/workflows"
 }
+
+/** One `add` step over typed inputs: `noteTitle`, which no step reads (an
+  unread input is allowed), and an optional field. */
+def typedInputs(name: string): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Add one to a.",
+    inputs: "{ noteTitle: string; a: number; b?: number }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: 1 } }
+    ]
+  }
+}
+
+// An optional input is a required key that may be null: that is how
+// Agency compiles `?`, and the stored schema is what the compiler gives.
+node savedMetaHasInputsSchema(): Json {
+  cleanup("typed")
+  const saved = runSave(typedInputs("typed"))
+  const loaded = loadWorkflow("typed", OUT) with approve
+  cleanup("typed")
+  if (saved is failure || loaded is failure) {
+    return ["failed", errorOf(saved), errorOf(loaded)]
+  }
+  const schema = loaded.value.meta.inputsSchema
+  const nullable = some(schema.properties.b.anyOf, \member -> member.type == "null")
+  return [
+    schema.properties.noteTitle.type,
+    schema.properties.a.type,
+    nullable,
+    schema.required,
+    saved.value.meta.inputsSchema.required
+  ]
+}
+
+node olderMetaLoadsWithNullSchema(): Json {
+  const saved = __dirname + "/fixtures/saved/olderOne"
+  const loaded = loadWorkflow("olderOne", saved) with approve
+  if (loaded is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [loaded.value.meta.inputsSchema, loaded.value.meta.savedBy]
+}
+
+node rejectedRunWritesNothing(): Json {
+  cleanup("norun")
+  mkdir(OUT) with approve
+  setMutable("effects", [])
+  let result: Result<WorkflowEntry> = failure("not run")
+  handle {
+    result = writeWorkflow(doubleSum("norun"), TOOLS, OUT)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    if (intr.effect == "std::run") {
+      return reject("no subprocess")
+    }
+    return approve()
+  }
+  const written = exists("workflows/norun.json", OUT)
+  cleanup("norun")
+  return [isFailure(result), written, getMutable("effects", [])]
+}

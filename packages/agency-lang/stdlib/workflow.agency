@@ -343,7 +343,8 @@ def nameClashProblem(name: string, tools: any[]): string | null {
   as the type of its one parameter. */
 def toolFor(workflow: Workflow, tools: any[], dir: string, inputsSchema: Json): any {
   const bound = runWorkflow.partial(workflow: workflow, tools: tools, dir: dir)
-  return bound.rename(workflow.name).describe(workflow.description).withParamSchema("inputs", inputsSchema)
+  const named = bound.rename(workflow.name).describe(workflow.description)
+  return named.withParamSchema("inputs", inputsSchema)
 }
 
 @capabilities(fileRead, fileWrite, subprocess)
@@ -665,7 +666,8 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
   if (fileNames.value.length > MAX_WORKFLOWS) {
     return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
   }
-  const names = sortBy(map(filter(fileNames.value, isVisible), workflowName), \name -> name)
+  const unsorted = map(filter(fileNames.value, isVisible), workflowName)
+  const names = sortBy(unsorted, \name -> name)
   const entries = map(names, \name -> entryFor(root.value, name))
   const broken = find(entries, \entry -> isFailure(entry))
   if (broken != null) {

@@ -230,7 +230,8 @@ The entry joins two sources. `describe` reads the tool's module. It gives the de
 
 ```
 const bound = runWorkflow.partial(workflow: workflow, tools: tools, dir: dir)
-return bound.rename(workflow.name).describe(workflow.description).withParamSchema("inputs", inputsSchema)
+const named = bound.rename(workflow.name).describe(workflow.description)
+return named.withParamSchema("inputs", inputsSchema)
 ```
 
 The tool's one parameter is `inputs`, with the workflow's inputs type nested inside it, so a model sends `{ "inputs": { "a": 2, "b": 3 } }`. Each call is a `runWorkflow` call: it checks the workflow, raises `std::workflow::run`, and runs the program in a subprocess.

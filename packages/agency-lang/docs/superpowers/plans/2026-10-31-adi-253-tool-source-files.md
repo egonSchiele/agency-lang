@@ -91,14 +91,17 @@ No compiled code uses an absolute path to find a file. Compiled code contains on
 
 ## Calls I made
 
-1. **The design.** The compiler records where the source is relative to the compiled file, and the module resolves it when it loads. Two other designs were set aside:
+1. **The design.** The compiler records where the source is relative to the compiled file, and the module resolves it when it loads. Three other designs were set aside:
    - Writing the absolute source path into the compiled code. It breaks when built output is moved, for example when a CI build is copied into a container. It also writes the build machine's folder names into every compiled file.
    - Making module ids relative to a fixed root, such as the project root. Module ids key globals, the registry, checkpoints, code fingerprints, and logs. Changing them is a far larger change than this bug needs.
-2. **No source file means a refusal.** A function value with `sourceFile: null` is refused with the message `tool "<name>" does not record the file it was defined in; recompile its module with this version of Agency`. That covers a module compiled before this change, and a program `run` compiled for a subprocess. Guessing from the working directory is the bug this ticket fixes, so the guess is removed.
+   - A registry keyed by module id, filled by one line in each module's prelude, the way `lib/runtime/moduleFingerprintRegistry.ts` holds code hashes. `toolRefs` would look up `tool.module` in it. That is one generated line per module instead of one property per `def`, so half the fixture churn, and no new field on `AgencyFunction`. It was set aside for two reasons. It is TypeScript module state, which the repo avoids outside the places that already have it. And it is keyed by module id, so two builds of one module loaded in one process, such as a build beside the source and an `outDir` build, would overwrite each other's entry. A field on the function value cannot be wrong about the function it sits on.
+
+   This choice, a field on each function value or a registry per module, is the one for the owner to confirm before the plan is executed.
+2. **No source file means a refusal.** A function value with `sourceFile: null` is refused with the message `tool "<name>" does not record the file it was defined in, so a workflow cannot import it`. Guessing from the working directory is the bug this ticket fixes, so the guess is removed. Four kinds of function value have no source file: one from a module compiled before this change, one from a program `run` compiled for a subprocess, a block, and the stub `revive` builds for a function in a checkpoint whose module this process never loaded (`makeUnresolvedFunctionStub`, `lib/runtime/revivers/functionRefReviver.ts:290-316`). The fix differs for each, so the message states the fact and the doc comment on `toolRefs` lists the four causes. For the first, the fix is to recompile the module.
 3. **`sourceFile` describes this process, not the program state.** A checkpoint does not carry it. A revived function value comes from the registry of the process that resumes, which loaded the module from its own location.
 4. **Only `def`s carry a source file.** Blocks, runtime builtins, and tools built by `createTool` get null. `toolRefs` already refuses a builtin and a `createTool` tool before it needs a path. A block passed as a tool now gets the no-source-file refusal, which is correct, because a block cannot be imported.
 5. **No symlink handling.** On Node, `import.meta.url` gives the compiled file's real path. A module imported through a symlinked folder reports the folder it really lives in, as a probe confirmed. A `dir` spelled through a symlink resolves to a different string, so its tools read as outside the workflow directory and are refused. The repository rule is to refuse symlinks, not to support them.
-6. **The "outside the workflow directory" message names the source file's absolute path** instead of the module id, since the id depends on where the compiler happened to run.
+6. **The "outside the workflow directory" message names the source file's absolute path** instead of the module id, since the id depends on where the compiler happened to run. That changes what a model can see in a tool result: the refusal now carries an absolute path from this machine. The `ENOENT` messages that already reach a model carry absolute paths as well. The PR body says so.
 7. **No new compiler parameter.** The builder already holds the source path, as `compilationUnit.fromFile`, and the output path, as `outputFile`. It records a source file when it has both. `outputFile` then means the file the generated code is written to and loaded from. `compileSource` loads its output from somewhere else, so it stops passing its made-up path.
 
 ## Not in this ticket
@@ -112,7 +115,7 @@ These are the inputs the spec implies but no test in the ticket exercises. Each 
 
 1. A host compiled at the project root and run from a subfolder: the workflow imports the right file. (Task 4)
 2. A relative `dir` while the working directory differs from the compile directory: `dir` is still read against the working directory at run time. (Task 3)
-3. A function value with no source file is refused with the recompile message. Its module id is not resolved against the working directory. (Task 3)
+3. A function value with no source file is refused. Its module id is not resolved against the working directory. (Task 3)
 4. Output in a different folder from its source, as with `outDir`: the recorded path climbs out of the output folder correctly. (Task 2)
 5. A derived copy, such as `.describe()`, and a function revived from a checkpoint keep the source file. (Task 1)
 
@@ -225,6 +228,7 @@ Both test files pass. Typecheck, prettier, and commit with the message in a file
   - The doc comment on `outputFile` says it is the file the generated code is written to and loaded from.
   - Every generated module declares `const __sourceFile = path.join(__dirname, "<path from the output's folder to the source>");` right after `__dirname`. When the builder lacks either path, it declares `const __sourceFile = null;`.
   - Every `def`'s `__AgencyFunction.create({ ... })` gets `sourceFile: __sourceFile`.
+  - `__sourceFile` starts with two underscores, so it is a compiler name that no Agency program can declare (`docs/dev/language/reserved-names.md`).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -344,9 +348,7 @@ it("reads a relative dir against the working directory it is given", () => {
 
 it("refuses a local tool that does not record its source file", () => {
   expect(toolRefs([fn("a", "agent/a.agency", null)], DIR, CWD).problems).toEqual([
-    problem(
-      'tool "a" does not record the file it was defined in; recompile its module with this version of Agency',
-    ),
+    problem('tool "a" does not record the file it was defined in, so a workflow cannot import it'),
   ]);
 });
 ```
@@ -355,7 +357,7 @@ Run the file. All three new tests fail, and so does the changed expectation. The
 
 - [ ] **Step 2: Implement**
 
-In `localModule`, refuse a tool whose `sourceFile` is null, using the message above. Otherwise compute the path from `path.resolve(cwd, dir)` to `tool.sourceFile`. Keep the rest as it is: the "outside" test, the `./` prefix, and the `MODULE_PATH` check in `moduleText`. Rewrite the file's header comment, which describes the old resolution. The comment says that a function value carries its module id and its source file, that the id decides `std::` and `pkg::`, and that the source file decides a local tool's import path.
+In `localModule`, refuse a tool whose `sourceFile` is null, using the message above. Otherwise compute the path from `path.resolve(cwd, dir)` to `tool.sourceFile`. Keep the rest as it is: the "outside" test, the `./` prefix, and the `MODULE_PATH` check in `moduleText`. Rewrite the file's header comment, which describes the old resolution. The comment says that a function value carries its module id and its source file, that the id decides `std::` and `pkg::`, and that the source file decides a local tool's import path. The doc comment on `toolRefs` lists the four kinds of function value with no source file, from call 2, and says that the first is fixed by recompiling its module.
 
 - [ ] **Step 3: Run the workflow tests and commit**
 
@@ -424,6 +426,8 @@ writeFileSync("__result.json", JSON.stringify({ finalData: result.data }, null, 
 { "finalData": { "__type": "resultType", "success": true, "value": "HI" } }
 ```
 
+`runWorkflow` starts a subprocess, so this test is slower than most agency-js tests. One such test is fine.
+
 - [ ] **Step 2: Watch it fail without the fix, then pass with it**
 
 The same files, run as a probe before this plan was written, failed with the doubled-path `ENOENT`. To see that here, run the test on a checkout without Task 3. With all tasks in place, run it from the package root. It passes.
@@ -440,15 +444,17 @@ Commit the four files: `test: a workflow finds its tool when run from another di
 - Modify: `docs/dev/stdlib/workflow.md`, the first paragraph of "Tool modules"
 - Modify: `docs/dev/language/agency-function.md`, a new bullet under "What it is"
 - Modify: `docs/dev/runtime/checkpointing.md`, one sentence in "Function values in a checkpoint"
+- Modify: `docs/dev/runtime/checkpoint-code-fingerprints.md`, one item under "Limitations"
 - Modify: `docs/superpowers/specs/2026-10-26-workflows-design.md`, "Tools and modules"
 
 - [ ] **Step 1: Write the changes**
 
 State the mechanism and the rules only:
 
-- **`workflow.md`:** a local tool's import path comes from its source file, relative to `dir`. A tool with no source file is refused, and the paragraph says which function values have none. Remove the sentence that describes the wrong-directory problem.
-- **`agency-function.md`:** a "Source file" bullet. Say what `sourceFile` holds and how the compiled module computes it from `__dirname` and the path the compiler recorded. Say why the compiler records a relative path and not an absolute one, and that blocks, builtins, and subprocess code have none.
+- **`workflow.md`:** a local tool's import path comes from its source file, relative to `dir`. A tool with no source file is refused, and the paragraph names the four kinds of function value that have none. Remove the sentence that describes the wrong-directory problem.
+- **`agency-function.md`:** a "Source file" bullet. Say what `sourceFile` holds and how the compiled module computes it from `__dirname` and the path the compiler recorded. Say why the compiler records a relative path and not an absolute one. Say which function values have none: blocks, builtins, tools built by `createTool`, code compiled for a subprocess, functions from a module compiled before this change, and the stub `revive` builds for a function whose module the process never loaded. Add one clause on Windows: a Windows build machine writes the recorded path with backslashes, Node's `path.join` reads them, and in the browser nothing reads the value.
 - **`checkpointing.md`:** one sentence. A checkpoint does not write `sourceFile`, and a revived function value takes it from the module the resuming process loaded.
+- **`checkpoint-code-fingerprints.md`:** one item under "Limitations", beside the one about the working directory. A module's hash covers its generated code, and the `__sourceFile` line is part of that code. So moving a module's output relative to its source, such as switching between a build beside the source and an `outDir` build, changes the hash, and a run paused before the move refuses to resume after it.
 - **The spec:** in "Tools and modules", replace "for a local file rewrites the path relative to `dir`" with the source-file rule.
 
 - [ ] **Step 2: Commit**
@@ -461,7 +467,7 @@ State the mechanism and the rules only:
 
 - [ ] **Step 1: Check the diff against `docs/dev/contributing/anti-patterns.md`.** Watch for logic in the builder that belongs in the runtime, and for a second place that turns a module id into a path.
 - [ ] **Step 2: Reread every comment and doc line you added.** Cut implementation notes and history.
-- [ ] **Step 3: Push and open the PR**, with its body written to a file. Title: `std::workflow: find a tool's file wherever the host runs from (ADI-253)`. The body covers the bug as reproduced in this plan, the fix, the two designs set aside, the seven calls above, and the fixture churn: every generated-code fixture gains two lines, and nothing else in them changes.
+- [ ] **Step 3: Push and open the PR**, with its body written to a file. Title: `std::workflow: find a tool's file wherever the host runs from (ADI-253)`. The body covers the bug as reproduced in this plan, the fix, the three designs set aside, the seven calls above, and the fixture churn: every generated-code fixture gains two lines, and nothing else in them changes. It says that the refusal for a tool outside the workflow directory now carries an absolute path, which can reach a model (call 6), and that the output layout now moves a module's code fingerprint (Task 5).
 - [ ] **Step 4: Link the PR on ADI-253.** The owner merges.
 
 ## Self-review notes
@@ -469,4 +475,4 @@ State the mechanism and the rules only:
 - The ticket's test, "a tool compiled in one directory, with the workflow checked and run from another, imports the right file", is Task 4. It checks and runs, because `runWorkflow` checks before it runs.
 - The ticket's question, whether a function value can carry the path or the registry can recover it, is answered in the background: the registry cannot, and the function value can.
 - Type consistency: `sourceFile` is `string | null` on the function value. The builder takes the source path from `compilationUnit.fromFile` and needs no new parameter, so the only new name the codegen tasks share is `__sourceFile`.
-- This plan and ADI-252 change different sections of `docs/dev/stdlib/workflow.md`. They can merge in either order.
+- This plan and ADI-252 both change `lib/runtime/agencyFunction.ts`: ADI-252 its import on line 4, this plan its options and fields. They also change different sections of `docs/dev/stdlib/workflow.md`. Either merge order works, and the second to merge takes a one-line conflict at most.

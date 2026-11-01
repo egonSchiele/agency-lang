@@ -81,7 +81,7 @@ A parameter with a default becomes nullable and gets the description `Default: <
 - Every tool `catalog` lists is one `checkWorkflow` would accept, because both start from `_toolRefs` and `_signatures`. The catalog adds no rule of its own about which tools are allowed.
 - `catalog` raises exactly what those two steps raise: one `std::read` per local module, and nothing for a `std::` module. It declares no new effect.
 - The change to `describe` is additive. No existing `ExportInfo` field changes value.
-- One reader of `@param` entries. `stripBoundParams` and the new reader share one splitter, and the existing `stripBoundParams` tests pass unchanged.
+- One reader of `@param` entries. `stripBoundParams` and the two new readers, `paramDocs` and `withoutParamDocs`, share one splitter, and the existing `stripBoundParams` tests pass unchanged.
 
 ## Calls I made
 
@@ -95,8 +95,8 @@ Each is a place the spec or the ticket leaves open. The owner can object to any 
 2. **`describe` gains `params`.** `ExportInfo` gets `params: ExportParam[]`, where `ExportParam` is `{ name, type, default, description }`, for every def and node. Other kinds get an empty list. The type text comes from the AST, through the printer the signature uses, so the catalog never parses a signature string. Any other generator that reads `describe` gets the parameters too.
 3. **A parameter the tool's schema leaves out is left out of the catalog.** That is a function-typed parameter, such as a block. A step's arguments are JSON values, so a workflow cannot pass one. A tool with a required function-typed parameter still appears, and `checkWorkflow` reports a step that calls it.
 4. **`returns` is `string | null`, not `string`.** It is `describe`'s `returnType`, which is null when the tool declares no return type. An empty string would look like a type with no name. The spec's Public API changes to match.
-5. **An entry's `description` is the docstring without its `@param` entries,** trimmed, or the empty string when the tool has no docstring. Each parameter carries its own description, so keeping the entries would say each one twice.
-6. **How `catalog` fails.** A tool list `_toolRefs` refuses fails with every problem as `{ problems }` data, the way `checkWorkflow` fails. A failed module read is returned as it came, so a rejected `std::read` keeps `rejected: true`.
+5. **An entry's `description` is the docstring without any of its `@param` entries,** trimmed, or the empty string when the tool has no docstring. Each parameter carries its own description, so keeping the entries would say each one twice. An entry whose name matches no parameter, such as a typo like `@param querry`, is removed too. Otherwise it would show up in the description while its parameter's description stayed null.
+6. **How `catalog` fails.** A tool list `_toolRefs` refuses fails with every problem as `{ problems }` data, the way `checkWorkflow` fails. A failed module read is returned as it came, so a rejected `std::read` keeps `rejected: true`. That failure's `data` is `{}` (`docs/dev/language/result-failures.md:24`), so a caller tells the two apart by `data.problems`: it holds the problems for a refused tool list, and it is absent for a failed read. Wrapping the read failure into `{ problems }` is what drops `rejected` in `_checked`, so the catalog does not wrap it. The docstring and the dev doc both say this. The return type stays `Result<CatalogEntry[]>`: a `Result` written with one type argument has `any` as its data type (`lib/parsers/typeHints.test.ts:2168`), so `listed.data.problems` typechecks.
 7. **Entries follow the tool list's order.** `_signatures` groups tools by module and sorts them. The catalog reads signatures by key, so the order the host chose is kept.
 
 ## Not in this ticket
@@ -120,17 +120,19 @@ These are the inputs the spec implies but no test in the ticket exercises. Each 
 
 **Files:**
 - Rename: `lib/runtime/stripBoundParams.ts` to `lib/runtime/paramDocs.ts`, and `lib/runtime/stripBoundParams.test.ts` to `lib/runtime/paramDocs.test.ts`, with `git mv`
-- Modify: `lib/runtime/agencyFunction.ts` (the import of `stripBoundParams`, line 4)
+- Modify: `lib/runtime/agencyFunction.ts` (the import of `stripBoundParams`, line 4). This is the only import of the file.
+- Modify: `lib/backends/toolSchemaContribution.test.ts` (the comment at line 115 that names `stripBoundParams`)
 
 **Interfaces:**
 - Produces, from `lib/runtime/paramDocs.ts`:
   - `type ParamDoc = { name: string; text: string }`
   - `paramDocs(description: string): ParamDoc[]`: every `@param` entry, in order. `text` is the rest of the entry's first line after the name, with one leading `-` and the whitespace around it removed, then each continuation line trimmed, all joined by one space and trimmed. An entry with nothing after its name has the text `""`.
   - `stripBoundParams(description: string, boundParamNames: string[]): string`, with the behavior it has today.
+  - `withoutParamDocs(description: string): string`: the description with every `@param` entry removed, whatever its name, by the same rule `stripBoundParams` uses for the names it is given.
 
 - [ ] **Step 1: Move the file and its tests**
 
-`git mv` both files, and change the import in `agencyFunction.ts`. Run the moved tests to confirm the move changed nothing: `pnpm test:run lib/runtime/paramDocs.test.ts > /tmp/adi252-t1.log 2>&1`. All nine pass.
+`git mv` both files, and change the import in `agencyFunction.ts`. In the comment at `lib/backends/toolSchemaContribution.test.ts:115`, write where the function now lives: "`stripBoundParams` in `lib/runtime/paramDocs.ts`". Run the moved tests to confirm the move changed nothing: `pnpm test:run lib/runtime/paramDocs.test.ts > /tmp/adi252-t1.log 2>&1`. All nine pass.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -167,21 +169,35 @@ See also: writeFile`;
     expect(paramDocs("Read a file from a directory.")).toEqual([]);
   });
 });
+
+describe("withoutParamDocs", () => {
+  it("removes every entry, whatever its name, with the blank line that ends it", () => {
+    const description = `Read a file.
+
+@param dir - The directory to read from.
+@param fielname - A misspelled entry
+
+See also: writeFile`;
+    expect(withoutParamDocs(description)).toBe(`Read a file.
+
+See also: writeFile`);
+  });
+});
 ```
 
-Run the file. The four new tests fail because `paramDocs` does not exist.
+Run the file. The five new tests fail because `paramDocs` and `withoutParamDocs` do not exist.
 
 - [ ] **Step 3: Implement the splitter, then both readers over it**
 
 Write one private function, `docSections(description: string): DocSection[]`, with `type DocSection = { param: string | null; lines: string[] }`. It walks the lines once. A `@param` line opens a section for its name. Each following line that is neither blank nor a `@param` line joins that section. A blank line closes the section and joins it as its last line. Every other line is a section of its own with `param: null`.
 
-Then `stripBoundParams` keeps the sections whose `param` is null or not bound and joins their lines with `\n`. A blank line that closes a bound entry goes with it, which is what the existing test "until blank line, preserving the blank line" pins. `paramDocs` maps each section that has a `param` to its `ParamDoc`.
+Then `stripBoundParams` keeps the sections whose `param` is null or not bound and joins their lines with `\n`. A blank line that closes a bound entry goes with it, which is what the existing test "until blank line, preserving the blank line" pins. `withoutParamDocs` keeps only the sections whose `param` is null and joins them the same way. `paramDocs` maps each section that has a `param` to its `ParamDoc`.
 
 Drop `stripBoundParams`'s early return. With the splitter, an empty description and a list of no bound names both come back unchanged, and the two existing tests for those cases check it.
 
 - [ ] **Step 4: Run the tests, typecheck, commit**
 
-Run `paramDocs.test.ts` and `lib/runtime/agencyFunction.test.ts`, which covers `.partial()` stripping descriptions. All pass. Then `pnpm run typecheck`, prettier on the three files, and commit with the message in a file: `paramDocs: one reader for a docstring's @param entries`.
+Run `paramDocs.test.ts` and `lib/runtime/agencyFunction.test.ts`, which covers `.partial()` stripping descriptions. All pass. Then `pnpm run typecheck`, prettier on the four files, and commit with the message in a file: `paramDocs: one reader for a docstring's @param entries`.
 
 ---
 
@@ -273,7 +289,7 @@ In `lib/cli/doc.ts`, replace `formatDefaultValue(node)` with a call to `generato
 
 - [ ] **Step 3: Add `params` to `describe`**
 
-In `lib/stdlib/agency.ts`, write `exportParams(node: FunctionDefinition | GraphNodeDefinition, generator: AgencyGenerator, docstring: string | null): ExportParam[]`. It maps `node.parameters` to `ExportParam`s. `description` is the text of the first `paramDocs(docstring)` entry with the parameter's name, or null when there is none or its text is empty. In `localExportInfos`, compute the docstring text once for the def entry and once for the node entry, and pass that one value to both the entry's `docstring` field and `exportParams`. Give every other entry `params: []`: the type alias and const entries near `agency.ts:389` and `:413`, and the thin re-export at `:525`. A `std::` re-export is described from its source module, so it gets the source's parameters with no change.
+In `lib/stdlib/agency.ts`, write `exportParams(node: FunctionDefinition | GraphNodeDefinition, generator: AgencyGenerator, docstring: string | null): ExportParam[]`. It maps `node.parameters` to `ExportParam`s. `description` is the text of the first `paramDocs(docstring)` entry with the parameter's name, or null when there is none or its text is empty. In `localExportInfos`, compute the docstring text once for the def entry and once for the node entry, and pass that one value to both the entry's `docstring` field and `exportParams`. Give every other entry `params: []`: the type alias entry at `agency.ts:387`, the const entry at `:411`, and `thinReExport` at `:516-535`. A `std::` re-export spreads the source module's entry (`:500`), so it carries the source's parameters with no change.
 
 In `stdlib/agency.agency`, add the `ExportParam` type and the `params` field, and add one sentence to `describe`'s docstring: "Each def and node lists its parameters, with the type and default as the signature writes them and the text of its `@param` entry."
 
@@ -293,7 +309,7 @@ In `stdlib/agency.agency`, add the `ExportParam` type and the `params` field, an
 - Modify: every `Signature` literal in `lib/stdlib/workflow/*.test.ts` and `testFixtures.ts`, about a dozen, which each gain `params: []`
 
 **Interfaces:**
-- Consumes: `ExportParam` from Task 2.
+- Consumes: `ExportParam` from Task 2, and `withoutParamDocs` from Task 1. This task needs Task 2 done first: `_pickSignatures` reads `params` from what `describe` returns (`DescribedExport`, `index.ts:95`), so do not reorder the tasks.
 - Produces:
   - `Signature.params: ExportParam[]`.
   - In `catalog.ts`: `type CatalogParam = ExportParam & { schema: unknown }`, `type CatalogEntry = { module: string; name: string; description: string; params: CatalogParam[]; returns: string | null }`, and `catalogEntries(tools: unknown[], refs: ToolRef[], signatures: Record<string, Signature>): CatalogEntry[]`.
@@ -340,7 +356,7 @@ const searchSignature: Signature = {
   returnType: "Result<Note[]>",
   returnsResult: true,
   docstring:
-    "Find notes whose title matches the query.\n\n  @param query - Text to match\n  @param each - Called once per note",
+    "Find notes whose title matches the query.\n\n  @param query - Text to match\n  @param each - Called once per note\n  @param querry - A misspelled entry",
   params: [
     { name: "query", type: "string", default: null, description: "Text to match" },
     { name: "each", type: "(string) -> any", default: null, description: "Called once per note" },
@@ -351,7 +367,7 @@ const ref = { module: "./notes.agency", name: "searchNotes" };
 const signatures = { [signatureKey(ref.module, ref.name)]: searchSignature };
 
 describe("catalogEntries", () => {
-  it("builds an entry from the signature and the parameter schema, leaving out a block", () => {
+  it("builds an entry from the signature and the parameter schema, leaving out a block and every @param entry", () => {
     expect(catalogEntries([searchNotes], [ref], signatures)).toEqual([
       {
         module: "./notes.agency",
@@ -389,14 +405,14 @@ Run it. Both fail because `catalog.ts` does not exist.
 
 - [ ] **Step 2: Carry `params` through `_pickSignatures`**
 
-Add `params: ExportParam[]` to `Signature` in `types.ts`, with the comment "What `describe` says about each parameter." In `_pickSignatures`, copy `params` with the other four fields. Add `params: []` to each `Signature` literal in the workflow tests, including the `exportInfo` helper and the expected value in `index.test.ts:135-160`, and the `signature` helper in `testFixtures.ts:95`. Run `pnpm test:run lib/stdlib/workflow/` and confirm everything except `catalog.test.ts` passes.
+Add `params: ExportParam[]` to `Signature` in `types.ts`, with the comment "What `describe` says about each parameter." In `_pickSignatures`, copy `params` with the other four fields. Add `params: []` to each `Signature` literal in the workflow tests. There are fourteen: nine in `resolve.test.ts`, two each in `index.test.ts` and `lower.test.ts`, and one in `testFixtures.ts`. The two in `index.test.ts` are the `exportInfo` helper at lines 135-142 and the expected object at 150-155. The one in `testFixtures.ts` is the `signature` helper at line 95. Run `pnpm test:run lib/stdlib/workflow/` and confirm everything except `catalog.test.ts` passes.
 
 - [ ] **Step 3: Implement `catalogEntries`**
 
-For each ref, take the tool with the same name, and look up the signature by `signatureKey(ref.module, ref.name)`. Read the tool's parameter schemas once with a small helper, `parameterSchemas(tool: unknown): Record<string, unknown>`. It returns the `properties` of `toolDefinition.schema.toJSONSchema()`, or `{}` for a value with no zod tool definition. Then:
+For each ref, take the tool with the same name, and look up the signature by `signatureKey(ref.module, ref.name)`. Read the tool's parameter schemas once with a small helper, `parameterSchemas(tool: unknown): Record<string, unknown>`. It returns the `properties` of `toolDefinition.schema.toJSONSchema()`, or `{}` for a value with no zod tool definition. This helper is the fourth place that calls `toJSONSchema()` on a tool's schema, after `lib/serve/mcp/adapter.ts:49-56`, `lib/stdlib/learnFunctions.ts:23`, and `lib/runtime/simpleOpenAIClient.ts:133`. Each guards a missing schema in its own way, so there is no shared helper to reuse. Do not add a fifth. Then:
 
 - `params` is the signature's params that appear in that record, each with its `schema` added, in the signature's order.
-- `description` is `stripBoundParams(docstring, names).trim()`, where `names` is the name of every parameter in the signature, block parameters included. It is `""` when the docstring is null.
+- `description` is `withoutParamDocs(docstring).trim()`, or `""` when the docstring is null.
 - `module` and `name` come from the ref, and `returns` is the signature's `returnType`.
 
 Re-export it from `index.ts` as `_catalogEntries`.
@@ -536,7 +552,7 @@ node repeatedToolRefused(): Json {
 
 node rejectedReadKeepsTheRejection(): Json {
   const listed = runCatalog([searchNotes], true)
-  return [isFailure(listed), listed.rejected]
+  return [isFailure(listed), listed.rejected, listed.data.problems == null]
 }
 
 node emptyToolList(): Json {
@@ -544,7 +560,7 @@ node emptyToolList(): Json {
 }
 ```
 
-This file parses with `agency ast` as written. `catalog.test.json` has one case per node, each `"type": "exact"`:
+This file parses with `agency ast` as written. The last value in `rejectedReadKeepsTheRejection` pins the failure shape the docstring promises: a failed read has no `data.problems`. `catalog.test.json` has one case per node, each `"type": "exact"`:
 
 | node | expectedOutput |
 |---|---|
@@ -553,7 +569,7 @@ This file parses with `agency ast` as written. `catalog.test.json` has one case 
 | `entriesFollowTheToolList` | `["searchNotes","add","round"]` |
 | `refusedLikeCheckWorkflow` | `[["tool \"round\" is a partial; pass the original def","tool \"plus\" is renamed from \"add\"; pass the original def"],[]]` |
 | `repeatedToolRefused` | `["tools \"add\" from \"std::math\" and \"std::math\" have the same name; a workflow imports each tool by its name"]` |
-| `rejectedReadKeepsTheRejection` | `[true,true]` |
+| `rejectedReadKeepsTheRejection` | `[true,true,true]` |
 | `emptyToolList` | `[]` |
 
 Run `make`, then the test. It fails to compile because `catalog` is not exported.
@@ -570,7 +586,7 @@ The docstring is a tool description, so write it for a model:
 
 ```
 """
-List the tools a workflow may call, in the order given: each tool's module and name as a step names them, its description, its parameters with their types, defaults, descriptions, and JSON Schemas, and its return type. Refuses the same tool lists `checkWorkflow` refuses. Reading a local tool's module raises `std::read`.
+List the tools a workflow may call, in the order given: each tool's module and name as a step names them, its description, its parameters with their types, defaults, descriptions, and JSON Schemas, and its return type. Reading a local tool's module raises `std::read`. A refused tool list fails with every problem in `data.problems`, as `checkWorkflow` does. A refused or failed read of a module fails with the read's own failure, which has no problems.
 
 @param tools - The functions the workflow may call
 @param dir - The directory a workflow's local modules are named relative to
@@ -581,7 +597,7 @@ Add one sentence to the module doc comment at the top of the file: "`catalog` li
 
 - [ ] **Step 3: Build, run, check, commit**
 
-Run `make`, the Agency test, and `pnpm test:run lib/stdlibCapabilities.test.ts`. The capability test passes because `catalog` carries `fileRead`, the tag `checkWorkflow` carries. Run the other workflow Agency tests too, `check.test.json` and `compile.test.json`, since `_pickSignatures` changed. Then typecheck and `pnpm run lint:structure`, and commit: `std::workflow: catalog`.
+Run `make`, the Agency test, and `pnpm test:run lib/stdlibCapabilities.test.ts`. If `stdToolEntry` fails on the schema field, read the real output before you change the expectation. The expected value is what zod printed for `round` on a current build, and the catalog's job is to report what the tool loop sends, whatever zod prints. The capability test passes because `catalog` carries `fileRead`, the tag `checkWorkflow` carries. Run the other workflow Agency tests too, `check.test.json` and `compile.test.json`, since `_pickSignatures` changed. Then typecheck and `pnpm run lint:structure`, and commit: `std::workflow: catalog`.
 
 ---
 
@@ -600,7 +616,8 @@ State the mechanism and the rules, and leave out the history:
 - why `type` is Agency text and `schema` is JSON Schema;
 - why a parameter the schema leaves out is left out of the catalog;
 - that `catalog` starts with the same two steps as `checkWorkflow`, so it refuses the same lists and raises the same prompts;
-- that a failed read is passed through unchanged;
+- that a failed read is passed through unchanged, with no `data.problems`, so a caller can tell it from a refused tool list;
+- that every `@param` entry is removed from an entry's description, whatever its name;
 - that entries keep the tool list's order.
 
 Show the `round` entry from this plan's background as the example. Remove `catalog` from "Not built yet".
@@ -631,4 +648,5 @@ Commit the four files with the message `docs: the workflow catalog`.
 - Ticket tests: "a `std::` tool and a local `.agency` tool both appear with the right parameters and return type" is `stdToolEntry` and `localToolEntry`. "Refused the same way `checkWorkflow` refuses it: a partial, a renamed function, or a repeated name" is `refusedLikeCheckWorkflow` and `repeatedToolRefused`.
 - Spec coverage: "The catalog" says the entry is built "from `describe` and the tool's parameter schema", which are Tasks 2 and 3. "Public API" gives the signature that Task 4 implements.
 - Type consistency: `ExportParam` is defined once in `lib/stdlib/agency.ts` and used by `Signature` and `CatalogParam`. The Agency types in `stdlib/agency.agency` and `stdlib/workflow.agency` repeat the same fields, because Agency types are declared in Agency source.
+- This plan and ADI-253 both change `lib/runtime/agencyFunction.ts`: this one its import on line 4, ADI-253 its options and fields. They also change different sections of `docs/dev/stdlib/workflow.md`. Either merge order works, and the second to merge takes a one-line conflict at most.
 - `catalogEntries` pairs a ref with its tool by name, which is safe because `_toolRefs` refuses a repeated name. It takes the order from the refs, which `_toolRefs` returns in the tool list's order. `entriesFollowTheToolList` checks that order.

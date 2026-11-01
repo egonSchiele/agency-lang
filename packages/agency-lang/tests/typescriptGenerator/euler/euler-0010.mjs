@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -373,6 +374,7 @@ return runtimeFailure(__error, {
 export const isPrime = __AgencyFunction.create({
   name: "isPrime",
   module: "euler-0010.agency",
+  sourceFile: __sourceFile,
   fn: __isPrime_impl,
   params: [{
     name: "n",

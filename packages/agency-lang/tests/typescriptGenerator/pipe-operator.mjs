@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -307,6 +308,7 @@ return runtimeFailure(__error, {
 export const double = __AgencyFunction.create({
   name: "double",
   module: "pipe-operator.agency",
+  sourceFile: __sourceFile,
   fn: __double_impl,
   params: [{
     name: "x",
@@ -452,6 +454,7 @@ return runtimeFailure(__error, {
 export const multiply = __AgencyFunction.create({
   name: "multiply",
   module: "pipe-operator.agency",
+  sourceFile: __sourceFile,
   fn: __multiply_impl,
   params: [{
     name: "a",
@@ -618,6 +621,7 @@ return runtimeFailure(__error, {
 export const safeDivide = __AgencyFunction.create({
   name: "safeDivide",
   module: "pipe-operator.agency",
+  sourceFile: __sourceFile,
   fn: __safeDivide_impl,
   params: [{
     name: "a",

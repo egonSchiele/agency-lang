@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -336,6 +337,7 @@ return runtimeFailure(__error, {
 export const mapItems = __AgencyFunction.create({
   name: "mapItems",
   module: "inlineBlockParams.agency",
+  sourceFile: __sourceFile,
   fn: __mapItems_impl,
   params: [{
     name: "items",

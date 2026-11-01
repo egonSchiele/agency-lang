@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -431,6 +432,7 @@ return runtimeFailure(__error, {
 export const describe = __AgencyFunction.create({
   name: "describe",
   module: "type-patterns.agency",
+  sourceFile: __sourceFile,
   fn: __describe_impl,
   params: [{
     name: "value",

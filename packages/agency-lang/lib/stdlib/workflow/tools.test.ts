@@ -13,9 +13,21 @@ const param = (name: string): FuncParam => ({
   variadic: false,
 });
 
-function fn(name: string, module: string): AgencyFunction {
+/** A tool compiled from CWD, unless `sourceFile` says otherwise. */
+function fn(
+  name: string,
+  module: string,
+  sourceFile: string | null = `${CWD}/${module}`,
+): AgencyFunction {
   return AgencyFunction.create(
-    { name, module, params: [param("q")], toolDefinition: null, fn: (_run, q: string) => q },
+    {
+      name,
+      module,
+      sourceFile,
+      params: [param("q")],
+      toolDefinition: null,
+      fn: (_run, q: string) => q,
+    },
     {},
   );
 }
@@ -54,7 +66,29 @@ describe("toolRefs", () => {
 
   it("refuses a local file outside dir", () => {
     expect(toolRefs([fn("a", "other/a.agency")], DIR, CWD).problems).toEqual([
-      problem('tool "a" is defined in "other/a.agency", outside the workflow directory'),
+      problem('tool "a" is defined in "/work/other/a.agency", outside the workflow directory'),
+    ]);
+  });
+
+  it("finds a local tool by its source file when the working directory has changed", () => {
+    const notes = fn("searchNotes", "agent/notes.agency", "/work/agent/notes.agency");
+    expect(toolRefs([notes], DIR, "/somewhere/else").refs).toEqual([
+      { module: "./notes.agency", name: "searchNotes" },
+    ]);
+  });
+
+  it("reads a relative dir against the working directory it is given", () => {
+    const notes = fn("searchNotes", "agent/notes.agency", "/work/agent/notes.agency");
+    expect(toolRefs([notes], "..", "/work/agent/sub").refs).toEqual([
+      { module: "./notes.agency", name: "searchNotes" },
+    ]);
+  });
+
+  it("refuses a local tool that does not record its source file", () => {
+    expect(toolRefs([fn("a", "agent/a.agency", null)], DIR, CWD).problems).toEqual([
+      problem(
+        'tool "a" does not record the file it was defined in, so a workflow cannot import it',
+      ),
     ]);
   });
 

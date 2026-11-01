@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -436,6 +437,7 @@ return runtimeFailure(__error, {
 export const toDigit = __AgencyFunction.create({
   name: "toDigit",
   module: "euler-0008.agency",
+  sourceFile: __sourceFile,
   fn: __toDigit_impl,
   params: [{
     name: "c",

@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -361,6 +362,7 @@ return runtimeFailure(__error, {
 export const logged = __AgencyFunction.create({
   name: "logged",
   module: "decorators.agency",
+  sourceFile: __sourceFile,
   fn: __logged_impl,
   params: [{
     name: "call",
@@ -554,6 +556,7 @@ return runtimeFailure(__error, {
 export const retry = __AgencyFunction.create({
   name: "retry",
   module: "decorators.agency",
+  sourceFile: __sourceFile,
   fn: __retry_impl,
   params: [{
     name: "times",
@@ -781,6 +784,7 @@ return runtimeFailure(__error, {
 export const plainTwin = __AgencyFunction.create({
   name: "plainTwin",
   module: "decorators.agency",
+  sourceFile: __sourceFile,
   fn: __plainTwin_impl,
   params: [{
     name: "x",
@@ -923,6 +927,7 @@ return runtimeFailure(__error, {
 export const undecoratedTwin = __AgencyFunction.create({
   name: "undecoratedTwin",
   module: "decorators.agency",
+  sourceFile: __sourceFile,
   fn: __undecoratedTwin_impl,
   params: [{
     name: "x",
@@ -1230,6 +1235,7 @@ return runtimeFailure(__error, {
 export const researcher = __AgencyFunction.create({
   name: "researcher",
   module: "decorators.agency",
+  sourceFile: __sourceFile,
   fn: __researcher_impl,
   params: [{
     name: "task",
@@ -1451,6 +1457,7 @@ return runtimeFailure(__error, {
 export const positionalAndNamed = __AgencyFunction.create({
   name: "positionalAndNamed",
   module: "decorators.agency",
+  sourceFile: __sourceFile,
   fn: __positionalAndNamed_impl,
   params: [{
     name: "a",

@@ -1,9 +1,11 @@
 /**
- * The host passes the tools a workflow may call as function values. A
- * function value carries the compiler's module id, a path relative to the
- * working directory it was compiled in (`stdlib/shell.agency`,
- * `agent/notes.agency`). This file turns each one into the module text an
- * import line uses, which is also what a workflow's `module` field says.
+ * The host passes the tools a workflow may call as function values. This
+ * file turns each one into the module text an import line uses, which is
+ * also what a workflow's `module` field says. A function value carries two
+ * facts for this. Its module id (`stdlib/shell.agency`) tells a `std::` or
+ * `pkg::` tool from a local one. Its source file, an absolute path, gives a
+ * local tool's import path relative to the workflow's directory, whatever
+ * the working directory is now.
  */
 import path from "#path";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
@@ -56,9 +58,13 @@ function refused(refusal: string): Importable {
 type ModuleOutcome = { text: string; refusal: null } | { text: null; refusal: string };
 
 function localModule(tool: AgencyFunction, dir: string, cwd: string): ModuleOutcome {
-  const fromDir = path.relative(path.resolve(cwd, dir), path.resolve(cwd, tool.module));
+  if (tool.sourceFile === null) {
+    const refusal = `tool "${tool.name}" does not record the file it was defined in, so a workflow cannot import it`;
+    return { text: null, refusal };
+  }
+  const fromDir = path.relative(path.resolve(cwd, dir), tool.sourceFile);
   if (fromDir === ".." || fromDir.startsWith("../") || path.isAbsolute(fromDir)) {
-    const refusal = `tool "${tool.name}" is defined in "${tool.module}", outside the workflow directory`;
+    const refusal = `tool "${tool.name}" is defined in "${tool.sourceFile}", outside the workflow directory`;
     return { text: null, refusal };
   }
   return { text: `./${fromDir}`, refusal: null };
@@ -113,10 +119,16 @@ function duplicateNames(refs: ToolRef[]): Problem[] {
   });
 }
 
-/** One `ToolRef` per function value. `dir` is the workflow's directory and
- *  `cwd` the working directory the tools were compiled in; a relative `dir`
- *  is read against `cwd`. Every tool that cannot be imported is reported,
- *  in order; the duplicate-name check runs only when all of them can. */
+/** One `ToolRef` per function value. `dir` is the workflow's directory; a
+ *  relative `dir` is read against `cwd`, the working directory now. Every
+ *  tool that cannot be imported is reported, in order; the duplicate-name
+ *  check runs only when all of them can.
+ *
+ *  A local tool needs its source file. Four kinds of function value have
+ *  none: one from a module compiled before Agency recorded source files
+ *  (recompile the module), one from a program `run` compiled for a
+ *  subprocess, a block, and the stub a checkpoint revives for a function
+ *  whose module this process never loaded. */
 export function toolRefs(tools: unknown[], dir: string, cwd: string): ToolRefsResult {
   const outcomes = tools.map((tool, index) => toolOutcome(tool, index, dir, cwd));
   const problems = outcomes.flatMap(({ problem }) => (problem === null ? [] : [problem]));

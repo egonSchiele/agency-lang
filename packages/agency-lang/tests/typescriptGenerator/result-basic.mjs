@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -321,6 +322,7 @@ return runtimeFailure(__error, {
 export const checkAge = __AgencyFunction.create({
   name: "checkAge",
   module: "result-basic.agency",
+  sourceFile: __sourceFile,
   fn: __checkAge_impl,
   params: [{
     name: "age",

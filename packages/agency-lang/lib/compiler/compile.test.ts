@@ -5,6 +5,14 @@ import path from "path";
 import { compileSource, typeCheckSource } from "./compile.js";
 
 describe("compileSource", () => {
+  it("records no source file for a program that runs from somewhere else", () => {
+    const result = compileSource(
+      `export def shout(text: string): string {\n  return text\n}\n`,
+      {},
+    );
+    expect(result.success && result.code).toContain("const __sourceFile = null;");
+  });
+
   it("compiles valid Agency source to JavaScript", () => {
     const source = `node main() { return "hello" }`;
     const result = compileSource(source, {});

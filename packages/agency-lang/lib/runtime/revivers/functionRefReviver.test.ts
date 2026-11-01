@@ -959,3 +959,28 @@ describe("withParamSchema schemas round-trip (ADI-249)", () => {
     }
   });
 });
+
+describe("source files across a checkpoint", () => {
+  it("a revived function takes its source file from the registered function", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const tool = AgencyFunction.create(
+      {
+        name: "shout",
+        module: "agent/shout.agency",
+        sourceFile: "/proj/agent/shout.agency",
+        fn: (_run, text: string) => text,
+        params: [{ name: "text", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: {
+          name: "shout",
+          description: "Shout.",
+          schema: z.object({ text: z.string() }),
+        },
+      },
+      registry,
+    );
+    expect(new FunctionRefReviver().serialize(tool)).not.toHaveProperty("sourceFile");
+    expect(roundTripFunction(tool.describe("Shout louder."), registry).sourceFile).toBe(
+      "/proj/agent/shout.agency",
+    );
+  });
+});

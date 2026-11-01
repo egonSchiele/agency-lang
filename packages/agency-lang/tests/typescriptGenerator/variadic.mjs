@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -324,6 +325,7 @@ return runtimeFailure(__error, {
 export const log = __AgencyFunction.create({
   name: "log",
   module: "variadic.agency",
+  sourceFile: __sourceFile,
   fn: __log_impl,
   params: [{
     name: "prefix",

@@ -184,7 +184,15 @@ The generated program is ordinary Agency, and it runs in a child process. Each s
 
 ## Tool modules
 
-`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`. Any other path is rewritten relative to the workflow's `dir`, resolved against the working directory at run time, so a host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
+`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value whose module id is under `stdlib/` becomes `std::<name>`. Any other tool is local. Its import path comes from its source file, the absolute path of the `.agency` file it was defined in (`sourceFile`, see [agency-function.md](../language/agency-function.md)), written relative to the workflow's `dir`:
+
+```
+dir:         /proj/agent
+sourceFile:  /proj/agent/tools/notes.agency
+module text: ./tools/notes.agency
+```
+
+A relative `dir` is read against the working directory at run time. The source file does not depend on the working directory, so a host finds its tools wherever it runs from. A local tool whose source file is outside `dir` is refused. A tool with no source file is refused too. Four kinds of function value reach this check with none: one from a module compiled by an older Agency, which recompiling fixes; one from a program `run` compiled for a subprocess; a block; and the stub a checkpoint revives for a function whose module the process never loaded.
 
 The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. Two tools with the same name are refused next, in a problem that names both modules: an import line names a tool by its name, and renaming is refused, so the fix is to rename one def in its file.
 

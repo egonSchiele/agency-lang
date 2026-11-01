@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -307,6 +308,7 @@ return runtimeFailure(__error, {
 export const decorate = __AgencyFunction.create({
   name: "decorate",
   module: "gotoWithArgs.agency",
+  sourceFile: __sourceFile,
   fn: __decorate_impl,
   params: [{
     name: "name",

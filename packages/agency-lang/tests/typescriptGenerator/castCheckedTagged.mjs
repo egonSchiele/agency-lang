@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -321,6 +322,7 @@ return runtimeFailure(__error, {
 export const isPositive = __AgencyFunction.create({
   name: "isPositive",
   module: "castCheckedTagged.agency",
+  sourceFile: __sourceFile,
   fn: __isPositive_impl,
   params: [{
     name: "value",
@@ -464,6 +466,7 @@ return runtimeFailure(__error, {
 export const neighbor = __AgencyFunction.create({
   name: "neighbor",
   module: "castCheckedTagged.agency",
+  sourceFile: __sourceFile,
   fn: __neighbor_impl,
   params: [],
   toolDefinition: {
@@ -602,6 +605,7 @@ return runtimeFailure(__error, {
 export const both = __AgencyFunction.create({
   name: "both",
   module: "castCheckedTagged.agency",
+  sourceFile: __sourceFile,
   fn: __both_impl,
   params: [{
     name: "first",

@@ -44,6 +44,7 @@ import {
 // its own through InvocationOptions.
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = null;
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
@@ -307,6 +308,7 @@ return runtimeFailure(__error, {
 export const prep = __AgencyFunction.create({
   name: "prep",
   module: "destructiveBlock.agency",
+  sourceFile: __sourceFile,
   fn: __prep_impl,
   params: [{
     name: "x",
@@ -449,6 +451,7 @@ return runtimeFailure(__error, {
 export const _doWrite = __AgencyFunction.create({
   name: "_doWrite",
   module: "destructiveBlock.agency",
+  sourceFile: __sourceFile,
   fn: ___doWrite_impl,
   params: [{
     name: "p",
@@ -612,6 +615,7 @@ return runtimeFailure(__error, {
 export const writeThing = __AgencyFunction.create({
   name: "writeThing",
   module: "destructiveBlock.agency",
+  sourceFile: __sourceFile,
   fn: __writeThing_impl,
   params: [{
     name: "x",

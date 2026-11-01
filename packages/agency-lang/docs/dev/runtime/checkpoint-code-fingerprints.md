@@ -68,6 +68,10 @@ recompile could match).
   so a finer-grained scheme can extend the keys later.
 - Resuming from a different working directory changes every moduleId and
   refuses.
+- Moving a module's output relative to its source refuses too, such as
+  switching between a build beside the source and an `outDir` build. The
+  generated code's `__sourceFile` line holds the path from the output to
+  the source, and the hash covers the generated code.
 - A redeploy invalidates outstanding paused runs in changed modules, with no
   override — and since interrupts are usually raised inside stdlib defs, an
   agency-lang upgrade that touches those files does too.

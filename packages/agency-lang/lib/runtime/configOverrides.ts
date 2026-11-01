@@ -6,11 +6,13 @@ import type { StatelogConfig } from "../statelogClient.js";
 import type { LogLevel } from "../logger.js";
 import type { MemoryConfig } from "./memory/types.js";
 import type { TraceConfig } from "./trace/types.js";
+import { inheritClientDefaults } from "./llmConfig.js";
 
 export type RuntimeContextConstructorArgs = {
   statelogConfig: StatelogConfig;
   smoltalkDefaults: Partial<SmolConfig>;
   maxToolResultChars?: number;
+  maxToolSchemaChars?: number;
   providerModules?: string[];
   dirname: string;
   maxRestores?: number;
@@ -85,6 +87,22 @@ export async function withRuntimeConfigOverrides<T>(
  *   • `budget` → the root spend/time cap; the config shape (`maxTime` as a
  *     duration string) is resolved to `{ maxCost, maxTimeMs }` here. This is how
  *     a host (statelog) sets a served agent's per-agent spend limit.
+ *   • `client.defaultModel` and `client.defaultProvider` → the model and its
+ *     provider, by `defaultRoute`: a model named alone clears the baked
+ *     provider, as the code generator would have.
+ *   • `client.apiKey` and `client.baseUrl` → merged per provider over the baked
+ *     ones.
+ *   • `client.logLevel` and `client.openRouter` → replace the baked ones.
+ *   • `client.maxToolResultChars` and `client.maxToolSchemaChars` → the tool
+ *     caps.
+ *   • `checkpoints.maxRestores` → the restore cap.
+ *
+ * Other `client` paths are not applied: `client.statelog` and
+ * `client.llamaCpp` are baked only, and the rest (`modelAliases`, `modelsDir`,
+ * and so on) are read from the config file at runtime by the code that needs
+ * them. All three entry points (the env variable, the IPC message, and
+ * `withRuntimeConfigOverrides`) get every field above, since they share this
+ * function.
  */
 export function applyRuntimeConfigOverridesToContextArgs(
   args: RuntimeContextConstructorArgs,
@@ -142,6 +160,20 @@ export function applyRuntimeConfigOverridesToContextArgs(
         ? { maxTimeMs: parseDurationMs(b.maxTime, "budget.maxTime") }
         : {}),
     };
+  }
+
+  const client = overrides.client;
+  if (client !== undefined) {
+    merged.smoltalkDefaults = inheritClientDefaults(args.smoltalkDefaults, client);
+    if (client.maxToolResultChars !== undefined) {
+      merged.maxToolResultChars = client.maxToolResultChars;
+    }
+    if (client.maxToolSchemaChars !== undefined) {
+      merged.maxToolSchemaChars = client.maxToolSchemaChars;
+    }
+  }
+  if (overrides.checkpoints?.maxRestores !== undefined) {
+    merged.maxRestores = overrides.checkpoints.maxRestores;
   }
 
   return merged;

@@ -6,6 +6,8 @@ import {
   type SmolConfig,
 } from "smoltalk";
 
+import { DEFAULT_MODEL, defaultRoute, type AgencyConfig } from "../config/config.js";
+
 export type LlmBaseUrls = NonNullable<SmolConfig["baseUrl"]> &
   Pick<NonNullable<DecideConfig["baseUrl"]>, "typesafe">;
 
@@ -60,6 +62,45 @@ export function mergeLlmConfig(
   const provider = modelProviderOverride(defaults, override);
   if (provider !== undefined) {
     merged.provider = provider;
+  }
+  return merged;
+}
+
+/** The smoltalk defaults a `client` config block gives over the baked ones:
+ *  the keys and base URLs merged per provider, the log level and the
+ *  OpenRouter preferences replaced whole, and the model with its provider
+ *  by `defaultRoute`, the compile-time rule, with the baked model and
+ *  provider as the fallback. */
+export function inheritClientDefaults(
+  baked: Partial<SmolConfig>,
+  client: NonNullable<AgencyConfig["client"]>,
+): Partial<SmolConfig> {
+  const override: Partial<SmolConfig> = {};
+  if (client.apiKey !== undefined) {
+    override.apiKey = { ...baked.apiKey, ...client.apiKey };
+  }
+  if (client.baseUrl !== undefined) {
+    override.baseUrl = client.baseUrl;
+  }
+  if (client.logLevel !== undefined) {
+    override.logLevel = client.logLevel;
+  }
+  if (client.openRouter !== undefined) {
+    override.openRouter = client.openRouter;
+  }
+  const merged = mergeLlmConfig(baked, override);
+  if (client.defaultModel === undefined && client.defaultProvider === undefined) {
+    return merged;
+  }
+  const route = defaultRoute(client, {
+    model: baked.model ?? DEFAULT_MODEL,
+    provider: baked.provider,
+  });
+  merged.model = route.model;
+  if (route.provider === undefined) {
+    delete merged.provider;
+  } else {
+    merged.provider = route.provider;
   }
   return merged;
 }

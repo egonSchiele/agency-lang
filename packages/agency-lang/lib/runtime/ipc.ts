@@ -15,6 +15,8 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
+import { mergeConfig } from "../config/merge.js";
+import type { RuntimeContext } from "./state/context.js";
 import { detachedRun, currentRun, withRun, type Run } from "./asyncContext.js";
 import type { SpanContext } from "../statelogClient.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
@@ -1316,18 +1318,17 @@ export async function _runFor(
 
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
-  // Forward the parent's configured provider modules to the subprocess. The
-  // child runs a separately-compiled program whose baked `providerModules`
-  // come from *its* compile config, not the parent's `agency.json`, so without
-  // this a parent that configured providers via config would have none in the
-  // child. (The `AGENCY_PROVIDER_MODULES` env var is inherited separately via
-  // buildForkOptions, so env-configured providers already reach the child.)
-  // Paths are resolved to absolute against the parent's cwd here so they still
-  // resolve in the child even when `run(cwd:)` gives it a different cwd.
-  const mergedConfigOverrides = withParentStatelog(
-    withParentProviderModules(configOverrides, ctx.providerModules),
-    ctx.getStatelogSink(),
-  );
+  // The child runs a program compiled in the sandbox, which baked the
+  // built-in model and provider and none of the parent's `agency.json`. So the
+  // parent sends its own settings (model, keys, base URLs, tool caps, limits),
+  // its provider modules with absolute paths, so they resolve under any
+  // `run(cwd:)`, and its effective statelog sink. The caller's explicit
+  // overrides win over all of them; `run(logFile:)` is one. (The
+  // `AGENCY_PROVIDER_MODULES` env var reaches the child through
+  // buildForkOptions, with the rest of the parent's environment.)
+  const inherited = withParentConfig(configOverrides, parentConfigOverrides(ctx));
+  const withModules = withParentProviderModules(inherited, ctx.providerModules);
+  const mergedConfigOverrides = withParentStatelog(withModules, ctx.getStatelogSink());
 
   const parentFrame = stateStack.lastFrame();
 
@@ -1432,6 +1433,75 @@ export function withParentStatelog(
     observability: true,
     ...(Object.keys(mergedLog).length > 0 ? { log: mergedLog } : {}),
   };
+}
+
+/** The parent context fields a child's settings come from. */
+export type ParentSettings = Pick<
+  RuntimeContext<any>,
+  | "smoltalkDefaults"
+  | "maxToolResultChars"
+  | "maxToolSchemaChars"
+  | "maxCallDepth"
+  | "failurePropagation"
+  | "maxRestores"
+>;
+
+/**
+ * The parent's settings as the config a child should start with. A child
+ * compiled in the sandbox baked the built-in model and provider, so it is
+ * handed the parent's smoltalk defaults, tool caps, and limits. These are
+ * the parent context's own fields, which already hold the baked config with
+ * the environment, IPC, and per-invocation overrides merged in, so a
+ * grandchild gets the root's values through a child compiled the same way.
+ * A parent that named a model with no provider has no `provider` here, and
+ * the child's merge then clears its own. `log`, `trace*`, `budget`,
+ * `memory`, and `client.providerModules` are not sent: the parent's
+ * effective statelog sink and its provider modules are forwarded by
+ * `withParentStatelog` and `withParentProviderModules`, a trace file
+ * belongs to one process, the parent's budget already counts a child's
+ * spend, and a memory store is one process's.
+ */
+export function parentConfigOverrides(parent: ParentSettings): Partial<AgencyConfig> {
+  const defaults = parent.smoltalkDefaults;
+  const client: NonNullable<AgencyConfig["client"]> = {};
+  if (defaults.model !== undefined) {
+    client.defaultModel = defaults.model;
+  }
+  if (defaults.provider !== undefined) {
+    client.defaultProvider = defaults.provider;
+  }
+  if (defaults.apiKey !== undefined) {
+    client.apiKey = defaults.apiKey;
+  }
+  if (defaults.baseUrl !== undefined) {
+    client.baseUrl = defaults.baseUrl;
+  }
+  if (defaults.logLevel !== undefined) {
+    client.logLevel = defaults.logLevel;
+  }
+  if (defaults.openRouter !== undefined) {
+    client.openRouter = defaults.openRouter;
+  }
+  if (parent.maxToolResultChars !== undefined) {
+    client.maxToolResultChars = parent.maxToolResultChars;
+  }
+  if (parent.maxToolSchemaChars !== undefined) {
+    client.maxToolSchemaChars = parent.maxToolSchemaChars;
+  }
+  return {
+    client,
+    maxCallDepth: parent.maxCallDepth,
+    failurePropagation: parent.failurePropagation,
+    checkpoints: { maxRestores: parent.maxRestores },
+  };
+}
+
+/** The parent's config under the caller's explicit overrides, key by key. */
+export function withParentConfig(
+  overrides: Partial<AgencyConfig> | undefined,
+  parentConfig: Partial<AgencyConfig>,
+): Partial<AgencyConfig> {
+  return mergeConfig(parentConfig, overrides ?? {}) as Partial<AgencyConfig>;
 }
 
 /**

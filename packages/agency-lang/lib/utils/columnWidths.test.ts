@@ -76,6 +76,12 @@ describe("fitColumnWidths", () => {
     expect(fitColumnWidths([50, 200], [cellsAt(0, 50), natAt(1, 200)], 33)).toEqual([50, 1]);
   });
 
+  it("starts from the available width, so one huge cell stays fast", () => {
+    // Starting from the widest cell would step down a billion times.
+    const widths = fitColumnWidths([1_000_000_000, 5], [natAt(0, 1_000_000_000), natAt(1, 5)], 40);
+    expect(widths).toEqual([35, 5]);
+  });
+
   it("never shrinks a column below its minWidth", () => {
     const plan: ColumnPlan[] = [
       { index: 0, parsed: null, natural: 60, minWidth: 60 },

@@ -104,7 +104,10 @@ export function fitColumnWidths(widths: number[], plan: ColumnPlan[], available:
     widths.map((width, i) => (shrinkable[i] ? Math.max(floors[i], Math.min(width, level)) : width));
   const total = (level: number): number => atLevel(level).reduce((sum, width) => sum + width, 0);
 
-  let level = Math.max(0, ...widths);
+  // No level above `available` can fit: a column wider than it fills the
+  // space on its own. Starting there bounds the loop by the space, not by
+  // the widest cell.
+  let level = Math.min(Math.max(0, ...widths), available);
   while (level > 0 && total(level) > available) {
     level--;
   }

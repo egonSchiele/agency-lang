@@ -235,7 +235,9 @@ source and keeps the metadata that names the change.
 A skill review (`std::skills::review`) works the same way, without a
 diff: its interrupt carries no earlier draft, so the handler prints the
 whole draft above the prompt (the name, the description, and the body as
-highlighted markdown), and the prompt's table keeps `dir` and `name`.
+written), and the prompt's table keeps `dir` and `name`. The body is not
+rendered as markdown, because a rendered link shows only its text and the
+user has to see the URL they are approving.
 `PROMPT_HIDDEN_FIELDS` lists, for each of these effects, the fields the
 prompt's table leaves out because they are printed above it. An effect
 that starts printing something above the prompt adds a row there.

@@ -6,7 +6,7 @@ A table with no `width` of its own is as wide as its content, up to a limit. Whe
 
 The limit is `ctx.availableWidth`, which `sizeTable` in `lib/stdlib/layout/table.ts` passes to `_resolveTableWidths` as `maxWidth`. At the root it is the terminal width (`resolveSizes` in `render.ts`). Inside a box or a row it is that container's inner width. With no terminal, the viewport is 80 columns (`DEFAULT_VIEWPORT`), so a program piped to a file gets tables wrapped at 80, as its plain text already is.
 
-A table with its own `width` uses that width as the limit instead. Before this rule, `width: "full"` stretched the frame and left the columns at their content width, so the rows overflowed the frame.
+A table with its own `width` uses that width as the limit instead.
 
 The limit caps the table. It does not pad a small table out to the limit.
 

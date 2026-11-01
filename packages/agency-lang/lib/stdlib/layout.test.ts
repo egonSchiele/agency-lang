@@ -1171,11 +1171,13 @@ describe("table — fits its width", () => {
     expect(widths.every((width) => width === widths[0])).toBe(true);
   });
 
-  test("a fixed column holding a raw cell keeps its declared width", () => {
+  test("a fixed column holding a wider raw cell widens to it and keeps the frame", () => {
     const raw = node("raw", { content: "r".repeat(10) });
     const tree = tableNode({ columns: [{}, { width: 6 }], body: [["k", raw]] });
-    const resolved = _internal.resolveSizes(tree, viewport);
-    expect((resolved.attrs.resolvedColumnWidths as number[])[1]).toBe(6);
+    const lines = stripAnsi(render(tree, viewport)).split("\n");
+    expect(lines[1]).toBe("│ k │ rrrrrrrrrr │");
+    const widths = lines.map((line) => visualWidth(line.trimEnd()));
+    expect(widths.every((width) => width === widths[0])).toBe(true);
   });
 });
 

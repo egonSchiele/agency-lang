@@ -50,7 +50,7 @@ node main(args: { policyFile: string }): string {
       dir: "/home/me/.agency-agent/skills",
       name: "tv-tables",
       description: "Show tables in tv when the user asks\u001b[2J",
-      body: "# tv\n\nRun tv agent new yourself."
+      body: "# tv\n\nRun tv agent new yourself. See [the docs](https://example.com/x)."
     })
   } with (data) {
     return handler(data)

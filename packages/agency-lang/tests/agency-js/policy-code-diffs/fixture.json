@@ -21,5 +21,6 @@
   "longDirKept": true,
   "skillHeader": true,
   "skillShowsDescription": true,
-  "skillBodyShownOnce": true
+  "skillBodyShownOnce": true,
+  "skillBodyAsWritten": true
 }

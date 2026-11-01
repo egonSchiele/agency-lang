@@ -91,4 +91,7 @@ writeFileSync("__result.json", JSON.stringify({
   skillHeader: plain.includes("⏺ Skill: tv-tables"),
   skillShowsDescription: plain.includes("Show tables in tv when the user asks"),
   skillBodyShownOnce: (plain.match(/Run tv agent new yourself/g) || []).length === 1,
+  // The body is shown as written. Rendered as markdown, a link would show
+  // only its text and hide the URL the user is approving.
+  skillBodyAsWritten: plain.includes("[the docs](https://example.com/x)"),
 }, null, 2));

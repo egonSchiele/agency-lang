@@ -756,19 +756,15 @@ def renderSourceDiff(
 }
 
 // A skill draft in full: its name, its description, and its body as
-// highlighted markdown. The model wrote all three, so they are stripped
-// before they are colored; stripping after would turn the colors into
-// visible text.
+// written. The body is not rendered as markdown: a rendered link shows
+// only its text, and the user must see the URL they are approving. The
+// model wrote all three, so they are stripped before the header is
+// colored; stripping after would turn the color into visible text.
 def renderSkillDraft(data: any): string {
   const name = stripControlChars(data.name)
   const description = stripControlChars(data.description)
   const body = stripControlChars(data.body)
-  return [
-    color.yellow("⏺ Skill: ${name}"),
-    description,
-    "",
-    highlight(body, language: "markdown")
-  ].join("\n")
+  return [color.yellow("⏺ Skill: ${name}"), description, "", body].join("\n")
 }
 
 /** The fields of a `std::toolbox::review` payload that say what the

@@ -135,6 +135,43 @@ the nesting cap down the tree.
 
 `compile()` compiles through the closure validator (`lib/compiler/closureValidator.ts`), which enforces a pure-Agency closure. Imports may name `std::` modules and `.agency` files inside `dir`, the confinement boundary the caller passes. An empty `dir`, the default, means no local import can resolve. TypeScript and JavaScript files, Node builtins, `pkg::` packages, symlinks, and compile-time splices are all refused anywhere in the import closure. Splices are refused before anything could expand them, because a splice generator executes in the compiling process.
 
+## What a child inherits
+
+A child's program is compiled in the sandbox with no `agency.json`, so its header bakes the built-in model and provider (`gpt-5-mini` through `openai-responses`). The parent fixes that by sending its own settings in the `configOverrides` of the `run` and `resume` instructions. `_runFor` in `lib/runtime/ipc.ts` builds them in three steps:
+
+1. `parentConfigOverrides` turns the parent's settings into a config, and `withParentConfig` puts the caller's explicit overrides over it, key by key. `run(logFile:)` is such an override, so it still wins.
+2. `withParentProviderModules` adds the parent's provider modules, with each path made absolute so it resolves under any `run(cwd:)`.
+3. `withParentStatelog` adds the parent's effective statelog sink.
+
+The child applies the result through the one runtime merge, `applyRuntimeConfigOverridesToContextArgs` in `lib/runtime/configOverrides.ts`, in its `RuntimeContext` constructor.
+
+The settings come from the parent context's own fields, not from a copy of its `agency.json`. Those fields hold the baked config with the environment, IPC, and per-invocation overrides already merged in. Two things follow:
+
+- A grandchild gets the root's values through a child that was itself compiled in the sandbox, because the child's fields hold what it was sent (`grandchildUsesParentModel`).
+- A served invocation that tightened `maxCallDepth` passes the tightened value on, because `createExecutionContext` applied the invocation's override to the field.
+
+What is sent:
+
+- the smoltalk defaults: the model, the provider, the API keys, the base URLs, `client.logLevel`, and the OpenRouter preferences;
+- the two tool caps, `client.maxToolResultChars` and `client.maxToolSchemaChars`;
+- `maxCallDepth`, `failurePropagation`, and `checkpoints.maxRestores`.
+
+What is not sent, and why:
+
+- `log` and `client.providerModules` have their own helpers, which make their paths absolute.
+- A trace file belongs to one process.
+- The parent's `budget` already counts a child's spend, and `run(maxCost:)` caps one child.
+- A memory store belongs to one process.
+- `maxToolCallRounds` is baked into each `llm()` call site by the code generator. A child uses `10`, or whatever `setLlmOptions({ maxToolCallRounds })` sets in its own source.
+- The top-level `logLevel`, for the runtime's own loggers, and `verbose` are debugging settings for one process. `client.logLevel`, smoltalk's, is a different setting, and it is sent.
+- A client set from TypeScript with `setLLMClient` is an object in the parent's process, so it cannot be sent.
+
+The message carries the API keys the parent read from its environment as well as the ones its config names. The child already has the parent's whole environment (`buildForkOptions`), so it learns nothing new. The message is not logged.
+
+The model and provider follow `defaultRoute` in `lib/config/config.ts`, the rule the code generator uses: a model named without a provider has no provider, so smoltalk picks one from the model name. A parent that names `gemini-3.8-flash` with no provider sends the model alone, and the child's merge clears its baked `openai-responses`. This is the compile-time rule. The rule for a single `llm(model:)` call is `modelProviderOverride` in `lib/runtime/llmConfig.ts`, and it is different.
+
+Nothing new is raised, and nothing new is checkpointed. The overrides are rebuilt for every `run` and `resume` instruction and never stored, so a resumed child gets them again from the instruction.
+
 ## Limits
 
 Wall-clock, memory, ipcPayload, and stdout limits clamp each subprocess, with ceilings in `LIMIT_CEILINGS` (`lib/runtime/ipc.ts`). All budgets are **per execution segment**. Each fork gets a fresh timer and fresh counters, and paused time never counts, because the process does not exist while paused. This property is pinned by fake-timer unit tests in `ipc.test.ts` (an end-to-end assertion would require segment-time-vs-cap arithmetic, which is unreliable on loaded CI runners). Accepted quirk: a child that pauses N times gets N stdout budgets.
@@ -249,7 +286,7 @@ A subprocess may itself call `run()`. Safety is the language's own idiom plus a 
 
 ## Tests
 
-Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/agency-js/subprocess-*`.
+Execution tests live in `tests/agency/subprocess/`, and in `tests/agency/subprocess-config/`, which has its own `agency.json`; agency-js tests in `tests/agency-js/subprocess-*`.
 
 | Test | What it verifies |
 |------|-----------------|
@@ -283,6 +320,8 @@ Execution tests live in `tests/agency/subprocess/`; agency-js tests in `tests/ag
 | `callback-forwarding-nested-relay` | root callback fires for a grandchild event relayed through a callbackless mid-tier |
 | `callback-forwarding-relay-both-fire` | mid-tier's own callback AND the root's both fire for the same grandchild event, filters respected |
 | `nested-gate-unapproved` | the gate exists on every hop |
+| `subprocess-config/inherits` `childUsesParentModel` | a child uses the model the parent's `agency.json` names, not the sandbox default |
+| `subprocess-config/inherits` `grandchildUsesParentModel` | a grandchild gets the root's model through a child compiled in the sandbox |
 | `subprocess-no-handler` (js) | std::run gate surfaces without a handler |
 | `subprocess-pause-basic` (js) | end-to-end pause → respond → resume |
 | `subprocess-durable-resume` (js) | JSON round-trip + fresh-process resume + artifact wipe |

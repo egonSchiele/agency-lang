@@ -27,6 +27,13 @@ Where applied: sources 1⊕2 at the CLI (baked into the generated program);
 source 3 at runtime, in the `RuntimeContext` constructor. Inspect the resolved
 result with `agency config show` (secrets masked; `--show-secrets` to reveal).
 
+The runtime merge has three entry points: the `AGENCY_CONFIG_OVERRIDES`
+variable, the IPC message a parent sends a child, and
+`withRuntimeConfigOverrides`, for a host that imports compiled modules itself.
+All three apply the same fields, including the `client` settings. A child
+started by `run` receives its parent's settings through the IPC message; see
+"What a child inherits" in `docs/dev/runtime/subprocess-ipc.md`.
+
 ## Config files
 
 ### Config paths
@@ -140,8 +147,10 @@ default; see `docs/dev/language/splices.md`.
 Worth knowing when adding any refusing flag: because it is config, anything
 that merges another config **over** the CLI-derived one cancels it. That is how
 `agency test run` beat this flag until both of its merge sites re-applied the
-CLI intent, and a subprocess re-derives its own config, so a flag has to be
-forwarded to it explicitly.
+CLI intent. A subprocess inherits only the settings listed in "What a child
+inherits" in `docs/dev/runtime/subprocess-ipc.md`, and `refuseSplices` is not
+one of them, so a flag like this has to be forwarded to a subprocess
+explicitly.
 
 ### `--platform`
 

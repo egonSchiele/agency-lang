@@ -268,7 +268,9 @@ export type CatalogEntry = {
   /** The parameters a step can pass. A function-typed parameter is left out. */
   params: CatalogParam[];
   /** The declared return type as Agency text. Null when none is declared. */
-  returns: string | null
+  returns: string | null;
+  /** What the tool can raise, as `describe` reports it. A tool that uses `guard` lists `std::guard`. A workflow rejects every guard trip itself, so `std::guard` never reaches a workflow's caller. */
+  effects: string[]
 }
 
 /** The catalog starts with the same two steps as `checkWorkflow`, so it

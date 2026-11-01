@@ -145,7 +145,9 @@ export type CatalogEntry = {
   /** The parameters a step can pass. A function-typed parameter is left out. */
   params: CatalogParam[];
   /** The declared return type as Agency text. Null when none is declared. */
-  returns?: string
+  returns?: string;
+  /** What the tool can raise, as `describe` reports it. A tool that uses `guard` lists `std::guard`. A workflow rejects every guard trip itself, so `std::guard` never reaches a workflow's caller. */
+  effects: string[]
 }
 ```
 
@@ -169,7 +171,7 @@ export type WorkflowMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L416))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L418))
 
 ### WorkflowEntry
 
@@ -187,7 +189,7 @@ export type WorkflowEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L429))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L431))
 
 ## Effects
 
@@ -219,7 +221,7 @@ effect std::workflow::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L458))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L460))
 
 ### std::workflow::save
 
@@ -242,7 +244,7 @@ effect std::workflow::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L468))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L470))
 
 ## Functions
 
@@ -348,7 +350,7 @@ The catalog starts with the same two steps as `checkWorkflow`, so it
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L277))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L279))
 
 ### runWorkflow
 
@@ -390,7 +392,7 @@ Check, ask, run. The check compiles the program and the run uses it. The
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L303))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L305))
 
 ### workflowTool
 
@@ -418,7 +420,7 @@ Make one tool that runs a workflow when called. The tool has the workflow's name
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L351))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L353))
 
 ### workflowTools
 
@@ -444,7 +446,7 @@ One tool per workflow saved under a project directory, in name order, each built
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L388))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L390))
 
 ### writeWorkflow
 
@@ -476,7 +478,7 @@ Save a workflow as `<dir>/workflows/<name>.json`, after the full check and one `
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L501))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L503))
 
 ### loadWorkflow
 
@@ -502,7 +504,7 @@ Load a saved workflow by name. Raises one `std::workflow::scan` prompt before re
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L606))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L608))
 
 ### listWorkflows
 
@@ -526,4 +528,4 @@ List the workflows saved under a project directory, in name order. Raises one `s
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L644))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L646))

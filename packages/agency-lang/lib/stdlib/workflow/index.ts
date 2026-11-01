@@ -112,13 +112,14 @@ export function _pickSignatures(
         `"${source.module}" re-exports "${name}" from another file; pass a def the module itself defines`,
       );
     }
-    const { signature, returnType, returnsResult, docstring, params } = found;
+    const { signature, returnType, returnsResult, docstring, params, effects } = found;
     signatures[signatureKey(source.module, name)] = {
       signature,
       returnType,
       returnsResult,
       docstring,
       params,
+      effects,
     };
   }
   return success(signatures);

@@ -98,6 +98,8 @@ export type Signature = {
   docstring: string | null;
   /** What `describe` says about each parameter. */
   params: ExportParam[];
+  /** What `describe` reports the tool can raise. */
+  effects: string[];
 };
 
 /** A checked reference. `path` is the text after the root name, such as

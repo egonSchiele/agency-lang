@@ -148,9 +148,10 @@ describe("_pickSignatures", () => {
     returnsResult: returnType !== null && returnType.startsWith("Result"),
     docstring: null,
     params: [],
+    effects: ["std::read"],
   });
 
-  it("keys each named function by module and name", () => {
+  it("keys each named function by module and name, keeping its effects", () => {
     const group = { module: "./a.agency", names: ["f"], reExport: null };
     const result = _pickSignatures(group, [
       exportInfo("f", "def", "string"),
@@ -163,6 +164,7 @@ describe("_pickSignatures", () => {
         returnsResult: false,
         docstring: null,
         params: [],
+        effects: ["std::read"],
       },
     });
   });

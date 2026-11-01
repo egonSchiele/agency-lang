@@ -21,6 +21,11 @@ export type CatalogEntry = {
   description: string;
   params: CatalogParam[];
   returns: string | null;
+  /** What the tool can raise, as `describe` reports it. A tool that uses
+   *  `guard` lists `std::guard`. A workflow rejects every guard trip itself,
+   *  so `std::guard` never reaches a workflow's caller, and `stepEffects`
+   *  leaves it out. */
+  effects: string[];
 };
 
 /** The JSON Schema of each parameter in the tool's definition, by name.
@@ -50,6 +55,7 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
     description,
     params,
     returns: signature.returnType,
+    effects: signature.effects,
   };
 }
 

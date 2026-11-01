@@ -528,7 +528,11 @@ def split(source: string): any {
   if (parsed is failure(why)) {
     return "UNPARSEABLE"
   }
-  const result = splitFlags("grep", parsed.value[0], GREP_FLAGS)
+  const first = parsed.value[0]
+  if (!(first is { tag: "simpleCommand" })) {
+    return "NOT-SIMPLE"
+  }
+  const result = splitFlags("grep", first, GREP_FLAGS)
   if (result is failure(why)) {
     return why
   }
@@ -572,7 +576,11 @@ def splitSummary(source: string, spec: FlagSpec): any {
   if (parsed is failure(why)) {
     return "UNPARSEABLE"
   }
-  const result = splitFlags("x", parsed.value[0], spec)
+  const first = parsed.value[0]
+  if (!(first is { tag: "simpleCommand" })) {
+    return "NOT-SIMPLE"
+  }
+  const result = splitFlags("x", first, spec)
   if (result is failure(why)) {
     return why
   }
@@ -1401,6 +1409,7 @@ node findAsksStdGlob() {
     grepNames("find . -maxdepth x"),
     grepNames("find . -maxdepth 0"),
     grepNames("find . -newer one.txt"),
+    grepNames("find . -size -1M"),
     grepNames("find one.txt -name x"),
     grepNames("find . -name '*.txt' | head"),
   ]

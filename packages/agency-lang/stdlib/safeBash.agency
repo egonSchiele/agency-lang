@@ -766,6 +766,11 @@ def nextWordValue(verb: string, flag: string, next: Word | null): Result<string>
   if (next == null) {
     return failure("${verb}'s `${flagDisplay(flag)}` needs a value")
   }
+  // The parser makes a word that starts with a dash a flag word, so
+  // `-size -1M` and `head -n -5` land here with a literal value.
+  if (next is { tag: "flag" }) {
+    return failure("the value of `${flagDisplay(flag)}` starts with a dash")
+  }
   const text = literalWordText(next)
   if (text is failure(why)) {
     return failure("the value of `${flagDisplay(flag)}` is not literal")

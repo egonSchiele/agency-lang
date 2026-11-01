@@ -4,7 +4,7 @@
 
 **Goal:** `pnpm test`, `make`, `pytest tests`, `tsc --noEmit`, and every other program safeBash has no rule for raise `std::exec`, the question the `exec` tool asks, in place of the broad `std::bash`. So "approve always here" on `pnpm test` saves `{ command: "pnpm", subcommand: "test" }`, and every later `pnpm test` runs with no prompt, alone or in a line such as `make 2>&1 | tail -100`.
 
-**Architecture:** One new step at the end of `otherVerbEffects`, where today a verb with no rule fails with "no rule for". A verb that reaches that point is not owned by any rule, so it raises `std::exec` with the payload the `exec` tool would raise. A short list of exceptions stays broad: wrapper verbs that run another program (`sh`, `xargs`, `env`, `sudo`, ...), `agency`, a command that reads a pipe, and a command with an input redirect. Nothing else in the classifier moves. The line still runs through bash, as every narrow plan does.
+**Architecture:** One new step at the end of `otherVerbEffects`, where today a verb with no rule fails with "no rule for". A verb that reaches that point is not owned by any rule, so it raises `std::exec` with the payload the `exec` tool would raise. A few cases stay broad. One list, `NO_EXEC_VERBS`, holds the wrapper verbs that run another program (`sh`, `xargs`, `env`, `sudo`, ...) and `agency`. One helper beside `stdinStage`, `pipedProgram`, refuses a program that reads a pipe or an input redirect. Nothing else in the classifier moves. The line still runs through bash, as every narrow plan does.
 
 **Tech Stack:** Agency (`stdlib/safeBash.agency`, `stdlib/safeBash/actions.agency`), the Agency test runner, `make`.
 
@@ -140,27 +140,28 @@ The full command line goes in `line`, not `command`. The other arms put it in `c
 ### Task 2: A verb with no rule asks `std::exec`
 
 **Files:**
-- Modify: `stdlib/safeBash.agency` (`otherVerbEffects`, new `WRAPPER_VERBS`, `NOT_EXEC_VERBS`, `execEffects`, `execArgs`)
+- Modify: `stdlib/safeBash.agency` (`otherVerbEffects`, new `NO_EXEC_VERBS`, `execEffects`, `execArgs`, and `pipedProgram` beside `stdinStage`)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
 
 ```agency
-/** Programs that exist to run another program. A std::exec payload for
- * one would name the wrapper, while what runs is in its arguments, so a
- * rule `{ command: "sh" }` would approve anything. These ask std::bash. */
-static const WRAPPER_VERBS: string[] = [
+/** Verbs that never become std::exec. They ask std::bash. */
+static const NO_EXEC_VERBS: string[] = [
+  // Programs that exist to run another program. A payload for one would
+  // name the wrapper, while what runs is in its arguments, so a rule
+  // `{ command: "sh" }` would approve anything.
   "sh", "bash", "zsh", "dash", "fish", "eval", "exec", "source", ".",
   "xargs", "env", "sudo", "doas", "nohup", "time", "timeout", "watch",
-  "command", "builtin", "nice", "script"
+  "command", "builtin", "nice", "script",
+  // A lone `agency` line runs in process through std::agency, and
+  // recommended approves std::exec for agency's safe subcommands, which
+  // were chosen for the exec tool. A bash spelling must not pick that up.
+  "agency"
 ]
-
-/** Verbs with a path of their own that a bash spelling must not bypass.
- * A lone `agency` line runs in process through std::agency, and
- * recommended approves std::exec for agency's safe subcommands, which
- * were chosen for the exec tool. */
-static const NOT_EXEC_VERBS: string[] = ["agency"]
 ```
+
+Both groups get the same answer and the same message, so they're one list with a comment per group. A second list would be a second lookup that does the same thing.
 
 ```agency
 def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]>
@@ -168,17 +169,24 @@ def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: b
 
 `otherVerbEffects`'s last line, today `return failure("no rule for `${verb}`")`, becomes `return execEffects(verb, command, cwd, readsStdin, redirects)`. `execEffects` checks these in order:
 
-1. If the verb is in `WRAPPER_VERBS` or `NOT_EXEC_VERBS`, fail with `"no rule for `${verb}`"`. That's the same text as today, on purpose. Four expected outputs pin it: `planReasons`, `rejectedBroadSaysWhy`, the `git log | xargs echo` row, and the agency-js fixture `tests/agency-js/safe-bash-user-rejection/fixture.json`. The sentence is still true, because safeBash has no rule for a wrapper.
-2. If `readsStdin` is true, fail with `"`${verb}` reads a pipe, and std::exec cannot say what it reads"`.
-3. If any redirect on the command has op `"<"`, fail with `"`${verb}` reads an input redirect, and std::exec cannot say what it reads"`. Read the command's own `redirects` field for this, not the effects.
-4. `execArgs(verb, command.args)` turns the words into text, or fails.
-5. Return `success([execEffect(payload), ...redirects])`, with this payload:
+1. If the verb is in `NO_EXEC_VERBS`, fail with `"no rule for `${verb}`"`. That's the same text as today, on purpose. Four expected outputs pin it: `planReasons`, `rejectedBroadSaysWhy`, the `git log | xargs echo` row, and the agency-js fixture `tests/agency-js/safe-bash-user-rejection/fixture.json`. The sentence is still true, because safeBash has no rule for a wrapper.
+2. `pipedProgram(verb, readsStdin, command)` fails when the program's stdin is a pipe or an input redirect.
+3. `execArgs(verb, command.args)` turns the words into text, or fails.
+4. Return `success([execEffect(payload), ...redirects])`, with this payload:
    - `command: verb`
    - `args`
    - `subcommand`: `args[0]`, or `""` when there are no arguments. Write it as a small def, so there's no if-else inside the record.
    - `cwd`
    - `timeout: 0`
    - `stdin: ""`
+
+```agency
+def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Result
+```
+
+`pipedProgram` sits right after `stdinStage` and is its counterpart, for a program that std::exec describes. The `std::exec` payload's `stdin` is `""`, so a program fed by a pipe or by `<` would be misdescribed. It fails with `"`${verb}` reads a pipe, and std::exec cannot say what it reads"` when `readsStdin` is true. It fails with `"`${verb}` reads an input redirect, and std::exec cannot say what it reads"` when a redirect on the command has op `"<"`. Read the command's own `redirects` field for that, not the effects.
+
+The dev doc ("Stages that read a pipe") says `stdinStage` is the only place that reads the pipe flag. After this plan there are two, side by side, one per kind of command: `stdinStage` for a verb whose rule can read stdin, and `pipedProgram` for a program `std::exec` describes. Change that sentence to name both, and keep every other reader out.
 
 ```agency
 def execArgs(verb: string, words: Word[]): Result<string[]>
@@ -242,27 +250,35 @@ Expected, row by row, where `X` is `[["std::exec"],null]` and `U(d)` is `[["std:
 18. `U("`pnpm` reads an input redirect, and std::exec cannot say what it reads")`
 19. `U("no rule for `agency`")`
 
-A payload node, with the for-and-if shape `lsPayloads` uses so that `payload` narrows:
+A payload node. `lsPayloads` and `globPayloads` each repeat the same loop: plan the line, keep the effects with one name, and read their payloads. Don't add a third copy. Add one generic helper and use it here. It reads each effect through an `any` local, the way `payloadValuesAreCorrect` does, because a name held in a variable doesn't narrow the union:
 
 ```agency
-def execPayloads(source: string): any {
+/** The payloads of the effects named `name` in the plan for `source`. */
+def payloadsNamed(source: string, name: string): any[] {
   let out: any[] = []
   for (effect in planFor(source, FIXTURES).effects) {
-    if (effect.name == "std::exec") {
-      out.push([effect.payload.command, effect.payload.args, effect.payload.subcommand, effect.payload.cwd == FIXTURES, effect.payload.timeout, effect.payload.stdin])
+    const each: any = effect
+    if (each.name == name) {
+      out.push(each.payload)
     }
   }
   return out
 }
 
+def execFields(source: string): any {
+  return [[p.command, p.args, p.subcommand, p.cwd == FIXTURES, p.timeout, p.stdin] for p in payloadsNamed(source, "std::exec")]
+}
+
 node execPayloadFields() {
   return [
-    execPayloads("pnpm run build --filter=web"),
-    execPayloads("make"),
-    execPayloads("pytest tests/*.py -k fast"),
+    execFields("pnpm run build --filter=web"),
+    execFields("make"),
+    execFields("pytest tests/*.py -k fast"),
   ]
 }
 ```
+
+Leave `lsPayloads` and `globPayloads` as they are. They work, and switching them isn't part of this ticket.
 
 Expected:
 
@@ -300,7 +316,7 @@ The changed rows (`false`, the `true` rows, `make`, `rg`) fail for the same reas
 
 - [ ] **Step 3: Implement**
 
-The interfaces above. Put `WRAPPER_VERBS`, `NOT_EXEC_VERBS`, `execEffects`, and `execArgs` right after `otherVerbEffects`.
+The interfaces above. Put `NO_EXEC_VERBS`, `execEffects`, and `execArgs` right after `otherVerbEffects`, and `pipedProgram` right after `stdinStage`.
 
 - [ ] **Step 4: `make`, run, verify pass**
 
@@ -324,7 +340,8 @@ Message: `safeBash: a program with no rule asks std::exec`.
     - the rule: a verb no arm or table owns raises `std::exec`, built in `execEffects`;
     - the payload: the exec tool's fields, `line` for the full command, `cwd` resolved, `timeout` 0, `stdin` empty, and an argument that may be an unexpanded glob;
     - why ownership needs no list: the arms and tables fail inside themselves, so `git push`, `find . -delete`, and `tail -f` never reach the new step;
-    - the exceptions and the reason for each: the wrapper verbs; `agency`; a command that reads a pipe or an input redirect; and, from earlier checks, a leading assignment and a command word that isn't literal;
+    - the exceptions and the reason for each: `NO_EXEC_VERBS` (the wrappers and `agency`); a program fed by a pipe or `<`, through `pipedProgram`; and, from earlier checks, a leading assignment and a command word that isn't literal;
+  - in "Stages that read a pipe", the sentence that names `stdinStage` as the only reader of the pipe flag now names `stdinStage` and `pipedProgram`;
     - why the wrapper message is still "no rule for";
     - what a saved rule covers: `@always(command, subcommand)` covers the program with that first argument in any folder, with any later arguments, the same as for the exec tool;
     - interpreters: `node -e '...'` is as broad as `sh -c`, so a rule for an interpreter should be keyed on `subcommand`;
@@ -363,7 +380,7 @@ Run each of these, save the output to a file, and confirm it's green:
 
 Commit the docs and the index lines, then push. Put the PR body in a file, with:
 - a before/after table for `pnpm test`, `make 2>&1 | tail -100`, `git push --force`, `sh -c x`, `git log | python3 x.py`, `pnpm test > out.log`, and `echo a; agency --version`;
-- where to look: `execEffects` and `WRAPPER_VERBS`;
+- where to look: `execEffects`, `NO_EXEC_VERBS`, and `pipedProgram`;
 - the rows that changed meaning, with old and new strings;
 - what's left out:
   - leading assignments (`AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm ...`), which needs an `env` field on the payload;

@@ -72,7 +72,7 @@ Which verbs take a file:
 ### Task 1: A file given to `ls` or `du` asks for its folder
 
 **Files:**
-- Modify: `stdlib/safeBash.agency` (`ListVerb`, `LIST_VERBS`, new `FileArgument`, `listEffects`, `resolveDirs` becoming `resolveTargets`, `resolveDirPath`, new `listingOf`, new `linkFree`, `findEffects`)
+- Modify: `stdlib/safeBash.agency` (`ListVerb`, `LIST_VERBS`, new `FileArgument`, `listEffects`, `resolveDirs` becoming `resolveTargets`, `resolveDirPath` becoming `requireFolder`, new `listingOf`, new `linkFree`, `findEffects`)
 - Modify: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
 **Interfaces:**
@@ -90,7 +90,13 @@ export type FileArgument = "folder" | "refuse"
 def resolveTargets(verb: string, words: Word[], cwd: string): Result<PathTarget[]>
 ```
 
-This is today's `resolveDirs` loop with the folder check taken out. Each word must be literal (failing with "the ${verb} path is not literal"), and each is resolved with `resolveTarget`. `resolveDirPath` and `resolveDirs` are deleted. `findEffects` calls `resolveTargets`, then refuses a target whose `file` isn't null, with `"find of a file is not a listing"`, the same message as today. It keeps its `dir` values.
+This is today's `resolveDirs` loop with the folder check taken out. Each word must be literal (failing with "the ${verb} path is not literal"), and each is resolved with `resolveTarget`. `resolveDirs` is deleted.
+
+```agency
+def requireFolder(verb: string, target: PathTarget): Result<string>
+```
+
+`requireFolder` replaces `resolveDirPath`'s folder check. It returns `target.dir` for a folder, and fails with `"${verb} of a file is not a listing"` for a file. It's the one place that refusal is written. `findEffects` maps its targets through it, and so does `listingOf` for a row that refuses files. Without it, the same check and message would be written twice.
 
 ```agency
 @capabilities(fileRead)
@@ -99,7 +105,7 @@ def listingOf(verb: string, spec: ListVerb, target: PathTarget, walk: boolean, c
 
 `listingOf` decides one path's payload:
 - A folder (`target.file == null`) gives `{ dir: target.dir, recursive: walk, maxResults: 0 }`, as today.
-- A file under a `refuse` row fails with `"${verb} of a file is not a listing"`.
+- A file under a `refuse` row goes through `requireFolder`, which fails with its message.
 - A file under a `folder` row runs `linkFree(verb, target, cwd)` first. Then it gives `{ dir: target.dir, recursive: false, maxResults: 0 }`.
 
 ```agency
@@ -161,6 +167,8 @@ node listingOfALinkedFileIsRefused() {
 ```
 
 Expected: `[{"kind":"unrecognized","detail":"ls of a symlink is not described"}, true]`.
+
+`linkFree` calls `_searchTargetIn` directly, not `resolveTarget`. `resolveTarget` takes the `Word` to decide whether `~` expands, and `linkFree` works from `argument`, which is already expanded. `readGrep` makes the same direct call for `"."`, so this matches existing code.
 
 End to end: `listingOfAFileAsksOneQuestion` runs `safeBash("ls -la one.txt", cwd: FIXTURES)` with one approve handler for "Are you sure you want to list this directory?" in the `.test.json`. It returns whether the output contains `one.txt`. Expected: `true`. A `std::bash` prompt would fail the run on an unmatched interrupt.
 

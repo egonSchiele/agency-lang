@@ -48,30 +48,33 @@ export function checkUnwraps(scopes: ScopeInfo[], ctx: TypeCheckerContext): void
   );
 }
 
+/** Every `?` under `nodes`, with the ancestors it was found under. */
+function unwrapAccesses(nodes: AgencyNode[]): { access: ValueAccess; ancestors: WalkAncestor[] }[] {
+  return [...walkNodes(nodes)]
+    .filter(({ node }) => isUnwrapAccess(node))
+    .map(({ node, ancestors }) => ({ access: node as ValueAccess, ancestors }));
+}
+
 function returnTypeRefusals(info: ScopeInfo, ctx: TypeCheckerContext) {
   const declared = info.returnType;
   if (!declared || isAssignable(RESULT_OF_ANY, declared, ctx.getTypeAliases())) {
     return [];
   }
-  const found: ValueAccess[] = [];
-  for (const { node, ancestors } of walkNodes(info.body)) {
-    // A `return` inside a block argument belongs to the block, and so does
-    // the return a `?` lowers to.
-    if (isUnwrapAccess(node) && !isInsideBlock(ancestors)) {
-      found.push(node);
-    }
-  }
-  return found.map((access) =>
-    diagnostic(
-      "unwrapReturnTypeNotResult",
-      { expr: operandText(access), name: info.name, type: formatTypeHint(declared) },
-      access.loc ?? null,
-    ),
-  );
+  // A `return` inside a block argument belongs to the block, and so does the
+  // return a `?` lowers to.
+  return unwrapAccesses(info.body)
+    .filter(({ ancestors }) => !isInsideBlock(ancestors))
+    .map(({ access }) =>
+      diagnostic(
+        "unwrapReturnTypeNotResult",
+        { expr: operandText(access), name: info.name, type: formatTypeHint(declared) },
+        access.loc ?? null,
+      ),
+    );
 }
 
 /** True when the nearest `parallel` ancestor is reached with no block
- *  argument in between, which makes `node` part of an arm's own statements. */
+ *  argument in between, which makes the node part of an arm's own statements. */
 function atTopLevelOfArm(ancestors: WalkAncestor[]): boolean {
   const armIndex = ancestors.map((a) => a.type).lastIndexOf("parallelBlock");
   if (armIndex === -1) return false;
@@ -79,33 +82,34 @@ function atTopLevelOfArm(ancestors: WalkAncestor[]): boolean {
 }
 
 function parallelArmRefusals(nodes: AgencyNode[]) {
-  const found: ValueAccess[] = [];
-  for (const { node, ancestors } of walkNodes(nodes)) {
-    if (isUnwrapAccess(node) && atTopLevelOfArm(ancestors)) {
-      found.push(node);
-    }
-  }
-  return found.map((access) =>
-    diagnostic("unwrapInParallelArm", { expr: operandText(access) }, access.loc ?? null),
-  );
+  return unwrapAccesses(nodes)
+    .filter(({ ancestors }) => atTopLevelOfArm(ancestors))
+    .map(({ access }) =>
+      diagnostic("unwrapInParallelArm", { expr: operandText(access) }, access.loc ?? null),
+    );
+}
+
+/** The target of `obj?.field = 1`, as the access it would read. */
+function assignmentTarget(node: AgencyNode & { type: "assignment" }): ValueAccess {
+  return {
+    type: "valueAccess",
+    base: { type: "variableName", value: node.variableName },
+    chain: node.accessChain ?? [],
+  } as unknown as ValueAccess;
 }
 
 function assignmentTargetRefusals(nodes: AgencyNode[]) {
-  const errors = [];
-  for (const { node } of walkNodes(nodes)) {
-    if (node.type !== "assignment" || !node.accessChain?.some(isUnwrapElement)) continue;
-    const target = {
-      type: "valueAccess" as const,
-      base: { type: "variableName" as const, value: node.variableName },
-      chain: node.accessChain,
-    };
-    errors.push(
+  return [...walkNodes(nodes)]
+    .map(({ node }) => node)
+    .filter(
+      (node): node is AgencyNode & { type: "assignment" } =>
+        node.type === "assignment" && (node.accessChain ?? []).some(isUnwrapElement),
+    )
+    .map((node) =>
       diagnostic(
         "unwrapInAssignmentTarget",
-        { expr: operandText(target as unknown as ValueAccess) },
+        { expr: operandText(assignmentTarget(node)) },
         node.loc ?? null,
       ),
     );
-  }
-  return errors;
 }

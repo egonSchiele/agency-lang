@@ -1,16 +1,91 @@
-## Unreleased
+## Nov 1 2026 — v0.35.0
+This is a jam-packed release with lots and lots of improvements. The major highlights are:
+- New "workflows" feature that lets you define a workflow as JSON. The JSON can then get compiled into agency code. This lets you build simple agents using a GUI instead of having to write code.
+- Many, many improvements to the agency agent. The most noticeable ones will be that the agent responds way faster, and tool calls are rendered much more nicely. I have removed the review step from the researcher agent and the expert step from the coding agent, and made similar changes across all the sub-agents for the agency agent. This was done based on an eval which clearly showed that features like the reviewer only had a negative impact on the agent. It made the agent take a lot longer, two minutes versus ten minutes for example, and cost a lot more money as well. The eval didn't have any cases for checking whether the agent is returning false information, which is where the reviewer step would actually be useful, so it's possible that this will be worth adding back in the future, but for now, please enjoy the way speedier responses from the agent.
+- Lots and lots of updates to Safe Bash. Safe Bash can handle a lot more cases now. We also decided that when possible, Safe Bash will use an agency function, instead of running the Bash command directly. This will make things safer and more predictable across different environments. So for example, any Bash command that Safe Bash knows about that reads a file will now go to the built-in agency `read` tool.
 
-### Debugger
-
-- **Attach no longer uses `SIGUSR2`.** A program opens its debug socket when it runs its first node, and `agency debug --attach` connects to it directly. A program under `nodemon`, which restarts a child with `SIGUSR2`, now restarts as it should instead of opening its debugger. Set `AGENCY_NO_ATTACH=1` to keep a program from registering at all. A program on an earlier version still waits for the signal, so the new CLI refuses it with "no debug socket"; restart it on this version.
+The full list of changes follows:
 
 ### Breaking
 
-- **Serving an image model now needs torchvision.** `agency local serve` checks for it with the other image packages, so a Python environment set up before this release stops with "cannot import torchvision" until you install it: `~/.agency-agent/mlx-env/bin/pip install torchvision==0.29.2`. Qwen-Image-Edit-2511 needs it, and the image packages are pinned as one set.
+- **`grep` takes `path:` instead of `dir:` in Agency source.** Model tool calls and served calls still accept `dir` as an alias.
+- **Shell commands now require Bash on `PATH`.** Both `bash` and `safeBash` use it, with shell startup variables and exported shell functions removed from the environment.
+- **Serving an image model now requires torchvision.** Update an existing image environment with `~/.agency-agent/mlx-env/bin/pip install torchvision==0.29.2`.
+
+### Language
+
+- **Nodes check their `!` parameters before running their bodies.** `!` Didn't work for nodes earlier. Now, invalid arguments return a failure before the node's start callback runs.
+- **A guard around a `Result<T>` now has the correct type, `Result<T>`.** The checker used to infer `Result<Result<T>>`.
+- **String literal types correctly escape backslashes and line breaks in generated TypeScript.** This prevents malformed output and keeps literal text from becoming executable code.
+
+### Runtime
+
+- **`llm()` warns the model before its tool rounds run out.** Use `warnAtRoundsLeft` to customize the warning's timing and text. As part of this change we also refactored how messages get removed from the message thread, a feature that was used be a surprising number of things, including handoffs. We now have a nice declarative way of saying when messages expire.
+- **`setLlmOptions` accepts provider base URLs,** so later calls can use a different server without repeating the address.
+- **Functions keep their `withParamSchema` schemas across checkpoints,** so resumed tools still show the model the correct argument types. This was a bug that was causing certain functions to lose their schemas after an interrupt/resume cycle.
+- **Subprocesses started through `std::agency` inherit the parent's model and provider settings.** Explicit settings for the child still take precedence.
+- **Tool rejection messages identify when the user or an approval policy rejected the call.** Standard library helpers preserve the rejection so the model is told not to retry it.
+- **Policy rules no longer match a `null` data field.** Directory patterns can also use `<home>` for the user's home directory.
+
+### Workflows
+
+- **`std::workflow` compiles, checks, and runs workflows written as JSON.** Steps call tools or make an LLM call, and later steps can use the results from earlier steps.
+- **Workflows support cost and time limits for the whole run or individual steps.** An optional `raises` list lets `checkWorkflow` flag tools that require other permissions.
+- **New `agency workflow` command with `tools`, `check`, `compile`, `list`, and `run` subcommands.**
+
+### Standard Library
+
+- **`systemMessage` and `userMessage` accept `expires: "llmCall"`.** The message leaves the thread when the next `llm()` call returns.
+- **`@guarded` accepts `keepDraft: false` to return a failure whenever its budget runs out.** `reviewAgent` uses this behavior when `failOpen: false`, so an unfinished review cannot pass as complete.
+- **`describe` in `std::agency` can resolve local imports** when given the module's directory and filename.
+- **Repeated HTTP tool calls return the cached response.** GET requests with headers or a body bypass the cache, and `refresh: true` fetches again.
+- **`wikipedia_article` follows Wikipedia redirects.**
+- **`grepSpill` accepts `morePatterns` to search saved output for several patterns in one call.** `keepOutput` accepts a `source` argument so saved output can name the command that produced it.
+- **`grep` can search a single file.** It only worked for directories earlier.
+- `grep`, `ls`, and `glob` explain when a path is missing or has the wrong kind.
+
+### Shell commands
+
+- **`safeBash` uses file permissions for more commands.** Supported searches, reads, listings, and `find` calls ask for `std::grep`, `std::read`, `std::ls`, and `std::glob`, so existing policies can approve them.
+- **Programs such as `pnpm test`, `make`, and `pytest` ask for `std::exec` through `safeBash`.** Saved command approvals can apply to these calls.
+- **`safeBash` recognizes pipelines, `2>&1`, glob words, and unquoted `~` paths.** Filters that only read a pipe, such as `git log | grep fix`, need no extra file permission.
+- **Supported `echo`, `grep`, `cat`, `head`, and `tail` commands run without starting a shell.** This includes multi-file `cat`, `echo -n`, and chains joined by `;`, `&&`, or `||`.
+- **`safeBash` logs how it classified each command.** When a general shell approval is rejected, the failure explains why a narrower permission could not cover it.
+
+### Agent
+
+- **The agent reads Claude Code skills from `~/.claude/skills` and project `.claude/skills` folders.**
+- **Presets can set `llmOptions.baseUrl.mlx` to use an MLX server on another machine.**
+- **Prettier rendering of tool calls and results.**
+- **Removed expert overview for coding agent, and review agent for research agent.** This made the agency agent much faster and cheaper.
+- **Added Herdr support.** The agent now reports its status and saved session to Herdr.
+
+### CLI
+
+- **The linter warns when rebuilding a failure would discard its data, checkpoint, or rejection flag.** The AL0004 fix returns the original failure.
+- **Tables with automatic column widths wrap to fit the terminal.**
+- **Diff background highlighting also stays within the terminal width.**
+- **Skill approval prompts show the complete draft**, including its description, body, and link URLs.
+
+### Logs viewer
+
+- **Made the logs command way more efficient for agents to use.** `agency logs traces`, `outline`, and `search` let scripts and agents inspect runs without having to grep through a large log file.
+- **The trace picker shows agent names and accepts an `agent:` filter.**
+- **Log readers stream large files, avoiding JavaScript's string-size limit.** This should make the viewer faster and able to read longer log files.
+- Statelog omits large binary payloads and repeated runtime and tool metadata.
+
+### Debugger
+
+- **Debugger attach connects directly to a socket, fixing `nodemon` restarts.** Before this we were running into an issue because `nodemon` and the debugger were sending the same `SIGUSR2` signal to the running program, so if `nodemon` tried to restart a program containing Agency code, Agency thought we were trying to connect a debugger.
+- **`AGENCY_NO_ATTACH=1` disables debugger attachment.**
 
 ### Local models
 
-- **The image server serves Qwen-Image-Edit-2511,** an editing model: pass `images` to `generateImageLocal`. It refuses a prompt with no picture.
+- **The image server supports Qwen-Image-Edit-2511 through `generateImageLocal`.** This model requires at least one picture in `images`.
+
+### Dependencies
+
+- Upgrade smoltalk to 0.20.2 and tarsec to 0.5.6.
 
 ## Oct 26 2026 — v0.34.0
 

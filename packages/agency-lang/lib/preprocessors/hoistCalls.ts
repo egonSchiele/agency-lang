@@ -59,6 +59,7 @@ import { bodySlots } from "../utils/bodySlots.js";
 import { createKeyword } from "../types/keyword.js";
 import { chainPieces, hasUnwrap } from "../types/access.js";
 import { resultCheckCall } from "../lowering/patternLowering.js";
+import { containsUnwrap } from "../utils/node.js";
 import {
   expressionSlots,
   isRegisteredExpressionKind,
@@ -267,12 +268,30 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
       // with fixtures, not as a refactor side effect.
       return [recurseSlots(stmt, counter)];
     }
-    case "withModifier":
+    case "withModifier": {
+      // A `with` statement holding the `?` operator is rewritten INSIDE its
+      // handler region: the expansion becomes a `handle` block with the
+      // same builtin handler, so every temp and the guard stay covered by
+      // the approval the author wrote. In a runner scope `with approve`
+      // already compiles to the same runner.handle a block does.
+      if (containsUnwrap(stmt.statement)) {
+        return [
+          {
+            type: "handleBlock",
+            body: rewriteStatement(stmt.statement, counter),
+            handler: { kind: "functionRef", functionName: stmt.handlerName },
+            loc: stmt.loc,
+          } as unknown as AgencyNode,
+        ];
+      }
+      // Otherwise fully opaque, including the statement body bodySlots
+      // exposes: rewriting inside a `with` region would move work across
+      // the modifier boundary, and its single-statement slot could not
+      // hold temps anyway.
+      return [stmt];
+    }
     case "staticStatement":
-      // Fully opaque, including the statement body bodySlots exposes:
-      // rewriting inside a `with` region would move work across the
-      // modifier boundary, and `static` belongs to init-topsort. Their
-      // single-statement slot could not hold temps anyway.
+      // Fully opaque; `static` belongs to init-topsort.
       return [stmt];
     default: {
       // Slot iteration for the statement kinds the pass extracts from;

@@ -831,3 +831,56 @@ def f(): Result {
     expect(JSON.stringify(original)).toBe(snapshot);
   });
 });
+
+describe("hoistCallsInScope: the ? operator under with", () => {
+  const lowered = (src: string) => stmts(hoistCallsInScope(bodyOf(src))) as any[];
+
+  it("expands const x = foo()? with approve into a handle block", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo()? with approve
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual(["handleBlock", "returnStatement"]);
+    expect(body[0].handler).toEqual({ kind: "functionRef", functionName: "approve" });
+    expect(stmts(body[0].body).map((n: any) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+    ]);
+  });
+
+  it("keeps every temp inside the handle block: foo(bar())? with approve", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo(bar())? with approve
+  return success(x)
+}`);
+    expect(body[0].type).toBe("handleBlock");
+    const inner = stmts(body[0].body) as any[];
+    expect(inner[0]).toMatchObject({ variableName: "__hoist_0", value: { functionName: "bar" } });
+    expect(inner[1]).toMatchObject({ variableName: "__hoist_1", value: { functionName: "foo" } });
+  });
+
+  it("leaves a with statement with no unwrap untouched", () => {
+    const body = lowered(`
+def f(): Result {
+  use(target()) with approve
+  return success(1)
+}`);
+    expect(body[0].type).toBe("withModifier");
+  });
+
+  it.each(["reject", "propagate"])("preserves %s", (handlerName) => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo()? with ${handlerName}
+  return success(x)
+}`);
+    expect(body[0]).toMatchObject({
+      type: "handleBlock",
+      handler: { kind: "functionRef", functionName: handlerName },
+    });
+  });
+});

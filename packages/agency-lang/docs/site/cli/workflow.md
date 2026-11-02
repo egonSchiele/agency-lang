@@ -42,15 +42,31 @@ $ agency workflow tools ./src/agent/lists.agency
 
 ## `check`
 
-Prints the workflow's problems, or the effects it can raise:
+Prints the workflow's problems, or its warnings and the effects it can raise:
 
 ```text
 $ agency workflow check updateMealPlanFromNote
 workflows/updateMealPlanFromNote.json: no problems
-can raise:
+
+Effects this workflow can raise:
   std::read          step text (readNote)
   test::lists::add   step add (addListItems)
 ```
+
+A warning means part of the workflow can only be checked when it runs. Here, `weather` is declared to return a plain `Result`, so `check` cannot tell whether `steps.weather.temperature` exists:
+
+```text
+$ agency workflow check temperatureForZip
+workflows/temperatureForZip.json: no problems
+
+Warnings:
+  step weather doesn't have a proper return type so cannot be statically verified.
+
+Effects this workflow can raise:
+  std::weather   step weather (weather)
+```
+
+The warning appears only when a later step or the `result` uses the step's value.
 
 ```text
 $ agency workflow check broken
@@ -145,6 +161,10 @@ If your policy has a `"*"` rule, the command adds nothing and does not ask. You 
 | `--log-file`, `--observability` | Where the run's log events go, including the workflow program's own. |
 
 The other `agency run` flags are left out. `--max-time` cannot stop a run while it waits on the workflow's program, which runs in its own process, so `run` does not take it yet. To cap a workflow's time, set `limits.maxTime` in the workflow itself. `-i` needs the program to own the terminal, which a workflow run does not give it yet. A trace covers one process, and the workflow's program runs in another. The workflow's program always compiles strictly and in the sandbox, so `--strict`, `--agency-only`, and `--refuse-splices` would change nothing.
+
+## Color
+
+On a terminal, the commands color their output: the result of `check` in green, problems in red, headings in bold, and effect names in cyan. Piped output and `--json` output are plain text.
 
 ## Exit codes
 

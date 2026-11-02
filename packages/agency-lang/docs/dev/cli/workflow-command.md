@@ -61,7 +61,9 @@ A sandboxed compile records no source file on a function, and `std::workflow` re
 
 ## `run` and its policy
 
-`run` runs the driver's `wfRunNode`, which loads the workflow and calls `runWorkflow` with no handler around it. The run's policy decides each of its interrupts. It reaches the driver as a root carrier, `rootCarriers.policy`, which the runtime installs as one handler in the chain. `runPolicy.ts` builds it from three parts, per effect and in this order:
+`run` runs the driver's `wfRunNode`, which loads the workflow and calls `runWorkflow` with no handler around it. The run's policy decides each of its interrupts.
+
+The typechecker does not know about the policy, so it would warn that `wfRun` raises interrupts outside a handler (AG3009). The driver is compiled whole for every command, so the warning would print for `check`, `list`, and the rest too, whenever the project's `agency.json` turns typechecking on. It names a file in `.agency-tmp` that the person never wrote. A `// @tc-ignore AG3009` above the call silences that one warning; any other diagnostic in the driver still prints. A spawn test runs `check` in a project with typechecking on and expects nothing on standard error. It reaches the driver as a root carrier, `rootCarriers.policy`, which the runtime installs as one handler in the chain. `runPolicy.ts` builds it from three parts, per effect and in this order:
 
 1. The person's rules, unchanged. A policy's first matching rule wins, so they decide first.
 2. The start rules, from `startRules`. They approve the prompts the run node raises before the first step: `loadWorkflow`'s `std::workflow::scan`, `std::read` for each local tool module, `std::workflow::run` for this workflow, and `std::run` for node `main` at depth 1. Each value goes through `escapeGlob`, so a directory such as `/p/v*1` matches only itself.
@@ -106,6 +108,10 @@ The table, the question, and every message go to stderr, so `--json` keeps stdou
 ## JSON output
 
 `resultJson` in `commands.ts` writes every command's `--json` output from its `DriverResult`, as `{ success: true, value }` or `{ success: false, error, step }`, with `problems` when there are some. One shape means a script reads every command the same way, and the `DriverResult` kind names stay inside the code.
+
+## Color
+
+The text output in `output.ts` is colored with `ttyColor`, which colors on a terminal and prints plain text when standard output is piped. Each formatter takes the color function as its last argument, so a test can pass `color` to check the codes. `resultJson` passes `plainColor` to `formatProblems`, so the problem text in a JSON `error` never carries color codes, even on a terminal. Text from a file is cleaned with `stripControlCharacters` before it is colored, because cleaning would strip the color codes too.
 
 ## The temp folder
 

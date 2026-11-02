@@ -2,12 +2,18 @@
  * What the `agency workflow` commands print. Every piece of text that came
  * from a file goes through `stripControlCharacters`, so a docstring or a
  * workflow description cannot move the cursor or recolor the terminal.
+ *
+ * Each formatter takes the color function as its last argument. The default,
+ * `ttyColor`, colors on a terminal and prints plain text when the output is
+ * piped. Text that goes into `--json` output passes `plainColor`. Text is
+ * cleaned before it is colored, since cleaning would strip the color codes.
  */
 import type { CatalogEntry } from "../../stdlib/workflow/catalog.js";
 import type { StepEffects } from "../../stdlib/workflow/effects.js";
 import { describeProblem } from "../../stdlib/workflow/index.js";
 import type { Problem } from "../../stdlib/workflow/types.js";
 import { stripControlCharacters } from "../../utils/controlCharacters.js";
+import { type ColorFunction, ttyColor } from "../../utils/termcolors.js";
 
 const clean = stripControlCharacters;
 
@@ -20,40 +26,47 @@ function firstParagraph(text: string): string {
     .join(" ");
 }
 
-/** `name(param: type = default, ...): returns`, as the signature writes it. */
-function signatureLine(entry: CatalogEntry): string {
+/** `name(param: type = default, ...): returns`, as the signature writes it,
+ *  with the name colored. */
+function signatureLine(entry: CatalogEntry, paint: ColorFunction): string {
   const params = entry.params.map((param) => {
     const typed = param.type === null ? param.name : `${param.name}: ${param.type}`;
     return param.default === null ? typed : `${typed} = ${param.default}`;
   });
   const returns = entry.returns === null ? "" : `: ${entry.returns}`;
-  return `${entry.name}(${params.join(", ")})${returns}`;
+  return `${paint.cyan(clean(entry.name))}${clean(`(${params.join(", ")})${returns}`)}`;
 }
 
 /** A heading per module, then each tool's signature, its description's
  *  first paragraph, and what it raises. */
-export function formatCatalog(entries: CatalogEntry[]): string {
+export function formatCatalog(entries: CatalogEntry[], paint: ColorFunction = ttyColor): string {
   const modules = entries
     .map((entry) => entry.module)
     .filter((module, index, all) => all.indexOf(module) === index);
   const lines = modules.flatMap((module) => [
-    clean(module),
+    paint.bold(clean(module)),
     ...entries
       .filter((entry) => entry.module === module)
       .flatMap((entry) => [
-        `  ${clean(signatureLine(entry))}`,
+        `  ${signatureLine(entry, paint)}`,
         ...(entry.description === "" ? [] : [`    ${clean(firstParagraph(entry.description))}`]),
-        ...(entry.effects.length === 0 ? [] : [`    raises ${clean(entry.effects.join(", "))}`]),
+        ...(entry.effects.length === 0
+          ? []
+          : [`    raises ${paint.yellow(clean(entry.effects.join(", ")))}`]),
       ]),
   ]);
   return lines.join("\n");
 }
 
 /** `<label> has <n> problem(s):`, then one line each. */
-export function formatProblems(label: string, problems: Problem[]): string {
+export function formatProblems(
+  label: string,
+  problems: Problem[],
+  paint: ColorFunction = ttyColor,
+): string {
   const count = problems.length === 1 ? "1 problem" : `${problems.length} problems`;
   return [
-    `${clean(label)} has ${count}:`,
+    `${clean(label)} has ${paint.red.bold(count)}:`,
     ...problems.map((problem) => `  ${clean(describeProblem(problem))}`),
   ].join("\n");
 }
@@ -79,36 +92,59 @@ export function effectSteps(steps: StepEffects[]): EffectSteps[] {
   return byEffect;
 }
 
-/** Each effect, padded to one column, then its steps. */
-export function effectTable(list: EffectSteps[]): string[] {
-  const width = Math.max(...list.map((entry) => entry.effect.length));
+/** Each effect, padded to one column, then its steps. The padding is
+ *  worked out on the plain text, before the effect is colored. */
+export function effectTable(list: EffectSteps[], paint: ColorFunction = ttyColor): string[] {
+  const width = Math.max(...list.map((entry) => clean(entry.effect).length));
   return list.map(
     ({ effect, steps }) =>
-      `  ${clean(effect).padEnd(width)}   ${steps.map((step) => `step ${clean(step)}`).join(", ")}`,
+      `  ${paint.cyan(clean(effect).padEnd(width))}   ${steps.map((step) => `step ${clean(step)}`).join(", ")}`,
   );
 }
 
-/** `<label>: no problems`, the warnings, then what the workflow can raise. */
-export function formatChecked(label: string, warnings: Problem[], steps: StepEffects[]): string {
+/** `<label>: no problems`, then the warnings and what the workflow can
+ *  raise, each under its own heading with a blank line before it. A
+ *  warning's message is a whole sentence that names its step, so it is
+ *  printed as it is. */
+export function formatChecked(
+  label: string,
+  warnings: Problem[],
+  steps: StepEffects[],
+  paint: ColorFunction = ttyColor,
+): string {
   const raised = effectSteps(steps);
-  return [
-    `${clean(label)}: no problems`,
-    ...warnings.map((warning) => `warning: ${clean(describeProblem(warning))}`),
-    ...(raised.length === 0 ? ["can raise: nothing"] : ["can raise:", ...effectTable(raised)]),
-  ].join("\n");
+  const warningLines =
+    warnings.length === 0
+      ? []
+      : [
+          "",
+          paint.yellow.bold("Warnings:"),
+          ...warnings.map((warning) => `  ${clean(warning.message)}`),
+        ];
+  const effectLines =
+    raised.length === 0
+      ? ["", `${paint.bold("Effects this workflow can raise:")} none`]
+      : ["", paint.bold("Effects this workflow can raise:"), ...effectTable(raised, paint)];
+  return [`${clean(label)}: ${paint.green("no problems")}`, ...warningLines, ...effectLines].join(
+    "\n",
+  );
 }
 
 /** The part of a saved workflow `list` prints. */
 export type ListedWorkflow = { name: string; workflow: { inputs: string; description: string } };
 
 /** Each workflow's name and inputs, then its description. */
-export function formatList(dir: string, entries: ListedWorkflow[]): string {
+export function formatList(
+  dir: string,
+  entries: ListedWorkflow[],
+  paint: ColorFunction = ttyColor,
+): string {
   if (entries.length === 0) {
     return `no saved workflows in ${clean(dir)}/workflows`;
   }
   return entries
     .flatMap(({ name, workflow }) => [
-      `${clean(name)} ${clean(workflow.inputs)}`,
+      `${paint.cyan.bold(clean(name))} ${clean(workflow.inputs)}`,
       ...(workflow.description === "" ? [] : [`  ${clean(firstParagraph(workflow.description))}`]),
     ])
     .join("\n");
@@ -120,8 +156,11 @@ export function formatRunValue(value: unknown): string {
 }
 
 /** The effects a person's policy does not cover, before the run asks. */
-export function formatUncovered(list: EffectSteps[]): string {
-  return ["Your policy does not cover these interrupts:", ...effectTable(list)].join("\n");
+export function formatUncovered(list: EffectSteps[], paint: ColorFunction = ttyColor): string {
+  return [
+    paint.bold("Your policy does not cover these interrupts:"),
+    ...effectTable(list, paint),
+  ].join("\n");
 }
 
 /** What `run` says when it has no terminal to ask in. */

@@ -162,7 +162,7 @@ describe("the commands", () => {
     expect(calls[0].node).toBe("wfCheckNode");
     expect(calls[0].args).toEqual(["addOne", project]);
     expect(out).toEqual([
-      "workflows/addOne.json: no problems\ncan raise:\n  test::lists::add   step add (addListItems)",
+      "workflows/addOne.json: no problems\n\nEffects this workflow can raise:\n  test::lists::add   step add (addListItems)",
     ]);
   });
 

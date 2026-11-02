@@ -8,6 +8,7 @@ import {
   formatRunValue,
   formatUncovered,
 } from "./output.js";
+import { color } from "../../utils/termcolors.js";
 
 const param = (name: string, type: string | null, def: string | null = null) => ({
   name,
@@ -104,7 +105,8 @@ describe("formatChecked", () => {
     expect(formatChecked("workflows/updateMealPlanFromNote.json", [], steps)).toBe(
       [
         "workflows/updateMealPlanFromNote.json: no problems",
-        "can raise:",
+        "",
+        "Effects this workflow can raise:",
         "  std::read          step text (readNote)",
         "  test::lists::add   step add (addListItems)",
       ].join("\n"),
@@ -116,19 +118,38 @@ describe("formatChecked", () => {
       { step: "a", tool: "readNote", effects: ["std::read"] },
       { step: "b", tool: "readNote", effects: ["std::read"] },
     ];
-    const warning = { step: "a", field: "tool", message: "untyped" };
+    const warning = {
+      step: "a",
+      field: "tool",
+      message: "step a doesn't have a proper return type so cannot be statically verified.",
+    };
     expect(formatChecked("w", [warning], steps)).toBe(
       [
         "w: no problems",
-        "warning: step a, tool: untyped",
-        "can raise:",
+        "",
+        "Warnings:",
+        "  step a doesn't have a proper return type so cannot be statically verified.",
+        "",
+        "Effects this workflow can raise:",
         "  std::read   step a (readNote), step b (readNote)",
       ].join("\n"),
     );
   });
 
   it("says when a workflow raises nothing", () => {
-    expect(formatChecked("w", [], [])).toBe("w: no problems\ncan raise: nothing");
+    expect(formatChecked("w", [], [])).toBe(
+      "w: no problems\n\nEffects this workflow can raise: none",
+    );
+  });
+
+  it("colors the result, the headings, and the effects when given color", () => {
+    const steps = [{ step: "a", tool: "readNote", effects: ["std::read"] }];
+    const warning = { step: "a", field: "tool", message: "untyped" };
+    const lines = formatChecked("w", [warning], steps, color).split("\n");
+    expect(lines[0]).toBe(`w: ${color.green("no problems")}`);
+    expect(lines[2]).toBe(color.yellow.bold("Warnings:"));
+    expect(lines[5]).toBe(color.bold("Effects this workflow can raise:"));
+    expect(lines[6]).toBe(`  ${color.cyan("std::read")}   step a (readNote)`);
   });
 });
 

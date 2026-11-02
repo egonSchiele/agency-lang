@@ -212,8 +212,7 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message:
-          'step "note": "searchNotes" declares no return type, so references into its value are checked at run time',
+        message: "step note doesn't have a proper return type so cannot be statically verified.",
       },
     ]);
   });
@@ -234,8 +233,7 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message:
-          'step "note": "searchNotes" returns Json, so references into its value are checked at run time',
+        message: "step note doesn't have a proper return type so cannot be statically verified.",
       },
     ]);
   });
@@ -256,8 +254,7 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message:
-          'step "note": "searchNotes" returns Result<Json, string>, so references into its value are checked at run time',
+        message: "step note doesn't have a proper return type so cannot be statically verified.",
       },
     ]);
   });
@@ -277,8 +274,45 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message:
-          'step "note": "searchNotes" returns Result, so references into its value are checked at run time',
+        message: "step note doesn't have a proper return type so cannot be statically verified.",
+      },
+    ]);
+  });
+
+  it("does not warn on an untyped step that nothing references", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result",
+        returnType: "Result",
+        returnsResult: true,
+        docstring: null,
+        params: [],
+      },
+    };
+    const wf = withArg(mealPlan, "text", "id", "note-1");
+    expect(resolve(wf, mealRefs, signatures).resolved!.warnings).toEqual([]);
+  });
+
+  it("warns on an untyped step that only the result references", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result",
+        returnType: "Result",
+        returnsResult: true,
+        docstring: null,
+        params: [],
+      },
+    };
+    const wf = withFields(withArg(mealPlan, "text", "id", "note-1"), {
+      result: { $ref: "steps.note[0].title" },
+    });
+    expect(resolve(wf, mealRefs, signatures).resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message: "step note doesn't have a proper return type so cannot be statically verified.",
       },
     ]);
   });

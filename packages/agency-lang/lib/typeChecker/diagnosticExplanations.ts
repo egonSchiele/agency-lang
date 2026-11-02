@@ -853,6 +853,30 @@ The body of a decorated function runs as the decorator's block, so a draft saved
 
 **How to fix:** save a value of the type the decorator's block returns.`,
 
+  unwrapReturnTypeNotResult: `When the Result before a \`?\` is a failure, the operator returns that failure from the enclosing function. The function is declared to return a plain type, so a failure could never fit its declared type.
+
+**How to fix:** declare the function to return a \`Result\`, or keep the Result and unwrap it with \`match\` or \`catch\` so the function decides what to return.`,
+
+  unwrapInOpaquePosition: `The \`?\` operator becomes an early return, so the compiler moves the expression before it onto its own line as a step. It cannot do that from the right side of \`&&\`, \`||\` or \`??\`, from either side of \`catch\`, from a pipe stage, or from a \`try\` operand, because code there may not run at all.
+
+**How to fix:** write the unwrap on its own line and use the variable.`,
+
+  unwrapOutsideBody: `The \`?\` operator returns from the enclosing function. A module-level initializer and a parameter default run outside any function body, so there is nothing to return from.
+
+**How to fix:** move the unwrap into a node or a def.`,
+
+  unwrapInHandlerBody: `A handler body (\`with (intr) { ... }\`) compiles to plain code with no steps, and the \`?\` operator needs a step to return from.
+
+**How to fix:** unwrap the Result before the \`handle\` block, or \`match\` on it inside the handler.`,
+
+  unwrapInParallelArm: `Each arm of a \`parallel\` block hands its bindings back when it finishes, and the compiler reads them after the block. An arm cannot return early, so a \`?\` at its top level has nowhere to return to. Inside a block argument within the arm, \`?\` is fine, because it returns from that block.
+
+**How to fix:** move the work into a def and call it from the arm, or keep the Result in the arm and match on it after the block.`,
+
+  unwrapInAssignmentTarget: `The \`?\` operator unwraps a value you read. A write target such as \`obj?.field = 1\` would have to unwrap and then write back into a Result, which has no meaning.
+
+**How to fix:** unwrap into a variable first, then assign to the variable's field.`,
+
   unwrapNonResult: `The \`?\` operator reads a \`Result\`: it gives the success value, and if the Result is a failure it returns that failure from the enclosing function. The expression before this \`?\` is not a \`Result\`, so there is nothing to unwrap. The usual causes are a function that returns a plain value, or JavaScript-style optional chaining (\`obj?.name\`), which Agency does not have.
 
 **How to fix:** remove the \`?\` if the value is already plain. If you meant to tolerate a null, check for it with \`if\` or \`??\` instead.`,

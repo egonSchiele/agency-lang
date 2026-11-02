@@ -1,4 +1,5 @@
 import { declaredName } from "../types/hole.js";
+import { hasUnwrap } from "../types/access.js";
 import {
   AccessChainElement,
   AgencyNode,
@@ -29,6 +30,16 @@ export type WalkAncestor = AgencyNode | BlockArgument;
 
 export function isInsideBlock(ancestors: WalkAncestor[]): boolean {
   return ancestors.some((a) => a.type === "blockArgument");
+}
+
+/** True when any access chain under `node` holds the `?` operator. */
+export function containsUnwrap(node: AgencyNode): boolean {
+  for (const { node: found } of walkNodes([node])) {
+    if (found.type === "valueAccess" && hasUnwrap(found)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Unwrap a function call argument to its inner expression. */

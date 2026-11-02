@@ -3,9 +3,10 @@ import type { BinOpExpression } from "../types/binop.js";
 import { PREFIX_OPS, bindsTighterThanCast } from "../types/binop.js";
 import { typeRunsValidators } from "../backends/typescriptGenerator/validationDescriptor.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { hoistPositions, type HoistStatus } from "../preprocessors/hoistPositions.js";
+import { hoistPositions } from "../preprocessors/hoistPositions.js";
 import { expressionToString } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
+import { positionRefusals } from "./positionRefusals.js";
 import type { TypeCheckerContext } from "./types.js";
 
 const isBinOp = (node: AgencyNode): node is BinOpExpression => node.type === "binOpExpression";
@@ -28,18 +29,27 @@ export function checkCastPositions(ctx: TypeCheckerContext): void {
     .filter(isBinOp)
     .filter(hasMisgroupedCast);
 
-  const castsThatCanPause = (status: HoistStatus): CastExpression[] =>
-    positions
-      .filter((position) => position.status === status)
-      .map((position) => position.node)
-      .filter(isCast)
-      .filter((cast) => cast.checked && typeRunsValidators(cast.targetType, aliases));
+  const isCastThatCanPause = (node: AgencyNode): node is CastExpression =>
+    isCast(node) && node.checked && typeRunsValidators(node.targetType, aliases);
 
+  // A handler body never pauses and the pass never rewrites one, so moving
+  // the cast to its own line inside the handler would not help; AG1020 says
+  // to do the cast before the `handle` block. The broader question of what
+  // any pausing Agency call does in a handler body stays open; a cast is
+  // refused because a `@validate` tag on a type declared elsewhere hides the
+  // interrupt that a call shows in the source.
   ctx.errors.push(
     ...misgrouped.map(refusedPositionDiagnostic),
-    ...castsThatCanPause("stuck").map(moveToOwnLineDiagnostic),
-    ...castsThatCanPause("outsideBodies").map(cannotRunHereDiagnostic),
-    ...castsThatCanPause("handlerBody").map(cannotPauseInHandlerDiagnostic),
+    ...positionRefusals(
+      positions,
+      isCastThatCanPause,
+      {
+        stuck: "castCanPauseInOpaquePosition",
+        outsideBodies: "castCanPauseOutsideBody",
+        handlerBody: "castCanPauseInHandlerBody",
+      },
+      (cast) => ({ cast: expressionToString(cast) }),
+    ),
   );
 }
 
@@ -52,33 +62,4 @@ function refusedPositionDiagnostic(node: BinOpExpression) {
     type: formatTypeHint(cast.targetType),
   };
   return diagnostic("castRefusedPosition", params, cast.loc ?? node.loc ?? null);
-}
-
-function moveToOwnLineDiagnostic(cast: CastExpression) {
-  return diagnostic(
-    "castCanPauseInOpaquePosition",
-    { cast: expressionToString(cast) },
-    cast.loc ?? null,
-  );
-}
-
-/** A handler body never pauses and the pass never rewrites one, so moving
- *  the cast to its own line inside the handler would not help. The broader
- *  question of what any pausing Agency call does in a handler body stays
- *  open; a cast is refused because a `@validate` tag on a type declared
- *  elsewhere hides the interrupt that a call shows in the source. */
-function cannotPauseInHandlerDiagnostic(cast: CastExpression) {
-  return diagnostic(
-    "castCanPauseInHandlerBody",
-    { cast: expressionToString(cast) },
-    cast.loc ?? null,
-  );
-}
-
-function cannotRunHereDiagnostic(cast: CastExpression) {
-  return diagnostic(
-    "castCanPauseOutsideBody",
-    { cast: expressionToString(cast) },
-    cast.loc ?? null,
-  );
 }

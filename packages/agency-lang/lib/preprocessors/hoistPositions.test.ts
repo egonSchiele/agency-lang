@@ -31,6 +31,12 @@ const PROGRAMS: [string, string][] = [
   ],
 ];
 
+// The model says liftable; the pass learns the `with` expansion in a later
+// commit, so this program is skipped until then.
+const PENDING_PASS_SUPPORT: [string, string][] = [
+  ["an unwrap under with", "const r = use(target())? with approve"],
+];
+
 // Statements the type checker sees before desugaring, and the pass sees after.
 const DESUGARED_FIRST: [string, string][] = [
   [
@@ -111,6 +117,12 @@ describe("hoistPositions agrees with the hoist pass", () => {
 
     const lifted = liftedTarget(hoistCallsInProgram(asThePassSeesIt(program)));
     expect(status === "liftable").toBe(lifted);
+  });
+
+  it.skip.each(PENDING_PASS_SUPPORT)("%s", (_name, line) => {
+    const program = parsed(`node main() {\n  ${line}\n}\n`);
+    expect(statusOf(asTheCheckerSeesIt(program))).toBe("liftable");
+    expect(liftedTarget(hoistCallsInProgram(asThePassSeesIt(program)))).toBe(true);
   });
 
   // Liftable, and still not lifted: the tail of a statement is its own step.

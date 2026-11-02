@@ -2,6 +2,7 @@ import type { AgencyNode } from "../types.js";
 import { bodySlots, type BodySlot } from "../utils/bodySlots.js";
 import { expressionSlots } from "../utils/expressionSlots.js";
 import { EXTRACTING_STATEMENT_KINDS } from "./hoistCalls.js";
+import { containsUnwrap } from "../utils/node.js";
 
 /** - "liftable": the pass lifts a call or checked cast out of here.
  *  - "stuck": inside a body the pass rewrites, in a position it leaves
@@ -108,6 +109,11 @@ function bodyStatus(owner: AgencyNode, slot: BodySlot, status: HoistStatus): Hoi
     return "handlerBody";
   }
   // `with` and `static`: fully opaque, including the statement they wrap.
+  // Except a `with` statement holding the `?` operator: the pass rewrites
+  // that one inside a `handle` block, so its positions stay liftable.
+  if (owner.type === "withModifier" && containsUnwrap(owner.statement)) {
+    return status;
+  }
   if (slot.single && status === "liftable") {
     return "stuck";
   }

@@ -1,0 +1,76 @@
+def parseName(text: string): Result<string> {
+  if (text == "") {
+    return failure("empty", { code: 7 })
+  }
+  return success(text)
+}
+
+def half(n: number): Result<number> {
+  if (n % 2 != 0) {
+    return failure("odd")
+  }
+  return success(n / 2)
+}
+
+def box(n: number): Result<{ n: number }> {
+  return success({ n: n })
+}
+
+def wrap(text: string): Result<string> {
+  const name = parseName(text)?
+  return success("never ${name}")
+}
+
+def direct(text: string): Result<string> {
+  return success(parseName(text)?)
+}
+
+def halfOfBoxed(n: number): Result<number> {
+  return success(half(box(n)?.n)?)
+}
+
+node successValue() {
+  const name = parseName("bob")?
+  return name
+}
+
+node failureReturned() {
+  const result = wrap("")
+  if (result is failure(error)) {
+    return "failed: ${error}"
+  }
+  return "did not fail"
+}
+
+node failureKeepsData() {
+  const result = wrap("")
+  if (result is failure) {
+    return "${result.data.code}"
+  }
+  return "did not fail"
+}
+
+node chain() {
+  const result = halfOfBoxed(4)
+  if (result is success(value)) {
+    return "${value}"
+  }
+  return "failed"
+}
+
+node blockReturn() {
+  const results = map([1, 2]) as n {
+    return half(n)?
+  }
+  const first = if (results[0] is failure) then "failure" else "success"
+  const second = if (results[1] is failure) then "failure" else "success"
+  return "${first},${second}"
+}
+
+node returnPosition() {
+  const result = direct("bob")
+  if (result is success(value)) {
+    return value
+  }
+  return "failed"
+}

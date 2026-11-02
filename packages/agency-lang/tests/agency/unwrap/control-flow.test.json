@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "nodeName": "whileCondition",
+      "input": "",
+      "expectedOutput": "\"odd\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? in a while condition returns from the def on the failing pass"
+    },
+    {
+      "nodeName": "ifCondition",
+      "input": "",
+      "expectedOutput": "\"yes\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? in an if condition"
+    },
+    {
+      "nodeName": "forIterable",
+      "input": "",
+      "expectedOutput": "\"abab\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? in a for iterable"
+    },
+    {
+      "nodeName": "argumentPosition",
+      "input": "",
+      "expectedOutput": "\"2\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? in an argument position"
+    },
+    {
+      "nodeName": "nestedHandle",
+      "input": "",
+      "expectedOutput": "\"3\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? inside a handle block inside a for loop"
+    },
+    {
+      "nodeName": "blockInsideParallel",
+      "input": "",
+      "expectedOutput": "\"1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? inside a block argument inside a parallel arm returns from the block"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "nodeName": "successValue",
+      "input": "",
+      "expectedOutput": "\"bob\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? on a success gives the value"
+    },
+    {
+      "nodeName": "failureReturned",
+      "input": "",
+      "expectedOutput": "\"failed: empty\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? on a failure returns it from the enclosing def"
+    },
+    {
+      "nodeName": "failureKeepsData",
+      "input": "",
+      "expectedOutput": "\"7\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The returned failure is the original object, data included"
+    },
+    {
+      "nodeName": "chain",
+      "input": "",
+      "expectedOutput": "\"2\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? chains through a property access and a second call"
+    },
+    {
+      "nodeName": "blockReturn",
+      "input": "",
+      "expectedOutput": "\"failure,success\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Inside a block argument, ? returns the failure from the block"
+    },
+    {
+      "nodeName": "returnPosition",
+      "input": "",
+      "expectedOutput": "\"bob\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? inside a return value hoists the operand"
+    }
+  ]
+}

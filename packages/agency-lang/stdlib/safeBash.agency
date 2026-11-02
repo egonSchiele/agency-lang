@@ -22,6 +22,7 @@ import {
   grepExecution,
   readEffect,
   lsEffect,
+  LsPayload,
   globEffect,
   execEffect,
   ExecPayload,
@@ -46,6 +47,7 @@ import { _addLine } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn } from "agency-lang/stdlib-lib/shell.js"
+import { basename as lastSegment, dirname as parentOf } from "std::path"
 import { _grepPatternToRegex } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _ignoredFromAbove } from "agency-lang/stdlib-lib/gitignore.js"
 
@@ -1454,41 +1456,94 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
   return try _searchTargetIn(text, cwd, tildeModeFor(word))
 }
 
-@capabilities(fileRead)
-def resolveDirPath(text: string, word: Word, cwd: string, subject: string): Result<string> {
-  """
-  A path a command lists, resolved to its real folder. A file is refused
-  because the listing payload names a folder. `subject` names the lister
-  in the message.
-  """
-  const target = resolveTarget(text, word, cwd)
-  if (isFailure(target)) {
-    return target
-  }
-  if (target.value.file != null) {
-    return failure("${subject} of a file is not a listing")
-  }
-  return success(target.value.dir)
+/** A listing's path, resolved, with whether its last step is a symlink. */
+type ListTarget = {
+  target: PathTarget;
+  linked: boolean
 }
 
 @capabilities(fileRead)
-def resolveDirs(verb: string, words: Word[], cwd: string): Result<string[]> {
+def resolveTargets(verb: string, words: Word[], cwd: string): Result<ListTarget[]> {
   """
-  The real folders a listing names, each literal and each a folder.
+  The paths a listing or a find names, each literal, resolved to its real
+  location, and paired with whether its last step is a link. What to do
+  about a file or a link is each verb's decision, in `listingOf` and
+  `findFolders`.
   """
-  let dirs: string[] = []
+  let out: ListTarget[] = []
   for (word in words) {
     const text = literalWordText(word)
     if (text is failure(why)) {
       return failure("the ${verb} path is not literal")
     }
-    const dir = resolveDirPath(text.value, word, cwd, verb)
-    if (isFailure(dir)) {
-      return dir
+    const target = resolveTarget(text.value, word, cwd)
+    if (isFailure(target)) {
+      return target
     }
-    dirs.push(dir.value)
+    const linked = lastStepIsLink(target.value, cwd)
+    if (isFailure(linked)) {
+      return linked
+    }
+    out.push({ target: target.value, linked: linked.value })
   }
-  return success(dirs)
+  return success(out)
+}
+
+/** Last segments that can never be a link: `.`, `..`, and the empty one
+ * of `/`. `.` is also what a listing with no path lists. */
+static const UNLINKED_SEGMENTS: string[] = [".", "..", ""]
+
+@capabilities(fileRead)
+def lastStepIsLink(target: PathTarget, cwd: string): Result<boolean> {
+  """
+  Whether the path as written ends in a symlink. The resolver follows
+  every link, so the path's last step was a link exactly when its last
+  segment differs from the real one, or its parent's real folder differs
+  from the real parent. A link earlier in the path is fine: both sides
+  are realpathed through it. Decides nothing about verbs.
+  """
+  const written = lastSegment(target.argument)
+  if (UNLINKED_SEGMENTS.includes(written)) {
+    return success(false)
+  }
+  if (written != realLastSegment(target)) {
+    return success(true)
+  }
+  // `argument` already has its `~` expanded, so the literal mode is right,
+  // as in readGrep's lookup of ".".
+  const parent = try _searchTargetIn(parentOf(target.argument), cwd, "literal")
+  if (isFailure(parent)) {
+    return parent
+  }
+  return success(parent.value.dir != realParent(target))
+}
+
+/** The real path's last segment: the file's name, or the folder's own. */
+def realLastSegment(target: PathTarget): string {
+  const file = target.file
+  if (file != null) {
+    return file
+  }
+  return lastSegment(target.dir)
+}
+
+/** The real path's parent folder. */
+def realParent(target: PathTarget): string {
+  if (target.file != null) {
+    return target.dir
+  }
+  return parentOf(target.dir)
+}
+
+def requireFolder(verb: string, target: PathTarget): Result<string> {
+  """
+  The real folder a listing or a find names, or a failure for a file.
+  The one place this refusal is written.
+  """
+  if (target.file != null) {
+    return failure("${verb} of a file is not a listing")
+  }
+  return success(target.dir)
 }
 
 def checkCountFlags(split: SplitArgs, countFlags: string[]): Result {
@@ -1507,13 +1562,19 @@ def checkCountFlags(split: SplitArgs, countFlags: string[]): Result {
 /** Whether a listing walks the tree always, or only when given -R. */
 export type ListWalk = "always" | "withR"
 
+/** What a listing verb does with a path that names a file: list the
+ * folder that holds it, or refuse. */
+export type FileArgument = "folder" | "refuse"
+
 /** A verb that lists directories: its flags, which valued flags hold a
  * count, and whether it walks the tree. */
 export type ListVerb = {
   flags: FlagSpec;
   /** The valued flags whose value must be digits, such as `-L` on tree. */
   countFlags: string[];
-  recursive: ListWalk
+  recursive: ListWalk;
+  /** What a file given to the verb asks: its folder, or nothing. */
+  files: FileArgument
 }
 
 /** The verbs that list the folders they name, or `.` when they name
@@ -1522,22 +1583,28 @@ export type ListVerb = {
  * on macOS, no group column on GNU). tree is not on macOS by default;
  * the line is recognized and the shell reports it missing. A recursive
  * listing through bash shows the entries under `.git` and `node_modules`
- * that the ls tool's walk leaves out, and no file's contents. */
+ * that the ls tool's walk leaves out, and no file's contents. Given a
+ * file, ls prints that one entry and du that one file's size, so both
+ * ask for the folder that holds it, with no walk even though du always
+ * walks a folder. tree prints the name and an error, so it refuses. */
 export static const LIST_VERBS: Record<string, ListVerb> = {
   ls: {
     flags: { plain: ["l", "a", "A", "h", "1", "t", "r", "S", "R", "d", "p", "F", "--color=never"], valued: [], optionsFirst: true },
     countFlags: [],
-    recursive: "withR"
+    recursive: "withR",
+    files: "folder"
   },
   tree: {
     flags: { plain: ["a", "d", "--noreport"], valued: ["L", "I"], optionsFirst: true },
     countFlags: ["L"],
-    recursive: "always"
+    recursive: "always",
+    files: "refuse"
   },
   du: {
     flags: { plain: ["s", "h", "a", "c"], valued: ["d"], optionsFirst: true },
     countFlags: ["d"],
-    recursive: "always"
+    recursive: "always",
+    files: "folder"
   }
 }
 
@@ -1588,7 +1655,11 @@ def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Resul
   if (leadingPositionals(command) != positionals.length) {
     return failure("find takes its paths before its tests")
   }
-  const dirs = resolveDirs("find", positionals, cwd)
+  const entries = resolveTargets("find", positionals, cwd)
+  if (isFailure(entries)) {
+    return entries
+  }
+  const dirs = findFolders("find", entries.value)
   if (isFailure(dirs)) {
     return dirs
   }
@@ -1634,8 +1705,10 @@ static const CURRENT_DIR_WORD: Word = { tag: "literal", text: "." }
 @capabilities(fileRead)
 def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVerb, redirects: Effect[]): Result<Effect[]> {
   """
-  A listing asks std::ls for each folder it names, as the ls tool does.
-  A listing ignores its stdin, so a pipe into it changes nothing.
+  A listing asks std::ls for each folder it names, as the ls tool does,
+  and for the folder that holds each file it names when its row allows
+  it, one question per folder. A listing ignores its stdin, so a pipe
+  into it changes nothing.
   """
   const split = splitFlags(verb, command, spec.flags)
   if (isFailure(split)) {
@@ -1647,13 +1720,107 @@ def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVer
   }
   const named = split.value.positionals
   const words: Word[] = if (named.length == 0) then [CURRENT_DIR_WORD] else named
-  const dirs = resolveDirs(verb, words, cwd)
-  if (isFailure(dirs)) {
-    return dirs
+  const entries = resolveTargets(verb, words, cwd)
+  if (isFailure(entries)) {
+    return entries
   }
-  const recursive = spec.recursive == "always" || split.value.plain.includes("R")
-  const listings = [lsEffect({ dir: dir, recursive: recursive, maxResults: 0 }) for dir in dirs.value]
+  const walk = spec.recursive == "always" || split.value.plain.includes("R")
+  const follows = followsFolderLink(verb, split.value)
+  let payloads: LsPayload[] = []
+  for (entry in entries.value) {
+    const payload = listingOf(verb, spec, entry, walk, follows)
+    if (isFailure(payload)) {
+      return payload
+    }
+    payloads.push(payload.value)
+  }
+  const listings = [lsEffect(payload) for payload in mergeListings(payloads)]
   return success([...listings, ...redirects])
+}
+
+/** The ls flags under which a folder link given as an operand is printed
+ * as itself instead of followed. POSIX: a symbolic link to a directory
+ * given as an operand is followed unless -F, -d, or -l is given. */
+static const LS_LINK_FLAGS: string[] = ["l", "d", "F"]
+
+def followsFolderLink(verb: string, split: SplitArgs): boolean {
+  """
+  Whether the program lists what a folder link operand points to. Only
+  ls does, and only without -l, -d, or -F. du and tree follow a link
+  operand only under -H, -L, or -l, and none of those is in their rows.
+  """
+  const printsLink = [flag for flag in LS_LINK_FLAGS if split.plain.includes(flag)]
+  return verb == "ls" && printsLink.length == 0
+}
+
+def listingOf(verb: string, spec: ListVerb, entry: ListTarget, walk: boolean, follows: boolean): Result<LsPayload> {
+  """
+  One path's std::ls payload. A path whose last step is a link is refused
+  when the program prints the link itself: always for a file, and for a
+  folder unless the program follows it. A file under a `folder` row is
+  its folder with no walk; one under a `refuse` row is refused.
+  """
+  const target = entry.target
+  if (entry.linked && (target.file != null || !follows)) {
+    return failure("${verb} of a symlink is not described")
+  }
+  if (spec.files == "refuse" || target.file == null) {
+    return match(requireFolder(verb, target)) {
+      success(dir) => success({ dir: dir, recursive: walk, maxResults: 0 })
+      failure(why) => failure(why)
+    }
+  }
+  return success({ dir: target.dir, recursive: false, maxResults: 0 })
+}
+
+def mergeListings(payloads: LsPayload[]): LsPayload[] {
+  """
+  One payload per folder, in order of first appearance. A folder named
+  twice is recursive if either path walks it: a walk covers a look at
+  one entry. `ls -R . .` and `ls one.txt two.txt` ask once.
+  """
+  let out: LsPayload[] = []
+  for (payload in payloads) {
+    const seen = [kept for kept in out if kept.dir == payload.dir]
+    if (seen.length > 0) {
+      out = [widened(kept, payload) for kept in out]
+    } else {
+      out.push(payload)
+    }
+  }
+  return out
+}
+
+/** `kept`, recursive if `extra` walks the same folder. */
+def widened(kept: LsPayload, extra: LsPayload): LsPayload {
+  if (kept.dir != extra.dir) {
+    return kept
+  }
+  return {
+    dir: kept.dir,
+    recursive: kept.recursive || extra.recursive,
+    maxResults: kept.maxResults
+  }
+}
+
+def findFolders(verb: string, entries: ListTarget[]): Result<string[]> {
+  """
+  The real folders a find searches. find never follows a link operand
+  without -H or -L, which the ordering rule refuses, so a linked path is
+  refused, and a file is refused by `requireFolder`.
+  """
+  let dirs: string[] = []
+  for (entry in entries) {
+    if (entry.linked) {
+      return failure("${verb} of a symlink is not described")
+    }
+    const dir = requireFolder(verb, entry.target)
+    if (isFailure(dir)) {
+      return dir
+    }
+    dirs.push(dir.value)
+  }
+  return success(dirs)
 }
 
 @capabilities(fileRead)

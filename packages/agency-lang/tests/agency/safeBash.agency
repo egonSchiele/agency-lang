@@ -1302,6 +1302,16 @@ node listingsAskStdLs() {
     grepNames("tree -L x ."),
     grepNames("ls $D"),
     grepNames("ls *.txt"),
+    grepNames("ls -la one.txt"),
+    grepNames("ls one.txt two.txt"),
+    grepNames("ls one.txt .."),
+    grepNames("du -sh one.txt"),
+    grepNames("tree one.txt"),
+    grepNames("ls -R . ."),
+    // ls prints "Not a directory" for a file with a trailing slash. The
+    // resolver accepts the path, so this asks std::ls for the folder,
+    // which names more than runs: safe, and not a gap.
+    grepNames("ls one.txt/"),
   ]
 }
 
@@ -1325,7 +1335,28 @@ def lsPayloads(source: string): any {
 }
 
 node lsPayloadFields() {
-  return [lsPayloads("ls"), lsPayloads("ls -R ."), lsPayloads("tree ."), lsPayloads("du -s .")]
+  return [
+    lsPayloads("ls"),
+    lsPayloads("ls -R ."),
+    lsPayloads("tree ."),
+    lsPayloads("du -s ."),
+    lsPayloads("ls -R one.txt"),
+    lsPayloads("du one.txt"),
+    lsPayloads("ls -R . one.txt"),
+  ]
+}
+
+/** The folders the std::ls effects of a plan name, joined with `,`. A
+ * string, so a row compares with `==`, which is not structural for two
+ * arrays. */
+def lsDirs(source: string, cwd: string): string {
+  let dirs: string[] = []
+  for (effect in planFor(source, cwd).effects) {
+    if (effect.name == "std::ls") {
+      dirs.push(effect.payload.dir)
+    }
+  }
+  return dirs.join(",")
 }
 
 /** A folder of its own for the listing symlink test. */
@@ -1365,6 +1396,8 @@ node listingUnderRecommendedNeedsNoPrompt() {
 }
 
 node listingOutsideTheLaunchDirIsUndecided() {
+  // /etc is a link on macOS, but plain ls follows a folder link operand,
+  // so the payload names /private/etc and stays a std::ls question.
   const plan = planFor("ls /etc", FIXTURES)
   for (effect in plan.effects) {
     if (effect.name == "std::ls") {
@@ -1458,7 +1491,9 @@ node findUnderRecommendedNeedsNoPrompt() {
 }
 
 node findOutsideTheLaunchDirIsUndecided() {
-  const plan = planFor("find /etc -name hosts", FIXTURES)
+  // Not /etc: on macOS /etc is a link to /private/etc, and find does not
+  // follow a link operand, so `find /etc` is refused. /usr is not a link.
+  const plan = planFor("find /usr -name ls", FIXTURES)
   for (effect in plan.effects) {
     if (effect.name == "std::glob") {
       const intr = { effect: effect.name, data: effect.payload }
@@ -1575,4 +1610,37 @@ node programUnderASavedRuleRuns() {
     return checkPolicy(NODE_VERSION_POLICY, intr)
   }
   return ran
+}
+
+
+/** A folder of its own for the linked-path listing test. */
+static const LS_FILE_LINK_FIXTURE = __dirname + "/stdlib/__safebash_ls_file_link__"
+
+node listingOfALinkedFileIsRefused() {
+  remove(LS_FILE_LINK_FIXTURE) with approve
+  mkdir(LS_FILE_LINK_FIXTURE) with approve
+  bash("mkdir inside outside && echo hi > outside/target.txt && echo hi > inside/plain.txt && ln -s ../outside/target.txt inside/link.txt && ln -s plain.txt inside/alias.txt && ln -s ../outside inside/dirlink", cwd: LS_FILE_LINK_FIXTURE) with approve
+  const inside = LS_FILE_LINK_FIXTURE + "/inside"
+  const outside = LS_FILE_LINK_FIXTURE + "/outside"
+  const linked = planFor("ls -l link.txt", inside).broadReason
+  const aliased = planFor("ls -l alias.txt", inside).broadReason
+  const bareLinked = planFor("ls link.txt", inside).broadReason
+  const dirLinked = planFor("ls -l dirlink", inside).broadReason
+  const duLinked = planFor("du dirlink", inside).broadReason
+  const foundLinked = planFor("find dirlink -name x", inside).broadReason
+  const followed = lsDirs("ls dirlink", inside)
+  const walked = lsDirs("ls -R dirlink", inside)
+  const plain = lsDirs("ls -l plain.txt", inside)
+  remove(LS_FILE_LINK_FIXTURE) with approve
+  return [linked, aliased, bareLinked, dirLinked, duLinked, foundLinked, followed == outside, walked == outside, plain == inside]
+}
+
+node listingOfAFileAsksOneQuestion() {
+  // One std::ls question for the folder that holds the file, approved by
+  // the test file. A std::bash prompt would fail the run.
+  const result = safeBash("ls -la one.txt", cwd: FIXTURES)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.includes("one.txt")
 }

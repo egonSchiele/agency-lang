@@ -973,9 +973,9 @@
     },
     {
       "nodeName": "listingsAskStdLs",
-      "description": "ls, tree, and du ask std::ls for each folder they list, . when none is named. A file, a flag the table does not list, a late flag, a count that is not a number, or a path that is not literal asks std::bash. A listing ignores its stdin.",
+      "description": "ls, tree, and du ask std::ls for each folder they list, . when none is named. A file, a flag the table does not list, a late flag, a count that is not a number, or a path that is not literal asks std::bash. A listing ignores its stdin. A file given to ls or du asks for the folder that holds it, one question per folder.",
       "input": "",
-      "expectedOutput": "[[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\",\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::git::log\",\"std::ls\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls of a file is not a listing\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls does not take `-L`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of ls\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls does not take `--color=always`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-L` is not a number\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the ls path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the ls path is not literal\"}]]",
+      "expectedOutput": "[[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\",\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::git::log\",\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls does not take `-L`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of ls\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"ls does not take `--color=always`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-L` is not a number\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the ls path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the ls path is not literal\"}],[[\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::ls\",\"std::ls\"],null],[[\"std::ls\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tree of a file is not a listing\"}],[[\"std::ls\"],null],[[\"std::ls\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -995,9 +995,9 @@
     },
     {
       "nodeName": "lsPayloadFields",
-      "description": "The std::ls payload names the real folder and says whether the listing walks the tree: ls only with -R, tree and du always.",
+      "description": "The std::ls payload names the real folder and says whether the listing walks the tree: ls only with -R, tree and du always. A file is its folder with no walk, even under -R or du, and a folder named twice is one payload, recursive if either path walks.",
       "input": "",
-      "expectedOutput": "[[[true,false]],[[true,true]],[[true,true]],[[true,true]]]",
+      "expectedOutput": "[[[true,false]],[[true,true]],[[true,true]],[[true,true]],[[true,false]],[[true,false]],[[true,true]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1187,6 +1187,34 @@
       "description": "The rule approve always here saves for a program, keyed on command and subcommand, also runs that program's bash spelling with no prompt.",
       "input": "",
       "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingOfALinkedFileIsRefused",
+      "description": "A path whose last step is a link is refused when the program would print the link itself: a file link under any flag, and a folder link under ls -l, du, or find. Plain ls and ls -R follow a folder link, so they keep a std::ls naming the target, and a plain file names its own folder.",
+      "input": "",
+      "expectedOutput": "[{\"kind\":\"unrecognized\",\"detail\":\"ls of a symlink is not described\"},{\"kind\":\"unrecognized\",\"detail\":\"ls of a symlink is not described\"},{\"kind\":\"unrecognized\",\"detail\":\"ls of a symlink is not described\"},{\"kind\":\"unrecognized\",\"detail\":\"ls of a symlink is not described\"},{\"kind\":\"unrecognized\",\"detail\":\"du of a symlink is not described\"},{\"kind\":\"unrecognized\",\"detail\":\"find of a symlink is not described\"},true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingOfAFileAsksOneQuestion",
+      "description": "ls of a file asks one std::ls question for its folder and no shell question.",
+      "input": "",
+      "expectedOutput": "true",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to list this directory?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"

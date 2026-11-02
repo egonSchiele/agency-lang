@@ -28,7 +28,7 @@ import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { isPlatformDiagnostic } from "@/typeChecker/platformCheck.js";
-import { isUnwrapRefusal } from "@/typeChecker/unwrapChecks.js";
+import { unwrapRefusals } from "@/typeChecker/unwrapChecks.js";
 import type { TypeCheckError } from "@/typeChecker/types.js";
 import {
   agencyImportTargets,
@@ -463,6 +463,7 @@ export class BuildSession {
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
     const info = buildCompilationUnit(liftedProgram, symbolTable, absoluteInputFile, contents);
     checkDecoratorsOrExit(liftedProgram, info, absoluteInputFile);
+    checkUnwrapsOrExit(liftedProgram);
     const compilationUnitEndTime = performance.now();
     logTime({
       label: `Built compilation unit for ${absoluteInputFile}`,
@@ -656,6 +657,16 @@ function checkDecoratorsOrExit(
   process.exit(1);
 }
 
+/** AG1021 to AG1025 run whether or not the type checker is on. Each marks a
+ *  `?` the hoist pass would leave in place, and codegen throws on one, so
+ *  the check has to happen here, like the decorator check above. */
+function checkUnwrapsOrExit(program: AgencyProgram): void {
+  const errors = unwrapRefusals(program.nodes);
+  if (errors.length === 0) return;
+  console.error(formatErrors(errors));
+  process.exit(1);
+}
+
 function runTypecheck(
   liftedProgram: AgencyProgram,
   config: AgencyConfig,
@@ -672,9 +683,11 @@ function runTypecheck(
   if (!checkerAsked && !platformAsked) return;
   const tcStartTime = performance.now();
   const found = typeCheck(liftedProgram, config, info).errors;
-  // Two kinds of diagnostic are reported and fatal in every mode: the
-  // platform one, and the `?` refusals that keep an unwrap out of codegen.
-  const alwaysFatal = (e: TypeCheckError) => isPlatformDiagnostic(e) || isUnwrapRefusal(e);
+  // Fatal whichever mode the checker is in: the platform diagnostic, and a
+  // `?` on a value that is not a Result, which would fail at runtime inside
+  // the generated `.value` read with a message that never mentions the `?`.
+  const alwaysFatal = (e: TypeCheckError) =>
+    isPlatformDiagnostic(e) || e.name === "unwrapNonResult";
   const errors = checkerAsked ? found : found.filter(alwaysFatal);
   const tcEndTime = performance.now();
   logTime({

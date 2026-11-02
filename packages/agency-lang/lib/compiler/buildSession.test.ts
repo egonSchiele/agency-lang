@@ -42,6 +42,36 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("the ? refusals run with the type checker off", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("a ? on the right of && exits with AG1021, never the codegen tripwire", () => {
+    const dir = writeTempDir({
+      "gate.agency":
+        "def g(): Result<number> {\n  return success(1)\n}\n\ndef f(): Result<number> {\n  const r = true && g()?\n  return success(r)\n}\n\nnode main() {\n  return f()\n}\n",
+    });
+    const printed: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      printed.push(args.map(String).join(" "));
+    });
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit");
+    }) as never);
+    const session = createBuildSession();
+    expect(() =>
+      session.compile(
+        { typechecker: { enabled: false } },
+        { entries: [path.join(dir, "gate.agency")], quiet: true },
+      ),
+    ).toThrow("exit");
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(printed.join("\n")).toContain("AG1021");
+    expect(printed.join("\n")).not.toContain("toolchain bug");
+  });
+});
+
 describe("createBuildSession", () => {
   test("compiles a single file and returns the output path", () => {
     const dir = writeTempDir({ "main.agency": TRIVIAL });

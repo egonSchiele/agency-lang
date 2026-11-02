@@ -136,7 +136,7 @@ const name = fetchUser(id)?.profile()?.displayName
 
 Each `?` checks the Result before it, and the first failure ends the function.
 
-Two rules follow from what `?` does. The function that uses it must be declared to return a `Result`, since a failure may come out of it. And the thing before `?` must be a `Result`; `?` on a plain value is a compile error.
+Two rules follow from what `?` does. The function that uses it must be declared to return a `Result`, since a failure may come out of it. And the thing before `?` must be a `Result`; `?` on a plain value is a type error.
 
 `?` passes the failure through unchanged. If you want to add a message, keep the Result and match on it:
 

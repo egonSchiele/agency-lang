@@ -942,7 +942,7 @@ def quarter(n: number): Result<number> {
 }
 ```
 
-`?` chains: `fetchUser(id)?.profile()?.displayName` stops at the first failure. Use `?` only on a `Result`; on a plain value it is a compile error.
+`?` chains: `fetchUser(id)?.profile()?.displayName` stops at the first failure. Use `?` only on a `Result`; on a plain value it is a type error.
 
 ## State isolation
 

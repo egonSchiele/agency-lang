@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allCodes, errorsWithCode } from "./castTestUtils.js";
-import { isUnwrapRefusal } from "./unwrapChecks.js";
+import { isUnwrapRefusal, unwrapRefusals } from "./unwrapChecks.js";
+import { parseAgency } from "../parser.js";
 import type { TypeCheckError } from "./types.js";
 
 const PRELUDE = `
@@ -90,6 +91,12 @@ describe("AG1021: positions the hoist pass cannot lower", () => {
     // expressionToString prints string literals without quotes.
     expect(error.message).toContain("`parseName(x)?` cannot be lowered");
   });
+
+  it("the message stops at the first ? when the chain continues", () => {
+    const [error] = errorsWithCode(inMain(`  const r = a && parseName("x")?.length`), "AG1021");
+    expect(error.message).toContain("`parseName(x)?` cannot be lowered");
+    expect(error.message).toContain("`const value = parseName(x)?`");
+  });
 });
 
 describe("AG1022: outside every body", () => {
@@ -133,6 +140,29 @@ describe("AG1024: a parallel arm", () => {
 describe("AG1025: an assignment target", () => {
   it("refuses obj?.field = 1", () => {
     expect(count(inMain(`  let o: any = {}\n  o?.field = 1`), "AG1025")).toBe(1);
+  });
+});
+
+describe("unwrapRefusals runs on the bare tree, so the compile path can call it with the checker off", () => {
+  it("reports AG1021 for a ? on the right of && without any type information", () => {
+    const parsed = parseAgency(
+      `def g(): Result<number> {\n  return success(1)\n}\n\ndef f(): Result<number> {\n  const r = true && g()?\n  return success(r)\n}\n`,
+      {},
+      false,
+    );
+    if (!parsed.success) throw new Error(parsed.message);
+    const codes = unwrapRefusals(parsed.result.nodes).map((error) => error.code);
+    expect(codes).toEqual(["AG1021"]);
+  });
+
+  it("reports nothing for a ? on its own line", () => {
+    const parsed = parseAgency(
+      `def g(): Result<number> {\n  return success(1)\n}\n\ndef f(): Result<number> {\n  const r = g()?\n  return success(r)\n}\n`,
+      {},
+      false,
+    );
+    if (!parsed.success) throw new Error(parsed.message);
+    expect(unwrapRefusals(parsed.result.nodes)).toEqual([]);
   });
 });
 

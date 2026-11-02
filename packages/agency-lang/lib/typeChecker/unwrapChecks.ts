@@ -9,11 +9,11 @@ import { positionRefusals } from "./positionRefusals.js";
 import { ANY_T } from "./primitives.js";
 import type { ScopeInfo, TypeCheckError, TypeCheckerContext } from "./types.js";
 
-/** The refusals that stand between a `?` and the codegen tripwire. The
- *  compile path treats them as fatal whether or not the type checker is in
- *  strict mode, the way it treats the platform diagnostic, because a
- *  warning here would let compilation run on into the throw. */
-const CODEGEN_GUARD_REFUSALS: string[] = [
+/** The names of the refusals `unwrapRefusals` reports. They stand between a
+ *  `?` and the codegen tripwire, so the compile path runs them and exits on
+ *  one whether or not the type checker is on (`checkUnwrapsOrExit` in
+ *  `buildSession.ts`). */
+export const CODEGEN_GUARD_REFUSALS: string[] = [
   "unwrapInOpaquePosition",
   "unwrapOutsideBody",
   "unwrapInHandlerBody",
@@ -28,10 +28,10 @@ export function isUnwrapRefusal(error: TypeCheckError): boolean {
 const isUnwrapAccess = (node: AgencyNode): node is ValueAccess =>
   node.type === "valueAccess" && hasUnwrap(node);
 
-/** The access printed without its trailing `?`, so a message can say `{expr}?`. */
+/** The access printed up to its first `?`, so a message can say `{expr}?`. */
 function operandText(access: ValueAccess): string {
-  const last = access.chain[access.chain.length - 1];
-  const chain = last && isUnwrapElement(last) ? access.chain.slice(0, -1) : access.chain;
+  const firstUnwrap = access.chain.findIndex(isUnwrapElement);
+  const chain = firstUnwrap === -1 ? access.chain : access.chain.slice(0, firstUnwrap);
   return expressionToString({ ...access, chain });
 }
 
@@ -46,10 +46,19 @@ const RESULT_OF_ANY = { type: "resultType" as const, successType: ANY_T, dataTyp
  * early (AG1024), and in a write target (AG1025).
  */
 export function checkUnwraps(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
-  const positions = hoistPositions(ctx.programNodes);
   ctx.errors.push(
+    ...unwrapRefusals(ctx.programNodes),
+    ...scopes.flatMap((scope) => returnTypeRefusals(scope, ctx)),
+  );
+}
+
+/** The refusals that need no types, only the tree: AG1021 to AG1025. The
+ *  compile path calls this before codegen even when the type checker is off,
+ *  because each one marks a `?` the hoist pass would leave for the tripwire. */
+export function unwrapRefusals(programNodes: AgencyNode[]): TypeCheckError[] {
+  return [
     ...positionRefusals(
-      positions,
+      hoistPositions(programNodes),
       isUnwrapAccess,
       {
         stuck: "unwrapInOpaquePosition",
@@ -58,10 +67,9 @@ export function checkUnwraps(scopes: ScopeInfo[], ctx: TypeCheckerContext): void
       },
       (access) => ({ expr: operandText(access) }),
     ),
-    ...scopes.flatMap((scope) => returnTypeRefusals(scope, ctx)),
-    ...parallelArmRefusals(ctx.programNodes),
-    ...assignmentTargetRefusals(ctx.programNodes),
-  );
+    ...parallelArmRefusals(programNodes),
+    ...assignmentTargetRefusals(programNodes),
+  ];
 }
 
 /** Every `?` under `nodes`, with the ancestors it was found under. */

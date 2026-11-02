@@ -39,8 +39,8 @@ ternary written without a space (`cond? a : b`) has been consumed, so
 `ternaryRefusal` also tries the ` a : b` tail directly. Both spellings give
 the "Agency has no ternary" message.
 
-Optional chaining (`a?.b`, `a?.[0]`, `a?.(x)`) was removed when `?` was
-added. Old code that used it on a plain object is caught by AG2023 below.
+Agency has no optional chaining (`a?.b`, `a?.[0]`, `a?.(x)`). Code that
+uses it on a plain object is caught by AG2023 below.
 
 ## What it does
 
@@ -136,10 +136,18 @@ access-chain statement that holds one extracts from its own expressions, and
 a `with` statement that holds one keeps its positions liftable. The agreement
 test in `hoistPositions.test.ts` runs the real pass over both programs.
 
-AG1021 to AG1025 are fatal in every mode, like the platform diagnostic
-(`isUnwrapRefusal`, read by `buildSession.ts`). Type errors are warnings
-unless `typechecker.strict` is set, and a warning here would let compilation
-run on into the throw below.
+AG1021 to AG1025 need no types, only the tree, so `unwrapRefusals` reports
+them and the compile path runs it before codegen whether or not the type
+checker is on (`checkUnwrapsOrExit` in `lib/compiler/buildSession.ts`, beside
+the decorator check that exists for the same reason). One of them exits the
+compile. The type checker is off by default, and even when it is on its
+errors are warnings unless `typechecker.strict` is set; either way a `?` the
+pass would leave in place must never reach codegen.
+
+AG2023 and AG2024 need types, so they run only with the checker. AG2023 is
+fatal in every checker mode: a `?` on a plain value would otherwise fail at
+runtime inside the generated `.value` read with a message that never mentions
+the `?`.
 
 `async f()?` is AG2023: the value is a pending handle, and the lowering would
 drop the `async`.

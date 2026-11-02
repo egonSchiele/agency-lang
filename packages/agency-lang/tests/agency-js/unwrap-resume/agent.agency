@@ -1,0 +1,20 @@
+import { bump, bumpCount } from "./counter.js"
+
+effect test::gate { n: number }
+
+def ask(n: number): Result<number> {
+  bump()
+  raise test::gate("ok?", { n: n })
+  return success(n)
+}
+
+export node paused(): Result<string> {
+  const v = ask(6)?
+  return success("got ${v}")
+}
+
+export node pausedTwice(): Result<string> {
+  const a = ask(1)?
+  const b = ask(2)?
+  return success("got ${a} and ${b}")
+}

@@ -1,0 +1,13 @@
+{
+  "firstInterrupted": true,
+  "firstEffect": "test::gate",
+  "approvedValue": "got 6",
+  "approvedBumps": 1,
+  "rejectedIsFailure": true,
+  "rejectedMessageHasReason": true,
+  "rejectedFlag": true,
+  "rejectedBumps": 1,
+  "secondInterruptN": 2,
+  "twiceValue": "got 1 and 2",
+  "twiceBumps": 2
+}

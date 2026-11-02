@@ -1,5 +1,38 @@
+## Nov 2 2026 — v0.36.0
+
+### Breaking
+
+- **Optional chaining is gone.** `a?.b` now means "unwrap the Result `a`, and return the value from the function if it is a failure, else read `.b`". This is similar to how Rust works. Old `obj?.name` code on a plain object is a compile error (AG2023).
+- **`setPolicy` raises `std::write` before it saves a policy file.** Programs that call it now need a handler that approves the write, such as `with approve`.
+
+### Language
+
+- **New `?` operator, like Rust's.** `const parsed = readJsonFile(path)?` gives you the value of a successful Result, or returns the failure from the enclosing function right away.
+- **`try f()?` now reads as `(try f())?`,** so you no longer need parentheses to unwrap a `try`.
+
+### Standard Library
+
+- **78 stdlib functions that raise interrupts now declare a `raises` clause,** and CI checks that every `raises` clause in the stdlib is correct.
+- **Docstrings across all 96 stdlib modules were rewritten.** Tool descriptions are about a third shorter, and setup notes and examples moved to the reference docs.
+
+### Agent
+
+- **The agent reads your own instructions from `~/.agency-agent/AGENTS.md` in every project.** Project `AGENTS.md` and `CLAUDE.md` files still take precedence.
+- **File writes show their full, syntax-highlighted contents above the approval prompt.**
+- **Todo lists render correctly when the model sends `done` and `active` flags,** instead of falling back to raw JSON.
+- **The agent offers only one search tool,** preferring Brave over Tavily when both API keys are set.
+- **Fixed a deprecation warning at startup on Node 26.**
+
+### CLI
+
+- **`agency workflow` output uses color on a terminal.** `check` prints its warnings and effects under headings, and lists effects in a table.
+- **`agency workflow check` only warns about a step's Result when a later step actually uses its value.**
+- **`agency doc` renders doc comments on exported constants, and shows each param's `@param` description in the parameter table.**
+
 ## Nov 1 2026 — v0.35.0
+
 This is a jam-packed release with lots and lots of improvements. The major highlights are:
+
 - New "workflows" feature that lets you define a workflow as JSON. The JSON can then get compiled into agency code. This lets you build simple agents using a GUI instead of having to write code.
 - Many, many improvements to the agency agent. The most noticeable ones will be that the agent responds way faster, and tool calls are rendered much more nicely. I have removed the review step from the researcher agent and the expert step from the coding agent, and made similar changes across all the sub-agents for the agency agent. This was done based on an eval which clearly showed that features like the reviewer only had a negative impact on the agent. It made the agent take a lot longer, two minutes versus ten minutes for example, and cost a lot more money as well. The eval didn't have any cases for checking whether the agent is returning false information, which is where the reviewer step would actually be useful, so it's possible that this will be worth adding back in the future, but for now, please enjoy the way speedier responses from the agent.
 - Lots and lots of updates to Safe Bash. Safe Bash can handle a lot more cases now. We also decided that when possible, Safe Bash will use an agency function, instead of running the Bash command directly. This will make things safer and more predictable across different environments. So for example, any Bash command that Safe Bash knows about that reads a file will now go to the built-in agency `read` tool.
@@ -135,7 +168,7 @@ The full list of changes follows:
 
 ### CLI
 
-- **`agency skills`** can be used to list, show, and install the `debug-run` and `debug-logs` skills for any coding agent. 
+- **`agency skills`** can be used to list, show, and install the `debug-run` and `debug-logs` skills for any coding agent.
 
 ### Evals
 
@@ -159,7 +192,7 @@ The full list of changes follows:
 - **The call stack is read from the checkpoint,** so it is correct after a rewind and inside a tool call.
 - **Responding to a batch of interrupts.** Users can respond to more than one interrupt.
 - **Edit a paused program.** At a stop you can send the model a message from the threads pane, change a local, remove a tool, change or disarm a guard's budget, or give a branch its result. `Ctrl+K` lists every edit you can make.
-- **`agency debug session` lets an agent drive a debugger.** 
+- **`agency debug session` lets an agent drive a debugger.**
 - **`agency debug` takes the run flags** (`--policy`, `--max-cost`, `--model`, and the rest)
 
 ### Runtime

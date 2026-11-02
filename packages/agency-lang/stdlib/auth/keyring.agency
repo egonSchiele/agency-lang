@@ -31,7 +31,7 @@ effect std::getSecret { key: string, service: string }
 effect std::deleteSecret { key: string, service: string }
 
 @capabilities(subprocess)
-export def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
+export def setSecret(key: string, value: string, service: string = "agency-lang"): Result raises <std::setSecret> {
   """
   Store a secret in the system keyring, replacing any existing value.
 
@@ -50,7 +50,7 @@ export def setSecret(key: string, value: string, service: string = "agency-lang"
 }
 
 @capabilities(subprocess)
-export def getSecret(key: string, service: string = "agency-lang"): Result {
+export def getSecret(key: string, service: string = "agency-lang"): Result raises <std::getSecret> {
   """
   Retrieve a secret from the system keyring, or null when it is missing.
 
@@ -66,7 +66,7 @@ export def getSecret(key: string, service: string = "agency-lang"): Result {
 }
 
 @capabilities(subprocess)
-export def deleteSecret(key: string, service: string = "agency-lang"): Result {
+export def deleteSecret(key: string, service: string = "agency-lang"): Result raises <std::deleteSecret> {
   """
   Delete a secret from the system keyring, returning whether it existed.
 

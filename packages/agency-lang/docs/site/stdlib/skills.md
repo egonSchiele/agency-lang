@@ -205,7 +205,7 @@ skillsDir(
   dir: string,
   layout: "flat" | "standard" = "standard",
   name: string = "",
-)
+) raises <std::skills::skillsDir>
 ```
 
 Build a tool that lets an LLM list and read skills from a directory.
@@ -507,7 +507,7 @@ Read a prompt file packaged with the stdlib agents.
 ### commandsDir
 
 ```ts
-commandsDir(dir: string): SkillCommand[]
+commandsDir(dir: string): SkillCommand[] raises <std::skills::commandsDir>
 ```
 
 Load slash-command templates from Markdown files directly under a directory.

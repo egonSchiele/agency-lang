@@ -65,7 +65,7 @@ sendWithResend(
   apiKey: string = "",
   allowList: string[] = [],
   blockList: string[] = [],
-): Result
+): Result raises <std::sendEmail>
 ```
 
 Send an email through Resend.
@@ -111,7 +111,7 @@ sendWithSendGrid(
   apiKey: string = "",
   allowList: string[] = [],
   blockList: string[] = [],
-): Result
+): Result raises <std::sendEmail>
 ```
 
 Send an email through SendGrid.
@@ -159,7 +159,7 @@ sendWithMailgun(
   region: string = "",
   allowList: string[] = [],
   blockList: string[] = [],
-): Result
+): Result raises <std::sendEmail>
 ```
 
 Send an email through Mailgun.

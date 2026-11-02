@@ -66,7 +66,7 @@ export def todoList(): Todo[] {
 
 /** Use this for user input in terminal, hosted, or embedded runs.
 A handler can answer with `approve("reply")`. */
-export def question(prompt: string): string {
+export def question(prompt: string): string raises <std::question> {
   """
   Ask the user for information needed to continue and wait for their reply.
   Use it for facts only the user can provide. Do not ask for anything you can

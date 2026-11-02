@@ -217,7 +217,7 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
 effect std::llm::registerProvider { path: string }
 
 @capabilities(fileRead)
-export def registerProviderModule(path: string): Result {
+export def registerProviderModule(path: string): Result raises <std::llm::registerProvider> {
   """
   Load a provider module by path at runtime and register its custom provider
   for llm() calls. The module must export register({ registerProvider }).
@@ -294,7 +294,7 @@ individual fields. Hosted-tool metadata also merges. The returned count is
 for this file, not the accumulated catalog.
 */
 @capabilities(fileRead)
-export def loadModelData(path: string): Result<number> {
+export def loadModelData(path: string): Result<number> raises <std::read> {
   """
   Load a model-data JSON file into the catalog and return its model count.
 

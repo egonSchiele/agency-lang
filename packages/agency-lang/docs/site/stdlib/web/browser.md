@@ -46,7 +46,7 @@ browserUse(
   timeout: number = 0,
   apiKey: string = "",
   allowedDomains: string[] = [],
-): Result
+): Result raises <std::browserUse>
 ```
 
 Run a browser automation task described in plain language through Browser Use.

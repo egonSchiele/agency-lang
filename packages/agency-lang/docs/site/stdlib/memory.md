@@ -151,7 +151,7 @@ Return the memory scope, or "default" when no scope is set or memory is disabled
 ### enableMemory
 
 ```ts
-enableMemory(config: MemoryConfig)
+enableMemory(config: MemoryConfig) raises <std::memory::enableMemory>
 ```
 
 Enable persistent memory for the current execution branch.
@@ -178,7 +178,7 @@ The storage directory is created when the store first writes data.
 ### disableMemory
 
 ```ts
-disableMemory()
+disableMemory() raises <std::memory::disableMemory>
 ```
 
 Remove the current branch's most recently enabled memory configuration.
@@ -225,7 +225,7 @@ approval, so the caller decides when to expose it.
 ### remember
 
 ```ts
-remember(content: string)
+remember(content: string) raises <std::memory::remember>
 ```
 
 Extract facts from text and persist them to memory.
@@ -246,7 +246,7 @@ Extract facts from text and persist them to memory.
 ### recall
 
 ```ts
-recall(query: string): string
+recall(query: string): string raises <std::memory::recall>
 ```
 
 Retrieve relevant stored facts as text for a question or topic.
@@ -269,7 +269,7 @@ Retrieve relevant stored facts as text for a question or topic.
 ### forget
 
 ```ts
-forget(query: string)
+forget(query: string) raises <std::memory::forget>
 ```
 
 Stop recalling facts that match a natural-language description.

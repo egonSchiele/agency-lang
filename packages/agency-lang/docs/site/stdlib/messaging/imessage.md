@@ -40,7 +40,7 @@ sendIMessage(
   message: string,
   allowList: string[] = [],
   blockList: string[] = [],
-): Result
+): Result raises <std::sendIMessage>
 ```
 
 Send an iMessage through the macOS Messages app.

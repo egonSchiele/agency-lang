@@ -97,7 +97,7 @@ authorize(
   scopes: string,
   port: number = 8914,
   extraAuthParams: string = "",
-): Result
+): Result raises <std::authorize>
 ```
 
 Open the browser to authorize an API provider and save its OAuth tokens.
@@ -130,7 +130,7 @@ Register the callback `http://127.0.0.1:8914/oauth/callback` with your
 ### getAccessToken
 
 ```ts
-getAccessToken(name: string): Result
+getAccessToken(name: string): Result raises <std::getAccessToken>
 ```
 
 Get an access token for an authorized provider, refreshing it when needed.
@@ -175,7 +175,7 @@ Check whether OAuth tokens are stored for a provider, without verifying their va
 ### revokeAuth
 
 ```ts
-revokeAuth(name: string): Result
+revokeAuth(name: string): Result raises <std::revokeAuth>
 ```
 
 Delete the locally stored OAuth tokens for a provider.

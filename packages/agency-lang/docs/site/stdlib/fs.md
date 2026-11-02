@@ -102,7 +102,7 @@ edit(
   edits: Edit[],
   dir: string = ".",
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::edit>
 ```
 
 Apply text replacements in order, writing only if every edit succeeds.
@@ -135,7 +135,10 @@ The `std::edit` interrupt carries the full `before` and `after` file contents
 ### applyPatch
 
 ```ts
-applyPatch(patch: string, allowedPaths: string[] = []): Result
+applyPatch(
+  patch: string,
+  allowedPaths: string[] = [],
+): Result raises <std::applyPatch>
 ```
 
 Apply a unified diff to files, including file creation.
@@ -163,7 +166,7 @@ mkdir(
   dir: string,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::mkdir>
 ```
 
 Create a directory and any missing parents. Succeeds if it already exists.
@@ -192,7 +195,7 @@ copy(
   dest: string,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::copy>
 ```
 
 Copy a file or directory recursively.
@@ -222,7 +225,7 @@ move(
   dest: string,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::move>
 ```
 
 Move or rename a file or directory.
@@ -251,7 +254,7 @@ remove(
   target: string,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::remove>
 ```
 
 Delete a file or directory recursively. Succeeds if the target is missing.

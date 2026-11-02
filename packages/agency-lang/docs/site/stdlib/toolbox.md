@@ -235,7 +235,9 @@ effect std::toolbox::save {
 ### listTools
 
 ```ts
-listTools(dir: string = "~/.agency-agent/tools"): Result<ToolEntry[]>
+listTools(
+  dir: string = "~/.agency-agent/tools",
+): Result<ToolEntry[]> raises <std::toolbox::scan, std::ls>
 ```
 
 List saved tools and their metadata, marking unreadable or invalid entries as broken.

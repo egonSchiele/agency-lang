@@ -61,7 +61,7 @@ effect std::deleteEvent { eventId: string, calendarId: string }
   possible. Use that module directly for custom scopes or callback ports.
 */
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def authorizeCalendar(clientId: string, clientSecret: string): Result {
+export def authorizeCalendar(clientId: string, clientSecret: string): Result raises <std::authorizeCalendar> {
   """
   Open the browser to authorize Google Calendar access.
 
@@ -84,7 +84,7 @@ export def isCalendarAuthorized(): boolean {
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: string = "", query: string = "", calendarId: string = "primary"): Result {
+export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: string = "", query: string = "", calendarId: string = "primary"): Result raises <std::listEvents> {
   """
   List Google Calendar events in start-time order.
 
@@ -113,7 +113,7 @@ export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: st
   May 10 alone uses start `"2026-05-10"` and end `"2026-05-11"`.
 */
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
+export def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result raises <std::createEvent> {
   """
   Create a Google Calendar event.
 
@@ -142,7 +142,7 @@ export def createEvent(summary: string, start: string, end: string, description:
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
+export def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result raises <std::updateEvent> {
   """
   Update the supplied fields of a Google Calendar event, leaving empty fields unchanged.
 
@@ -172,7 +172,7 @@ export def updateEvent(eventId: string, summary: string = "", start: string = ""
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
+export def deleteEvent(eventId: string, calendarId: string = "primary"): Result raises <std::deleteEvent> {
   """
   Delete a Google Calendar event.
 

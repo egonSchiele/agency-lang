@@ -95,7 +95,7 @@ readTextBlocks(
   path: string,
   language: string = "",
   fast: boolean = false,
-): Result<TextBlock[]>
+): Result<TextBlock[]> raises <std::ocr>
 ```
 
 Read text from an image with confidence scores and bounding boxes.
@@ -154,7 +154,7 @@ readTextWithModel(
   model: string = "",
   provider: string = "",
   prompt: string = "",
-): Result<string>
+): Result<string> raises <std::ocrCloud>
 ```
 
 Send an image to a vision model to transcribe its text. The result may contain

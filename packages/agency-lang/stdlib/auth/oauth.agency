@@ -58,7 +58,7 @@ effect std::revokeAuth { name: string }
   browser. Authorize again if credentials expire without a refresh token.
 */
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 8914, extraAuthParams: string = ""): Result {
+export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 8914, extraAuthParams: string = ""): Result raises <std::authorize> {
   """
   Open the browser to authorize an API provider and save its OAuth tokens.
 
@@ -93,7 +93,7 @@ export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: 
   token has no refresh token. In those cases, authorize the provider again.
 */
 @capabilities(fileRead, fileWrite, network, subprocess, env)
-export def getAccessToken(name: string): Result {
+export def getAccessToken(name: string): Result raises <std::getAccessToken> {
   """
   Get an access token for an authorized provider, refreshing it when needed.
 
@@ -121,7 +121,7 @@ export def isAuthorized(name: string): boolean {
   the tokens remotely. Authorize again before using the provider locally.
 */
 @capabilities(fileRead, fileWrite)
-export def revokeAuth(name: string): Result {
+export def revokeAuth(name: string): Result raises <std::revokeAuth> {
   """
   Delete the locally stored OAuth tokens for a provider.
 

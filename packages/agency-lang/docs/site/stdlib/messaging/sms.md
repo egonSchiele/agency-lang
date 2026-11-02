@@ -44,7 +44,7 @@ sendSms(
   authToken: string = "",
   allowList: string[] = [],
   blockList: string[] = [],
-): Result
+): Result raises <std::sendSms>
 ```
 
 Send an SMS text message through Twilio.

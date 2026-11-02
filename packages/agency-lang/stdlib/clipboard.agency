@@ -16,7 +16,7 @@ effect std::clipboardCopy {}
 effect std::clipboardPaste {}
 
 @capabilities(subprocess)
-export def copy(text: string) {
+export def copy(text: string) raises <std::clipboardCopy> {
   """
   Copy text to the system clipboard.
   """
@@ -28,7 +28,7 @@ export def copy(text: string) {
 }
 
 @capabilities(subprocess)
-export def paste(): string {
+export def paste(): string raises <std::clipboardPaste> {
   """
   Read text from the system clipboard.
   """

@@ -41,7 +41,7 @@ effect std::wikipedia::summary { title: string }
 effect std::wikipedia::article { title: string }
 
 @capabilities(network)
-export def search(query: string, limit: number = 5): WikiSearchResult[] {
+export def search(query: string, limit: number = 5): WikiSearchResult[] raises <std::wikipedia::search> {
   """
   Find English Wikipedia articles matching a search query.
   """
@@ -54,7 +54,7 @@ export def search(query: string, limit: number = 5): WikiSearchResult[] {
 }
 
 @capabilities(network)
-export def summary(title: string): WikiSummary {
+export def summary(title: string): WikiSummary raises <std::wikipedia::summary> {
   """
   Read the introductory summary of a Wikipedia article.
 
@@ -68,7 +68,7 @@ export def summary(title: string): WikiSummary {
 }
 
 @capabilities(network)
-export def article(title: string): WikiArticle {
+export def article(title: string): WikiArticle raises <std::wikipedia::article> {
   """
   Read the full plain text of a Wikipedia article.
 

@@ -24,7 +24,7 @@ effect std::sendIMessage { to: string }
 
 /** Only works on macOS with Messages.app signed in to iMessage. No API key required. */
 @capabilities(subprocess)
-export def sendIMessage(to: string, message: string, allowList: string[] = [], blockList: string[] = []): Result {
+export def sendIMessage(to: string, message: string, allowList: string[] = [], blockList: string[] = []): Result raises <std::sendIMessage> {
   """
   Send an iMessage through the macOS Messages app.
 

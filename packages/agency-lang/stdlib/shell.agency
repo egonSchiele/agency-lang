@@ -93,7 +93,7 @@ export def exec(
   blockedCommands: string[] = [],
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): ExecResult {
+): ExecResult raises <std::exec> {
   """
 
   Run an executable with separate arguments and no shell expansion.
@@ -158,7 +158,7 @@ export def bash(
   blockedCommands: string[] = [],
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): ExecResult {
+): ExecResult raises <std::bash> {
   """
 
   Run a bash command with pipes, redirects, and globbing.
@@ -212,7 +212,7 @@ export idempotent def ls(
   maxResults: number = 1000,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result {
+): Result raises <std::ls> {
   """
   List directory entries, optionally including subdirectories. A recursive
   listing skips node_modules, .git, dist, build, .next, and .cache.
@@ -264,7 +264,7 @@ export idempotent def grep(
   filesOnly: boolean = false,
   invert: boolean = false,
   respectGitignore: boolean = true,
-): Result {
+): Result raises <std::grep> {
   """
   Search a file or directory recursively with a JavaScript regular expression.
   A directory search skips node_modules, .git, dist, build, .next, and .cache.
@@ -324,7 +324,7 @@ export idempotent def glob(
   maxResults: number = 500,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result {
+): Result raises <std::glob> {
   """
   Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
 

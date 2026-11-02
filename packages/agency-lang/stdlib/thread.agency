@@ -240,7 +240,7 @@ export def handBack(message: string) {
 effect std::viewFile { dir: string, filename: string }
 
 @capabilities(fileRead)
-export def viewFile(path: string): Result<string> {
+export def viewFile(path: string): Result<string> raises <std::viewFile> {
   """
   Show an image or PDF file to yourself. The file is attached to the
   message that follows this tool result. Only works when called as a

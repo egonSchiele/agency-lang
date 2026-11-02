@@ -351,7 +351,7 @@ Return the first provider in `order` whose API-key environment variable
 ### registerProviderModule
 
 ```ts
-registerProviderModule(path: string): Result
+registerProviderModule(path: string): Result raises <std::llm::registerProvider>
 ```
 
 Load a provider module by path at runtime and register its custom provider
@@ -428,7 +428,7 @@ answer means the catalog has no information; it does not prove incompatibility.
 ### loadModelData
 
 ```ts
-loadModelData(path: string): Result<number>
+loadModelData(path: string): Result<number> raises <std::read>
 ```
 
 Load a model-data JSON file into the catalog and return its model count.

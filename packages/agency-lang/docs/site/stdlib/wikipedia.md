@@ -57,7 +57,10 @@ effect std::wikipedia::article {
 ### search
 
 ```ts
-search(query: string, limit: number = 5): WikiSearchResult[]
+search(
+  query: string,
+  limit: number = 5,
+): WikiSearchResult[] raises <std::wikipedia::search>
 ```
 
 Find English Wikipedia articles matching a search query.
@@ -80,7 +83,7 @@ Find English Wikipedia articles matching a search query.
 ### summary
 
 ```ts
-summary(title: string): WikiSummary
+summary(title: string): WikiSummary raises <std::wikipedia::summary>
 ```
 
 Read the introductory summary of a Wikipedia article.
@@ -102,7 +105,7 @@ Read the introductory summary of a Wikipedia article.
 ### article
 
 ```ts
-article(title: string): WikiArticle
+article(title: string): WikiArticle raises <std::wikipedia::article>
 ```
 
 Read the full plain text of a Wikipedia article.

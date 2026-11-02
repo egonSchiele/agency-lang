@@ -230,17 +230,14 @@ __stack.locals.noBounds = __stack.locals.arr.slice();
 __stack.locals.negativeStart = __stack.locals.arr.slice(-2);
         });
         await runner.step(7, __run, async (runner, __run) => {
-__stack.locals.optionalSlice = __stack.locals.arr?.slice(1, 3);
-        });
-        await runner.step(8, __run, async (runner, __run) => {
 __stack.locals.str = `hello`;
         });
-        await runner.step(9, __run, async (runner, __run) => {
+        await runner.step(8, __run, async (runner, __run) => {
 __stack.locals.stringSlice = __stack.locals.str.slice(1, 3);
         });
       })
       if (runner.halted) return runner.haltResult;
-      await runner.hook(10, __run, async (__run) => {
+      await runner.hook(9, __run, async (__run) => {
 await callHook(__run, {
           name: "onNodeEnd",
           data: {
@@ -332,4 +329,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"slice.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":4,"col":2},"5":{"line":5,"col":2},"6":{"line":6,"col":2},"7":{"line":7,"col":2},"8":{"line":8,"col":2},"9":{"line":9,"col":2}}};
+export const __sourceMap = {"slice.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":4,"col":2},"5":{"line":5,"col":2},"6":{"line":6,"col":2},"7":{"line":7,"col":2},"8":{"line":8,"col":2}}};

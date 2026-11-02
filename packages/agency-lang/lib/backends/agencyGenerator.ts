@@ -2213,24 +2213,20 @@ export class AgencyGenerator {
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {
-    const dot = node.optional ? "?." : ".";
     switch (node.kind) {
       case "property":
-        return `${dot}${node.name}`;
-      case "index": {
-        const inner = this.processNode(node.index).trim();
-        return node.optional ? `?.[${inner}]` : `[${inner}]`;
-      }
+        return `.${node.name}`;
+      case "index":
+        return `[${this.processNode(node.index).trim()}]`;
       case "slice": {
         const start = node.start ? this.processNode(node.start).trim() : "";
         const end = node.end ? this.processNode(node.end).trim() : "";
-        const inner = `${start}:${end}`;
-        return node.optional ? `?.[${inner}]` : `[${inner}]`;
+        return `[${start}:${end}]`;
       }
       case "methodCall":
-        return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
+        return `.${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       case "call":
-        return `${node.optional ? "?." : ""}${this.renderArgList(node.arguments, node.block, node.argumentTrivia)}`;
+        return this.renderArgList(node.arguments, node.block, node.argumentTrivia);
       default:
         throw new Error(`Unknown access chain element kind: ${(node as any).kind}`);
     }

@@ -298,13 +298,29 @@ const raisesRule: Rule = ({ workflow, signatures }) => {
 
 const RULES: Rule[] = [toolRule, referenceRule, collisionRule, raisesRule];
 
+/** The ids of the steps some step field or the result references. */
+function referencedSteps(workflow: Workflow): string[] {
+  const values = [
+    ...workflow.steps.flatMap((step) => stepFields(step).map(([, value]) => value)),
+    workflow.result,
+  ];
+  return values.flatMap(refsIn).flatMap((ref) => {
+    const resolved = resolveRef(ref.$ref);
+    return resolved.kind === "step" ? [resolved.step] : [];
+  });
+}
+
+/** A warning for each tool step whose return type says nothing about its
+ *  value, when something references that value. A step nothing references
+ *  has nothing to check, so it gets no warning. */
 function untypedWarnings({ workflow, signatures }: Context): Problem[] {
+  const referenced = referencedSteps(workflow);
   return toolSteps(workflow).flatMap((step) => {
     const returnType = signatures[signatureKey(step.module, step.tool)].returnType;
-    if (!UNTYPED.includes(valueType(returnType))) {
+    if (!UNTYPED.includes(valueType(returnType)) || !referenced.includes(step.id)) {
       return [];
     }
-    const message = `step "${step.id}": "${step.tool}" ${untypedReason(returnType)}, so references into its value are checked at run time`;
+    const message = `${step.tool} ${untypedReason(returnType)}, so a reference into its value is checked only when the workflow runs`;
     return [{ step: step.id, field: "tool", message }];
   });
 }

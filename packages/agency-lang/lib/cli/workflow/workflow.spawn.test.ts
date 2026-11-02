@@ -157,8 +157,46 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     expect(r.stderr).toBe("");
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("workflows/addOne.json: no problems");
-    expect(r.stdout).toMatch(/test::lists::add\s+step add \(addListItems\)/);
+    expect(r.stdout).toMatch(/test::lists::add\s+add\s+addListItems/);
     noDriverLeft();
+  });
+
+  it("check prints no typechecker warning about the driver when the project turns typechecking on", async () => {
+    // Its own project, since an agency.json in the shared one would change
+    // every other test.
+    const typechecked = makeAgencyTempDir("wf-spawn-tc");
+    try {
+      mkdirSync(path.join(typechecked, "workflows"));
+      writeFileSync(
+        path.join(typechecked, "agency.json"),
+        JSON.stringify({ typechecker: { enabled: true } }),
+      );
+      writeFileSync(
+        path.join(typechecked, "workflows", "roundIt.json"),
+        JSON.stringify({
+          workflow: {
+            format: 1,
+            name: "roundIt",
+            description: "Round a number.",
+            inputs: "{ n: number }",
+            steps: [
+              {
+                id: "rounded",
+                kind: "tool",
+                module: "std::math",
+                tool: "round",
+                args: { num: { $ref: "inputs.n" } },
+              },
+            ],
+          },
+        }),
+      );
+      const r = await runCli(typechecked, ["check", "roundIt"]);
+      expect(r.stderr).toBe("");
+      expect(r.code).toBe(0);
+    } finally {
+      rmSync(typechecked, { recursive: true, force: true });
+    }
   });
 
   it("check leaves a compiled .js beside each tool, as agency run does", async () => {
@@ -182,8 +220,8 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
   it("list names both saved workflows", async () => {
     const r = await runCli(project, ["list"]);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("addOne { noteTitle: string }");
-    expect(r.stdout).toContain("broken { noteTitle: string }");
+    expect(r.stdout).toContain("addOne(noteTitle: string)");
+    expect(r.stdout).toContain("broken(noteTitle: string)");
     noDriverLeft();
   });
 
@@ -209,7 +247,7 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     it("runs nothing without a terminal when the policy does not cover an effect", async () => {
       const r = await runAddOne();
       expect(r.code).toBe(1);
-      expect(r.stderr).toMatch(/test::lists::add\s+step add \(addListItems\)/);
+      expect(r.stderr).toMatch(/test::lists::add\s+add\s+addListItems/);
       expect(r.stderr).toContain("Run this in a terminal to approve them");
       expect(r.stdout).toBe("");
       noDriverLeft();

@@ -15,6 +15,7 @@ import { stepEffects } from "../../stdlib/workflow/effects.js";
 import { parseWorkflow } from "../../stdlib/workflow/parse.js";
 import { isObject, type Problem, type Workflow } from "../../stdlib/workflow/types.js";
 import { stripControlCharacters } from "../../utils/controlCharacters.js";
+import { plainColor } from "../../utils/termcolors.js";
 import { DRIVER_NODES } from "./driver.js";
 import { locateWorkflow, type WorkflowFile } from "./locate.js";
 import {
@@ -140,7 +141,7 @@ export function resultJson(result: DriverResult, label: string): string {
       case "problems":
         return {
           success: false,
-          error: formatProblems(label, result.problems),
+          error: formatProblems(label, result.problems, plainColor),
           step: null,
           problems: result.problems,
         };

@@ -69,6 +69,8 @@ A sandboxed compile records no source file on a function, and `std::workflow` re
 
 Then a `"*"` rule rejects everything else.
 
+The typechecker does not know about the policy, so it would warn that `wfRun` raises interrupts outside a handler (AG3009). The driver is compiled whole for every command, so in a project whose `agency.json` turns typechecking on, `check`, `list`, and the rest would all print that warning, naming a file in `.agency-tmp` the person never wrote. A `// @tc-ignore AG3009` above the call silences that one warning. Any other diagnostic in the driver still prints.
+
 The start rules come after the person's rules because "a policy approves exactly what it says". A person whose policy rejects every read has said so, and the run stops at the check. Putting the start rules first would quietly approve reads they rejected.
 
 Each start rule spells its data the way the prompt does. `loadWorkflow` names the real folder (`_realDir`), so the scan rule uses `fs.realpathSync`. `read` names the real root and the path below it, so the CLI asks `prepareContainedPath` for the same answer. `runWorkflow` names `path.resolve(dir)` with no realpath. On macOS a temp folder under `/var` is really under `/private/var`, so the wrong spelling fails there and passes on Linux.
@@ -106,6 +108,12 @@ The table, the question, and every message go to stderr, so `--json` keeps stdou
 ## JSON output
 
 `resultJson` in `commands.ts` writes every command's `--json` output from its `DriverResult`, as `{ success: true, value }` or `{ success: false, error, step }`, with `problems` when there are some. One shape means a script reads every command the same way, and the `DriverResult` kind names stay inside the code.
+
+## Color
+
+The text output in `output.ts` is colored with `ttyColor`, which colors on a terminal and prints plain text when standard output is piped. `resultJson` passes `plainColor` to `formatProblems`, so the problem text in a JSON `error` never carries color codes, even on a terminal. Text from a file is cleaned with `stripControlCharacters` before it is colored, because cleaning would strip the color codes too.
+
+`ttyColor` asks whether standard output is a terminal, but `formatProblems` and `formatUncovered` are written to standard error. So `agency workflow check broken 2> problems.txt`, run in a terminal, writes color codes into `problems.txt`, and `agency workflow run addOne | tee out.txt` prints the uncovered-effects table plain even though the prompt is on the terminal. `ttyColor` has no standard error version yet.
 
 ## The temp folder
 

@@ -7,6 +7,10 @@
  *
  * `wfRunNode` has no handler around `wfRun`: the run's policy, passed as a
  * root carrier, decides each of its interrupts.
+ * The typechecker cannot see the policy, so it would warn that `wfRun`
+ * raises interrupts outside a handler (AG3009), on every command, about a
+ * file the person never wrote. The `@tc-ignore` above the call silences
+ * that one warning.
  *
  * Every node returns a `Result`. `readDriverResult` depends on that: it reads
  * a bare list as interrupts that nothing answered.
@@ -57,6 +61,7 @@ node wfRunNode(name: string, dir: string, inputs: any) {
   if (wfEntry is failure) {
     return wfEntry
   }
+  // @tc-ignore AG3009
   const wfResult = wfRun(wfEntry.value.workflow, inputs, wfTools, dir)
   return wfResult
 }

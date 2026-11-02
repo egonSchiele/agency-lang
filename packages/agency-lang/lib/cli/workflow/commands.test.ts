@@ -162,7 +162,7 @@ describe("the commands", () => {
     expect(calls[0].node).toBe("wfCheckNode");
     expect(calls[0].args).toEqual(["addOne", project]);
     expect(out).toEqual([
-      "workflows/addOne.json: no problems\ncan raise:\n  test::lists::add   step add (addListItems)",
+      "workflows/addOne.json: no problems\n\nEffects this workflow can raise:\n  Effect             Step   Tool\n  test::lists::add   add    addListItems",
     ]);
   });
 
@@ -239,7 +239,7 @@ describe("the commands", () => {
     answer = { ok: true, data: success([{ name: "addOne", workflow: addOne }]) };
     expect(await workflowList(undefined, {}, io())).toBe(0);
     expect(calls[0]).toMatchObject({ node: "wfListNode", args: [project], imports: [] });
-    expect(out).toEqual(["addOne { noteTitle: string }\n  Find a list and add soup to it."]);
+    expect(out).toEqual(["addOne(noteTitle: string)\n  Find a list and add soup to it."]);
   });
 
   describe("run", () => {
@@ -258,7 +258,7 @@ describe("the commands", () => {
         "Approve these effects for the whole run? This is the same as --approve test::lists::add",
       ]);
       expect(err[0]).toBe(
-        "Your policy does not cover these interrupts:\n  test::lists::add   step add (addListItems)",
+        "Your policy does not cover these interrupts:\n  Effect             Step   Tool\n  test::lists::add   add    addListItems",
       );
       expect(out).toEqual(["added 1 items to l1/Meals"]);
       expect(calls[0].node).toBe("wfRunNode");

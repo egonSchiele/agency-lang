@@ -42,15 +42,33 @@ $ agency workflow tools ./src/agent/lists.agency
 
 ## `check`
 
-Prints the workflow's problems, or the effects it can raise:
+Prints the workflow's problems, or its warnings and the effects it can raise. The effects table has one row for each step that raises each effect: the effect, the step's id, and the tool the step calls.
 
 ```text
 $ agency workflow check updateMealPlanFromNote
 workflows/updateMealPlanFromNote.json: no problems
-can raise:
-  std::read          step text (readNote)
-  test::lists::add   step add (addListItems)
+
+Effects this workflow can raise:
+  Effect             Step   Tool
+  std::read          text   readNote
+  test::lists::add   add    addListItems
 ```
+
+A warning means part of the workflow can only be checked when it runs. Here, `weather` is declared to return a plain `Result`, so `check` cannot tell whether `steps.weather.temperature` exists:
+
+```text
+$ agency workflow check temperatureForZip
+workflows/temperatureForZip.json: no problems
+
+Warnings:
+  step weather: weather returns Result, so a reference into its value is checked only when the workflow runs
+
+Effects this workflow can raise:
+  Effect         Step      Tool
+  std::weather   weather   weather
+```
+
+The warning appears only when a later step or the `result` uses the step's value.
 
 ```text
 $ agency workflow check broken
@@ -70,11 +88,14 @@ agency workflow compile updateMealPlanFromNote
 
 ## `list`
 
-Prints the workflows saved in a project, each with its inputs and description. The project directory is `.` unless you name another.
+Prints the workflows saved in a project, each written like a function call with its inputs as the parameters, then its description. The project directory is `.` unless you name another.
 
 ```text
 $ agency workflow list
-updateMealPlanFromNote { noteTitle: string }
+temperatureForZip(zip: string)
+  Get the current temperature for a zip code.
+
+updateMealPlanFromNote(noteTitle: string)
   Copy this week's meal plan from the groceries note to the weekly meal plan list.
 ```
 
@@ -112,8 +133,9 @@ Before anything runs, the command works out which effects the workflow's steps c
 
 ```text
 Your policy does not cover these interrupts:
-  test::lists::add   step add (addListItems)
-  std::read          step text (readNote)
+  Effect             Step   Tool
+  test::lists::add   add    addListItems
+  std::read          text   readNote
 Approve these effects for the whole run? This is the same as --approve test::lists::add,std::read [y/N]
 ```
 
@@ -145,6 +167,10 @@ If your policy has a `"*"` rule, the command adds nothing and does not ask. You 
 | `--log-file`, `--observability` | Where the run's log events go, including the workflow program's own. |
 
 The other `agency run` flags are left out. `--max-time` cannot stop a run while it waits on the workflow's program, which runs in its own process, so `run` does not take it yet. To cap a workflow's time, set `limits.maxTime` in the workflow itself. `-i` needs the program to own the terminal, which a workflow run does not give it yet. A trace covers one process, and the workflow's program runs in another. The workflow's program always compiles strictly and in the sandbox, so `--strict`, `--agency-only`, and `--refuse-splices` would change nothing.
+
+## Color
+
+When standard output is a terminal, the commands color their output: the result of `check` in green, problems in red, headings in bold, and effect names in cyan. When standard output is piped, and in `--json` output, the text is plain.
 
 ## Exit codes
 

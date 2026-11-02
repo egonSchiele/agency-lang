@@ -7,7 +7,9 @@ import {
   formatProblems,
   formatRunValue,
   formatUncovered,
+  inputsAsParams,
 } from "./output.js";
+import { color } from "../../utils/termcolors.js";
 
 const param = (name: string, type: string | null, def: string | null = null) => ({
   name,
@@ -104,9 +106,11 @@ describe("formatChecked", () => {
     expect(formatChecked("workflows/updateMealPlanFromNote.json", [], steps)).toBe(
       [
         "workflows/updateMealPlanFromNote.json: no problems",
-        "can raise:",
-        "  std::read          step text (readNote)",
-        "  test::lists::add   step add (addListItems)",
+        "",
+        "Effects this workflow can raise:",
+        "  Effect             Step   Tool",
+        "  std::read          text   readNote",
+        "  test::lists::add   add    addListItems",
       ].join("\n"),
     );
   });
@@ -116,19 +120,42 @@ describe("formatChecked", () => {
       { step: "a", tool: "readNote", effects: ["std::read"] },
       { step: "b", tool: "readNote", effects: ["std::read"] },
     ];
-    const warning = { step: "a", field: "tool", message: "untyped" };
+    const warning = {
+      step: "a",
+      field: "tool",
+      message:
+        "readNote returns Result, so a reference into its value is checked only when the workflow runs",
+    };
     expect(formatChecked("w", [warning], steps)).toBe(
       [
         "w: no problems",
-        "warning: step a, tool: untyped",
-        "can raise:",
-        "  std::read   step a (readNote), step b (readNote)",
+        "",
+        "Warnings:",
+        "  step a: readNote returns Result, so a reference into its value is checked only when the workflow runs",
+        "",
+        "Effects this workflow can raise:",
+        "  Effect      Step   Tool",
+        "  std::read   a      readNote",
+        "  std::read   b      readNote",
       ].join("\n"),
     );
   });
 
   it("says when a workflow raises nothing", () => {
-    expect(formatChecked("w", [], [])).toBe("w: no problems\ncan raise: nothing");
+    expect(formatChecked("w", [], [])).toBe(
+      "w: no problems\n\nEffects this workflow can raise: none",
+    );
+  });
+
+  it("colors the result, the headings, and the effects when given color", () => {
+    const steps = [{ step: "a", tool: "readNote", effects: ["std::read"] }];
+    const warning = { step: "a", field: "tool", message: "untyped" };
+    const lines = formatChecked("w", [warning], steps, color).split("\n");
+    expect(lines[0]).toBe(`w: ${color.green("no problems")}`);
+    expect(lines[2]).toBe(color.yellow.bold("Warnings:"));
+    expect(lines[5]).toBe(color.bold("Effects this workflow can raise:"));
+    expect(lines[6]).toBe(color.dim("  Effect      Step   Tool"));
+    expect(lines[7]).toBe(`  ${color.cyan("std::read")}   a      readNote`);
   });
 });
 
@@ -137,11 +164,43 @@ describe("formatList", () => {
     const listed = [
       { name: "addOne", workflow: { inputs: "{ noteTitle: string }", description: "Add soup." } },
     ];
-    expect(formatList("/p", listed)).toBe("addOne { noteTitle: string }\n  Add soup.");
+    expect(formatList("/p", listed)).toBe("addOne(noteTitle: string)\n  Add soup.");
+  });
+
+  it("puts a blank line between workflows", () => {
+    const listed = [
+      { name: "addOne", workflow: { inputs: "{ noteTitle: string }", description: "Add soup." } },
+      { name: "addTwo", workflow: { inputs: "{ n: number }", description: "" } },
+    ];
+    expect(formatList("/p", listed)).toBe(
+      "addOne(noteTitle: string)\n  Add soup.\n\naddTwo(n: number)",
+    );
   });
 
   it("says when there are none", () => {
     expect(formatList("/p", [])).toBe("no saved workflows in /p/workflows");
+  });
+});
+
+describe("inputsAsParams", () => {
+  it("writes each input as a parameter, keeping optional marks and nested types", () => {
+    expect(inputsAsParams("{ zip: string }")).toBe("zip: string");
+    expect(inputsAsParams("{ a?: string; b: number[]; c: { d: string, e: number } }")).toBe(
+      "a?: string, b: number[], c: { d: string; e: number }",
+    );
+  });
+
+  it("drops comments and reads properties on their own lines", () => {
+    const inputs = '{\n  // the zip code\n  zip: string\n  units: "imperial" | "metric"\n}';
+    expect(inputsAsParams(inputs)).toBe('zip: string, units: "imperial" | "metric"');
+  });
+
+  it("prints an empty list for no inputs", () => {
+    expect(inputsAsParams("{}")).toBe("");
+  });
+
+  it("returns text that does not parse as it is", () => {
+    expect(inputsAsParams("{ zip: }")).toBe("{ zip: }");
   });
 });
 
@@ -160,14 +219,15 @@ describe("formatUncovered", () => {
   it("prints the spec's table", () => {
     expect(
       formatUncovered([
-        { effect: "test::lists::add", steps: ["add (addListItems)"] },
-        { effect: "std::read", steps: ["text (readNote)"] },
+        { effect: "test::lists::add", steps: [{ step: "add", tool: "addListItems" }] },
+        { effect: "std::read", steps: [{ step: "text", tool: "readNote" }] },
       ]),
     ).toBe(
       [
         "Your policy does not cover these interrupts:",
-        "  test::lists::add   step add (addListItems)",
-        "  std::read          step text (readNote)",
+        "  Effect             Step   Tool",
+        "  test::lists::add   add    addListItems",
+        "  std::read          text   readNote",
       ].join("\n"),
     );
   });

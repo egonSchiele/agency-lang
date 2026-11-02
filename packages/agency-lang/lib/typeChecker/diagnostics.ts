@@ -895,6 +895,48 @@ export const DIAGNOSTICS = {
     message:
       "The body of '{target}' saves a draft of type '{actual}', but decorator '{name}' takes a block returning '{expected}'.",
   },
+  unwrapReturnTypeNotResult: {
+    code: "AG2024",
+    severity: "error",
+    message:
+      "`{expr}?` returns a failure from `{name}` when the Result fails, but `{name}` is declared to return `{type}`. Declare it as `Result<{type}>`, or unwrap with `match` or `catch` instead.",
+  },
+  unwrapInOpaquePosition: {
+    code: "AG1021",
+    severity: "error",
+    message:
+      "`{expr}?` cannot be lowered in this position. Move it to its own line: `const value = {expr}?`.",
+  },
+  unwrapOutsideBody: {
+    code: "AG1022",
+    severity: "error",
+    message:
+      "`{expr}?` returns from a function, and a module-level initializer or a parameter default is not inside one. Use it inside a node or a def.",
+  },
+  unwrapInHandlerBody: {
+    code: "AG1023",
+    severity: "error",
+    message:
+      "`{expr}?` cannot be used inside a handler body. Unwrap the Result before the `handle` block, or match on it here.",
+  },
+  unwrapInParallelArm: {
+    code: "AG1024",
+    severity: "error",
+    message:
+      "`{expr}?` would return from a `parallel` arm, and an arm cannot return early. Do the unwrap inside a def the arm calls.",
+  },
+  unwrapInAssignmentTarget: {
+    code: "AG1025",
+    severity: "error",
+    message:
+      "`{expr}?` cannot be a write target. Unwrap into a variable first, then assign to its field.",
+  },
+  unwrapNonResult: {
+    code: "AG2023",
+    severity: "error",
+    message:
+      "`{expr}?` needs a `Result`, and `{expr}` is a `{type}`. Only a `Result` can be unwrapped with `?`.",
+  },
   parameterAliasCollision: {
     code: "AG2022",
     severity: "error",

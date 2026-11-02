@@ -547,7 +547,16 @@ const content = read("file.txt") catch "" with approve
 write("file.txt", "Hello, world!") with approve
 ```
 
-`read` returns a `Result`, not a string. `catch ""` unwraps it, giving `""` if the read failed. Write `catch` before `with approve`. To handle the failure yourself, keep the Result and match on it:
+`read` returns a `Result`, not a string. `catch ""` unwraps it, giving `""` if the read failed. Write `catch` before `with approve`. Inside a def that returns a `Result`, `?` unwraps it instead and returns the failure to the caller when the read failed:
+
+```ts
+def loadConfig(): Result<string> {
+ const content = read("config.json")? with approve
+ return success(content)
+}
+```
+
+To handle the failure yourself, keep the Result and match on it:
 
 ```ts
 const loaded = read("file.txt") with approve
@@ -921,6 +930,19 @@ node main(msg: string) {
  const result2 = divide(10, 0) catch 3
 }
 ```
+
+## The `?` operator
+
+When there is no sensible default, `?` unwraps the Result and, if it is a failure, returns that failure from the enclosing def. The def must be declared to return a `Result`:
+
+```ts
+def quarter(n: number): Result<number> {
+ const h = divide(n, 2)?
+ return divide(h, 2)
+}
+```
+
+`?` chains: `fetchUser(id)?.profile()?.displayName` stops at the first failure. Use `?` only on a `Result`; on a plain value it is a type error.
 
 ## State isolation
 

@@ -1,4 +1,5 @@
 import type { AgencyNode, ScopeType } from "../../types.js";
+import { UNWRAP_REACHED_CODEGEN } from "../../types/access.js";
 import type { AccessChainElement } from "../../types/access.js";
 import type { FunctionCall } from "../../types/function.js";
 import type { TsNode } from "../../ir/tsIR.js";
@@ -117,6 +118,9 @@ export class AssignmentEmitter {
           result = ts.await(callExpr);
           break;
         }
+        case "unwrap":
+          // AG1025 refuses a `?` in a write target before codegen.
+          throw new Error(UNWRAP_REACHED_CODEGEN);
       }
     }
     return result;

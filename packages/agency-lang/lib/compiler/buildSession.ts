@@ -28,6 +28,8 @@ import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { isPlatformDiagnostic } from "@/typeChecker/platformCheck.js";
+import { unwrapRefusals } from "@/typeChecker/unwrapChecks.js";
+import type { TypeCheckError } from "@/typeChecker/types.js";
 import {
   agencyImportTargets,
   buildCompiledClosure,
@@ -461,6 +463,7 @@ export class BuildSession {
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
     const info = buildCompilationUnit(liftedProgram, symbolTable, absoluteInputFile, contents);
     checkDecoratorsOrExit(liftedProgram, info, absoluteInputFile);
+    checkUnwrapsOrExit(liftedProgram, absoluteInputFile);
     const compilationUnitEndTime = performance.now();
     logTime({
       label: `Built compilation unit for ${absoluteInputFile}`,
@@ -654,6 +657,18 @@ function checkDecoratorsOrExit(
   process.exit(1);
 }
 
+/** AG1021 to AG1025 run whether or not the type checker is on. Each marks a
+ *  `?` the hoist pass would leave in place, and codegen throws on one, so
+ *  the check has to happen here, like the decorator check above. The type
+ *  checker stamps the file onto its own errors; these come straight from
+ *  the tree, so the file is stamped here for the `file:line:col` prefix. */
+function checkUnwrapsOrExit(program: AgencyProgram, absPath: string): void {
+  const errors = unwrapRefusals(program.nodes).map((error) => ({ ...error, file: absPath }));
+  if (errors.length === 0) return;
+  console.error(formatErrors(errors));
+  process.exit(1);
+}
+
 function runTypecheck(
   liftedProgram: AgencyProgram,
   config: AgencyConfig,
@@ -670,7 +685,12 @@ function runTypecheck(
   if (!checkerAsked && !platformAsked) return;
   const tcStartTime = performance.now();
   const found = typeCheck(liftedProgram, config, info).errors;
-  const errors = checkerAsked ? found : found.filter(isPlatformDiagnostic);
+  // Fatal whichever mode the checker is in: the platform diagnostic, and a
+  // `?` on a value that is not a Result, which would fail at runtime inside
+  // the generated `.value` read with a message that never mentions the `?`.
+  const alwaysFatal = (e: TypeCheckError) =>
+    isPlatformDiagnostic(e) || e.name === "unwrapNonResult";
+  const errors = checkerAsked ? found : found.filter(alwaysFatal);
   const tcEndTime = performance.now();
   logTime({
     label: `Type checked ${absoluteInputFile}`,
@@ -681,7 +701,7 @@ function runTypecheck(
   if (errors.length === 0) return;
   const hint = formatDiagnosticsHint(errors);
   const fatal = errors.some(
-    (e) => e.severity === "error" && (tc?.strict === true || isPlatformDiagnostic(e)),
+    (e) => e.severity === "error" && (tc?.strict === true || alwaysFatal(e)),
   );
   if (fatal) {
     console.error(formatErrors(errors));

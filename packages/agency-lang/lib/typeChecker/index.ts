@@ -26,6 +26,7 @@ import { buildScopes } from "./scopes.js";
 import { desugarGuardsInBody } from "../preprocessors/guardDesugar.js";
 import { decoratorLookup, desugarDecorators } from "../preprocessors/decoratorDesugar.js";
 import { checkCastPositions } from "./castPositions.js";
+import { checkUnwraps } from "./unwrapChecks.js";
 import { buildFlowGraphs } from "./flowBuilder.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
@@ -385,6 +386,7 @@ export class TypeChecker {
     // A function cannot be both destructive and idempotent.
     checkConflictingMarkers(ctx);
     checkCastPositions(ctx);
+    checkUnwraps(scopes, ctx);
 
     // Defaulted parameters must come last (positional binding makes a
     // required-after-defaulted parameter silently unfillable).

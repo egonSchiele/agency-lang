@@ -1,0 +1,123 @@
+def half(n: number): Result<number> {
+  if (n % 2 != 0) {
+    return failure("odd")
+  }
+  return success(n / 2)
+}
+
+def parseName(text: string): Result<string> {
+  if (text == "") {
+    return failure("empty")
+  }
+  return success(text)
+}
+
+def items(text: string): Result<string[]> {
+  if (text == "") {
+    return failure("empty")
+  }
+  return success([text, text])
+}
+
+def use(n: number): string {
+  return "${n}"
+}
+
+def countUp(start: number): Result<number> {
+  let i = start
+  while (half(i)? < 3) {
+    i += 1
+  }
+  return success(i)
+}
+
+def greet(text: string): Result<string> {
+  if (parseName(text)? == "bob") {
+    return success("yes")
+  }
+  return success("no")
+}
+
+def joined(text: string): Result<string> {
+  let out = ""
+  for (item in items(text)?) {
+    out = out + item
+  }
+  return success(out)
+}
+
+def useHalf(n: number): Result<string> {
+  return success(use(half(n)?))
+}
+
+def countApproved(ns: number[]): Result<number> {
+  let done = 0
+  for (n in ns) {
+    handle {
+      const v = half(n)?
+      done += 1
+    } with approve
+  }
+  return success(done)
+}
+
+def inParallel(): Result<string> {
+  parallel {
+    const a = map([2]) as n {
+      return half(n)?
+    }
+    const b = half(4)
+  }
+  if (a[0] is failure) {
+    return success("failed")
+  }
+  return success("${a[0]}")
+}
+
+node whileCondition() {
+  const result = countUp(0)
+  if (result is failure(error)) {
+    return error
+  }
+  return "finished"
+}
+
+node ifCondition() {
+  const result = greet("bob")
+  if (result is success(value)) {
+    return value
+  }
+  return "failed"
+}
+
+node forIterable() {
+  const result = joined("ab")
+  if (result is success(value)) {
+    return value
+  }
+  return "failed"
+}
+
+node argumentPosition() {
+  const result = useHalf(4)
+  if (result is success(value)) {
+    return value
+  }
+  return "failed"
+}
+
+node nestedHandle() {
+  const result = countApproved([2, 4, 6])
+  if (result is success(value)) {
+    return "${value}"
+  }
+  return "failed"
+}
+
+node blockInsideParallel() {
+  const result = inParallel()
+  if (result is success(value)) {
+    return value
+  }
+  return "failed"
+}

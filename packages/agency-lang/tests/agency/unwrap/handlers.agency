@@ -1,0 +1,76 @@
+effect test::check { n: number }
+
+let asks = 0
+let afterUnwrap = 0
+
+def ask(n: number): Result<number> {
+  asks += 1
+  interrupt test::check("ok to continue?", { n: n })
+  return success(n)
+}
+
+def use(n: number): Result<string> {
+  const v = ask(n)?
+  afterUnwrap += 1
+  return success("got ${v}")
+}
+
+def useOneLine(n: number): Result<string> {
+  const v = ask(n)? with reject
+  return success("after ${v}")
+}
+
+node approved() {
+  handle {
+    const result = use(6)
+    if (result is success(value)) {
+      return value
+    }
+    return "rejected"
+  } with approve
+}
+
+node rejected() {
+  handle {
+    const result = use(6)
+    if (result is failure) {
+      return "rejected,${afterUnwrap}"
+    }
+    return "approved"
+  } with reject
+}
+
+node decidedByData() {
+  handle {
+    const result = use(6)
+    if (result is failure) {
+      return "rejected"
+    }
+    return "approved"
+  } with (intr) {
+    if (intr.data.n == 6) {
+      return reject()
+    }
+    return approve()
+  }
+}
+
+node withApproveOneLine() {
+  const v = ask(6)? with approve
+  return "${v}"
+}
+
+node withRejectOneLine() {
+  const result = useOneLine(6)
+  if (result is failure) {
+    return "rejected"
+  }
+  return "approved"
+}
+
+node ranOnce() {
+  handle {
+    use(6)
+  } with approve
+  return "${asks}"
+}

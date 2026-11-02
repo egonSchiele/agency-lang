@@ -111,7 +111,6 @@ produces `undefined` everywhere regardless of the surface language:
 - a missing object key reads as `undefined`
 - an out-of-bounds array index → `undefined`
 - a function that falls off the end without returning → `undefined`
-- optional chaining `a?.b` → `undefined`
 - any TypeScript interop can hand back `undefined`
 
 This rules out the naive "just pretend `undefined` doesn't exist" approach: if
@@ -133,14 +132,12 @@ of an access chain and the `__matchval_<id>` read that consumes a match result
 are wrapped in `__nn`, so they yield `null` rather than `undefined` as an
 observable value. This complements `__eq` (which unifies the two only at
 *comparison* sites) by unifying them at the *value* level too. The wrap is
-terminal-only and skipped for assignment/update targets, so JS optional-chain
-short-circuit is preserved (`a?.[b].c` stays `undefined`, does not throw) and
-lvalues (`x[i]++`, `x[i] += v`) stay valid. An *optional* terminal index
-(`arr?.[i]`) is also left raw, so `?.[]` stays consistent with `?.` property
-access (both yield `undefined` on a null base) — optional chaining as a whole is
-deferred. The remaining leak sites (optional chaining, destructuring a missing
-field, falling off a function without `return`, and TypeScript interop) are not
-yet normalized and are tracked as follow-ups.
+terminal-only and skipped for assignment/update targets, so lvalues (`x[i]++`,
+`x[i] += v`) stay valid. Agency has no optional chaining: `?` after an
+expression is the unwrap operator (`docs/dev/language/unwrap-operator.md`). The
+remaining leak sites (destructuring a missing field, falling off a function
+without `return`, and TypeScript interop) are not yet normalized and are tracked
+as follow-ups.
 
 ## Alternatives considered
 

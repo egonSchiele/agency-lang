@@ -37,10 +37,11 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 | short-circuit right sides | opaque | may never execute |
 | if-expression branches | hoisted within, never across | an if-expression lowers to an `ifElse` whose branches are statement bodies, so a temp lands inside the branch it belongs to. `hoistPositions.test.ts` pins this against the pass |
 | a checked cast, `x as T!` | becomes a temp, under the same rules as a call | a `@validate` validator is an Agency function and can pause |
+| the `?` operator, `expr?` | the chain is split at each `?`: a temp, an `isFailure` temp, and an `if` that returns the temp | it is an early return, which has to be a step; a bare `foo()?` statement gets its own dispatcher case. See `docs/dev/language/unwrap-operator.md` |
 | a `!` parameter check | not the pass's job: the check runs inside the function's step 0 | the check is emitted by codegen, not written in the source, so no statement exists to lift; step 0 runs once and a resume skips it. See the "step 0" section of `docs/dev/language/validation-annotations.md` |
 | pipe stages | opaque | already memoized per step and failure-gated |
 | pipe input | hoist | evaluated inline at statement level, outside the memoization |
-| `with`/`static` wrapped statements | opaque | hoisting out would cross the approval region; the slot holds exactly one statement |
+| `with`/`static` wrapped statements | opaque, except a `with` statement containing `?`, which is rewritten inside a `handle` block with the same handler | hoisting out would cross the approval region; the slot holds exactly one statement |
 | handler (`with (data)`) bodies | never touched | compile to plain JS, cannot pause, safety infrastructure |
 | lifted block bodies (comprehensions, fork branches, `as x { }` blocks) | hoisted within, never across | they own their frame; a temp crossing out would change per-item evaluation to once |
 | module-level initializers | never touched | init-topsort owns them; they cannot pause |

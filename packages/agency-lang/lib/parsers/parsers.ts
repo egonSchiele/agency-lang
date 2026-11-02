@@ -3379,17 +3379,10 @@ export const functionCallParser: Parser<FunctionCall> = label(
 // access.ts
 // =============================================================================
 
-// Parse "?." or "." — returns true for optional, false for regular
-const dotParser: Parser<boolean> = or(
-  map(str("?."), () => true),
-  map(char("."), () => false),
-);
-
-// Parse a single chain element: .method(), ?.method(), .property, ?.property, [index], ?.[index]
+// Parse a single chain element: .method(), .property
 const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> => {
-  const dotResult = dotParser(input);
+  const dotResult = char(".")(input);
   if (!dotResult.success) return failure("expected dot", input);
-  const optional = dotResult.result;
   const afterDot = dotResult.rest;
 
   // First try: functionCall (name + parens)
@@ -3399,7 +3392,6 @@ const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> =>
       {
         kind: "methodCall" as const,
         functionCall: fcResult.result,
-        ...(optional && { optional: true }),
       },
       fcResult.rest,
     );
@@ -3412,7 +3404,6 @@ const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> =>
       {
         kind: "property" as const,
         name: nameResult.result.value,
-        ...(optional && { optional: true }),
       },
       nameResult.rest,
     );
@@ -3421,11 +3412,8 @@ const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> =>
   return failure("expected property name or method call after dot", input);
 };
 
-// Parse "?.[" or "[" — returns true for optional, false for regular
-const bracketParser: Parser<boolean> = or(
-  map(str("?.["), () => true),
-  map(char("["), () => false),
-);
+// Parse "[" at the start of an index or slice element.
+const bracketParser: Parser<string> = char("[");
 
 /** Zero-width parser: succeeds, consuming nothing, when the parse
  *  position sits at the start of its line's content — nothing but
@@ -3479,7 +3467,7 @@ const startOfLineContent: Parser<null> = (input: string) => {
 const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
   const parser = seqC(
     not(startOfLineContent),
-    capture(bracketParser, "optional"),
+    bracketParser,
     optionalSpaces,
     capture(optional(lazy(() => exprParser)), "start"),
     optionalSpaces,
@@ -3494,14 +3482,13 @@ const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
   const element: Partial<AccessChainElement> = { kind: "slice" as const };
   if (result.result.start) element.start = result.result.start;
   if (result.result.end) element.end = result.result.end;
-  if (result.result.optional) element.optional = true;
   return success(element as AccessChainElement, result.rest);
 };
 
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {
   const parser = seqC(
     not(startOfLineContent),
-    capture(bracketParser, "optional"),
+    bracketParser,
     optionalSpaces,
     capture(
       lazy(() => exprParser),
@@ -3516,19 +3503,15 @@ const indexChainParser: Parser<AccessChainElement> = (input: string) => {
     {
       kind: "index" as const,
       index: result.result.index,
-      ...(result.result.optional && { optional: true }),
     },
     result.rest,
   );
 };
 
-// Parse a call chain element: (args) or ?.(args) — calling the result of a previous chain element
-// e.g. arr[0](arg1, arg2), getHandlers()[0](), fns[0]?.(5)
+// Parse a call chain element: (args) — calling the result of a previous chain element
+// e.g. arr[0](arg1, arg2), getHandlers()[0]()
 const callChainParser: Parser<AccessChainElement> = (input: string) => {
-  const optResult = str("?.")(input);
-  const isOptional = optResult.success;
-
-  const result = argumentListParser(isOptional ? optResult.rest : input);
+  const result = argumentListParser(input);
   if (!result.success) return failure("expected call arguments", input);
 
   const extracted = extractInlineBlock(
@@ -3545,15 +3528,24 @@ const callChainParser: Parser<AccessChainElement> = (input: string) => {
       arguments: extracted.arguments,
       ...(extracted.block && { block: extracted.block }),
       ...(extracted.trivia && { argumentTrivia: extracted.trivia }),
-      ...(isOptional && { optional: true }),
     },
     result.rest,
   );
 };
 
+// The `?` operator, as a chain element. Probed on the raw input like the
+// other elements, so it must sit directly against what it unwraps. A `?`
+// followed by another `?` is nullish coalescing and is left for the binary
+// operator table.
+const unwrapChainParser: Parser<AccessChainElement> = (input: string) => {
+  const result = seqC(char("?"), not(char("?")))(input);
+  if (!result.success) return failure("expected ?", input);
+  return success({ kind: "unwrap" as const }, result.rest);
+};
+
 const chainElementParser: Parser<AccessChainElement> = memo(
   "chainElementParser",
-  or(dotMethodCallParser, callChainParser, sliceChainParser, indexChainParser),
+  or(dotMethodCallParser, callChainParser, sliceChainParser, indexChainParser, unwrapChainParser),
 );
 
 /**
@@ -3889,7 +3881,7 @@ export const schemaAccessParser: Parser<ValueAccess> = memo(
     map(
       seqC(
         capture(schemaExpressionParser, "base"),
-        peek(dotParser),
+        peek(char(".")),
         captureCaptures(
           parseError(
             "expected a method call after schema(...), e.g. schema(number).parseJSON(input)",
@@ -4514,20 +4506,36 @@ const _exprParserBase: Parser<Expression> = label(
  *  Built once: this runs on every successful expression parse. */
 const ternaryMarker = seqC(char("?"), not(oneOf(".?")));
 
-const ternaryRefusal = (rest: string): ParserFailure | null => {
+/** The ` a : b` part of a ternary, after its `?`. */
+const ternaryTail = seqC(
+  optionalSpacesOrNewline,
+  lazy(() => exprParser),
+  optionalSpacesOrNewline,
+  char(":"),
+);
+
+/** True when `expression` ends in the `?` operator, so the `?` of a ternary
+ *  written without a space (`cond? a : b`) has already been consumed. */
+const endsInUnwrap = (expression: Expression): boolean =>
+  expression.type === "valueAccess" &&
+  expression.chain.length > 0 &&
+  expression.chain[expression.chain.length - 1].kind === "unwrap";
+
+const ternaryRefusal = (expression: Expression, rest: string): ParserFailure | null => {
   // Newlines are crossed on purpose. Prettier wraps any ternary past the line
   // limit onto three lines, so `cond\n  ? a\n  : b` is the shape a model has
   // seen most, and skipping only spaces would miss it. A statement cannot begin
   // with `?`, so a `?` on the next line is unambiguously a continuation.
   const afterExpr = optionalSpacesOrNewline(rest);
   const marker = ternaryMarker(afterExpr.success ? afterExpr.rest : rest);
-  if (!marker.success) return null;
-  const tail = seqC(
-    optionalSpacesOrNewline,
-    lazy(() => exprParser),
-    optionalSpacesOrNewline,
-    char(":"),
-  )(marker.rest);
+  let afterMarker: string | null = null;
+  if (marker.success) {
+    afterMarker = marker.rest;
+  } else if (endsInUnwrap(expression)) {
+    afterMarker = rest;
+  }
+  if (afterMarker === null) return null;
+  const tail = ternaryTail(afterMarker);
   if (!tail.success) return null;
   return committedFailure(TERNARY_MESSAGE, tail.rest);
 };
@@ -4547,7 +4555,7 @@ export const exprParser: Parser<Expression> = (input: string) => {
   }
   const result = _exprParserBase(input);
   if (!result.success) return result;
-  const refused = ternaryRefusal(result.rest);
+  const refused = ternaryRefusal(result.result, result.rest);
   if (!refused) return result;
   // The enclosing node body is wrapped in a `parseError` that would otherwise
   // win the reporting contest, so record the commit in the parse state too.

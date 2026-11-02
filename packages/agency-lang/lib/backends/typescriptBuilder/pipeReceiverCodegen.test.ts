@@ -6,8 +6,8 @@ import { generateTypeScript } from "../typescriptGenerator.js";
  * Code-gen regressions for pipe-stage receiver lowering.
  *
  * These are NOT runtime tests — the runtime values for the shapes
- * below happen to be identical whether the optional flag /
- * await-paren wrapping is preserved or dropped (the broken codegen
+ * below happen to be identical whether the await-paren wrapping is
+ * preserved or dropped (the broken codegen
  * only crashes on null receivers, which throw either way). So we
  * assert directly against the generated TypeScript string to lock in
  * that the codegen contains the expected operators.
@@ -24,21 +24,6 @@ function compile(src: string): string {
 }
 
 describe("pipe receiver codegen", () => {
-  it("preserves optional chaining (`?.`) on the receiver", () => {
-    const out = compile(`
-      def triple(x: number): Result { return success(x * 3) }
-      def makeC(): any { return { inner: { m: triple } } }
-      node main() {
-        let c = makeC()
-        let r = success(5) |> c?.inner.m
-        return r.value
-      }
-    `);
-    // Receiver was `c?.inner.m`; pipe slices off `.m` and lowers the
-    // remaining `c?.inner` chain. The `?.` must survive.
-    expect(out).toMatch(/c\?\.inner/);
-  });
-
   it("paren-wraps an awaited functionCall base before applying intermediate chain", () => {
     const out = compile(`
       def triple(x: number): Result { return success(x * 3) }

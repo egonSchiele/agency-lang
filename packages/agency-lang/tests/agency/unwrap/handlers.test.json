@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "nodeName": "approved",
+      "input": "",
+      "expectedOutput": "\"got 6\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "An enclosing handler answers the interrupt a ? operand raises"
+    },
+    {
+      "nodeName": "rejected",
+      "input": "",
+      "expectedOutput": "\"rejected,0\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A rejecting handler makes ? return the rejected failure and nothing after it runs"
+    },
+    {
+      "nodeName": "decidedByData",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The handler sees the operand's interrupt data and decides from it"
+    },
+    {
+      "nodeName": "withApproveOneLine",
+      "input": "",
+      "expectedOutput": "\"6\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? and with approve on one line"
+    },
+    {
+      "nodeName": "withRejectOneLine",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "? and with reject on one line returns the failure from the def"
+    },
+    {
+      "nodeName": "ranOnce",
+      "input": "",
+      "expectedOutput": "\"1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The operand runs exactly once"
+    }
+  ]
+}

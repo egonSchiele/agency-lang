@@ -1262,6 +1262,42 @@ function pushPropertyDoesNotExist(
   );
 }
 
+/** The type after a `?` at `index` in the chain of `expr`, given the type the
+ *  chain has reached so far. Reports AG2023 when that type is not a Result. */
+function unwrapOperandType(
+  expr: ValueAccess,
+  index: number,
+  currentType: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+  ctx: TypeCheckerContext,
+): VariableType {
+  const operand = expressionToString({ ...expr, chain: expr.chain.slice(0, index) });
+  if (expr.async && index === 0) {
+    // `async f()?`: the value is a pending handle, not the Result it will
+    // become, and the lowering would drop the `async`.
+    ctx.errors.push(
+      diagnostic(
+        "unwrapNonResult",
+        { expr: operand, type: "pending async call" },
+        expr.loc ?? null,
+      ),
+    );
+    return ANY_T;
+  }
+  if (isAnyType(currentType)) return ANY_T;
+  const resolved = safeResolveType(currentType, typeAliases);
+  if (isAnyType(resolved)) return ANY_T;
+  if (resolved.type === "resultType") return resolved.successType;
+  ctx.errors.push(
+    diagnostic(
+      "unwrapNonResult",
+      { expr: operand, type: formatTypeHint(currentType) },
+      expr.loc ?? null,
+    ),
+  );
+  return ANY_T;
+}
+
 export function synthValueAccess(
   expr: ValueAccess,
   scope: Scope,
@@ -1276,7 +1312,14 @@ export function synthValueAccess(
     narrowedPrefix === null ? synthType(expr.base, scope, ctx) : narrowedPrefix.type;
   const chainStart = narrowedPrefix === null ? 0 : narrowedPrefix.consumed;
 
-  for (const element of expr.chain.slice(chainStart)) {
+  for (const [offset, element] of expr.chain.slice(chainStart).entries()) {
+    if (element.kind === "unwrap") {
+      // The `?` operator: a Result yields its success value. Anything else is
+      // a misread return type, or old optional chaining. The chain continues
+      // as `any` so one mistake reports once.
+      currentType = unwrapOperandType(expr, chainStart + offset, currentType, typeAliases, ctx);
+      continue;
+    }
     // Validate .partial()/.describe() even when the base type is unknown,
     // since we can check argument structure against the function definition.
     // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.

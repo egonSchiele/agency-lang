@@ -40,6 +40,7 @@ import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { TypeTestExpression } from "@/types/pattern.js";
 import { CastExpression } from "@/types/castExpression.js";
+import { UNWRAP_REACHED_CODEGEN } from "@/types/access.js";
 import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
@@ -1286,14 +1287,10 @@ export class TypeScriptBuilder {
     for (const element of node.chain) {
       switch (element.kind) {
         case "property":
-          result = ts.prop(result, element.name, {
-            optional: element.optional,
-          });
+          result = ts.prop(result, element.name);
           break;
         case "index":
-          result = ts.index(result, this.processNode(element.index), {
-            optional: element.optional,
-          });
+          result = ts.index(result, this.processNode(element.index));
           break;
         case "slice": {
           const args: TsNode[] = [];
@@ -1304,17 +1301,13 @@ export class TypeScriptBuilder {
             args.push(ts.raw("0"));
             args.push(this.processNode(element.end));
           }
-          const sliceProp = ts.prop(result, "slice", {
-            optional: element.optional,
-          });
-          result = ts.call(sliceProp, args);
+          result = ts.call(ts.prop(result, "slice"), args);
           break;
         }
         case "methodCall": {
           const fnCall = element.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
           const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
-          if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(
             ts.call(ts.id("__callMethod"), [ts.runtime.run, ...callArgs]),
             element === node.chain[node.chain.length - 1],
@@ -1324,37 +1317,29 @@ export class TypeScriptBuilder {
         case "call": {
           const descriptor = this.buildCallDescriptor(element);
           const callArgs: TsNode[] = [result, descriptor];
-          if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(
             ts.call(ts.id("__call"), [ts.runtime.run, ...callArgs]),
             element === node.chain[node.chain.length - 1],
           );
           break;
         }
+        case "unwrap":
+          throw new Error(UNWRAP_REACHED_CODEGEN);
       }
     }
     // Normalize the observable value of a *terminal* index read (`obj[key]`,
     // `arr[i]`) to `null` when the key is missing / index is out of bounds.
     // Wrap only the completed chain, and only when its last element is an
-    // index: wrapping each `case "index"` element individually would insert
-    // `__nn` *between* an optional index and a following access, capturing JS
-    // optional-chain short-circuit and turning `a?.[b].c` (null `a` → whole-
-    // chain `undefined`) into `null.c` → a thrown TypeError. Intermediate
-    // missing reads still throw exactly as before (the terminal `__nn` runs
-    // last), and the emitted shape is a single `__nn(...)`, never nested.
+    // index. Intermediate missing reads still throw exactly as before (the
+    // terminal `__nn` runs last), and the emitted shape is a single
+    // `__nn(...)`, never nested.
     //
     // `asLValue` skips the wrap when this access is emitted as an
     // assignment/update *target* (`x[i]++`, `x[i] += v`) — `__nn(x[i]) = ...`
     // is not a valid assignment target. Those targets stay raw lvalues.
-    //
-    // An *optional* terminal index (`arr?.[i]`) is left raw: optional chaining
-    // is deliberately deferred (see docs/dev/language/null-and-undefined.md), so `?.[]`
-    // stays consistent with `?.` property access — both yield `undefined` on a
-    // null base rather than `null`. Only a plain `[i]` — issue #409's actual
-    // target — is normalized.
     // See docs/dev/language/null-and-undefined.md and issue #409.
     const lastElement = node.chain[node.chain.length - 1];
-    if (!asLValue && lastElement?.kind === "index" && !lastElement.optional) {
+    if (!asLValue && lastElement?.kind === "index") {
       return ts.call(ts.id("__nn"), [result]);
     }
     return result;

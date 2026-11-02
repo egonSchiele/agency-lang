@@ -157,7 +157,7 @@ function renderChainElement(
   valueParamNames?: ReadonlyArray<string>,
 ): string {
   if (el.kind === "property") {
-    return el.optional ? `?.${el.name}` : `.${el.name}`;
+    return `.${el.name}`;
   }
   if (el.kind === "methodCall") {
     const fc = el.functionCall;
@@ -168,8 +168,7 @@ function renderChainElement(
           .map((a) => `${(a as any).name}: ${tagArgToTs((a as any).value, valueParamNames)}`)
           .join(", ")} }`
       : functionCallArgsToTs(fc, valueParamNames);
-    const dot = el.optional ? "?." : ".";
-    return `${dot}${fc.functionName}(${argStr})`;
+    return `.${fc.functionName}(${argStr})`;
   }
   throw new Error(`tagArgToTs: unsupported access chain element "${(el as any).kind}"`);
 }

@@ -47,7 +47,7 @@ describe("#platform", () => {
     };
   }
 
-  it("registerAttach writes nothing under a memory host, with a debugger, or in an IPC child", () => {
+  it("registerAttach writes nothing under a memory host, with a debugger, in an IPC child, or when AGENCY_NO_ATTACH is 1", () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "agency-home-"));
     const previous = process.env.AGENCY_HOME;
     process.env.AGENCY_HOME = home;
@@ -67,6 +67,17 @@ describe("#platform", () => {
           process.env.AGENCY_IPC = ipc;
         }
       }
+      const noAttach = process.env[nodePlatform.NO_ATTACH_VAR];
+      process.env[nodePlatform.NO_ATTACH_VAR] = "1";
+      try {
+        nodePlatform.registerAttach(args(false, nodeHost()));
+      } finally {
+        if (noAttach === undefined) {
+          delete process.env[nodePlatform.NO_ATTACH_VAR];
+        } else {
+          process.env[nodePlatform.NO_ATTACH_VAR] = noAttach;
+        }
+      }
       expect(fs.existsSync(path.join(home, "debug-sessions"))).toBe(false);
       browserPlatform.registerAttach(args(false, nodeHost()));
     } finally {
@@ -77,5 +88,21 @@ describe("#platform", () => {
       }
       fs.rmSync(home, { recursive: true, force: true });
     }
+  });
+
+  it("registerAttach serves the functions of the most recent registration through one shared slot", () => {
+    // This registers the test worker itself, under the run's AGENCY_HOME
+    // (lib/debugger/attach/vitest.globalSetup.ts), and opens a real
+    // socket under its pid. The slot is deliberately not cleared
+    // afterwards: attach.test.ts registers the same process later and
+    // reads the slot through the server's getter, and a cleared slot
+    // would make that registration open a second server on the same
+    // socket path.
+    const first = { first: true } as never;
+    const second = { second: true } as never;
+    nodePlatform.registerAttach({ ...args(false, nodeHost()), functions: first });
+    nodePlatform.registerAttach({ ...args(false, nodeHost()), functions: second });
+    const slot = process as unknown as Record<symbol, { functions: unknown } | undefined>;
+    expect(slot[Symbol.for("agency.debug.attachTarget")]?.functions).toBe(second);
   });
 });

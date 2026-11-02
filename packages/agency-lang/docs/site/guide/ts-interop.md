@@ -70,3 +70,5 @@ run();
 
 Only nodes can be imported into TypeScript. Other things like functions cannot.
 
+Running a node on Node registers the process for [`agency debug --attach`](/cli/debug): it writes a small record and listens on a private Unix socket under `~/.agency/debug-sessions`, both removed when the process exits. Whoever connects can step the program, change its variables, and answer its interrupts, and only the same user can reach the directory. The socket is unreferenced, so it never keeps your process alive. Set `AGENCY_NO_ATTACH=1` to turn this off. A sessions directory the program cannot use (a read-only home, say) is skipped silently; start the program with `DEBUG=1` to see why.
+

@@ -84,7 +84,7 @@ While the program runs, the status line names the model request or tool call it 
 
 A program's own interrupts keep going wherever the program sends them: a policy, the `--approve` and `--reject` flags, or the program's terminal under `--interactive`. The debugger shows them going by and does not answer them. A question asked with `input()` goes to the program's terminal as well.
 
-How it works: a running program listens for the `SIGUSR2` signal and opens a Unix socket under `~/.agency/debug-sessions` when it arrives; `--attach` sends the signal and connects. Only a process running as the same user can send it, the directory is readable by that user alone, and a program nobody signals opens nothing. Two things follow from the signal: a program run under `nodemon`, which restarts a child with `SIGUSR2`, opens its debug socket instead of restarting; and whoever can reach that directory can do what the program's owner can do, including changing a variable, so keep it yours.
+How it works: a running program opens a private Unix socket under `~/.agency/debug-sessions` when it runs its first node, and `--attach` connects to it. The directory is readable by that user alone, and whoever can reach it can do what the program's owner can do, including changing a variable, so keep it yours. The socket never keeps a finished program alive. Set `AGENCY_NO_ATTACH=1` to start a program that opens no socket and cannot be attached to.
 
 ## Driving the debugger from a script
 

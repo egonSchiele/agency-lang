@@ -10,7 +10,6 @@ import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
 import { isPaused } from "@/runtime/pause.js";
-import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
 import { functionRefReviver, nativeTypeReplacer } from "@/runtime/revivers/index.js";
 import { AgencyFunction } from "@/runtime/agencyFunction.js";
 import { TestDebuggerIO, fixtureDir, freshImport, withLLMMocks } from "../testHelpers.js";
@@ -362,16 +361,16 @@ describe("a debugger attached over a channel", () => {
 });
 
 describe("a program registered for attach, over the socket", () => {
-  // The record and the signal listener are per process, written by the
-  // first node run on the Node host with no debugger (the runs above all
-  // had one, but an earlier test file in this worker may have run one);
-  // the context a debugger attaches to is the one that most recently
-  // started a node. AGENCY_HOME is one temporary directory for the whole
+  // The record and the socket are per process, opened by the first node
+  // run on the Node host with no debugger (the runs above all had one,
+  // but an earlier test file in this worker may have run one); the
+  // context a debugger attaches to is the one that most recently started
+  // a node. AGENCY_HOME is one temporary directory for the whole
   // run (lib/debugger/attach/vitest.globalSetup.ts), so the record is
   // found wherever in the run it was written.
   const dir = sessionsDir(nodeHost());
 
-  it("writes its record, opens the socket on the signal, and takes a debugger", async () => {
+  it("writes its record, opens the socket, and takes a debugger", async () => {
     const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
     const running = mod.main();
     await helper.untilWaiting();
@@ -381,8 +380,6 @@ describe("a program registered for attach, over the socket", () => {
     expect(record!.node).toBe("main");
     expect(Math.abs(record!.startedAt - (Date.now() - process.uptime() * 1000))).toBeLessThan(2000);
 
-    // The signal handler, called the way the signal would call it.
-    process.emit(ATTACH_SIGNAL as "SIGUSR2");
     const sock = recordPaths(dir, process.pid).sock;
     // The socket appears at listen and is chmod 600 right after; ready
     // means both.

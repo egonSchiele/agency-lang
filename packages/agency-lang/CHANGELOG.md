@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Debugger
+
+- **Attach no longer uses `SIGUSR2`.** A program opens its debug socket when it runs its first node, and `agency debug --attach` connects to it directly. A program under `nodemon`, which restarts a child with `SIGUSR2`, now restarts as it should instead of opening its debugger. Set `AGENCY_NO_ATTACH=1` to keep a program from registering at all. A program on an earlier version still waits for the signal, so the new CLI refuses it with "no debug socket"; restart it on this version.
+
 ### Breaking
 
 - **Serving an image model now needs torchvision.** `agency local serve` checks for it with the other image packages, so a Python environment set up before this release stops with "cannot import torchvision" until you install it: `~/.agency-agent/mlx-env/bin/pip install torchvision==0.29.2`. Qwen-Image-Edit-2511 needs it, and the image packages are pinned as one set.

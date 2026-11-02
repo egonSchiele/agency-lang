@@ -137,6 +137,33 @@ describe("parameter entries in Markdown examples", () => {
       "````text\n```\n@param input - Still an example.\n````\n\n@param input - Actual input.";
     expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
   });
+
+  it.each(["```", "~~~", "````"])("keeps a %s example inside its parameter entry", (fence) => {
+    const pathEntry = [
+      "@param path - The file. For example:",
+      `${fence}text`,
+      "first",
+      "",
+      "@param other - inside the example",
+      fence,
+      "The example belongs to path.",
+    ].join("\n");
+    const description = `Read a file.\n\n${pathEntry}\n@param other - Actual option.\n\nMore details.`;
+    expect(paramDocs(description)).toEqual([
+      {
+        name: "path",
+        text: `The file. For example: ${fence}text first  @param other - inside the example ${fence} The example belongs to path.`,
+      },
+      { name: "other", text: "Actual option." },
+    ]);
+    expect(stripBoundParams(description, ["other"])).toBe(
+      `Read a file.\n\n${pathEntry}\nMore details.`,
+    );
+    expect(stripBoundParams(description, ["path"])).toBe(
+      "Read a file.\n\n@param other - Actual option.\n\nMore details.",
+    );
+    expect(withoutParamDocs(description)).toBe("Read a file.\n\nMore details.");
+  });
 });
 
 describe("inline code before parameter documentation", () => {

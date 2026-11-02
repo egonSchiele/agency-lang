@@ -215,13 +215,11 @@ function isFile(file: string): boolean {
 
 /**
  * Content hash of the code `entryFile` runs: every module it reaches by
- * relative import, except those under `distLibDir/runtime/` by default. Only this code
+ * relative import, except those under `distLibDir/runtime/`. Only this code
  * can change what the entry emits, so an edit to the logs viewer or the TUI
  * does not rebuild every .agency file. Runtime modules are still walked, so
  * whatever they import is hashed. A match inside a string literal can only
  * add a file to the hash, which costs a rebuild, never a stale skip.
- * Documentation uses `includeRuntime` because its renderer calls runtime
- * helpers whose implementation changes the emitted Markdown.
  *
  * A missing entry means it was renamed or moved, and a walk from it would
  * reach nothing, so every compiler edit would leave the stamp unchanged.
@@ -232,14 +230,9 @@ function isFile(file: string): boolean {
  * Under vitest the entry resolves into lib/, which holds .ts files, so
  * the writer and the checker both take this path and agree.
  */
-export function computeCompilerStamp(
-  distLibDir: string,
-  entryFile: string,
-  options: { includeRuntime?: boolean } = {},
-): string {
+export function computeCompilerStamp(distLibDir: string, entryFile: string): string {
   if (!isFile(entryFile)) {
-    const excluded = options.includeRuntime ? ["agents"] : ["runtime", "agents"];
-    return hashFiles(distLibDir, walkFiles(distLibDir, ".js", excluded));
+    return hashFiles(distLibDir, walkFiles(distLibDir, ".js", ["runtime", "agents"]));
   }
   const reached: string[] = [];
   const queue = [entryFile];
@@ -254,8 +247,7 @@ export function computeCompilerStamp(
     }
   }
   const runtimeDir = path.join(distLibDir, "runtime") + path.sep;
-  const files = options.includeRuntime ? reached : reached.filter((f) => !f.startsWith(runtimeDir));
-  return hashFiles(distLibDir, files.sort());
+  return hashFiles(distLibDir, reached.filter((f) => !f.startsWith(runtimeDir)).sort());
 }
 
 export type FreshnessContext = {

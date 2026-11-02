@@ -196,26 +196,6 @@ describe("computeCompilerStamp", () => {
     });
   });
 
-  test("includes reached runtime modules when the caller renders with them", () => {
-    withDistTree((dir, entry) => {
-      const before = computeCompilerStamp(dir, entry, { includeRuntime: true });
-      fs.writeFileSync(
-        path.join(dir, "runtime", "r.js"),
-        'export * from "../typeChecker/t.js";\nexport const r = 2;\n',
-      );
-      expect(computeCompilerStamp(dir, entry, { includeRuntime: true })).not.toBe(before);
-    });
-  });
-
-  test("includes runtime in the missing-entry fallback when requested", () => {
-    withDistTree((dir) => {
-      const missing = path.join(dir, "cli", "missing.js");
-      const before = computeCompilerStamp(dir, missing, { includeRuntime: true });
-      fs.writeFileSync(path.join(dir, "runtime", "r.js"), "export const r = 2;\n");
-      expect(computeCompilerStamp(dir, missing, { includeRuntime: true })).not.toBe(before);
-    });
-  });
-
   test("an import cycle terminates", () => {
     withDistTree((dir, entry) => {
       fs.writeFileSync(path.join(dir, "utils", "u.js"), 'import "../compiler/entry.js";\n');

@@ -21,7 +21,7 @@ import type { InterruptEffect } from "@/symbolTable.js";
 import type { Capability } from "@/host/host.js";
 import { heading, codeFence, bold, markdownTable, section } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
-import { paramDocs, stripBoundParams, type ParamDoc } from "@/runtime/paramDocs.js";
+import { paramDocs, stripBoundParams, type ParamDoc } from "@/utils/paramDocs.js";
 import { HIDDEN_TAG, isHidden } from "@/utils/hiddenTag.js";
 import {
   OwnedPathError,

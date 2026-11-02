@@ -1475,6 +1475,31 @@ return input
     expect(output).not.toContain("@param input");
   });
 
+  it("does not use parameter names inside an entry's example as descriptions", () => {
+    const description = [
+      "Read a file.",
+      "",
+      "@param path - The file. For example:",
+      "```text",
+      "first",
+      "",
+      "@param other - inside the example",
+      "```",
+      "@param other - Actual option.",
+    ].join("\n");
+    const output = render(`export def read(path: string, other: string): string {
+"""
+${description}
+"""
+return path
+}
+`);
+    expect(output).toContain(
+      "| path | `string` |  | The file. For example: ```text first  @param other - inside the example ``` |",
+    );
+    expect(output).toContain("| other | `string` |  | Actual option. |");
+  });
+
   it("keeps the compact table when no parameters have descriptions", () => {
     const output = render(`export def echo(input: string): string {
 """Echo text."""

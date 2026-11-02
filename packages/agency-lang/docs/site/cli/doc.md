@@ -68,6 +68,7 @@ export def greet(name: string, greeting: string = "Hello"): string {
 The generated parameter table includes each `@param` entry in a Description
 column beside the parameter's name, type, and default. Continuation lines belong
 to the same description until the next `@param` entry or a blank line.
+Inside a fenced code example, blank lines and `@param` lines belong to the example.
 
 The rest of the docstring keeps its Markdown formatting. An entry whose name
 does not match a parameter stays in the prose so its text is not lost. A table

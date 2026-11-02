@@ -66,7 +66,8 @@ When you use `.partial()`, any `@param` lines in the function's docstring for bo
 [`agency doc`](/cli/doc#parameter-descriptions) uses the same entries to fill the
 Description column in the generated parameter table. You can wrap a description
 onto following lines. A blank line ends the entry. Entries inside fenced code
-examples remain part of the example.
+examples remain part of the example, including when the example is inside a
+parameter description. A blank line inside a fence does not end the entry.
 
 ### Custom descriptions with `.describe()`
 

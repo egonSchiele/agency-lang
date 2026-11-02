@@ -220,8 +220,8 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
   it("list names both saved workflows", async () => {
     const r = await runCli(project, ["list"]);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("addOne { noteTitle: string }");
-    expect(r.stdout).toContain("broken { noteTitle: string }");
+    expect(r.stdout).toContain("addOne(noteTitle: string)");
+    expect(r.stdout).toContain("broken(noteTitle: string)");
     noDriverLeft();
   });
 

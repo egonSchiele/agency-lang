@@ -7,6 +7,7 @@ import {
   formatProblems,
   formatRunValue,
   formatUncovered,
+  inputsAsParams,
 } from "./output.js";
 import { color } from "../../utils/termcolors.js";
 
@@ -162,11 +163,43 @@ describe("formatList", () => {
     const listed = [
       { name: "addOne", workflow: { inputs: "{ noteTitle: string }", description: "Add soup." } },
     ];
-    expect(formatList("/p", listed)).toBe("addOne { noteTitle: string }\n  Add soup.");
+    expect(formatList("/p", listed)).toBe("addOne(noteTitle: string)\n  Add soup.");
+  });
+
+  it("puts a blank line between workflows", () => {
+    const listed = [
+      { name: "addOne", workflow: { inputs: "{ noteTitle: string }", description: "Add soup." } },
+      { name: "addTwo", workflow: { inputs: "{ n: number }", description: "" } },
+    ];
+    expect(formatList("/p", listed)).toBe(
+      "addOne(noteTitle: string)\n  Add soup.\n\naddTwo(n: number)",
+    );
   });
 
   it("says when there are none", () => {
     expect(formatList("/p", [])).toBe("no saved workflows in /p/workflows");
+  });
+});
+
+describe("inputsAsParams", () => {
+  it("writes each input as a parameter, keeping optional marks and nested types", () => {
+    expect(inputsAsParams("{ zip: string }")).toBe("zip: string");
+    expect(inputsAsParams("{ a?: string; b: number[]; c: { d: string, e: number } }")).toBe(
+      "a?: string, b: number[], c: { d: string; e: number }",
+    );
+  });
+
+  it("drops comments and reads properties on their own lines", () => {
+    const inputs = '{\n  // the zip code\n  zip: string\n  units: "imperial" | "metric"\n}';
+    expect(inputsAsParams(inputs)).toBe('zip: string, units: "imperial" | "metric"');
+  });
+
+  it("prints an empty list for no inputs", () => {
+    expect(inputsAsParams("{}")).toBe("");
+  });
+
+  it("returns text that does not parse as it is", () => {
+    expect(inputsAsParams("{ zip: }")).toBe("{ zip: }");
   });
 });
 

@@ -11,6 +11,7 @@
 import type { CatalogEntry } from "../../stdlib/workflow/catalog.js";
 import type { StepEffects } from "../../stdlib/workflow/effects.js";
 import { describeProblem } from "../../stdlib/workflow/index.js";
+import { parseTypeText, printType } from "../../stdlib/workflow/typeText.js";
 import type { Problem } from "../../stdlib/workflow/types.js";
 import { stripControlCharacters } from "../../utils/controlCharacters.js";
 import { type ColorFunction, ttyColor } from "../../utils/termcolors.js";
@@ -153,7 +154,30 @@ export function formatChecked(
 /** The part of a saved workflow `list` prints. */
 export type ListedWorkflow = { name: string; workflow: { inputs: string; description: string } };
 
-/** Each workflow's name and inputs, then its description. */
+/**
+ * A workflow's inputs type written as a parameter list, so a saved workflow
+ * reads like a function call: `{ zip: string; units: string }` becomes
+ * `zip: string, units: string`. The printer puts each top-level property on
+ * its own line ending in `;`, and a nested object type on one line, so the
+ * line ends are where the commas go. Text that does not parse is returned
+ * as it is.
+ */
+export function inputsAsParams(inputs: string): string {
+  const parsed = parseTypeText("Inputs", inputs, "inputs");
+  if ("message" in parsed) {
+    return inputs;
+  }
+  const lines = printType(parsed.alias).split("\n");
+  return lines
+    .slice(1, -1)
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .map((line) => (line.endsWith(";") ? `${line.slice(0, -1)},` : line))
+    .join(" ");
+}
+
+/** Each workflow as a call, `name(input: type, ...)`, then its description,
+ *  with a blank line between workflows. */
 export function formatList(
   dir: string,
   entries: ListedWorkflow[],
@@ -163,11 +187,15 @@ export function formatList(
     return `no saved workflows in ${clean(dir)}/workflows`;
   }
   return entries
-    .flatMap(({ name, workflow }) => [
-      `${paint.cyan.bold(clean(name))} ${clean(workflow.inputs)}`,
-      ...(workflow.description === "" ? [] : [`  ${clean(firstParagraph(workflow.description))}`]),
-    ])
-    .join("\n");
+    .map(({ name, workflow }) =>
+      [
+        `${paint.cyan.bold(clean(name))}(${clean(inputsAsParams(workflow.inputs))})`,
+        ...(workflow.description === ""
+          ? []
+          : [`  ${clean(firstParagraph(workflow.description))}`]),
+      ].join("\n"),
+    )
+    .join("\n\n");
 }
 
 /** A run's value: a string as itself, anything else as indented JSON. */

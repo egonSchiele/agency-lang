@@ -88,11 +88,14 @@ agency workflow compile updateMealPlanFromNote
 
 ## `list`
 
-Prints the workflows saved in a project, each with its inputs and description. The project directory is `.` unless you name another.
+Prints the workflows saved in a project, each written like a function call with its inputs as the parameters, then its description. The project directory is `.` unless you name another.
 
 ```text
 $ agency workflow list
-updateMealPlanFromNote { noteTitle: string }
+temperatureForZip(zip: string)
+  Get the current temperature for a zip code.
+
+updateMealPlanFromNote(noteTitle: string)
   Copy this week's meal plan from the groceries note to the weekly meal plan list.
 ```
 

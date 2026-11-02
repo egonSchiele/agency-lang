@@ -239,7 +239,7 @@ describe("the commands", () => {
     answer = { ok: true, data: success([{ name: "addOne", workflow: addOne }]) };
     expect(await workflowList(undefined, {}, io())).toBe(0);
     expect(calls[0]).toMatchObject({ node: "wfListNode", args: [project], imports: [] });
-    expect(out).toEqual(["addOne { noteTitle: string }\n  Find a list and add soup to it."]);
+    expect(out).toEqual(["addOne(noteTitle: string)\n  Find a list and add soup to it."]);
   });
 
   describe("run", () => {

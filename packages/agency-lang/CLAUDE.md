@@ -241,6 +241,7 @@ Other process docs:
 - `docs/dev/language/template-agency.md` — How templates work under the hood: holes, `fill`, and hygiene.
 - `docs/dev/language/triple-quoted-string-escapes.md` — The two escapes a raw `"""` string honours, `\${` and `\"""`, and the three places (parser, generator, optimizer) that must agree on them.
 - `docs/dev/language/type-casts.md` — `expr as Type` and `expr as Type!`: how a cast is told from an `as` block, the positions refused because Agency and TypeScript would group them differently, and why a checked cast is hoisted like a call.
+- `docs/dev/language/unwrap-operator.md` — The `?` operator: an access-chain element that unwraps a `Result` or returns its failure, lowered by the hoist pass to a temp and an `isFailure` guard, the `with approve` expansion, and the seven diagnostics that refuse it where it cannot return or be lowered.
 - `docs/dev/language/validation-annotations.md` — How `@validate` and `@jsonSchema` are compiled, how the runtime walks a validated value, where a `!` parameter is checked (step 0, so a resume skips it), why a resume's argument overrides are applied as given, and why a validator that pauses is not supported from a parameter check.
 - `docs/dev/language/with-approve.md` — The `with approve/reject/propagate` shorthand for wrapping a single statement in a handler.
 

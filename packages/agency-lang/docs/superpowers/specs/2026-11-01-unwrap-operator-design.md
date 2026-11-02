@@ -115,9 +115,11 @@ chaining read left to right.
 
 ### Adjacency
 
-`?` must directly follow the expression, with no whitespace between. `foo() ?`
-is not an unwrap. This keeps the operator visually attached to its operand
-and keeps the ternary refusal below simple.
+Chain elements are probed on the raw input with no whitespace skipping, so
+after a variable the `?` must be adjacent: `x ?` is not an unwrap. The call
+parser consumes the whitespace after `foo()`, so `foo() ?` does parse as an
+unwrap and means the same as `foo()?`. The ternary refusal below covers
+both spellings.
 
 ### What follows the `?`
 
@@ -243,9 +245,10 @@ branch that already handles access chains.
 ### The rewrite
 
 The common case is an assignment: `const x = expr?`, and equally
-`let x = expr?`, `x = expr?`, `x += expr?`, and `const { a } = expr?`. All of
-them hold `expr?` in the assignment's value slot, which the pass already
-walks, so one rule covers them. For a chain that contains `unwrap` elements,
+`let x = expr?`, `x = expr?`, and `const { a } = expr?`. All of them hold
+`expr?` in the assignment's value slot, which the pass already walks, so one
+rule covers them. A compound assignment, `n += expr?`, parses as a bare
+expression statement the pass never extracts from, so AG1021 refuses it. For a chain that contains `unwrap` elements,
 the pass splits the chain at each one. Each piece before an `unwrap` becomes a hoisted temp, followed by a guard
 that returns the temp if it is a failure, and the chain continues from the
 temp's `.value`:

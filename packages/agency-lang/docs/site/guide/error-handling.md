@@ -105,6 +105,48 @@ node main(msg: string) {
 
 `catch` unwraps the Result type for you, and if it's a failure, uses the default value instead.
 
+## The `?` operator
+
+Often there is no sensible default. The function that got the failure wants to hand it to its own caller. Written out, that is four lines:
+
+```ts
+def readMeta(root: string): Result<MetaFile> {
+  const parsed = readJsonFile(root, "meta.json")
+  if (parsed is failure) {
+    return parsed
+  }
+  return success(parsed.value)
+}
+```
+
+The `?` operator is that check in one character. Put it after an expression that holds a `Result`. If the Result is a success, you get the value. If it is a failure, the enclosing function returns that failure right there:
+
+```ts
+def readMeta(root: string): Result<MetaFile> {
+  const parsed = readJsonFile(root, "meta.json")?
+  return success(parsed)
+}
+```
+
+`?` binds tighter than anything else, so it chains:
+
+```ts
+const name = fetchUser(id)?.profile()?.displayName
+```
+
+Each `?` checks the Result before it, and the first failure ends the function.
+
+Two rules follow from what `?` does. The function that uses it must be declared to return a `Result`, since a failure may come out of it. And the thing before `?` must be a `Result`; `?` on a plain value is a compile error.
+
+`?` passes the failure through unchanged. If you want to add a message, keep the Result and match on it:
+
+```ts
+const parsed = readJsonFile(root, "meta.json")
+if (parsed is failure(error)) {
+  return failure("meta.json could not be read: ${error}")
+}
+```
+
 ## The pipe operator (`|>`)
 If can be a pain to unwrap the `Result` type all the time. Here is a function called `half`, which works if the number is even:
 

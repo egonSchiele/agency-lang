@@ -471,6 +471,7 @@ def writePolicyFile(
 // Mark the start of the handler's own operation on its policy file. The
 // directory is the real one, spelled the way read and write payloads spell
 // it. If it cannot be resolved, nothing matches and the policy decides.
+@capabilities(fileRead)
 def beginOwnIo(effect: string) {
   const dir = try _policyFileDir(globalCliPolicyOpts.file)
   _internalIoDir = dir catch ""

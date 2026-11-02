@@ -1,7 +1,3 @@
-/**
-  MCP (Model Context Protocol) integration for the agency agent. Loads tools
-  from configured MCP servers and gates every call through the policy handler.
-*/
 import {
   _isMcpAvailable,
   _readProjectMcpConfig,
@@ -10,8 +6,22 @@ import {
   _loadMcpToolsWithStatus
 } from "agency-lang/stdlib-lib/mcp.js"
 
-/// The result of loadMcpToolsWithStatus: the flat tool list plus a per-server
-/// status map ("connected" / "unavailable").
+/** @module
+  @summary Load MCP tools and report server connection status.
+  Read project server settings, merge them with global settings, and load
+  tools for use in `llm()`. Calls to loaded tools raise `mcp::call` so handlers
+  and policies can approve or reject them.
+
+  ```ts
+  import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
+
+  const servers = readProjectMcpConfig(".")
+  const loaded = loadMcpToolsWithStatus(servers)
+  printJSON(loaded.status)
+  ```
+*/
+
+/** Loaded tools and each server's "connected" or "unavailable" status. */
 export type McpLoadResult = {
   tools: any[];
   status: Record<string, string>
@@ -19,7 +29,7 @@ export type McpLoadResult = {
 
 // The effect an MCP tool call raises before its JSON-RPC fires. Raised from TS
 // (lib/stdlib/mcpGate.ts) via agency.interrupt with this exact name; declared
-// here so policy authors can write `handle mcp::call` blocks inspecting e.args.
+// here so handlers can match the effect and inspect its server, tool, and args.
 @always(server, tool)
 effect mcp::call {
   server: string,
@@ -52,6 +62,10 @@ export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
 
 @capabilities(fileRead, fileWrite, network, subprocess)
 export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult {
-  """Like loadMcpTools, but also returns a per-server status map for /mcp."""
+  """
+  Load MCP tools and report which servers connected.
+
+  @param merged - Server configurations, such as the output of mergeMcpServers.
+  """
   return _loadMcpToolsWithStatus(merged, onOAuthRequired)
 }

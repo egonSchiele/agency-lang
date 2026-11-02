@@ -1,26 +1,26 @@
 ---
 name: "expertGuidance"
-description: "The ExpertGuidance type shared by the expert agents, with render"
+description: "Render expert guidance for a solver and handle failed consultations."
 ---
 
 # expertGuidance
 
-and fail-open helpers.
+Expert agents return `ExpertGuidance`. Pass it through `renderGuidance` for
+a coding agent's context and use its `checklist` as acceptance criteria.
+`guidanceOrEmpty` turns a failed consultation into empty guidance.
 
 ## Types
 
 ### ExpertGuidance
 
-What an expert consult returns.
-- `rules` are for the solver to read;
-- `checklist` are concrete, checkable acceptance criteria.
-Empty rules and checklist means "nothing domain-specific here".
+Guidance for a solver: domain conventions in `rules` and checkable
+acceptance criteria in `checklist`. Empty lists mean the consult supplied
+no domain-specific guidance.
 
 ```ts
-/** What an expert consult returns.
-- `rules` are for the solver to read;
-- `checklist` are concrete, checkable acceptance criteria.
-Empty rules and checklist means "nothing domain-specific here". */
+/** Guidance for a solver: domain conventions in `rules` and checkable
+acceptance criteria in `checklist`. Empty lists mean the consult supplied
+no domain-specific guidance. */
 export type ExpertGuidance = {
   domain: string;
   rules: string[];
@@ -28,7 +28,7 @@ export type ExpertGuidance = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L12))
 
 ## Constants
 
@@ -44,7 +44,7 @@ export static const emptyGuidance: ExpertGuidance = {
 
 **Type:** [ExpertGuidance](#expertguidance)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L18))
 
 ## Functions
 
@@ -65,7 +65,7 @@ Fold expert guidance into a context block the coding agent reads
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L24))
 
 ### guidanceOrEmpty
 
@@ -73,8 +73,7 @@ Fold expert guidance into a context block the coding agent reads
 guidanceOrEmpty(result: Result<ExpertGuidance>): ExpertGuidance
 ```
 
-Unwrap a consult Result, failing open: a consult that errored yields
-  empty guidance, so the caller proceeds as if no consult happened.
+Return expert guidance, or empty guidance if the consultation failed.
 
 **Parameters:**
 
@@ -84,4 +83,4 @@ Unwrap a consult Result, failing open: a consult that errored yields
 
 **Returns:** [ExpertGuidance](#expertguidance)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L35))

@@ -1,16 +1,25 @@
 ---
 name: "coding"
-description: "Writes an Agency program for a task and iterates until it parses,"
+description: "Generate Agency source and check that it parses, typechecks, and compiles."
 ---
 
 # coding
 
-typechecks, compiles, and (by default) has a node main.
+`agencyCodingAgent` returns source text for the caller to save or run.
+By default it also requires `node main`. Pass `requireMain: false` for a
+library module, and set `dir` when the source imports local files.
 
-  This agent's contract ends at VALID source. To also check the program's
-  behavior, compose it with agencyVerifierAgent: generate source here, run
-  agencyVerifierAgent on the result, and retry with its findings folded into
-  the task.
+```ts
+import { agencyCodingAgent } from "std::agents/agency/coding"
+
+node main() {
+  const generated = agencyCodingAgent("Return the squares of the numbers 1 through 5")
+  print(generated)
+}
+```
+
+Use `agencyVerifierAgent` separately to run the generated program and
+judge its behavior. Generation checks establish source validity.
 
 ## Types
 
@@ -28,7 +37,7 @@ export type WriteFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L43))
 
 ## Functions
 
@@ -38,14 +47,10 @@ export type WriteFailure = {
 buildTools(strict: boolean = false, projectTools: boolean = true): any[]
 ```
 
-Return the Agency writer's tools: the bundled documentation, the source
-  inspectors it checks drafts with, read-only access to the project it is
-  writing for, and fetches for a named external resource. Not testFile: the
-  writer returns source it has not saved, so there is nothing on disk for a
-  harness to test yet.
+Return documentation, source checks, project lookups, and fetch tools for an Agency writer.
 
-  @param strict - Offer a typecheck that reports what a sandboxed compile would, so the writer sees those errors on its own draft
-  @param projectTools - False leaves out the file and git tools, for a draft that depends on nothing in the project
+  @param strict - Offer the typecheck restrictions used by sandboxed compilation.
+  @param projectTools - False omits the file and Git lookup tools.
 
 **Parameters:**
 
@@ -56,7 +61,7 @@ Return the Agency writer's tools: the bundled documentation, the source
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L218))
 
 ### agencyCodingAgent
 
@@ -78,29 +83,20 @@ agencyCodingAgent(
 ): Result<string, WriteFailure>
 ```
 
-Write an Agency program for the task. Iterates until the source parses,
-  typechecks, compiles, and (when requireMain) has a node main, or attempts
-  run out. On failure returns the last attempted source with the problems
-  found in it.
+Generate checked Agency source for a task, returning source text for the caller to save.
+  Failures include the last attempted source and its problems.
 
-  @param task - What the program should do
-  @param context - Extra material folded into the prompt, or ""
-  @param maxAttempts - Generation attempts before giving up
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param requireMain - Demand a `node main` entry point (default). Pass false
-    when the deliverable is a library module whose exports the caller places.
-  @param dir - Directory the draft's relative imports resolve against, so a
-    draft that imports a sibling file typechecks. "" when it imports none.
-  @param strict - Check each draft the way a sandboxed (`--agency-only`)
-    compile would, and give the writer a typecheck that does the same. Pass
-    true when the deliverable will run sandboxed.
-  @param projectTools - False leaves out the writer's file and git tools.
-    Pass false when nothing in the caller's project bears on the task.
+  @param maxAttempts - Maximum generation attempts before returning a failure.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
+  @param extraTools - Additional tools, ignoring any whose names duplicate built-in tools.
+  @param requireMain - False allows library modules without a `node main` entry point.
+  @param dir - Base directory for the source's relative imports.
+  @param strict - True checks drafts with the restrictions used by sandboxed compilation.
+  @param projectTools - False omits project file and Git lookup tools.
 
 **Parameters:**
 
@@ -126,4 +122,4 @@ Write an Agency program for the task. Iterates until the source parses,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L407))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L408))

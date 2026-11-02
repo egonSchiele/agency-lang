@@ -28,13 +28,13 @@ node main() {
 ### OpenRouterProviderPreferences
 
 How OpenRouter picks the company that runs the model. Provider names
- are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
- smoltalk's `OpenRouterProviderPreferences`.
+   are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
+   smoltalk's `OpenRouterProviderPreferences`.
 
 ```ts
 /** How OpenRouter picks the company that runs the model. Provider names
- *  are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
- *  smoltalk's `OpenRouterProviderPreferences`. */
+   are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
+   smoltalk's `OpenRouterProviderPreferences`. */
 export type OpenRouterProviderPreferences = {
   order?: string[];
   only?: string[];
@@ -65,11 +65,11 @@ export type OpenRouterOptions = {
 ### WarnAtRoundsLeft
 
 When the tool loop warns the model that its tool rounds are running
- out. See `warnAtRoundsLeft` on `LlmDefaults`.
+   out. See `warnAtRoundsLeft` on `LlmDefaults`.
 
 ```ts
 /** When the tool loop warns the model that its tool rounds are running
- *  out. See `warnAtRoundsLeft` on `LlmDefaults`. */
+   out. See `warnAtRoundsLeft` on `LlmDefaults`. */
 export type WarnAtRoundsLeft = {
   remaining?: number;
   text?: string;
@@ -83,13 +83,13 @@ export type WarnAtRoundsLeft = {
 ### LlmBaseUrls
 
 The base URL for each provider that takes one. Each field is
- optional. A provider left out uses the URL from `agency.json`, or its
- default.
+   optional. A provider left out uses the URL from `agency.json`, or its
+   default.
 
 ```ts
 /** The base URL for each provider that takes one. Each field is
- *  optional. A provider left out uses the URL from `agency.json`, or its
- *  default. */
+   optional. A provider left out uses the URL from `agency.json`, or its
+   default. */
 export type LlmBaseUrls = {
   openAiCompat?: string;
   openRouter?: string;
@@ -106,101 +106,101 @@ export type LlmBaseUrls = {
 ### LlmDefaults
 
 Default options for `llm()` calls. Every field is optional; only the
- fields you pass are changed. `provider` is normally derived from the
- model name. Set it only when the name doesn't imply a provider (e.g.
- a custom or local model).
+   fields you pass are changed. `provider` is normally derived from the
+   model name. Set it only when the name doesn't imply a provider (e.g.
+   a custom or local model).
 
- `thinking` turns a model's thinking on or off, with an optional budget
- of tokens it may think for before it has to answer. On a local MLX
- model, `{ enabled: false }` skips the thinking entirely, which is the
- biggest saving there is on a small task.
+   `thinking` turns a model's thinking on or off, with an optional budget
+   of tokens it may think for before it has to answer. On a local MLX
+   model, `{ enabled: false }` skips the thinking entirely, which is the
+   biggest saving there is on a small task.
 
- `replyLimits` changes how the MLX chat server treats a reply that goes
- in circles: `hedgeLimit` is how many second thoughts ("But wait",
- "Hmm") it allows and `repeatLimit` how many times one sentence may
- repeat, both within the last two thousand tokens, and `limitAnswers`
- watches the answer as well as the thinking. `0` turns a limit off,
- which a song with a chorus needs. Other providers ignore it.
+   `replyLimits` changes how the MLX chat server treats a reply that goes
+   in circles: `hedgeLimit` is how many second thoughts ("But wait",
+   "Hmm") it allows and `repeatLimit` how many times one sentence may
+   repeat, both within the last two thousand tokens, and `limitAnswers`
+   watches the answer as well as the thinking. `0` turns a limit off,
+   which a song with a chorus needs. Other providers ignore it.
 
- `openRouter.provider` chooses which companies OpenRouter may send the
- call to, for example `{ provider: { ignore: ["open-inference"] } }` to
- skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
- to use only one. Other providers ignore it. `rawAttributes` is spread
- into the provider's request body as given, for a request field Agency
- has no option for, such as `{ top_k: 5 }`.
+   `openRouter.provider` chooses which companies OpenRouter may send the
+   call to, for example `{ provider: { ignore: ["open-inference"] } }` to
+   skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
+   to use only one. Other providers ignore it. `rawAttributes` is spread
+   into the provider's request body as given, for a request field Agency
+   has no option for, such as `{ top_k: 5 }`.
 
- `warnAtRoundsLeft` warns the model before it runs out of tool rounds
- (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
- the call sends `text` as a user message; when one round is left and
- `finalWarning` is true (the default), it sends `finalWarningText`. In
- either text, `{remaining}` becomes the number of rounds left and
- `{limit}` the cap. Each warning is sent once per `llm()` call and is
- removed from the thread when the call returns. `remaining: 0` turns
- the first warning off. The default texts are "Of the {limit} tool
- rounds for this request, {remaining} remain. Finish what you can with
- them and then write your answer." and "This is the last tool round for
- this request. The results of the tool calls you make now are the last
- you will see. After them, write your answer from what you have." A
- call's own `warnAtRoundsLeft` combines with this one field by field.
+   `warnAtRoundsLeft` warns the model before it runs out of tool rounds
+   (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
+   the call sends `text` as a user message; when one round is left and
+   `finalWarning` is true (the default), it sends `finalWarningText`. In
+   either text, `{remaining}` becomes the number of rounds left and
+   `{limit}` the cap. Each warning is sent once per `llm()` call and is
+   removed from the thread when the call returns. `remaining: 0` turns
+   the first warning off. The default texts are "Of the {limit} tool
+   rounds for this request, {remaining} remain. Finish what you can with
+   them and then write your answer." and "This is the last tool round for
+   this request. The results of the tool calls you make now are the last
+   you will see. After them, write your answer from what you have." A
+   call's own `warnAtRoundsLeft` combines with this one field by field.
 
- `baseUrl` sets the base URLs to use for the providers it names, for
- example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
- server on another machine. A later `setLlmOptions` call with `baseUrl`
- replaces this one whole. A provider it leaves out uses the URL from
- `agency.json`, or its default.
+   `baseUrl` sets the base URLs to use for the providers it names, for
+   example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
+   server on another machine. A later `setLlmOptions` call with `baseUrl`
+   replaces this one whole. A provider it leaves out uses the URL from
+   `agency.json`, or its default.
 
- Setting a field to `null` removes it, so the value `agency.json` gives
- it, if any, applies again. To turn OpenRouter routing off entirely,
- pass `openRouter: {}`.
+   Setting a field to `null` removes it, so the value `agency.json` gives
+   it, if any, applies again. To turn OpenRouter routing off entirely,
+   pass `openRouter: {}`.
 
 ```ts
 /** Default options for `llm()` calls. Every field is optional; only the
- *  fields you pass are changed. `provider` is normally derived from the
- *  model name. Set it only when the name doesn't imply a provider (e.g.
- *  a custom or local model).
- *
- *  `thinking` turns a model's thinking on or off, with an optional budget
- *  of tokens it may think for before it has to answer. On a local MLX
- *  model, `{ enabled: false }` skips the thinking entirely, which is the
- *  biggest saving there is on a small task.
- *
- *  `replyLimits` changes how the MLX chat server treats a reply that goes
- *  in circles: `hedgeLimit` is how many second thoughts ("But wait",
- *  "Hmm") it allows and `repeatLimit` how many times one sentence may
- *  repeat, both within the last two thousand tokens, and `limitAnswers`
- *  watches the answer as well as the thinking. `0` turns a limit off,
- *  which a song with a chorus needs. Other providers ignore it.
- *
- *  `openRouter.provider` chooses which companies OpenRouter may send the
- *  call to, for example `{ provider: { ignore: ["open-inference"] } }` to
- *  skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
- *  to use only one. Other providers ignore it. `rawAttributes` is spread
- *  into the provider's request body as given, for a request field Agency
- *  has no option for, such as `{ top_k: 5 }`.
- *
- *  `warnAtRoundsLeft` warns the model before it runs out of tool rounds
- *  (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
- *  the call sends `text` as a user message; when one round is left and
- *  `finalWarning` is true (the default), it sends `finalWarningText`. In
- *  either text, `{remaining}` becomes the number of rounds left and
- *  `{limit}` the cap. Each warning is sent once per `llm()` call and is
- *  removed from the thread when the call returns. `remaining: 0` turns
- *  the first warning off. The default texts are "Of the {limit} tool
- *  rounds for this request, {remaining} remain. Finish what you can with
- *  them and then write your answer." and "This is the last tool round for
- *  this request. The results of the tool calls you make now are the last
- *  you will see. After them, write your answer from what you have." A
- *  call's own `warnAtRoundsLeft` combines with this one field by field.
- *
- *  `baseUrl` sets the base URLs to use for the providers it names, for
- *  example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
- *  server on another machine. A later `setLlmOptions` call with `baseUrl`
- *  replaces this one whole. A provider it leaves out uses the URL from
- *  `agency.json`, or its default.
- *
- *  Setting a field to `null` removes it, so the value `agency.json` gives
- *  it, if any, applies again. To turn OpenRouter routing off entirely,
- *  pass `openRouter: {}`. */
+   fields you pass are changed. `provider` is normally derived from the
+   model name. Set it only when the name doesn't imply a provider (e.g.
+   a custom or local model).
+
+   `thinking` turns a model's thinking on or off, with an optional budget
+   of tokens it may think for before it has to answer. On a local MLX
+   model, `{ enabled: false }` skips the thinking entirely, which is the
+   biggest saving there is on a small task.
+
+   `replyLimits` changes how the MLX chat server treats a reply that goes
+   in circles: `hedgeLimit` is how many second thoughts ("But wait",
+   "Hmm") it allows and `repeatLimit` how many times one sentence may
+   repeat, both within the last two thousand tokens, and `limitAnswers`
+   watches the answer as well as the thinking. `0` turns a limit off,
+   which a song with a chorus needs. Other providers ignore it.
+
+   `openRouter.provider` chooses which companies OpenRouter may send the
+   call to, for example `{ provider: { ignore: ["open-inference"] } }` to
+   skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
+   to use only one. Other providers ignore it. `rawAttributes` is spread
+   into the provider's request body as given, for a request field Agency
+   has no option for, such as `{ top_k: 5 }`.
+
+   `warnAtRoundsLeft` warns the model before it runs out of tool rounds
+   (`maxToolCallRounds`). When `remaining` rounds are left (default 3),
+   the call sends `text` as a user message; when one round is left and
+   `finalWarning` is true (the default), it sends `finalWarningText`. In
+   either text, `{remaining}` becomes the number of rounds left and
+   `{limit}` the cap. Each warning is sent once per `llm()` call and is
+   removed from the thread when the call returns. `remaining: 0` turns
+   the first warning off. The default texts are "Of the {limit} tool
+   rounds for this request, {remaining} remain. Finish what you can with
+   them and then write your answer." and "This is the last tool round for
+   this request. The results of the tool calls you make now are the last
+   you will see. After them, write your answer from what you have." A
+   call's own `warnAtRoundsLeft` combines with this one field by field.
+
+   `baseUrl` sets the base URLs to use for the providers it names, for
+   example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
+   server on another machine. A later `setLlmOptions` call with `baseUrl`
+   replaces this one whole. A provider it leaves out uses the URL from
+   `agency.json`, or its default.
+
+   Setting a field to `null` removes it, so the value `agency.json` gives
+   it, if any, applies again. To turn OpenRouter routing off entirely,
+   pass `openRouter: {}`. */
 export type LlmDefaults = {
   model?: string;
   provider?: string;
@@ -238,7 +238,7 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L239))
 
 ## Effects
 
@@ -251,7 +251,7 @@ effect std::llm::registerProvider {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L222))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L217))
 
 ### std::read
 
@@ -263,7 +263,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L289))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L284))
 
 ## Functions
 
@@ -294,8 +294,6 @@ setModel(name: string)
 
 Set the default model for subsequent llm() calls.
 
-  @param name - The model name, e.g. "gpt-4o-mini" or "claude-opus-4-8"
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -310,14 +308,10 @@ Set the default model for subsequent llm() calls.
 envVarFor(provider: string): string
 ```
 
-Return the environment variable that holds the API key for a recognized
-  provider, or "" for an unrecognized name. Recognized: "anthropic"
-  (ANTHROPIC_API_KEY), "google" (GEMINI_API_KEY), "openai" (OPENAI_API_KEY),
-  "openrouter" (OPENROUTER_API_KEY), "litellm" (LITELLM_API_KEY). Note that
-  "litellm" also requires a base URL (LITELLM_BASE_URL). This returns only
-  the API-key var.
+Return a provider's API-key environment variable name, or an empty string if unknown.
 
-  @param provider - The provider name to map
+Recognizes anthropic, google, openai, openrouter, and litellm. LiteLLM also
+needs LITELLM_BASE_URL; this helper returns only its API-key variable name.
 
 **Parameters:**
 
@@ -327,7 +321,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L162))
 
 ### pickProvider
 
@@ -356,7 +350,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L184))
 
 ### registerProviderModule
 
@@ -381,7 +375,7 @@ Load a provider module by path at runtime and register its custom provider
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L225))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L220))
 
 ### listHostedModels
 
@@ -394,7 +388,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L249))
 
 ### hostedModelInfo
 
@@ -415,7 +409,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L262))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L257))
 
 ### modelSupportsInput
 
@@ -423,13 +417,12 @@ Metadata for one hosted model by name, or null if the name is unknown or
 modelSupportsInput(model: string, modality: string): boolean | null
 ```
 
-Whether a model accepts a given input modality ("image" or "pdf").
-  Tri-state: true / false when the model catalog says so, null when the
-  model or its modality data is unknown. Treat null as "do not gate",
-  the same rule llm() applies at send time.
+Check catalog support for an input modality; null means unknown.
 
-  @param model - The model name (e.g. "gpt-4o-mini")
-  @param modality - "image" or "pdf"
+  @param modality - "image" or "pdf".
+
+Use this to decide whether to offer an image or PDF to a model. A null
+answer means the catalog has no information; it does not prove incompatibility.
 
 **Parameters:**
 
@@ -440,7 +433,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L272))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L271))
 
 ### loadModelData
 
@@ -448,12 +441,9 @@ Whether a model accepts a given input modality ("image" or "pdf").
 loadModelData(path: string): Result<number>
 ```
 
-Load model data from a JSON file (the shape `agency models refresh`
-  prints) and register it so `llm()` and the model catalog recognize
-  those models. Multiple loads accumulate. Returns the number of models
-  loaded, or a failure if the file cannot be read.
+Load a model-data JSON file into the catalog and return its model count.
 
-  @param path - Path to a model-data JSON file
+  @param path - File produced by agency models refresh, relative to the working directory or absolute.
 
 **Parameters:**
 
@@ -467,4 +457,4 @@ Load model data from a JSON file (the shape `agency models refresh`
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L297))

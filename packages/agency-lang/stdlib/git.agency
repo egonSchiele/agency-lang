@@ -10,12 +10,10 @@ import {
  } from "agency-lang/stdlib-lib/git.js"
 
 /** @module
-  @summary Typed, safe git tools for agents: each tool builds its own git command, so the model never supplies a raw flag.
-  Typed, safe git tools for agents. Each tool builds its own git command
-  internally, so the model never supplies a raw flag. Read tools (status, log,
-  diff, ...) raise effects an agent policy can auto-approve. Write tools (add,
-  commit, checkout, ...) prompt for approval. Tighten any tool before handing it
-  to an agent with `.partial()`, e.g.
+  @summary Inspect repositories and manage local Git changes with typed tools.
+  Inspect status, history, and diffs, or stage, commit, and restore local
+  changes. Each operation has its own effect for handlers and policies.
+  Bind restrictions before handing a tool to an agent, for example:
   `gitAdd.partial(all: false, allowedPaths: ["src/"])` or
   `gitBranchDelete.partial(force: false, protectedBranches: ["main"])`.
 
@@ -27,20 +25,15 @@ import {
   import { gitStatus, gitCommit } from "std::git"
 
   node main() {
-    const status = gitStatus()             // read: auto-approvable
+    const status = gitStatus() with approve
     print(status.branch)
-    gitCommit("Update docs") with approve  // write: prompts for approval
+    gitCommit("Update docs") with approve
   }
   ```
 */
 
-// Result types are declared natively in Agency (not imported from the TS
-// module): Agency does not parse TypeScript, so a TS-imported type is an opaque
-// name with no accessible fields — `status.entries` would not typecheck. These
-// mirror the shapes the TS parsers (parseStatus, parseLog, ...) return, so
-// `return parseStatus(...)` bridges cleanly, exactly as `bash` returns a
-// natively-declared `ExecResult` from a TS `_bash` impl. Keep these in sync
-// with `lib/stdlib/gitCore.ts`.
+// Keep these native result types in sync with lib/stdlib/gitCore.ts.
+// Agency cannot inspect the fields of types imported from TypeScript.
 
 /** git porcelain change codes: "." unmodified, "M" modified, "A" added,
   "D" deleted, "R" renamed, "C" copied, "U" unmerged, "T" type-changed,
@@ -90,8 +83,8 @@ export type BlameLine = {
 export type GitRemote = { name: string; url: string; direction: "fetch" | "push" }
 export type GitStash = { ref: string; description: string }
 
-// Positional values (refs/paths/branches) may not start with "-". Agency uses an
-// explicit `cwd` as given, never joining it to the agent working directory.
+// gitCore rejects leading "-" on positional values before building argv.
+// The runner uses an explicit cwd without joining it to the agent directory.
 
 // Read effects
 @alwaysUnder(cwd)
@@ -130,9 +123,9 @@ effect std::git::stashPop     { cwd: string }
 @alwaysUnder(cwd)
 effect std::git::restore      { cwd: string, paths: string[], staged: boolean }
 
-/** Read-only git effects, auto-approvable. */
+/** Effects for reading repository state without changing it. */
 export effectSet GitRead = <std::git::status, std::git::log, std::git::diff, std::git::show, std::git::branchList, std::git::remoteList, std::git::blame, std::git::stashList>
-/** Mutating git effects, should prompt. */
+/** Effects for operations that change repository state. */
 export effectSet GitWrite = <std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore>
 /** All git effects. */
 export effectSet Git = <GitRead, GitWrite>
@@ -153,10 +146,9 @@ def repoDir(cwd: string): string {
 @capabilities(fileRead, subprocess, env)
 export idempotent def gitIsRepo(cwd: string = ""): boolean raises <std::git::status> {
   """
-  True when `cwd` is inside a git work tree. Never fails: a directory that is not
-  a git repository (or does not exist) returns false, so callers can guard on it
-  before running other git tools.
-  @param cwd - The directory to check. Defaults to the agent working directory.
+  Check whether a directory is inside a Git worktree, returning false for a missing or non-repository directory.
+
+  @param cwd - An absolute directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::status("Check whether this is a git repository", { cwd: dir })
@@ -166,9 +158,8 @@ export idempotent def gitIsRepo(cwd: string = ""): boolean raises <std::git::sta
 @capabilities(fileRead, subprocess, env)
 export idempotent def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
   """
-  Show the working-tree status: current branch, ahead/behind counts, and
-  changed files.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  Inspect staged and unstaged repository changes.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::status("Show git status", { cwd: dir })
@@ -185,13 +176,13 @@ export idempotent def gitLog(
 ): GitLog raises <std::git::log> {
   """
   Show commit history as structured commits.
-  @param n - Max number of commits (default 20).
+  @param n - The maximum commits to return, or zero or less for all matching commits.
   @param oneline - Omit commit bodies.
   @param path - Limit to commits touching this path (may not start with "-").
-  @param ref - Start from this revision (e.g. HEAD~5, a branch, a sha).
+  @param ref - Start from this revision, such as HEAD~5 or a SHA, without a leading "-".
   @param author - Filter by author substring.
   @param allowedPaths - If non-empty, path must fall under one of these prefixes.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   if (path != "") {
@@ -211,11 +202,11 @@ export idempotent def gitDiff(
   """
   Show a diff as a structured per-file summary plus the raw unified patch.
   @param ref - Compare against this revision (default: working tree vs index).
-  @param ref2 - Optional second revision to diff ref..ref2.
+  @param ref2 - Compare ref against this second revision, without a leading "-".
   @param staged - Diff the index (staged changes) instead of the working tree.
   @param path - Limit the diff to this path (may not start with "-").
   @param allowedPaths - If non-empty, path must fall under one of these prefixes.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   if (path != "") {
@@ -225,13 +216,16 @@ export idempotent def gitDiff(
   return parseDiff(_gitRun(dir, diffArgs({ ref: ref, ref2: ref2, staged: staged, path: path })))
 }
 
+/**
+  Line counts are approximate for merge commits because combined diffs
+  are not counted by the summary parser.
+*/
 @capabilities(fileRead, subprocess, env)
 export idempotent def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show> {
   """
-  Show a commit as a structured per-file summary plus the raw patch. Line
-  counts are approximate for merge commits (combined diffs are not counted).
-  @param ref - The revision to show (default HEAD).
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  Show a commit’s per-file changes and unified patch.
+  @param ref - A revision such as HEAD or a SHA, without a leading "-".
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::show("Show git commit", { cwd: dir, ref: ref })
@@ -241,8 +235,8 @@ export idempotent def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff r
 @capabilities(fileRead, subprocess, env)
 export idempotent def gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList> {
   """
-  List local branches with their current-marker, upstream, and sha.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  List local Git branches.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::branchList("List git branches", { cwd: dir })
@@ -253,7 +247,7 @@ export idempotent def gitBranchList(cwd: string = ""): GitBranch[] raises <std::
 export idempotent def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList> {
   """
   List configured remotes with their fetch/push URLs.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::remoteList("List git remotes", { cwd: dir })
@@ -265,8 +259,8 @@ export idempotent def gitBlame(path: string, ref: string = "", cwd: string = "")
   """
   Show line-by-line authorship for a file.
   @param path - The file to blame (may not start with "-").
-  @param ref - Optional revision to blame at.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param ref - A revision without a leading "-", or empty for the working tree.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::blame("Show git blame", { cwd: dir, path: path })
@@ -277,7 +271,7 @@ export idempotent def gitBlame(path: string, ref: string = "", cwd: string = "")
 export idempotent def gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList> {
   """
   List stashes with their ref and description.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::stashList("List git stashes", { cwd: dir })
@@ -294,9 +288,9 @@ export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: stri
   """
   Stage changes for commit.
   @param paths - Files to stage (may not start with "-").
-  @param all - Stage every change in the repo (git add -A).
+  @param all - Stage all repository changes, which cannot be combined with allowedPaths.
   @param allowedPaths - If non-empty, each path must fall under one of these prefixes.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   assertAllNotRestricted(all, allowedPaths)
@@ -312,8 +306,7 @@ export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: stri
 export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
   """
   Create a commit from the staged changes.
-  @param message - The commit message.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::commit("Create commit: ${message}", { cwd: dir, message: message })
@@ -329,7 +322,7 @@ export def gitCheckout(target: string, force: boolean = false, cwd: string = "")
   Check out a branch, commit, or path.
   @param target - The branch/commit/path (may not start with "-").
   @param force - Discard local changes while checking out (git checkout --force).
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   let message = "Checkout ${target}"
@@ -348,7 +341,7 @@ export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""):
   Switch to a branch.
   @param branch - The branch to switch to (may not start with "-").
   @param create - Create the branch first (git switch -c).
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::switch("Switch to branch ${branch}", { cwd: dir, branch: branch, create: create })
@@ -362,7 +355,7 @@ export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std
   """
   Create a new branch at HEAD (does not switch to it).
   @param branch - The new branch name (may not start with "-").
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::branchCreate("Create branch ${branch}", { cwd: dir, branch: branch })
@@ -381,7 +374,7 @@ export def gitBranchDelete(branch: string, force: boolean = false, protectedBran
   @param branch - The branch to delete (may not start with "-").
   @param force - Delete even if the branch is unmerged (git branch -D).
   @param protectedBranches - Branch names that may never be deleted (e.g. ["main", "master"]).
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   assertBranchAllowed(branch, protectedBranches)
@@ -400,8 +393,7 @@ export def gitBranchDelete(branch: string, force: boolean = false, protectedBran
 export def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
   """
   Stash the working-tree changes.
-  @param message - Optional stash message.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::stashPush("Stash changes", { cwd: dir, message: message })
@@ -414,7 +406,7 @@ export def gitStashPush(message: string = "", cwd: string = ""): string raises <
 export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
   """
   Apply and drop the most recent stash.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::stashPop("Pop the latest stash", { cwd: dir })
@@ -432,7 +424,7 @@ export def gitRestore(paths: string[], staged: boolean = false, allowedPaths: st
   @param paths - Files to restore (may not start with "-").
   @param staged - Unstage the files instead of discarding working-tree changes.
   @param allowedPaths - If non-empty, each path must fall under one of these prefixes.
-  @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
+  @param cwd - An absolute repository directory, or empty to use the agent working directory.
   """
   const dir = repoDir(cwd)
   assertPathsContained(paths, allowedPaths, dir)

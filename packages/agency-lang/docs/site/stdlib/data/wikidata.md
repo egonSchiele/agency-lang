@@ -1,6 +1,6 @@
 ---
 name: "wikidata"
-description: "Wikidata — the open knowledge graph"
+description: "Find Wikidata entities, read claims, and query the knowledge graph."
 ---
 
 # wikidata
@@ -48,7 +48,7 @@ export type Entity = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L48))
 
 ### EntityDetail
 
@@ -69,7 +69,7 @@ export type EntityDetail = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L58))
 
 ## Effects
 
@@ -82,7 +82,7 @@ effect std::wikidata {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L35))
 
 ## Functions
 
@@ -95,12 +95,9 @@ wikidataSearch(
 ): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON>
 ```
 
-Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
-  QID identifies the entity for a follow-up entity fetch or SPARQL query. Empty result set returns an
-  empty list.
+Find Wikidata entities by name and return their QIDs.
 
-  @param name - The person, organization, place, or thing to search for
-  @param limit - Maximum number of matches to return (default 5)
+  @param name - A person, organization, place, or topic to look up.
 
 **Parameters:**
 
@@ -115,7 +112,7 @@ Search Wikidata for entities by name. Returns matches with QID, label, descripti
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L220))
 
 ### wikidataEntity
 
@@ -125,11 +122,9 @@ wikidataEntity(
 ): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON>
 ```
 
-Fetch one Wikidata entity by its QID. Returns the English label, description, aliases, and claims
-  (property id to values; entity-valued claims are QIDs to resolve separately). Unknown QID returns
-  a failure.
+Read a Wikidata entity’s English profile and property claims.
 
-  @param qid - The Wikidata entity id, e.g. "Q42"
+  @param qid - A Wikidata entity ID such as "Q42", obtained from search or another claim.
 
 **Parameters:**
 
@@ -143,7 +138,7 @@ Fetch one Wikidata entity by its QID. Returns the English label, description, al
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L234))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L232))
 
 ### wikidataQuery
 
@@ -153,11 +148,19 @@ wikidataQuery(
 ): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON>
 ```
 
-Run a SPARQL query against the Wikidata Query Service and return rows (each a map of the SELECTed
-  variable names to string values). Prefixes wd:/wdt:/rdfs: and SERVICE wikibase:label are available.
-  Example: SELECT ?item ?itemLabel WHERE { ?item wdt:P31 wd:Q5 . SERVICE wikibase:label { bd:serviceParam wikibase:language "en" } } LIMIT 10
+Run a SPARQL SELECT query against the Wikidata knowledge graph.
 
-  @param sparql - The SPARQL query text
+  @param sparql - A complete SPARQL SELECT query.
+
+Use SELECT queries to retrieve rows. Each row maps a selected variable
+  name to its string value. Ask for labels when you need names for QIDs:
+
+  ```sparql
+  SELECT ?item ?itemLabel WHERE {
+    ?item wdt:P31 wd:Q5 .
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+  } LIMIT 10
+  ```
 
 **Parameters:**
 
@@ -171,4 +174,4 @@ Run a SPARQL query against the Wikidata Query Service and return rows (each a ma
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L255))

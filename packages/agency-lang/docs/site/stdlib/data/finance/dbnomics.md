@@ -1,21 +1,18 @@
 ---
 name: "dbnomics"
-description: "DBnomics — world macroeconomic time-series"
+description: "Read economic time series from DBnomics."
 ---
 
 # dbnomics
 
 ## DBnomics — world macroeconomic time-series
 
-  Fetch economic data from [DBnomics](https://db.nomics.world/), an aggregator that re-serves
-  80+ statistical providers (Eurostat, IMF, World Bank, OECD, BLS, national statistics offices)
-  through one keyless API. Use this connector for *non-U.S.* or cross-country data, or a
-  provider FRED does not carry. Each series is addressed by a `provider / dataset / series`
-  code triple (browse db.nomics.world to find codes). For U.S. macro prefer
-  `std::data/finance/fred`; for news use `std::data/news/gdelt`.
+  Fetch economic data from [DBnomics](https://db.nomics.world/) using a
+  provider, dataset, and series code. Browse the DBnomics directory to find
+  codes for national or cross-country statistics. No API key is required.
 
   Returns a series as a list of `{ period, value }` observations (period like "2025-01"; a
-  missing value is null). No API key required.
+  missing value is null).
 
   ### Usage
 
@@ -42,7 +39,7 @@ export type DbnomicsObservation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L29))
 
 ### DbnomicsSeries
 
@@ -60,7 +57,7 @@ export type DbnomicsSeries = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L35))
 
 ## Effects
 
@@ -74,7 +71,7 @@ effect std::dbnomics {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L26))
 
 ## Functions
 
@@ -88,14 +85,11 @@ dbnomicsSeries(
 ): Result<DbnomicsSeries> raises <std::dbnomics, std::http::fetchJSON>
 ```
 
-Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series codes
-  (e.g. provider "BLS", dataset "cu", series "CUUR0000SA0" for U.S. CPI). Returns the series
-  name, frequency, and a list of { period, value } observations. Use for non-U.S. or
-  cross-country economic data. No API key required.
+Fetch an economic time series from DBnomics.
 
-  @param provider - DBnomics provider code, e.g. "Eurostat", "IMF", "BLS"
-  @param dataset - Dataset code within the provider, e.g. "cu"
-  @param series - Series code within the dataset, e.g. "CUUR0000SA0"
+  @param provider - The DBnomics provider code, such as "BLS" or "IMF".
+  @param dataset - The dataset code within that provider, such as "cu".
+  @param series - The series code within that dataset, such as "CUUR0000SA0".
 
 **Parameters:**
 
@@ -111,4 +105,4 @@ Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series c
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L95))

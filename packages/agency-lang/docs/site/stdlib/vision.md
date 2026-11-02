@@ -1,6 +1,6 @@
 ---
 name: "vision"
-description: "Find objects, tags, a caption, or embeddings in an image with a vision model on this machine."
+description: "Detect, tag, caption, and compare images with local vision models."
 ---
 
 # vision
@@ -123,7 +123,7 @@ export type BoundingBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L113))
 
 ### Detection
 
@@ -141,7 +141,7 @@ export type Detection = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L122))
 
 ### Region
 
@@ -160,7 +160,7 @@ export type Region = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L132))
 
 ### Tag
 
@@ -174,7 +174,7 @@ export type Tag = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L139))
 
 ## Effects
 
@@ -190,7 +190,7 @@ effect std::vision {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L108))
 
 ## Functions
 
@@ -205,15 +205,17 @@ detectObjects(
 ): Result<Detection[]> raises <std::vision>
 ```
 
-Find the named things in an image with a local detector and return
-  each one's label, score, and bounding box. The box is normalized to
-  0..1 with the origin at the top left, the shape cropImage takes. Runs
-  on this machine; nothing is uploaded.
+Locate named objects in an image using a local detector.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required. OWLv2 looks for every label in one pass; Florence-2 looks for each in its own pass, so each label adds to the time
-  @param model - A local vision model that detects, such as "owlv2-base" or "florence-2"
-  @param threshold - Drop detections scoring below this, 0 to 1. Null uses the model's default: 0.1 for OWLv2, whose real objects often score 0.2 to 0.4. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
+  @param path - Path to a PNG, JPEG, WebP, or GIF image.
+  @param labels - One to 50 object names to look for, such as "person" or "chair".
+  @param model - A running local detector, such as "owlv2-base" or "florence-2".
+  @param threshold - Minimum score from 0 to 1, or null for the model default.
+
+Use labels for object categories such as "person" or "chair". OWLv2 handles
+the labels in one pass. Florence-2 makes a separate pass for each label.
+Florence-2 assigns every detection a score of 1. OWLv2 uses a default
+threshold of 0.1 when none is supplied.
 
 **Parameters:**
 
@@ -230,7 +232,7 @@ Find the named things in an image with a local detector and return
 
 **Needs:** `fileRead`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L151))
 
 ### tagImage
 
@@ -243,16 +245,15 @@ tagImage(
 ): Result<Tag[]> raises <std::vision>
 ```
 
-Describe an image as booru tags with a local tagger: "1girl, glasses,
-  reading, book". Each tag comes with its score, best first. This is the
-  vocabulary illustration models such as NoobAI-XL take in a prompt, so
-  the tags can go straight into a caption file. Runs on this machine;
-  nothing is uploaded.
+Describe an image with booru tags using a local model.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param model - A local vision model that tags, such as "wd14-tagger" or "florence-2"
-  @param threshold - Drop tags scoring below this, 0 to 1
-  @param limit - At most this many tags, 1 to 500
+  @param path - Path to a PNG, JPEG, WebP, or GIF image.
+  @param model - A running local tagger, such as "wd14-tagger" or "florence-2".
+  @param threshold - Minimum tag score from 0 to 1.
+  @param limit - Maximum tags to return, from 1 to 500.
+
+Use the returned booru tags in illustration-model prompts or caption files.
+Tags arrive in descending score order.
 
 **Parameters:**
 
@@ -269,7 +270,7 @@ Describe an image as booru tags with a local tagger: "1girl, glasses,
 
 **Needs:** `fileRead`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L183))
 
 ### captionImage
 
@@ -302,7 +303,7 @@ Write a sentence about an image with a local model. Runs on this
 
 **Needs:** `fileRead`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L211))
 
 ### embedImage
 
@@ -314,24 +315,17 @@ embedImage(
 ): Result<number[][]> raises <std::vision>
 ```
 
-Turn an image into an embedding, a list of numbers that says how it
-  looks, so things that look alike come out close together. Pass boxes to
-  embed each box instead of the whole image, one embedding per box.
-  Compare two embeddings only when both were cut the same way, such as a
-  tight crop and a box around the same thing.
+Embed a whole image or selected regions for visual similarity comparisons.
+  Compare vectors from the same model and with similar crop framing.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param model - A local vision model that embeds, such as "dinov2-base"
-  @param boxes - Boxes to embed, as detectObjects and findRegions return them, at most 100. Null embeds the whole image
+  @param path - Path to a PNG, JPEG, WebP, or GIF image.
+  @param model - A running local embedding model, such as "dinov2-base".
+  @param boxes - Up to 100 normalized regions, or null for the whole image.
 
-Similarity between two embeddings is `cosineSimilarity` from
-`std::embedding`, where 1 is identical. As a starting point, on one
-photo of two cats and two TV remotes, the two cats scored 0.55 against
-each other, the two remotes 0.57, and a cat against a remote at most
-0.26. The same object in two different photos has not been measured,
-and neither have pen-and-ink drawings. Rather than pick a cut-off,
-compare each box with crops of your own things and of other things, and
-keep the nearer side: the module doc comment shows how.
+Compare vectors with `cosineSimilarity` from `std::embedding`. Use crops
+from the same model and with similar framing. Compare against labeled
+examples of both the objects you want and other objects; the module example
+shows how to choose the closer group.
 
 **Parameters:**
 
@@ -360,15 +354,16 @@ findRegions(
 ): Result<Region[]> raises <std::vision>
 ```
 
-Box every thing in an image with a local model, with no names: for
-  finding things a detector has no word for, such as the characters in a
-  drawing. Each region comes with a score for how much it looks like a
-  thing at all, best first. Runs on this machine; nothing is uploaded.
+Find candidate object regions in an image using a local model, without labels.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param model - A local vision model that finds regions, such as "owlv2-base" or "florence-2"
-  @param limit - At most this many regions, 1 to 100
-  @param threshold - Drop regions scoring below this, 0 to 1. Null uses 0.1, which drops the many boxes OWLv2 puts on nothing. Florence-2 gives no scores: every region scores 1, so the threshold drops nothing
+  @param path - Path to a PNG, JPEG, WebP, or GIF image.
+  @param model - A running local region model, such as "owlv2-base" or "florence-2".
+  @param limit - Maximum regions to return, from 1 to 100.
+  @param threshold - Minimum score from 0 to 1, or null for the model default.
+
+Use this before `embedImage` when you want candidate objects without choosing
+category names. Regions arrive in descending score order. Florence-2 gives
+every region a score of 1; OWLv2 defaults to a threshold of 0.1.
 
 **Parameters:**
 
@@ -385,4 +380,4 @@ Box every thing in an image with a local model, with no names: for
 
 **Needs:** `fileRead`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L272))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L274))

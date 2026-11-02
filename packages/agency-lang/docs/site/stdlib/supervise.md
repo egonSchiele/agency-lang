@@ -1,48 +1,51 @@
 ---
 name: "supervise"
-description: "Runs a block, pausing it at a fixed interval to check progress and"
+description: "Check and steer long-running work at regular intervals."
 ---
 
 # supervise
 
-steer: continue, redirect with a message, or stop.
+```ts
+import { supervise, SuperviseDecision } from "std::supervise"
 
-  supervise owns pause-and-check so no agent has to. Compose it around any
-  long-running block:
+def checkProgress(elapsed: number, draft: any): SuperviseDecision {
+  printJSON(draft)
+  return { action: "continue", message: "" }
+}
 
-    supervise(every: 5m, maxTime: 30m, check: myCheck) {
-      return codingAgent(task, maxTime: 30m)
-    }
+node main() {
+  return supervise(every: 5m, maxTime: 30m, check: checkProgress) {
+    return llm("Investigate the task", { tools: [saveDraft] })
+  }
+}
+```
 
-  The check callback decides at each pause. "redirect" injects its message
-  into the paused LLM loop, so it only steers blocks that are LLM loops.
-  "continue" and "stop" work for any block. A stopped block is aborted, and
-  work it saved with saveDraft is salvaged into the returned Result.
+The callback can continue, redirect with a message, or stop. Redirection
+steers a paused LLM loop. Continue and stop work for any block.
+Stopping can return work the block preserved with `saveDraft`.
 
-  A supervised block must not read a Result with `match`: a match expression
-  inside a block that pauses and resumes evaluates to null. Use
-  `if (isFailure(r))` and `r.value` instead. See
-  tests/agency/supervise/nestedGuardResume.agency.
+Use supervision in one execution path. Concurrent sibling fork branches
+can assign the same guard label and answer each other's checks.
 
 ## Types
 
 ### SuperviseDecision
 
-What a supervise check decides: continue silently, redirect with a
-  course-correction message, or stop the block. `message` carries the
-  redirect text or the stop reason, and is ignored for "continue".
+The check's decision. `message` supplies redirect text or a stop reason;
+continue ignores it.
 
 ```ts
-/** What a supervise check decides: continue silently, redirect with a
-  course-correction message, or stop the block. `message` carries the
-  redirect text or the stop reason, and is ignored for "continue". */
+/**
+The check's decision. `message` supplies redirect text or a stop reason;
+continue ignores it.
+*/
 export type SuperviseDecision = {
   action: "continue" | "redirect" | "stop";
   message: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L31))
 
 ## Functions
 
@@ -57,19 +60,16 @@ supervise(
 ): Result
 ```
 
-Run a block, pausing it every interval to check progress and steer it.
+Run a block and periodically check whether to continue, redirect, or stop.
+  Do not call supervise concurrently in sibling fork branches.
 
-  @param every - How often to pause and check
-  @param maxTime - Total time budget across all intervals
-  @param check - Called at each pause with elapsed time and the block's most
-    recent saveDraft value (null when none has been saved), and decides
-    whether to continue, redirect, or stop. The draft is the block's own
-    account of its progress: a draft that has not changed between checks is
-    strong evidence the block is stalled.
-  @param block - The long-running work. Known limitation: do not call
-    supervise() in parallel fork branches — sibling instances can mint
-    colliding guard labels (the instance counter is branch-isolated
-    while the handler chain is shared) and answer each other's trips.
+  @param every - Working-time interval in milliseconds between checks.
+  @param maxTime - Total working-time budget in milliseconds, at least `every`.
+  @param check - Callback receiving elapsed time and the latest saved draft.
+
+The check receives elapsed working time and the latest saved draft, or null.
+Use the draft to assess progress. A stopped block can return a saved partial
+result under the usual guard salvage rules.
 
 **Parameters:**
 
@@ -84,4 +84,4 @@ Run a block, pausing it every interval to check progress and steer it.
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L45))

@@ -35,7 +35,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "FileSystem": {
     "name": "FileSystem",
-    "doc": "All filesystem access — reads and writes.",
+    "doc": "Filesystem reads and writes covered by FileRead and FileWrite.",
     "members": [
       "std::read",
       "std::readBinary",
@@ -61,7 +61,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "Shell": {
     "name": "Shell",
-    "doc": "Arbitrary command / process execution. The sharpest edge — grant with care.",
+    "doc": "Shell commands, program execution, and Agency subprocess runs.",
     "members": [
       "std::bash",
       "std::exec",
@@ -71,7 +71,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "Network": {
     "name": "Network",
-    "doc": "Anything that talks to the outside world over the network.",
+    "doc": "Network effects for HTTP, search, browsers, and service integrations.",
     "members": [
       "std::http::fetch",
       "std::http::fetchJSON",
@@ -122,7 +122,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "AwsS3": {
     "name": "AwsS3",
-    "doc": "Amazon S3 access: reading and writing objects, creating buckets, and minting presigned download URLs. Presigning is deliberately NOT in Network — it sends nothing; it mints a bearer capability locally.",
+    "doc": "S3 reads, writes, bucket creation, and presigned download URLs.\nPresigning creates a download credential locally and has no network effect.",
     "members": [
       "std::aws::s3::get",
       "std::aws::s3::getBinary",
@@ -219,7 +219,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "DataFinance": {
     "name": "DataFinance",
-    "doc": "The std::data/finance connectors (macro + filings). Each also raises\nstd::http::fetchJSON, which is covered by the broader Network set. GDELT\n(news) lives in std::data/news and is not part of this set.",
+    "doc": "Finance connector effects for macroeconomic data and filings.\nInclude Network as well for the HTTP effects their requests raise.",
     "members": [
       "std::fred",
       "std::edgar",
@@ -259,7 +259,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "Calendar": {
     "name": "Calendar",
-    "doc": "Calendar access: listing and mutating events (incl. calendar authorization).",
+    "doc": "Calendar access: listing and mutating events including calendar authorization.",
     "members": [
       "std::listEvents",
       "std::createEvent",

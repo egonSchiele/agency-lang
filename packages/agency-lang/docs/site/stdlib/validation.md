@@ -1,6 +1,6 @@
 ---
 name: "validation"
-description: "Validators and format helpers for constrained types, for use with @validate(...) and @jsonSchema(...)."
+description: "Validate values and describe constraints in tool schemas."
 ---
 
 # validation
@@ -31,10 +31,10 @@ Validators and format helpers for constrained types. Pair a validator with
 
 ### Email
 
-A syntactically valid email address.
+An email-shaped string with a name, an @ sign, and a dotted domain.
 
 ```ts
-/** A syntactically valid email address. */
+/** An email-shaped string with a name, an @ sign, and a dotted domain. */
 @validate(isEmail)
 @jsonSchema({
   ...emailFormat
@@ -52,16 +52,14 @@ export type Email = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L158))
 
 ### URLString
 
-An http:// or https:// URL. (Named `URLString` so it does not shadow
-    JavaScript's global `URL` constructor.)
+A string with an http:// or https:// prefix and no whitespace.
 
 ```ts
-/** An http:// or https:// URL. (Named `URLString` so it does not shadow
-    JavaScript's global `URL` constructor.) */
+/** A string with an http:// or https:// prefix and no whitespace. */
 @validate(isUrl)
 @jsonSchema({
   ...urlFormat
@@ -79,16 +77,14 @@ export type URLString = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L163))
 
 ### UUIDString
 
-A canonical 8-4-4-4-12 hex UUID string. (Named `UUIDString` for symmetry
-    with `URLString`.)
+A UUID in 8-4-4-4-12 hexadecimal form.
 
 ```ts
-/** A canonical 8-4-4-4-12 hex UUID string. (Named `UUIDString` for symmetry
-    with `URLString`.) */
+/** A UUID in 8-4-4-4-12 hexadecimal form. */
 @validate(isUuid)
 @jsonSchema({
   ...uuidFormat
@@ -106,7 +102,7 @@ export type UUIDString = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L168))
 
 ### NumberInRange
 
@@ -137,7 +133,7 @@ export type NumberInRange(low: number, high: number) = number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L175))
 
 ### StringWithLength
 
@@ -164,7 +160,7 @@ export type StringWithLength(min: number, max: number) = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L180))
 
 ### MatchesPattern
 
@@ -189,7 +185,7 @@ export type MatchesPattern(pat: string) = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L185))
 
 ### BoundedArray
 
@@ -213,7 +209,7 @@ export type BoundedArray<T>(min: number, max: number) = T[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L199))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L189))
 
 ### Json
 
@@ -233,7 +229,7 @@ export type Json = any
 
 **Validators:** `isJsonValue`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L218))
 
 ### JsonObject
 
@@ -249,7 +245,7 @@ export type JsonObject = object
 
 **Validators:** `isJsonObject`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L235))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L223))
 
 ## Constants
 
@@ -261,7 +257,7 @@ export static const emailFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L135))
 
 ### urlFormat
 
@@ -271,7 +267,7 @@ export static const urlFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L138))
 
 ### uuidFormat
 
@@ -281,7 +277,7 @@ export static const uuidFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L141))
 
 ### dateTimeFormat
 
@@ -291,7 +287,7 @@ export static const dateTimeFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L144))
 
 ### dateFormat
 
@@ -301,7 +297,7 @@ export static const dateFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L147))
 
 ### ipv4Format
 
@@ -311,7 +307,7 @@ export static const ipv4Format = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L150))
 
 ### ipv6Format
 
@@ -321,7 +317,7 @@ export static const ipv6Format = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L153))
 
 ## Functions
 
@@ -331,10 +327,10 @@ export static const ipv6Format = {
 isEmail(value: string): Result
 ```
 
-Returns success if value is a syntactically valid email address,
-  failure otherwise.
+Check for an email-shaped string with a name, an @ sign, and a dotted domain.
 
-  @param value - The string to check.
+Use for a basic input check. This does not verify that the mailbox exists or
+implement every email-address syntax rule.
 
 **Parameters:**
 
@@ -344,7 +340,7 @@ Returns success if value is a syntactically valid email address,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L33))
 
 ### isUrl
 
@@ -352,10 +348,9 @@ Returns success if value is a syntactically valid email address,
 isUrl(value: string): Result
 ```
 
-Returns success if value is an http:// or https:// URL,
-  failure otherwise.
+Check for an http:// or https:// prefix followed by non-whitespace text.
 
-  @param value - The string to check.
+Use for a basic URL check. This does not validate the hostname or fetch the URL.
 
 **Parameters:**
 
@@ -365,7 +360,7 @@ Returns success if value is an http:// or https:// URL,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L43))
 
 ### isUuid
 
@@ -376,8 +371,6 @@ isUuid(value: string): Result
 Returns success if value is a canonical UUID string
   (8-4-4-4-12 hex), failure otherwise.
 
-  @param value - The string to check.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -386,7 +379,7 @@ Returns success if value is a canonical UUID string
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L50))
 
 ### isInt
 
@@ -396,8 +389,6 @@ isInt(value: number): Result
 
 Returns success if value is an integer (no fractional component),
   failure otherwise.
-
-  @param value - The number to check.
 
 **Parameters:**
 
@@ -417,8 +408,6 @@ isPositive(value: number): Result
 
 Returns success if value > 0, failure otherwise.
 
-  @param value - The number to check.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -427,7 +416,7 @@ Returns success if value > 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L68))
 
 ### isNegative
 
@@ -437,8 +426,6 @@ isNegative(value: number): Result
 
 Returns success if value < 0, failure otherwise.
 
-  @param value - The number to check.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -447,7 +434,7 @@ Returns success if value < 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L76))
 
 ### min
 
@@ -458,9 +445,8 @@ min(n: number, value: number): Result
 Returns success if `value >= n`, failure otherwise.
 
   @param n - The inclusive minimum allowed value.
-  @param value - The number to check.
 
-Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(min.partial(n: 0))`.
+Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(min.partial(n: 0))`.
 
 **Parameters:**
 
@@ -471,7 +457,7 @@ Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(min.partial(n: 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L85))
 
 ### max
 
@@ -482,9 +468,8 @@ max(n: number, value: number): Result
 Returns success if `value <= n`, failure otherwise.
 
   @param n - The inclusive maximum allowed value.
-  @param value - The number to check.
 
-Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(max.partial(n: 150))`.
+Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(max.partial(n: 150))`.
 
 **Parameters:**
 
@@ -495,7 +480,7 @@ Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(max.partial(n: 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L95))
 
 ### minLength
 
@@ -506,9 +491,8 @@ minLength(n: number, value: string): Result
 Returns success if `value.length >= n`, failure otherwise.
 
   @param n - The inclusive minimum allowed length.
-  @param value - The string to check.
 
-Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(minLength.partial(n: 3))`.
+Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(minLength.partial(n: 3))`.
 
 **Parameters:**
 
@@ -519,7 +503,7 @@ Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(minLength.parti
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L105))
 
 ### maxLength
 
@@ -530,9 +514,8 @@ maxLength(n: number, value: string): Result
 Returns success if `value.length <= n`, failure otherwise.
 
   @param n - The inclusive maximum allowed length.
-  @param value - The string to check.
 
-Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(maxLength.partial(n: 80))`.
+Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(maxLength.partial(n: 80))`.
 
 **Parameters:**
 
@@ -543,7 +526,7 @@ Bind `n` via PFA before use in `@validate(...)`, e.g. `@validate(maxLength.parti
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L115))
 
 ### matches
 
@@ -554,9 +537,8 @@ matches(pattern: string, value: string): Result
 Returns success if `value` matches the regular expression `pattern`, failure otherwise.
 
   @param pattern - The regular expression source to match against.
-  @param value - The string to check.
 
-Bind `pattern` via PFA before use in `@validate(...)`, e.g. `@validate(matches.partial(pattern: "^[A-Z]"))`.
+Bind `pattern` with partial application before use in `@validate(...)`, e.g. `@validate(matches.partial(pattern: "^[A-Z]"))`.
 
 **Parameters:**
 
@@ -567,7 +549,7 @@ Bind `pattern` via PFA before use in `@validate(...)`, e.g. `@validate(matches.p
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L125))
 
 ### isJsonValue
 
@@ -579,8 +561,6 @@ Returns success if value is a plain JSON tree that round-trips through
   JSON serialization unchanged, failure (naming the offending path)
   otherwise.
 
-  @param value - The value to check.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -589,7 +569,7 @@ Returns success if value is a plain JSON tree that round-trips through
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L191))
 
 ### isJsonObject
 
@@ -600,8 +580,6 @@ isJsonObject(value: any): Result
 Returns success if value is a plain JSON-serializable object (non-null,
   non-array), failure otherwise.
 
-  @param value - The value to check.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -610,4 +588,4 @@ Returns success if value is a plain JSON-serializable object (non-null,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L212))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L201))

@@ -1,6 +1,6 @@
 ---
 name: "http"
-description: "Fetch URLs from Agency code."
+description: "Fetch web content as text, JSON, or Markdown."
 ---
 
 # http
@@ -14,8 +14,7 @@ Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
   of a URL the same conversation already fetched is not fetched again: the
   tool returns what the first fetch returned, and `refresh: true` fetches
   anyway.
-  Fetches from Agency code are never cached. See
-  docs/dev/stdlib/fetch-cache.md.
+  Direct calls from Agency code always make a request.
 
   ```ts
   import { fetch, fetchJSON } from "std::http"
@@ -44,7 +43,7 @@ export type HttpMethod =
   | "DELETE"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L41))
 
 ## Effects
 
@@ -61,7 +60,7 @@ effect std::http::fetch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L34))
 
 ### std::http::fetchJSON
 
@@ -76,7 +75,7 @@ effect std::http::fetchJSON {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L36))
 
 ### std::http::fetchMarkdown
 
@@ -91,7 +90,7 @@ effect std::http::fetchMarkdown {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L38))
 
 ## Functions
 
@@ -110,16 +109,13 @@ fetch(
 ): Result
 ```
 
-Fetch a URL and return the response as text.
+Fetch a URL as text.
 
-  @param baseUrl - The base URL to fetch
-  @param path - Optional path appended to baseUrl
-  @param headers - Custom request headers
-  @param allowedDomains - Restrict fetches to these domains (empty allows all)
-  @param method - The HTTP method
-  @param body - Request body: a string is sent as-is, a non-string is sent as JSON
-  @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
+  @param path - Optional path appended to baseUrl.
+  @param allowedDomains - Allowed destination domains, or empty for no restriction.
+  @param body - Text sent as-is, or an object sent as JSON.
+  @param timeout - Whole-request time limit in milliseconds, or zero for no limit.
+  @param refresh - Refetch a repeated GET that would otherwise reuse the conversation's cached response.
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -144,7 +140,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L49))
 
 ### fetchJSON
 
@@ -161,16 +157,13 @@ fetchJSON(
 ): Result
 ```
 
-Fetch a URL and return the response parsed as JSON.
+Fetch a URL and parse the response as JSON.
 
-  @param baseUrl - The base URL to fetch
-  @param path - Optional path appended to baseUrl
-  @param headers - Custom request headers
-  @param allowedDomains - Restrict fetches to these domains (empty allows all)
-  @param method - The HTTP method
-  @param body - Request body: a string is sent as-is, a non-string is sent as JSON
-  @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
+  @param path - Optional path appended to baseUrl.
+  @param allowedDomains - Allowed destination domains, or empty for no restriction.
+  @param body - Text sent as-is, or an object sent as JSON.
+  @param timeout - Whole-request time limit in milliseconds, or zero for no limit.
+  @param refresh - Refetch a repeated GET that would otherwise reuse the conversation's cached response.
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -195,7 +188,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L93))
 
 ### fetchMarkdown
 
@@ -212,16 +205,13 @@ fetchMarkdown(
 ): Result
 ```
 
-Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
+Fetch a web page as readable Markdown for an LLM, or plain text for non-HTML responses.
 
-  @param baseUrl - The base URL to fetch
-  @param path - Optional path appended to baseUrl
-  @param headers - Custom request headers
-  @param allowedDomains - Restrict fetches to these domains (empty allows all)
-  @param method - The HTTP method
-  @param body - Request body: a string is sent as-is, a non-string is sent as JSON
-  @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
+  @param path - Optional path appended to baseUrl.
+  @param allowedDomains - Allowed destination domains, or empty for no restriction.
+  @param body - Text sent as-is, or an object sent as JSON.
+  @param timeout - Whole-request time limit in milliseconds, or zero for no limit.
+  @param refresh - Refetch a repeated GET that would otherwise reuse the conversation's cached response.
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -246,4 +236,4 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L137))

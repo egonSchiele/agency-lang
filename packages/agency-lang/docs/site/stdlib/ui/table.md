@@ -1,15 +1,13 @@
 ---
 name: "table"
-description: "Draws tables for terminal output; table(...) returns a layout node you render with std::ui/layout."
+description: "Build tables for terminal output."
 ---
 
 # table
 
-Draws tables for terminal output. `table(...)` returns a layout node whose
-  columns line up across header, body, and footer. Render it with `render`
-  from `std::ui/layout`, so a table nests inside `box` / `row` / `column`.
-  Pass the rows directly (data form, JSON-friendly and LLM-callable) or build
-  them up in a trailing block.
+Build tables with aligned headers, rows, and footers. Pass the cells as
+  arrays, then call `render` from `std::ui/layout` to display the table.
+  You can also place a table inside a `box`, `row`, or `column` layout.
 
   ```ts
   import { table } from "std::ui/table"
@@ -27,13 +25,14 @@ Draws tables for terminal output. `table(...)` returns a layout node whose
   print(render(t))
   ```
 
-  The block form builds the same table imperatively:
+  Use a trailing block to add rows as you build the table:
 
   ```ts
-  const t = table(title: "Employees") as t {
-    t.header("ID", "Name", "Balance")
-    t.row("1", "Dave", "100")
-    t.footer("", "Total", "50")
+  const t = table(title: "Employees") as builder {
+    builder.header("ID", "Name", "Balance")
+    builder.row("1", "Dave", "100")
+    builder.row("2", "Alice", "-50")
+    builder.footer("", "Total", "50")
   }
   ```
 
@@ -41,55 +40,62 @@ Draws tables for terminal output. `table(...)` returns a layout node whose
 
 ### Cell
 
-A table cell. Either a bare string (auto-coerced to a styled `text`
-leaf at render time) or any pre-built LayoutNode (e.g.
-`text("-50", fgColor: "red")`).
+A table cell. Use a string for plain text or a layout node for styled
+  content, such as `text("-50", fgColor: "red")` from `std::ui/layout`.
 
 ```ts
 /**
- * A table cell. Either a bare string (auto-coerced to a styled `text`
- * leaf at render time) or any pre-built LayoutNode (e.g.
- * `text("-50", fgColor: "red")`).
- */
+  A table cell. Use a string for plain text or a layout node for styled
+  content, such as `text("-50", fgColor: "red")` from `std::ui/layout`.
+*/
 export type Cell = string | LayoutNode
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L41))
 
 ### CellRow
 
+One row of cells in a table's body or footer.
+
 ```ts
+/** One row of cells in a table's body or footer. */
 export type CellRow = Cell[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L44))
 
 ### ColumnSpec
 
-Per-column configuration for a `table`. All fields are optional.
-Omitted columns default to start-aligned with no minimum width.
+Configure each column's alignment, width, and text color. Columns without
+  a specification use start alignment and size themselves to their content.
 
-@param align - Horizontal alignment of every cell in this column
-@param minWidth - Lower bound on column width; widens narrow columns
-@param width - Optional per-column constraint. A number caps the
-  column's content width in cells. `"X%"` takes a percentage of the
-  table's remaining inner width. `"full"` counts as `"100%"`.
-@param fgColor - Default foreground color for every cell in this
-  column that doesn't carry its own `fgColor`.
+  - `align`: horizontal alignment within the column.
+  - `minWidth`: minimum content width in terminal cells, excluding padding.
+  - `width`: content width in terminal cells, or a percentage of the space
+    left after borders, padding, separators, and columns sized by a number
+    or their content. `"full"` means `"100%"`. Percentage columns need a
+    width set on the table or inherited from a sized box or column layout.
+  - `fgColor`: default color for plain strings and uncolored `text` cells.
+
+  Text wraps to the column width. Content that cannot wrap can widen the
+  column beyond its requested width.
 
 ```ts
 /**
- * Per-column configuration for a `table`. All fields are optional.
- * Omitted columns default to start-aligned with no minimum width.
- *
- * @param align - Horizontal alignment of every cell in this column
- * @param minWidth - Lower bound on column width; widens narrow columns
- * @param width - Optional per-column constraint. A number caps the
- *   column's content width in cells. `"X%"` takes a percentage of the
- *   table's remaining inner width. `"full"` counts as `"100%"`.
- * @param fgColor - Default foreground color for every cell in this
- *   column that doesn't carry its own `fgColor`.
- */
+  Configure each column's alignment, width, and text color. Columns without
+  a specification use start alignment and size themselves to their content.
+
+  - `align`: horizontal alignment within the column.
+  - `minWidth`: minimum content width in terminal cells, excluding padding.
+  - `width`: content width in terminal cells, or a percentage of the space
+    left after borders, padding, separators, and columns sized by a number
+    or their content. `"full"` means `"100%"`. Percentage columns need a
+    width set on the table or inherited from a sized box or column layout.
+  - `fgColor`: default color for plain strings and uncolored `text` cells.
+
+  Text wraps to the column width. Content that cannot wrap can widen the
+  column beyond its requested width.
+*/
 export type ColumnSpec = {
   align?: Alignment;
   minWidth?: number;
@@ -98,20 +104,32 @@ export type ColumnSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L61))
 
 ### TableBuilder
 
-Methods available inside a `table`'s trailing `as t { ... }` block.
-`columns` / `caption` set top-level table attrs; `header` / `row` /
-`footer` append cell arrays to the corresponding section.
+Methods available inside a `table` trailing block:
+
+  - `columns(specs)`: replace the column specifications.
+  - `caption(text)`: replace the caption.
+  - `header(...cells)`: replace the header row.
+  - `row(...cells)`: append a body row.
+  - `footer(...cells)`: append a footer row.
+
+  These methods also work with data passed in the `table` arguments.
 
 ```ts
 /**
- * Methods available inside a `table`'s trailing `as t { ... }` block.
- * `columns` / `caption` set top-level table attrs; `header` / `row` /
- * `footer` append cell arrays to the corresponding section.
- */
+  Methods available inside a `table` trailing block:
+
+  - `columns(specs)`: replace the column specifications.
+  - `caption(text)`: replace the caption.
+  - `header(...cells)`: replace the header row.
+  - `row(...cells)`: append a body row.
+  - `footer(...cells)`: append a footer row.
+
+  These methods also work with data passed in the `table` arguments.
+*/
 export type TableBuilder = {
   columns: any;
   caption: any;
@@ -121,7 +139,7 @@ export type TableBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L79))
 
 ## Functions
 
@@ -149,33 +167,31 @@ table(
 ): LayoutNode
 ```
 
-Build a bordered table as a layout node. Pass the data form: `header`,
-  `body`, and `footer` as arrays of cells, where every row has the same
-  number of cells. Render the returned node to display it.
+Build a terminal table. Every row must have the same number of cells.
+  Call `render` from `std::ui/layout` to display it.
 
-  @param title - Title shown in the top border
-  @param titleColor - Color of the title text
-  @param borderStyle - Frame style; "none" draws no outer frame, so the
-    cells render as plain aligned text (interior dividers still follow
-    their own flags)
-  @param borderColor - Color of the border characters
+  @param title - Title above the rows, placed in the top border when it fits
+  @param borderStyle - Outer frame style; "none" leaves the divider flags in effect
   @param caption - Caption shown beneath the table
-  @param cellPadding - Horizontal padding inside each cell, in cells
-  @param width - Table width in cells, or "full" / "N%". With no width, a
-    table whose cells are wider than the terminal (or the box it sits in)
-    wraps its widest columns. With no terminal, the limit is 80 columns.
-    Raw cells do not wrap, so their columns do not shrink.
-  @param columns - Per-column configuration (alignment, width, color)
-  @param header - Header cells
-  @param body - Body rows, each an array of cells
-  @param footer - Footer rows, each an array of cells
-  @param headerDivider - Draw a divider line beneath the header
-  @param footerDivider - Draw a divider line above the footer
-  @param rowDividers - Draw a divider between every body row
-  @param columnDividers - Draw vertical dividers between columns
-  @param columnGap - Cells of blank space between adjacent columns when
-    columnDividers is false (the divider is the separator when it is on).
-    Keeps a gap even when a column grows past its minWidth.
+  @param cellPadding - Blank terminal cells on each side of a cell's content
+  @param width - Total width in terminal cells, "full", or "N%" of the available width
+  @param columns - One specification per column; percentage widths need a table width set or inherited
+  @param rowDividers - Draw a divider between body rows
+  @param columnGap - Blank terminal cells between columns when columnDividers is false
+
+Use the array arguments for existing data, or a trailing block to build
+  rows in a loop. The block can replace the header, columns, and caption,
+  and append to the supplied body and footer rows.
+
+  With no `width`, the table sizes itself to its content and wraps its
+  widest columns to fit the terminal or enclosing layout. With no terminal,
+  the available width defaults to 80 cells. Columns with an explicit width
+  keep that width. Raw cells do not wrap, so a table containing them can
+  exceed the available width.
+
+  Set `borderStyle: "none"` for a table without an outer frame. The divider
+  flags still apply. To leave blank space between columns, set
+  `columnDividers: false` and choose a `columnGap`.
 
 **Parameters:**
 
@@ -201,4 +217,4 @@ Build a bordered table as a layout node. Pass the data form: `header`,
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L137))

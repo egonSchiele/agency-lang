@@ -1,20 +1,14 @@
 ---
 name: "expert"
-description: "Consults an Agency-language specialist for a task: returns the"
+description: "Get Agency syntax guidance and acceptance criteria from the bundled docs."
 ---
 
 # expert
 
-syntax rules and acceptance checklist a solver needs, grounded in the
-  bundled docs.
-
-  It only consults; to solve with the guidance, compose:
-
-    const guidance = guidanceOrEmpty(agencyExpertAgent(task))
-    agencyCodingAgent(task, context: renderGuidance(guidance))
-
-  For any other technical domain, use expertAgent, which consults the web
-  instead of the bundled docs.
+Use `agencyExpertAgent` before generating Agency source when a task needs
+language-specific guidance. Pass `renderGuidance` output as the coding
+agent's context, or give the checklist to a verifier. The shared helpers
+are in `std::agents/lib/expertGuidance`.
 
 ## Functions
 
@@ -24,12 +18,11 @@ syntax rules and acceptance checklist a solver needs, grounded in the
 buildTools(): any[]
 ```
 
-Return the Agency expert's tools: the bundled language documentation and
-  the source inspectors it cites in its guidance.
+Return the Agency expert's documentation and source-checking tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L19))
 
 ### agencyExpertAgent
 
@@ -52,10 +45,10 @@ Consult an Agency-language specialist: return the syntax rules and
 
   @param task - The task to advise on
   @param context - Extra material, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param provider - Provider for the model override, ignored when model is empty.
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
@@ -76,4 +69,4 @@ Consult an Agency-language specialist: return the syntax rules and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L54))

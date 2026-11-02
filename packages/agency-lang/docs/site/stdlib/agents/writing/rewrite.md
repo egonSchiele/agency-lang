@@ -1,17 +1,21 @@
 ---
 name: "rewrite"
-description: "Rewrite prose from the writing reviewer's findings and return the new text."
+description: "Review prose and return a rewrite with the findings applied."
 ---
 
 # rewrite
 
-The writing reviewer (`std::agents/writing/review`) returns a list of
-  findings. That suits a caller that wants to apply them itself. A caller
-  that wants the finished text instead calls this agent: it runs the
-  reviewer, hands the findings and the text to one rewriting call, and
-  returns the rewritten text. With `passes` above 1 the rewritten text is
-  reviewed and rewritten again, up to that many times; a review with no
-  findings ends the loop early.
+`writingRewriteAgent` reviews the text, then rewrites it when the review
+has findings. `passes` bounds the number of review-and-rewrite rounds.
+A review without findings ends the loop, and a failed review fails the call.
+
+```ts
+import { writingRewriteAgent } from "std::agents/writing/rewrite"
+
+node main() {
+  print(writingRewriteAgent(text: "The report was written by Alice."))
+}
+```
 
 ## Functions
 
@@ -32,35 +36,20 @@ writingRewriteAgent(
 ): Result<string>
 ```
 
-Review prose and return it rewritten with the findings applied. If
-  the reviewer finds nothing wrong with the text, send it back unchanged.
+Review prose and return a rewrite with the findings applied.
+  Return unchanged text when the review has no findings.
 
-  @param text - The text to rewrite
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, as text, or ""
-    for the reviewer's built-in catalog alone
-  @param context - Extra material for the judgment, or ""
-  @param passes - How many review-and-rewrite rounds to run at most. Each
-    round reviews the current text and rewrites it; a round whose review
-    finds nothing ends the loop.
-  @param maxCost - Hard spend cap for all rounds together
-  @param maxTime - Hard wall-clock cap for all rounds together
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param task - The intended reader and what the text must communicate.
+  @param guidelines - Writing guidelines that override conflicting built-in review rules.
+  @param passes - Maximum review-and-rewrite rounds, stopping early when a review has no findings.
+  @param maxCost - Cost budget in USD for all rounds together.
+  @param maxTime - Time budget in milliseconds for all rounds together.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
 
-Rewrites a piece of text according to the findings of a writing review.
-
-Quick note on the `passes` parameter: a single pass is usually enough.
-Running the eval suite comparing one pass to two passes,
-the accuracy went from 0.769 -> 0.795.
-
-Usage example:
-
-```ts
-const rewritten = writingRewriteAgent(
-  text: "Original text",
-)
-```
+Start with one pass and increase `passes` when another review of the
+rewritten text is useful. The rewrite call receives the review findings
+and the original task and guidelines.
 
 **Parameters:**
 
@@ -80,4 +69,4 @@ const rewritten = writingRewriteAgent(
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L80))

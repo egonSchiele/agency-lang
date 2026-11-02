@@ -1,19 +1,21 @@
 ---
 name: "wikipedia"
-description: "Search Wikipedia and read article summaries or full text from Agency code."
+description: "Search English Wikipedia and read article introductions or full text."
 ---
 
 # wikipedia
 
-Search Wikipedia and read article summaries or full text from Agency code.
+Search English Wikipedia and read article summaries or full text.
 
   ```ts
   import { search, summary } from "std::wikipedia"
 
   node main() {
     const results = search("Ada Lovelace")
-    const intro = summary(results[0].title)
-    print(intro.extract)
+    if (results.length > 0) {
+      const intro = summary(results[0].title)
+      print(intro.extract)
+    }
   }
   ```
 
@@ -28,7 +30,7 @@ effect std::wikipedia::search {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L39))
 
 ### std::wikipedia::summary
 
@@ -38,7 +40,7 @@ effect std::wikipedia::summary {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L40))
 
 ### std::wikipedia::article
 
@@ -48,7 +50,7 @@ effect std::wikipedia::article {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L41))
 
 ## Functions
 
@@ -58,10 +60,7 @@ effect std::wikipedia::article {
 search(query: string, limit: number = 5): WikiSearchResult[]
 ```
 
-Search Wikipedia for articles matching a query. Each result has a title, description, and excerpt.
-
-  @param query - The search query
-  @param limit - Maximum number of results to return
+Find English Wikipedia articles matching a search query.
 
 **Parameters:**
 
@@ -76,7 +75,7 @@ Search Wikipedia for articles matching a query. Each result has a title, descrip
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L44))
 
 ### summary
 
@@ -84,9 +83,9 @@ Search Wikipedia for articles matching a query. Each result has a title, descrip
 summary(title: string): WikiSummary
 ```
 
-Get a summary of a Wikipedia article. Returns the title, description, intro extract, and URL.
+Read the introductory summary of a Wikipedia article.
 
-  @param title - The article title
+  @param title - An article title returned by Wikipedia search.
 
 **Parameters:**
 
@@ -108,9 +107,9 @@ Get a summary of a Wikipedia article. Returns the title, description, intro extr
 article(title: string): WikiArticle
 ```
 
-Get the full text of a Wikipedia article. Returns the title, plain-text content, and URL.
+Read the full plain text of a Wikipedia article.
 
-  @param title - The article title
+  @param title - An article title returned by Wikipedia search.
 
 **Parameters:**
 

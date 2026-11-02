@@ -1,8 +1,30 @@
 ---
 name: "safeBash"
+description: "Run Bash commands with approvals matched to their actions."
 ---
 
 # safeBash
+
+```ts
+import { safeBash } from "std::safeBash"
+
+node main() {
+  return safeBash("git status")
+}
+```
+
+Recognized commands ask for specific approvals such as a file read or Git
+status. When a command cannot be described that way, the whole command
+asks for `std::bash` approval. Handlers and policies decide the requests
+before execution begins.
+
+Some echo, grep, cat, head, and tail commands run in process. Other commands
+run under Bash, preserving the command's control flow. Explicit destructive
+spellings such as `rm` and `git reset --hard` are refused. That list does not
+cover every way to perform a destructive action; approval rules still apply.
+
+Use `planFor` to inspect the planned effects and execution without running
+the command. See `docs/dev/stdlib/safe-bash.md` for classification rules.
 
 ## Types
 
@@ -20,7 +42,7 @@ export type Word =
   | InterpolatedVariableWord
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L77))
 
 ### ScriptName
 
@@ -28,7 +50,7 @@ export type Word =
 export type ScriptName = LiteralWord | PathWord
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L87))
 
 ### LiteralWord
 
@@ -39,7 +61,7 @@ export type LiteralWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L89))
 
 ### PathWord
 
@@ -50,25 +72,25 @@ export type PathWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L94))
 
 ### GlobWord
 
 An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
-so it is never mistaken for the quoted text `'*.ts'`; no rule here
-treats it as a literal.
+ so it is never mistaken for the quoted text `'*.ts'`; no rule here
+ treats it as a literal.
 
 ```ts
 /** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
- * so it is never mistaken for the quoted text `'*.ts'`; no rule here
- * treats it as a literal. */
+ so it is never mistaken for the quoted text `'*.ts'`; no rule here
+ treats it as a literal. */
 export type GlobWord = {
   tag: "glob";
   text: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L102))
 
 ### FlagWord
 
@@ -82,7 +104,7 @@ export type FlagWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L107))
 
 ### SingleQuotedWord
 
@@ -93,7 +115,7 @@ export type SingleQuotedWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L115))
 
 ### DoubleQuotedWord
 
@@ -104,7 +126,7 @@ export type DoubleQuotedWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L120))
 
 ### VariableWord
 
@@ -115,19 +137,14 @@ export type VariableWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L125))
 
 ### InterpolatedVariableWord
 
-A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
-`"$HOME"/x`. These are ONE word in bash; split into separate words they
-become separate arguments and the command means something else.
+Adjacent word parts, such as `$HOME.txt` or `"a"b`, that form one Bash argument.
 
 ```ts
-/** A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
- * `"$HOME"/x`. These are ONE word in bash; split into separate words they
- * become separate arguments and the command means something else.
- */
+/** Adjacent word parts, such as `$HOME.txt` or `"a"b`, that form one Bash argument. */
 export type InterpolatedVariableWord = {
   tag: "interpolatedVariable";
   parts: (
@@ -138,7 +155,7 @@ export type InterpolatedVariableWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L131))
 
 ### Assignment
 
@@ -153,20 +170,20 @@ export type Assignment = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L141))
 
 ### Redirect
 
 A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
-the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
-explicit file descriptor (`2` in `2>`), or undefined for the default.
-Heredocs and here-strings are rejected rather than parsed.
+ the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
+ explicit file descriptor (`2` in `2>`), or undefined for the default.
+ Heredocs and here-strings are rejected rather than parsed.
 
 ```ts
 /** A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
- * the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
- * explicit file descriptor (`2` in `2>`), or undefined for the default.
- * Heredocs and here-strings are rejected rather than parsed. */
+ the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
+ explicit file descriptor (`2` in `2>`), or undefined for the default.
+ Heredocs and here-strings are rejected rather than parsed. */
 export type Redirect = {
   tag: "redirect";
   fd?: number;
@@ -175,7 +192,7 @@ export type Redirect = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L151))
 
 ### SimpleCommand
 
@@ -184,18 +201,15 @@ export type SimpleCommand = {
   tag: "simpleCommand";
   assignments: Assignment[];
   /* The command name, or null for an assignment-only line (`FOO=bar`).
-   *  Bash requires at least one of a command name or an assignment. */
+    Bash requires at least one of a command name or an assignment. */
   command?: ScriptName;
-  /** Every word after the command name, in source order. There is no
-   *  `subcommands` field: no syntactic rule separates `git status` from
-   *  `echo status`, so splitting them would put a command's real
-   *  arguments in whichever bucket the preceding word happened to pick. */
+  /** Every word after the command name, in source order. */
   args: Word[];
   redirects: Redirect[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L158))
 
 ### Command
 
@@ -203,7 +217,7 @@ export type SimpleCommand = {
 export type Command = SimpleCommand | Pipeline | And | Or | Parens
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L169))
 
 ### PipelineStage
 
@@ -214,7 +228,7 @@ What may sit between pipes: a simple command or a parenthesized group.
 export type PipelineStage = SimpleCommand | Parens
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L172))
 
 ### Pipeline
 
@@ -228,7 +242,7 @@ export type Pipeline = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L175))
 
 ### And
 
@@ -240,7 +254,7 @@ export type And = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L180))
 
 ### Or
 
@@ -252,7 +266,7 @@ export type Or = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L186))
 
 ### Parens
 
@@ -263,7 +277,7 @@ export type Parens = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L192))
 
 ### BashNode
 
@@ -277,7 +291,7 @@ export type BashNode =
   | ScriptName
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L197))
 
 ### BashAST
 
@@ -285,57 +299,57 @@ export type BashNode =
 export type BashAST = Command[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L205))
 
 ### FlagSpec
 
 Which flags a verb takes. Short letters are listed one per entry, so a
-combined `-rn` is checked letter by letter. A long flag that takes no
-value is listed as written (`--color=never`).
+ combined `-rn` is checked letter by letter. A long flag that takes no
+ value is listed as written (`--color=never`).
 
 ```ts
 /** Which flags a verb takes. Short letters are listed one per entry, so a
- * combined `-rn` is checked letter by letter. A long flag that takes no
- * value is listed as written (`--color=never`). */
+ combined `-rn` is checked letter by letter. A long flag that takes no
+ value is listed as written (`--color=never`). */
 export type FlagSpec = {
   /** Flags that stand alone. */
   plain: string[];
   /** Flags that take a value, from the rest of the word (`-A3`), after
-   * `=` (`--regexp=x`), or from the next word (`-A 3`). Each may appear
-   * once. */
+   `=` (`--regexp=x`), or from the next word (`-A 3`). Each may appear
+   once. */
   valued: string[];
   /** Every flag must come before the first positional word. True for a
-   * command real grep will run: BSD grep, and GNU grep with
-   * POSIXLY_CORRECT set, read a later `-s` as a file to search. */
+   command real grep will run: BSD grep, and GNU grep with
+   POSIXLY_CORRECT set, read a later `-s` as a file to search. */
   optionsFirst: boolean;
   /** The valued flag a bare digit flag stands for: with `n`, head's `-20`
-   * is `-n 20`. A digit flag after a valued flag is that flag's value,
-   * so `head -n -5` stays a refused value. */
+   is `-n 20`. A digit flag after a valued flag is that flag's value,
+   so `head -n -5` stays a refused value. */
   digitFlag?: string;
   /** A single-dash flag is one word, listed with its dash (`-name`), and
-   * never a run of letters. True for find. No verb mixes the two kinds,
-   * so a table holds letters or words, not both. */
+   never a run of letters. True for find. No verb mixes the two kinds,
+   so a table holds letters or words, not both. */
   wholeWords?: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L633))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L606))
 
 ### FlagValue
 
 One valued flag and its value. `flag` is the letter for a short flag
-(`A`) and the whole name for a long one (`--regexp`).
+ (`A`) and the whole name for a long one (`--regexp`).
 
 ```ts
 /** One valued flag and its value. `flag` is the letter for a short flag
- * (`A`) and the whole name for a long one (`--regexp`). */
+ (`A`) and the whole name for a long one (`--regexp`). */
 export type FlagValue = {
   flag: string;
   value: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L656))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L629))
 
 ### SplitArgs
 
@@ -350,28 +364,28 @@ export type SplitArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L662))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L635))
 
 ### ReadVerb
 
 A read verb's flags, how many paths it takes, and which of its valued
-flags hold a count.
+ flags hold a count.
 
 ```ts
 /** A read verb's flags, how many paths it takes, and which of its valued
- * flags hold a count. */
+ flags hold a count. */
 export type ReadVerb = {
   flags: FlagSpec;
   /** head and tail take one path, because several files print headers;
-   * uniq takes one, because a second positional is its output file; diff
-   * and cmp compare exactly two. */
+   uniq takes one, because a second positional is its output file; diff
+   and cmp compare exactly two. */
   paths: CountRange;
   /** The valued flags whose value must be digits, such as `-n` on head. */
   countFlags: string[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1288))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1233))
 
 ### ListWalk
 
@@ -382,29 +396,29 @@ Whether a listing walks the tree always, or only when given -R.
 export type ListWalk = "always" | "withR"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1567))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1495))
 
 ### FileArgument
 
 What a listing verb does with a path that names a file: list the
-folder that holds it, or refuse.
+ folder that holds it, or refuse.
 
 ```ts
 /** What a listing verb does with a path that names a file: list the
- * folder that holds it, or refuse. */
+ folder that holds it, or refuse. */
 export type FileArgument = "folder" | "refuse"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1571))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1499))
 
 ### ListVerb
 
 A verb that lists directories: its flags, which valued flags hold a
-count, and whether it walks the tree.
+ count, and whether it walks the tree.
 
 ```ts
 /** A verb that lists directories: its flags, which valued flags hold a
- * count, and whether it walks the tree. */
+ count, and whether it walks the tree. */
 export type ListVerb = {
   flags: FlagSpec;
   /** The valued flags whose value must be digits, such as `-L` on tree. */
@@ -415,25 +429,21 @@ export type ListVerb = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1575))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1503))
 
 ### FlatCommand
 
-One simple command from a flattened line, and whether a pipe feeds
-it its stdin. Not named `Stage`: `PipelineStage` is a parsed pipe
-stage, which may be a whole parenthesized group.
+A flattened simple command and whether a pipe supplies its input.
 
 ```ts
-/** One simple command from a flattened line, and whether a pipe feeds
- * it its stdin. Not named `Stage`: `PipelineStage` is a parsed pipe
- * stage, which may be a whole parenthesized group. */
+/** A flattened simple command and whether a pipe supplies its input. */
 export type FlatCommand = {
   command: SimpleCommand;
   readsStdin: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2174))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2061))
 
 ## Constants
 
@@ -464,7 +474,7 @@ export static const GREP_FLAGS: FlagSpec = {
 
 **Type:** [FlagSpec](#flagspec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L691))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L664))
 
 ### READ_VERBS
 
@@ -585,7 +595,7 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
 
 **Type:** `Record<string, ReadVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1308))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1253))
 
 ### LIST_VERBS
 
@@ -640,7 +650,7 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
 
 **Type:** `Record<string, ListVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1594))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1522))
 
 ## Functions
 
@@ -654,15 +664,11 @@ effectsFor(
 ): Result<Effect[]>
 ```
 
-Which interrupts this one command needs raised.
+Classify the approvals needed by one simple command.
+  Return a failure when it needs the broader Bash approval.
 
-  A failure means the command is not recognized. The caller turns that
-  into a `std::bash` question for the whole string rather than trying to
-  ask a narrow question about part of it.
-
-  @param command - One simple command from the parsed AST
-  @param cwd - The resolved working directory, for payloads that need it
-  @param readsStdin - True when a pipe feeds this command its stdin
+  @param cwd - The resolved working directory used in approval payloads.
+  @param readsStdin - Whether a pipe supplies this command's input.
 
 **Parameters:**
 
@@ -676,7 +682,7 @@ Which interrupts this one command needs raised.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L361))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L354))
 
 ### outcomeOf
 
@@ -684,8 +690,7 @@ Which interrupts this one command needs raised.
 outcomeOf(plan: Plan): string
 ```
 
-Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
-  Exhaustive over Execution, so a new execution kind is a type error here.
+Name a plan's outcome: refuse, shellFree, agency, narrow, or broad.
 
 **Parameters:**
 
@@ -695,7 +700,7 @@ Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2037))
 
 ### planFor
 
@@ -703,14 +708,9 @@ Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
 planFor(source: string, cwd: string): Plan
 ```
 
-Decide everything about a call before any of it happens.
+Plan approvals and execution for Bash source without running the command.
 
-  Parses the string, classifies every command, and works out which
-  interrupts to raise and what to run. Nothing here has an effect, which
-  is what makes the decision testable: hand in a string, look at the plan.
-
-  @param source - One or more bash commands
-  @param cwd - The resolved working directory
+  @param cwd - The working directory used to resolve paths during classification.
 
 **Parameters:**
 
@@ -723,7 +723,7 @@ Decide everything about a call before any of it happens.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2471))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2324))
 
 ### isRefused
 
@@ -731,14 +731,7 @@ Decide everything about a call before any of it happens.
 isRefused(command: SimpleCommand): boolean
 ```
 
-True when this command must not run, whatever anyone approves.
-
-  Matches the command word, including the last part of a path, so `rm`,
-  `/bin/rm` and `./rm` are all refused.
-
-  This wall is friction against the obvious spelling, not a guarantee.
-  `find . -delete` and `xargs rm` get past it and are approvable under
-  `std::bash`, which is where the actual control lives.
+Check whether a command matches an explicitly refused destructive spelling.
 
 **Parameters:**
 
@@ -748,7 +741,7 @@ True when this command must not run, whatever anyone approves.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2571))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2419))
 
 ### bashParser
 
@@ -766,7 +759,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2647))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2477))
 
 ### resolveCwd
 
@@ -774,12 +767,7 @@ Parse a string of bash code into an AST.
 resolveCwd(cwd: string): string
 ```
 
-Which directory a command runs in: the caller's, or the agent's when the
-  caller did not say.
-
-  Resolved once, at the top, and then carried on every action. An action
-  that did not carry it would run wherever the process happened to be,
-  which is the same command doing two different things.
+Use the requested directory, then the agent directory, then the process directory.
 
 **Parameters:**
 
@@ -789,7 +777,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2671))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2498))
 
 ### safeBash
 
@@ -800,26 +788,11 @@ safeBash(
 ): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
 ```
 
-Run a shell command, asking the narrowest question that describes it.
+Run Bash commands after approval of the actions they perform.
+  Return stdout on success and report nonzero exits with their code and output.
+  Read saved long output with readSpill or grepSpill.
 
-  `bash` cannot be pre-approved, because a command is a string and a
-  string could do anything, so every call needs a human. Many of the
-  commands an agent writes can be identified, and for those we ask a more
-  specific question — one a policy can answer in advance.
-
-  Nothing runs until every question is answered. If everything is
-  approved, the whole string goes to bash in one call, so bash does the
-  control flow and produces the output.
-
-  A success result means the command exited 0, and its value is the
-  command's stdout. A non-zero exit is a failure whose message carries
-  the exit code, stdout, and stderr. There is no need to echo `$?` or
-  re-run a command to learn how it exited. Output longer than a couple of
-  thousand characters is saved and replaced by a preview that names it;
-  read it with readSpill or grepSpill, not with bash.
-
-  @param command - One or more bash commands
-  @param cwd - Working directory. Defaults to the agent working directory.
+  @param cwd - Working directory, defaulting to the agent directory or the process directory.
 
 **Parameters:**
 
@@ -834,4 +807,4 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2692))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2513))

@@ -1,16 +1,3 @@
-/** @module
-  What safeBash decides, and the three ways it can carry that out.
-
-  A `Plan` is the whole decision about one call, made before anything
-  happens: which interrupts to raise, and what to run if they are all
-  approved. Deciding and doing are separate steps so the deciding half can
-  be tested by handing in a string and looking at the plan.
-
-  The executors call the NON-RAISING internals (`_bash`, `_write`) rather
-  than the `bash` and `write` tools, because those raise their own
-  interrupts and the caller has already raised a narrower one. See the
-  comment on `runBash`.
-*/
 import { WriteMode } from "std::index"
 
 import { keepOutput } from "std::spill"
@@ -20,11 +7,27 @@ import { _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
 import { _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
 
-/** One interrupt a command needs raised before it may run.
- *
- * A discriminated union rather than a bag of `any`: the effect set is
- * closed, so each payload can be typed, and typing them is what makes the
- * raise sites check that every payload satisfies its effect's contract. */
+/** @module
+@summary Represent and execute plans made by safeBash.
+
+Use `safeBash` from `std::safeBash` to run commands. This module holds its
+plan types and executors. Executors assume the caller has already approved
+every effect in the plan; they do not raise those approvals themselves.
+
+```ts
+import { outcomeOf, planFor } from "std::safeBash"
+
+node main() {
+  const plan = planFor("git status", "/project")
+  print(outcomeOf(plan))
+}
+```
+
+A plan pairs the required approvals with an execution. Inspect the plan to
+test classification without executing its commands.
+*/
+
+/** A required approval, with a payload checked for its effect. */
 export type Effect =
   | { name: "std::bash" }
   | { name: "std::write"; payload: WritePayload }
@@ -44,9 +47,11 @@ export type WritePayload = {
   mode: WriteMode
 }
 
-/** Both plan sides derive from one WritePayload, so payload/execution
-  parity holds by construction. */
+/**
+Build the write approval from the same payload used by `writeExecution`.
+*/
 export def writeEffect(write: WritePayload): Effect {
+  """Build a write approval descriptor without raising it."""
   return {
     name: "std::write",
     payload: write
@@ -54,6 +59,7 @@ export def writeEffect(write: WritePayload): Effect {
 }
 
 export def writeExecution(write: WritePayload): WriteExec {
+  """Build a file-write execution plan without running it."""
   return {
     kind: "write",
     filename: write.filename,
@@ -77,6 +83,7 @@ export type GrepPayload = {
 }
 
 export def grepEffect(payload: GrepPayload): Effect {
+  """Build a grep approval descriptor without raising it."""
   return {
     name: "std::grep",
     payload: payload
@@ -84,13 +91,14 @@ export def grepEffect(payload: GrepPayload): Effect {
 }
 
 /** The fields the read tool's own std::read interrupt is keyed on: the
- * real parent of the file, and its name. */
+ real parent of the file, and its name. */
 export type ReadPayload = {
   dir: string;
   filename: string
 }
 
 export def readEffect(payload: ReadPayload): Effect {
+  """Build a file-read approval descriptor without raising it."""
   return {
     name: "std::read",
     payload: payload
@@ -98,8 +106,8 @@ export def readEffect(payload: ReadPayload): Effect {
 }
 
 /** The fields the ls tool's own std::ls interrupt is keyed on. On the
- * bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
- * everything. */
+ bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
+ everything. */
 export type LsPayload = {
   dir: string;
   recursive: boolean;
@@ -107,6 +115,7 @@ export type LsPayload = {
 }
 
 export def lsEffect(payload: LsPayload): Effect {
+  """Build a directory-listing approval descriptor without raising it."""
   return {
     name: "std::ls",
     payload: payload
@@ -114,8 +123,8 @@ export def lsEffect(payload: LsPayload): Effect {
 }
 
 /** The fields the glob tool's own std::glob interrupt is keyed on. On the
- * bash path `maxResults` is 0, meaning no cap: real find lists
- * everything. */
+ bash path `maxResults` is 0, meaning no cap: real find lists
+ everything. */
 export type GlobPayload = {
   pattern: string;
   dir: string;
@@ -123,6 +132,7 @@ export type GlobPayload = {
 }
 
 export def globEffect(payload: GlobPayload): Effect {
+  """Build a file-search approval descriptor without raising it."""
   return {
     name: "std::glob",
     payload: payload
@@ -130,9 +140,9 @@ export def globEffect(payload: GlobPayload): Effect {
 }
 
 /** The fields the exec tool's own std::exec interrupt carries. From
- * safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
- * 0 and `stdin` is empty, which is how safeBash runs the line, and an
- * argument may be an unexpanded glob or `~` that bash expands. */
+ safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
+ 0 and `stdin` is empty, which is how safeBash runs the line, and an
+ argument may be an unexpanded glob or `~` that bash expands. */
 export type ExecPayload = {
   command: string;
   args: string[];
@@ -143,6 +153,7 @@ export type ExecPayload = {
 }
 
 export def execEffect(payload: ExecPayload): Effect {
+  """Build a command-execution approval descriptor without raising it."""
   return {
     name: "std::exec",
     payload: payload
@@ -157,12 +168,8 @@ export type GitDiffPayload = {
   path: string
 }
 
-/** What happens if every effect in the plan is approved.
- *
- * One variant per way a plan can be carried out, each carrying only the
- * fields that way needs. The dispatch in `safeBash` matches over this
- * union exhaustively, so adding a variant is a type error at the dispatch
- * rather than a silent fall-through. */
+// Dispatch in safeBash must handle every execution variant.
+/** What happens if every effect in the plan is approved. */
 export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | ChainExec
 
 export type BashExec = {
@@ -190,13 +197,13 @@ export type WriteExec = {
 }
 
 /** Whether grep prints file names: `-H` gives "always", `-h` gives
- * "never", neither gives "default". */
+ "never", neither gives "default". */
 export type GrepFileNames = "default" | "always" | "never"
 
 /** What a grep command said about printing. The rules that turn this
- * into grep's output live in `_renderGrepOutput`
- * (lib/stdlib/grepDialect.ts), whose type of the same name must keep
- * these fields. */
+ into grep's output live in `_renderGrepOutput`
+ (lib/stdlib/grepDialect.ts), whose type of the same name must keep
+ these fields. */
 export type GrepRender = {
   /** `-n` was given. */
   lineNumbers: boolean;
@@ -208,17 +215,19 @@ export type GrepRender = {
 }
 
 /** A lone grep, run through the grep tool's own search with no shell.
- * The search reads only what `payload` says, so the approval means what
- * the grep tool's approval means. */
+ The search reads only what `payload` says, so the approval means what
+ the grep tool's approval means. */
 export type GrepExec = {
   kind: "grep";
   payload: GrepPayload;
   render: GrepRender
 }
 
-/** Both plan sides derive from one GrepPayload, so the question asked and
- * the search run cannot disagree. */
+/**
+Build the search execution from the same payload used by `grepEffect`.
+*/
 export def grepExecution(payload: GrepPayload, render: GrepRender): GrepExec {
+  """Build a grep execution plan without running the search."""
   return {
     kind: "grep",
     payload: payload,
@@ -227,9 +236,9 @@ export def grepExecution(payload: GrepPayload, render: GrepRender): GrepExec {
 }
 
 /** How the shell-free path prints a file: whole, numbered (cat -n), the
- * first `lines` lines (head), or the last `lines` lines (tail). The rules
- * live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
- * the same name must keep these fields. */
+ first `lines` lines (head), or the last `lines` lines (tail). The rules
+ live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
+ the same name must keep these fields. */
 export type ReadView =
   | { kind: "whole" }
   | { kind: "numbered" }
@@ -237,9 +246,9 @@ export type ReadView =
   | { kind: "tail"; lines: number }
 
 /** A lone cat of one or more files, or a head or tail of one, run
- * through the read tool's own read with no shell. The read covers only
- * what `payloads` names, so the approval means what the read tool's
- * approval means. */
+ through the read tool's own read with no shell. The read covers only
+ what `payloads` names, so the approval means what the read tool's
+ approval means. */
 export type ReadExec = {
   kind: "read";
   payloads: ReadPayload[];
@@ -247,11 +256,11 @@ export type ReadExec = {
 }
 
 /** How a chain step follows the one before it: `;` always runs it, `&&`
- * only after a success, `||` only after a failure. */
+ only after a success, `||` only after a failure. */
 export type Join = "seq" | "and" | "or"
 
 /** The executions a chain may hold: every in-process kind, and nothing
- * that spawns a shell. */
+ that spawns a shell. */
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 
 export type ChainStep = {
@@ -260,15 +269,17 @@ export type ChainStep = {
 }
 
 /** Several in-process commands joined by `;`, `&&`, or `||`, run left to
- * right with bash's rule for each join. */
+ right with bash's rule for each join. */
 export type ChainExec = {
   kind: "chain";
   steps: ChainStep[]
 }
 
-/** Both plan sides derive from the same ReadPayloads, so the questions
- * asked and the files read cannot disagree. */
+/**
+Build file reads from the same payloads used by `readEffect`.
+*/
 export def readExecution(payloads: ReadPayload[], view: ReadView): ReadExec {
+  """Build a file-read execution plan without reading files."""
   return {
     kind: "read",
     payloads: payloads,
@@ -282,9 +293,9 @@ export type RefuseExec = {
 }
 
 /** Why a plan asks the broad std::bash question. `detail` is the parser
- * message for `unparseable`, the first unrecognized command's message for
- * `unrecognized`, the render failure for `unrenderable`, and "" for
- * `noEffects`. */
+ message for `unparseable`, the first unrecognized command's message for
+ `unrecognized`, the render failure for `unrenderable`, and "" for
+ `noEffects`. */
 export type BroadReason = {
   kind: "unparseable" | "unrecognized" | "noEffects" | "unrenderable";
   detail: string
@@ -297,47 +308,28 @@ export type Plan = {
   /** Why the plan asks the broad std::bash question, or null when it does not. */
   broadReason: BroadReason | null;
   /** The command word of every simple command planFor decided over, in
-   *  order; "" for an assignment-only command; [] when unparseable. */
+    order; "" for an assignment-only command; [] when unparseable. */
   verbs: string[]
 }
 
+/**
+Requires Bash on the search path. Successful stderr is omitted from the
+result. Nonzero exits return failures, including grep's "no match" and
+diff's "files differ" statuses. Long output is saved with a preview.
+*/
 @capabilities(fileRead, subprocess)
 export def runBash(command: string, cwd: string, source: string = ""): Result<string> {
   """
-  Run a command string through bash and return what it printed.
-
-  The script runs under bash, found on the search path. When there is no
-  bash the result is a failure that says so; nothing falls back to
-  another shell.
-
-  On success the value is bash's stdout, raw — nothing added, nothing
-  stripped. stderr is discarded on success and reported on failure: two
-  captured pipes cannot interleave the way a terminal does, so this is a
-  policy either way, and discarding on success keeps the value exactly
-  equal to bash's stdout.
-
-  A non-zero exit is a failure, which `&&` and `||` require. The known
-  cost: `grep` exits 1 when it finds nothing and `diff` exits 1 when files
-  differ, and neither is an error.
+  Execute a Bash command after its planned effects have been approved.
+  Return stdout on success, or an exit failure with output on nonzero exit.
   """
-  // `_bash`, NOT `bash`. The `bash` tool raises `std::bash` itself, so
-  // calling it here would ask the broad question again — after the human
-  // already answered a narrower one — and the entire feature would be a
-  // no-op.
-  //
-  // Bypassing a tool's interrupt is normally forbidden: handlers are
-  // safety infrastructure. It is correct here for one specific reason,
-  // and only while that reason holds: the narrow interrupt REPLACES the
-  // broad one, and the only path into this function runs through a
-  // `raiseAll` that raised every effect in the plan and returned success.
-  // Every plan raises at least one effect, so no classification bug can
-  // turn into an ungated shell call.
+  // raiseAll already obtained the plan's approvals. Use _bash to avoid
+  // asking for a second, broader approval after those specific decisions.
   const attempt = try _bash(command, cwd, 0, "", {})
   if (attempt is failure(why)) {
     return failure("`${command}` was not run: ${why}")
   }
-  // `try` WRAPS the call in a Result, so the ExecResult is inside
-  // `.value`. Reading `attempt.stdout` directly is undefined.
+  // try wraps the returned ExecResult in the success value.
   const result: any = attempt.value
   // `source` is the command as the user typed it, which can differ from
   // the narrowed text this function ran; the trace names the original.
@@ -348,8 +340,7 @@ export def runBash(command: string, cwd: string, source: string = ""): Result<st
   return success(keepOutput(result.stdout, result.exitCode, label))
 }
 
-/** The failure a command with a non-zero exit returns: its exit code and
- * both streams, each long one saved and previewed. */
+// Include the exit code and both streams, saving long output for later retrieval.
 def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string): Result<string> {
   const out = keepOutput(stdout, exitCode, label)
   return failure(
@@ -367,8 +358,8 @@ def exitFailure(command: string, exitCode: number, stdout: string, stderr: strin
 @capabilities(fileRead)
 export def runGrep(exec: GrepExec, command: string): Result<string> {
   """
-  Run a lone grep through the grep tool's own search and print what grep
-  would print. No match is the failure grep's exit code 1 would give.
+  Execute an approved in-process grep plan and return its rendered output.
+  No matches return an exit-code-1 failure.
   """
   const found = grepResults(exec)
   if (isFailure(found)) {
@@ -384,8 +375,8 @@ export def runGrep(exec: GrepExec, command: string): Result<string> {
 @capabilities(fileRead)
 export def printGrep(exec: GrepExec): Result<string> {
   """
-  What a shell-free grep prints, before long output is saved. No match is
-  a failure carrying the notes, the text grep would write to stderr.
+  Execute an approved grep plan and return its full output.
+  No matches return a failure carrying any search notes.
   """
   const found = grepResults(exec)
   if (isFailure(found)) {
@@ -400,9 +391,7 @@ export def printGrep(exec: GrepExec): Result<string> {
 
 @capabilities(fileRead)
 def grepResults(exec: GrepExec): Result<any[]> {
-  // `_grep`, NOT `grep`, for the reason `runBash` gives: the `grep` tool
-  // raises its own std::grep, and the caller already raised one carrying
-  // this same payload. The only path here runs through `raiseAll`.
+  // The caller already approved std::grep for this payload.
   const payload = exec.payload
   const query = {
     pattern: payload.pattern,
@@ -415,7 +404,7 @@ def grepResults(exec: GrepExec): Result<any[]> {
   return try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
 }
 
-/** The matches as grep prints them, then the notes, if any. */
+// Append search notes after the rendered matches.
 def grepText(exec: GrepExec, results: any[]): string {
   const printed = _renderGrepOutput(results, exec.render)
   const notes = grepNotes(exec.payload, results.length)
@@ -428,8 +417,7 @@ def grepText(exec: GrepExec, results: any[]): string {
 @capabilities(fileRead)
 export def runRead(exec: ReadExec, command: string): Result<string> {
   """
-  Run a lone cat, head, or tail through the read tool's own read and
-  print what the program would print.
+  Execute approved file reads and return cat, head, or tail output.
   """
   return match(printRead(exec)) {
     success(text) => success(keepOutput(text, 0, command))
@@ -437,21 +425,16 @@ export def runRead(exec: ReadExec, command: string): Result<string> {
   }
 }
 
+/**
+Files are concatenated before rendering, so a missing final newline joins
+the next file's first line. A failed read drops previously collected text.
+*/
 @capabilities(fileRead)
 export def printRead(exec: ReadExec): Result<string> {
   """
-  What a shell-free read prints, before long output is saved: each file
-  read in order, the texts joined, and the joined text rendered once. A
-  first file with no final newline runs into the second, as real cat
-  prints it.
+  Execute approved file reads and return their full rendered output.
   """
-  // `_read`, NOT `read`, for the reason `runBash` gives: the `read` tool
-  // raises its own std::read, and the caller already raised one carrying
-  // each of these payloads. The only path here runs through `raiseAll`.
-  //
-  // The plan refused a missing file or a folder before anything ran, so
-  // a failure here is a race or a permission error, and `_read`'s own
-  // message says which. The text of the files read before it is dropped.
+  // The caller already approved std::read for each payload.
   let joined = ""
   for (payload in exec.payloads) {
     const text = try _read(payload.dir, payload.filename)
@@ -463,8 +446,7 @@ export def printRead(exec: ReadExec): Result<string> {
   return success(_renderReadView(joined, exec.view))
 }
 
-/** The lines safeBash adds to a shell-free grep's output: which folders
- * the search skipped, and where it stopped. */
+// Report skipped folders and any match limit reached by the in-process grep.
 def grepNotes(payload: GrepPayload, found: number): string {
   let notes: string[] = []
   if (payload.file == null) {
@@ -479,17 +461,9 @@ def grepNotes(payload: GrepPayload, found: number): string {
 @capabilities(fileRead, fileWrite)
 export def runWrite(exec: WriteExec): Result<string> {
   """
-  Perform the write a redirected echo asked for. Returns the empty string,
-  which is what bash's stdout for `echo hi > f` is.
-
-  `_write`, NOT `write`, for the same reason `runBash` uses `_bash`: the
-  `write` tool raises its own `std::write`, and the caller already raised
-  one carrying the content.
+  Execute an approved redirected echo write and return an empty stdout string.
   """
-  // `destructive { }` because `write()` wraps `_write` in one, and that
-  // marker feeds the tool-loop retry rules. Calling `_write` directly
-  // without it would give this write a different retry classification
-  // from the tool it replaces.
+  // Match write()'s destructive marker so tool-loop retries account for the write.
   destructive {
     const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
     if (isFailure(written)) {
@@ -502,11 +476,8 @@ export def runWrite(exec: WriteExec): Result<string> {
 @capabilities(fileRead, fileWrite)
 export def runChain(exec: ChainExec, command: string): Result<string> {
   """
-  Run a chain of in-process commands left to right with bash's rule: `;`
-  runs the next step whatever happened, `&&` only after a success, `||`
-  only after a failure. A skipped step changes nothing. The chain fails
-  when the last step that ran failed. A failed step adds no text, the way
-  a failing program's complaint goes to stderr.
+  Execute approved in-process commands with Bash-style ;, &&, and || joins.
+  Return a failure when the last command executed failed.
   """
   let out = ""
   let ok = true
@@ -517,12 +488,8 @@ export def runChain(exec: ChainExec, command: string): Result<string> {
     }
     let printed: Result<string> = success("")
     if (step.execution.kind == "write") {
-      // A region of runChain's own: runWrite enters one, but that marks
-      // runWrite's activation, and a failure built here after the write
-      // (`echo started >> log.txt; grep zzz one.txt`) would otherwise say
-      // nothing destructive ran, so the tool loop could retry and write
-      // twice. Entered before `_write` runs, so a write that fails before
-      // writing still says true, which is the safe direction.
+      // Mark this activation too: a later failure must not let the tool
+      // loop retry the chain and repeat an earlier write.
       destructive {
         printed = printStep(step.execution)
       }
@@ -544,7 +511,7 @@ export def runChain(exec: ChainExec, command: string): Result<string> {
 }
 
 /** Whether bash skips a step after this join, given how the last step that
- * ran ended. */
+ ran ended. */
 def skipsStep(join: Join, ok: boolean): boolean {
   return (join == "and" && !ok) || (join == "or" && ok)
 }
@@ -552,7 +519,7 @@ def skipsStep(join: Join, ok: boolean): boolean {
 @capabilities(fileRead, fileWrite)
 def printStep(exec: StepExec): Result<string> {
   """
-  What one chain step prints, before long output is saved.
+  Execute an approved chain step before saving long output.
   """
   return match(exec) {
     { kind: "echo", content } => success(content)

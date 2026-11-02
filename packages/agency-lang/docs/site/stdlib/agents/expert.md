@@ -1,22 +1,23 @@
 ---
 name: "expert"
-description: "Consults a domain expert for a task: returns the rules and"
+description: "Get domain rules and acceptance criteria before solving a task."
 ---
 
 # expert
 
-acceptance checklist a solver needs to get the task right.
+`expertAgent` returns `ExpertGuidance` for a solver or verifier to use.
+`guidanceOrEmpty` lets a caller continue if the consultation fails.
+For Agency-language guidance, use `agencyExpertAgent`.
 
-  A weak model often fails a task because it is missing a domain convention,
-  not because it cannot reason. This agent returns that missing expertise as
-  ExpertGuidance. It only consults; to solve with the guidance, compose:
+```ts
+import { expertAgent } from "std::agents/expert"
+import { guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
 
-    const guidance = guidanceOrEmpty(expertAgent(task))
-    codingAgent(task, context: renderGuidance(guidance))
-    verifierAgent(task, criteria: guidance.checklist)
-
-  For tasks about the Agency language itself, use agencyExpertAgent, which
-  grounds its guidance in the bundled docs instead of the web.
+node main() {
+  const guidance = guidanceOrEmpty(expertAgent("Validate a FASTA file"))
+  print(renderGuidance(guidance))
+}
+```
 
 ## Functions
 
@@ -26,12 +27,11 @@ acceptance checklist a solver needs to get the task right.
 buildTools(): any[]
 ```
 
-Return the expert's tools: the web and encyclopedia lookups it uses to
-  confirm domain specifics.
+Return the expert agent's web lookup and saved-output tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L29))
 
 ### expertAgent
 
@@ -54,10 +54,10 @@ Consult a domain expert: identify the task's technical domain and return
 
   @param task - The task to advise on
   @param context - Extra material, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param provider - Provider for the model override, ignored when model is empty.
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
@@ -78,4 +78,4 @@ Consult a domain expert: identify the task's technical domain and return
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L73))

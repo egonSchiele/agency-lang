@@ -1,6 +1,6 @@
 ---
 name: "fred"
-description: "FRED — U.S. macroeconomic time-series"
+description: "Read FRED economic series and their metadata."
 ---
 
 # fred
@@ -9,10 +9,8 @@ description: "FRED — U.S. macroeconomic time-series"
 
   Fetch U.S. economic data from the Federal Reserve Bank of St. Louis
   [FRED API](https://fred.stlouisfed.org/docs/api/fred/): interest rates, CPI (inflation),
-  unemployment, GDP, and ~800k other series, each addressed by its `series_id`
-  (e.g. `UNRATE`, `CPIAUCSL`, `FEDFUNDS`). This is the curated gold standard for *U.S.*
-  macro; for non-U.S. or cross-country data use `std::data/finance/dbnomics`; for news use
-  `std::data/news/gdelt`.
+  unemployment, and GDP. Use a series ID such as `UNRATE`, `CPIAUCSL`,
+  or `FEDFUNDS`. For other providers, see `std::data/finance/dbnomics`.
 
   Returns a series as a list of `{ date, value }` observations (a missing value is `null`),
   oldest-first, plus a `fredSeriesInfo` call for a series' title/display-units/frequency/coverage.
@@ -25,9 +23,7 @@ description: "FRED — U.S. macroeconomic time-series"
   > **Note:** FRED's API v1 accepts the key only as a URL query parameter, so when
   > `observability` is enabled the key appears in statelog `fetchJSON` interrupt payloads
   > (the URL is logged). This is a general property of any secret passed in a URL with
-  > `std::http`; a follow-up will add URL-secret redaction to statelog. If this matters for
-  > your deployment, avoid enabling observability on runs that call FRED, or route statelog
-  > to a trusted sink.
+  > `std::http`. Use a trusted statelog destination for runs that call FRED.
 
   ### Usage
 
@@ -56,16 +52,16 @@ export type FredObservation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L43))
 
 ### FredSeries
 
-A FRED data series. `units` is the requested units *transform code* (e.g. "lin", "pch"),
-    not the display label — use fredSeriesInfo for the display units.
+A FRED series whose `units` is a transform code, such as "lin" or "pch".
+    Use `fredSeriesInfo` for display units.
 
 ```ts
-/** A FRED data series. `units` is the requested units *transform code* (e.g. "lin", "pch"),
-    not the display label — use fredSeriesInfo for the display units. */
+/** A FRED series whose `units` is a transform code, such as "lin" or "pch".
+    Use `fredSeriesInfo` for display units. */
 export type FredSeries = {
   seriesId: string;
   units: string;
@@ -73,14 +69,14 @@ export type FredSeries = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L50))
 
 ### FredSeriesInfo
 
-Metadata about a FRED series. `units` here IS the human display label (e.g. "Percent").
+Metadata about a FRED series, with display units such as "Percent".
 
 ```ts
-/** Metadata about a FRED series. `units` here IS the human display label (e.g. "Percent"). */
+/** Metadata about a FRED series, with display units such as "Percent". */
 export type FredSeriesInfo = {
   id: string;
   title: string;
@@ -92,7 +88,7 @@ export type FredSeriesInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L57))
 
 ### FredUnits
 
@@ -112,7 +108,7 @@ export type FredUnits =
   | "log"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L73))
 
 ### FredFrequency
 
@@ -139,7 +135,7 @@ export type FredFrequency =
   | "wesun"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L77))
 
 ## Effects
 
@@ -151,7 +147,7 @@ effect std::fred {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L40))
 
 ## Functions
 
@@ -168,18 +164,19 @@ fredSeries(
 ): Result<FredSeries> raises <std::fred, std::env, std::http::fetchJSON>
 ```
 
-Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
-  unemployment rate, "CPIAUCSL" for CPI, "FEDFUNDS" for the fed funds rate). Returns the
-  series and a list of { date, value } observations, ordered oldest-first (value is null when
-  missing). For the most recent data, set observationStart rather than relying on limit
-  (limit caps from the oldest observation). Requires the FRED_API_KEY environment variable.
+Fetch observations for a FRED economic series, ordered oldest first.
+  Requires FRED_API_KEY.
 
-  @param seriesId - FRED series id, e.g. "UNRATE"
-  @param observationStart - Optional earliest date, "YYYY-MM-DD" (empty for no bound)
-  @param observationEnd - Optional latest date, "YYYY-MM-DD" (empty for no bound)
-  @param frequency - Optional frequency aggregation code, e.g. "m", "q", "a" (null for native)
-  @param units - Optional units transform code, e.g. "pch" for percent change (null for "lin")
-  @param limit - Optional max observations from the oldest, 0 means no limit
+  @param seriesId - A FRED series ID such as "UNRATE" or "CPIAUCSL".
+  @param observationStart - The earliest YYYY-MM-DD date, or empty for no lower bound.
+  @param observationEnd - The latest YYYY-MM-DD date, or empty for no upper bound.
+  @param frequency - The aggregation frequency, or null to keep the native frequency.
+  @param units - The units transform, such as "pch" for percent change, or null for native values.
+  @param limit - The maximum observations from the oldest, or zero for the API default.
+
+Set the observation start date when you want recent data. A limit takes
+  observations from the oldest end of the selected range. Missing source
+  values become null.
 
 **Parameters:**
 
@@ -198,7 +195,7 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 
 **Needs:** `network`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L180))
 
 ### fredSeriesInfo
 
@@ -208,10 +205,10 @@ fredSeriesInfo(
 ): Result<FredSeriesInfo> raises <std::fred, std::env, std::http::fetchJSON>
 ```
 
-Fetch metadata about a FRED series by its id: its human title, display units, frequency, and
-  the date range it covers. Requires the FRED_API_KEY environment variable.
+Fetch a FRED series’ title, display units, frequency, and coverage dates.
+  Requires FRED_API_KEY.
 
-  @param seriesId - FRED series id, e.g. "UNRATE"
+  @param seriesId - A FRED series ID such as "UNRATE".
 
 **Parameters:**
 
@@ -225,4 +222,4 @@ Fetch metadata about a FRED series by its id: its human title, display units, fr
 
 **Needs:** `network`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L206))

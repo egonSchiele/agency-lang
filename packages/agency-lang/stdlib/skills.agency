@@ -3,15 +3,6 @@ import { mkdir } from "std::fs"
 import { frontmatter } from "std::markdown"
 import { exists } from "std::shell"
 
-// `skillsDir` / `commandsDir` raise ONE approval interrupt up front
-// ("scan this directory for skills?"). Reading the matched files is part
-// of fulfilling that approval, so we glob + read them with the
-// non-interrupt primitives (`_glob` / `_read`) rather than the
-// interrupt-raising `glob` / `read`. Otherwise every file would raise
-// its own std::glob / std::read interrupt, re-prompting the user (and,
-// for an agent that bundles 100+ doc files, flooding the handler chain
-// and statelog at startup). `try` keeps the same `Result` return shape
-// the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 import { _realDir } from "agency-lang/stdlib-lib/fs.js"
@@ -27,26 +18,40 @@ import {
 
 
 /** @module
-  @summary Give an LLM access to a directory of skills, and support Claude-Code-style slash commands.
-  Give an LLM access to a directory of skills, and support Claude-Code-style
-  slash commands. `skillsDir` builds a tool that lets the model read skill
-  files on demand. `writeSkill` saves a new skill after approval.
-  `designSkill` shows a draft to the user, revises it on their feedback,
-  and saves it through `writeSkill`. `commandsDir` and `expandSlash` load
-  prompt-template commands and expand a user's `/command` into its body.
+  @summary Load skill files for LLMs and expand slash-command templates.
 
   ```ts
-  import { skillsDir, commandsDir, expandSlash } from "std::skills"
+  import { skillsDir } from "std::skills"
+
+  node main(request: string) {
+    const skills = skillsDir("${cwd()}/skills") with approve
+    const reply: string = llm(request, { tools: [skills] })
+    print(reply)
+  }
+  ```
+
+  Put each skill in `skills/<name>/SKILL.md` with `name` and `description`
+  frontmatter. The tool lists the skills and lets the model read them on
+  demand. Reads through the tool still need approval. Use the `"flat"`
+  layout for loose Markdown files, including skills saved by `writeSkill`.
+  Use `designSkill` when the user should review and revise a draft first.
+
+  ```ts
+  import { commandsDir, expandSlash } from "std::skills"
 
   static const commands = commandsDir("${cwd()}/.claude/commands") with approve
 
-  node main(msg: string) {
-    const prompt = expandSlash(msg, commands)
-    let reply: string = llm(prompt, { tools: [skillsDir("${cwd()}/skills")] })
+  node main(message: string) {
+    const reply: string = llm(expandSlash(message, commands))
+    print(reply)
   }
   ```
+
+  A command file supplies the prompt for `/name`. Put `$ARGUMENTS` in its
+  body where the user's arguments should appear.
 */
 
+/** A skill listing entry whose `location` is relative to its scanned directory. */
 export type SkillEntry = {
   name: string;
   description: string;
@@ -55,13 +60,7 @@ export type SkillEntry = {
 
 def xmlEscape(s: string): string {
   """
-  Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
-  XML text or attribute values. Used before splicing frontmatter or
-  filenames into the `<available_skills>` block. Without this, a
-  description containing `&` or a closing tag would produce malformed
-  markup and could inject extra tags into the prompt.
-
-  @param s - The string to escape.
+  Escape characters that have special meaning in XML text and attributes.
   """
   let out = s
   out = out.replaceAll("&", "&amp;")
@@ -74,12 +73,7 @@ def xmlEscape(s: string): string {
 
 def renderEntry(entry: SkillEntry): string {
   """
-  Render one SkillEntry as a `<skill>` XML block. All string fields are
-  XML-escaped because they originate from user-authored frontmatter or
-  filenames. An unescaped `<` or `&` would otherwise corrupt the
-  surrounding `<available_skills>` markup.
-
-  @param entry - The skill entry to render.
+  Render a skill listing entry as XML.
   """
   const nameX = xmlEscape(entry.name)
   const descX = xmlEscape(entry.description)
@@ -93,12 +87,7 @@ def renderEntry(entry: SkillEntry): string {
 
 def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
   """
-  Build a SkillEntry for one file in the legacy flat-markdown layout.
-  Prefers frontmatter `name`, then `title` (so VitePress-style docs
-  still work), then the filename. `description` defaults to "".
-
-  @param filename - The skill file path, relative to the skills root.
-  @param parsedFrontmatter - The parsed YAML frontmatter object from the file.
+  Build a flat-layout entry, using its frontmatter name, title, or filename.
   """
   return {
     name: parsedFrontmatter.name ?? parsedFrontmatter.title ?? filename,
@@ -107,20 +96,15 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
   }
 }
 
-// Providers cap tool-name length: OpenAI at 64 characters, Anthropic at 128.
-// Cap to the stricter 64 so a name is accepted everywhere.
+/** Maximum length of a generated tool name or a newly saved skill name. */
 export static const MAX_TOOL_NAME_LEN = 64
 
-// Cap on how many files one skills/commands scan will read.
+// Bound the file reads performed by each scan.
 const MAX_SKILL_FILES = 500
 
 def sanitizeToolSegment(raw: string): string {
   """
-  Reduce an arbitrary string to characters providers accept in a tool name.
-  Replace every run of non-alphanumerics with a single underscore — one pass
-  handles `/`, `.`, `-`, space, and crucially the Windows backslash and
-  drive-letter colon (`C:\\docs\\guide`) — then trim edge underscores left by
-  a leading `../` or a trailing slash so names read cleanly.
+  Replace punctuation and whitespace with underscores for use in a tool name.
   """
   let cleaned = raw.replaceAll(re/[^a-zA-Z0-9]+/g, "_")
   while (cleaned.startsWith("_")) {
@@ -132,18 +116,16 @@ def sanitizeToolSegment(raw: string): string {
   return cleaned
 }
 
+// The final path segments distinguish sibling skills directories.
 def capToolName(name: string): string {
   """
-  Cap a tool name to the provider limit, keeping the TAIL. For a deep path
-  the distinctive part (the leaf skill dir, e.g. `docs_guide`) is at the end,
-  and sibling skill dirs share a long common prefix, so dropping the head
-  preserves both readability and uniqueness better than truncating the tail.
+  Shorten a tool name to the limit, preserving its final path segments.
   """
   if (name.length <= MAX_TOOL_NAME_LEN) {
     return name
   }
   let capped = name.slice(name.length - MAX_TOOL_NAME_LEN, name.length)
-  // A tail slice can begin mid-segment with a leading underscore; trim it.
+  // Trim an underscore left at the start of a shortened name.
   while (capped.startsWith("_")) {
     capped = capped.slice(1)
   }
@@ -152,15 +134,7 @@ def capToolName(name: string): string {
 
 def skillToolName(dir: string): string {
   """
-  Derive a unique, readable LLM tool name from a skills directory. The
-  returned tool is `read.partial(dir)`, and `.partial()` keeps the base
-  name `read`. So two `skillsDir(...)` results in one `tools:` list would
-  collide, because providers require unique tool names. Naming each after
-  its directory keeps them distinct AND makes tool-call traces legible.
-  The result is capped at 64 characters (see `capToolName`); pass an explicit
-  `name` to `skillsDir` to override the derived name entirely.
-
-  @param dir - The skills directory the tool reads from.
+  Derive a tool name from a skills directory.
   """
   let cleaned = sanitizeToolSegment(dir)
   if (cleaned == "") {
@@ -169,14 +143,12 @@ def skillToolName(dir: string): string {
   return capToolName("skills_${cleaned}")
 }
 
-// Frontmatter text on one line. A user wrote it, and a line break in it
-// would read as another entry in a brief listing.
+// Collapse frontmatter whitespace so one skill cannot occupy multiple listing lines.
 def oneLine(text: string): string {
   return text.replace(re/\s+/g, " ").trim()
 }
 
-// One line of a brief listing: the path, then the description, or the name
-// when the file has no description and its name says more than its path.
+// Use the name as a fallback when it adds information beyond the path.
 def briefEntry(entry: SkillEntry): string {
   const description = oneLine(entry.description)
   if (description != "") {
@@ -191,12 +163,7 @@ def briefEntry(entry: SkillEntry): string {
 
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
   """
-  Build a SkillEntry for one skill in the standard SKILL.md layout.
-  The skill name defaults to the skill's directory name when the
-  frontmatter has no name, or an empty one.
-
-  @param skillPath - [skill-dir]/SKILL.md relative to the skills root.
-  @param parsedFrontmatter - The parsed YAML frontmatter object from SKILL.md.
+  Build a SKILL.md entry, defaulting its name to the skill directory.
   """
   const skillDir = skillPath.replace("/SKILL.md", "")
   let name = skillDir
@@ -210,19 +177,6 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
   }
 }
 
-/**
-Build a tool that lets an LLM read skill files in `dir`. Supports two
-layouts:
-  - "standard" (default): each subdirectory of `dir` is one skill with
-    a `SKILL.md` entrypoint. Frontmatter `name` / `description` are
-    read; `name` defaults to the subdirectory name.
-  - "flat": each `.md` / `.markdown` file directly under `dir` is one
-    skill. Frontmatter `name` (or `title`) and `description` are read.
-
-The returned tool is `read` partially applied with `dir: dir`. Its
-description lists every available skill so the LLM knows which
-`location` to pass back as `filename`.
-*/
 @alwaysUnder(dir)
 effect std::skills::skillsDir {
   dir: string;
@@ -234,9 +188,9 @@ effect std::skills::commandsDir {
 }
 
 /**
-The pure build half of a skills tool: no reads, no interrupts. A caller
-that already holds a directory's entries (a cached catalog, say) can
-rebuild the tool without rescanning.
+Use cached scan results to build a skills tool without reading the directory
+again. Choose `brief` for large catalogs to reduce the listing sent on each
+model call. Each later read through the tool requires approval.
 */
 export def skillsToolFromEntries(
   dir: string,
@@ -245,12 +199,11 @@ export def skillsToolFromEntries(
   brief: boolean = false,
 ) {
   """
-  Build the skills tool for `dir` from already-scanned entries.
+  Build a skills tool from entries scanned from the same directory.
 
-  @param dir - The directory the entries were scanned from; the tool reads each entry's location relative to it. For scanSkillsSubdirs output, pass the group's own dir, not the root.
-  @param entries - The skills to list in the tool description
-  @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
-  @param brief - List each file as one `path - description` line, with no XML and no directory path. For a directory with so many files that the full listing is too long to send on every model call.
+  @param dir - The scanned directory, or the group's own `dir` for scanSkillsSubdirs results.
+  @param name - Override the directory-derived tool name, with punctuation replaced by underscores and a 64-character limit.
+  @param brief - List each file as one `path - description` line instead of XML.
   """
   let description = ""
   if (brief) {
@@ -264,13 +217,10 @@ export def skillsToolFromEntries(
     const footer = "\n</available_skills>"
     description = header + lines.join("\n") + footer
   }
-  // `.rename(...)` is essential, not cosmetic: without it every skillsDir
-  // tool is named `read` (the base of `read.partial`), so two of them in one
-  // `tools:` list trip the provider's unique-name requirement.
+  // Rename the partially applied `read` to distinguish skills tools.
   let toolName = skillToolName(dir)
   if (name != "") {
-    // An explicit name still gets sanitized (providers reject spaces /
-    // punctuation) and capped, but overrides the path-derived name.
+    // Apply the same name restrictions to caller-supplied names.
     const explicit = sanitizeToolSegment(name)
     if (explicit != "") {
       toolName = capToolName(explicit)
@@ -279,12 +229,9 @@ export def skillsToolFromEntries(
   return read.partial(dir: dir).describe(description).rename(toolName)
 }
 
-// Read one directory of skills into entries: glob the layout's pattern,
-// read each match with the interrupt-free primitives (a scan
-// interrupt's approval covers them), and parse its frontmatter,
-// tolerating a file that does not parse. `root` is the directory the
-// scan interrupt named and `sub` is where under it to look ("." for the
-// root itself), so a scan of root/sub can never leave root through a link.
+// A scan's approval covers listing and reading its files, so use the
+// interrupt-free primitives here. Keep `root` fixed at the approved directory
+// and pass the subdirectory separately to enforce containment.
 @capabilities(fileRead)
 def scanEntries(
   root: string,
@@ -304,8 +251,7 @@ def scanEntries(
   if (pathsResult is failure) {
     return []
   }
-  // A SKILL.md goes through the same reader scanClaudeSkills uses, so a
-  // switch beside a list or a multi-line value still counts.
+  // Preserve frontmatter switches beside lists and multi-line values in SKILL.md.
   const parsed = map(pathsResult.value) as path {
     const raw = try _read(root, "${sub}/${path}", 0, 0) catch ""
     let data: any = {}
@@ -339,6 +285,20 @@ def buildSkillsTool(
   return skillsToolFromEntries(dir, scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES), name)
 }
 
+/**
+Use this to give a model access to skills without loading every body into
+its prompt. The tool description lists each skill's name, description, and
+location. The model passes a listed location as `filename` to read it.
+
+Standard skills use `<name>/SKILL.md` with `name` and `description`
+frontmatter. A missing or empty name defaults to the directory name.
+Skills with `disable-model-invocation: true` stay out of this listing.
+Flat skills use loose `.md` or `.markdown` files with a frontmatter
+`name` or `title`, falling back to the filename.
+
+Set an explicit tool name for stable naming across machines, or when two
+directory-derived names collide after sanitizing and shortening them.
+*/
 @capabilities(fileRead)
 export def skillsDir(
   dir: string,
@@ -346,11 +306,10 @@ export def skillsDir(
   name: string = "",
 ) {
   """
-  Build a skills tool for an LLM over a directory of skills.
+  Build a tool that lets an LLM list and read skills from a directory.
 
-  @param dir - Directory containing the skills.
-  @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
-  @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
+  @param layout - Use "standard" for `<name>/SKILL.md` or "flat" for loose Markdown files.
+  @param name - Override the directory-derived tool name, with punctuation replaced by underscores and a 64-character limit.
   """
   const real = try _realDir(dir)?
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
@@ -361,19 +320,16 @@ export def skillsDir(
   return buildSkillsTool(real, layout, name)
 }
 
-/** One subdirectory's scan result: the directory that was scanned (the
-  `dir` to build a skills tool over) and the entries found in it. */
+/** Pass a group's `dir` and `entries` together to `skillsToolFromEntries`. */
 export type SkillGroup = {
   dir: string;
   entries: SkillEntry[]
 }
 
 /**
-For an application with several subagents, each owning one skills
-subdirectory under a common root: read every subdirectory's skill files
-in one pass and group the entries by subdirectory name. Each group
-carries the scanned directory, which is what `skillsToolFromEntries`
-needs as its `dir`.
+Use this when several agents keep flat-layout skills in separate directories
+under one root. Build each agent's tool from its group's `dir` and `entries`.
+Every requested subdirectory gets a group, including empty or missing ones.
 */
 @capabilities(fileRead)
 export def scanSkillsSubdirs(
@@ -381,39 +337,31 @@ export def scanSkillsSubdirs(
   subdirs: string[],
 ): Result<Record<string, SkillGroup>> raises <std::skills::skillsDir> {
   """
-  Scan named subdirectories of a root. Each subdirectory holds one
-  agent's flat-layout skills; the result maps every requested name to
-  its directory and entries (empty when the subdirectory is empty or
-  missing).
+  Scan direct subdirectories for flat-layout skills and group them by name.
 
-  @param root - The directory holding the subdirectories
-  @param subdirs - The subdirectory names to scan
+  @param root - The nonempty directory holding the agents' skills directories.
+  @param subdirs - Bare directory names, excluding empty names, `.`, `..`, and path separators.
   """
   if (root.trim() == "") {
     return failure("root must not be empty")
   }
-  // The one interrupt approves scanning under `root`, so every name must
-  // stay a single path segment; anything else would carry that approval
-  // outside the directory the user said yes to. Checked before raising,
-  // so a bad caller fails without prompting anyone.
+  // Check names before asking for approval so each scan stays under the approved root.
   const bad = filter(subdirs, \sub -> sub == "" || sub == "." || sub == ".." || sub.includes("/") || sub.includes("\\"))
   if (bad.length > 0) {
     return failure("not bare directory names: '${bad.join("', '")}'; scanSkillsSubdirs only scans direct subdirectories of its root")
   }
-  // Nothing to scan: no prompt is spent on it.
+  // An empty request needs no scan approval.
   if (subdirs.length == 0) {
     return success(Object.create(null))
   }
-  // The real spelling, so the interrupt payload and any always-scope
-  // rule saved from it name one directory however the caller spelled it.
+  // Normalize the directory before approval so saved policy rules match later reads.
   const absRoot = try _realDir(root)?
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: absRoot,
     layout: "flat"
   })
 
-  // Null-prototype record, so a name like "__proto__" is a plain data
-  // key (the groupBy pattern from std::index).
+  // A null prototype keeps names such as "__proto__" as ordinary data keys.
   const out: Record<string, SkillGroup> = Object.create(null)
   for (sub in subdirs) {
     out[sub] = {
@@ -424,9 +372,7 @@ export def scanSkillsSubdirs(
   return success(out)
 }
 
-/** One slash command: what `commandsDir` reads from a `.claude/commands`
-  file, and what `scanClaudeSkills` makes from a skill. `expandSlash` takes
-  either. */
+/** A prompt template from `commandsDir` or `scanClaudeSkills` for `expandSlash`. */
 export type SkillCommand = {
   name: string;
   description: string;
@@ -434,9 +380,11 @@ export type SkillCommand = {
   body: string
 }
 
-/** One scan of a Claude Code skills folder. `names` holds every skill found,
-  before either frontmatter switch applies, so a caller merging several
-  folders can let a name in one folder hide the same name in the next. */
+/**
+Use `names` when merging folders by precedence: it includes accepted names
+before the model and user invocation switches filter `entries` and `commands`.
+A manual-only skill can therefore hide a model-invocable skill in another folder.
+*/
 export type ClaudeSkillsScan = {
   dir: string;
   names: string[];
@@ -444,8 +392,7 @@ export type ClaudeSkillsScan = {
   commands: SkillCommand[]
 }
 
-// Claude Code cuts a skill's description, `when_to_use` included, at this
-// many characters in the skill listing.
+// Limit each description in the Claude Code skills listing, including `when_to_use`.
 static const MAX_SKILL_DESCRIPTION_CHARS = 1536
 
 static const TRUE_WORDS = ["true", "yes", "on", "1"]
@@ -454,8 +401,7 @@ static const FALSE_WORDS = ["false", "no", "off", "0"]
 // Written with `\$` so it is the literal token, not an interpolation.
 static const CLAUDE_SKILL_DIR_TOKEN = "\${CLAUDE_SKILL_DIR}"
 
-// A frontmatter switch read the way Claude Code reads its boolean fields: a
-// YAML boolean, a number, or a word, in any letter case.
+// Accept boolean values and common text spellings regardless of letter case.
 def frontmatterFlagToBool(data: any, key: string, fallback: boolean): boolean {
   if (data == null || data[key] == null) {
     return fallback
@@ -490,9 +436,7 @@ def firstNonEmptyLine(text: string): string {
   return ""
 }
 
-// Claude Code's listing text for a skill: its description, or the first
-// line of its body when that is missing or empty, then `when_to_use`, cut
-// to the listing limit.
+// Fall back to the body's first nonempty line before appending `when_to_use`.
 def skillDescription(data: any, body: string): string {
   let text = "${data.description ?? ""}"
   if (text == "") {
@@ -518,24 +462,22 @@ def commandRecord(name: string, description: string, data: any, body: string): S
 }
 
 /**
-Scan a Claude Code skills folder: one subdirectory per skill, each with a
-`SKILL.md`. Each file is read once, and it yields up to two things: an entry
-in the skills tool's listing, unless its frontmatter sets
-`disable-model-invocation: true`, and a slash command, unless it sets
-`user-invocable: false`. A command's body starts with `Base directory for
-this skill: <folder>`, and `${CLAUDE_SKILL_DIR}` in it becomes that folder.
-A name Claude Code refuses or reserves is skipped, and a space in a
-name becomes a dash.
+Use this when one Claude Code skills folder supplies both an LLM skills
+listing and user slash commands. `disable-model-invocation: true` hides a
+skill from `entries`. `user-invocable: false` hides it from `commands`.
+Spaces in accepted names become dashes. Reserved or invalid names are skipped.
+
+Command bodies include their base directory and replace `${CLAUDE_SKILL_DIR}`
+with that path. Other execution settings, such as `allowed-tools`, are ignored.
+The folder's scan approval covers both outputs, so reject
+`std::skills::skillsDir` to prevent this scan's command loading.
 */
 @capabilities(fileRead)
 export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::skills::skillsDir> {
   """
-  Scan a Claude Code skills folder for the skills a model may read and the
-  skills a user may run as slash commands. Raises one std::skills::skillsDir
-  interrupt for the folder, which also covers the commands: a rule that
-  rejects std::skills::commandsDir does not stop them.
+  Scan a Claude Code skills folder for model-readable skills and slash commands.
 
-  @param dir - The skills folder, such as ~/.claude/skills
+  @param dir - The folder containing `<name>/SKILL.md` files.
   """
   const real = try _realDir(dir)?
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
@@ -560,8 +502,7 @@ export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::
     if (_refusedSkillName(name) || _refusedSkillName(folder)) {
       continue
     }
-    // `expandSlash` ends a command name at the first space, so `My Skill`
-    // is `My-Skill` everywhere, for `/My-Skill` to run.
+    // Slash command names cannot contain spaces.
     name = name.replaceAll(" ", "-")
     names.push(name)
     const description = skillDescription(data, text)
@@ -589,9 +530,7 @@ effect std::skills::save {
   content: string
 }
 
-// Skill names: kebab-case — lowercase alphanumeric segments separated
-// by single hyphens. Mirrors the bundled skills' names. Validated,
-// never rewritten, so a user-chosen name is never changed.
+// Validate names without rewriting the caller's choice of filename.
 def validSkillName(name: string): boolean {
   return name =~ re/^[a-z0-9]+(-[a-z0-9]+)*$/
 }
@@ -607,8 +546,7 @@ def renderFrontmatter(name: string, description: string): Result<string> {
   return fm
 }
 
-// Runs before anyone is asked. Returns the absolutized directory, so
-// the interrupt payloads name one directory however the caller spelled it.
+// Validate before asking for approval and normalize the directory for policy matching.
 @capabilities(fileRead)
 def checkSkillInputs(dir: string, name: string, description: string): Result<string> {
   if (!validSkillName(name)) {
@@ -632,11 +570,13 @@ def checkSkillInputs(dir: string, name: string, description: string): Result<str
 }
 
 /**
-The plain primitive for saving a skill that is already final: show the
-complete file in a `std::skills::save` interrupt, then write it. There
-is deliberately no feedback shape on that interrupt — any approval
-saves, and data carried on the approval is not consulted. The
-draft-revise-accept loop is `designSkill`, which ends by calling this.
+Use this when you already have a finished skill. It creates `<name>.md` in
+the flat layout, with name and description frontmatter followed by the body.
+It refuses to overwrite an existing file.
+
+The save request shows the complete file. Approval data does not revise it.
+The directory creation and file write require their own approvals after the
+save approval. Use `designSkill` to collect feedback before saving.
 */
 @capabilities(fileRead, fileWrite)
 export def writeSkill(
@@ -646,15 +586,13 @@ export def writeSkill(
   body: string,
 ): Result<SkillEntry> raises <std::skills::save, std::mkdir, std::write> {
   """
-  Save one skill file into a skills directory, after approval. Composes
-  the flat-layout markdown (frontmatter with name and description, then
-  the body); a rejection writes nothing and fails the call. To draft a
-  skill with the user and revise it on their feedback, use designSkill.
+  Save a new skill after approval without overwriting an existing file.
+  Use designSkill if the user should review and revise a draft first.
 
-  @param dir - The skills directory to write into
-  @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
-  @param description - One line telling the reading agent when to use the skill
-  @param body - The skill's markdown body
+  @param dir - The nonempty skills directory to write into.
+  @param name - An unused name of at most 64 characters, using lowercase letters and digits separated by single hyphens.
+  @param description - One line telling the reading agent when to use the skill.
+  @param body - The skill's Markdown instructions.
   """
   const checked = checkSkillInputs(dir, name, description)?
   const absDir = checked
@@ -667,19 +605,12 @@ export def writeSkill(
   )
 
   const made = mkdir(absDir)?
-  // create-only, because the pre-interrupt duplicate check is stale by
-  // now: approval can take arbitrarily long, and the name may have
-  // appeared. Never overwrite.
+  // Approval can take time; refuse a duplicate created after the initial check.
   const wrote = write(filename, content, absDir, "create-only")?
   return success({ name: name, description: description, location: filename })
 }
 
-// ============================================================
-// The design loop
-// ============================================================
-
-/** What the redraft model returns. The name is fixed, since it is also
-  the filename. */
+// The name stays fixed across revisions because it is also the filename.
 type SkillDraft = {
   description: string;
   body: string
@@ -713,7 +644,7 @@ Rewrite the description and the body so the feedback is addressed. Keep everythi
 """
 }
 
-// Not llmOptions from std::agents/lib/shared: that module imports this one.
+// Keep options local to avoid a dependency cycle with std::agents/lib/shared.
 def draftOptions(model: string, provider: string): any {
   const options: any = {}
   if (model != "") {
@@ -743,8 +674,7 @@ def redraft(
   return next
 }
 
-// The answer is text: a bare approve() or "accept" accepts, and anything
-// else is the feedback for the next draft. Returns null for accept.
+// Return null for a bare approval or "accept", and nonempty text for feedback.
 def askUser(dir: string, name: string, draft: SkillDraft): Result<string | null> {
   const answer = interrupt std::skills::review("Review this skill before it is saved: answer accept, or give feedback for the next draft", {
     dir: dir,
@@ -765,7 +695,7 @@ def askUser(dir: string, name: string, draft: SkillDraft): Result<string | null>
   return feedback
 }
 
-/** `done` ends the loop. Otherwise `feedback` goes into the next round. */
+// Use `feedback` for the next draft unless `done` ends the loop.
 type SkillRoundOutcome = {
   done?: Result<SkillEntry>;
   feedback: string
@@ -787,13 +717,14 @@ def oneSkillRound(
 }
 
 /**
-The draft-show-revise-accept loop over `writeSkill`. The caller's draft
-is shown first, in a `std::skills::review` interrupt. The answer is
-text: `accept` (or a bare approval) accepts, and anything else is
-feedback, which goes to a model call that rewrites the description and
-body. The result is shown again, up to `maxRounds` reviews. Accept
-calls `writeSkill`, whose own `std::skills::save` interrupt still gates
-the write. This is the function to hand to a model as a tool.
+Give this tool to a model that can write the first draft from the conversation.
+The user sees that draft before any revision call. A bare approval or `accept`
+accepts it; other nonempty text asks the model to revise the description and body.
+The name stays fixed.
+
+Each revised draft gets another review, up to `maxRounds` reviews in total.
+Acceptance calls `writeSkill`, which still asks for save and file-operation
+approvals. Accepting the first draft makes no revision model call.
 */
 export def designSkill(
   dir: string,
@@ -805,16 +736,16 @@ export def designSkill(
   provider: string = "",
 ): Result<SkillEntry> raises <std::skills::review, std::skills::save, std::mkdir, std::write> {
   """
-  Show a draft skill to the user, revise it on their feedback, and save
-  it once they accept.
+  Show a draft skill to the user, revise it on their feedback, and save it
+  once they accept.
 
-  @param dir - The skills directory to write into
-  @param name - The skill's name, also its filename. Lowercase letters, digits, and hyphens.
-  @param description - One line telling the reading agent when to use the skill
-  @param body - The skill's markdown body, as a first draft
-  @param maxRounds - Reviews before giving up
-  @param model - Model override for the redraft, or ""
-  @param provider - Provider for the model override
+  @param dir - The nonempty skills directory to write into.
+  @param name - An unused name of at most 64 characters, using lowercase letters and digits separated by single hyphens.
+  @param description - One line telling the reading agent when to use the skill.
+  @param body - The first draft of the skill's Markdown instructions.
+  @param maxRounds - Maximum number of reviews before returning a failure.
+  @param model - Model to use for revisions, or "" for the configured model.
+  @param provider - Provider for the model override, ignored when model is "".
   """
   const checked = checkSkillInputs(dir, name, description)?
   const absDir = checked
@@ -836,52 +767,48 @@ export def designSkill(
 
 type DocsSection = "guide" | "cli" | "diagnostics" | "stdlib" | "agent"
 
+/**
+Scan once, then pass the entries to `docsToolFromEntries` to build both full
+and brief listings without rereading the packaged documentation.
+*/
 export def docsEntries(section: DocsSection): SkillEntry[] {
   """
-  Scan one section of the packaged Agency documentation. Pass the result to
-  docsToolFromEntries to build the full and the brief tool from one scan.
-
-  @param section - Which documentation set to scan
+  List the pages in one section of the packaged Agency documentation.
   """
-  // No approval interrupt for the startup scan: these docs ship inside
-  // the agency package, so scanning them carries the same trust as
-  // running the stdlib itself.
+  // Packaged documentation is trusted for startup scanning without approval.
   return scanEntries(_docsDir(section), ".", "flat", true, MAX_SKILL_FILES)
 }
 
+/** Reuse one scan to prepare full and brief docs tools for different context sizes. */
 export def docsToolFromEntries(
   section: DocsSection,
   entries: SkillEntry[],
   brief: boolean = false,
 ) {
   """
-  Build a docs tool for an LLM from entries docsEntries returned.
+  Build a documentation tool from pages listed by docsEntries.
 
-  @param section - The documentation set the entries were scanned from
-  @param entries - The pages to list in the tool description
-  @param brief - List each page as one `path - description` line
+  @param section - The section used to obtain the entries.
+  @param brief - List each page as one `path - description` line.
   """
-  // The returned tool is read.partial, so every read the LLM performs
-  // raises std::read and goes through handlers and policies like any
-  // other read tool.
+  // Reads through the returned tool require the ordinary std::read approval.
   return skillsToolFromEntries(_docsDir(section), entries, "", brief: brief)
 }
 
 @capabilities(fileRead)
 export def docsSkill(section: DocsSection, brief: boolean = false) {
   """
-  Build a docs tool for an LLM over the packaged Agency documentation.
+  Build a tool that lets an LLM read a section of the packaged Agency docs.
 
-  @param section - Which documentation set to serve
-  @param brief - List each page as one `path - description` line
+  @param brief - List each page as one `path - description` line.
   """
   return docsToolFromEntries(section, docsEntries(section), brief: brief)
 }
 
+/** Use this directory to scope a handler or policy that approves packaged docs reads. */
 export def bundledDocsDir(): string {
   """
-  The directory holding the Agency docs that ship inside the package. A
-  handler can approve reads under it and still reject everything else.
+  Return the directory containing the packaged Agency documentation.
   """
   return _bundledDocsDir()
 }
@@ -889,20 +816,12 @@ export def bundledDocsDir(): string {
 @capabilities(fileRead)
 export def agentSkill(agent: string) {
   """
-  Build a skills tool over the skills shipped for one agent. The returned
-  tool lists every skill in its description and lets the model read any one
-  on demand.
+  Build a tool that lets an LLM list and read an agent's packaged skills.
 
-  @param agent - Which agent's skills to serve, as a path under the shipped skills directory
+  @param agent - The agent's path under the packaged skills directory.
   """
-  // No approval interrupt for the startup scan, matching docsSkill: these
-  // skills ship inside the agency package, so scanning them carries the same
-  // trust as running the stdlib itself. The returned tool is read.partial, so
-  // every read the LLM later performs still raises std::read and goes through
-  // handlers and policies exactly like any other read tool.
-  //
-  // The explicit name matters: the name derived from a directory embeds the
-  // absolute install path, so it differs per machine and gets truncated.
+  // Trust packaged skills for startup scanning. Later tool reads require approval.
+  // Use a stable tool name that does not depend on the package's installation path.
   const name = "skills_${agent.replace("/", "_")}"
   return buildSkillsTool(_agentSkillsDir(agent), "flat", name)
 }
@@ -910,35 +829,16 @@ export def agentSkill(agent: string) {
 @capabilities(fileRead)
 export def agentPrompt(filename: string): Result<string> {
   """
-  Read one of the prompt files shipped for the stdlib agents. A failure
-  means the file did not ship or cannot be read.
+  Read a prompt file packaged with the stdlib agents.
 
-  @param filename - The file to read, as a path under the shipped prompts directory
+  @param filename - The prompt's path relative to the packaged prompts directory.
   """
-  // No approval interrupt, for the reason docsEntries gives: the file ships
-  // inside the agency package. The read is confined to the prompts directory.
+  // Trust packaged prompts for reading without approval, confined to their directory.
   return try _read(_agentPromptsDir(), filename, 0, 0)
 }
 
-// ============================================================
-// Slash commands
-// ============================================================
-//
-// `commandsDir(dir)` + `expandSlash(msg, commands)` are the
-// command-flavored sibling of `skillsDir`. CC merged custom commands
-// and skills into one file format; we surface both halves from this
-// module.
-//
-// A command is a pure prompt template: the rendered body is the user
-// message. No shell injection, no `$N` positional refs (only
-// `$ARGUMENTS`), no `allowed-tools` pre-approval. Deferred features
-// are tracked in `docs/superpowers/plans/2026-06-05-slash-commands-v2.md`.
-
-// Strip frontmatter + a single trailing newline. Three cases:
-//   - No frontmatter (`---\n` not at start) → return raw less trailing \n
-//   - Frontmatter with no closing fence → return ""
-//   - Frontmatter with closing fence → return everything after, less
-//     trailing \n
+// Remove frontmatter and one trailing newline. An unclosed frontmatter
+// fence produces an empty body.
 def stripFm(raw: string): string {
   if (!raw.startsWith("---\n")) {
     if (raw.endsWith("\n")) {
@@ -958,43 +858,24 @@ def stripFm(raw: string): string {
 }
 
 /**
-Discover Claude-Code-format slash commands under `dir`. Each `.md`
-file becomes one command record `{ name, description, argHint, body }`.
+Load `.claude/commands` prompt templates for use with `expandSlash` before
+calling an LLM. Each loose `.md` filename supplies the command name.
+The optional `description` and `argument-hint` frontmatter fields default
+to empty strings. Files without frontmatter also work.
 
-Pair with `expandSlash(msg, commands)` in your agent's per-turn
-handler:
+Relative directories resolve against the working directory. Use a path under
+`__dirname` for commands beside the Agency file, or `${cwd()}/.claude/commands`
+for commands in the launch directory.
 
-```ts
-static const commands = commandsDir("${cwd()}/.claude/commands") with approve
-def _runTurn(msg: string) {
-  const prompt = expandSlash(msg, commands)
-  const reply = llm(prompt, { tools })
-}
-```
-
-`commandsDir` reads only the `description` and `argument-hint`
-frontmatter fields. It silently ignores all other CC fields
-(`allowed-tools`, `model`, `effort`, `context: fork`,
-`disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
-`shell`, ...). `commandsDir` is a pure prompt-template loader, not an
-executor.
-
-Files with no frontmatter still dispatch. `description` and
-`argHint` default to `""` (never null/undefined). Missing or empty
-`dir` returns `[]`.
-
-Relative `dir` resolves against the current working directory;
-pass `__dirname` for a directory relative to the current Agency file.
-For project-level commands (e.g. `.claude/commands` at the project
-root), pass an absolute path: `"${cwd()}/.claude/commands"`.
+Only the template body, description, and argument hint are used. Fields such
+as `allowed-tools` and `model` do not grant permissions or configure execution.
+Use `scanClaudeSkills` for the invocation switches in Claude Code SKILL.md files.
 */
 @capabilities(fileRead)
 export def commandsDir(dir: string): SkillCommand[] {
   """
-  Discover .md files under `dir` and parse each as a slash-command
-  template. Returns [] if `dir` is missing or empty.
-
-  @param dir - Directory containing command markdown files.
+  Load slash-command templates from Markdown files directly under a directory.
+  Returns an empty list when the directory is missing or has no command files.
   """
   const real = try _realDir(dir)
   if (real is failure) {
@@ -1008,12 +889,8 @@ export def commandsDir(dir: string): SkillCommand[] {
   if (pathsResult is success(paths)) {
     return map(paths) as p {
       const raw = try _read(real.value, p, 0, 0) catch ""
-      // `catch {}` collapses parse failures + a missing frontmatter
-      // block to an empty object so the dot access below is safe.
+      // Missing or invalid frontmatter leaves metadata empty.
       const fm = frontmatter(raw) catch {}
-      // `?? ""` is required here: in Agency `undefined == null` is
-      // false, so the older `!= null` guard let `undefined` through
-      // and stringified it as `"undefined"`. `??` treats both nullish.
       const descriptionRaw = fm.description ?? ""
       let name = p
       if (name.endsWith(".md")) {
@@ -1026,29 +903,25 @@ export def commandsDir(dir: string): SkillCommand[] {
 }
 
 /**
-Expand a user-typed slash command against a `commandsDir` result.
+```ts
+const prompt = expandSlash("/review src/main.ts", commands)
+```
 
-- If `msg` (after trimming) matches `/<name>` with optional
-  whitespace + args, returns the rendered command body with
-  `$ARGUMENTS` substituted.
-- If the body has no `$ARGUMENTS` token and args were passed,
-  appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
-  (matches Claude Code).
-- Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
-  through to the LLM as plain text, again matching CC.
+Use the expanded prompt as the user's LLM message. The first command with
+a matching name supplies its body. `$ARGUMENTS` becomes the trimmed text
+after the command name. If the body has no token, extra arguments appear
+at the end as `ARGUMENTS: <text>`.
 
-Args are split off at the first whitespace (space, tab, or
-newline) after `/<name>`. `expandSlash` tolerates leading and
-trailing whitespace on `msg`, so piped invocations (`echo /foo |
-agency agent`, yielding `"/foo\n"`) dispatch correctly.
+Leading and trailing whitespace do not affect command matching. Unknown
+commands and messages without a slash pass through unchanged. Expansion
+substitutes text only; it does not execute shell commands or positional arguments.
 */
 export def expandSlash(msg: string, commands: SkillCommand[]): string {
   """
-  Expand a /command in `msg` into its command body. Returns the rendered
-  body with $ARGUMENTS substituted, or `msg` unchanged if no command matches.
+  Expand a slash command into its prompt template, substituting $ARGUMENTS.
+  Return the original message when no command matches.
 
-  @param msg - The raw input line (may have leading/trailing whitespace or newlines).
-  @param commands - Array of command records to match against.
+  @param commands - Templates from commandsDir or scanClaudeSkills, with the first matching name taking precedence.
   """
   const trimmed = msg.trim()
   if (!trimmed.startsWith("/")) {

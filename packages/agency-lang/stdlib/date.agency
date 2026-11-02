@@ -27,17 +27,18 @@ node main() {
 /** A day of the week, lowercase. */
 export type DayOfWeek = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday"
 
-/** Get the current instant as epoch milliseconds. */
+/**
+Use `format(now(), timezone)` to display the instant in a timezone.
+The numeric instant itself identifies the same moment in every timezone.
+*/
 export def now(): number {
   """
-  Get the current instant as epoch milliseconds (a number). To display it as a
-  string, use format(now(), timezone). An instant is absolute and has no
-  timezone of its own.
+  Get the current time as milliseconds since the Unix epoch.
   """
   return _now()
 }
 
-/** Test-only seam (import test { _advanceTime }): advance the fake clock so a
+/** Test helper (import test { _advanceTime }): advance the fake clock so a
 time guard trips without spending real time. Only works under a test case with
 "fakeClock": true; throws otherwise. */
 def _advanceTime(ms: number) {
@@ -50,7 +51,6 @@ def _advanceTime(ms: number) {
   _advanceTimeImpl(ms)
 }
 
-/** Get today's date as a YYYY-MM-DD string. */
 export def today(timezone: string = ""): string {
   """
   Get today's date as a YYYY-MM-DD string (e.g. "2026-05-05").
@@ -60,7 +60,6 @@ export def today(timezone: string = ""): string {
   return _today(timezone)
 }
 
-/** Get tomorrow's date as a YYYY-MM-DD string. */
 export def tomorrow(timezone: string = ""): string {
   """
   Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06").
@@ -70,113 +69,96 @@ export def tomorrow(timezone: string = ""): string {
   return _tomorrow(timezone)
 }
 
-/** Get the date of the next occurrence of a day of the week (e.g. "monday"). */
 export def nextDayOfWeek(day: DayOfWeek, timezone: string = ""): string {
   """
-  Get the next occurrence of a given day of the week as a YYYY-MM-DD string. For example, passing "tuesday" returns the date of next Tuesday.
+  Get the next occurrence of a weekday as a YYYY-MM-DD date.
 
-  @param day - The day of the week
-  @param timezone - IANA timezone name (defaults to the local timezone)
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   return _nextDayOfWeek(day, timezone)
 }
 
-/** Get the instant of a wall-clock time on a calendar date, in a timezone. */
+/**
+Use `atTime("2026-05-05", "09:00", "America/New_York")` to schedule a
+local wall-clock time. Invalid dates and times throw an error.
+*/
 export def atTime(date: string, time: string, timezone: string = ""): number {
   """
-  Get the instant (epoch milliseconds) of a wall-clock time on a calendar date,
-  in a timezone. Example: atTime("2026-05-05", "09:00", "America/New_York").
-  Throws if the date or time cannot be parsed, so bad input fails loudly instead
-  of becoming a silent NaN.
+  Convert a calendar date and local time to epoch milliseconds.
 
-  @param date - The calendar date, "YYYY-MM-DD"
-  @param time - The wall-clock time, "HH:MM" or "HH:MM:SS"
-  @param timezone - IANA timezone name (defaults to local)
+  @param date - Calendar date in YYYY-MM-DD form.
+  @param time - Wall-clock time in HH:MM or HH:MM:SS form.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   return _atTime(date, time, timezone)
 }
 
-/** Get midnight of the day containing an instant, as epoch milliseconds. */
 export def startOfDay(instant?: number, timezone: string = ""): number {
   """
-  Get midnight (00:00:00) of the day containing `instant`, in a timezone, as
-  epoch milliseconds. Defaults to now(). Display it with format(...).
+  Get midnight of the day containing the instant, as epoch milliseconds.
 
-  @param instant - The instant whose day to use (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the day, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   const at = instant ?? now()
   return _startOfDay(at, timezone)
 }
 
-/** Get the last millisecond of the day containing an instant. */
 export def endOfDay(instant?: number, timezone: string = ""): number {
   """
-  Get the last millisecond (23:59:59.999) of the day containing `instant`, in a
-  timezone, as epoch milliseconds. Defaults to now(). An instant is always
-  within [startOfDay, endOfDay] of its own day.
+  Get the last millisecond of the day containing the instant.
 
-  @param instant - The instant whose day to use (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the day, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   const at = instant ?? now()
   return _endOfDay(at, timezone)
 }
 
-/** Get midnight on Sunday of the week containing an instant. */
 export def startOfWeek(instant?: number, timezone: string = ""): number {
   """
-  Get midnight on Sunday of the week containing `instant`, in a timezone, as
-  epoch milliseconds. Weeks begin on Sunday. Defaults to now().
+  Get midnight on Sunday of the week containing the instant, as epoch milliseconds.
 
-  @param instant - An instant within the week (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the week, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   const at = instant ?? now()
   return _startOfWeek(at, timezone)
 }
 
-/** Get the last millisecond of Saturday of the week containing an instant. */
 export def endOfWeek(instant?: number, timezone: string = ""): number {
   """
-  Get the last millisecond (23:59:59.999) of Saturday of the week containing
-  `instant`, in a timezone, as epoch milliseconds. Weeks end on Saturday.
-  Defaults to now().
+  Get the last millisecond of Saturday of the week containing the instant.
 
-  @param instant - An instant within the week (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the week, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   const at = instant ?? now()
   return _endOfWeek(at, timezone)
 }
 
-/** Get midnight on the 1st of the month containing an instant. */
 export def startOfMonth(instant?: number, timezone: string = ""): number {
   """
-  Get midnight on the 1st of the month containing `instant`, in a timezone, as
-  epoch milliseconds. Defaults to now().
+  Get midnight on the first day of the month containing the instant, as epoch milliseconds.
 
-  @param instant - An instant within the month (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the month, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   const at = instant ?? now()
   return _startOfMonth(at, timezone)
 }
 
-/** Get the last millisecond of the last day of the month containing an instant. */
 export def endOfMonth(instant?: number, timezone: string = ""): number {
   """
-  Get the last millisecond (23:59:59.999) of the last day of the month
-  containing `instant`, in a timezone, as epoch milliseconds. Defaults to now().
+  Get the last millisecond of the month containing the instant.
 
-  @param instant - An instant within the month (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the month, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
   """
   const at = instant ?? now()
   return _endOfMonth(at, timezone)
 }
 
-/** Format an instant as an ISO 8601 string with milliseconds and offset. */
 export def format(ms: number, timezone: string = ""): string {
   """
   Format an instant (epoch milliseconds) as an ISO 8601 string with
@@ -188,7 +170,6 @@ export def format(ms: number, timezone: string = ""): string {
   return _format(ms, timezone)
 }
 
-/** Format an instant as the "YYYY-MM-DD" calendar date it falls on. */
 export def formatDate(ms: number, timezone: string = ""): string {
   """
   Format an instant as the "YYYY-MM-DD" calendar date it falls on in a timezone.
@@ -199,37 +180,32 @@ export def formatDate(ms: number, timezone: string = ""): string {
   return _formatDate(ms, timezone)
 }
 
-/** Parse an ISO 8601 datetime string into an instant (epoch milliseconds). */
+/**
+Parsing follows JavaScript Date rules, so inputs such as `"2026"` and
+`"2026-05"` are also accepted. Invalid input throws an error.
+*/
 export def parse(iso: string): number {
   """
-  Parse an ISO 8601 datetime string into an instant (epoch milliseconds). Throws
-  if the string cannot be parsed, so bad input fails loudly instead of becoming
-  a silent NaN. Strictness matches JavaScript's Date, not RFC 3339: loosely
-  valid strings like "2026" or "2026-05" are accepted.
-
-  @param iso - The ISO 8601 datetime string
+  Parse a datetime string into epoch milliseconds.
   """
   return _parse(iso)
 }
 
-/** Render a millisecond duration as a readable string like "5m 32s". */
+/**
+Output uses whole seconds, with weeks as the largest unit.
+*/
 export def formatDuration(ms: number): string {
   """
-  Render a duration in milliseconds as a readable string like "5m 32s" or
-  "2w 3d". Whole-second granularity; largest unit is weeks.
-
-  @param ms - The duration in milliseconds
+  Format a duration in milliseconds as text such as "5m 32s".
   """
   return _formatDuration(ms)
 }
 
-/** How much time has elapsed since an instant, as a readable duration string. */
 export def elapsedTime(since: number): string {
   """
-  How much time has elapsed since the given instant, as a readable duration
-  like "5m 32s". Capture the start with now().
+  Format the time since an earlier instant as a duration such as "5m 32s".
 
-  @param since - The starting instant, from now()
+  @param since - Starting time in epoch milliseconds, such as a value from now().
   """
   return formatDuration(now() - since)
 }

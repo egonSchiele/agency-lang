@@ -29,66 +29,35 @@ import { _realDir } from "agency-lang/stdlib-lib/fs.js"
 import { _mkdir, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
 
 /** @module
-  @summary Keep a directory of tools an agent wrote.
-  A tool is a directory holding two Agency files. `impl.agency` is the
-  part the coding agent writes: `export type Request` and
-  `export def run(request: Request): Json`. `tool.agency` is generated
-  from a fixed template and wraps `run` in a guard with time and cost
-  limits. It exports `tool` and `node main`, both taking a `Request`.
+@summary Create, save, and run reusable Agency tools.
 
-  ## Useful exports
-  - `listTools` reads a toolbox directory into a catalog. It raises a
-    `std::toolbox::scan` interrupt, then `std::ls` for the listing.
-  - `designTool` has the coding agent draft a new tool. `designTool` then
-    checks and tests the draft, shows it to the user through a
-    `std::toolbox::review` interrupt that can ask for a revision, and
-    saves it through the same save gate `writeTool` uses.
-  - `writeTool` saves a tool whose `run` function is already written. It
-    wraps and typechecks the source, shows it through a
-    `std::toolbox::save` interrupt, and saves it. No model is called.
-  - `runTool` runs a saved tool and records the use.
+```ts
+import { designTool, runTool } from "std::toolbox"
 
-  ```ts
-  import { designTool, listTools, runTool } from "std::toolbox"
-
-  node main() {
-    handle {
-      const written = designTool(
-        name: "getNews",
-        purpose: "Summarize today's news for a list of topics as Markdown.",
-        request: "{ topics: string[]; maxItems: number }",
-      )
-      if (written is failure(err)) {
-        print("not written: ${err}")
-        return
-      }
-      printJSON(listTools())
-      const news = runTool("getNews", { topics: ["tech"], maxItems: 5 })
-      print(news)
-    } with (intr) {
-      return match (intr.effect) {
-        "std::toolbox::review" => {
-          print(intr.data.source)
-          print("effects: ${intr.data.effects.join(", ")}")
-          const answer = input("accept, or feedback for the next draft (empty rejects): ")
-          if (answer == "") {
-            return reject("cancelled by user")
-          }
-          return approve(answer)
-        }
-        "std::toolbox::save" => approve()
-        _ => pass()
-      }
-    }
+node main() {
+  const saved = designTool(
+    name: "addTax",
+    purpose: "Add a tax rate to an amount.",
+    request: "{ amount: number; rate: number }",
+  )
+  if (saved is failure) {
+    return saved
   }
-  ```
+  return runTool("addTax", { amount: 100, rate: 0.08 })
+}
+```
 
-  A program can also import a saved tool directly:
-  `import { tool as getNews } from "~/.agency-agent/tools/getNews/tool.agency"`.
+Run interactively or supply handlers for the review and save requests.
+`designTool` drafts and checks a tool, then lets the user accept it or ask
+for changes. Use `writeTool` when the source is already written, and
+`listTools` to inspect saved tools.
+
+Each tool has an `impl.agency` exporting `Request` and `run`. A generated
+`tool.agency` wraps it with cost and time limits. You can also import its
+`tool` export directly from the saved directory.
 */
 
-// Upper bound on tools one scan reads; the same cap std::skills uses for a
-// skills directory.
+// Refuse oversized listings rather than returning an incomplete toolbox.
 const MAX_TOOLS = 500
 
 // Added to a tool's own time limit for the subprocess that runs it, so
@@ -124,13 +93,8 @@ effect std::toolbox::recordUse {
   name: string
 }
 
-// A tool's own files, written where the toolbox put them: the four fixed
-// names, under a directory Agency chose from a checked tool name. Its own
-// effect, never a std::write rule on the agent home, so a policy can let
-// the toolbox write a draft without granting writes anywhere else. The
-// approval covers the write that fulfils it. `root` is the toolbox root,
-// so "approve always here" pins the toolbox rather than one draft's
-// staging directory, whose name carries a random number.
+// Scope draft writes to the toolbox without granting general file writes.
+// Pin the root so an always-rule covers later drafts with different staging names.
 @alwaysUnder(root)
 effect std::toolbox::writeFile {
   root: string;
@@ -410,19 +374,19 @@ def toolNames(root: string): Result<string[]> {
   return success(map(filter(entries, isToolDir), \entry -> entry.name))
 }
 
+/**
+Use the catalog to select a tool before calling `runTool`. Each entry
+includes its signature, tool description, effects, and saved metadata.
+A `broken` entry explains why the tool cannot be used.
+*/
 @capabilities(fileRead)
 export idempotent def listTools(
   dir: string = "~/.agency-agent/tools",
 ): Result<ToolEntry[]> {
   """
-  List the tools in a toolbox directory. Raises a `std::toolbox::scan`
-  interrupt before reading anything, then `std::ls` for the listing. Each entry has: the tool's name and
-  directory; what `describe` says about its `run` function (signature,
-  docstring, effects); and its meta.json record (purpose, request type,
-  creation time, time limit, version, run count, last-run time). An
-  entry `runTool` would refuse carries the reason in `broken`.
+  List saved tools and their metadata, marking unreadable or invalid entries as broken.
 
-  @param dir - The toolbox directory to scan
+  @param dir - Nonempty toolbox directory to scan.
   """
   const root = expandRoot(dir)?
   return interrupt std::toolbox::scan("Are you sure you want to scan this directory for tools?", {
@@ -484,9 +448,10 @@ type DraftSettings = {
   review: boolean
 }
 
-/** A draft that typechecked, passed review, and (for a pure tool) its
-  own tests. `source` is impl.agency. `tested` is false when the tool
-  was not tested. */
+/**
+A checked draft ready for user review. `source` is impl.agency.
+`tested` records whether generated tests ran; `review` may contain open findings.
+*/
 type Draft = {
   source: string;
   effects: string[];
@@ -749,10 +714,11 @@ let _unresolved: Record<string, Unresolved[]> = {}
 // `point` and `reason` only.
 def cannotFix(stagingDir: string, point: string, reason: string): string {
   """
-  Report a review point that the code in this module cannot fix, and why. Call it once for each such point, then finish the draft without fixing that point. The user who asked for the tool reads the reason and decides what to do.
+  Report a review point this module cannot fix, then finish the draft.
+  Call once per unresolved point so the user can decide what to change.
 
-  @param point - The review point, in the reviewer's words
-  @param reason - Why the code in this module cannot fix it
+  @param point - The review point in the reviewer's words.
+  @param reason - Why this module cannot fix it.
   """
   const soFar = _unresolved[stagingDir] ?? []
   const already = filter(soFar, \item -> item.point.trim() == point.trim())
@@ -777,9 +743,8 @@ let _answered: Record<string, Answered[]> = {}
 // Offered to the coding agent as `question`, with `stagingDir` bound.
 def askAndRecord(stagingDir: string, prompt: string): string {
   """
-  Ask the user a question and wait for their reply. Use it when the work depends on a fact only the user knows, such as which address, account, or service they mean. Do not use it for something you can look up, and do not guess at a fact you could ask for.
-
-  @param prompt - The question to show the user
+  Ask for a fact only the user can supply, such as the intended address or account.
+  Do not guess or ask for facts you can look up.
   """
   const answer = question(prompt)
   if (answer != null) {
@@ -829,10 +794,8 @@ def progress(settings: DraftSettings, message: string, points: string[] = []) {
   }
 }
 
-// Every attempt the coding agent makes is one the parser, typechecker, or
-// compiler sent back. Those are cheap to fix and say nothing about whether
-// the tool is right, so they get a count of their own, larger than the
-// rounds, which are for failed tests and the user's feedback.
+// Allow several parser, typechecker, or compiler corrections within a
+// drafting round. Test failures and user feedback consume separate rounds.
 static const CHECK_ATTEMPTS = 6
 
 def draftSource(
@@ -875,10 +838,7 @@ def draftSource(
   return written
 }
 
-// The reviewer's own rule makes a requirement the task states and the
-// code does not meet an error. Here the author can change one module and
-// nothing else, so a point it cannot fix would block every draft. This
-// tells the reviewer where that line is.
+// Separate fixable code problems from limitations that require the user's decision.
 static const REVIEW_LIMITS = """
 The author of this code can change the code in this module and nothing else. It cannot change the task, the Request type, or what a standard library function returns.
 
@@ -974,9 +934,7 @@ def removeStagedFile(
   }
 }
 
-// Write impl.agency and the filled template beside it, then typecheck the
-// pair. A draft that exports the wrong names fails here with the
-// compiler's message, which goes back to the coding agent as feedback.
+// Assemble the fixed wrapper and check the draft before user review.
 def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   const wroteImpl = writeToolFile(settings, IMPL_FILE, source)?
   const filled = fill(
@@ -998,8 +956,7 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   if (compiled is failure(compileErr)) {
     return draftProblem("${compileErr}")
   }
-  // The compile does not report type errors; the typecheck does. It takes
-  // the source the template just produced, so nothing is read back.
+  // Typecheck the wrapper source in memory instead of reading it back.
   const report = typecheck(toolSource, dir: settings.stagingDir, strict: true)?
   if (report.errors.length > 0) {
     const messages = map(report.errors, \diag -> diag.message)
@@ -1202,8 +1159,7 @@ def prepareDraft(
   return draft
 }
 
-// The answer is text: a bare approve() or "accept" accepts, and anything
-// else is the feedback for the next draft. Returns null for accept.
+// Return null for a bare approval or "accept", and other nonempty text as feedback.
 def askUser(
   name: string,
   settings: DraftSettings,
@@ -1255,15 +1211,8 @@ def askToSave(
   return success(null)
 }
 
-// The staged directory already holds impl.agency, tool.agency, and (when
-// the tool was tested) tool.test.json. Add meta.json and publish the whole
-// directory with one rename, so a tool is either fully present or absent.
-// The existence check is repeated here because the one in checkName is
-// stale after the approval and any model calls.
-// The JSON Schema of the draft's Request type, from the `requestSchema`
-// node the template gives every tool. It is what a model is shown as the
-// learned tool's parameter, so it comes from the compiled type and not
-// from the type text, and it runs in the same sandbox as the tests.
+// Derive the tool parameter schema from its compiled Request type in the
+// sandbox, using the requestSchema node supplied by the fixed wrapper.
 def requestSchemaOf(settings: DraftSettings): Result<Json> {
   const ran = runFile(settings.stagingDir, TOOL_FILE, REQUEST_SCHEMA_NODE)
   if (ran is failure(runErr)) {
@@ -1272,6 +1221,8 @@ def requestSchemaOf(settings: DraftSettings): Result<Json> {
   return success(ran.value.data)
 }
 
+// Add metadata and publish the staged directory with one rename. Recheck
+// the name because approval and model calls can take time.
 @capabilities(fileRead, fileWrite)
 def saveTool(
   root: string,
@@ -1640,11 +1591,18 @@ def clearStaging(
 }
 
 /**
-The design loop: the coding agent drafts the tool, the review agent and
-the typecheck vet the draft, a pure tool gets generated tests, and the
-result goes to the user in a `std::toolbox::review` interrupt that can
-accept it or send feedback for another round. An accepted draft is
-published through the same `std::toolbox::save` gate `writeTool` uses.
+Use this when a tool still needs to be written or refined. The coding agent
+writes against your fixed request type. Each draft gets sandbox compilation
+and typechecking; pure, predictable tools also get generated tests.
+Set `review: true` to add a review agent before those checks.
+
+The user can accept the draft or give text feedback for another round.
+Acceptance still requires the save approval shared with `writeTool`.
+An unfinished draft stays available during the session for the same name,
+request type, and purpose.
+
+The saved tool runs under `maxTime` and `maxCost`. These limits apply to
+future calls of the tool, rather than the drafting process.
 */
 export def designTool(
   name: string,
@@ -1659,22 +1617,18 @@ export def designTool(
   review: boolean = false,
 ): Result<ToolEntry> {
   """
-  Design a reusable tool with the user and save it into a toolbox
-  directory. The coding agent drafts the tool's `run` function against
-  the request type. The draft is typechecked, tested when it is pure
-  computation, and shown to the user, who accepts it or gives feedback
-  for another draft.
+  Draft a reusable tool, revise it with the user, and save it after acceptance.
 
-  @param name - The tool's name; also its directory under dir
-  @param purpose - What the tool should do, in plain language
-  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
-  @param dir - The toolbox directory to write into
-  @param maxRounds - Draft-review rounds before giving up
-  @param maxTime - Time limit baked into the tool's guard, under one hour
-  @param maxCost - Cost limit baked into the tool's guard
-  @param model - Model override for the coding and review agents, or ""
-  @param provider - Provider for the model override
-  @param review - True has a review agent read each draft before its checks, and sends its blocking findings back to the author once. Off by default: on the `evals/design-tool` suite it doubled the time and tripled the cost of a tool and did not change the score
+  @param name - Unused camelCase name of at most 64 letters or digits, starting with a lowercase letter and excluding "staging".
+  @param purpose - What the tool should do, in plain language.
+  @param request - Input type as Agency text, such as `{ amount: number; rate: number }`.
+  @param dir - Nonempty toolbox directory to write into.
+  @param maxRounds - Maximum draft and revision rounds before returning a failure.
+  @param maxTime - Saved tool's time limit in milliseconds, at most 59m30s.
+  @param maxCost - Saved tool's cost limit in dollars.
+  @param model - Model override for drafting and review, or "" for the configured model.
+  @param provider - Provider for the model override.
+  @param review - Have a review agent inspect drafts before their checks when true.
   """
   const staged = stage(name, purpose, request, dir, maxTime, maxCost, model, provider, review)?
   const outcome = rounds(staged.root, name, staged.settings, maxRounds)
@@ -1700,11 +1654,14 @@ def assembleAndSave(
 }
 
 /**
-The plain primitive for saving a tool whose `run` function is already
-written: wrap the source in the guarded tool module, typecheck the pair,
-show the source and its effects in a `std::toolbox::save` interrupt, and
-publish. No model is called and no tests are generated. The design loop
-in `designTool` ends by publishing through this same gate.
+Use this for source you have already written and tested. It compiles and
+typechecks the source with a generated wrapper, shows the source and effects
+for save approval, and publishes the tool. It makes no model calls and
+generates no tests. Use `designTool` to draft or revise with the user.
+
+The source must export a `Request` type matching `request` and a
+`run(request: Request): Json` function. Import `Json` from `std::validation`.
+The wrapper enforces `maxTime` and `maxCost` on later tool calls.
 */
 export def writeTool(
   name: string,
@@ -1716,19 +1673,14 @@ export def writeTool(
   maxCost: number = $1.00,
 ): Result<ToolEntry> {
   """
-  Save an already-written tool into a toolbox directory, after approval.
-  The source must export `type Request` (matching the request text) and
-  `def run(request: Request): Json`. It is wrapped in the guarded tool
-  module and typechecked before the user is asked. A rejection saves
-  nothing and fails the call.
+  Save an already-written tool after checking its source and obtaining approval.
 
-  @param name - The tool's name, also its directory under dir
-  @param purpose - What the tool does, in plain language
-  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
-  @param source - The complete impl.agency source
-  @param dir - The toolbox directory to write into
-  @param maxTime - Time limit baked into the tool's guard, under one hour
-  @param maxCost - Cost limit baked into the tool's guard
+  @param name - Unused camelCase name of at most 64 letters or digits, starting with a lowercase letter and excluding "staging".
+  @param request - Input type as Agency text, matching the source's Request type.
+  @param source - Agency-only module exporting `Request` and `run(request: Request): Json`.
+  @param dir - Nonempty toolbox directory to write into.
+  @param maxTime - Saved tool's time limit in milliseconds, at most 59m30s.
+  @param maxCost - Saved tool's cost limit in dollars.
   """
   const staged = stage(name, purpose, request, dir, maxTime, maxCost, "", "")?
   const outcome = assembleAndSave(staged.root, name, source, staged.settings)
@@ -1756,6 +1708,12 @@ def recordUse(root: string, name: string, meta: ToolMeta): Result {
   return try _write(root, "${name}/${META_FILE}", JSON.stringify(used, null, 2), "overwrite")
 }
 
+/**
+Runs the saved `main` node in a subprocess under the tool's stored time
+limit. Metadata must be readable before the tool starts. After the run,
+recording its use count is best-effort: a rejected or failed metadata write
+does not change the tool's result. The result itself is not recorded there.
+*/
 @capabilities(fileRead)
 export def runTool(
   name: string,
@@ -1763,14 +1721,11 @@ export def runTool(
   dir: string = "~/.agency-agent/tools",
 ): Result<Json> {
   """
-  Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json counts one more use and the time. A
-  declined or failed count does not fail the run. The result is not
-  recorded.
+  Run a saved tool with its input and return its result.
 
-  @param name - The tool's name under dir
-  @param request - The tool's input, a value of its Request type
-  @param dir - The toolbox directory holding the tool
+  @param name - The saved tool's name under dir.
+  @param request - A value matching the tool's Request type.
+  @param dir - Nonempty toolbox directory holding the tool.
   """
   const syntax = checkNameSyntax(name)?
   const root = expandRoot(dir)?

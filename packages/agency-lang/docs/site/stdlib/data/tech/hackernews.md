@@ -1,6 +1,6 @@
 ---
 name: "hackernews"
-description: "Hacker News — front page, items, users, and search"
+description: "Read Hacker News stories, items, profiles, and search results."
 ---
 
 # hackernews
@@ -34,10 +34,10 @@ description: "Hacker News — front page, items, users, and search"
 
 ### Story
 
-A Hacker News story (the hydrated list / search shape). `time` is a Unix timestamp.
+A Hacker News story from a list or search, with `time` in Unix seconds.
 
 ```ts
-/** A Hacker News story (the hydrated list / search shape). `time` is a Unix timestamp. */
+/** A Hacker News story from a list or search, with `time` in Unix seconds. */
 export type Story = {
   id: number;
   title: string;
@@ -50,7 +50,7 @@ export type Story = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L47))
 
 ### Item
 
@@ -73,7 +73,7 @@ export type Item = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L59))
 
 ### User
 
@@ -90,7 +90,7 @@ export type User = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L74))
 
 ## Effects
 
@@ -103,7 +103,7 @@ effect std::hackernews {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L31))
 
 ## Functions
 
@@ -116,12 +116,13 @@ hnStories(
 ): Result<Story[]> raises <std::hackernews, std::http::fetchJSON>
 ```
 
-Fetch a Hacker News story list and hydrate the top items into full stories (title, url, author,
-  score, comment count). Fetches the id list plus one request per item, so a large limit means many
-  requests (capped at 100).
+Read stories from a ranked Hacker News list.
 
-  @param list - Which ranked list to read: "top", "new", "best", "ask", "show", or "job"
-  @param limit - How many stories to hydrate (capped at 100)
+  @param list - Use "top", "new", "best", "ask", "show", or "job".
+  @param limit - The maximum stories to fetch, clamped to the range zero through 100.
+
+This requests the ranked ID list and then one item per requested story.
+  Use a small limit to reduce requests. Items whose fetch fails are skipped.
 
 **Parameters:**
 
@@ -136,7 +137,7 @@ Fetch a Hacker News story list and hydrate the top items into full stories (titl
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L259))
 
 ### hnItem
 
@@ -144,10 +145,9 @@ Fetch a Hacker News story list and hydrate the top items into full stories (titl
 hnItem(id: number): Result<Item> raises <std::hackernews, std::http::fetchJSON>
 ```
 
-Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its text, author,
-  score, and the ids of its direct child comments. An unknown id returns a failure.
+Read a Hacker News story, comment, job, or poll, including its child IDs.
 
-  @param id - The Hacker News item id
+  @param id - A Hacker News item ID from a story listing, search, or parent item.
 
 **Parameters:**
 
@@ -161,7 +161,7 @@ Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L277))
 
 ### hnUser
 
@@ -171,10 +171,9 @@ hnUser(
 ): Result<User> raises <std::hackernews, std::http::fetchJSON>
 ```
 
-Fetch a Hacker News user's public profile: karma, account age, about text, and submitted item
-  ids. An unknown username returns a failure.
+Read a Hacker News user’s public profile and submitted item IDs.
 
-  @param username - The Hacker News username (case-sensitive)
+  @param username - The case-sensitive Hacker News username.
 
 **Parameters:**
 
@@ -188,7 +187,7 @@ Fetch a Hacker News user's public profile: karma, account age, about text, and s
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L287))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L289))
 
 ### hnSearch
 
@@ -201,13 +200,11 @@ hnSearch(
 ): Result<Story[]> raises <std::hackernews, std::http::fetchJSON>
 ```
 
-Search Hacker News stories by keyword via the Algolia index. Returns matching stories (title,
-  url, author, score, comment count), sorted by relevance or recency.
+Search Hacker News through its Algolia index.
 
-  @param query - The search keywords
-  @param sort - Result ordering: "relevance" or "recent"
-  @param tags - Algolia tag filter, e.g. "story", "comment", "ask_hn", "show_hn"
-  @param limit - Maximum results (capped at 50)
+  @param sort - Order results by "relevance" or "recent".
+  @param tags - Algolia tag filters, such as "story", "comment", "ask_hn", or "show_hn".
+  @param limit - The maximum results, clamped to the range zero through 50.
 
 **Parameters:**
 
@@ -224,4 +221,4 @@ Search Hacker News stories by keyword via the Algolia index. Returns matching st
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L300))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L301))

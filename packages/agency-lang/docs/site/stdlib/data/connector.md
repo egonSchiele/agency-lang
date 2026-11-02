@@ -1,20 +1,24 @@
 ---
 name: "connector"
-description: "Connector core — shared plumbing for `std::data` connectors"
+description: "Shared request and normalization helpers for data connectors."
 ---
 
 # connector
 
-## Connector core — shared plumbing for `std::data` connectors
+Use these helpers when writing a connector for a public JSON API. They
+  provide request handling, consistent error messages, limit clamping,
+  and timestamp conversion.
 
-  Every data connector (Hacker News, Bluesky, ...) needs the same plumbing: an
-  HTTP fetch that surfaces as one connector-level prompt instead of a raw HTTP
-  prompt per request, a consistent failure message, limit clamping, and
-  timestamp normalization. This module holds that plumbing so a connector file
-  only contains what is specific to its source: types, reshapes, path
-  builders, and verbs.
+  ```ts
+  import { clampLimit, dateStrToEpochMs } from "std::data/connector"
 
-  See `docs/dev/stdlib/data-connectors.md` for the full guide to writing a connector.
+  node main() {
+    return {
+      limit: clampLimit(500, 100),
+      timestamp: dateStrToEpochMs("2026-01-01T00:00:00Z")
+    }
+  }
+  ```
 
 ## Functions
 
@@ -31,14 +35,16 @@ connectorFetch(
 ): Result raises <std::http::fetchJSON>
 ```
 
-Fetch a connector API path and return the parsed-JSON Result. Raises the
-    same std::http::fetchJSON interrupt as fetchJSON itself, so calling this
-    directly is fully gated — nothing is pre-approved. Connector verbs approve
-    it at the call site (`connectorFetch(...) with approve`), AFTER raising
-    their own connector effect; that is what makes a connector call surface as
-    one connector-level prompt. The call-site approval is a vote, not a
-    bypass: an outer handler still receives the fetch interrupt and its
-    reject wins. allowedDomains is enforced inside fetchJSON.
+Fetch a JSON API path within the allowed domains.
+
+  @param base - The API base URL to resolve the path against.
+  @param domains - Hostnames that the request is allowed to reach.
+  @param path - The API path and query string, with user-supplied values URL-encoded.
+
+In a custom connector, raise your connector's effect before calling this
+  helper with `with approve`. That avoids a separate interactive prompt
+  for each HTTP request. Outer handlers still receive the HTTP interrupt
+  and can reject it. Calling this helper directly requires an HTTP decision.
 
 **Parameters:**
 
@@ -57,7 +63,7 @@ Fetch a connector API path and return the parsed-JSON Result. Raises the
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L28))
 
 ### connectorError
 
@@ -65,7 +71,9 @@ Fetch a connector API path and return the parsed-JSON Result. Raises the
 connectorError(source: string, err: any): string
 ```
 
-Shared failure message for a failed connector fetch. Pure.
+Format a connector request failure with its source name.
+
+Keep request failures consistent across connector operations.
 
 **Parameters:**
 
@@ -76,7 +84,7 @@ Shared failure message for a failed connector fetch. Pure.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L47))
 
 ### shapeError
 
@@ -84,9 +92,9 @@ Shared failure message for a failed connector fetch. Pure.
 shapeError(source: string, endpoint: string, err: any): string
 ```
 
-Failure message for a response body that failed wire-shape validation.
-    The embedded Zod issues name each mismatched path and what was expected
-    there, so API drift is diagnosable from the message alone. Pure.
+Format a connector response-validation failure with its source and endpoint.
+
+Preserve validation details so a caller can identify changed API fields.
 
 **Parameters:**
 
@@ -98,7 +106,7 @@ Failure message for a response body that failed wire-shape validation.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L55))
 
 ### clampLimit
 
@@ -106,7 +114,9 @@ Failure message for a response body that failed wire-shape validation.
 clampLimit(n: number, cap: number): number
 ```
 
-Clamp n into [0, cap]. Pure.
+Clamp a limit to the range from zero through the supplied cap.
+
+Use for connector limits that should be clamped instead of rejected.
 
 **Parameters:**
 
@@ -117,7 +127,7 @@ Clamp n into [0, cap]. Pure.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L63))
 
 ### dateStrToEpochMs
 
@@ -125,10 +135,9 @@ Clamp n into [0, cap]. Pure.
 dateStrToEpochMs(iso: string): number
 ```
 
-Convert an ISO 8601 datetime string to epoch milliseconds. Returns 0 when
-    the string cannot be parsed, so reshapes using it stay total. Connectors
-    normalize every source timestamp through this, whatever the source's
-    native format, so cross-connector code can compare times directly. Pure.
+Convert an ISO 8601 timestamp to epoch milliseconds, returning zero if it cannot be parsed.
+
+Normalize source timestamps so results from different connectors can be compared.
 
 **Parameters:**
 
@@ -138,4 +147,4 @@ Convert an ISO 8601 datetime string to epoch milliseconds. Returns 0 when
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L77))

@@ -1,14 +1,17 @@
 ---
 name: "verifier"
-description: "Verifies completed work on disk against a task: derives measurable"
+description: "Check completed work on disk against measurable task criteria."
 ---
 
 # verifier
 
-criteria and computes each one with tools.
+The verifier derives criteria, uses tools to check the work, and returns
+`Feedback` findings. You can supply known criteria as well. It has shell
+execution tools, so the caller's handlers decide which commands may run.
+Use `reviewAgent` to judge text without running it.
 
-  The verifier runs; review reads. To judge a work product handed to you as
-  text without touching the file system, use reviewAgent instead.
+A stopped run may return saved partial findings. A failed verification
+returns no findings, so an empty list alone does not prove the work passed.
 
 ## Functions
 
@@ -18,15 +21,11 @@ criteria and computes each one with tools.
 buildTools(): any[]
 ```
 
-Return the verifier's tools. It measures with shell pipelines and reads
-  bytes, because a criterion checked by eye is a criterion not checked. It
-  has no write tools: a verifier that can fix things is no longer a verifier.
-  Agency code is checked with the type checker and test harness tools, since
-  the `agency` command line is not available from inside the agent.
+Return the verifier's file inspection, command execution, and Agency check tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L27))
 
 ### verifierAgent
 
@@ -44,19 +43,17 @@ verifierAgent(
 ): Result<Feedback[]>
 ```
 
-Verify work on disk against a task: derive measurable success criteria,
-  compute each one with tools, and return one pass/fail finding per
-  criterion.
+Check work on disk against task criteria with tools and return findings.
+  A failed verification returns no findings.
 
-  @param task - The task the work must satisfy
-  @param criteria - Known acceptance criteria to check, extended with derived ones
-  @param context - Extra material for the judgment, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param criteria - Known criteria to check alongside those derived from the task.
+  @param context - Reserved and currently unused.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
+  @param extraTools - Tools available to criteria generation and verification.
 
 **Parameters:**
 
@@ -76,4 +73,4 @@ Verify work on disk against a task: derive measurable success criteria,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L74))

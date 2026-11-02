@@ -1,5 +1,12 @@
 import { systemMessage } from "std::thread"
 
+/** @module
+@summary Rewrite a user prompt before passing it to another agent.
+
+`promptRewriter` returns only the revised prompt from an isolated
+conversation. Use it when a request needs a clearer goal or output format.
+*/
+
 static const systemPrompt = """
 You rewrite user prompts so that an AI agent produces a better response. You do NOT answer the prompt yourself; you only return an improved version of it.
 
@@ -16,8 +23,8 @@ Return ONLY the rewritten prompt. No preamble, no explanation, no quotation mark
 
 export def promptRewriter(prompt: string): string {
   """
-  Rewrite a user prompt to be clearer and more specific before handing it to
-  an agent. Preserves the user's intent; returns only the rewritten prompt.
+  Rewrite a prompt with a clearer goal and output requirements.
+  Return the rewritten prompt without answering it.
   """
   thread {
     systemMessage(systemPrompt)

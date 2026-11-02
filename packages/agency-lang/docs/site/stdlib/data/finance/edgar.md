@@ -1,6 +1,6 @@
 ---
 name: "edgar"
-description: "SEC EDGAR — U.S. company filings"
+description: "Find recent SEC filings by ticker or company CIK."
 ---
 
 # edgar
@@ -9,10 +9,8 @@ description: "SEC EDGAR — U.S. company filings"
 
   Look up official filings for a U.S.-listed company from the SEC's
   [EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces).
-  Use this connector for *authoritative, mandated* facts about one company — its 10-K
-  (annual), 10-Q (quarterly), 8-K (material event), and Form 4 (insider trade) filings — the
-  slow-moving ground truth. For news or rumor about a company use `std::data/news/gdelt`;
-  for economic numbers use fred/dbnomics.
+  Find annual reports (10-K), quarterly reports (10-Q), material-event
+  reports (8-K), or other filings by ticker or CIK.
 
   Returns a list of filings with form type, filing/report dates, and a direct URL to the
   primary document. No API key required, but the SEC requires a descriptive User-Agent with
@@ -50,7 +48,7 @@ export type Filing = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L34))
 
 ## Effects
 
@@ -62,7 +60,7 @@ effect std::edgar {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L31))
 
 ## Functions
 
@@ -76,13 +74,11 @@ edgarFilingsByCik(
 ): Result<Filing[]> raises <std::edgar, std::http::fetchJSON>
 ```
 
-List recent SEC filings for a company by its CIK (Central Index Key). Returns filings with
-  form type, filing/report dates, and a direct URL to each primary document. Optionally filter
-  by form type (e.g. "10-K", "10-Q", "8-K").
+List recent SEC filings for a company by CIK.
 
-  @param cik - The company CIK, with or without leading zeros
-  @param formType - Optional filing form to filter by, e.g. "10-K" (empty for all forms)
-  @param limit - Maximum filings to return (default 20)
+  @param cik - The company Central Index Key, with or without leading zeros.
+  @param formType - A form such as "10-K" or "8-K", or empty for all forms.
+  @param limit - The maximum filings to return, or zero or less for all recent filings.
 
 **Parameters:**
 
@@ -98,7 +94,7 @@ List recent SEC filings for a company by its CIK (Central Index Key). Returns fi
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L133))
 
 ### edgarFilings
 
@@ -110,15 +106,15 @@ edgarFilings(
 ): Result<Filing[]> raises <std::edgar, std::http::fetchJSON>
 ```
 
-List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").
-  Resolves the ticker to a CIK, then returns filings with form type, filing/report dates, and
-  a direct URL to each primary document. Optionally filter by form type (e.g. "10-K", "8-K").
-  This downloads the SEC ticker->CIK map on each call; if you already know the CIK, prefer
-  edgarFilingsByCik to skip that fetch.
+List recent SEC filings for a company by stock ticker.
 
-  @param ticker - The company's stock ticker, e.g. "AAPL"
-  @param formType - Optional filing form to filter by, e.g. "10-K" (empty for all forms)
-  @param limit - Maximum filings to return (default 20)
+  @param ticker - A stock ticker such as "AAPL", matched without regard to case.
+  @param formType - A form such as "10-K" or "8-K", or empty for all forms.
+  @param limit - The maximum filings to return, or zero or less for all recent filings.
+
+Use `edgarFilingsByCik` when you already know the company CIK to skip
+  the ticker-directory request. These functions read the recent-filings
+  section of SEC submissions data, rather than the full filing archive.
 
 **Parameters:**
 
@@ -134,4 +130,4 @@ List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AA
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L155))

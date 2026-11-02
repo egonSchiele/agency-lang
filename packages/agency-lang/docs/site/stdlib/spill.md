@@ -5,18 +5,13 @@ description: "Where long tool output goes, and how to read it back."
 
 # spill
 
-A command can print far more than a model should be handed in one tool
-  result. Cutting the output off hid whether a build had finished, and the
-  model re-ran the command to find out. So output past `MAX_STDOUT_LEN` is
-  saved instead, and the model gets a preview: the exit code, a few lines
-  from each end, and the name the output was saved under.
+Use saved output to inspect long command results without sending the whole
+  text to the model at once. Output past `MAX_STDOUT_LEN` is saved and replaced
+  by a preview with the exit code, the first and last lines, and a saved name.
 
-  Saved output lives in the run, not on disk: it is kept in the run's
-  globals, so it is copied into every checkpoint and is still there after a
-  pause and resume, in this process or another. Nothing is written to a
-  directory. The store holds about a million characters; when it is full,
-  the oldest output goes, and reading its name back says it is no longer
-  available.
+  Saved output survives checkpoints and resumes. The store holds about a
+  million characters and removes its oldest entries when full. Reading a
+  removed entry returns a failure.
 
   When an `llm()` call sets `spillToolResultsOver`, the tool loop uses the
   same store for any tool result longer than that or than
@@ -51,7 +46,7 @@ A command can print far more than a model should be handed in one tool
 export static const MAX_STDOUT_LEN = 2000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L42))
 
 ## Functions
 
@@ -61,14 +56,14 @@ export static const MAX_STDOUT_LEN = 2000
 keepOutput(text: string, exitCode: number, source: string = ""): string
 ```
 
-What the model gets back for a command's output.
+Save long command output and return a preview with its saved name.
 
-  Short output comes back exactly as printed. Long output is saved in the
-  run and replaced by a preview: the exit code, the first and last lines,
-  and the name it was saved under, with the tools that read it. `source`
-  is the command that produced the output, as the user saw it; the preview
-  names it, and so does the agent's trace line when the output is read back.
-  Leave it empty when there is no command to name.
+  @param source - The command that produced the output, or an empty string when none applies.
+
+Use this when returning command output to an LLM. Short text passes through
+unchanged. Long text becomes a preview that includes the exit code and a
+saved name. Include `readSpill` and `grepSpill` in the model's tools so it can
+inspect the complete output.
 
 **Parameters:**
 
@@ -80,7 +75,7 @@ What the model gets back for a command's output.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L50))
 
 ### readSpill
 
@@ -104,7 +99,7 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L59))
 
 ### grepSpill
 
@@ -117,12 +112,12 @@ grepSpill(
 ): Result
 ```
 
-Search saved tool output for a regular expression. Each match comes back with its line number and line text. Patterns use JavaScript regex syntax. To look for several things at once, put the others in morePatterns: one call searches them all and returns each pattern's matches under it.
+Search saved tool output using JavaScript regular expressions. Returns matching
+  lines with line numbers, grouped by pattern when morePatterns is supplied.
 
-  @param pattern - The regular expression to search for
-  @param filename - The name from a "full output saved as" notice. A name only, never a path.
-  @param maxResults - Most matches to return, for each pattern
-  @param morePatterns - More regular expressions to search for in the same call
+  @param filename - The saved name from a "full output saved as" notice.
+  @param maxResults - Maximum matches per pattern.
+  @param morePatterns - Additional patterns to search in the same output.
 
 **Parameters:**
 
@@ -135,4 +130,4 @@ Search saved tool output for a regular expression. Each match comes back with it
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L74))

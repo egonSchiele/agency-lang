@@ -1,6 +1,7 @@
 import { _weather } from "agency-lang/stdlib-lib/weather.js"
 
 /** @module
+  @summary Look up current weather and convert temperatures.
   Look up current weather for a city or zip code, and convert between
   Celsius and Fahrenheit. No API key required.
 
@@ -35,25 +36,14 @@ type WeatherResult = {
   units: string
 }
 
-/**
-  Usage from Agency code:
-  import { weather } from "std::weather"
-
-  node main() {
-    const w = weather("San Francisco")
-    print(w)
-  }
-
-  Open-Meteo (https://open-meteo.com) provides the weather data, licensed
-  under CC BY 4.0. Free API usage is for non-commercial purposes only.
-*/
+/** Include a region or country in a city name when the location is ambiguous. */
 @capabilities(network)
 export def weather(location: string, units: "imperial" | "metric" = "imperial"): Result {
   """
-  Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a text description.
+  Get current weather for a city or zip code.
 
-  @param location - City name or zip code
-  @param units - "imperial" for Fahrenheit/mph, "metric" for Celsius/km/h
+  @param location - A city name, optionally with a region or country, or a zip code.
+  @param units - Use imperial for Fahrenheit and mph, or metric for Celsius and km/h.
   """
   return interrupt std::weather("Are you sure you want to fetch the weather from Open-Meteo?", {
     location: location,

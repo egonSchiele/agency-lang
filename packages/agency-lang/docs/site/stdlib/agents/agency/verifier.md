@@ -1,12 +1,16 @@
 ---
 name: "verifier"
-description: "Runs an Agency program and judges its actual result against a task."
+description: "Run an Agency program and judge its result against a task."
 ---
 
 # verifier
 
-The verifier runs; review reads. To check source text without executing it,
-  use agencyReviewAgent instead.
+The verifier checks the returned value and can inspect files the program
+created. A program that cannot run produces an error finding.
+Use `agencyReviewAgent` to check source without executing it.
+
+A stopped run may return saved partial findings. A failed judgment returns
+no findings, so an empty list alone does not prove the program passed.
 
 ## Functions
 
@@ -16,13 +20,11 @@ The verifier runs; review reads. To check source text without executing it,
 buildTools(): any[]
 ```
 
-Return the Agency verifier's tools. It reads and measures what the program
-  left behind; it has no write tools, because a verifier that can fix things
-  is no longer a verifier.
+Return the Agency verifier's file inspection and command execution tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L28))
 
 ### agencyVerifierAgent
 
@@ -40,19 +42,16 @@ agencyVerifierAgent(
 ): Result<Feedback[]>
 ```
 
-Run an Agency program and judge its result against the task. A program that
-  fails to run yields a single error finding rather than a failure, so callers
-  can always read findings.
+Run an Agency program and judge its result against a task.
+  Run failures become error findings, and a failed judgment returns no findings.
 
-  @param source - The Agency program to run
-  @param task - What the program's result must satisfy
-  @param context - Extra material for the judgment, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param context - Reserved and currently unused.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override for the judgment, or "" for the ambient model.
+  @param provider - Provider for the judgment model, ignored when model is empty.
+  @param session - Name a judgment conversation to reuse, or "" for an isolated thread.
+  @param extraTools - Additional tools for judging the program's result.
 
 **Parameters:**
 
@@ -74,4 +73,4 @@ Run an Agency program and judge its result against the task. A program that
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L91))

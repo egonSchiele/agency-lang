@@ -1,14 +1,14 @@
 ---
 name: "search"
-description: "Selects one web-search provider from the configured API keys."
+description: "Select client-side and provider-hosted search tools for agents."
 ---
 
 # search
 
-Agents receive one client-side search tool: Brave when BRAVE_API_KEY is
-  set, otherwise Tavily when TAVILY_API_KEY is set. With neither key set,
-  they receive no client-side search tool. The catalog order sets the
-  preference for all agents that use this helper.
+`searchTools` selects Brave when `BRAVE_API_KEY` is available, then Tavily
+when `TAVILY_API_KEY` is available, or no client-side tool without a key.
+`hostedSearchTools` selects hosted search for the model and provider route
+used by an LLM call. Both can be offered together.
 
 ## Functions
 
@@ -27,7 +27,7 @@ Return one web-search tool, preferring BRAVE_API_KEY over TAVILY_API_KEY.
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L55))
 
 ### searchProviderName
 
@@ -35,10 +35,7 @@ Return one web-search tool, preferring BRAVE_API_KEY over TAVILY_API_KEY.
 searchProviderName(toolName: string): string | null
 ```
 
-Return a search tool's provider name from the catalog, or null for an
-  unknown tool. This lookup does not read API keys or contact a provider.
-
-  @param toolName - The name assigned to the search tool
+Return the catalog provider name for a search tool, or null when its name is unknown.
 
 **Parameters:**
 
@@ -48,7 +45,7 @@ Return a search tool's provider name from the catalog, or null for an
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L63))
 
 ### hostedSearchTools
 
@@ -56,13 +53,10 @@ Return a search tool's provider name from the catalog, or null for an
 hostedSearchTools(model: string = "", provider: string = ""): string[]
 ```
 
-Return the provider-hosted search capabilities available to a call on this
-  model through this provider, or an empty array when that route offers none
-  (the base "openai" client, local models). Pass the same model and provider
-  the call will use: the answer depends on the route, not the model alone.
+Select provider-hosted search for an LLM call's model and provider route.
 
-  @param model - The model that will run the call, or "" for the ambient default
-  @param provider - The provider the call will route through, or "" for the ambient default
+  @param model - Use the same model as the call, or "" for the ambient model.
+  @param provider - Use the same provider as the call, or "" for automatic resolution.
 
 **Parameters:**
 
@@ -73,7 +67,7 @@ Return the provider-hosted search capabilities available to a call on this
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L74))
 
 ### searchProviderNames
 
@@ -90,4 +84,4 @@ Return the selected web-search provider's name, preferring Brave over
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L84))

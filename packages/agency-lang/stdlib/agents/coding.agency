@@ -1,19 +1,3 @@
-/** @module
-  @summary Writes, edits, and runs code to complete a task on disk. One
-  honest pass: it works until it believes the task is done, then returns a
-  summary.
-
-  The real output is filesystem side effects; the returned string is a
-  summary. This agent does not verify its own work against the task. To add
-  verify-and-fix, compose it with verifierAgent, or run it under supervise
-  (std::supervise) for mid-run course correction:
-
-    supervise(every: 5m, maxTime: 30m, check: myCheck) {
-      return codingAgent(task, maxTime: 30m)
-    }
-
-  For an Agency-specific coding agent, use std::agents/agency/coding.
-*/
 import { hostedSearchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
@@ -35,6 +19,22 @@ import { systemMessage, threadIsNew } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
+/** @module
+@summary Write, edit, and run code to complete a task on disk.
+
+The returned string summarizes the work. Files and other effects are the
+deliverable. Use `verifierAgent` afterwards to check the result against the
+task, or `std::agents/agency/coding` to generate Agency source as text.
+
+```ts
+import { codingAgent } from "std::agents/coding"
+
+node main() {
+  const result = codingAgent("Create a CSV report in report.csv")
+  print(result)
+}
+```
+*/
 
 static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
 
@@ -60,8 +60,7 @@ static const skills = agentSkill("coding")
 
 export def buildTools(): any[] {
   """
-  Return the coding agent's tools. Exported so a caller can inspect what the
-  agent may do, and so tests can assert it.
+  Return the coding agent's built-in tools for inspection or extension.
   """
   return [
     setAgentCwd,
@@ -124,10 +123,10 @@ export def codingAgent(
 
   @param task - What to accomplish
   @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param provider - Provider for the model override, ignored when model is empty.
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """

@@ -1,3 +1,9 @@
+import { _recognizeTextLocal } from "agency-lang/stdlib-lib/ocr.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
+import { _approvedFilePath } from "agency-lang/stdlib-lib/approvedPath.js"
+import { dirname, basename } from "std::path"
+import { image } from "std::thread"
+
 /** @module
 @summary Read the text in an image, locally with macOS Vision or through a vision model.
 Read the text in an image. `readText` and `readTextBlocks` run macOS
@@ -19,11 +25,6 @@ They never fall back to a model provider, because an approval that named
 a local read must not become an upload. For offline OCR on Linux or
 Windows, install `@agency-lang/tesseract-local`.
 */
-import { _recognizeTextLocal } from "agency-lang/stdlib-lib/ocr.js"
-import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
-import { _approvedFilePath } from "agency-lang/stdlib-lib/approvedPath.js"
-import { dirname, basename } from "std::path"
-import { image } from "std::thread"
 
 // Local recognition. The file never leaves the machine.
 @alwaysUnder(dir)
@@ -65,14 +66,12 @@ export def readTextBlocks(
   fast: boolean = false,
 ): Result<TextBlock[]> {
   """
-  Recognize the text in an image with macOS Vision and return each line
-  with its confidence and normalized top-left bounding box. Runs on the
-  machine; nothing is uploaded. Fails on any platform that is not macOS.
-  Prefer readText unless you need positions.
+  Read text from an image with confidence scores and bounding boxes.
+  Uses macOS Vision locally; requires macOS and does not upload the image.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image
-  @param language - Recognition language such as "en-US"; empty lets Vision choose
-  @param fast - Use Vision's fast recognition level instead of accurate
+  @param path - Path to a PNG, JPEG, GIF, or WebP image.
+  @param language - Recognition language such as "en-US", or empty for automatic selection.
+  @param fast - Use fast recognition instead of accurate recognition.
   """
   const real = try _realTarget(path)
   if (isFailure(real)) {
@@ -93,13 +92,12 @@ export def readText(
   fast: boolean = false,
 ): Result<string> {
   """
-  Recognize the text in an image with macOS Vision and return it as one
-  string, one recognized line per line. Runs on the machine; nothing is
-  uploaded. Fails on any platform that is not macOS.
+  Read text from an image as a string with one recognized line per line.
+  Uses macOS Vision locally; requires macOS and does not upload the image.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image
-  @param language - Recognition language such as "en-US"; empty lets Vision choose
-  @param fast - Use Vision's fast recognition level instead of accurate
+  @param path - Path to a PNG, JPEG, GIF, or WebP image.
+  @param language - Recognition language such as "en-US", or empty for automatic selection.
+  @param fast - Use fast recognition instead of accurate recognition.
   """
   const blocks = readTextBlocks(path, language, fast)
   if (isFailure(blocks)) {
@@ -111,6 +109,11 @@ export def readText(
   return success(lines.join("\n"))
 }
 
+/**
+Runs in a separate conversation thread, so the image and transcription
+instructions do not remain in the caller's conversation. Check the result
+against the image when exact transcription matters.
+*/
 @capabilities(fileRead, llm)
 export def readTextWithModel(
   path: string,
@@ -119,17 +122,13 @@ export def readTextWithModel(
   prompt: string = "",
 ): Result<string> {
   """
-  Send an image to a vision model and return the text it reads. The
-  image leaves the machine. A model generates text rather than
-  recognizing it, so it can return plausible content that is not on the
-  page; prefer readText when the output must be trusted, or check the
-  result against the image. Runs in its own thread so the image and the
-  instruction do not stay in your conversation.
+  Send an image to a vision model to transcribe its text. The result may contain
+  invented or misread text; use readText for local OCR on macOS.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image
-  @param model - Model to use; empty means the run's default model
-  @param provider - Provider override; normally derived from the model name
-  @param prompt - Extra instruction, such as jargon or field names to expect
+  @param path - Path to a PNG, JPEG, GIF, or WebP image.
+  @param model - Model to use, or empty for the run's default.
+  @param provider - Override the provider derived from the model name.
+  @param prompt - Additional transcription instructions, such as names or jargon.
   """
   const real = try _realTarget(path)
   if (isFailure(real)) {

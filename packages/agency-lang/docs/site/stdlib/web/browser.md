@@ -1,6 +1,6 @@
 ---
 name: "browser"
-description: "Run browser automation tasks described in plain language via the Browser Use cloud API."
+description: "Run browser tasks described in plain language through Browser Use."
 ---
 
 # browser
@@ -13,7 +13,7 @@ Run browser automation tasks described in plain language via the Browser Use
 
   node main() {
     const result = browserUse("Find the top 3 trending repos on GitHub today")
-    print(result.output)
+    print(result)
   }
   ```
 
@@ -31,7 +31,7 @@ effect std::browserUse {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L27))
 
 ## Functions
 
@@ -49,15 +49,22 @@ browserUse(
 ): Result
 ```
 
-Run a browser automation task described in natural language via the Browser Use cloud API. The managed browser has stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID.
+Run a browser automation task described in plain language through Browser Use.
 
-  @param task - Natural language description of the browser task
-  @param model - Model to use: "bu-mini" (default), "bu-max", or "bu-ultra"
-  @param maxCostUsd - Maximum spend limit in USD
-  @param proxyCountryCode - Two-letter country code for geographic routing (e.g. "US", "DE")
-  @param timeout - Timeout in milliseconds (default 120000)
-  @param apiKey - Browser Use API key (defaults to the BROWSER_USE_API_KEY env var)
-  @param allowedDomains - Restrict the browser to only visit these domains
+  @param task - Describe the goal, relevant pages, and when the task is complete.
+  @param model - A Browser Use model name, or empty for the service default.
+  @param maxCostUsd - The spend limit sent to the remote service, in USD.
+  @param proxyCountryCode - A two-letter routing country code, such as "US" or "DE".
+  @param timeout - How long to poll for completion in milliseconds, or zero for two minutes.
+  @param apiKey - Leave empty to use BROWSER_USE_API_KEY.
+  @param allowedDomains - Ask the remote browser agent to navigate only to these domains.
+
+Requires a Browser Use API key. The result includes the remote task’s
+  output, status, and session ID. Check the status before treating the
+  output as a completed task.
+
+  The domain list only changes the task instructions sent to the remote
+  browser agent. The client does not check its navigation against the list.
 
 **Parameters:**
 
@@ -77,4 +84,4 @@ Run a browser automation task described in natural language via the Browser Use 
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L38))

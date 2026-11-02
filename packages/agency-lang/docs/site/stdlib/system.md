@@ -94,10 +94,7 @@ effect std::notify {
 notify(title: string, message: string): boolean
 ```
 
-Show a native OS notification. Returns true if the notification was sent.
-
-  @param title - The notification title
-  @param message - The notification body text
+Show a native OS notification. Returns true if it was sent.
 
 **Parameters:**
 
@@ -154,7 +151,7 @@ screencapture.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L56))
 
 ### exit
 
@@ -162,8 +159,12 @@ screencapture.
 exit(code: number = 0)
 ```
 
-Terminate the process with the given exit code. Use with caution. This skips any cleanup or pending operations, except that it first sends any logs still on their way to a Statelog server.
-  @param code - Exit code (0 for success, non-zero for failure)
+Terminate the process with an exit code.
+
+  @param code - Zero for success, nonzero for failure.
+
+Flushes pending Statelog deliveries before terminating. Other pending work
+and cleanup may not finish.
 
 **Parameters:**
 
@@ -173,7 +174,7 @@ Terminate the process with the given exit code. Use with caution. This skips any
 
 **Throws:** `std::exit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L86))
 
 ### args
 
@@ -185,7 +186,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L98))
 
 ### cwd
 
@@ -193,11 +194,11 @@ Return the command-line arguments passed to the Agency program (excluding the no
 cwd(): string
 ```
 
-Return the absolute path of the current working directory of the Agency process.
+Return the run's current working directory as an absolute path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L105))
 
 ### env
 
@@ -205,10 +206,7 @@ Return the absolute path of the current working directory of the Agency process.
 env(name: string): string | null
 ```
 
-Read an environment variable. Returns null if the variable is not set, or if
-  the read was denied.
-
-  @param name - The environment variable name
+Read an environment variable, or return null if unset or access is denied.
 
 **Parameters:**
 
@@ -230,10 +228,13 @@ Read an environment variable. Returns null if the variable is not set, or if
 setEnv(name: string, value: string): Result
 ```
 
-Set an environment variable in the current process. Fails if the name is empty or contains '='. The change is visible to child processes spawned afterward but does not persist outside the current process.
+Set an environment variable on the host.
 
-  @param name - The environment variable name
-  @param value - The value to set
+  @param name - A nonempty variable name without = or NUL bytes
+  @param value - Must not contain NUL bytes
+
+On the Node host, the change affects this process and child processes
+started afterward. It does not change the launching shell's environment.
 
 **Parameters:**
 
@@ -248,7 +249,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L140))
 
 ### isTTY
 
@@ -256,13 +257,15 @@ Set an environment variable in the current process. Fails if the name is empty o
 isTTY(): boolean
 ```
 
-Return true if standard input is connected to a terminal. Returns false when stdin is piped or redirected from a file. Use this to detect non-interactive invocations (e.g. `echo "hi" | my-agent`) and adjust output accordingly.
+Return whether standard input is connected to a terminal.
+
+Use this to distinguish interactive input from piped or redirected input.
 
 **Returns:** `boolean`
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L158))
 
 ### readStdin
 
@@ -270,13 +273,13 @@ Return true if standard input is connected to a terminal. Returns false when std
 readStdin(): string
 ```
 
-Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program.
+Read piped or redirected standard input as text, waiting until the stream closes.
 
 **Returns:** `string`
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L166))
 
 ### openUrl
 
@@ -285,8 +288,6 @@ openUrl(url: string): Result
 ```
 
 Open a URL in the user's default browser.
-
-  @param url - The URL to open
 
 macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 `open` subprocess.
@@ -303,7 +304,7 @@ macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L182))
 
 ### setTitle
 
@@ -311,9 +312,10 @@ macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 setTitle(title: string): void
 ```
 
-Set the process title (as shown in system monitors, `ps` output, and the terminal window). This can help users identify the process, especially when running multiple agents simultaneously.
+Set the process title shown in system monitors.
 
-  @param title - The new process title
+Use a descriptive title to distinguish several running agents in system
+monitors and `ps` output.
 
 **Parameters:**
 
@@ -323,4 +325,4 @@ Set the process title (as shown in system monitors, `ps` output, and the termina
 
 **Returns:** `void`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L198))

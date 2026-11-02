@@ -1,6 +1,6 @@
 ---
 name: "email"
-description: "Send email from Agency code through Resend, SendGrid, or Mailgun, each reading its own API key from the environment."
+description: "Send email through Resend, SendGrid, or Mailgun."
 ---
 
 # email
@@ -68,21 +68,19 @@ sendWithResend(
 ): Result
 ```
 
-Send an email using the Resend API.
+Send an email through Resend.
 
-  @param from - Sender email address
-  @param to - Recipient email address
-  @param subject - Email subject
-  @param html - HTML content
-  @param text - Plain text content
-  @param cc - CC recipients
-  @param bcc - BCC recipients
-  @param replyTo - Reply-to address
-  @param apiKey - Resend API key
-  @param allowList - Only allow sending to these addresses
-  @param blockList - Block sending to these addresses
+  @param from - An email address authorized to send through this provider.
+  @param html - An HTML message body, which may accompany a plain-text alternative.
+  @param text - A plain-text message body, which may accompany an HTML version.
+  @param cc - One optional copy recipient address.
+  @param bcc - One optional hidden-copy recipient address.
+  @param replyTo - Direct replies to this address instead of the sender.
+  @param apiKey - Leave empty to use RESEND_API_KEY.
+  @param allowList - Limit to, cc, and bcc to these addresses, or leave empty for no allow restriction.
+  @param blockList - Reject any to, cc, or bcc address on this list, even if allowed.
 
-Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly.
+Configure a verified sender and a Resend API key before sending.
 
 **Parameters:**
 
@@ -126,21 +124,19 @@ sendWithSendGrid(
 ): Result
 ```
 
-Send an email using the SendGrid API.
+Send an email through SendGrid.
 
-  @param from - Sender email address
-  @param to - Recipient email address
-  @param subject - Email subject
-  @param html - HTML content
-  @param text - Plain text content
-  @param cc - CC recipients
-  @param bcc - BCC recipients
-  @param replyTo - Reply-to address
-  @param apiKey - SendGrid API key
-  @param allowList - Only allow sending to these addresses
-  @param blockList - Block sending to these addresses
+  @param from - An email address authorized to send through this provider.
+  @param html - An HTML message body, which may accompany a plain-text alternative.
+  @param text - A plain-text message body, which may accompany an HTML version.
+  @param cc - One optional copy recipient address.
+  @param bcc - One optional hidden-copy recipient address.
+  @param replyTo - Direct replies to this address instead of the sender.
+  @param apiKey - Leave empty to use SENDGRID_API_KEY.
+  @param allowList - Limit to, cc, and bcc to these addresses, or leave empty for no allow restriction.
+  @param blockList - Reject any to, cc, or bcc address on this list, even if allowed.
 
-Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly.
+Configure a verified sender and a SendGrid API key before sending.
 
 **Parameters:**
 
@@ -164,7 +160,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L107))
 
 ### sendWithMailgun
 
@@ -186,23 +182,21 @@ sendWithMailgun(
 ): Result
 ```
 
-Send an email using the Mailgun API.
+Send an email through Mailgun.
 
-  @param from - Sender email address
-  @param to - Recipient email address
-  @param subject - Email subject
-  @param html - HTML content
-  @param text - Plain text content
-  @param cc - CC recipients
-  @param bcc - BCC recipients
-  @param replyTo - Reply-to address
-  @param apiKey - Mailgun API key
-  @param domain - Mailgun domain
-  @param region - Mailgun region ("eu" for EU)
-  @param allowList - Only allow sending to these addresses
-  @param blockList - Block sending to these addresses
+  @param from - An email address authorized to send through this provider.
+  @param html - An HTML message body, which may accompany a plain-text alternative.
+  @param text - A plain-text message body, which may accompany an HTML version.
+  @param cc - One optional copy recipient address.
+  @param bcc - One optional hidden-copy recipient address.
+  @param replyTo - Direct replies to this address instead of the sender.
+  @param apiKey - Leave empty to use MAILGUN_API_KEY.
+  @param domain - Leave empty to use MAILGUN_DOMAIN.
+  @param region - Use "eu" for the EU endpoint, or empty to use MAILGUN_REGION then "us".
+  @param allowList - Limit to, cc, and bcc to these addresses, or leave empty for no allow restriction.
+  @param blockList - Reject any to, cc, or bcc address on this list, even if allowed.
 
-Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint.
+Configure a Mailgun sending domain and API key before sending.
 
 **Parameters:**
 
@@ -228,4 +222,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L162))

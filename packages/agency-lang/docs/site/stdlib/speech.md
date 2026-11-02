@@ -9,7 +9,7 @@ Speak text aloud locally, synthesize and transcribe speech in the
 cloud, and record from the microphone.
 
   ```ts
-  import { record, transcribe, speak, say } from "std::speech"
+  import { record, transcribe, speak, speakLocal, say } from "std::speech"
 
   node main() {
     const audio = record()
@@ -93,15 +93,15 @@ say(
 )
 ```
 
-Speak text aloud locally using the operating system's text-to-speech
-  (macOS only). For cloud text-to-speech that returns an audio file, use
-  `speak()` instead.
+Speak text aloud using macOS text-to-speech.
 
-  @param text - The text to speak
-  @param voice - Voice name to use
-  @param rate - Speaking rate in words per minute
-  @param outputFile - When set, save the audio to this file instead of playing it
-  @param allowedPaths - Only allow saving under these path prefixes
+  @param voice - macOS voice name, or empty for the default.
+  @param rate - Words per minute, or zero for the default.
+  @param outputFile - Save audio here instead of playing it when nonempty.
+  @param allowedPaths - Restrict outputFile to these directories, or leave empty for no restriction.
+
+Ctrl-C, a race loss, or a time-guard abort stops in-progress playback.
+Use `speak` for cloud synthesis or `speakLocal` for a local model that writes audio.
 
 **Parameters:**
 
@@ -117,7 +117,7 @@ Speak text aloud locally using the operating system's text-to-speech
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L92))
 
 ### record
 
@@ -136,13 +136,13 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
   @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
 
 `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
-`record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
+  `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
 
-Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
-which surfaces as an AgencyCancelledError.
+  Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
+  which surfaces as an AgencyCancelledError.
 
-An empty `outputFile` is auto-generated under the system temp directory and
-is not subject to the `allowedPaths` allow-list.
+  An empty `outputFile` is auto-generated under the system temp directory and
+  is not subject to the `allowedPaths` allow-list.
 
 **Parameters:**
 
@@ -158,7 +158,7 @@ is not subject to the `allowedPaths` allow-list.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L127))
 
 ### transcribe
 
@@ -178,17 +178,16 @@ transcribe(
 Transcribe an audio file to text using a cloud speech provider (OpenAI
   Whisper by default). Returns the transcript text; throws on failure.
 
-  @param filepath - Path to the audio file
   @param language - Language code (e.g. "en") for better accuracy
   @param allowedPaths - Only allow reading audio files under these path prefixes
-  @param model - Transcription model (default "whisper-1")
   @param provider - Override the provider (normally derived from the model name)
   @param prompt - Optional text to bias decoding (names, jargon)
   @param timestampGranularity - "segment" or "word" to request timestamps
   @param apiKey - Override the API key
 
-A cloud transcription request tears down on Ctrl-C, race-loser, or
-time-guard abort. Cost, spend guards, and statelog apply.
+Transcription uses the active model client and counts toward usage.
+Cancellation stops the request. Even when timestampGranularity is supplied,
+this function returns only the transcript text.
 
 **Parameters:**
 
@@ -209,7 +208,7 @@ time-guard abort. Cost, spend guards, and statelog apply.
 
 **Needs:** `fileRead`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L147))
 
 ### speak
 
@@ -232,10 +231,7 @@ Synthesize speech from text using a cloud text-to-speech provider (OpenAI
   by default), writing the audio to a file and returning its path. For local
   playback through the speakers, use `say()` instead.
 
-  @param text - The text to synthesize
   @param outputFile - Where to write the audio (auto-generated temp file if empty). Never overwrites an existing file.
-  @param voice - Voice name (default "alloy")
-  @param model - Speech model (default "tts-1")
   @param provider - Override the provider (normally derived from the model name)
   @param format - Output audio format: mp3 (default), opus, aac, flac, wav, or pcm
   @param speed - Speaking speed (0.25 to 4.0)
@@ -268,7 +264,7 @@ and statelog apply.
 
 **Needs:** `fileRead`, `fileWrite`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L199))
 
 ### speakLocal
 
@@ -296,11 +292,9 @@ Speak text into an audio file with a local speech model, and return the path of 
   @param allowedPaths - Directories that outputFile must be inside
   @param speed - Speaking speed, from 0.5 to 100 (both included). Anything other than 1 needs ffmpeg.
 
-Use this for speech that must not leave the machine, and for the
-emotion a local model can perform that a cloud voice cannot. Long text is
-sent to the server in pieces, so Ctrl-C stops within one piece and writes
-no file. The usage record costs nothing, and statelog gets one event per
-call however many pieces the text becomes.
+Use this to generate speech locally. Long text is sent in pieces, so
+Ctrl-C stops within one piece and writes no file. The run records one
+usage event per call with zero provider cost.
 
 Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 `speakLocal` refuses such a call before raising any interrupt when
@@ -326,4 +320,4 @@ Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L272))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L264))

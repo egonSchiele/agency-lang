@@ -1,8 +1,12 @@
 ---
 name: "promptRewriter"
+description: "Rewrite a user prompt before passing it to another agent."
 ---
 
 # promptRewriter
+
+`promptRewriter` returns only the revised prompt from an isolated
+conversation. Use it when a request needs a clearer goal or output format.
 
 ## Functions
 
@@ -12,8 +16,8 @@ name: "promptRewriter"
 promptRewriter(prompt: string): string
 ```
 
-Rewrite a user prompt to be clearer and more specific before handing it to
-  an agent. Preserves the user's intent; returns only the rewritten prompt.
+Rewrite a prompt with a clearer goal and output requirements.
+  Return the rewritten prompt without answering it.
 
 **Parameters:**
 
@@ -23,4 +27,4 @@ Rewrite a user prompt to be clearer and more specific before handing it to
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/promptRewriter.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/promptRewriter.agency#L24))

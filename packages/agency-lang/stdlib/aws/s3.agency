@@ -1,7 +1,16 @@
+import {
+  _s3Get,
+  _s3GetBinary,
+  _s3Put,
+  _s3PutBinary,
+  _createBucket,
+  _s3PresignGet,
+ } from "agency-lang/stdlib-lib/aws/s3.js"
+
 /** @module
-  Amazon S3 access from Agency code — get and put objects (text or binary) and
-  create buckets — with no AWS SDK dependency. Requests are signed with AWS
-  Signature Version 4 using only Node's built-in crypto.
+  @summary Read and write S3 objects, create buckets, and share download links.
+  Read and write text or binary objects in Amazon S3, create buckets, and
+  generate presigned download links. No AWS SDK installation is needed.
 
   Credentials come from the standard AWS environment variables
   (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and optionally
@@ -18,23 +27,11 @@
   }
   ```
 
-  Every operation raises an interrupt before it runs, so an S3 function handed to
-  an LLM as a tool cannot read or write a bucket without going through a handler.
-  Lock the `bucket` parameter with `.partial(bucket: ...)` to scope an agent to a
-  single bucket.
+  Bind `bucket` with `.partial(bucket: "my-bucket")` before handing a
+  function to an agent to keep that tool within one bucket.
 
-  Scope: plain SigV4; virtual-hosted and path-style endpoints across the
-  commercial, GovCloud, China, and ISO partitions. Binary is base64 in and out.
+  Binary uploads and downloads use base64 strings.
 */
-
-import {
-  _s3Get,
-  _s3GetBinary,
-  _s3Put,
-  _s3PutBinary,
-  _createBucket,
-  _s3PresignGet,
- } from "agency-lang/stdlib-lib/aws/s3.js"
 
 effect std::aws::s3::get {
   bucket: string;
@@ -94,11 +91,10 @@ export def s3Get(
   region: string = "",
 ): Result<string> {
   """
-  Download an S3 object as UTF-8 text. Complete `.` and `..` key segments are rejected.
+  Download an S3 object as UTF-8 text.
 
-  @param bucket - The S3 bucket name
-  @param key - The object key (path within the bucket)
-  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  @param key - A non-empty object key with no complete "." or ".." path segments.
+  @param region - Leave empty to use AWS_REGION, then us-east-1.
   """
   return interrupt std::aws::s3::get("Allow reading the object '${key}' from S3 bucket '${bucket}'?", {
     bucket: bucket,
@@ -115,11 +111,10 @@ export def s3GetBinary(
   region: string = "",
 ): Result<string> {
   """
-  Download an S3 object as base64, not readable text. Complete `.` and `..` key segments are rejected.
+  Download an S3 object as a base64 string.
 
-  @param bucket - The S3 bucket name
-  @param key - The object key (path within the bucket)
-  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  @param key - A non-empty object key with no complete "." or ".." path segments.
+  @param region - Leave empty to use AWS_REGION, then us-east-1.
   """
   return interrupt std::aws::s3::getBinary("Allow reading the binary object '${key}' from S3 bucket '${bucket}'?", {
     bucket: bucket,
@@ -138,13 +133,11 @@ export def s3Put(
   contentType: string = "text/plain",
 ): Result<S3PutResult> {
   """
-  Upload UTF-8 text to S3. Returns the bucket, key, URL, and ETag. Complete `.` and `..` key segments are rejected.
+  Upload UTF-8 text to an S3 object.
 
-  @param bucket - The S3 bucket name
-  @param key - The object key (path within the bucket)
-  @param content - The text to write
-  @param region - AWS region; defaults to AWS_REGION, then us-east-1
-  @param contentType - The Content-Type for the object
+  @param key - A non-empty object key with no complete "." or ".." path segments.
+  @param region - Leave empty to use AWS_REGION, then us-east-1.
+  @param contentType - The MIME type readers should use for the object.
   """
   return interrupt std::aws::s3::put("Allow writing the object '${key}' to S3 bucket '${bucket}'?", {
     bucket: bucket,
@@ -165,13 +158,12 @@ export def s3PutBinary(
   contentType: string = "application/octet-stream",
 ): Result<S3PutResult> {
   """
-  Upload strict base64-decoded binary to S3. Returns the bucket, key, URL, and ETag. Complete `.` and `..` key segments are rejected.
+  Upload base64-encoded binary to an S3 object.
 
-  @param bucket - The S3 bucket name
-  @param key - The object key (path within the bucket)
-  @param base64 - The binary content, base64-encoded
-  @param region - AWS region; defaults to AWS_REGION, then us-east-1
-  @param contentType - The Content-Type for the object
+  @param key - A non-empty object key with no complete "." or ".." path segments.
+  @param region - Leave empty to use AWS_REGION, then us-east-1.
+  @param base64 - Valid base64 encoding of the bytes to upload.
+  @param contentType - The MIME type readers should use for the object.
   """
   return interrupt std::aws::s3::putBinary("Allow writing the binary object '${key}' to S3 bucket '${bucket}'?", {
     bucket: bucket,
@@ -183,6 +175,12 @@ export def s3PutBinary(
   }
 }
 
+/**
+  The URL is computed locally without downloading the object. Treat it
+  as a credential: anyone holding it can download the object. With temporary
+  AWS credentials, it stops working when the session expires even if the
+  requested expiry is later.
+*/
 export def s3PresignGet(
   bucket: string,
   key: string,
@@ -190,16 +188,11 @@ export def s3PresignGet(
   region: string = "",
 ): Result<string> {
   """
-  Create a presigned download URL for a private S3 object. Anyone holding the
-  URL can download that object until it expires, so treat the URL like the
-  object's contents. The URL is computed locally; no request is sent. With
-  temporary credentials (AWS_SESSION_TOKEN), the URL stops working when the
-  session expires, whatever expiry was requested.
+  Create a shareable download URL for a private S3 object.
 
-  @param bucket - The S3 bucket name
-  @param key - The object key (path within the bucket)
-  @param expiresIn - How long the URL works for, in milliseconds, 1 to 604800000 (7 days); default one hour
-  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  @param key - A non-empty object key with no complete "." or ".." path segments.
+  @param expiresIn - A whole number of milliseconds from 1 through 604800000, at most seven days.
+  @param region - Leave empty to use AWS_REGION, then us-east-1.
   """
   raise std::aws::s3::presignGet("Allow creating a download link for '${key}' in S3 bucket '${bucket}', usable by anyone for ${expiresIn}ms?", {
     bucket: bucket,
@@ -216,10 +209,10 @@ export def createBucket(
   region: string = "",
 ): Result<S3CreateBucketResult> {
   """
-  Create an S3 bucket and return its bucket, region, and location.
+  Create an S3 bucket.
 
-  @param bucket - The globally-unique bucket name to create
-  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  @param bucket - A globally unique S3 bucket name.
+  @param region - Leave empty to use AWS_REGION, then us-east-1.
   """
   return interrupt std::aws::s3::createBucket("Allow creating the S3 bucket '${bucket}'?", {
     bucket: bucket,

@@ -1,6 +1,6 @@
 ---
 name: "gdelt"
-description: "GDELT — worldwide news coverage"
+description: "Search recent worldwide news coverage with GDELT."
 ---
 
 # gdelt
@@ -8,12 +8,8 @@ description: "GDELT — worldwide news coverage"
 ## GDELT — worldwide news coverage
 
   Search global online news via the [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/).
-  Use this connector for the *qualitative, fast-moving* signal — what the world is reporting
-  right now about an event, company, or topic. It returns recent matching articles (title,
-  URL, source domain, language, source country, and GDELT's seen-date). It tells you what is
-  being *said*, not what is *true* — for authoritative company facts use
-  `std::data/finance/edgar`; for economic numbers use `std::data/finance/fred` or
-  `std::data/finance/dbnomics`.
+  Find recent articles about an event, company, or topic. Results include
+  source links and publication metadata for checking the reporting.
 
   No API key required. GDELT asks callers to make at most one request every 5 seconds; on a
   zero-match query it returns no `articles` (this connector returns an empty list).
@@ -49,7 +45,7 @@ export type NewsArticle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L31))
 
 ## Effects
 
@@ -61,7 +57,7 @@ effect std::gdelt {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L28))
 
 ## Functions
 
@@ -75,14 +71,12 @@ gdeltNews(
 ): Result<NewsArticle[]> raises <std::gdelt, std::http::fetchJSON>
 ```
 
-Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns recent
-  matching articles (title, URL, source domain, language, source country, and the GDELT
-  seen-date); a zero-match query returns an empty list. Use for current events, public
-  attention, and sentiment. Note: GDELT is rate-limited to about one request every 5 seconds.
+Search recent worldwide news coverage with GDELT. Allow five seconds
+  between requests.
 
-  @param query - Search terms in GDELT DOC query syntax, e.g. "Federal Reserve rate cut"
-  @param maxRecords - Maximum number of articles to return, 1-250 (default 25)
-  @param timespan - How far back to search, e.g. "24h", "3d", "1w" (default "3d")
+  @param query - GDELT DOC search syntax, such as "Federal Reserve rate cut".
+  @param maxRecords - Request from 1 through 250 articles.
+  @param timespan - How far back to search, such as "24h", "3d", or "1w".
 
 **Parameters:**
 
@@ -98,4 +92,4 @@ Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns rec
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L77))

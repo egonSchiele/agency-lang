@@ -1,26 +1,25 @@
 ---
 name: "markdown"
-description: "Parse Markdown text into a structured AST you can walk, and render Markdown for the terminal or HTML."
+description: "Parse and transform Markdown, then render it for a terminal or as HTML."
 ---
 
 # markdown
 
-Parse Markdown text into a structured AST you can walk. The returned `blocks`
-  array holds block-level nodes like `Paragraph`, `Heading`, `CodeBlock`, `List`,
-  `Table`, and `BlockQuote`. Each is tagged with a `type` field to switch on.
-
-  ```ts
-  import { parse } from "std::markdown"
+```ts
+  import { parse, renderForCli } from "std::markdown"
 
   const result = parse("# Hello\n\nSome **bold** text.")
-  if (result.success) {
-    for (block in result.blocks) {
-      print(block.type)
-    }
+  if (result.success && result.rest == "") {
+    print(renderForCli(result.blocks))
   } else {
-    print("parse error: ${result.error}")
+    print("Could not parse the whole document.")
   }
   ```
+
+  Use `parse` to inspect a document's structure or `walk` to transform it
+  before rendering. Block and inline nodes have a `type` field, such as
+  `"paragraph"`, `"heading"`, or `"inline-text"`. The types below describe
+  the nested nodes held in fields typed as `any[]`.
 
 ## Types
 
@@ -36,7 +35,7 @@ export type InlineText = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L31))
 
 ### InlineSoftBreak
 
@@ -49,7 +48,7 @@ export type InlineSoftBreak = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L37))
 
 ### InlineHardBreak
 
@@ -62,7 +61,7 @@ export type InlineHardBreak = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L42))
 
 ### InlineBold
 
@@ -76,7 +75,7 @@ export type InlineBold = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L47))
 
 ### InlineItalic
 
@@ -90,21 +89,21 @@ export type InlineItalic = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L53))
 
 ### InlineBoldItalic
 
-Combined bold + italic text (`***...***`). `content` is an array of inline nodes.
+Bold and italic text (`***...***`). `content` is an array of inline nodes.
 
 ```ts
-/** Combined bold + italic text (`***...***`). `content` is an array of inline nodes. */
+/** Bold and italic text (`***...***`). `content` is an array of inline nodes. */
 export type InlineBoldItalic = {
   type: "inline-bold-italic";
   content: any[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L59))
 
 ### InlineStrike
 
@@ -118,7 +117,7 @@ export type InlineStrike = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L65))
 
 ### InlineCode
 
@@ -132,7 +131,7 @@ export type InlineCode = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L71))
 
 ### InlineLink
 
@@ -148,14 +147,14 @@ export type InlineLink = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L77))
 
 ### Image
 
-An inline image `![alt](url "title")`.
+An image `![alt](url "title")`, used inline or as a block.
 
 ```ts
-/** An inline image `![alt](url "title")`. */
+/** An image `![alt](url "title")`, used inline or as a block. */
 export type Image = {
   type: "image";
   url: string;
@@ -164,14 +163,18 @@ export type Image = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L85))
 
 ### InlineRefLink
 
-A reference-style link `[text][id]`, resolved against link definitions.
+A reference-style link `[text][id]` before reference resolution.
+    `parse` replaces it with an `InlineLink` when a definition matches,
+    or `InlineText` when none matches.
 
 ```ts
-/** A reference-style link `[text][id]`, resolved against link definitions. */
+/** A reference-style link `[text][id]` before reference resolution.
+    `parse` replaces it with an `InlineLink` when a definition matches,
+    or `InlineText` when none matches. */
 export type InlineRefLink = {
   type: "inline-ref-link";
   text: string;
@@ -179,14 +182,18 @@ export type InlineRefLink = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L95))
 
 ### InlineRefImage
 
-A reference-style image `![alt][id]`, resolved against link definitions.
+A reference-style image `![alt][id]` before reference resolution.
+    `parse` replaces it with an `Image` when a definition matches,
+    or `InlineText` when none matches.
 
 ```ts
-/** A reference-style image `![alt][id]`, resolved against link definitions. */
+/** A reference-style image `![alt][id]` before reference resolution.
+    `parse` replaces it with an `Image` when a definition matches,
+    or `InlineText` when none matches. */
 export type InlineRefImage = {
   type: "inline-ref-image";
   alt: string;
@@ -194,16 +201,16 @@ export type InlineRefImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L104))
 
 ### InlineFootnoteRef
 
-A footnote reference `[^id]`. `content` is filled in by reference
-    resolution when a matching footnote definition exists.
+A footnote reference `[^id]`. `content` holds text from a matching
+    definition when reference resolution finds one.
 
 ```ts
-/** A footnote reference `[^id]`. `content` is filled in by reference
-    resolution when a matching footnote definition exists. */
+/** A footnote reference `[^id]`. `content` holds text from a matching
+    definition when reference resolution finds one. */
 export type InlineFootnoteRef = {
   type: "inline-footnote-ref";
   id: string;
@@ -211,21 +218,21 @@ export type InlineFootnoteRef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L112))
 
 ### InlineHTML
 
-A raw inline HTML tag, passed through verbatim including its angle brackets.
+A raw inline HTML tag, including its angle brackets.
 
 ```ts
-/** A raw inline HTML tag, passed through verbatim including its angle brackets. */
+/** A raw inline HTML tag, including its angle brackets. */
 export type InlineHTML = {
   type: "inline-html";
   content: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L119))
 
 ### Paragraph
 
@@ -239,7 +246,7 @@ export type Paragraph = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L127))
 
 ### Heading
 
@@ -254,16 +261,18 @@ export type Heading = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L133))
 
 ### CodeBlock
 
-A fenced or indented code block. `language` is the info string for fenced
-    blocks, or `null` for indented blocks and unlabelled fences.
+A fenced or indented code block. `language` is the tag after the opening
+    backticks, or `null` for indented blocks and unlabelled fences.
+    Tags accept letters, digits, and `_+#.-`.
 
 ```ts
-/** A fenced or indented code block. `language` is the info string for fenced
-    blocks, or `null` for indented blocks and unlabelled fences. */
+/** A fenced or indented code block. `language` is the tag after the opening
+    backticks, or `null` for indented blocks and unlabelled fences.
+    Tags accept letters, digits, and `_+#.-`. */
 export type CodeBlock = {
   type: "code-block";
   content: string;
@@ -291,25 +300,21 @@ export type BlockQuote = {
 
 ### ListItem
 
-A single item in a list. `content` is an array of block nodes, typically
-    a single paragraph but may include nested lists, code blocks, etc. Typed
-    as `any[]` because Agency does not yet support mutual recursion with
-    `List.items: ListItem[]`. `checked` is set for GFM task-list items:
-    `true` for `[x]`/`[X]`, `false` for `[ ]`, absent for plain items.
+A list item with block nodes in `content`, including paragraphs and
+    nested lists. For task lists, `checked` is `true` for `[x]` or `[X]`
+    and `false` for `[ ]`. Plain items omit `checked`.
 
 ```ts
-/** A single item in a list. `content` is an array of block nodes, typically
-    a single paragraph but may include nested lists, code blocks, etc. Typed
-    as `any[]` because Agency does not yet support mutual recursion with
-    `List.items: ListItem[]`. `checked` is set for GFM task-list items:
-    `true` for `[x]`/`[X]`, `false` for `[ ]`, absent for plain items. */
+/** A list item with block nodes in `content`, including paragraphs and
+    nested lists. For task lists, `checked` is `true` for `[x]` or `[X]`
+    and `false` for `[ ]`. Plain items omit `checked`. */
 export type ListItem = {
   content: any[];
   checked?: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L158))
 
 ### List
 
@@ -327,7 +332,7 @@ export type List = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L165))
 
 ### HorizontalRule
 
@@ -340,7 +345,7 @@ export type HorizontalRule = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L173))
 
 ### Alignment
 
@@ -353,14 +358,14 @@ Per-column alignment for a Markdown table. `null` means no explicit
 export type Alignment = "left" | "right" | "center" | null
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L179))
 
 ### Table
 
-A GFM-style pipe table.
+A GFM-style pipe table. Headers and cells keep their Markdown as strings.
 
 ```ts
-/** A GFM-style pipe table. */
+/** A GFM-style pipe table. Headers and cells keep their Markdown as strings. */
 export type Table = {
   type: "table";
   headers: string[];
@@ -369,16 +374,16 @@ export type Table = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L182))
 
 ### LinkDef
 
-A link definition (`[id]: url "title"`). Reference resolution strips these
-    from the output, but the type is exposed for completeness.
+A link definition (`[id]: url "title"`). `parse` uses definitions to
+    resolve references, then removes them from the returned nodes.
 
 ```ts
-/** A link definition (`[id]: url "title"`). Reference resolution strips these
-    from the output, but the type is exposed for completeness. */
+/** A link definition (`[id]: url "title"`). `parse` uses definitions to
+    resolve references, then removes them from the returned nodes. */
 export type LinkDef = {
   type: "link-definition";
   id: string;
@@ -387,14 +392,16 @@ export type LinkDef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L191))
 
 ### FootnoteDef
 
-A footnote definition (`[^id]: ...`).
+A single-line footnote definition (`[^id]: text`). Reference resolution
+    copies its text to matching references, then removes the definition.
 
 ```ts
-/** A footnote definition (`[^id]: ...`). */
+/** A single-line footnote definition (`[^id]: text`). Reference resolution
+    copies its text to matching references, then removes the definition. */
 export type FootnoteDef = {
   type: "footnote-definition";
   id: string;
@@ -402,50 +409,50 @@ export type FootnoteDef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L200))
 
 ### HTMLBlock
 
-A raw HTML block, passed through verbatim.
+A raw HTML block containing its source text.
 
 ```ts
-/** A raw HTML block, passed through verbatim. */
+/** A raw HTML block containing its source text. */
 export type HTMLBlock = {
   type: "html-block";
   content: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L207))
 
 ### Frontmatter
 
-YAML-style frontmatter at the very top of the document. `data` is an
-    object whose values are strings, numbers, booleans, nulls, or arrays of
-    those (recursive).
+YAML-style frontmatter at the start of a document. Field values are
+    strings, numbers, booleans, null, or inline lists of these values.
+    See `frontmatter` for the supported syntax.
 
 ```ts
-/** YAML-style frontmatter at the very top of the document. `data` is an
-    object whose values are strings, numbers, booleans, nulls, or arrays of
-    those (recursive). */
+/** YAML-style frontmatter at the start of a document. Field values are
+    strings, numbers, booleans, null, or inline lists of these values.
+    See `frontmatter` for the supported syntax. */
 export type Frontmatter = {
   type: "frontmatter";
   data: Record<string, any>
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L215))
 
 ### ParseResult
 
-The result of a successful or failed `parse()` call. On success,
-    `blocks` is the parsed document; on failure, `error` describes what
-    went wrong and `rest` is the unconsumed input.
+The outcome of parsing Markdown. `blocks` holds the parsed nodes and
+    `rest` holds any unconsumed input, even when `success` is true.
+    On failure, `blocks` is empty and `error` describes the problem.
 
 ```ts
-/** The result of a successful or failed `parse()` call. On success,
-    `blocks` is the parsed document; on failure, `error` describes what
-    went wrong and `rest` is the unconsumed input. */
+/** The outcome of parsing Markdown. `blocks` holds the parsed nodes and
+    `rest` holds any unconsumed input, even when `success` is true.
+    On failure, `blocks` is empty and `error` describes the problem. */
 export type ParseResult = {
   success: boolean;
   blocks: any[];
@@ -454,7 +461,7 @@ export type ParseResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L224))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L223))
 
 ## Functions
 
@@ -464,12 +471,9 @@ export type ParseResult = {
 parse(input: string): ParseResult
 ```
 
-Parse a Markdown string into a structured AST. On success, `blocks` holds
-  the block-level nodes and `success` is true. On failure, `error` describes
-  the problem and `rest` is the unconsumed input. Every block and inline node
-  carries a `type` discriminator you can switch on.
-
-  @param input - The Markdown source text to parse
+Parse Markdown into block and inline nodes for inspection or rendering.
+  Check `success` and that `rest` is empty before treating `blocks` as a
+  complete document.
 
 **Parameters:**
 
@@ -479,7 +483,7 @@ Parse a Markdown string into a structured AST. On success, `blocks` holds
 
 **Returns:** [ParseResult](#parseresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L230))
 
 ### frontmatter
 
@@ -487,13 +491,16 @@ Parse a Markdown string into a structured AST. On success, `blocks` holds
 frontmatter(input: string): Result
 ```
 
-Extract the YAML-style frontmatter block from a Markdown string. Returns
-  `success(data)` with the parsed frontmatter fields as an object, or
-  `failure(...)` if the document has no frontmatter or parsing failed.
+Extract frontmatter fields from the start of Markdown. Supports a flat
+  YAML-style record with scalar values and inline lists. Returns a failure
+  if frontmatter is missing or parsing fails.
 
-  @param input - The Markdown source text to parse
-
-Composes well with the pipe operator, e.g. `read(filename, dir) |> frontmatter`.
+Frontmatter must start at the first character and use `---` fences.
+    Supported fields use `key: value` lines with scalar values or inline
+    lists such as `[one, two]`. Keys accept letters, digits, `_`, and `-`.
+    Nested objects, indented lists, and multiline values are unsupported.
+    A frontmatter block with unsupported syntax may be treated as document
+    content and reported as missing.
 
 **Parameters:**
 
@@ -503,7 +510,7 @@ Composes well with the pipe operator, e.g. `read(filename, dir) |> frontmatter`.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L245))
 
 ### walk
 
@@ -511,25 +518,31 @@ Composes well with the pipe operator, e.g. `read(filename, dir) |> frontmatter`.
 walk(blocks: any[], block: (any) -> any): any[]
 ```
 
-Walk a Markdown AST top-down, calling `block` on every block and inline
-  node and replacing each with the node it returns. Children of the returned
-  node are walked recursively. Returns the transformed array of block nodes
-  without mutating the input.
+Transform Markdown block and inline nodes from parent to child. Return
+  replacement nodes instead of mutating callback arguments.
 
-  @param blocks - The array of block nodes to transform
-  @param block - Callback invoked with each node; returns the replacement node
+  @param blocks - Use the `blocks` from `parse` or the result of a previous `walk`.
+  @param block - Return the replacement node whose children should be visited next.
 
-Typically used with the trailing-block syntax:
+```ts
+  import { parse, walk } from "std::markdown"
 
-    ```ts
-    const result = parse(input)
-    const transformed = walk(result.blocks) as node {
-      if (node.type == "code-block") {
-        return { ...node, content: highlight(node.content, node.language) }
+  const result = parse("A **bold** greeting.")
+  if (result.success && result.rest == "") {
+    const transformed = walk(result.blocks) as part {
+      if (part.type == "inline-text") {
+        return { ...part, content: part.content.toUpperCase() }
       }
-      return node
+      return part
     }
-    ```
+  }
+  ```
+
+  Children of each replacement node are visited next. List-item wrappers
+  are skipped, but their block children are visited. Table cells are plain
+  strings, so the callback receives the table rather than individual cells.
+  Return new objects to preserve the input, since the callback receives
+  the original nodes.
 
 **Parameters:**
 
@@ -540,7 +553,7 @@ Typically used with the trailing-block syntax:
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L284))
 
 ### renderForCli
 
@@ -548,14 +561,13 @@ Typically used with the trailing-block syntax:
 renderForCli(blocks: any[]): string
 ```
 
-Render a Markdown AST to an ANSI-styled string for printing in a terminal.
-  Links use OSC 8 escapes so capable terminals render them as clickable
-  hyperlinks.
+Render Markdown nodes as an ANSI-styled string for a terminal.
 
-  @param blocks - The array of block nodes to render
+  @param blocks - Use the `blocks` from `parse` or the result of `walk`.
 
-Code-block bodies are emitted verbatim. Pre-process them with `walk` to add
-    syntax highlighting inside the fences.
+Use `walk` to add ANSI syntax highlighting to code-block bodies before
+    rendering. The renderer preserves those escape sequences.
+    Links use OSC 8 escapes for clickable hyperlinks in terminals that support them.
 
 **Parameters:**
 
@@ -565,7 +577,7 @@ Code-block bodies are emitted verbatim. Pre-process them with `walk` to add
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L298))
 
 ### renderForHtml
 
@@ -573,26 +585,26 @@ Code-block bodies are emitted verbatim. Pre-process them with `walk` to add
 renderForHtml(blocks: any[]): string
 ```
 
-Render a Markdown AST to an HTML string. Text content is escaped, unsafe URL
-  schemes are dropped, and raw HTML in the source is not passed through.
+Render Markdown nodes as HTML with escaped text and filtered URLs.
+  Raw HTML in the source is omitted.
 
-  @param blocks - The array of block nodes to render
+  @param blocks - Use the `blocks` from `parse` or the result of `walk`.
 
-Unlike [renderForCli](#renderforcli), this renderer treats the AST as
-    untrusted, because the Markdown it renders is often written by a model.
-    Text is escaped, URLs are restricted to `http`, `https`, `mailto`, `tel`,
-    and relative paths, and raw HTML in the source is dropped rather than
-    passed through. Frontmatter is omitted, since it is metadata rather than
-    content.
+```ts
+  import { parse, renderForHtml } from "std::markdown"
 
-    ```ts
-    import { parse, renderForHtml } from "std::markdown"
-
-    const result = parse("## Findings\n\n- one\n- two")
+  const result = parse("## Findings\n\n- one\n- two")
+  if (result.success && result.rest == "") {
     const html = renderForHtml(result.blocks)
     // <h2>Findings</h2>
     // <ul><li>one</li><li>two</li></ul>
-    ```
+  }
+  ```
+
+  Use this renderer for HTML destinations, including model-written Markdown.
+  Allowed URLs use `http`, `https`, `mailto`, `tel`, or relative paths.
+  Protocol-relative URLs are rejected. Rejected links keep their text,
+  and rejected images keep their alt text. Frontmatter is omitted.
 
 **Parameters:**
 
@@ -602,4 +614,4 @@ Unlike [renderForCli](#renderforcli), this renderer treats the AST as
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/markdown.agency#L324))

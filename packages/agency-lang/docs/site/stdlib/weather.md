@@ -1,6 +1,6 @@
 ---
 name: "weather"
-description: "Look up current weather for a city or zip code, and convert between Celsius and Fahrenheit."
+description: "Look up current weather and convert temperatures."
 ---
 
 # weather
@@ -31,7 +31,7 @@ effect std::weather {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L21))
 
 ## Functions
 
@@ -41,21 +41,12 @@ effect std::weather {
 weather(location: string, units: "imperial" | "metric" = "imperial"): Result
 ```
 
-Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a text description.
+Get current weather for a city or zip code.
 
-  @param location - City name or zip code
-  @param units - "imperial" for Fahrenheit/mph, "metric" for Celsius/km/h
+  @param location - A city name, optionally with a region or country, or a zip code.
+  @param units - Use imperial for Fahrenheit and mph, or metric for Celsius and km/h.
 
-Usage from Agency code:
-  import { weather } from "std::weather"
-
-  node main() {
-    const w = weather("San Francisco")
-    print(w)
-  }
-
-  Open-Meteo (https://open-meteo.com) provides the weather data, licensed
-  under CC BY 4.0. Free API usage is for non-commercial purposes only.
+Include a region or country in a city name when the location is ambiguous.
 
 **Parameters:**
 
@@ -70,7 +61,7 @@ Usage from Agency code:
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L41))
 
 ### celsiusToFahrenheit
 
@@ -88,7 +79,7 @@ Convert a temperature from Celsius to Fahrenheit.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L56))
 
 ### fahrenheitToCelsius
 
@@ -106,4 +97,4 @@ Convert a temperature from Fahrenheit to Celsius.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L61))

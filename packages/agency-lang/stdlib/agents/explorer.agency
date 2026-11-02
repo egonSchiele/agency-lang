@@ -1,14 +1,3 @@
-/** @module
-  @summary A read-only surveyor: give it a broad question about a codebase or
-  a body of docs and it reads widely, then synthesizes an organized answer.
-
-  Reach for it when the answer needs many files read and pulled together:
-  summarize these docs, tour this module, explain how this works across the
-  codebase. It reads and organizes; it never changes anything.
-
-  Broad and descriptive, where oracleAgent is sharp and narrow. Ask the
-  explorer to survey many things; ask the oracle to judge one.
-*/
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
@@ -25,6 +14,16 @@ import { ensureSystemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
+/** @module
+@summary Survey a codebase or documentation and return an organized answer.
+
+Use `explorerAgent` for documentation summaries, module tours, and explanations
+that span many files. Its built-in tools read files and sources. Use
+`oracleAgent` for a focused design judgment.
+
+When called as an LLM tool, the explorer continues the caller's conversation.
+From code, wrap the call in `thread { ... }` when you want an isolated survey.
+*/
 
 static const skills = agentSkill("explorer")
 
@@ -116,8 +115,7 @@ summary, which is the fastest way to answer "what exists".
 
 export def buildTools(): any[] {
   """
-  Return the explorer's tools. Read-only by design: it surveys and
-  describes, and a surveyor that can edit is no longer a surveyor.
+  Return the explorer's file and source lookup tools.
   """
   return [
     ...readOnlyFileTools(),
@@ -153,8 +151,8 @@ def survey(
 }
 
 /** Called from code, this runs on the caller's thread like any function:
- *  the system prompt, the reads, and the answer stay there. Wrap the call
- *  in `thread { ... }` for an isolated survey. */
+  the system prompt, the reads, and the answer stay there. Wrap the call
+  in `thread { ... }` for an isolated survey. */
 @guarded(cost: maxCost, time: maxTime)
 export handoff def explorerAgent(
   question: string,
@@ -166,22 +164,15 @@ export handoff def explorerAgent(
   extraTools: any[] = [],
 ): Result<string> {
   """
-  Survey a codebase or a body of documentation and return an organized
-  answer: a summary, a tour, or an explanation of how something works across
-  many files. Reads widely before synthesizing, and cites what it read. It
-  never changes anything.
+  Survey a codebase or documentation and return an organized answer with sources.
+  As an LLM tool, continue the caller's conversation and keep the research in its history.
 
-  The explorer continues your conversation: it sees everything said so
-  far, and every file it reads stays in your history when it hands back.
-  Say how much ground to cover, and scope the question tightly.
-
-  @param question - The question, and the scope you want covered
-  @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param question - The question and the scope to cover.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param extraTools - Tools to add to the built-in lookup tools.
   """
 
   // Return position: a draft the model saved reaches the guard, which

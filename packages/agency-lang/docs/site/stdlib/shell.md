@@ -1,13 +1,14 @@
 ---
 name: "shell"
-description: "Run commands and inspect the filesystem: exec and bash run programs (with approval); ls, grep, glob, stat, exists, which are read-only."
+description: "Run commands, search files, and inspect filesystem metadata."
 ---
 
 # shell
 
-Run commands and inspect the filesystem. `exec` and `bash` run programs and
-  raise an approval interrupt before doing so. `ls`, `grep`, `glob`, `stat`,
-  `exists`, and `which` are read-only helpers that return results directly.
+Use `exec` for an executable with separate arguments, or `bash` for shell
+  syntax such as pipes and redirects. Use `ls`, `grep`, and `glob` to inspect
+  files. These operations request approval. `stat`, `exists`, and `which`
+  provide metadata without an approval interrupt.
 
   ```ts
   import { bash } from "std::shell"
@@ -22,16 +23,10 @@ Run commands and inspect the filesystem. `exec` and `bash` run programs and
 
 ### ExecResult
 
-What a shell command produced. Exported so `std::safeBash` can declare the
- same return type on both its paths — a fast-path result and a real
- `bash()` result have to be the same shape by construction, not by
- coincidence.
+Captured standard output, standard error, and exit code from a command.
 
 ```ts
-/** What a shell command produced. Exported so `std::safeBash` can declare the
- *  same return type on both its paths — a fast-path result and a real
- *  `bash()` result have to be the same shape by construction, not by
- *  coincidence. */
+/** Captured standard output, standard error, and exit code from a command. */
 export type ExecResult = {
   stdout: string;
   stderr: string;
@@ -39,7 +34,7 @@ export type ExecResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L35))
 
 ## Effects
 
@@ -57,7 +52,7 @@ effect std::exec {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L42))
 
 ### std::bash
 
@@ -71,7 +66,7 @@ effect std::bash {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L51))
 
 ### std::ls
 
@@ -84,7 +79,7 @@ effect std::ls {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L58))
 
 ### std::grep
 
@@ -103,7 +98,7 @@ effect std::grep {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L64))
 
 ### std::glob
 
@@ -116,7 +111,7 @@ effect std::glob {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L76))
 
 ## Functions
 
@@ -136,7 +131,8 @@ exec(
 ): ExecResult
 ```
 
-Run an executable directly with an array of arguments, bypassing the shell, and return its stdout, stderr, and exit code. Arguments are passed straight to the process without shell interpretation, which prevents command injection. Prefer this whenever you have a known command and structured arguments.
+Run an executable with separate arguments and no shell expansion.
+  Use this for commands whose arguments are already available as values.
 
   @param command - The executable to run
   @param args - Arguments to pass
@@ -168,7 +164,7 @@ Run an executable directly with an array of arguments, bypassing the shell, and 
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L83))
 
 ### bash
 
@@ -184,7 +180,8 @@ bash(
 ): ExecResult
 ```
 
-Run a shell command string via bash -c and return its stdout, stderr, and exit code. The shell interprets the string, so pipes, redirects, and globbing work. Interpolated values are also subject to shell interpretation, so prefer running an executable directly with structured arguments when passing untrusted or dynamic values.
+Run a bash command with pipes, redirects, and globbing.
+  Use exec with separate arguments when values should remain literal.
 
   @param command - The shell command to run
   @param cwd - Working directory for the command
@@ -195,8 +192,8 @@ Run a shell command string via bash -c and return its stdout, stderr, and exit c
   @param useAgentCwd - When true, a relative or empty cwd is resolved against the agent working directory if one is set; an absolute cwd is left unchanged
 
 `allowedPaths` restricts `cwd`, but bash cannot meaningfully restrict the
-shell command string itself, so prefer running an executable directly with
-structured arguments when capability narrowing matters.
+  shell command string itself, so prefer running an executable directly with
+  structured arguments when capability narrowing matters.
 
 **Parameters:**
 
@@ -230,17 +227,14 @@ ls(
 ): Result
 ```
 
-List entries in a directory. Each entry has name, path, type ("file", "dir", or "other"; symlinked entries are left out), and size. Set recursive to true to walk subdirectories. Fails if the directory is missing, is a file, or cannot be read.
+List directory entries, optionally including subdirectories.
+  Narrow dir or raise maxResults when the listing reaches its limit.
 
-  A recursive listing skips heavyweight dirs (node_modules, .git, dist, build, .next, .cache) and stops at maxResults. A non-recursive listing still shows those dirs. If entries look truncated, narrow dir or raise maxResults.
+  @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
 
-  @param dir - The directory to list
-  @param recursive - Whether to walk subdirectories
-  @param maxResults - Maximum number of entries to return
-  Symlinked entries are left out. Symlinks below dir are never followed.
-
-  @param allowedPaths - Only allow listing directories under these prefixes
-  @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
+Recursive listings skip node_modules, .git, dist, build, .next, and .cache.
+Non-recursive listings include those directories. Symlinked entries are omitted.
 
 **Parameters:**
 
@@ -258,7 +252,7 @@ List entries in a directory. Each entry has name, path, type ("file", "dir", or 
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L206))
 
 ### grep
 
@@ -278,26 +272,24 @@ grep(
 ): Result
 ```
 
-Search a directory or a single file for a regular expression, like `grep -rn`. A directory is searched recursively; a file is searched on its own. Every match comes back with its file path, line number, and line text. A directory search skips node_modules, .git, dist, build, .next, .cache, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex, or the path is missing or cannot be read.
+Search a file or directory recursively with a JavaScript regular expression.
+  Narrow path or refine the pattern when results reach maxResults.
 
-  Returned file values are relative to the directory searched, or the file's own name when path is a file. Returns at most maxResults matches; if matches look truncated, narrow the path or refine the pattern. Symlinked entries are left out. Symlinks below the path are never followed.
+  @param path - Directory or single file to search.
+  @param flags - Regex flags i, m, s, or u; use the named options for whole-word and inverted searches.
+  @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve a relative path against the agent working directory when set.
+  @param wholeWord - Match only whole words.
+  @param filesOnly - Return matching file paths instead of lines.
+  @param invert - Return nonmatching lines.
+  @param respectGitignore - Honor .gitignore during directory searches; false includes ignored files.
 
-  @param pattern - The regex pattern to search for, in JavaScript regex syntax
-  @param path - The directory to search, or one file to search
-  @param flags - JavaScript regex flags (i, m, s, u). grep's -r and -n are always on. For -w, -l, and -v use wholeWord, filesOnly, and invert.
-  @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes
-  @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
-  @param ignoreCase - Match regardless of letter case (grep -i)
-  @param wholeWord - Match only where the pattern is a whole word (grep -w)
-  @param filesOnly - Return just the paths of the files with a match, one entry per file, instead of the matching lines (grep -l)
-  @param invert - Return the lines that do NOT match (grep -v)
-  @param respectGitignore - Skip files and directories that the .gitignore files under the path ignore. True by default; pass false to search build output too. A file named as the path is always searched.
+Directory searches skip common build and dependency directories, plus paths
+ignored by .gitignore when `respectGitignore` is true. A directly named file
+is always searched. Symlinked entries are omitted.
 
-The `flags` string is translated before it reaches the RegExp, so a caller
-who writes grep-style letters gets a search or a message naming the parameter
-to use, never a RegExp constructor error. The rule table is in
-`lib/stdlib/grepQuery.ts`.
+Match paths are relative to the searched directory. For a single-file search,
+they contain the filename. Use `filesOnly` when you only need matching paths.
 
 **Parameters:**
 
@@ -321,7 +313,7 @@ to use, never a RegExp constructor error. The rule table is in
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L249))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L251))
 
 ### glob
 
@@ -335,13 +327,10 @@ glob(
 ): Result
 ```
 
-Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax, or the directory is missing, is a file, or cannot be read. Symlinked entries are left out. Symlinks below dir are never followed.
+Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
 
-  @param pattern - The glob pattern to match
-  @param dir - The directory to search in
-  @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes
-  @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
+  @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
 
 **Parameters:**
 
@@ -359,7 +348,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the p
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L318))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L316))
 
 ### stat
 
@@ -392,7 +381,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L358))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L353))
 
 ### exists
 
@@ -425,7 +414,7 @@ Return true if a file or directory exists at the given path. A symlink below dir
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L382))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L377))
 
 ### which
 
@@ -433,9 +422,7 @@ Return true if a file or directory exists at the given path. A symlink below dir
 which(command: string): string
 ```
 
-Locate an executable in PATH and return its absolute path, or an empty string if not found. On Windows, also tries PATHEXT extensions.
-
-  @param command - The executable to find
+Find an executable in PATH, or return an empty string if absent.
 
 **Parameters:**
 
@@ -447,4 +434,4 @@ Locate an executable in PATH and return its absolute path, or an empty string if
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L406))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L401))

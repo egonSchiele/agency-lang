@@ -1,34 +1,43 @@
 ---
 name: "memory"
-description: "Give an agent long-term memory: remember extracts and saves facts to a knowledge graph, and recall retrieves them later."
+description: "Store facts across runs and recall them for an agent."
 ---
 
 # memory
 
-Give an agent long-term memory. `remember` extracts facts from text
-and saves them to a knowledge graph, and `recall` retrieves the
-relevant ones later. Memory is off until you turn it on with
-`enableMemory`, and it stays local to the current branch.
-
-Memory reads and writes raise an approval interrupt, so call them
-`with approve` (or your own policy) to let them through.
+Enable memory for a directory, then use `remember` to extract facts and
+`recall` to retrieve them. Memory configuration and scope changes stay
+local to the current execution branch. The files persist across runs.
 
 ```ts
-import { enableMemory, remember, recall } from "std::memory"
+import { enableMemory, setMemoryId, remember, recall } from "std::memory"
 
 node main() {
   enableMemory({ dir: "./mem" }) with approve
+  setMemoryId("alice")
   remember("Alice's favorite color is blue") with approve
-  const facts: string = recall("What is Alice's favorite color?") with approve
+  const facts = recall("Alice's favorite color") with approve
   print(facts)
 }
 ```
+
+`remember` and `forget` do nothing while memory is disabled. `recall`
+still raises its approval request and then returns an empty string.
 
 ## Types
 
 ### MemoryConfig
 
+Configure the storage directory and optional memory model, extraction,
+compaction, and embedding settings. The same settings can be supplied in
+the `memory` block of `agency.json`. Relative `dir` paths use the working
+directory, and `~` expands to the home directory.
+
 ```ts
+/** Configure the storage directory and optional memory model, extraction,
+compaction, and embedding settings. The same settings can be supplied in
+the `memory` block of `agency.json`. Relative `dir` paths use the working
+directory, and `~` expands to the home directory. */
 export type MemoryConfig = {
   dir: string;
   model?: string;
@@ -38,7 +47,7 @@ export type MemoryConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L55))
 
 ## Effects
 
@@ -50,7 +59,7 @@ effect std::memory::enableMemory {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L63))
 
 ### std::memory::disableMemory
 
@@ -58,7 +67,7 @@ effect std::memory::enableMemory {
 effect std::memory::disableMemory {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L64))
 
 ### std::memory::remember
 
@@ -68,7 +77,7 @@ effect std::memory::remember {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L65))
 
 ### std::memory::recall
 
@@ -78,7 +87,7 @@ effect std::memory::recall {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L66))
 
 ### std::memory::forget
 
@@ -88,7 +97,7 @@ effect std::memory::forget {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L67))
 
 ## Functions
 
@@ -98,17 +107,13 @@ effect std::memory::forget {
 isMemoryActive(): boolean
 ```
 
-Return `true` when memory is on for the current branch and reads and
-  writes will reach a real store. Returns `false` when memory was never
-  enabled, was turned off, or the call is outside any runtime frame.
+Return whether memory is enabled for the current execution branch.
 
-Useful for branching in user code (`if (isMemoryActive()) { ... }`)
- and for tests that verify memory is on without inspecting internal
- state.
+Check this before offering memory tools when memory may be disabled.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L70))
 
 ### setMemoryId
 
@@ -116,18 +121,14 @@ Useful for branching in user code (`if (isMemoryActive()) { ... }`)
 setMemoryId(id: string)
 ```
 
-Set the memory scope for this agent run, so reads and writes target a
-  specific user, thread, or workspace. Call before other memory
-  operations. The scope defaults to "default" if never set. Memory must
-  be enabled for this to have any effect.
+Choose the user, conversation, or workspace scope for memory reads and writes.
+  Enable memory before setting the scope.
 
-  @param id - A unique identifier for the memory scope (e.g. user ID)
+  @param id - Nonempty scope using letters, digits, dots, underscores, or hyphens, excluding `.` and `..`.
 
-The id is independent of which memory configuration is active. It
- persists as memory is turned on and off. Re-set it explicitly when
- switching stores. Branch-scoped: a fork/race branch inherits the id
- active at fork time, and a change inside a branch stays local to that
- branch.
+A branch inherits its memory scope when it forks. Changing the scope
+inside a branch leaves the parent's scope unchanged. Switching storage
+directories keeps the scope, so set it again when you want a different one.
 
 **Parameters:**
 
@@ -135,7 +136,7 @@ The id is independent of which memory configuration is active. It
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L80))
 
 ### getMemoryId
 
@@ -143,14 +144,11 @@ The id is independent of which memory configuration is active. It
 getMemoryId(): string
 ```
 
-Return the current memory scope id, or "default" if it was never set
-  or memory is not active.
-
-  @returns The active memory scope id
+Return the memory scope, or "default" when no scope is set or memory is disabled.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L90))
 
 ### enableMemory
 
@@ -158,26 +156,16 @@ Return the current memory scope id, or "default" if it was never set
 enableMemory(config: MemoryConfig)
 ```
 
-Turn memory on for the current execution branch using `config`. The
-  directory in `config.dir` is created if missing. Enabling a directory
-  that is already active is a no-op.
+Enable persistent memory for the current execution branch.
+  Enabling the active directory again leaves its configuration unchanged.
 
-  @param config - Memory configuration with `dir` required
+  @param config - Supply a nonempty `dir` for the memory store.
 
-Storage is shared process-wide by absolute directory, so calls
- (across runs, forks, or modules) that point at the same dir share one
- store. Enabling the same dir again is a no-op, so declaring
- `static const _ = enableMemory({...})` AND calling it from `main()` is
- safe. Enabling a different dir stacks on top. Turn it off with
- `disableMemory()` or use the block form for lexical scoping.
-
- `config.dir` is resolved against `process.cwd()`, not the module dir.
- This deliberately mirrors how `agency.json`'s `memory.dir` resolves, so
- the same string in JSON and in code points at the same place.
-
- Branch-scoped: a fork/race branch inherits the config active at fork
- time, and enabling/disabling inside a branch stays local to that
- branch.
+Runs on the same host that use the same absolute directory share a store.
+Enabling the active directory again leaves its configuration unchanged.
+A different directory becomes the active configuration until it is popped
+by `disableMemory`. Prefer the `memory` block form for temporary changes.
+The storage directory is created when the store first writes data.
 
 **Parameters:**
 
@@ -189,7 +177,7 @@ Storage is shared process-wide by absolute directory, so calls
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L103))
 
 ### disableMemory
 
@@ -197,19 +185,15 @@ Storage is shared process-wide by absolute directory, so calls
 disableMemory()
 ```
 
-Turn off memory for the current branch by removing the most recently
-  enabled memory configuration.
+Remove the current branch's most recently enabled memory configuration.
+  An earlier configuration becomes active again if one remains.
 
-Removes whatever memory configuration is on top, including a bottom
- frame seeded from `agency.json`. Library authors should not call this
- casually. It shadows the caller's configured memory. Prefer the block
- form `memory({...}) as { ... }`, which restores the previous
- configuration on exit. Branch-scoped: a call inside a fork branch stays
- local to that branch.
+This also removes a configuration loaded from `agency.json`.
+Use the `memory` block form when the previous configuration must be restored.
 
 **Throws:** `std::memory::disableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L119))
 
 ### memory
 
@@ -217,18 +201,20 @@ Removes whatever memory configuration is on top, including a bottom
 memory(config: MemoryConfig, block: () -> any = null): Result
 ```
 
-Run `block` with `config` as the active memory configuration, then
-  restore the previous configuration when the block returns or fails.
-  Returns a `Result`: success holds the block's return value, failure
-  holds an error raised inside the block.
+Run a block with a temporary memory configuration, then restore the previous one.
 
-  Example:
-  const r = memory({ dir: "./mem-user-a" }) as {
-  remember("alice's favorite color is blue")
-  }
+  @param config - Supply a nonempty `dir` for the memory store.
+  @param block - Required block whose return value becomes the successful result.
 
-  @param config - Memory configuration with `dir` required
-  @param block - The code to run with the configuration active
+```ts
+const result = memory({ dir: "./temporary-memory" }) as {
+  remember("Alice's favorite color is blue") with approve
+}
+```
+
+The block returns a `Result` and restores the prior configuration after
+normal completion or failure. This helper does not raise the enable-memory
+approval, so the caller decides when to expose it.
 
 **Parameters:**
 
@@ -241,7 +227,7 @@ Run `block` with `config` as the active memory configuration, then
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L139))
 
 ### remember
 
@@ -249,10 +235,8 @@ Run `block` with `config` as the active memory configuration, then
 remember(content: string)
 ```
 
-Extract structured facts (entities, observations, and relations) from
-  the given text and store them in the knowledge graph.
-
-  @param content - Natural language text containing facts to remember
+Extract facts from text and persist them to memory.
+  Does nothing while memory is disabled.
 
 **Parameters:**
 
@@ -264,7 +248,7 @@ Extract structured facts (entities, observations, and relations) from
 
 **Needs:** `fileRead`, `fileWrite`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L155))
 
 ### recall
 
@@ -272,14 +256,8 @@ Extract structured facts (entities, observations, and relations) from
 recall(query: string): string
 ```
 
-Retrieve relevant facts from the knowledge graph as a formatted
-  string. Combines structured lookup, embedding similarity, and
-  LLM-powered retrieval. Returns up to 10 entities ranked by match
-  quality.
-
-  Returns an empty string if memory is not configured or nothing matches.
-
-  @param query - A natural language query describing what to recall
+Retrieve relevant stored facts as text for a question or topic.
+  Return an empty string when memory is disabled or no facts match.
 
 **Parameters:**
 
@@ -293,7 +271,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Needs:** `fileRead`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L181))
 
 ### forget
 
@@ -301,11 +279,11 @@ Retrieve relevant facts from the knowledge graph as a formatted
 forget(query: string)
 ```
 
-Soft-delete facts matching the query from the knowledge graph. Data is
-  not erased. Affected observations are marked with a validTo timestamp,
-  preserving the audit trail.
+Stop recalling facts that match a natural-language description.
+  This preserves stored history and does nothing while memory is disabled.
 
-  @param query - A natural language description of what to forget
+Forgetting expires matching observations and relations. The stored history
+remains available for auditing.
 
 **Parameters:**
 
@@ -317,4 +295,4 @@ Soft-delete facts matching the query from the knowledge graph. Data is
 
 **Needs:** `fileRead`, `fileWrite`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L237))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L196))

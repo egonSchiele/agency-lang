@@ -1,16 +1,17 @@
 ---
 name: "review"
-description: "Reviews a work product against a task and returns findings."
+description: "Review a work product against a task and return findings."
 ---
 
 # review
 
-Review reads the work and looks things up. The verifier runs the work and
-  measures it. This agent never touches the file system and never executes
-  what it is reviewing, but it can consult the web to check a claim: whether
-  an API is used correctly, whether a cited source says what the work says it
-  does. For Agency source specifically, agencyReviewAgent adds parse and
-  typecheck findings.
+Pass the work as text. The agent can consult web sources and read GitHub
+pull requests and issues. Use `verifierAgent` to run checks on work on disk,
+or `agencyReviewAgent` to include Agency parse and typecheck findings.
+
+By default, failed reviews return no findings and interrupted reviews may
+return saved partial findings. Pass `failOpen: false` when either outcome
+must be reported as a failure.
 
 ## Functions
 
@@ -20,13 +21,11 @@ Review reads the work and looks things up. The verifier runs the work and
 buildTools(): any[]
 ```
 
-Return the reviewer's lookup tools. It reads and checks; it has no tools
-  that change anything. The GitHub tools here are the read bundle only, so
-  it can read a pull request it is asked to review and cannot post to it.
+Return the reviewer's web and GitHub lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L33))
 
 ### reviewAgent
 
@@ -45,24 +44,16 @@ reviewAgent(
 ): Result<Feedback[]>
 ```
 
-Review a work product against a task and return findings. error=true marks
-  a way the work fails the task; error=false marks a satisfied point.
+Review a work product against a task and return satisfied points and problems.
 
-  @param work - The work product to review, as text
-  @param task - What the work should accomplish
-  @param context - Extra material for the judgment, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param failOpen - When true, a review that could not run (budget with
-    nothing saved, policy, model error) returns no findings instead of a
-    failure, and a review the budget cut short returns the findings it
-    saved. Pass false to get a failure in both cases, for callers that must
-    not mistake a failed or partial review for a clean one: the findings a
-    cut-short review saved are in the failure's data as `draft`
+  @param work - The work product as text.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
+  @param extraTools - Tools added to the built-in lookup tools.
+  @param failOpen - False makes failed or partial reviews return failures instead of empty or partial findings.
 
 **Parameters:**
 

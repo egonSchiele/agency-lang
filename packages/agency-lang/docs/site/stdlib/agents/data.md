@@ -1,17 +1,21 @@
 ---
 name: "data"
-description: "Answers a question using the structured public-data APIs in the"
+description: "Answer questions using structured public-data APIs."
 ---
 
 # data
 
-standard library: economic series, securities filings, federal spending,
-  news, and entity databases.
+Use `dataAgent` for economic series, securities filings, public spending,
+news, and entity records. It can search for identifiers before querying an
+API. Use `researcherAgent` for questions answered mainly by web pages.
 
-  This agent works structured sources with exact identifiers. For unstructured
-  web pages and encyclopedia prose, use researcherAgent instead. Querying
-  these APIs usually means finding an identifier first, such as a FRED series
-  ID or an EDGAR CIK, so the agent carries search and fetch tools too.
+```ts
+import { dataAgent } from "std::agents/data"
+
+node main() {
+  print(dataAgent("Find the latest reported US unemployment rate and cite its series"))
+}
+```
 
 ## Functions
 
@@ -21,12 +25,11 @@ standard library: economic series, securities filings, federal spending,
 buildTools(): any[]
 ```
 
-Return the data agent's tools: every connector, plus the search and fetch
-  tools it needs to find an identifier before querying.
+Return the data agent's connectors and source lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L55))
 
 ### dataAgent
 
@@ -49,10 +52,10 @@ Answer a question from structured public-data APIs, naming the source and
 
   @param task - The question to answer
   @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param provider - Provider for the model override, ignored when model is empty.
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
@@ -73,4 +76,4 @@ Answer a question from structured public-data APIs, naming the source and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L116))

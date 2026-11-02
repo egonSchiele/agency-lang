@@ -1,6 +1,6 @@
 ---
 name: "usaspending"
-description: "USASpending — U.S. federal awards"
+description: "Find U.S. federal awards and inspect recipient details."
 ---
 
 # usaspending
@@ -9,8 +9,7 @@ description: "USASpending — U.S. federal awards"
 
   Query [USASpending](https://api.usaspending.gov), the U.S. Treasury's award-level spending API:
   which companies and organizations received federal contracts and grants, from which agency, for
-  how much. Use it to follow federal money — pairs with `std::data/people/littlesis` (who is
-  connected) and `std::data/finance/edgar` (company filings).
+  how much. Use it to research federal contracts, grants, and other awards.
 
   No API key required. `usaspendingAwards` searches; its results carry a `generatedId` you can drill
   into with `usaspendingAward`, which also surfaces recipient executive compensation and sub-award
@@ -33,10 +32,12 @@ description: "USASpending — U.S. federal awards"
 
 ### Award
 
-One federal award from a search. `generatedId` drills into usaspendingAward; `amount` is USD.
+A federal award from a search, with `amount` in USD.
+    Pass `generatedId` to `usaspendingAward` to read its details.
 
 ```ts
-/** One federal award from a search. `generatedId` drills into usaspendingAward; `amount` is USD. */
+/** A federal award from a search, with `amount` in USD.
+    Pass `generatedId` to `usaspendingAward` to read its details. */
 export type Award = {
   internalId: number;
   generatedId: string;
@@ -103,7 +104,7 @@ effect std::usaspending {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L30))
 
 ## Functions
 
@@ -120,15 +121,13 @@ usaspendingAwards(
 ): Result<Award[]> raises <std::usaspending, std::http::fetchJSON>
 ```
 
-Search U.S. federal awards. Returns each award's id, recipient, amount, awarding agency, dates, and
-  description, most-funded first. An empty result set returns an empty list.
+Search U.S. federal awards, ordered by award amount from largest to smallest.
 
-  @param recipient - Recipient or company name to filter by (blank = any)
-  @param agency - Awarding agency name to filter by (blank = any)
-  @param awardType - Award category: contracts, grants, loans, direct_payments, or other
-  @param startDate - ISO start date bounding the award period; only applied when endDate is also set
-  @param endDate - ISO end date bounding the award period; only applied when startDate is also set
-  @param limit - Maximum number of awards to return
+  @param recipient - Match a recipient or company name, or leave empty for any recipient.
+  @param agency - Match an awarding agency name, or leave empty for any agency.
+  @param awardType - Use contracts, grants, loans, direct_payments, or other.
+  @param startDate - A YYYY-MM-DD award-period bound, applied only when endDate is also set.
+  @param endDate - A YYYY-MM-DD award-period bound, applied only when startDate is also set.
 
 **Parameters:**
 
@@ -147,7 +146,7 @@ Search U.S. federal awards. Returns each award's id, recipient, amount, awarding
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L217))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L216))
 
 ### usaspendingAward
 
@@ -157,11 +156,9 @@ usaspendingAward(
 ): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON>
 ```
 
-Fetch full detail for one federal award. Returns amount, recipient and UEI, awarding agency, dates,
-  place of performance, sub-award totals, and recipient executive compensation. Unknown id returns a
-  failure.
+Read one federal award’s details, including subawards and executive compensation.
 
-  @param awardId - The award id: the generatedId from a search, or the numeric internalId as a string
+  @param awardId - A search result’s generatedId, or its numeric internalId converted to a string.
 
 **Parameters:**
 
@@ -175,4 +172,4 @@ Fetch full detail for one federal award. Returns amount, recipient and UEI, awar
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L238))

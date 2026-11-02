@@ -1,15 +1,3 @@
-/** @module
-  @summary Named bundles of tools that agents compose into their tool lists.
-
-  An agent's tool list should read as a description of what that agent may
-  do. Bundling also means a tool added to a category reaches every agent that
-  claimed the category, instead of drifting between hand-maintained arrays.
-
-  Every bundle is a function rather than a constant, matching searchTools() in
-  std::agents/lib/search, which must be a function because it reads API keys
-  at call time. An agent whose list includes searchTools() must build that
-  list inside a function too, or it freezes the environment at module load.
-*/
 import { typecheck, parseAST, testFile } from "std::agency"
 import { question, todoWrite, todoList } from "std::agent"
 import { edit } from "std::fs"
@@ -65,6 +53,22 @@ import {
   article as wikipediaArticle,
  } from "std::wikipedia"
 
+/** @module
+@summary Compose agents from named bundles of file, web, GitHub, and other tools.
+
+Build an agent's tool list by combining the bundles it needs. Construct
+lists inside a function when they include `searchTools`, so API-key
+selection happens at call time. Bundle membership describes the tools
+available; the caller's handlers still decide their interrupts.
+
+```ts
+import { readOnlyFileTools, communicationTools } from "std::agents/lib/toolkits"
+
+const tools = [...readOnlyFileTools(), ...communicationTools()]
+const answer: string = llm("Summarize README.md", { tools: tools })
+```
+*/
+
 // Bundled Agency docs. `static` caches each tool across calls. Each gets an
 // explicit name: the name docsSkill derives from a directory embeds the
 // absolute install path, which differs per machine and is truncated to fit.
@@ -90,33 +94,27 @@ static const briefAgentSkill = docsToolFromEntries("agent", agentEntries, brief:
 
 export def whatIAmDoing(message: string): string {
   """
-  Tell the user what you are doing. Use this tool often to update the user on what you're up to.
+  Report progress to the user when starting work or changing approach.
   """
   print(message)
   return "Delivered message to user."
 }
 
+/** `question` raises an interrupt the host or a handler answers with a value.
+Use it in hosted as well as terminal agents. Approval policy rules cannot
+supply a question's reply. */
 export def communicationTools(): any[] {
   """
-  Return tools that help the agent communicate with the user: `whatIAmDoing`
-  to report progress, and `question` to ask for a fact only the user has.
-
-  `question` raises an interrupt rather than reading the terminal, so whoever
-  hosts the agent can answer it: a person at a prompt, an HTTP host, or a
-  handler in a test. A run with no one to ask rejects it. An approval policy
-  rule can never answer it, because the answer is a value and `approve()`
-  carries none; see `docs/dev/stdlib/asking-the-user.md`.
+  Return progress-reporting and user-question tools.
   """
   return [whatIAmDoing, question]
 }
 
+/** The grep tool always respects `.gitignore`. The setting is bound so the
+model cannot include ignored files by changing an argument. */
 export def readOnlyFileTools(): any[] {
   """
-  Return tools that inspect the file system without changing it: read, list,
-  glob, and grep, resolved against the agent working directory.
-
-  grep honours .gitignore, and the setting is locked by partial application
-  so the model cannot turn it off and search generated files.
+  Return file inspection tools rooted in the agent's working directory.
   """
   return [
     read.partial(useAgentCwd: true),
@@ -128,7 +126,7 @@ export def readOnlyFileTools(): any[] {
 
 export def writableFileTools(): any[] {
   """
-  Return the read-only file tools plus write and edit.
+  Return file inspection, write, and edit tools.
   """
   return [
     ...readOnlyFileTools(),
@@ -137,44 +135,30 @@ export def writableFileTools(): any[] {
   ]
 }
 
+/** `safeBash` parses pipelines and raises effects for recognized operations.
+`exec` runs one binary with arguments. Both use the agent's working directory.
+The saved-output readers retrieve output too large to return inline. */
 export def shellTools(): any[] {
   """
-  Return tools that run commands: safeBash for a shell pipeline, exec for
-  a single binary with arguments. safeBash rather than raw bash: it
-  parses the command and raises the narrowest effects that describe it
-  (a recognized write raises std::write, a git read raises its git
-  effect), so a policy can pre-approve what raw bash never could. It
-  needs no useAgentCwd binding — its empty cwd already resolves to the
-  agent working directory (resolveCwd in std::safeBash). readSpill and
-  grepSpill read back the output safeBash saved when a command printed
-  too much to return inline.
+  Return command execution and saved-output readers for the agent's working directory.
   """
   return [safeBash, exec.partial(useAgentCwd: true), readSpill, grepSpill]
 }
 
+/** Add these when an agent enables `spillToolResultsOver`, so it can retrieve
+long tool results. `shellTools` already includes them. */
 export def spillTools(): any[] {
   """
-  Return the two tools that read saved tool output back: readSpill for the
-  whole text or a slice of lines, grepSpill to search it. A long command
-  output is saved in the run and the model gets a preview naming it
-  (std::spill); so is any long tool result, such as a fetched page, when
-  the llm() call sets spillToolResultsOver. shellTools() already includes
-  these; add spillTools() to an agent that fetches pages without it. They
-  raise no interrupt: the output was already in the conversation the name
-  arrived in.
+  Return tools for reading and searching saved tool output.
   """
   return [readSpill, grepSpill]
 }
 
+/** Use `gitIsRepo` to detect a repository from a package subdirectory.
+Git finds the repository root even when `.git` is in a parent directory. */
 export def readOnlyGitTools(): any[] {
   """
-  Return the read-only git tools: history, diffs, status, branches. Nothing
-  here changes the repository, so read-only agents (verifiers, reviewers,
-  writers with read-only project access) can carry them. gitIsRepo is
-  included because "am I inside a repo?" is the question an agent otherwise
-  answers by probing for a `.git` directory by hand — which fails in a
-  monorepo, where `.git` lives above the package directory (git itself
-  walks up; a manual probe does not).
+  Return Git repository inspection tools.
   """
   return [
     gitIsRepo,
@@ -189,10 +173,11 @@ export def readOnlyGitTools(): any[] {
   ]
 }
 
+/** Repository modifications raise approval interrupts. The inspection tools
+are also available separately from `readOnlyGitTools`. */
 export def gitTools(): any[] {
   """
-  Return the git tools. The read-only ones run without an approval prompt;
-  the ones that change the repository prompt for approval.
+  Return Git repository inspection and modification tools.
   """
   return [
     ...readOnlyGitTools(),
@@ -208,13 +193,11 @@ export def gitTools(): any[] {
   ]
 }
 
+/** The tools resolve the repository from the origin remote under the agent's
+working directory. They read remote data and cannot post reviews or comments. */
 export def githubReadTools(): any[] {
   """
-  Return the read-only GitHub tools: pull requests, their diffs, files,
-  reviews, and checks; issues, their comments, and search. Nothing here
-  posts anything, so read-only agents (reviewers) can carry them. Each
-  tool resolves the repository from the origin remote of the agent working
-  directory, so an agent with these tools needs a working directory set.
+  Return tools for reading GitHub pull requests, issues, and their comments.
   """
   return [
     ghPrGet,
@@ -231,14 +214,11 @@ export def githubReadTools(): any[] {
   ]
 }
 
+/** Each remote write raises an approval interrupt. Pull-request approval
+has its own effect, so policies can permit comments while refusing approvals. */
 export def githubTools(): any[] {
   """
-  Return the GitHub tools. The read-only ones are in githubReadTools; the
-  rest post comments and reviews, and create, comment on, close, and label
-  issues. Every write prompts for approval unless a policy approves it.
-  ghPrApprove raises its own effect (std::github::prApprove), so a policy
-  can forbid approving a pull request while allowing every other review
-  action.
+  Return GitHub lookup, review, comment, and issue-management tools.
   """
   return [
     ...githubReadTools(),
@@ -252,22 +232,12 @@ export def githubTools(): any[] {
   ]
 }
 
+/** Add search tools when an agent must discover sources before fetching them.
+The HTTP tool returns HTML as Markdown and other bodies as received.
+Its `refresh` argument is bound to false to reuse a page within a conversation. */
 export def webTools(): any[] {
   """
-  Return tools that retrieve a named web resource: one HTTP fetch and the
-  Wikipedia lookups. These retrieve something you can already name; to
-  discover a source you cannot name yet, add a search tool as well.
-
-  One fetch, not three. fetchMarkdown returns an HTML page as text the
-  model can read and any other body (JSON included) as it came, so it
-  covers what fetch and fetchJSON did. Three fetch tools meant three
-  effects for a policy to cover: in trace wX5GvrUq the user's policy
-  approved two of them, the model used the third, and 26 of 57 minutes
-  went to approval prompts (ADI-44).
-
-  The fetch has `refresh` bound to false. A repeat fetch in the same
-  conversation returns the stored page, and a model offered `refresh`
-  re-downloads pages it already has.
+  Return HTTP and Wikipedia lookup tools for named sources.
   """
   return [
     fetchMarkdown.partial(refresh: false),
@@ -277,21 +247,20 @@ export def webTools(): any[] {
   ]
 }
 
+/** The bundles cover the guide, CLI, diagnostics, stdlib, and agent docs.
+Reads through these tools still raise `std::read`. */
 export def agencyDocTools(): any[] {
   """
-  Return the bundled Agency documentation tools: the language guide, the CLI
-  reference, the type-checker diagnostic codes, and the standard-library
-  reference.
+  Return the five packaged Agency documentation tools.
   """
   return [docSkill, cliSkill, diagnosticsSkill, stdlibSkill, agentSkill]
 }
 
+/** Use compact listings when the prompt already teaches the language.
+Offer this bundle or `agencyDocTools`: both use the same tool names. */
 export def agencyDocToolsBrief(): any[] {
   """
-  Return the same five documentation tools as agencyDocTools, under the same
-  names, with each page listed as one `path - description` line. For an agent
-  whose prompt already teaches the language. Offer one set or the other: the
-  names collide.
+  Return packaged documentation tools with compact page listings.
   """
   return [
     briefDocSkill,
@@ -302,17 +271,18 @@ export def agencyDocToolsBrief(): any[] {
   ]
 }
 
+/** `testFile` runs a saved `.test.json` harness in a subprocess.
+Use parse and typecheck for source text that has not been saved. */
 export def agencyCodeTools(): any[] {
   """
-  Return tools for checking Agency source: the type checker, the parser,
-  and testFile, which runs a .test.json harness in a sandboxed subprocess.
+  Return Agency parsing, typechecking, and test-harness tools.
   """
   return [typecheck, parseAST, testFile]
 }
 
 export def memoryTools(): any[] {
   """
-  Return tools that persist and retrieve facts across sessions.
+  Return fact storage and retrieval tools for enabled memory.
   """
   return [remember, recall]
 }
@@ -322,8 +292,7 @@ export def memoryTools(): any[] {
 // without landing saveDraft in the list twice, which the provider rejects.
 export def planningTools(): any[] {
   """
-  Return tools an agent uses to organize a long run: writing and reading a
-  todo list.
+  Return tools for replacing and reading the agent's todo list.
   """
   return [todoWrite, todoList]
 }

@@ -1,16 +1,20 @@
 ---
 name: "agent"
-description: "Helpers for building user-facing agents: ask the user a question through an interrupt, and manage a todo list."
+description: "Ask the user questions and track an agent's todo list."
 ---
 
 # agent
 
-Helpers for building user-facing agents. This module offers two
-independent tools:
-- `question` asks the user something through an interrupt the host UI
-can render, and
-- `todoWrite` / `todoList` give the LLM a small todo
-list to track multi-step work across turns.
+Give `question` to an LLM when it needs information only the user can
+provide. Its interrupt lets a terminal, an application, or a handler supply
+the reply. Use `todoWrite` to set a plan and `todoUpdate` to track progress.
+
+```ts
+import { todoWrite, todoUpdate } from "std::agent"
+
+todoWrite([{ id: "review", text: "Review the draft", status: "pending" }])
+todoUpdate("review", "completed")
+```
 
 ## Effects
 
@@ -22,7 +26,7 @@ effect std::question {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L24))
 
 ## Functions
 
@@ -42,7 +46,7 @@ Add a new todo to the list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L28))
 
 ### todoUpdate
 
@@ -61,7 +65,7 @@ Update the status of a todo by id.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L36))
 
 ### todoWrite
 
@@ -79,7 +83,7 @@ Replace the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L52))
 
 ### todoList
 
@@ -91,7 +95,7 @@ Return the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L60))
 
 ### question
 
@@ -99,15 +103,11 @@ Return the current todo list.
 question(prompt: string): string
 ```
 
-Ask the user a question and wait for their reply. Use it when the work
-  depends on a fact only the user knows, such as which address, account,
-  or service they mean. Do not use it for something you can look up, and
-  do not guess at a fact you could ask for.
+Ask the user for information needed to continue and wait for their reply.
+  Use it for facts only the user can provide, after checking available sources.
 
-  @param prompt - The question to show the user
-
-Alternative to the `input` function, raises an interrupt instead,
-so it can be used anywhere (eg a web server) instead of just the CLI.
+Use this for user input in terminal, hosted, or embedded runs.
+A handler can answer with `approve("reply")`.
 
 **Parameters:**
 
@@ -119,4 +119,4 @@ so it can be used anywhere (eg a web server) instead of just the CLI.
 
 **Throws:** `std::question`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L69))

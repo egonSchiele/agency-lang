@@ -1,12 +1,12 @@
 ---
 name: "syntax"
-description: "Syntax-highlight code, detect its language, and render colored diffs and patches for the terminal or the web."
+description: "Highlight code and produce terminal diffs or unified patches."
 ---
 
 # syntax
 
-Syntax-highlight code, detect its language, and render colored diffs
-and patches for the terminal or the web.
+Highlight code and compare versions of text. Use `diff` for terminal
+  display or `patch` to produce a unified diff for `git apply`.
 
   ```ts
   import { highlight } from "std::syntax"
@@ -20,11 +20,14 @@ and patches for the terminal or the web.
 
 ### HighlightMode
 
+Accepted values for the currently unused `highlight` mode parameter.
+
 ```ts
+/** Accepted values for the currently unused `highlight` mode parameter. */
 export type HighlightMode = "shell" | "web"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L24))
 
 ### Style
 
@@ -35,42 +38,42 @@ A text style modifier applied to a token's color.
 export type Style = "bold" | "italic" | "underline" | "dim"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L35))
 
 ### TokenStyle
 
 The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
-termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
-bold / italic / underline / dim.
+  termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
+  bold / italic / underline / dim.
 
 ```ts
 /**
- * The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
- * termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
- * bold / italic / underline / dim.
- */
+  The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
+  termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
+  bold / italic / underline / dim.
+*/
 export type TokenStyle = {
   color: string;
   styles?: Style[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L42))
 
 ### ColorScheme
 
 A custom color scheme. Each field is a highlight.js token class. The
-non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
-`metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
-"vscode-dark" scheme.
+  non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
+  `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
+  "vscode-dark" scheme.
 
 ```ts
 /**
- * A custom color scheme. Each field is a highlight.js token class. The
- * non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
- * `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
- * "vscode-dark" scheme.
- */
+  A custom color scheme. Each field is a highlight.js token class. The
+  non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
+  `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
+  "vscode-dark" scheme.
+*/
 export type ColorScheme = {
   keyword?: TokenStyle;
   builtIn?: TokenStyle;
@@ -117,20 +120,16 @@ export type ColorScheme = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L53))
 
 ### ThemeName
 
-The name of a built-in color scheme. Naming each one instead of taking a
-plain `string` keeps the tool schema small and tells a model which values
-are actually accepted.
+A built-in color scheme accepted by `highlight` and `diff`.
 
 ```ts
 /**
- * The name of a built-in color scheme. Naming each one instead of taking a
- * plain `string` keeps the tool schema small and tells a model which values
- * are actually accepted.
- */
+  A built-in color scheme accepted by `highlight` and `diff`.
+*/
 export type ThemeName =
   | "vscode-dark"
   | "github-dark"
@@ -142,7 +141,7 @@ export type ThemeName =
   | "a11y-light"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L104))
 
 ## Constants
 
@@ -154,7 +153,7 @@ export static const colorSchemes: string[] = _builtinThemeNames
 
 **Type:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L99))
 
 ## Functions
 
@@ -164,12 +163,8 @@ export static const colorSchemes: string[] = _builtinThemeNames
 detectLanguage(code: string): string
 ```
 
-Guess the programming language of a code snippet. Returns a highlight.js
-  language name (e.g. "typescript", "python", "json"), or "plaintext" when it
-  can't tell. Detection is heuristic and less reliable on short or ambiguous
-  snippets.
-
-  @param code - The code snippet to detect the language of
+Guess a code snippet's language, or return "plaintext" when unknown.
+  Detection is less reliable on short or ambiguous snippets.
 
 **Parameters:**
 
@@ -179,7 +174,7 @@ Guess the programming language of a code snippet. Returns a highlight.js
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L26))
 
 ### highlight
 
@@ -192,15 +187,14 @@ highlight(
 ): string
 ```
 
-Syntax-highlight a code snippet and return the highlighted string.
+Add ANSI syntax highlighting to code for terminal display.
 
-  @param code - The code snippet to highlight
-  @param language - The programming language of the code (e.g. "javascript", "python", "json"). Use "auto" to auto-detect it (heuristic; less reliable on short snippets). Defaults to "plaintext".
-  @param mode - Output format: "shell" for terminal output, "web" for web output
-  @param theme - A named color scheme ("vscode-dark", "github-dark", "monokai", "dracula", "nord", "github", "a11y-dark", "a11y-light")
+  @param language - A highlight.js language name, or "auto" to guess.
+  @param mode - Currently ignored; output uses terminal styling.
 
-When `language` is "markdown", fenced code blocks use the default palette
-regardless of `theme`.
+Returns ANSI terminal styling. The `mode` parameter currently has no effect.
+  When `language` is "markdown", fenced code blocks use the default palette
+  regardless of `theme`.
 
 **Parameters:**
 
@@ -213,7 +207,7 @@ regardless of `theme`.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L119))
 
 ### diff
 
@@ -234,22 +228,21 @@ diff(
 ): string
 ```
 
-Produce a human-readable diff of two strings and return it as a string.
-  Shows the full text by default with changed words highlighted via `-`/`+`
-  lines.
+Compare two texts for terminal display, highlighting changed words.
 
-  @param oldText - The original text
-  @param newText - The updated text
-  @param context - Unchanged lines to keep around each change; -1 means show the full text
-  @param lineNumbers - Prefix each line with its line number
-  @param color - `"auto"` (default) emits ANSI colors only when stdout is a TTY; `true` always; `false` never. Coloring highlights deletions in red and insertions in green inline.
-  @param oldLabel - When non-empty, render a `--- <oldLabel>` header
-  @param newLabel - When non-empty, render a `+++ <newLabel>` header
-  @param ignoreWhitespace - Treat whitespace-only changes as equal
-  @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
-  @param summary - Prefix the diff with an "N insertions, M deletions" line
-  @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring. Use "auto" to auto-detect the language once from the full text (heuristic). Changed-line backgrounds stop at the terminal's width.
-  @param theme - When `language` is set, the syntax-highlighting color scheme using a named scheme (e.g. "dracula")
+  @param context - Unchanged lines around each change, or -1 for the full text.
+  @param color - "auto" colors terminal output; true always colors; false disables color.
+  @param oldLabel - Optional label for the original text header.
+  @param newLabel - Optional label for the updated text header.
+  @param ignoreWhitespace - Treat whitespace-only changes as equal.
+  @param hunkHeaders - Include location headers between change regions.
+  @param summary - Include insertion and deletion counts.
+  @param language - Highlight changed lines using this language, or "auto" to guess.
+  @param theme - Color scheme for syntax-highlighted changes.
+
+Use for displaying changes to a person. With `language` and color enabled,
+changed lines use syntax highlighting on red or green backgrounds. Background
+padding is limited to the terminal width. Use `patch` for output to apply with Git.
 
 **Parameters:**
 
@@ -272,7 +265,7 @@ Produce a human-readable diff of two strings and return it as a string.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L140))
 
 ### patch
 
@@ -287,16 +280,15 @@ patch(
 ): string
 ```
 
-Produce a standard unified diff and return it as a string, in a format that
-  `git apply` can apply. Pass the file's path as `filename`; an empty `oldText`
-  produces a file-creation patch and an empty `newText` a deletion patch.
+Produce a unified diff suitable for git apply.
 
-  @param oldText - The original file contents
-  @param newText - The updated file contents
-  @param filename - The path used in the patch headers (the `a/` and `b/` sides)
-  @param context - Context lines to include around each hunk
-  @param ignoreWhitespace - Treat whitespace-only changes as equal
-  @param newFilename - When non-empty, use this path for the new (`+++`) side, e.g. to record a rename
+  @param filename - Path to use in the patch headers.
+  @param context - Unchanged lines around each change.
+  @param ignoreWhitespace - Treat whitespace-only changes as equal.
+  @param newFilename - Optional new path for a rename.
+
+An empty `oldText` creates a file-creation patch. An empty `newText` creates
+a deletion patch. This function returns patch text without changing files.
 
 **Parameters:**
 

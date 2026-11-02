@@ -12,7 +12,7 @@ import {
 import { parse, renderForHtml } from "std::markdown"
 
 /** @module
-  @summary Create, read, search, and edit notes in the macOS Notes app. macOS only; the first call asks for Automation permission.
+  @summary Create, read, search, and edit notes in the macOS Notes app.
   Create, read, search, and edit notes in the macOS Notes app. macOS only.
   The first call asks for Automation permission with a system dialog. If
   nobody answers the dialog, the call fails after 30 seconds.
@@ -56,11 +56,9 @@ import { parse, renderForHtml } from "std::markdown"
 
   ## Confining an agent to one folder
 
-  Every function takes an optional `folder`. It constrains rather than
-  addresses: if you pass it, the call fails unless the note is in that
-  folder. Combined with partial application, that confines an agent in a way
-  the model cannot see or route around, because the locked parameter is
-  stripped from the tool's schema:
+  Bind `folder` on tools before handing them to an agent. Search and list
+  calls then stay within that folder. Reads, appends, and deletes fail if
+  the note belongs to another folder:
 
   ```ts
   import { listNotes, readNote } from "std::notes/apple"
@@ -72,7 +70,7 @@ import { parse, renderForHtml } from "std::markdown"
   }
   ```
 
-  The model may pass any id it likes. Anything outside Work fails closed.
+  These tools only list or read notes in Work.
 
   ## Deciding with a policy
 
@@ -95,7 +93,7 @@ import { parse, renderForHtml } from "std::markdown"
   above therefore matches a bare `readNote(id)` for a note that lives in
   Work.
 
-  One v1 limit: only those three calls populate `account`. `createNote`,
+  Only those three calls populate `account`. `createNote`,
   `searchNotes`, and `listNotes` send it as an empty string, and an empty
   string matches no glob. A rule that matches on `account` never applies to
   them, so match on `folder` instead.
@@ -114,23 +112,17 @@ import { parse, renderForHtml } from "std::markdown"
   `deleteNote` moves a note to Recently Deleted, where it stays for about
   30 days. `listFolders` returns that folder like any other.
 
-  ## Other note apps
-
-  Obsidian needs no module. A vault is a directory of Markdown files, so
-  `std::fs` already covers it, and the same handlers, policies, and partial
-  application apply. Bear is not supported: its `x-callback-url` API cannot
-  deliver a callback to a command-line process, so a create call could not
-  return the new note's id.
+  For an Obsidian vault, use `std::fs` to read and write its Markdown files.
 */
 
-/** A folder in Notes. `noteCount` is derived, not stored. */
+/** A folder in Notes, including the number of notes it contains. */
 export type Folder = {
   id: string
   name: string
   noteCount: number
 }
 
-/** A note's metadata. Deliberately contains no body. */
+/** Note metadata from a listing, search, or write, without the body. */
 export type Note = {
   id: string
   title: string
@@ -163,7 +155,7 @@ effect std::notes::list   { account: string, folder: string }
 @always(folder)
 effect std::notes::delete { account: string, folder: string, title: string, id: string }
 
-/** Convert markdown to the HTML that Notes requires on write. */
+/* Convert Markdown to the HTML that Notes requires on write. */
 def toHtml(body: string): Result<string> {
   const parsed = parse(body)
   if (!parsed.success) {
@@ -172,8 +164,7 @@ def toHtml(body: string): Result<string> {
   return success(renderForHtml(parsed.blocks))
 }
 
-/** What the pre-flight lookup returns. Re-declared natively because record
-    types imported from TypeScript are opaque to the typechecker. */
+/* Mirror the TypeScript preflight record so Agency can typecheck its fields. */
 type Preflight = {
   id: string
   title: string
@@ -182,19 +173,10 @@ type Preflight = {
   locked: boolean
 }
 
-/** Look the note up before raising the interrupt, so the payload can carry its
-    real title, folder, and account. Those are the fields a policy glob matches
-    on and a human reads before approving. Without this, the payload would hold
-    an opaque id and empty strings, and no policy could ever match an append,
-    read, or delete.
-
-    This helper also refuses locked notes and folder mismatches, so both errors
-    precede the interrupt and a human never approves a call that is guaranteed
-    to fail. It keeps the payload honest too: the folder shown to the approver
-    is always the note's real folder. The TypeScript layer re-checks the folder
-    and the locked flag after the approval, because the note can change during
-    the approval window. Those re-checks are the belt and braces; this check is
-    what makes the error precede the interrupt. */
+/* Read the real title, folder, and account before building the approval
+   payload. Reject locked notes and folder mismatches before the interrupt.
+   The TypeScript operation rechecks both after approval, since the note
+   may change while waiting. */
 @capabilities(subprocess)
 def preflight(id: string, folder: string | null): Result<Preflight> {
   const meta = try _preflightNote(id)
@@ -213,11 +195,10 @@ def preflight(id: string, folder: string | null): Result<Preflight> {
 @capabilities(subprocess)
 export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
   """
-  Create a note in the Notes app and return it, including its new id.
+  Create a note in the macOS Notes app.
 
-  @param title - The note's title
-  @param body - The note's content, as Markdown
-  @param folder - The folder to create it in. Created if it does not exist.
+  @param body - The note’s content as Markdown.
+  @param folder - The folder to use, creating it if missing.
   """
   const html = toHtml(body)
   if (isFailure(html)) {
@@ -247,11 +228,11 @@ export def createNote(title: string, body: string, folder: string = "Agency Note
 @capabilities(subprocess)
 export def appendToNote(id: string, body: string, folder?: string): Result<Note> raises <std::notes::append> {
   """
-  Append Markdown to an existing note. Get the id from listNotes or searchNotes.
+  Append Markdown to an existing note.
 
-  @param id - The note's id
-  @param body - The content to append, as Markdown
-  @param folder - If given, the call fails unless the note is in this folder
+  @param id - A note ID from a listing, search, or create result.
+  @param body - Markdown content to add to the existing body.
+  @param folder - If supplied, fail unless the note belongs to this folder.
   """
   const html = toHtml(body)
   if (isFailure(html)) {
@@ -278,10 +259,10 @@ export def appendToNote(id: string, body: string, folder?: string): Result<Note>
 @capabilities(subprocess)
 export idempotent def readNote(id: string, folder?: string): Result<NoteContent> raises <std::notes::read> {
   """
-  Read a note's contents as plain text. Get the id from listNotes or searchNotes.
+  Read a note’s contents as plain text.
 
-  @param id - The note's id
-  @param folder - If given, the call fails unless the note is in this folder
+  @param id - A note ID from a listing, search, or create result.
+  @param folder - If supplied, fail unless the note belongs to this folder.
   """
   const meta = preflight(id, folder)
   if (isFailure(meta)) {
@@ -351,11 +332,10 @@ export idempotent def listFolders(): Result<Folder[]> raises <std::notes::list> 
 @capabilities(subprocess)
 export def deleteNote(id: string, folder?: string): Result<null> raises <std::notes::delete> {
   """
-  Delete a note. It moves to the Recently Deleted folder, where it stays for
-  about 30 days.
+  Move a note to Recently Deleted, where it remains for about 30 days.
 
-  @param id - The note's id
-  @param folder - If given, the call fails unless the note is in this folder
+  @param id - A note ID from a listing, search, or create result.
+  @param folder - If supplied, fail unless the note belongs to this folder.
   """
   const meta = preflight(id, folder)
   if (isFailure(meta)) {

@@ -1,11 +1,13 @@
 ---
 name: "shared"
-description: "Helpers every std::agents worker uses: context folding, model"
+description: "Build agent prompts and LLM options, and restrict evals to bundled docs."
 ---
 
 # shared
 
-overrides, and the handler an eval entry node runs its worker under.
+Use `withContext` to add optional material to a task and `llmOptions` to
+apply model overrides consistently. `docsOnlyHandler` lets an eval worker
+read packaged documentation while rejecting other interrupts.
 
 ## Types
 
@@ -15,7 +17,7 @@ overrides, and the handler an eval entry node runs its worker under.
 export type ReasoningEffort = "low" | "medium" | "high"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L35))
 
 ## Constants
 
@@ -34,6 +36,8 @@ export static const AGENT_SPILL_OVER = 100000
 ```ts
 docsOnlyHandler(intr)
 ```
+
+Approve packaged-document reads and reject other interrupts.
 
 Approves reads of the docs that ship in this package and rejects every
   other interrupt. Run a worker under it when it may look up syntax but
@@ -54,11 +58,7 @@ Approves reads of the docs that ship in this package and rejects every
 withContext(task: string, context: string): string
 ```
 
-Fold optional context material into a task prompt. Returns the task
-  unchanged when no context is given.
-
-  @param task - The task text
-  @param context - Extra material, or "" for none
+Append optional context to a task prompt, returning the task unchanged when context is empty.
 
 **Parameters:**
 
@@ -69,7 +69,7 @@ Fold optional context material into a task prompt. Returns the task
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L28))
 
 ### llmOptions
 
@@ -87,20 +87,15 @@ llmOptions(
 ): any
 ```
 
-Build an llm options object with an optional model override. Returns a
-  fresh object every call and never mutates its arguments. The model and
-  provider fields are only set when a model is named, so an empty override
-  never clobbers the default model.
+Build LLM options for an agent call, using the ambient model unless overridden.
 
-  @param model - Model name, or "" for the ambient model
-  @param provider - Provider for the model, or "" to auto-resolve
-  @param tools - Tools to offer the LLM
-  @param hostedTools - Provider-hosted tools to enable
-  @param reasoningEffort - Reasoning effort to request from the model, or null for none
-  @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
-  @param validationRetries - How many times to resend a structured-output call whose answer failed schema validation, or 0 for none
-  @param maxToolCallRounds - Tool-call rounds the call may use, or 0 for the configured default
-  @param spillToolResultsOver - Save a tool result longer than this or than maxToolResultChars in the run and send the model a preview, or 0 to cut long results instead. The tools must include readSpill
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the override, ignored when model is empty.
+  @param hostedTools - Provider-hosted tool identifiers to enable.
+  @param reasoningEffort - Requested reasoning level, or null to leave it unset.
+  @param validationRetries - Retries after structured-output validation fails, or zero to leave the option unset.
+  @param maxToolCallRounds - Maximum tool rounds, or zero for the configured default.
+  @param spillToolResultsOver - Save results above this threshold, requiring `readSpill` in tools, or zero to leave spilling unset.
 
 **Parameters:**
 
@@ -118,4 +113,4 @@ Build an llm options object with an optional model override. Returns a
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L37))

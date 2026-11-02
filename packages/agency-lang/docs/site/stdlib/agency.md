@@ -1,21 +1,19 @@
 ---
 name: "agency"
-description: "Tools for compiling, type-checking, running, formatting, and inspecting Agency programs from Agency code."
+description: "Compile, run, inspect, and generate Agency programs."
 ---
 
 # agency
 
-Tools for compiling, type-checking, running, formatting, and inspecting
-  Agency programs from Agency code. Compile and run source in a sandboxed
-  subprocess, type-check or format it, and walk its AST to find imports,
-  functions, or nodes.
+Execute Agency source in a child process, inspect module exports and
+  effects, or build source with AST and template helpers. Child operations
+  still consult the parent’s interrupt handlers.
 
   ```ts
-  import { compile, run } from "std::agency"
+  import { runCode } from "std::agency"
 
   node main() {
-    const program = compile("export node main() { return 42 }")
-    const result = run(program, "main")
+    const result = runCode("export node main() { return 42 }")
     print(result)
   }
   ```
@@ -24,31 +22,37 @@ Tools for compiling, type-checking, running, formatting, and inspecting
 
 ### CompiledProgram
 
+A compiled program returned by compile; retain the full returned value for execution.
+
 ```ts
+/** A compiled program returned by compile; retain the full returned value for execution. */
 export type CompiledProgram = {
   moduleId: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L81))
 
 ### AgencyModuleSource
 
-An installed stdlib module, a file confined to dir, or source text / Template Agency code.
+An installed standard-library module selected by its std:: import name.
 
 ```ts
-/** An installed stdlib module, a file confined to dir, or source text / Template Agency code. */
+/** An installed standard-library module selected by its std:: import name. */
 export type AgencyModuleSource = {
   kind: "module";
   module: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L86))
 
 ### AgencyFileSource
 
+An Agency file whose local imports remain inside dir.
+
 ```ts
+/** An Agency file whose local imports remain inside dir. */
 export type AgencyFileSource = {
   kind: "file";
   dir: string;
@@ -60,7 +64,10 @@ export type AgencyFileSource = {
 
 ### AgencyTextSource
 
+Source text or a complete Template Agency program, optionally with a local import directory.
+
 ```ts
+/** Source text or a complete Template Agency program, optionally with a local import directory. */
 export type AgencyTextSource = {
   kind: "source";
   source: string | Code;
@@ -68,7 +75,7 @@ export type AgencyTextSource = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L90))
 
 ### AgencySource
 
@@ -79,7 +86,7 @@ export type AgencySource =
   | AgencyTextSource
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L91))
 
 ### RunOptions
 
@@ -99,7 +106,7 @@ export type RunOptions = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L94))
 
 ### SourceLocation
 
@@ -112,7 +119,7 @@ export type SourceLocation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L130))
 
 ### TypeCheckDiagnostic
 
@@ -131,7 +138,7 @@ export type TypeCheckDiagnostic = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L137))
 
 ### TypeCheckReport
 
@@ -142,7 +149,7 @@ export type TypeCheckReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L150))
 
 ### InterruptAnswer
 
@@ -154,7 +161,7 @@ export type InterruptAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L433))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L465))
 
 ### TestArguments
 
@@ -162,7 +169,7 @@ export type InterruptAnswer = {
 export type TestArguments = Record<string, any>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L439))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L471))
 
 ### AgencyTestCase
 
@@ -177,7 +184,7 @@ export type AgencyTestCase = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L441))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L473))
 
 ### CaseReport
 
@@ -189,7 +196,7 @@ export type CaseReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L450))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L482))
 
 ### TestReport
 
@@ -200,7 +207,7 @@ export type TestReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L456))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L488))
 
 ### EffectsByExport
 
@@ -211,7 +218,7 @@ Per-exported-symbol effect lists, keyed by node/function name.
 export type EffectsByExport = Record<string, string[]>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L841))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L862))
 
 ### ExportParam
 
@@ -230,30 +237,26 @@ export type ExportParam = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L863))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L882))
 
 ### ExportInfo
 
-What describe reports for one exported symbol. `signature` is the
-printed declaration line without the export keyword or tool markers;
-`docstring` is the symbol's docstring (defs and nodes) or doc comment
-(types); `effects` uses the same names and "unknown" sentinel as
-getEffects, and is empty for types and consts. Re-exported symbols carry
-the module path they came through in `reexportedFrom` (the outermost hop
-when re-exports chain); when that module cannot be read from a source
-string (relative paths), the entry has kind "reexport" and its effects
-are ["unknown"] rather than silently missing.
+Metadata for one public export. The signature omits export and tool
+  markers. For functions and nodes, docstring holds the tool description;
+  for types, it holds the doc comment.
+
+  Effects use the names and unknown marker returned by getEffects. Types
+  and constants have no effects. A re-export names the outermost module
+  it came through; an unresolved re-export has unknown effects.
 
 ```ts
-/** What describe reports for one exported symbol. `signature` is the
-printed declaration line without the export keyword or tool markers;
-`docstring` is the symbol's docstring (defs and nodes) or doc comment
-(types); `effects` uses the same names and "unknown" sentinel as
-getEffects, and is empty for types and consts. Re-exported symbols carry
-the module path they came through in `reexportedFrom` (the outermost hop
-when re-exports chain); when that module cannot be read from a source
-string (relative paths), the entry has kind "reexport" and its effects
-are ["unknown"] rather than silently missing. */
+/** Metadata for one public export. The signature omits export and tool
+  markers. For functions and nodes, docstring holds the tool description;
+  for types, it holds the doc comment.
+
+  Effects use the names and unknown marker returned by getEffects. Types
+  and constants have no effects. A re-export names the outermost module
+  it came through; an unresolved re-export has unknown effects. */
 export type ExportInfo = {
   name: string;
   kind: "def" | "node" | "type" | "const" | "reexport";
@@ -273,7 +276,7 @@ export type ExportInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L882))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L899))
 
 ### ModuleInfo
 
@@ -284,7 +287,7 @@ export type ModuleInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L900))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L917))
 
 ### AST
 
@@ -307,7 +310,7 @@ export type AST = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L958))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L980))
 
 ### Code
 
@@ -329,7 +332,7 @@ export type Code = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1016))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1034))
 
 ### HoleInfo
 
@@ -343,7 +346,7 @@ export type HoleInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1023))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1041))
 
 ## Effects
 
@@ -357,7 +360,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L59))
 
 ### std::write
 
@@ -369,7 +372,7 @@ effect std::write {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L64))
 
 ### std::run
 
@@ -387,7 +390,7 @@ effect std::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L68))
 
 ## Constants
 
@@ -407,11 +410,17 @@ export static const CLI_NOT_AVAILABLE = "The agency command line is not availabl
 compile(source: string, dir: string = "", strict: boolean = false): Result
 ```
 
-Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Imports may name standard library (`std::`) modules and `.agency` files inside `dir`. TypeScript/JavaScript files, Node modules, `pkg::` packages, symlinks, and compile-time splices are refused anywhere in the import closure.
+Compile Agency source for a later subprocess run. Only std:: and local
+  .agency imports are supported; compile-time splices are refused.
 
-  @param source - Agency source code as a string
-  @param dir - Directory relative imports resolve against, and the boundary they are confined to. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param dir - Resolve and confine local imports within this directory, or leave empty to disallow them.
+  @param strict - Also reject unresolved names and JavaScript globals outside the sandbox allowlist.
+
+Use `runCode` to execute source supplied by an LLM in one call. Use
+  `compile` and `run` separately when Agency code can retain the full
+  compiled value between calls. Compilation permits standard-library
+  imports and local `.agency` files inside the given directory. It refuses
+  JS/TS, Node and pkg:: imports, symlinks, and compile-time splices.
 
 **Parameters:**
 
@@ -425,7 +434,7 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L163))
 
 ### run
 
@@ -445,32 +454,35 @@ run(
 ): Result
 ```
 
-Execute a compiled Agency program in a subprocess and return the node's result.
+Execute a compiled Agency program in a subprocess.
 
-  The std::run gate's module and function labels describe a prepared call. They do not verify saved code against the installed module. Checkpoint or session edits can replace compiled code while retaining its label. Use module-specific approval rules only with trusted saved state. Hosts receiving external checkpoints should verify their integrity before resuming; see [checkpoint integrity](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/docs/dev/runtime/checkpoint-integrity.md). Source text and sandboxed descendants use the generic gate with empty labels.
+  @param compiled - The complete value returned by compile, including its captured code.
+  @param node - The exported entry node to execute.
+  @param args - Named arguments for the entry node.
+  @param wallClock - The execution time limit in milliseconds, up to one hour, or null for the default.
+  @param memory - The V8 heap limit in bytes, up to 4gb, or null for the default.
+  @param ipcPayload - The limit per IPC message in bytes, up to 1gb, or null for the default.
+  @param stdout - The combined stdout and stderr limit in bytes, up to 100mb, or null for the default.
+  @param logFile - An optional statelog JSONL destination for this child run.
+  @param cwd - The child working directory, or empty to inherit the caller’s process directory.
+  @param maxDepth - The subprocess nesting cap, up to ten, also bounded by ancestor caps.
+  @param maxCost - The child’s LLM spend limit in dollars, or null for no additional cost cap.
 
-  @param compiled - A compiled Agency program
-  @param node - Which exported node to run
-  @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
-  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
-  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
-  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
-  @param logFile - Optional statelog JSONL file path for this subprocess run
-  @param cwd - Optional working directory for this subprocess run
-  @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
-  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
+Run a compiled program in a child process. Parent handlers and guards
+  apply to the child, and supported lifecycle callbacks are forwarded.
+  Streaming callbacks are not forwarded. A resource-limit failure reports
+  `limit_exceeded`. Each execution segment gets its own wall-clock, memory,
+  IPC, and output budget; paused time does not count. The lowest ancestor
+  maxDepth remains in force.
 
-Runs agent-generated Agency code in a child process.
-Any interrupts and guards defined in the parent process will
-apply to the child process. Any callbacks in scope will also apply.
-Exceeding a resource limit kills the subprocess and returns a
-limit_exceeded failure. Exceeding maxCost kills the subprocess and
-returns a limit_exceeded failure, like the other limits.
+  Success carries the subprocess result envelope, including its `data`
+  value and usage information. Use `runCode` for just the node’s value.
 
-For `maxDepth`, if an ancestor process has a lower maxDepth,
-the lower value is used. For example, if a parent process has maxDepth=3
-and a child process has maxDepth=5, maxDepth=3 is used.
+  The run interrupt’s module and function labels describe a prepared call;
+  they do not verify compiled code stored in a checkpoint. Use
+  module-specific approval rules only with trusted saved state. External
+  hosts should verify checkpoint integrity before resuming saved code; see
+  [checkpoint integrity](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/docs/dev/runtime/checkpoint-integrity.md).
 
 **Parameters:**
 
@@ -494,7 +506,7 @@ and a child process has maxDepth=5, maxDepth=3 is used.
 
 **Needs:** `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L192))
 
 ### runFunction
 
@@ -507,16 +519,22 @@ runFunction(
 ): Result
 ```
 
-Call an exported function in a fresh subprocess. Returns its Result unchanged, or wraps a plain value in success. Parent handlers, policies, callbacks, and run's resource limits apply.
+Call a public exported Agency function in a fresh subprocess.
 
-  Use { kind: "module", module: "std::data/finance/fred" } for installed stdlib code, { kind: "file", dir: "/project", filename: "tools.agency" } for a file, or { kind: "source", source: "export def double(n: number) { return n * 2 }" } for text or complete Template Agency Code. Local imports stay inside dir; JS/TS, Node modules, pkg:: imports, symlinks, and compile-time splices are refused. Only public exported defs are supported, not nodes or handoff functions.
+  @param source - A std:: module, contained Agency file, or complete Agency source program.
+  @param functionName - The public exported def to call, excluding nodes and handoff functions.
+  @param args - Named arguments, with ordinary Agency defaults and aliases.
+  @param options - Per-call resource limits, statelog destination, and working directory.
 
-  @param source - The module, file, or source to prepare
-  @param functionName - Which public exported def to call
-  @param args - Named arguments; defaults and aliases follow ordinary Agency calls
-  @param options - The limits, logFile, and cwd accepted by run
+Call a public exported def without writing an entry node. The source
+  can name a std:: module, a file inside a directory, or source text or
+  complete Template Agency Code. Local imports must remain inside the
+  directory; the same import restrictions as `compile` apply. Nodes and
+  handoff functions are not supported.
 
-Call an exported Agency function without writing an entry node yourself.
+  Each call starts a fresh subprocess with the parent handlers, policies,
+  guards, and supported callbacks. A returned Result passes through
+  unchanged; a plain value becomes a success.
 
 **Parameters:**
 
@@ -533,7 +551,7 @@ Call an exported Agency function without writing an entry node yourself.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L322))
 
 ### learn
 
@@ -546,16 +564,30 @@ learn(
 ): Result<any[]>
 ```
 
-Return tools with the original functions' descriptions, schemas, aliases, and argument binding. An empty names list selects all public exported defs; hidden exports, types, and nodes are excluded. Selecting a node, handoff def, required function argument, or unresolved generic schema fails the whole batch. A namespace advertises namespace_exportName; empty keeps the export name.
+Create callable tools from public exported Agency functions. Module
+  initialization runs during inspection and can pause or fail. The batch fails
+  if any selected def is a handoff, requires a function argument, or lacks a
+  concrete parameter schema.
 
-  Learning runs module initialization once in a subprocess to inspect the compiled definitions, so it can pause, fail, or be rejected. Inspection uses the same std::run gate as calls, with function set to `<inspect>` for a module or file prepared by the host. Source text and sandboxed descendants use the generic gate. It does not call the selected function bodies. Each later tool call runs in its own fresh subprocess with the bound options and the usual run gate and parent handlers. Imported code is captured during preparation; later calls do not reread local source files. This returns function values without saving them or changing an agent's tool list.
+  @param source - A std:: module, contained Agency file, or complete Agency source program.
+  @param names - Public exported defs to select, or empty for all public defs.
+  @param namespace - An optional prefix using letters, digits, underscores, or hyphens, keeping each full tool name within 64 characters.
+  @param options - Resource limits, statelog destination, and working directory for inspection and calls.
 
-  @param source - The module, file, or complete source accepted by runFunction
-  @param names - Exported defs to learn; empty selects all public defs
-  @param namespace - Optional prefix for advertised tool names
-  @param options - The limits, logFile, and cwd accepted by run, used for inspection and calls
+Creates callable tools with the source functions’ descriptions, schemas,
+  aliases, and argument binding. Import preparation captures local source
+  files, so later calls use those bytes. A namespace prefixes advertised
+  names as `namespace_exportName`.
 
-Learn public Agency functions as callable tools for this program.
+  Learning runs module initialization in a subprocess to inspect tool
+  metadata. That can pause, fail, or be rejected; it does not call the
+  selected bodies. Inspection and each later tool call use the normal run
+  gate and parent handlers. The module and function labels follow the
+  trusted-state rules documented on `run`.
+
+  The whole batch fails if a selected function is a handoff, needs a
+  required function argument, or lacks a concrete parameter schema. The
+  returned functions are not saved or added to an agent’s tool list.
 
 **Parameters:**
 
@@ -572,7 +604,7 @@ Learn public Agency functions as callable tools for this program.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L352))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L383))
 
 ### runFile
 
@@ -590,24 +622,23 @@ runFile(
 ): Result
 ```
 
-Compile and execute an Agency file in a subprocess and return the node's result.
-  Imports may name standard library (`std::`) modules and `.agency` files inside
-  `dir`; TypeScript/JavaScript files, Node modules, `pkg::` packages, symlinks, and
-  compile-time splices are refused anywhere in the import closure.
+Compile an Agency file and execute its exported node in a subprocess.
+  Only std:: and contained .agency imports are supported.
 
-  @param dir - The directory containing the file; also the boundary its local imports are confined to
-  @param filename - The agency file to compile and run
-  @param node - Which node to run
-  @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 1h). Pass null for the default.
-  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4gb). Pass null for the default.
-  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1gb). Pass null for the default.
-  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 100mb). Pass null for the default.
-  @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
+  @param dir - The directory containing the file and confining its local imports.
+  @param filename - A relative Agency filename that stays inside dir.
+  @param node - The exported entry node to execute.
+  @param args - Named arguments for the entry node.
+  @param wallClock - The execution time limit in milliseconds, up to one hour.
+  @param memory - The V8 heap limit in bytes, up to 4gb.
+  @param ipcPayload - The limit per IPC message in bytes, up to 1gb.
+  @param stdout - The combined stdout and stderr limit in bytes, up to 100mb.
+  @param maxCost - The child’s LLM spend limit in dollars, or null for no additional cost cap.
 
-Just like `run`, any interrupts and guards defined in the parent process
-will apply to the child process. Any callbacks in scope will also apply.
-Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
+Compiles a file and runs its exported node through `run`, with the same
+  parent handlers, guards, callbacks, and subprocess limits. Local imports
+  remain within the supplied directory. The import restrictions on
+  `compile` apply to the full dependency closure.
 
 **Parameters:**
 
@@ -629,7 +660,7 @@ Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` f
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L390))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L424))
 
 ### test
 
@@ -646,34 +677,28 @@ test(
 ): Result<TestReport>
 ```
 
-Run test cases against an Agency file in the sandboxed subprocess and return a per-case report. The file's imports may name std:: modules, .agency files inside dir, and pkg:: packages with a pure-Agency closure.
+Run test cases against an Agency file in subprocesses and report each
+  case’s result. Only std:: and contained .agency imports are supported.
 
-  @param dir - The directory containing the tested file; also the boundary its local imports are confined to
-  @param filename - The agency file whose exported nodes the cases run
-  @param cases - The cases: which node, what args, what value to expect
-  @param wallClock - Max wall-clock time per case in MILLISECONDS (default 60000 = 60s); a case's own wallClock overrides it
-  @param memory - Max V8 heap size per case in BYTES (default 536870912 = 512mb)
-  @param ipcPayload - Max single IPC message size per case in BYTES (default 104857600 = 100mb)
-  @param stdout - Max combined stdout+stderr output per case in BYTES (default 1048576 = 1mb)
-  @param maxCost - Max LLM spend in dollars for the WHOLE call. null = no cost limit.
+  @param dir - The directory containing the tested file and confining local imports.
+  @param filename - A relative Agency source filename that stays inside dir.
+  @param cases - Exported entry nodes, named arguments, expected values, and optional scripted interrupt answers.
+  @param wallClock - Milliseconds per case, overridden by a case’s own wallClock value.
+  @param memory - The V8 heap limit per case in bytes.
+  @param ipcPayload - The byte limit per IPC message in each case.
+  @param stdout - The combined stdout and stderr limit per case in bytes.
+  @param maxCost - The LLM spend limit in dollars for the whole batch, or null for no additional cost cap.
 
-Runs agency tests the way run() runs a node: each case executes in the
-sandboxed subprocess, so every interrupt the tested code raises — and the
-per-case std::run launch itself — is voted on by the caller's handlers, and
-any reject wins.
+Each case runs in its own child process through `run`. Parent handlers
+  vote on both the launch and the tested code’s interrupts. Scripted
+  interrupt answers add handler votes in order; a parent rejection still
+  wins. Exhausted answers let outer handlers decide. Leftover answers or
+  an expected-message mismatch fail the case.
 
-A case's scripted `interrupts` answers are ONE VOTE each, consumed in
-order by a handler wrapped closest around the case; parents still see
-every interrupt, so a test file can never approve something the caller's
-handler would reject. Exhausted answers stay silent (the interrupt
-propagates outward); leftover answers fail the case; an `expectedMessage`
-mismatch fails the case.
-
-A compile failure (including "the tested file does not export X's import")
-is a whole-call failure: fix the input and call again. A case failing —
-wrong value, rejected interrupt, per-case limit — is a `pass: false` entry
-in a success report, and never stops the batch. `maxCost` guards the WHOLE
-call, in the same limit_exceeded shape as run()'s other limits.
+  Compilation errors fail the whole call. A failed value check, rejected
+  interrupt, or per-case resource limit appears in the report and does
+  not stop later cases. The cost cap covers the whole batch and returns a
+  `limit_exceeded` failure when reached.
 
 **Parameters:**
 
@@ -694,7 +719,7 @@ call, in the same limit_exceeded shape as run()'s other limits.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L479))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L506))
 
 ### testFile
 
@@ -706,11 +731,11 @@ testFile(
 ): Result<TestReport>
 ```
 
-Run the test cases a .test.json file declares against its source file.
+Run the test cases declared in an Agency .test.json file.
 
-  @param dir - The directory holding the .test.json and the file it tests
-  @param filename - The .test.json file
-  @param maxCost - Max LLM spend in dollars for the WHOLE call. null = no cost limit.
+  @param dir - The directory containing the test file and its source file.
+  @param filename - A relative .test.json filename that stays inside dir.
+  @param maxCost - The LLM spend limit in dollars for the whole batch, or null for no additional cost cap.
 
 **Parameters:**
 
@@ -726,7 +751,7 @@ Run the test cases a .test.json file declares against its source file.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L622))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L649))
 
 ### runCode
 
@@ -745,39 +770,32 @@ runCode(
 ): Result
 ```
 
-Compile Agency source code and execute one of its nodes in a subprocess,
-  returning the value the node returned. Prefer this over separate
-  compile() and run() calls. Imports may name standard library (`std::`)
-  modules and `.agency` files inside `dir`; TypeScript/JavaScript files,
-  Node modules, `pkg::` packages, symlinks, and compile-time splices are
-  refused anywhere in the import closure. Compile
-  errors are returned as a failure without running anything; fix the source
-  and call again.
+Compile Agency source and execute an exported node in one call. Only
+  std:: and contained .agency imports are supported; splices are refused.
 
-  @param source - Agency source code as a string
-  @param node - Which exported node to run (default "main")
-  @param args - Arguments to pass to the node
-  @param wallClock - Max wall-clock time in MILLISECONDS before SIGKILL (default 60000 = 60s, max 3600000 = 1h). Pass null for the default.
-  @param memory - Max V8 heap size in BYTES (default 536870912 = 512mb, max 4294967296 = 4gb). Pass null for the default.
-  @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1073741824 = 1gb). Pass null for the default.
-  @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 104857600 = 100mb). Pass null for the default.
-  @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
-  @param cwd - Working directory for the subprocess AT RUN TIME. Empty inherits the caller's process cwd (which may be the package dir, not where you want files); pass the agent working directory so the generated program's file writes land there. Independent of dir.
-  @param dir - Directory relative imports resolve against AT COMPILE TIME, and the boundary they are confined to. Empty (the default) means local imports cannot resolve. Independent of cwd.
+  @param node - The exported entry node to execute.
+  @param args - Named arguments for the entry node.
+  @param wallClock - A positive execution time limit in milliseconds, up to one hour.
+  @param memory - A positive V8 heap limit in bytes, up to 4gb.
+  @param ipcPayload - A positive byte limit per IPC message, up to 1gb.
+  @param stdout - A positive combined stdout and stderr byte limit, up to 100mb.
+  @param maxCost - The child’s LLM spend limit in dollars, or null for no additional cost cap.
+  @param cwd - The runtime working directory, or empty to inherit the caller’s process directory.
+  @param dir - Resolve and confine local imports within this directory, or leave empty to disallow them.
 
-Just like `run`, any interrupts and guards defined in the parent process
-will apply to the child process. Any callbacks in scope will also apply.
-Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
+Use this when an LLM supplies source code to execute. It combines
+  compilation and execution so the model does not need to copy a compiled
+  program value into another call. The node’s value is returned without
+  the subprocess envelope.
 
-Designed for LLM tool use: compile() returns a CompiledProgram the model
-would have to echo back into run() verbatim (it will not — see the
-compile→run "CompiledProgram has no code" failure mode). runCode takes
-the source directly, so nothing large round-trips through the model.
+  Parent handlers, guards, and supported callbacks apply as in `run`.
+  A compile error returns a failure before execution. The full import
+  closure follows `compile` restrictions. `cwd` controls runtime file
+  operations; `dir` separately controls local import resolution.
 
-Left unmarked (neither destructive nor idempotent): it runs arbitrary
-code whose danger depends on that code, so its failures reach a
-tool-calling model as the neutral, re-callable tier. Each attempt
-re-raises std::run and the child's own effects re-prompt.
+  The function is unmarked because arbitrary supplied code determines
+  whether retrying is appropriate. Each new attempt raises the run gate
+  and the child’s own effects again.
 
 **Parameters:**
 
@@ -800,7 +818,7 @@ re-raises std::run and the child's own effects re-prompt.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L733))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L761))
 
 ### typecheck
 
@@ -813,17 +831,19 @@ typecheck(
 ): Result<TypeCheckReport>
 ```
 
-Type-check Agency source code given as a string. To check a file that is already on disk, call `typecheckFile` with its path instead of pasting its contents here. A clean report does not mean `compile` or `run` will accept the code: those refuse TypeScript, JavaScript, Node and `pkg::` imports and compile-time splices, and this check reports them only when `strict` is true.
+Type-check Agency source and return errors and warnings.
 
-  @param source - Agency source code as a string
-  @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
-  @param dir - Directory the source's relative imports resolve against. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, a JavaScript global outside the sandbox allowlist is refused, and so is any import `compile` would refuse (error AG4013). Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param ignoreCodes - Diagnostic codes, such as AG3009, to omit from errors and warnings.
+  @param dir - Resolve relative imports within this directory, or leave empty when no local imports are needed.
+  @param strict - Also report sandbox import violations, unresolved names, and disallowed JavaScript globals.
 
-Without `dir`, relative imports (./foo.agency) cannot be resolved from a
-source string. With `dir`, the source is checked as if it were a file in
-`dir`, so its relative imports resolve against the files there, the way
-`typecheckFile` resolves them. Nothing is written to `dir`.
+Checks source text without writing it. With a directory, relative
+  imports resolve as if the source were a file there. Use `typecheckFile`
+  for an existing file.
+
+  A normal check can accept imports that subprocess compilation refuses.
+  Enable strict checking to apply the sandbox import and bound-name checks
+  before trying to run generated code.
 
 **Parameters:**
 
@@ -838,7 +858,7 @@ source string. With `dir`, the source is checked as if it were a file in
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L801))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L823))
 
 ### getEffects
 
@@ -846,18 +866,15 @@ source string. With `dir`, the source is checked as if it were a file in
 getEffects(source: string): Result<EffectsByExport>
 ```
 
-Map each exported node and function in the source to the list of
-  interrupt effects it can raise, transitively. Bare `interrupt(...)`
-  sites appear as the sentinel "unknown", so the envelope never
-  silently under-reports. Use this to show or check what a program can
-  do before running it.
+List the interrupt effects each exported function or node can raise.
+  Dynamic calls can escape the analysis, so an empty list does not prove
+  that execution has no effects.
 
-  Not visible to this: code generated by a compile-time splice, a
-  function received as a parameter and then called, and a function
-  reference stored in a variable before being passed on. An empty list
-  means nothing risky was found, not that nothing risky exists.
-
-  @param source - Agency source code as a string
+Includes effects propagated through statically known calls. Bare
+  interrupts appear as `unknown`. Compile-time generated code, functions
+  received as parameters, and function references passed through variables
+  can escape the analysis. Use this to inspect a program, with those limits
+  in mind.
 
 **Parameters:**
 
@@ -869,7 +886,7 @@ Map each exported node and function in the source to the list of
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L844))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L872))
 
 ### describe
 
@@ -881,19 +898,23 @@ describe(
 ): Result<ModuleInfo>
 ```
 
-Describe what an Agency module exports: each exported function, node, type, const, and re-export, in source order, with its signature, docstring, transitive effect list, and destructive/idempotent/handoff markers. Anything marked @hidden is left out, as is anything whose name starts with an underscore - both are the same visibility rule `agency doc` applies, so this is the module surface a reader sees. Re-exports from std:: modules resolve to full entries; re-exports from relative paths come back with effects ["unknown"], with or without a file. Each def and node lists its parameters, with the type and default as the signature writes them and the text of its `@param` entry. Use this instead of reading source when generating code shaped by a module - for example, one handler per effect its tools can raise.
+Describe an Agency module’s public exports, signatures, documentation,
+  and statically known effects.
 
-  Source text alone cannot resolve a relative import, so describing a module that imports another local file fails. Pass `dir` and `filename` to name the file `source` came from: its imports then resolve against its own folder, and effects that come through a local helper are counted. The imports are checked as a sandboxed compile checks them, before anything runs: a TypeScript file, an escape from `dir`, a symlink, or a splice is refused. `source` must be the file's contents. The imported files are read with no `std::read` prompt of their own: only the names of the effects they raise come back, never their text.
+  @param source - Module source text matching the file exactly when a filename is supplied.
+  @param dir - Supply with filename to resolve local imports within this directory.
+  @param filename - The module’s path relative to dir, or empty when describing source without local imports.
 
-  @param source - Agency source code as a string
-  @param dir - The directory the module's file is in, or below. Give it with `filename`, or neither
-  @param filename - The module's file, relative to dir. Must stay inside dir
+Use export metadata when generating code from a module, for example
+  one handler per effect its tools can raise. It uses the visibility
+  rules of `agency doc`: hidden and underscore-prefixed exports are
+  omitted. The description is the module’s one-line summary.
 
-The reify primitive: exports-as-data, so generators can be shaped by
-what a module contains instead of hand-maintained lists. Omits what
-`agency doc` omits: `@hidden` declarations, and underscore-prefixed
-exports (lowering targets, not caller surface). `description` is the
-module doc comment's one-line summary.
+  For a module with local imports, supply its directory and filename along
+  with the file’s exact source text. The import closure is checked under
+  the same restrictions as compilation. Imported source is read to compute
+  metadata without a separate read interrupt. Relative re-exports remain
+  entries with `unknown` effects; std:: re-exports resolve to full entries.
 
 **Parameters:**
 
@@ -907,7 +928,7 @@ module doc comment's one-line summary.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L911))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L935))
 
 ### typecheckFile
 
@@ -915,15 +936,13 @@ module doc comment's one-line summary.
 typecheckFile(dir: string, filename: string): Result
 ```
 
-Type-check an Agency file on disk. The file is read from dir/filename,
-  with relative imports inside it resolved against the file's directory.
-  No import policy applies: a file that imports TypeScript, JavaScript or an
-  npm package can pass here and still be refused by `compileFile` and
-  `runFile`, which accept only `std::` modules and `.agency` files inside dir.
+Type-check an Agency file on disk.
 
-  @param dir - The directory containing the file
-  @param filename - The agency file to type-check. Must stay inside dir; to
-    read another directory, pass it in `dir`.
+  @param filename - A relative Agency filename that stays inside dir.
+
+Resolves imports relative to the file’s own directory. This check does
+  not apply subprocess import restrictions, so a clean report can still be
+  refused by `runFile`.
 
 **Parameters:**
 
@@ -938,7 +957,7 @@ Type-check an Agency file on disk. The file is read from dir/filename,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L930))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L958))
 
 ### parseAST
 
@@ -946,9 +965,7 @@ Type-check an Agency file on disk. The file is read from dir/filename,
 parseAST(source: string): Result<AST>
 ```
 
-Parse Agency source code into an abstract syntax tree.
-
-  @param source - Agency source code as a string
+Parse Agency source into an abstract syntax tree.
 
 **Parameters:**
 
@@ -958,7 +975,7 @@ Parse Agency source code into an abstract syntax tree.
 
 **Returns:** `Result<AST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L964))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L986))
 
 ### writeAST
 
@@ -971,16 +988,14 @@ writeAST(
 ): Result
 ```
 
-Format an AST as Agency source and write it to dir/filename. Absolute paths and .. segments cannot escape dir. Symlinks on existing files are followed and re-checked.
+Format an Agency AST as source and write it to a file.
 
-  @param ast - The AST to write (typically a parsed Agency AST)
-  @param dir - The sandbox directory
-  @param filename - The agency file to write, resolved relative to dir
-  @param overwrite - If false, fail when the file already exists (default true)
+  @param filename - A relative output filename that stays inside dir.
+  @param overwrite - If false, fail when the output file already exists.
 
-Output is canonical formatter output (the same style as `pnpm run fmt`):
-  the formatter preserves comments (they live in the AST as nodes) but
-  normalizes whitespace and formatting.
+Writes the canonical formatter output, preserving comments while
+  normalizing whitespace. The target must stay inside the supplied
+  directory; symlinks below that directory are refused.
 
 **Parameters:**
 
@@ -997,7 +1012,7 @@ Output is canonical formatter output (the same style as `pnpm run fmt`):
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L977))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L999))
 
 ### format
 
@@ -1005,9 +1020,7 @@ Output is canonical formatter output (the same style as `pnpm run fmt`):
 format(source: string): Result
 ```
 
-Format Agency source code with the standard Agency formatter.
-
-  @param source - Agency source code as a string
+Format Agency source with the standard Agency formatter.
 
 **Parameters:**
 
@@ -1017,7 +1030,7 @@ Format Agency source code with the standard Agency formatter.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1003))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1023))
 
 ### loadTemplate
 
@@ -1025,11 +1038,9 @@ Format Agency source code with the standard Agency formatter.
 loadTemplate(dir: string, filename: string): Result<Code>
 ```
 
-Load an Agency file containing holes as a template.
+Read an Agency file containing template holes.
 
-  @param dir - The sandbox directory
-  @param filename - The template file, resolved relative to dir. Must stay
-    inside dir; to read another directory, pass it in `dir`.
+  @param filename - A relative template filename that stays inside dir.
 
 **Parameters:**
 
@@ -1044,7 +1055,7 @@ Load an Agency file containing holes as a template.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1032))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1050))
 
 ### holesOf
 
@@ -1052,9 +1063,11 @@ Load an Agency file containing holes as a template.
 holesOf(template: Code): HoleInfo[]
 ```
 
-The unfilled holes in a template, in the order they appear. Each entry has the hole's name, its sort (what category of thing fills it), whether it is a splice, and its type when one is known. origin names the fill this hole most recently arrived through when it came in via a grafted fragment (best-effort; null for holes written directly in the template).
+List the unfilled holes in an Agency code template.
 
-  @param template - A template loaded with loadTemplate
+Inspect remaining holes before filling a template. Each name appears
+  once, in encounter order. The origin identifies the fill through which
+  a grafted hole arrived when known; original holes have no origin.
 
 **Parameters:**
 
@@ -1064,7 +1077,7 @@ The unfilled holes in a template, in the order they appear. Each entry has the h
 
 **Returns:** `HoleInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1051))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1072))
 
 ### fill
 
@@ -1072,10 +1085,13 @@ The unfilled holes in a template, in the order they appear. Each entry has the h
 fill(template: Code, values: Record<string, Json | Code>): Result<Code>
 ```
 
-Fill holes in a template. Plain values become literals and are never parsed; Code values are grafted as trees. Filling some holes and not others returns a template with the rest still in it.
+Fill selected holes in an Agency code template.
 
-  @param template - A template loaded with loadTemplate
-  @param values - A record mapping hole names to values
+  @param values - Map existing hole names to literal data or Code fragments of the required kind.
+
+Plain values become literal nodes; Code fragments are inserted as
+  trees. String values are not parsed as source. A partial fill returns
+  a template whose remaining holes can be filled later.
 
 **Parameters:**
 
@@ -1086,7 +1102,7 @@ Fill holes in a template. Plain values become literals and are never parsed; Cod
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1060))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1084))
 
 ### combine
 
@@ -1094,13 +1110,13 @@ Fill holes in a template. Plain values become literals and are never parsed; Cod
 combine(codes: Code[]): Result<Code>
 ```
 
-Merge several Code fragments into one, in order. Use this to build one
-  fragment from a loop, for example one function per item in a list.
-  Fragments of the same kind merge into that kind. Expressions merge into
-  a statement list. A whole-program fragment cannot merge with loose
-  statements or expressions.
+Combine Agency code fragments in order. Whole programs cannot be mixed
+  with loose statements or expressions.
 
-  @param codes - The fragments to merge, in order
+Use this when generating one fragment per item, then joining the
+  results. Fragments of the same kind retain that kind; expressions
+  combine into a statement list. Whole programs cannot combine with
+  loose expressions or statements.
 
 **Parameters:**
 
@@ -1110,7 +1126,7 @@ Merge several Code fragments into one, in order. Use this to build one
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1073))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1102))
 
 ### toSource
 
@@ -1118,9 +1134,7 @@ Merge several Code fragments into one, in order. Use this to build one
 toSource(code: Code): string
 ```
 
-Print a Code value back to Agency source, including any unfilled holes.
-
-  @param code - A template or filled program
+Print Agency Code as source, preserving any unfilled template holes.
 
 **Parameters:**
 
@@ -1130,7 +1144,7 @@ Print a Code value back to Agency source, including any unfilled holes.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1086))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1110))
 
 ### parseExpr
 
@@ -1138,9 +1152,7 @@ Print a Code value back to Agency source, including any unfilled holes.
 parseExpr(source: string): Result<Code>
 ```
 
-Parse a single Agency expression into a Code fragment that can fill an expr hole. Fails on anything other than exactly one expression.
-
-  @param source - Agency source for one expression
+Parse exactly one Agency expression into a Code fragment for an expression hole.
 
 **Parameters:**
 
@@ -1150,7 +1162,7 @@ Parse a single Agency expression into a Code fragment that can fill an expr hole
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1095))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1117))
 
 ### parseStatements
 
@@ -1158,9 +1170,7 @@ Parse a single Agency expression into a Code fragment that can fill an expr hole
 parseStatements(source: string): Result<Code>
 ```
 
-Parse a list of Agency statements into a Code fragment that can fill a statements hole.
-
-  @param source - Agency source for one or more statements
+Parse Agency statements into a Code fragment for a statements hole.
 
 **Parameters:**
 
@@ -1170,7 +1180,7 @@ Parse a list of Agency statements into a Code fragment that can fill a statement
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1124))
 
 ### formatFile
 
@@ -1178,11 +1188,9 @@ Parse a list of Agency statements into a Code fragment that can fill a statement
 formatFile(dir: string, filename: string): Result
 ```
 
-Format an Agency file in place using the standard Agency formatter.
+Format an Agency file in place.
 
-  @param dir - The directory containing the file
-  @param filename - The agency file to format. Must stay inside dir; to
-    write another directory, pass it in `dir`.
+  @param filename - A relative Agency filename that stays inside dir.
 
 Read and write happen inside the same interrupt, so approving it approves both.
   If the file is already formatted, no write occurs and its mtime is preserved.
@@ -1200,7 +1208,7 @@ Read and write happen inside the same interrupt, so approving it approves both.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1134))
 
 ### walkAST
 
@@ -1208,17 +1216,18 @@ Read and write happen inside the same interrupt, so approving it approves both.
 walkAST(ast: AST, visitor: (node: any, ancestors: any[]) -> any): AST
 ```
 
-Walk every node in a deep-cloned copy of the AST, invoking the visitor
-  with each (node, ancestors) pair, and return the modified clone.
-  The visitor may mutate nodes in place. This will not modify the original tree.
-  The ancestors array lists every enclosing node from the root outward, excluding the node itself.
+Visit and modify nodes in a cloned Agency AST.
 
-  @param ast - The AST to walk
-  @param visitor - Called once per node as visitor(node, ancestors). Mutate node in place, return value is ignored.
+  @param visitor - Called with the node and its ancestors, allowing in-place edits and ignoring the return value.
 
-- Iteration is pre-order (a node is visited before its children)
-- The visit list is fixed upfront: nodes the visitor adds during
-  the walk are not visited. Replacing a child reference still visits the old subtree.
+Visits parents before children in a deep-cloned tree. Mutate each
+  visited node in place to transform the returned clone. The original
+  tree is unchanged.
+
+  The visit list is fixed before callbacks run: added nodes are not
+  visited, and replacing a child reference does not remove the old subtree
+  from that list. Ancestors run from the root to the parent, excluding
+  the visited node.
 
 **Parameters:**
 
@@ -1229,7 +1238,7 @@ Walk every node in a deep-cloned copy of the AST, invoking the visitor
 
 **Returns:** [AST](#ast)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1161))
 
 ### getNodesOfType
 
@@ -1237,10 +1246,9 @@ Walk every node in a deep-cloned copy of the AST, invoking the visitor
 getNodesOfType(source: string, types: string[]): Result<any[]>
 ```
 
-Parse Agency source code and return every AST node whose `type` field matches any of the provided types.
+Parse Agency source and find AST nodes matching the requested kinds.
 
-  @param source - Agency source code
-  @param types - List of AST type strings to match (e.g. ["function", "graphNode"])
+  @param types - AST discriminants such as "function", "graphNode", or "importStatement".
 
 **Parameters:**
 
@@ -1251,7 +1259,7 @@ Parse Agency source code and return every AST node whose `type` field matches an
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1177))
 
 ### getImports
 
@@ -1259,9 +1267,7 @@ Parse Agency source code and return every AST node whose `type` field matches an
 getImports(source: string): Result<any[]>
 ```
 
-Return every import statement in the source (i.e. `import { x } from "..."`).
-
-  @param source - Agency source code
+Find import statements in Agency source.
 
 **Parameters:**
 
@@ -1271,7 +1277,7 @@ Return every import statement in the source (i.e. `import { x } from "..."`).
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1189))
 
 ### getFunctions
 
@@ -1279,9 +1285,7 @@ Return every import statement in the source (i.e. `import { x } from "..."`).
 getFunctions(source: string): Result<any[]>
 ```
 
-Return every function definition (`def foo(...) { ... }`) in the source.
-
-  @param source - Agency source code
+Find function definitions in Agency source.
 
 **Parameters:**
 
@@ -1291,7 +1295,7 @@ Return every function definition (`def foo(...) { ... }`) in the source.
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1196))
 
 ### getGraphNodes
 
@@ -1299,9 +1303,7 @@ Return every function definition (`def foo(...) { ... }`) in the source.
 getGraphNodes(source: string): Result<any[]>
 ```
 
-Return every graph node definition (`node main() { ... }`) in the source.
-
-  @param source - Agency source code
+Find graph node definitions in Agency source.
 
 **Parameters:**
 
@@ -1311,7 +1313,7 @@ Return every graph node definition (`node main() { ... }`) in the source.
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1203))
 
 ### filterImports
 
@@ -1325,31 +1327,23 @@ filterImports(
 ): Result<{ source: string; filtered: boolean }>
 ```
 
-Filter imports in Agency source code according to the given policy.
-  Returns the filtered source and a boolean indicating whether any imports were dropped.
+Remove imports that fail the supplied allow and exclude rules. Excludes
+  win; empty rule lists permit every import.
 
-  @param source - Agency source code
-  @param allowedPackages - Glob patterns; matched imports are allowed (subject to excludes)
-  @param excludedPackages - Glob patterns; matched imports are dropped
-  @param allowKinds - Kind strings ("stdlib" | "pkg" | "local" | "node") to allow
-  @param excludeKinds - Kind strings to drop
+  @param allowedPackages - Import-path globs to retain, unless an exclude rule matches.
+  @param excludedPackages - Import-path globs to remove even when allowed elsewhere.
+  @param allowKinds - Retain imports of kind stdlib, pkg, local, or node.
+  @param excludeKinds - Remove imports of these kinds even when allowed elsewhere.
 
-Parse Agency source, drop imports that fail the policy, and return the resulting source plus a flag indicating whether anything was dropped.
+Use to remove unwanted imports from generated source before further
+  checking. This only filters import statements; it does not validate the
+  remaining dependency closure. The returned source is formatted.
 
-  Imports are classified by `kind`:
-  - "stdlib" — `std::*` (e.g. `std::shell`)
-  - "pkg"    — `pkg::*` (e.g. `pkg::wikipedia`)
-  - "local"  — relative or absolute file paths (e.g. `./util.agency`)
-  - "node"   — bare specifiers resolved by Node (e.g. `fs`, `child_process`)
-
-  Policy:
-  - `allowedPackages` / `excludedPackages` are glob patterns (picomatch syntax) matched against the raw import path string.
-  - `allowKinds` / `excludeKinds` accept the kind strings above.
-  - Exclude rules always win: if a path matches anything in `excludedPackages` or `excludeKinds`, it is dropped.
-  - When all four lists are empty, every import is allowed (default-allow).
-  - When at least one allow list is non-empty, an import must match an allowed kind OR an allowed package glob (union across the two axes). Note that allowKinds=["stdlib"] is still a restriction even with the package lists empty, only stdlib passes.
-
-  We format the source with the Agency formatter before returning it.
+  Import kinds are stdlib for std:: paths, pkg for pkg:: paths, local for
+  file paths, and node for bare Node specifiers. Package patterns use
+  picomatch syntax against the original import path. Excludes always win.
+  With no allow rules, remaining imports pass. Otherwise an allowed kind
+  or an allowed path pattern is enough to retain an import.
 
 **Parameters:**
 
@@ -1363,7 +1357,7 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
 
 **Returns:** `Result<{ source: string; filtered: boolean }>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1221))
 
 ### getVersion
 
@@ -1375,7 +1369,7 @@ Get the current version of the Agency standard library.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1246))
 
 ### cliHandles
 
@@ -1383,9 +1377,7 @@ Get the current version of the Agency standard library.
 cliHandles(subcommand: string): boolean
 ```
 
-Whether `cli` runs this agency subcommand in-process.
-
-  @param subcommand - The first CLI argument, e.g. "test"
+Check whether the in-process Agency command helper supports a subcommand.
 
 **Parameters:**
 
@@ -1403,10 +1395,16 @@ Whether `cli` runs this agency subcommand in-process.
 cli(args: string[], cwd: string = "."): Result<ExecResult>
 ```
 
-Run an `agency <subcommand> <file>` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. The result has the CLI's shape: stdout, stderr, exitCode. Anything else (a flag, another subcommand, a missing file argument) is a failure saying what the call should have been.
+Run a supported Agency file command and return stdout, stderr, and exitCode.
 
-  @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
-  @param cwd - The directory the file argument is inside
+  @param args - Exactly a supported subcommand and filename, such as ["test", "x.test.json"].
+  @param cwd - The directory containing the file argument.
+
+Runs supported file commands through the matching functions in this
+  module, without spawning an installed Agency CLI. Supports test,
+  typecheck/tc, ast, fmt, and run. The run command selects node main.
+  The fmt command returns formatted source without writing it back.
+  Use the underlying functions when you need flags or other options.
 
 **Parameters:**
 
@@ -1421,4 +1419,4 @@ Run an `agency <subcommand> <file>` command line through the matching function: 
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1267))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1272))

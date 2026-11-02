@@ -463,7 +463,7 @@ export class BuildSession {
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
     const info = buildCompilationUnit(liftedProgram, symbolTable, absoluteInputFile, contents);
     checkDecoratorsOrExit(liftedProgram, info, absoluteInputFile);
-    checkUnwrapsOrExit(liftedProgram);
+    checkUnwrapsOrExit(liftedProgram, absoluteInputFile);
     const compilationUnitEndTime = performance.now();
     logTime({
       label: `Built compilation unit for ${absoluteInputFile}`,
@@ -659,9 +659,11 @@ function checkDecoratorsOrExit(
 
 /** AG1021 to AG1025 run whether or not the type checker is on. Each marks a
  *  `?` the hoist pass would leave in place, and codegen throws on one, so
- *  the check has to happen here, like the decorator check above. */
-function checkUnwrapsOrExit(program: AgencyProgram): void {
-  const errors = unwrapRefusals(program.nodes);
+ *  the check has to happen here, like the decorator check above. The type
+ *  checker stamps the file onto its own errors; these come straight from
+ *  the tree, so the file is stamped here for the `file:line:col` prefix. */
+function checkUnwrapsOrExit(program: AgencyProgram, absPath: string): void {
+  const errors = unwrapRefusals(program.nodes).map((error) => ({ ...error, file: absPath }));
   if (errors.length === 0) return;
   console.error(formatErrors(errors));
   process.exit(1);

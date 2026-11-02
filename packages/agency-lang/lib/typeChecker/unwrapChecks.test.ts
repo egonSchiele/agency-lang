@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allCodes, errorsWithCode } from "./castTestUtils.js";
-import { isUnwrapRefusal, unwrapRefusals } from "./unwrapChecks.js";
+import { unwrapRefusals } from "./unwrapChecks.js";
 import { parseAgency } from "../parser.js";
-import type { TypeCheckError } from "./types.js";
 
 const PRELUDE = `
 effect test::ask { n: number }
@@ -164,28 +163,6 @@ describe("unwrapRefusals runs on the bare tree, so the compile path can call it 
     if (!parsed.success) throw new Error(parsed.message);
     expect(unwrapRefusals(parsed.result.nodes)).toEqual([]);
   });
-});
-
-describe("the refusals that guard codegen are fatal in every mode", () => {
-  const named = (name: string) =>
-    ({ name, code: "", severity: "error", message: "" }) as unknown as TypeCheckError;
-
-  it.each([
-    "unwrapInOpaquePosition",
-    "unwrapOutsideBody",
-    "unwrapInHandlerBody",
-    "unwrapInParallelArm",
-    "unwrapInAssignmentTarget",
-  ])("%s is an unwrap refusal", (name) => {
-    expect(isUnwrapRefusal(named(name))).toBe(true);
-  });
-
-  it.each(["unwrapNonResult", "unwrapReturnTypeNotResult", "castCanPauseInOpaquePosition"])(
-    "%s is not",
-    (name) => {
-      expect(isUnwrapRefusal(named(name))).toBe(false);
-    },
-  );
 });
 
 describe("a clean program", () => {

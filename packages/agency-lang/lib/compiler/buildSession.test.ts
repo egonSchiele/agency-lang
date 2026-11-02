@@ -68,6 +68,8 @@ describe("the ? refusals run with the type checker off", () => {
     ).toThrow("exit");
     expect(exit).toHaveBeenCalledWith(1);
     expect(printed.join("\n")).toContain("AG1021");
+    // The `?` is on line 6, column 21 of gate.agency; the message must say so.
+    expect(printed.join("\n")).toContain(`${path.join(dir, "gate.agency")}:6:21 - `);
     expect(printed.join("\n")).not.toContain("toolchain bug");
   });
 });

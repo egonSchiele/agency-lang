@@ -9,22 +9,6 @@ import { positionRefusals } from "./positionRefusals.js";
 import { ANY_T } from "./primitives.js";
 import type { ScopeInfo, TypeCheckError, TypeCheckerContext } from "./types.js";
 
-/** The names of the refusals `unwrapRefusals` reports. They stand between a
- *  `?` and the codegen tripwire, so the compile path runs them and exits on
- *  one whether or not the type checker is on (`checkUnwrapsOrExit` in
- *  `buildSession.ts`). */
-export const CODEGEN_GUARD_REFUSALS: string[] = [
-  "unwrapInOpaquePosition",
-  "unwrapOutsideBody",
-  "unwrapInHandlerBody",
-  "unwrapInParallelArm",
-  "unwrapInAssignmentTarget",
-];
-
-export function isUnwrapRefusal(error: TypeCheckError): boolean {
-  return CODEGEN_GUARD_REFUSALS.includes(error.name);
-}
-
 const isUnwrapAccess = (node: AgencyNode): node is ValueAccess =>
   node.type === "valueAccess" && hasUnwrap(node);
 

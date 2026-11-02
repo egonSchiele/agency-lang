@@ -378,7 +378,7 @@ validatePolicy(policy: Record<string, any>): Result<void>
 Validate a policy object, returning a failure that describes invalid rules.
 
 Check user-supplied or hand-edited policy data before using it.
-`writePolicyFile` also validates before saving.
+`setPolicy` and `addPolicyRules` also validate before saving.
 
 **Parameters:**
 
@@ -573,32 +573,6 @@ Later flushes still use the file configured by `cliPolicyHandler`.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L423))
 
-### writePolicyFile
-
-```ts
-writePolicyFile(path: string, policy: Policy, allowedPaths: string[] = [])
-```
-
-Validate a policy and save it as JSON, returning a failure on error.
-
-  @param allowedPaths - Allowed destination directories, or [] for no path restriction.
-
-Use this from trusted policy-management code: it writes the policy file
-without raising a write interrupt. Invalid policies return a failure before
-writing. Set `allowedPaths` to restrict the destination to known directories.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| policy | [Policy](#policy) |  |
-| allowedPaths | `string[]` | [] |
-
-**Needs:** `fileRead`, `fileWrite`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L438))
-
 ### missingPolicyRules
 
 ```ts
@@ -625,7 +599,7 @@ Pass accepted additions to `addPolicyRules`.
 
 **Needs:** `fileRead`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L532))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L530))
 
 ### addPolicyRules
 
@@ -650,7 +624,7 @@ fails, the active policy stays unchanged.
 
 **Needs:** `fileRead`, `fileWrite`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L547))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L545))
 
 ### flushPolicy
 
@@ -666,7 +640,7 @@ decision can otherwise remain unsaved. Does nothing without pending changes.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L571))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L569))
 
 ### cliPolicyHandler
 
@@ -723,4 +697,4 @@ overrides them. An empty override disables that choice for the effect.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1240))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1238))

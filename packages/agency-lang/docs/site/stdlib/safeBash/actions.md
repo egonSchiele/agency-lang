@@ -5,9 +5,10 @@ description: "Represent and execute plans made by safeBash."
 
 # actions
 
-Use `safeBash` from `std::safeBash` to run commands. This module holds its
-plan types and executors. Executors assume the caller has already approved
-every effect in the plan; they do not raise those approvals themselves.
+Use `safeBash` from `std::safeBash` to run commands. This module holds the
+types that describe a plan: the approvals it asks for and what runs after
+they are granted. The code that runs a plan lives in `std::safeBash` and is
+not exported, because it skips the approvals the plan already raised.
 
 ```ts
 import { outcomeOf, planFor } from "std::safeBash"
@@ -42,7 +43,7 @@ export type Effect =
   | { name: "std::exec"; payload: ExecPayload }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L26))
 
 ### WritePayload
 
@@ -55,7 +56,7 @@ export type WritePayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L38))
 
 ### GrepPayload
 
@@ -76,7 +77,7 @@ export type GrepPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L68))
 
 ### ReadPayload
 
@@ -92,7 +93,7 @@ export type ReadPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L90))
 
 ### LsPayload
 
@@ -111,7 +112,7 @@ export type LsPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L106))
 
 ### GlobPayload
 
@@ -130,7 +131,7 @@ export type GlobPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L123))
 
 ### ExecPayload
 
@@ -154,7 +155,7 @@ export type ExecPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L141))
 
 ### GitDiffPayload
 
@@ -168,7 +169,7 @@ export type GitDiffPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L158))
 
 ### Execution
 
@@ -187,7 +188,7 @@ export type Execution =
   | ChainExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L176))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L171))
 
 ### BashExec
 
@@ -198,7 +199,7 @@ export type BashExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L173))
 
 ### EchoExec
 
@@ -209,7 +210,7 @@ export type EchoExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L183))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L178))
 
 ### AgencyExec
 
@@ -223,7 +224,7 @@ export type AgencyExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L184))
 
 ### WriteExec
 
@@ -237,7 +238,7 @@ export type WriteExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L194))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L189))
 
 ### GrepFileNames
 
@@ -250,7 +251,7 @@ Whether grep prints file names: `-H` gives "always", `-h` gives
 export type GrepFileNames = "default" | "always" | "never"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L199))
 
 ### GrepRender
 
@@ -275,7 +276,7 @@ export type GrepRender = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L210))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L205))
 
 ### GrepExec
 
@@ -294,7 +295,7 @@ export type GrepExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L218))
 
 ### ReadView
 
@@ -315,7 +316,7 @@ export type ReadView =
   | { kind: "tail"; lines: number }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L245))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L240))
 
 ### ReadExec
 
@@ -336,7 +337,7 @@ export type ReadExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L250))
 
 ### Join
 
@@ -349,7 +350,7 @@ How a chain step follows the one before it: `;` always runs it, `&&`
 export type Join = "seq" | "and" | "or"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L263))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L258))
 
 ### StepExec
 
@@ -362,7 +363,7 @@ The executions a chain may hold: every in-process kind, and nothing
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L267))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L262))
 
 ### ChainStep
 
@@ -373,7 +374,7 @@ export type ChainStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L264))
 
 ### ChainExec
 
@@ -389,7 +390,7 @@ export type ChainExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L276))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L271))
 
 ### RefuseExec
 
@@ -400,7 +401,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L293))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L288))
 
 ### BroadReason
 
@@ -424,7 +425,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L302))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L297))
 
 ### Plan
 
@@ -443,7 +444,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L308))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L303))
 
 ## Functions
 
@@ -465,7 +466,7 @@ Build the write approval from the same payload used by `writeExecution`.
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L48))
 
 ### writeExecution
 
@@ -483,7 +484,7 @@ Build a file-write execution plan without running it.
 
 **Returns:** [WriteExec](#writeexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L56))
 
 ### grepEffect
 
@@ -501,7 +502,7 @@ Build a grep approval descriptor without raising it.
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L80))
 
 ### readEffect
 
@@ -519,7 +520,7 @@ Build a file-read approval descriptor without raising it.
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L95))
 
 ### lsEffect
 
@@ -537,7 +538,7 @@ Build a directory-listing approval descriptor without raising it.
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L112))
 
 ### globEffect
 
@@ -555,7 +556,7 @@ Build a file-search approval descriptor without raising it.
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L129))
 
 ### execEffect
 
@@ -573,7 +574,7 @@ Build a command-execution approval descriptor without raising it.
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L150))
 
 ### grepExecution
 
@@ -594,7 +595,7 @@ Build the search execution from the same payload used by `grepEffect`.
 
 **Returns:** [GrepExec](#grepexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L227))
 
 ### readExecution
 
@@ -615,160 +616,4 @@ Build file reads from the same payloads used by `readEffect`.
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L284))
-
-### runBash
-
-```ts
-runBash(command: string, cwd: string, source: string = ""): Result<string>
-```
-
-Execute a Bash command after its planned effects have been approved.
-  Return stdout on success, or an exit failure with output on nonzero exit.
-
-Requires Bash on the search path. Successful stderr is omitted from the
-result. Nonzero exits return failures, including grep's "no match" and
-diff's "files differ" statuses. Long output is saved with a preview.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| command | `string` |  |
-| cwd | `string` |  |
-| source | `string` | "" |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`, `subprocess`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L324))
-
-### runGrep
-
-```ts
-runGrep(exec: GrepExec, command: string): Result<string>
-```
-
-Execute an approved in-process grep plan and return its rendered output.
-  No matches return an exit-code-1 failure.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [GrepExec](#grepexec) |  |
-| command | `string` |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L373))
-
-### printGrep
-
-```ts
-printGrep(exec: GrepExec): Result<string>
-```
-
-Execute an approved grep plan and return its full output.
-  No matches return a failure carrying any search notes.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [GrepExec](#grepexec) |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L390))
-
-### runRead
-
-```ts
-runRead(exec: ReadExec, command: string): Result<string>
-```
-
-Execute approved file reads and return cat, head, or tail output.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [ReadExec](#readexec) |  |
-| command | `string` |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L434))
-
-### printRead
-
-```ts
-printRead(exec: ReadExec): Result<string>
-```
-
-Execute approved file reads and return their full rendered output.
-
-Files are concatenated before rendering, so a missing final newline joins
-the next file's first line. A failed read drops previously collected text.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [ReadExec](#readexec) |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L449))
-
-### runWrite
-
-```ts
-runWrite(exec: WriteExec): Result<string>
-```
-
-Execute an approved redirected echo write and return an empty stdout string.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [WriteExec](#writeexec) |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`, `fileWrite`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L484))
-
-### runChain
-
-```ts
-runChain(exec: ChainExec, command: string): Result<string>
-```
-
-Execute approved in-process commands with Bash-style ;, &&, and || joins.
-  Return a failure when the last command executed failed.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [ChainExec](#chainexec) |  |
-| command | `string` |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`, `fileWrite`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L506))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L279))

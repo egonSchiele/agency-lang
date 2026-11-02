@@ -1,0 +1,7 @@
+// safeBash's executors skip the approvals their plan already raised, so no
+// program outside std::safeBash may import one.
+import { runBash } from "std::safeBash/actions"
+
+node main() {
+  return runBash("echo hi", ".")
+}

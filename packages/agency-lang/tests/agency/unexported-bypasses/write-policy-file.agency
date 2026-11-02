@@ -1,0 +1,7 @@
+// writePolicyFile writes without raising std::write, so no program outside
+// std::policy may import it.
+import { writePolicyFile } from "std::policy"
+
+node main() {
+  return writePolicyFile("policy.json", {})
+}

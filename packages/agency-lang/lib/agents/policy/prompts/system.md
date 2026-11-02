@@ -33,7 +33,7 @@ Each rule has:
 3. Otherwise, present the interrupt kinds and ask the user what they want to allow
 4. Build the policy based on the user's intent
 5. Show the complete policy JSON and ask for confirmation
-6. If the user approves, write the policy file using the writePolicyFile tool
+6. If the user approves, return done. The program saves the policy file after the conversation ends
 7. If the user wants changes, refine and show again
 
 Be concise. Don't over-explain the policy format unless the user asks. Focus on understanding what they want to allow or deny, then build the policy for them.

@@ -231,7 +231,7 @@ export def checkPolicy(
 
 /**
 Check user-supplied or hand-edited policy data before using it.
-`writePolicyFile` also validates before saving.
+`setPolicy` and `addPolicyRules` also validate before saving.
 */
 export def validatePolicy(policy: Record<string, any>): Result<void> {
   """
@@ -429,13 +429,11 @@ export def setPolicy(path: string, policy: Policy) {
   writePolicyFile(path, policy, []) with approve
 }
 
-/**
-Use this from trusted policy-management code: it writes the policy file
-without raising a write interrupt. Invalid policies return a failure before
-writing. Set `allowedPaths` to restrict the destination to known directories.
-*/
+// Not exported: this writes the policy file without raising std::write, so
+// only this module's own trusted callers may use it. Invalid policies fail
+// before anything is written. `allowedPaths` restricts the destination.
 @capabilities(fileRead, fileWrite)
-export def writePolicyFile(
+def writePolicyFile(
   path: string,
   policy: Policy,
   allowedPaths: string[] = [],

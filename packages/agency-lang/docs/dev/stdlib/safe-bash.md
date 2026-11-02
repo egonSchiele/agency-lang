@@ -951,11 +951,17 @@ is correct for one reason: the only path to an executor runs through a
 every plan raises at least one effect. `runChain` reaches the same
 internals through each step's executor.
 
+That reason holds only if nothing else can call an executor. So the
+executors are private functions in `stdlib/safeBash.agency`, not exports.
+An exported executor would let any program import it and run a command,
+write a file, or read a file with no approval at all.
+
 ## Files and tests
 
-- `stdlib/safeBash.agency`: the classifier, `planFor`, `safeBash`.
-- `stdlib/safeBash/actions.agency`: `Plan`, `BroadReason`, `Effect`,
-  `Execution`, and the executors.
+- `stdlib/safeBash.agency`: the classifier, `planFor`, `safeBash`, and
+  the private executors.
+- `stdlib/safeBash/actions.agency`: `Plan`, `BroadReason`, `Effect`, and
+  `Execution`.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
 - `lib/stdlib/grepDialect.ts`: the pattern translation, grep's output
   format, and the skipped-folders note.

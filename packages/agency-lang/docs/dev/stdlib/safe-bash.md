@@ -618,23 +618,75 @@ here is shell-free.
 ### `ls`, `tree`, and `du`
 
 `LIST_VERBS` gives each listing verb its flags, the valued flags that
-hold a count, and whether it walks the tree:
+hold a count, whether it walks the tree, and what a file given to it
+asks:
 
-| Verb | Flags | Count flags | Walks the tree |
-|---|---|---|---|
-| `ls` | `l a A h 1 t r S R d p F --color=never` | none | with `-R` |
-| `tree` | `a d --noreport`, valued `L I` | `L` | always |
-| `du` | `s h a c`, valued `d` | `d` | always |
+| Verb | Flags | Count flags | Walks the tree | Given a file |
+|---|---|---|---|---|
+| `ls` | `l a A h 1 t r S R d p F --color=never` | none | with `-R` | its folder |
+| `tree` | `a d --noreport`, valued `L I` | `L` | always | refused |
+| `du` | `s h a c`, valued `d` | `d` | always | its folder |
 
 `listEffects` raises one `std::ls { dir, recursive, maxResults: 0 }` per
 folder named, and `.` when none is named. Every path goes through
-`resolveDirPath`. It must be literal and must be a folder, and the
-payload names the real folder. A file (`ls one.txt`), a missing path, or
-a glob word makes the command unrecognized. `ls -l link` lists the link
-itself and does not go into the folder, while the payload names the
-folder the link points to. So the question names more than runs, which
-fails safe. A listing ignores its stdin, so `git log | ls` is a listing
-of `.`.
+`resolveTargets`: it must be literal, and the payload names the real
+folder. A missing path or a glob word makes the command unrecognized. A
+listing ignores its stdin, so `git log | ls` is a listing of `.`.
+
+A file given to `ls` or `du` asks for the folder that holds it, with
+`recursive: false`. `ls -la one.txt` prints one entry of that folder,
+and `du one.txt` prints that one file's size, so the question names
+more than runs, which fails safe: a policy that approves listing the
+folder has approved seeing every entry in it. `tree` of a file prints
+the name and an error, so it's refused, and so is `find` of a file,
+because `std::glob` searches a folder. `requireFolder` is the one place
+that refusal is written.
+
+`mergeListings` asks once per folder. `ls one.txt two.txt` in one folder
+is one question, and a folder named twice is recursive if either path
+walks it, so `ls -R . one.txt` and `ls -R . .` are one recursive
+question each.
+
+### Paths whose last step is a link
+
+The resolver follows every link, so a payload names the target. Some
+programs print the link's own entry instead, from the link's folder,
+and the two can be different folders. Say `/tmp/x.txt` links into the
+project: the payload would name the project folder, `recommended` would
+approve it, and `ls -l x.txt` would read an entry in `/tmp`.
+
+What each program does with a link operand:
+
+| Operand is a link to | Command | Prints | Rule |
+|---|---|---|---|
+| a file | `ls link.txt`, `ls -l link.txt` | the link's own entry | refused |
+| a folder | `ls dirlink`, `ls -R dirlink`, `ls -a dirlink` | the target's contents | allowed: the payload is true |
+| a folder | `ls -l dirlink`, `ls -d dirlink`, `ls -F dirlink` | the link's own entry | refused |
+| a folder | `du dirlink`, `tree dirlink`, `find dirlink -name x` | the link's size, its name, nothing | refused |
+
+POSIX says `ls` follows a link to a directory given as an operand
+unless `-F`, `-d`, or `-l` is given, and GNU and BSD both do.
+`followsFolderLink` holds that rule, and `LS_LINK_FLAGS` the three
+flags. du, tree, and find follow a link operand only under `-H`, `-L`,
+or `-l`, which their rows refuse.
+
+So a file whose last step is a link is always refused, and a folder
+whose last step is a link is refused unless plain `ls` follows it. The
+rule keeps pnpm's `node_modules`, where each package is a folder link,
+approved: `ls node_modules/react` asks `std::ls` for the real folder
+under `.pnpm`. A link to a file in the same folder is refused too,
+which is the safe direction. A trailing slash (`ls -l dirlink/`) makes
+every program follow the link, but it does not change the rule: plain
+`ls dirlink/` is allowed and the rest are refused, which is the safe
+direction for the ones that would have followed it. On macOS, `/etc` and `/tmp` are
+links, so `ls -l /etc` and `find /tmp -name x` ask `std::bash`, while
+plain `ls /etc` still asks `std::ls`.
+
+`lastStepIsLink` finds a link with the resolver alone. The written
+path's last step is a link exactly when its last segment differs from
+the real one, or its parent's real folder differs from the real parent.
+It skips `.`, `..`, and `/`, which can't be links. A link earlier in the
+path is fine, because both sides are realpathed through it.
 
 Left out: `-L` on every verb, because it follows symlinks out of the
 folder. `ls -G` is left out because it turns on color on macOS and hides

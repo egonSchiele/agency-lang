@@ -71,6 +71,16 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
   The project block (date, cwd, AGENTS.md or else CLAUDE.md) is
   `projectContextText` in `lib/projectContext.agency`, a leaf module so
   the code subagent can put the same block in its own prompt.
+- `lib/globalInstructions.agency`: reads optional `AGENTS.md` from
+  `POLICY_DIR` at startup. This uses the same agent-home override as
+  settings and history. Both brains add it before each LLM call with
+  `expires: "llmCall"`; code does the same inside its conversation loop.
+  Other subagents receive it through their context arguments, scoped to
+  the current request. Earlier request text remains in their conversation
+  history. The static text reloads on restart, while the expiring system
+  message leaves the thread before a completed turn is saved. Resumed
+  conversations therefore use the current global file. Keep it out of the persistent grounding block,
+  which a restored session would retain.
 - `lib/agentName.agency`: `agentNameFor(brain)` returns
   `"agency-agent/<brain name>"`. `main()` passes it to `setAgentName`, so
   every trace is grouped by the brain that produced it.

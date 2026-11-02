@@ -1,0 +1,53 @@
+/** @module
+  @summary User instructions shared by every project, loaded from the agent home at startup.
+*/
+import { exists } from "std::shell"
+import { systemMessage } from "std::thread"
+
+import { POLICY_DIR } from "./config.agency"
+
+export def loadGlobalInstructions(dir: string): string {
+  """
+  Read the optional AGENTS.md in the agent home. Missing or unreadable
+  files return an empty string. The contained read refuses symlinks.
+  """
+  if (!exists("AGENTS.md", dir)) {
+    return ""
+  }
+  const contents = read("AGENTS.md", dir) with approve
+  if (isFailure(contents)) {
+    print(color.yellow("Could not read ${path.join(dir, "AGENTS.md")}: ${contents.error}"))
+    return ""
+  }
+  return contents.value
+}
+
+// Static values reload on process startup and are not restored from a
+// saved session. Read before the turn's policy handler is installed,
+// like the bundled prompts, so this fixed startup file never prompts.
+static const GLOBAL_INSTRUCTIONS = loadGlobalInstructions(POLICY_DIR)
+
+export def globalInstructionsText(): string {
+  if (GLOBAL_INSTRUCTIONS.trim() == "") {
+    return ""
+  }
+  return """
+
+  Global instructions from ${path.join(POLICY_DIR, "AGENTS.md")}:
+  Apply these user defaults to the current request. They replace global
+  instructions from earlier requests. More specific project instructions
+  take precedence when they conflict.
+  <global_instructions>
+  ${GLOBAL_INSTRUCTIONS}
+  </global_instructions>
+  """
+}
+
+export def addGlobalInstructions() {
+  const instructions = globalInstructionsText()
+  if (instructions != "") {
+    // Keep them through the tool loop, then remove them before the
+    // session is saved. A resumed turn uses this startup's fresh copy.
+    systemMessage(instructions, label: "global-instructions", expires: "llmCall")
+  }
+}

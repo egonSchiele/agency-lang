@@ -1,0 +1,71 @@
+import { globalInstructionsText, loadGlobalInstructions } from "../../../lib/agents/agency-agent/lib/globalInstructions.agency"
+import { projectContextText } from "../../../lib/agents/agency-agent/lib/projectContext.agency"
+import { simpleBrain } from "../../../lib/agents/agency-agent/brains/simple/simple.agency"
+import { threadHasSystemText } from "../../../lib/agents/agency-agent/tests/threadText.agency"
+import { env } from "std::system"
+
+node context(): any {
+  const project = projectContextText() with approve
+  return {
+    global: globalInstructionsText(),
+    project: project
+  }
+}
+
+node readOptional(args: { dir: string }): string {
+  return loadGlobalInstructions(args.dir) with approve
+}
+
+let observed: any[] = []
+let readsDuringTurn = 0
+
+callback("onLLMCallStart") as data {
+  let count = 0
+  let first = false
+  let second = false
+  let project = false
+  for (message in data.messages) {
+    if (message.role == "system" && typeof message.content == "string") {
+      if (message.content.includes("GLOBAL_PREF_")) {
+        count = count + 1
+      }
+      first = first || message.content.includes("GLOBAL_PREF_V1")
+      second = second || message.content.includes("GLOBAL_PREF_V2")
+      project = project || message.content.includes("PROJECT_PREF")
+    }
+  }
+  observed.push({ count: count, first: first, second: second, project: project })
+}
+
+// Like a saved agent session, the checkpoint sits between completed turns.
+// Restoring skips brain.init and keeps its existing conversation thread.
+node savedSession(args: { saved: any }): any {
+  if (args.saved != null) {
+    restore(args.saved, {})
+  }
+  const brain = simpleBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  const grounding = projectContextText() with approve
+  handle {
+    init({ interactive: true, grounding: grounding })
+    answer("", "first turn")
+    const checkpointId = checkpoint()
+    if (env("RESUMED") != "1") {
+      return { saved: getCheckpoint(checkpointId) }
+    }
+    answer("", "second turn")
+  } with (intr) {
+    if (intr.effect == "std::read") {
+      readsDuringTurn = readsDuringTurn + 1
+      return reject()
+    }
+    return approve()
+  }
+  return {
+    observed: observed,
+    readsDuringTurn: readsDuringTurn,
+    retainedGlobalInstructions: threadHasSystemText("GLOBAL_PREF_"),
+    retainedProjectInstructions: threadHasSystemText("PROJECT_PREF")
+  }
+}

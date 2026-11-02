@@ -4,6 +4,7 @@ import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
 import { setMemoryId } from "std::memory"
 
+import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
 import { announce } from "../lib/announce.agency"
 
 // The review itself lives in std::agents/agency/review, so users get the
@@ -27,7 +28,11 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
   """
   announce("reviewAgent", userMsg)
   if (!agencyTask) {
-    const general = generalReviewAgent(work: userMsg, task: "Review this code.")
+    const general = generalReviewAgent(
+      work: userMsg,
+      task: "Review this code.",
+      context: globalInstructionsText(),
+    )
     return renderFeedback(general)
   }
   return renderFeedback(review(userMsg))
@@ -44,7 +49,11 @@ export def review(userMsg: string): Result<Feedback[]> {
     let feedback: Result<Feedback[]> = success([])
 
     for (codeSnippet in snippets) {
-      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code, extraTools: [question]))
+      feedback = mergeFeedback(feedback, agencyReviewAgent(
+        codeSnippet.code,
+        context: globalInstructionsText(),
+        extraTools: [question],
+      ))
     }
   }
   return feedback

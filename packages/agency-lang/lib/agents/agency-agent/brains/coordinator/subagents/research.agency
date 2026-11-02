@@ -16,6 +16,7 @@ import { researcherAgent } from "std::agents/researcher"
 import { setMemoryId } from "std::memory"
 import { endTurn } from "std::thread"
 
+import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
 
@@ -50,11 +51,12 @@ export handoff def researchAgent(
   """
   announce("researchAgent", userMsg)
   setMemoryId("research")
+  const context = "${replStyle}\n\n${globalInstructionsText()}"
   let answer: Result<string> = failure("no research ran")
   if (agencyTopic) {
     answer = agencyResearcherAgent(
       question: userMsg,
-      context: replStyle,
+      context: context,
       maxCost: maxDollars ?? $10.00,
       maxTime: timeBudget(maxSeconds, 10m),
       session: "research",
@@ -64,7 +66,7 @@ export handoff def researchAgent(
   } else {
     answer = researcherAgent(
       task: userMsg,
-      context: replStyle,
+      context: context,
       maxCost: maxDollars ?? $50.00,
       maxTime: timeBudget(maxSeconds, 30m),
       session: "research",

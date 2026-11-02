@@ -14,6 +14,7 @@ import { skillsDir } from "std::skills"
 import { Attachment, endTurn, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
+import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 import { learnedExtras } from "../../lib/learned.agency"
 import { claudeSkillTools } from "../../lib/claudeSkills.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
@@ -189,6 +190,7 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     // conversation and makes every routing decision, so it gets the
     // strongest model the user configured. High-volume work still runs on
     // the subagents' own slots.
+    addGlobalInstructions()
     const result = llm(prompt, mainOptions(turnStart))
   }
   return result

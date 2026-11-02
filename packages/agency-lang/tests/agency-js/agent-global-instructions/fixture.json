@@ -1,0 +1,23 @@
+{
+  "defaultHome": true,
+  "independentOfWorkingDirectory": true,
+  "projectAgentsPreferred": true,
+  "projectClaudeFallback": true,
+  "globalAndProjectSeparate": true,
+  "alternateHome": true,
+  "absentOptional": true,
+  "blankOptional": true,
+  "singularIgnored": true,
+  "unreadableOptional": true,
+  "unreadableWarned": true,
+  "checkpointHasNoStaleInstructions": true,
+  "resumed": {
+    "observed": [
+      { "count": 1, "first": true, "second": false, "project": true },
+      { "count": 1, "first": false, "second": true, "project": true }
+    ],
+    "readsDuringTurn": 0,
+    "retainedGlobalInstructions": false,
+    "retainedProjectInstructions": true
+  }
+}

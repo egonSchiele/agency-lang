@@ -223,14 +223,20 @@ everything prompt. What they cannot show is that a branch really did land
 inside the window; that is up to the scheduler. The guarantee is
 `isOwnPolicyIo`, not the timing.
 
-## Code changes are shown as a diff
+## File contents and code changes are shown above the prompt
 
-Two effects carry source code: `std::edit`, which is a change to a file,
-and `std::toolbox::review`, which is a tool the agent has drafted. For
-both, the change is the thing being judged, and six rows of a footer
-cannot hold it. So the handler prints the whole change above the prompt,
-as a syntax-highlighted unified diff, and the prompt's own body drops the
-source and keeps the metadata that names the change.
+File writes (`std::write`) show their complete content with syntax
+highlighting above the approval prompt, along with the filename and write
+mode. The prompt keeps the file metadata and omits `content` to avoid
+printing it twice. A write carries no previous file contents, so this is
+a preview of the supplied content. Write tools that provide only file
+metadata keep the ordinary prompt.
+
+File edits (`std::edit`) and tool drafts (`std::toolbox::review`) include
+source to compare. For both, the change is the thing being judged, and six
+rows of a footer cannot hold it. So the handler prints the whole change
+above the prompt, as a syntax-highlighted unified diff, and the prompt's
+own body drops the source and keeps the metadata that names the change.
 
 A skill review (`std::skills::review`) works the same way, without a
 diff: its interrupt carries no earlier draft, so the handler prints the
@@ -246,9 +252,9 @@ The prompt's table is drawn at `interruptBodyWidth()`, the width the
 footer wraps its body to. A table drawn at the terminal's width is two
 columns too wide for the footer and gets wrapped a second time.
 
-`renderInterruptDiff` in `stdlib/policy.agency` decides whether an
-interrupt has a diff and builds it; `printInterruptDiff` prints it. There
-are exactly two callers, which is the part that is easy to get wrong:
+`renderInterruptDiff` in `stdlib/policy.agency` builds each preview;
+`printInterruptDiff` prints it. There are exactly two callers, which is
+the part that is easy to get wrong:
 
 - `askUser`, after its second policy check and before it draws the
   prompt. After that check, so an interrupt a rule decides there prints

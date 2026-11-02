@@ -26,6 +26,7 @@ import { exec } from "std::shell"
 import { systemMessage } from "std::thread"
 
 import { projectContextText } from "../../../lib/projectContext.agency"
+import { addGlobalInstructions, globalInstructionsText } from "../../../lib/globalInstructions.agency"
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
@@ -147,7 +148,7 @@ def escalate(task: string, reason: string, plan: string): string {
   """
   const planned = plannerAgent(
     task,
-    context: reason,
+    context: "${reason}\n\n${globalInstructionsText()}",
     plan: plan,
     maxCost: CODE_MAX_COST,
     maxTime: CODE_MAX_TIME,
@@ -290,7 +291,7 @@ def solveUnattended(
 ): string {
   const solved = solve(
     task: task,
-    context: ONE_SHOT_NOTE,
+    context: "${ONE_SHOT_NOTE}\n\n${globalInstructionsText()}",
     agencyTask: agencyTask,
     maxCost: maxCost,
     maxTime: maxTime,
@@ -332,6 +333,7 @@ def converse(
     let done = false
     while (!done && attemptsLeft > 0) {
       attemptsLeft = attemptsLeft - 1
+      addGlobalInstructions()
       reply = llm(message, withWebSearch({ memory: true, tools: tools }))
       // Reviewing the .agency files just written only means something on the
       // Agency path; elsewhere there are none and this is a no-op.

@@ -483,9 +483,8 @@ export type PresetSwitch = {
   limits: ToolLimits
 }
 
-// configureSearch reads and saves settings.json and may ask the user a
-// question, so it runs only when the switch changes local versus hosted,
-// the same case /local covers.
+// configureSearch reads and saves settings.json, so it runs only when the
+// switch changes local versus hosted, the same case /local covers.
 def followLocality(isLocal: boolean) {
   if (isLocal != getSearchSession().isLocal) {
     configureSearch(isLocal)

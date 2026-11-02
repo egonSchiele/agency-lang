@@ -154,7 +154,10 @@ a valid list prints
 every task in its original order, including repeated snapshots.
 Completed tasks have a green check and dim strikethrough text. Active tasks
 use blue text and an explicit status label. Plain output keeps the markers
-and words. Empty lists show `0/0 complete` and `No tasks`. Failures show a named
+and words. The renderer accepts the declared `id`/`text`/`status` fields and
+model-supplied lists with `text`, `done`, and `active` fields. A true `done`
+flag marks a task completed even when `active` is also true.
+Empty lists show `0/0 complete` and `No tasks`. Failures show a named
 `Tasks failed` block; malformed returned lists show `Task result`.
 
 Hosted searches print when `onLLMCallEnd` receives their records. Their

@@ -46,7 +46,13 @@ from `/preset`.
 `applyModelRequest` does not set up web search. Startup runs
 `configureSearch` once. `/preset` runs it only when the switch moves
 between a local and a hosted model, because `configureSearch` reads and
-saves `settings.json` and can ask the user which backend to use.
+saves `settings.json`.
+
+With no saved search choice, startup selects Brave when `BRAVE_API_KEY`
+is set, otherwise Tavily when `TAVILY_API_KEY` is set. Explicit saved
+choices remain in effect. The shared `stdlib/agents/lib/search.agency`
+helper gives the other subagents at most one client tool using the same
+automatic preference.
 
 The startup flags and `settings.model` are kept in `let` globals in
 `session.agency`. `/model` and `/preset` resolve with them, so flags stay

@@ -810,14 +810,22 @@ def renderReviewFindings(data: ReviewFindings): string {
 }
 
 // What an interrupt asks the user to judge, printed above the prompt, or
-// "" for every other effect: the diff for an interrupt that changes code,
-// or the whole draft for a skill review. The prompt's own body would cut
-// either off after a few lines.
+// "" for every other effect: a diff for edits and tool reviews, or the
+// full content for writes and skill reviews. The prompt's own body would
+// cut these off after a few lines.
 def renderInterruptDiff(intr: any): string {
   // Reading a field off a null payload throws, and a handler is the
   // worst place for that. `prettyPrintInterruptData` guards the same way.
   if (intr.data == null) {
     return ""
+  }
+  if (intr.effect == "std::write" && typeof intr.data.content == "string") {
+    // Writes carry the content being written, but no previous contents
+    // to compare it with. Some write tools carry only file metadata.
+    const mode = if intr.data.mode then " (${intr.data.mode})" else ""
+    const header = stripControlChars("⏺ Write${mode}: ${intr.data.filename}")
+    const content = highlight(stripControlChars(intr.data.content), language: "auto")
+    return [color.yellow(header), content].join("\n")
   }
   if (intr.effect == "std::edit") {
     return renderSourceDiff(
@@ -892,18 +900,19 @@ def prettyPrintInterruptData(data: any, effect: string = "", cols: number = 0): 
     return render(paramTable, cols: cols)
   }
   if (typeof data == "object") {
-    return renderObjAsTable(data, excludeKeys: promptHiddenFields(effect), cols: cols)
+    return renderObjAsTable(data, excludeKeys: promptHiddenFields(effect, data), cols: cols)
   }
   return JSON.stringify(data)
 }
 
 // The fields an effect prints above the prompt (see renderInterruptDiff),
 // left out of the prompt's own table so they are not shown twice. The
-// table keeps the metadata that says which change this is. An edit drops
-// its source and `edits`, the raw op list the diff already shows. A tool
-// review drops its source and its findings, printed under its diff. A
-// skill review drops the draft it prints in full.
+// table keeps the metadata that says which change this is. A write drops
+// its content. An edit drops its source and `edits`, the raw op list the
+// diff already shows. A tool review drops its source and its findings,
+// printed under its diff. A skill review drops the draft it prints in full.
 static const PROMPT_HIDDEN_FIELDS: Record<string, string[]> = {
+  "std::write": ["content"],
   "std::edit": ["before", "after", "edits"],
   "std::toolbox::review": ["source", "previous", "notes", "blocking", "unresolved", "resumed"],
   "std::skills::review": ["description", "body"]
@@ -911,7 +920,11 @@ static const PROMPT_HIDDEN_FIELDS: Record<string, string[]> = {
 
 // Checked with `keys` so an effect named like an Object.prototype
 // property (`toString`) gets no list instead of a function.
-def promptHiddenFields(effect: string): string[] {
+def promptHiddenFields(effect: string, data: any): string[] {
+  // Custom tools may attach non-text content, which has no source preview.
+  if (effect == "std::write" && typeof data.content != "string") {
+    return []
+  }
   if (keys(PROMPT_HIDDEN_FIELDS).includes(effect)) {
     return PROMPT_HIDDEN_FIELDS[effect]
   }

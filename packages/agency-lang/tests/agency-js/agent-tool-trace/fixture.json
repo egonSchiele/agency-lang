@@ -7,6 +7,8 @@
   },
   "interactive": {
     "oneTaskSnapshot": true,
+    "oneBooleanTaskSnapshot": true,
+    "noFallbackTodo": true,
     "noGenericTodo": true,
     "failedTodoVisible": true,
     "noTodoArgumentRows": true,
@@ -34,6 +36,8 @@
   "quietHasNoTraces": true,
   "verbose": {
     "oneTaskSnapshot": true,
+    "oneBooleanTaskSnapshot": true,
+    "noFallbackTodo": true,
     "noGenericTodo": true,
     "failedTodoVisible": true,
     "noTodoArgumentRows": true,
@@ -60,6 +64,8 @@
   },
   "debug": {
     "oneTaskSnapshot": true,
+    "oneBooleanTaskSnapshot": true,
+    "noFallbackTodo": true,
     "noGenericTodo": true,
     "failedTodoVisible": true,
     "noTodoArgumentRows": true,

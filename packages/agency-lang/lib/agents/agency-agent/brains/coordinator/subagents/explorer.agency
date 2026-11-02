@@ -7,6 +7,7 @@
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
+import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
 
@@ -39,6 +40,7 @@ export handoff def explorerAgent(
   announce("explorerAgent", userMsg)
   return stdExplorerAgent(
     question: userMsg,
+    context: globalInstructionsText(),
     maxCost: maxDollars ?? $20.00,
     maxTime: timeBudget(maxSeconds, 15m),
     model: getSlowModel(),

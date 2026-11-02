@@ -1,4 +1,4 @@
-import { main, autoApproved, nullPayload } from "./agent.js";
+import { main, autoApproved, autoApprovedWrite, nullPayload } from "./agent.js";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -6,8 +6,8 @@ import { tmpdir } from "os";
 const dir = mkdtempSync(join(tmpdir(), "policy-code-diffs-"));
 const policyFile = join(dir, "policy.json");
 
-// "a" approves each of the three interrupts at the menu.
-const answers = ["a", "a", "a"];
+// "a" approves each of the seven interrupts at the menu.
+const answers = ["a", "a", "a", "a", "a", "a", "a"];
 let asked = 0;
 const inputOverride = async () => {
   asked += 1;
@@ -28,6 +28,7 @@ console.log = (...args) => {
 try {
   await main({ policyFile }, { inputOverride });
   await autoApproved({ policyFile }, { inputOverride });
+  await autoApprovedWrite({ policyFile }, { inputOverride });
   survivedNullPayload = (await nullPayload({ policyFile }, { inputOverride })).data;
 } finally {
   console.log = realLog;
@@ -41,8 +42,24 @@ const tableLines = plain.split("\n").filter((line) => line.includes("│"));
 // The table row the tool's name renders on, which is where a CR the
 // strip missed would do its damage.
 const nameRow = (printed.split("\n").find((line) => line.includes("greetHindi")) ?? "");
+const writePreview = printed.slice(
+  printed.indexOf("⏺ Write (overwrite): write.js"),
+  printed.indexOf("⏺ Write (create-only): empty.js"),
+);
 
 writeFileSync("__result.json", JSON.stringify({
+  writeHeader: plain.includes("⏺ Write (overwrite): write.js"),
+  writeContentShownOnce: (plain.match(/write-preview-tail/g) || []).length === 1,
+  writeSyntaxHighlighted: /\x1b\[38;2;[\d;]+m/.test(writePreview),
+  writeContentOutsideTable: !tableLines.some((line) => line.includes("write-preview-tail")),
+  writeMetadataKept: tableLines.some((line) => line.includes("write.js")) &&
+    tableLines.some((line) => line.includes("overwrite")),
+  emptyWritePreview: plain.includes("⏺ Write (create-only): empty.js"),
+  metadataWriteKept: tableLines.some((line) => line.includes("metadata.agency")),
+  metadataWriteHasNoPreview: !plain.includes("⏺ Write: metadata.agency"),
+  nonTextWriteContentKept: tableLines.some((line) => line.includes("structured-write-content")),
+  autoApprovedWriteShownOnce: plain.includes("⏺ Write (append): append.js") &&
+    (plain.match(/auto-write-preview/g) || []).length === 1,
   editHeader: plain.includes("⏺ Edit: greet.agency"),
   editShowsChange: plain.includes("\"hi\"") && plain.includes("\"hello\""),
   toolHeader: plain.includes("⏺ Tool: greetHindi"),
@@ -54,8 +71,7 @@ writeFileSync("__result.json", JSON.stringify({
   // A rule approved this one without asking, and the diff still printed.
   autoApprovedHeader: plain.includes("⏺ Tool: silentTool"),
   autoApprovedShowsSource: plain.includes("quiet"),
-  // Two prompts for the two interrupts main raises. The rule-approved
-  // one draws none, so a third answer would mean it prompted after all.
+  // Only main prompts; the rule-approved interrupts draw no prompt.
   promptsDrawn: asked,
   // The draft's escape sequence never reaches the terminal. `plain` has
   // had the highlighter's own colors removed, so what is left is the

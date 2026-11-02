@@ -5,6 +5,7 @@
 import { Attachment, systemMessage } from "std::thread"
 
 import { AgentBrain, BrainContext } from "../brain.agency"
+import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 
 // Per-run grounding, from BrainContext. Spliced into the system prompt.
 let _context: string = ""
@@ -27,6 +28,7 @@ def simpleRunTurn(
       )
       first = false
     }
+    addGlobalInstructions()
     const result = llm(prompt)
   }
   return result

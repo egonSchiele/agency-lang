@@ -1,8 +1,31 @@
 # Project context and slash commands
 
-## AGENTS.md
+## Global instructions
 
-Like other coding agents, the Agency agent will look for an AGENTS.md file in your project root, and read it if it exists.
+Put instructions you want in every project in `~/.agency-agent/AGENTS.md`:
+
+```markdown
+# My preferences
+
+- Keep replies concise.
+- Prefer pnpm for JavaScript projects.
+- Explain how you tested code changes.
+```
+
+The agent reads this optional file at startup, regardless of the working
+directory. Both brains and their subagents receive the instructions.
+Restart the agent after editing it; continuing a saved session picks up
+the new contents too. A missing or empty file adds no instructions.
+
+If you use `--agent-home` or `AGENCY_AGENT_HOME`, put `AGENTS.md` in that
+directory instead. The agent does not create the file for you.
+
+## Project instructions
+
+The agent reads `AGENTS.md` in the working directory. If that file is
+absent, it reads `CLAUDE.md` there instead. It does not search parent
+directories. Project instructions apply alongside the global file and
+take precedence when they conflict.
 
 ## Custom slash commands
 

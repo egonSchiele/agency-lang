@@ -1,12 +1,10 @@
 /** @module
-  @summary Finds which web-search providers are usable right now and returns
-  their tools.
+  @summary Selects one web-search provider from the configured API keys.
 
-  Client-side web search needs an API key, and which providers a user has
-  keys for varies. Agents ask for whatever is available instead of hardcoding
-  one provider, so an agent still runs with no keys at all, just without web
-  search. Adding a provider means appending one entry to the catalog here,
-  and every agent picks it up.
+  Agents receive one client-side search tool: Brave when BRAVE_API_KEY is
+  set, otherwise Tavily when TAVILY_API_KEY is set. With neither key set,
+  they receive no client-side search tool. The catalog order sets the
+  preference for all agents that use this helper.
 */
 import { _hostedSearchTools } from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
@@ -21,22 +19,30 @@ type SearchProvider = {
 
 static const providers: SearchProvider[] = [
   {
-  name: "Tavily",
-  envKey: "TAVILY_API_KEY",
-  toolName: "web_search_tavily",
-  tool: tavilySearch
-},
+    name: "Brave",
+    envKey: "BRAVE_API_KEY",
+    toolName: "web_search_brave",
+    tool: braveSearch
+  },
   {
-  name: "Brave",
-  envKey: "BRAVE_API_KEY",
-  toolName: "web_search_brave",
-  tool: braveSearch
-},
+    name: "Tavily",
+    envKey: "TAVILY_API_KEY",
+    toolName: "web_search_tavily",
+    tool: tavilySearch
+  },
 ]
 
 def hasKey(provider: SearchProvider): boolean {
   const key = env(provider.envKey) with approve
   return key != null && key != ""
+}
+
+def selectedProviders(): SearchProvider[] {
+  const provider = find(providers, hasKey)
+  if (provider == null) {
+    return []
+  }
+  return [provider]
 }
 
 def boundTool(provider: SearchProvider): any {
@@ -52,11 +58,10 @@ def boundTool(provider: SearchProvider): any {
 
 export def searchTools(): any[] {
   """
-  Return the web-search tools whose API key is set, or an empty array when
-  no search provider is configured.
+  Return one web-search tool, preferring BRAVE_API_KEY over TAVILY_API_KEY.
+  Return an empty array when neither key is set.
   """
-  const available = filter(providers, hasKey)
-  return map(available, boundTool)
+  return map(selectedProviders(), boundTool)
 }
 
 export def searchProviderName(toolName: string): string | null {
@@ -88,9 +93,8 @@ export def hostedSearchTools(model: string = "", provider: string = ""): string[
 
 export def searchProviderNames(): string[] {
   """
-  Return the names of the web-search providers whose API key is set, for
-  telling a user which search is active.
+  Return the selected web-search provider's name, preferring Brave over
+  Tavily, or an empty array when neither API key is set.
   """
-  const available = filter(providers, hasKey)
-  return map(available, \provider -> provider.name)
+  return map(selectedProviders(), \provider -> provider.name)
 }

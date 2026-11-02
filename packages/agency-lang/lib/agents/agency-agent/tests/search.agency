@@ -32,12 +32,24 @@ node cloudFirstRunDefaultsToHostedWithANote(): string {
   return report(planSearchSetup(ctx(false, true, false, false, "")))
 }
 
-node localFirstRunBothKeysAsksWhich(): string {
+node localFirstRunBothKeysSelectsBrave(): string {
   return report(planSearchSetup(ctx(true, true, true, true, "")))
 }
 
-node localFirstRunOnlyTavilyConfirms(): string {
+node localFirstRunOnlyTavilySelectsTavily(): string {
   return report(planSearchSetup(ctx(true, true, true, false, "")))
+}
+
+node localFirstRunOnlyBraveSelectsBrave(): string {
+  return report(planSearchSetup(ctx(true, true, false, true, "")))
+}
+
+node cloudFirstRunBothKeysSelectsBrave(): string {
+  return report(planSearchSetup(ctx(false, true, true, true, "")))
+}
+
+node cloudFirstRunOnlyTavilySelectsTavily(): string {
+  return report(planSearchSetup(ctx(false, true, true, false, "")))
 }
 
 node localFirstRunNoKeysPromptsMissing(): string {
@@ -56,12 +68,32 @@ node savedTavilyWithKeyIsUsed(): string {
   return report(planSearchSetup(ctx(false, true, true, false, "tavily")))
 }
 
-node nonTtyLocalBothKeysDefaultsToTavily(): string {
+node savedTavilyWithBothKeysIsUsed(): string {
+  return report(planSearchSetup(ctx(false, true, true, true, "tavily")))
+}
+
+node savedTavilyWithoutKeyWarnsDespiteBrave(): string {
+  return report(planSearchSetup(ctx(false, true, false, true, "tavily")))
+}
+
+node savedBraveWithoutKeyWarnsDespiteTavily(): string {
+  return report(planSearchSetup(ctx(false, true, true, false, "brave")))
+}
+
+node savedHostedWithBothKeysIsUsed(): string {
+  return report(planSearchSetup(ctx(false, true, true, true, "hosted")))
+}
+
+node nonTtyLocalBothKeysDefaultsToBrave(): string {
   return report(planSearchSetup(ctx(true, false, true, true, "")))
 }
 
+node nonTtyCloudBothKeysDefaultsToBrave(): string {
+  return report(planSearchSetup(ctx(false, false, true, true, "")))
+}
+
 node savedOffIsRespected(): string {
-  return report(planSearchSetup(ctx(false, true, false, false, "off")))
+  return report(planSearchSetup(ctx(false, true, true, true, "off")))
 }
 
 node unknownSavedBackendWarnsAndDisables(): string {

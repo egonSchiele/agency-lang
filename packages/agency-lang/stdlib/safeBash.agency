@@ -1663,7 +1663,7 @@ def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Resul
   if (isFailure(entries)) {
     return entries
   }
-  const dirs = findFolders("find", entries.value)
+  const dirs = findFolders(entries.value)
   if (isFailure(dirs)) {
     return dirs
   }
@@ -1807,7 +1807,7 @@ def widened(kept: LsPayload, extra: LsPayload): LsPayload {
   }
 }
 
-def findFolders(verb: string, entries: ListTarget[]): Result<string[]> {
+def findFolders(entries: ListTarget[]): Result<string[]> {
   """
   The real folders a find searches. find never follows a link operand
   without -H or -L, which the ordering rule refuses, so a linked path is
@@ -1816,9 +1816,9 @@ def findFolders(verb: string, entries: ListTarget[]): Result<string[]> {
   let dirs: string[] = []
   for (entry in entries) {
     if (entry.linked) {
-      return failure("${verb} of a symlink is not described")
+      return failure("find of a symlink is not described")
     }
-    const dir = requireFolder(verb, entry.target)
+    const dir = requireFolder("find", entry.target)
     if (isFailure(dir)) {
       return dir
     }

@@ -674,9 +674,11 @@ So a file whose last step is a link is always refused, and a folder
 whose last step is a link is refused unless plain `ls` follows it. The
 rule keeps pnpm's `node_modules`, where each package is a folder link,
 approved: `ls node_modules/react` asks `std::ls` for the real folder
-under `.pnpm`. A link to a file in the same folder is refused too, and
-so is a folder link written with a trailing slash, which every program
-follows; both are the safe direction. On macOS, `/etc` and `/tmp` are
+under `.pnpm`. A link to a file in the same folder is refused too,
+which is the safe direction. A trailing slash (`ls -l dirlink/`) makes
+every program follow the link, but it does not change the rule: plain
+`ls dirlink/` is allowed and the rest are refused, which is the safe
+direction for the ones that would have followed it. On macOS, `/etc` and `/tmp` are
 links, so `ls -l /etc` and `find /tmp -name x` ask `std::bash`, while
 plain `ls /etc` still asks `std::ls`.
 

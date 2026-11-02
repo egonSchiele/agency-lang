@@ -1569,7 +1569,11 @@ export class AgencyGenerator {
       "schemaExpression",
       "hole",
     ];
-    if (!SAFE_BARE_BASES.includes(node.base.type)) {
+    // `try f()?` is the one compound base that prints bare: the parser
+    // reads a `?` after a try operand as applying to the try, so the
+    // parentheses would only come back as `(try f())?`.
+    const tryThenUnwrap = node.base.type === "tryExpression" && node.chain[0]?.kind === "unwrap";
+    if (!SAFE_BARE_BASES.includes(node.base.type) && !tryThenUnwrap) {
       code = `(${code})`;
     }
     for (const element of node.chain) {

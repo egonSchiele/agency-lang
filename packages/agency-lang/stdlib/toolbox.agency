@@ -289,15 +289,9 @@ def factsOf(exported: ExportInfo): ModuleFacts {
 // tool's directory under it, so a linked tool directory is refused.
 @capabilities(fileRead)
 def moduleFacts(root: string, name: string): Result<ModuleFacts> {
-  const source = try _read(root, "${name}/${IMPL_FILE}", 0, 0)
-  if (source is failure) {
-    return source
-  }
-  const info = describe(source.value)
-  if (info is failure) {
-    return info
-  }
-  const exported = runExport(info.value)
+  const source = try _read(root, "${name}/${IMPL_FILE}", 0, 0)?
+  const info = describe(source)?
+  const exported = runExport(info)
   if (exported == null) {
     return failure("no exported `def run` in ${IMPL_FILE}")
   }
@@ -409,14 +403,11 @@ def toolNames(root: string): Result<string[]> {
   if (!exists(root)) {
     return success([])
   }
-  const entries = ls(root, false, MAX_TOOLS + 1)
-  if (entries is failure) {
-    return entries
-  }
-  if (entries.value.length > MAX_TOOLS) {
+  const entries = ls(root, false, MAX_TOOLS + 1)?
+  if (entries.length > MAX_TOOLS) {
     return failure("${root} has more than ${MAX_TOOLS} entries; a toolbox holds fewer")
   }
-  return success(map(filter(entries.value, isToolDir), \entry -> entry.name))
+  return success(map(filter(entries, isToolDir), \entry -> entry.name))
 }
 
 @capabilities(fileRead)
@@ -433,18 +424,12 @@ export idempotent def listTools(
 
   @param dir - The toolbox directory to scan
   """
-  const root = expandRoot(dir)
-  if (root is failure) {
-    return root
-  }
+  const root = expandRoot(dir)?
   return interrupt std::toolbox::scan("Are you sure you want to scan this directory for tools?", {
-    dir: root.value
+    dir: root
   })
-  const names = toolNames(root.value)
-  if (names is failure) {
-    return names
-  }
-  return success(map(names.value, \name -> entryFor(root.value, name)))
+  const names = toolNames(root)?
+  return success(map(names, \name -> entryFor(root, name)))
 }
 
 // ---- the tool template ----
@@ -933,18 +918,15 @@ def writeToolFile(
   filename: string,
   content: string,
 ): Result {
-  const real = try _realDir(settings.stagingDir)
-  if (real is failure) {
-    return real
-  }
+  const real = try _realDir(settings.stagingDir)?
   return interrupt std::toolbox::writeFile("Are you sure you want to write this tool file?", {
     root: settings.root,
-    dir: real.value,
+    dir: real,
     filename: filename,
     content: content
   })
   destructive {
-    return try _write(real.value, filename, content, "overwrite")
+    return try _write(real, filename, content, "overwrite")
   }
 }
 
@@ -996,10 +978,7 @@ def removeStagedFile(
 // pair. A draft that exports the wrong names fails here with the
 // compiler's message, which goes back to the coding agent as feedback.
 def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
-  const wroteImpl = writeToolFile(settings, IMPL_FILE, source)
-  if (wroteImpl is failure) {
-    return wroteImpl
-  }
+  const wroteImpl = writeToolFile(settings, IMPL_FILE, source)?
   const filled = fill(
     toolTemplate,
     {
@@ -1007,47 +986,32 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
       maxCost: settings.maxCost,
       purpose: settings.purpose
     },
-  )
-  if (filled is failure) {
-    return filled
-  }
-  const toolSource = toSource(filled.value)
-  const wroteTool = writeToolFile(settings, TOOL_FILE, toolSource)
-  if (wroteTool is failure) {
-    return wroteTool
-  }
+  )?
+  const toolSource = toSource(filled)
+  const wroteTool = writeToolFile(settings, TOOL_FILE, toolSource)?
   // The sandboxed compile resolves the pair's imports and refuses
   // TypeScript, Node, and pkg:: imports anywhere in the closure, so a
   // draft cannot reach a raw primitive that raises no interrupt. It runs
   // first because a draft that exports the wrong name fails here, and
   // that is a problem the next draft can fix.
-  const compiled = compile(toSource(filled.value), settings.stagingDir, strict: true)
+  const compiled = compile(toSource(filled), settings.stagingDir, strict: true)
   if (compiled is failure(compileErr)) {
     return draftProblem("${compileErr}")
   }
   // The compile does not report type errors; the typecheck does. It takes
   // the source the template just produced, so nothing is read back.
-  const report = typecheck(toolSource, dir: settings.stagingDir, strict: true)
-  if (report is failure) {
-    return report
-  }
-  if (report.value.errors.length > 0) {
-    const messages = map(report.value.errors, \diag -> diag.message)
+  const report = typecheck(toolSource, dir: settings.stagingDir, strict: true)?
+  if (report.errors.length > 0) {
+    const messages = map(report.errors, \diag -> diag.message)
     return draftProblem("the tool does not typecheck:\n${messages.join("\n")}")
   }
-  const requestOk = checkRequestMatches(source, settings.request)
-  if (requestOk is failure) {
-    return requestOk
-  }
+  const requestOk = checkRequestMatches(source, settings.request)?
   return moduleFacts(settings.stagingDir, ".")
 }
 
 def requestSignature(source: string): Result<string> {
-  const info = describe(source)
-  if (info is failure) {
-    return info
-  }
-  const exported = find(info.value.exports, \entry -> entry.name == "Request" && entry.kind == "type")
+  const info = describe(source)?
+  const exported = find(info.exports, \entry -> entry.name == "Request" && entry.kind == "type")
   if (exported == null) {
     return failure("no exported `type Request`")
   }
@@ -1059,17 +1023,14 @@ def requestSignature(source: string): Result<string> {
 // will advertise. Both are printed by `describe`, so spacing and line
 // breaks do not count as a difference.
 def checkRequestMatches(source: string, request: string): Result {
-  const expected = requestSignature("export type Request = ${request}")
-  if (expected is failure) {
-    return expected
-  }
+  const expected = requestSignature("export type Request = ${request}")?
   const actual = requestSignature(source)
   if (actual is failure(missing)) {
     return draftProblem("${missing} in ${IMPL_FILE}")
   }
-  if (actual.value != expected.value) {
+  if (actual.value != expected) {
     return draftProblem(
-      "${IMPL_FILE} declares `${actual.value}` but the request type is `${expected.value}`. Copy the request type as given.",
+      "${IMPL_FILE} declares `${actual.value}` but the request type is `${expected}`. Copy the request type as given.",
     )
   }
   return success(null)
@@ -1102,17 +1063,11 @@ def runGeneratedTests(source: string, settings: DraftSettings): Result {
   if (cases is failure(caseErr)) {
     return failure("the test cases had the wrong shape: ${caseErr}")
   }
-  const prepared = prepareCases(cases.value)
-  if (prepared is failure) {
-    return prepared
-  }
-  const wroteCases = writeToolFile(settings, TEST_FILE, testFileJson(prepared.value))
-  if (wroteCases is failure) {
-    return wroteCases
-  }
+  const prepared = prepareCases(cases.value)?
+  const wroteCases = writeToolFile(settings, TEST_FILE, testFileJson(prepared))?
   // The cases are already in hand, so they run from memory: the file is
   // written for the saved tool to be re-tested later, never read back.
-  const report = test(settings.stagingDir, TOOL_FILE, memoryCases(prepared.value))
+  const report = test(settings.stagingDir, TOOL_FILE, memoryCases(prepared))
   if (report is failure(testErr)) {
     return failure("tests could not run: ${testErr}")
   }
@@ -1124,11 +1079,8 @@ def runGeneratedTests(source: string, settings: DraftSettings): Result {
 
 // Only a tool that does nothing but compute gets generated tests.
 def testSource(source: string, settings: DraftSettings, review: Review): Result<Draft> {
-  const assembled = assembleTool(source, settings)
-  if (assembled is failure) {
-    return assembled
-  }
-  const effects = assembled.value.effects
+  const assembled = assembleTool(source, settings)?
+  const effects = assembled.effects
   const pure = effects.length == 0 && !callsUnpredictable(source)
   if (!pure) {
     // A previous round may have been pure and left a test file behind;
@@ -1139,10 +1091,7 @@ def testSource(source: string, settings: DraftSettings, review: Review): Result<
         settings.stagingDir,
         settings.name,
         TEST_FILE,
-      )
-      if (cleared is failure) {
-        return cleared
-      }
+      )?
     }
     return success(
       {
@@ -1153,10 +1102,7 @@ def testSource(source: string, settings: DraftSettings, review: Review): Result<
       },
     )
   }
-  const tested = runGeneratedTests(source, settings)
-  if (tested is failure) {
-    return tested
-  }
+  const tested = runGeneratedTests(source, settings)?
   return success({
     source: source,
     effects: effects,
@@ -1212,15 +1158,9 @@ def prepareDraft(
   round: number,
 ): Result<Draft> {
   progress(settings, "writing draft ${round + 1}")
-  const source = draftSource(settings, feedback, fromReviewer, drafted)
-  if (source is failure) {
-    return source
-  }
-  const reviewed = reviewDraft(source.value, settings, fromReviewer)
-  if (reviewed is failure) {
-    return reviewed
-  }
-  const review = reviewed.value
+  const source = draftSource(settings, feedback, fromReviewer, drafted)?
+  const reviewed = reviewDraft(source, settings, fromReviewer)?
+  const review = reviewed
   if (review.blocking.length > 0) {
     if (!fromReviewer) {
       progress(
@@ -1230,7 +1170,7 @@ def prepareDraft(
       )
       return failure(
         review.blocking.join("\n"),
-        { retryable: true, fromReviewer: true, drafted: source.value },
+        { retryable: true, fromReviewer: true, drafted: source },
       )
     }
     progress(
@@ -1239,7 +1179,7 @@ def prepareDraft(
       review.blocking,
     )
   }
-  const draft = testSource(source.value, settings, review)
+  const draft = testSource(source, settings, review)
   if (draft is failure(problem)) {
     // The draft did not assemble or its tests failed. The points the
     // author could not fix are still open, so they go back with the
@@ -1254,7 +1194,7 @@ def prepareDraft(
     if (open) {
       message = stillOpen(problem, review.unresolved)
     }
-    return failure(message, { retryable: true, fromReviewer: open, drafted: source.value })
+    return failure(message, { retryable: true, fromReviewer: open, drafted: source })
   }
   if (draft.value.tested) {
     progress(settings, "the generated tests pass")
@@ -1338,22 +1278,16 @@ def saveTool(
   name: string,
   settings: DraftSettings,
 ): Result<ToolEntry> {
-  const requestSchema = requestSchemaOf(settings)
-  if (requestSchema is failure) {
-    return requestSchema
-  }
+  const requestSchema = requestSchemaOf(settings)?
   const meta: ToolMeta = {
     ...DEFAULT_META,
     purpose: settings.purpose,
     request: settings.request,
-    requestSchema: requestSchema.value,
+    requestSchema: requestSchema,
     createdAt: format(now()),
     maxTime: settings.maxTime
   }
-  const savedMeta = writeToolFile(settings, META_FILE, JSON.stringify(meta, null, 2))
-  if (savedMeta is failure) {
-    return savedMeta
-  }
+  const savedMeta = writeToolFile(settings, META_FILE, JSON.stringify(meta, null, 2))?
   if (exists(name, root)) {
     return failure(
       "a tool named `${name}` appeared in ${root} while this one was being written",
@@ -1361,10 +1295,7 @@ def saveTool(
   }
   // The save gate was answered a moment ago and named this root and
   // name; the rename that fulfils it raises nothing of its own.
-  const published = try _move(settings.stagingDir, "${root}/${name}")
-  if (published is failure) {
-    return published
-  }
+  const published = try _move(settings.stagingDir, "${root}/${name}")?
   return interrupt std::toolbox::scan("Are you sure you want to read the saved tool?", {
     dir: "${root}/${name}"
   })
@@ -1478,10 +1409,7 @@ def gateAndSave(
   source: string,
   effects: string[],
 ): Result<ToolEntry> {
-  const approved = askToSave(root, name, source, effects)
-  if (approved is failure) {
-    return approved
-  }
+  const approved = askToSave(root, name, source, effects)?
   return saveTool(root, name, settings)
 }
 
@@ -1616,10 +1544,7 @@ def checkNameSyntax(name: string): Result {
 }
 
 def checkName(name: string, root: string): Result {
-  const syntax = checkNameSyntax(name)
-  if (syntax is failure) {
-    return syntax
-  }
+  const syntax = checkNameSyntax(name)?
   if (exists(name, root)) {
     return failure("a tool named `${name}` already exists in ${root}")
   }
@@ -1664,31 +1589,19 @@ def stage(
 ): Result<Staged> {
   // Expanded once here: the sandboxed testFile resolves paths without
   // expanding `~`, unlike the file primitives.
-  const expanded = expandRoot(dir)
-  if (expanded is failure) {
-    return expanded
-  }
-  const root = expanded.value
-  const nameOk = checkName(name, root)
-  if (nameOk is failure) {
-    return nameOk
-  }
+  const expanded = expandRoot(dir)?
+  const root = expanded
+  const nameOk = checkName(name, root)?
   if (maxTime > MAX_TOOL_TIME) {
     return failure(
       "maxTime must be at most ${MAX_TOOL_TIME} ms (an hour minus the subprocess headroom), got ${maxTime}",
     )
   }
-  const requestOk = checkRequest(request)
-  if (requestOk is failure) {
-    return requestOk
-  }
+  const requestOk = checkRequest(request)?
   // Each call stages in its own directory, so two writes of the same
   // name never share a draft; the publish rename decides which one wins.
   const stagingDir = "${root}/${STAGING_DIR}/${name}-${Math.floor(Math.random() * 1000000000)}"
-  const made = makeStagingDir(root, stagingDir, name)
-  if (made is failure) {
-    return made
-  }
+  const made = makeStagingDir(root, stagingDir, name)?
   return success({
     root: root,
     settings: {
@@ -1763,16 +1676,13 @@ export def designTool(
   @param provider - Provider for the model override
   @param review - True has a review agent read each draft before its checks, and sends its blocking findings back to the author once. Off by default: on the `evals/design-tool` suite it doubled the time and tripled the cost of a tool and did not change the score
   """
-  const staged = stage(name, purpose, request, dir, maxTime, maxCost, model, provider, review)
-  if (staged is failure) {
-    return staged
-  }
-  const outcome = rounds(staged.value.root, name, staged.value.settings, maxRounds)
+  const staged = stage(name, purpose, request, dir, maxTime, maxCost, model, provider, review)?
+  const outcome = rounds(staged.root, name, staged.settings, maxRounds)
   return clearStaging(
     outcome,
-    staged.value.root,
+    staged.root,
     name,
-    staged.value.settings.stagingDir,
+    staged.settings.stagingDir,
   )
 }
 
@@ -1820,16 +1730,13 @@ export def writeTool(
   @param maxTime - Time limit baked into the tool's guard, under one hour
   @param maxCost - Cost limit baked into the tool's guard
   """
-  const staged = stage(name, purpose, request, dir, maxTime, maxCost, "", "")
-  if (staged is failure) {
-    return staged
-  }
-  const outcome = assembleAndSave(staged.value.root, name, source, staged.value.settings)
+  const staged = stage(name, purpose, request, dir, maxTime, maxCost, "", "")?
+  const outcome = assembleAndSave(staged.root, name, source, staged.settings)
   return clearStaging(
     outcome,
-    staged.value.root,
+    staged.root,
     name,
-    staged.value.settings.stagingDir,
+    staged.settings.stagingDir,
   )
 }
 
@@ -1865,17 +1772,11 @@ export def runTool(
   @param request - The tool's input, a value of its Request type
   @param dir - The toolbox directory holding the tool
   """
-  const syntax = checkNameSyntax(name)
-  if (syntax is failure) {
-    return syntax
-  }
-  const root = expandRoot(dir)
-  if (root is failure) {
-    return root
-  }
-  const toolDir = "${root.value}/${name}"
-  if (!exists("${name}/${TOOL_FILE}", root.value)) {
-    return failure("no tool named `${name}` in ${root.value}")
+  const syntax = checkNameSyntax(name)?
+  const root = expandRoot(dir)?
+  const toolDir = "${root}/${name}"
+  if (!exists("${name}/${TOOL_FILE}", root)) {
+    return failure("no tool named `${name}` in ${root}")
   }
   // The same approval listTools asks for, here for one tool's directory:
   // meta.json is read before the run, so a corrupt record stops the tool
@@ -1883,10 +1784,7 @@ export def runTool(
   return interrupt std::toolbox::scan("Are you sure you want to read this tool?", {
     dir: toolDir
   })
-  const meta = metaFacts(root.value, name)
-  if (meta is failure) {
-    return meta
-  }
+  const meta = metaFacts(root, name)?
   const ran = runFile(
     toolDir,
     TOOL_FILE,
@@ -1894,13 +1792,13 @@ export def runTool(
     {
       request: request
     },
-    wallClock: meta.value.maxTime + WALL_CLOCK_HEADROOM,
+    wallClock: meta.maxTime + WALL_CLOCK_HEADROOM,
   )
   let result: Result<Json> = ran
   if (ran is success(finished)) {
     result = finished.data
   }
   // Best-effort: the tool has already run.
-  recordUse(root.value, name, meta.value)
+  recordUse(root, name, meta)
   return result
 }

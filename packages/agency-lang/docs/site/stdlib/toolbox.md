@@ -290,7 +290,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L423))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L414))
 
 ### designTool
 
@@ -353,7 +353,7 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1736))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1649))
 
 ### writeTool
 
@@ -407,7 +407,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1799))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1709))
 
 ### runTool
 
@@ -442,4 +442,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1853))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1760))

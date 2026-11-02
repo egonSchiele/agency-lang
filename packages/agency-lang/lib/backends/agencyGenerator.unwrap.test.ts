@@ -34,4 +34,19 @@ describe("formatting the ? operator", () => {
       print(access(call("a"), [unwrap, methodCall("b"), unwrap, methodCall("c"), unwrap])),
     ).toBe("const p = a()?.b()?.c()?");
   });
+
+  it("prints an unwrap of a try without parentheses, which is how it parses back", () => {
+    const tried = { type: "tryExpression", call: call("foo") };
+    expect(print(access(tried, [unwrap]))).toBe("const p = try foo()?");
+    expect(print(access(tried, [unwrap, { kind: "property", name: "name" }]))).toBe(
+      "const p = try foo()?.name",
+    );
+  });
+
+  it("still parenthesizes a try base when the chain does not start with ?", () => {
+    const tried = { type: "tryExpression", call: call("foo") };
+    expect(print(access(tried, [{ kind: "property", name: "name" }]))).toBe(
+      "const p = (try foo()).name",
+    );
+  });
 });

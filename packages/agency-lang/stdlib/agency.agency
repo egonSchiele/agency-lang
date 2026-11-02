@@ -317,11 +317,8 @@ export def runFunction(
   @param args - Named arguments; defaults and aliases follow ordinary Agency calls
   @param options - The limits, logFile, and cwd accepted by run
   """
-  const prepared = try _prepareFunctions(source, [functionName])
-  if (prepared is failure) {
-    return prepared
-  }
-  return _executePrepared(prepared.value, functionName, args, options)
+  const prepared = try _prepareFunctions(source, [functionName])?
+  return _executePrepared(prepared, functionName, args, options)
 }
 
 /** @hidden */
@@ -334,11 +331,8 @@ export def _executePrepared(
   const outcome = _runProgram(
     prepared.compiled, prepared.invokeNode, { exportName: exportName, args: args },
     options, prepared.sourceModule, exportName,
-  )
-  if (outcome is failure) {
-    return outcome
-  }
-  const value = outcome.value.data
+  )?
+  const value = outcome.data
   if (value is success) {
     return value
   }
@@ -371,22 +365,16 @@ export def learn(
   @param namespace - Optional prefix for advertised tool names
   @param options - The limits, logFile, and cwd accepted by run, used for inspection and calls
   """
-  const prepared = try _prepareFunctions(source, names, true)
-  if (prepared is failure) {
-    return prepared
-  }
+  const prepared = try _prepareFunctions(source, names, true)?
   const metadata = _runProgram(
-    prepared.value.compiled, prepared.value.metadataNode, {}, options,
-    prepared.value.sourceModule, "<inspect>",
-  )
-  if (metadata is failure) {
-    return metadata
-  }
-  const definitions = metadata.value.data
+    prepared.compiled, prepared.metadataNode, {}, options,
+    prepared.sourceModule, "<inspect>",
+  )?
+  const definitions = metadata.data
   if (definitions is failure) {
     return definitions
   }
-  return try _createLearnedTools(definitions, prepared.value, namespace, options, _executePrepared, MAX_TOOL_NAME_LEN)
+  return try _createLearnedTools(definitions, prepared, namespace, options, _executePrepared, MAX_TOOL_NAME_LEN)
 }
 
 /** @hidden */
@@ -1301,51 +1289,30 @@ export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
 // Each wrapper returns the underlying failure as it is, so its data,
 // checkpoint, and origin reach the caller.
 def cliTest(cwd: string, file: string): Result<ExecResult> {
-  const report = testFile(cwd, file)
-  if (report is failure) {
-    return report
-  }
-  return success(renderTestReport(report.value))
+  const report = testFile(cwd, file)?
+  return success(renderTestReport(report))
 }
 
 def cliTypecheck(cwd: string, file: string): Result<ExecResult> {
-  const report = typecheckFile(cwd, file)
-  if (report is failure) {
-    return report
-  }
-  return success(renderTypeCheck(report.value))
+  const report = typecheckFile(cwd, file)?
+  return success(renderTypeCheck(report))
 }
 
 def cliRun(cwd: string, file: string): Result<ExecResult> {
-  const value = runFile(cwd, file, "main")
-  if (value is failure) {
-    return value
-  }
-  return success(cliOutput(JSON.stringify(value.value)))
+  const value = runFile(cwd, file, "main")?
+  return success(cliOutput(JSON.stringify(value)))
 }
 
 def cliAst(cwd: string, file: string): Result<ExecResult> {
-  const source = read(file, cwd)
-  if (source is failure) {
-    return source
-  }
-  const tree = parseAST(source.value)
-  if (tree is failure) {
-    return tree
-  }
-  return success(cliOutput(JSON.stringify(tree.value, null, 2)))
+  const source = read(file, cwd)?
+  const tree = parseAST(source)?
+  return success(cliOutput(JSON.stringify(tree, null, 2)))
 }
 
 def cliFmt(cwd: string, file: string): Result<ExecResult> {
-  const source = read(file, cwd)
-  if (source is failure) {
-    return source
-  }
-  const formatted = format(source.value)
-  if (formatted is failure) {
-    return formatted
-  }
-  return success(cliOutput("${formatted.value}"))
+  const source = read(file, cwd)?
+  const formatted = format(source)?
+  return success(cliOutput("${formatted}"))
 }
 
 def cliOutput(stdout: string): ExecResult {

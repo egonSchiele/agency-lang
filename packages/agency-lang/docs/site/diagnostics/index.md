@@ -33,6 +33,11 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1018](types-aliases.md#ag1018) | `&#123;expr&#125;` is a `&#123;from&#125;`. A cast does not unwrap it. Unwrap the Result first, with `match` or `catch`, then cast the value if you still need to. |
 | [AG1019](types-aliases.md#ag1019) | `&#123;cast&#125;` runs validators that can pause the program, and a module-level initializer or a parameter default cannot pause. Do the cast inside a node or a def. |
 | [AG1020](types-aliases.md#ag1020) | `&#123;cast&#125;` runs validators that can pause the program, and a handler body cannot pause. Do the cast before the `handle` block and use the value here. |
+| [AG1021](types-aliases.md#ag1021) | `&#123;expr&#125;?` cannot be lowered in this position. Move it to its own line: `const value = &#123;expr&#125;?`. |
+| [AG1022](types-aliases.md#ag1022) | `&#123;expr&#125;?` returns from a function, and a module-level initializer or a parameter default is not inside one. Use it inside a node or a def. |
+| [AG1023](types-aliases.md#ag1023) | `&#123;expr&#125;?` cannot be used inside a handler body. Unwrap the Result before the `handle` block, or match on it here. |
+| [AG1024](types-aliases.md#ag1024) | `&#123;expr&#125;?` would return from a `parallel` arm, and an arm cannot return early. Do the unwrap inside a def the arm calls. |
+| [AG1025](types-aliases.md#ag1025) | `&#123;expr&#125;?` cannot be a write target. Unwrap into a variable first, then assign to its field. |
 
 ## Assignability and checking
 
@@ -60,6 +65,8 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG2020](checking.md#ag2020) | '&#123;target&#125;' is declared to return '&#123;declared&#125;', but decorator '&#123;name&#125;' returns '&#123;actual&#125;'. |
 | [AG2021](checking.md#ag2021) | The body of '&#123;target&#125;' saves a draft of type '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'. |
 | [AG2022](checking.md#ag2022) | Parameter '&#123;param&#125;' of '&#123;fn&#125;' has alias '&#123;alias&#125;', which is already the name or an alias of parameter '&#123;other&#125;'. |
+| [AG2023](checking.md#ag2023) | `&#123;expr&#125;?` needs a `Result`, and `&#123;expr&#125;` is a `&#123;type&#125;`. Only a `Result` can be unwrapped with `?`. |
+| [AG2024](checking.md#ag2024) | `&#123;expr&#125;?` returns a failure from `&#123;name&#125;` when the Result fails, but `&#123;name&#125;` is declared to return `&#123;type&#125;`. Declare it as `Result&lt;&#123;type&#125;&gt;`, or unwrap with `match` or `catch` instead. |
 
 ## Interrupts, effects, and handlers
 

@@ -156,11 +156,8 @@ def describeGroup(group: SignatureSource, dir: string): Result<ModuleInfo> {
   if (group.reExport != null) {
     return describe(group.reExport)
   }
-  const text = read(group.module, dir)
-  if (text is failure) {
-    return text
-  }
-  return describe(text.value, dir: dir, filename: group.module)
+  const text = read(group.module, dir)?
+  return describe(text, dir: dir, filename: group.module)
 }
 
 /** What `describe` says about each tool, keyed by module and name. */
@@ -169,15 +166,9 @@ def describeGroup(group: SignatureSource, dir: string): Result<ModuleInfo> {
 export def _signatures(refs: ToolRef[], dir: string): Result<Record<string, ExportInfo>> {
   let signatures: Record<string, ExportInfo> = {}
   for (group in _signatureSources(refs)) {
-    const info = describeGroup(group, dir)
-    if (info is failure) {
-      return info
-    }
-    const picked = _pickSignatures(group, info.value.exports)
-    if (picked is failure) {
-      return picked
-    }
-    signatures = { ...signatures, ...picked.value }
+    const info = describeGroup(group, dir)?
+    const picked = _pickSignatures(group, info.exports)?
+    signatures = { ...signatures, ...picked }
   }
   return success(signatures)
 }
@@ -186,15 +177,12 @@ export def _signatures(refs: ToolRef[], dir: string): Result<Record<string, Expo
 @hidden
 @capabilities(fileRead)
 export def _compileWithRanges(workflow: Workflow, tools: any[], dir: string): Result<Compiled, WorkflowFailure> {
-  const refs = _toolRefs(tools, dir)
-  if (refs is failure) {
-    return failure(refs.error, refs.data)
-  }
-  const signatures = _signatures(refs.value, dir)
+  const refs = _toolRefs(tools, dir)?
+  const signatures = _signatures(refs, dir)
   if (signatures is failure) {
     return _workflowFailure(signatures.error)
   }
-  return _compileWorkflowSource(workflow, refs.value, signatures.value)
+  return _compileWorkflowSource(workflow, refs, signatures.value)
 }
 
 /** The source is text, not a compiled program: hand it to `compile` or
@@ -210,11 +198,8 @@ export idempotent def compileWorkflow(workflow: Workflow, tools: any[], dir: str
   @param tools - The functions the workflow may call. A step may only name one of these
   @param dir - The directory a workflow's local modules are named relative to
   """
-  const compiled = _compileWithRanges(workflow, tools, dir)
-  if (compiled is failure) {
-    return failure(compiled.error, compiled.data)
-  }
-  return success(compiled.value.source)
+  const compiled = _compileWithRanges(workflow, tools, dir)?
+  return success(compiled.source)
 }
 
 /** The check behind `checkWorkflow` and `runWorkflow`: generate, typecheck,
@@ -222,11 +207,8 @@ export idempotent def compileWorkflow(workflow: Workflow, tools: any[], dir: str
 @hidden
 @capabilities(fileRead)
 export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Checked, WorkflowFailure> {
-  const compiled = _compileWithRanges(workflow, tools, dir)
-  if (compiled is failure) {
-    return failure(compiled.error, compiled.data)
-  }
-  const source = compiled.value.source
+  const compiled = _compileWithRanges(workflow, tools, dir)?
+  const source = compiled.source
   // The typecheck runs first: its errors carry a line and a payload, so each
   // one is mapped to its step and field. A strict compile reports the same
   // errors as one message, so it runs second, for what is left.
@@ -235,7 +217,7 @@ export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Check
     return _workflowFailure(report.error)
   }
   if (report.value.errors.length > 0) {
-    return _problemsFailure(_problemsFromDiagnostics(report.value.errors, compiled.value.ranges, compiled.value.typeOwners))
+    return _problemsFailure(_problemsFromDiagnostics(report.value.errors, compiled.ranges, compiled.typeOwners))
   }
   const program = compile(source, dir, strict: true)
   if (program is failure) {
@@ -243,8 +225,8 @@ export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Check
   }
   return success({
     program: program.value,
-    warnings: compiled.value.warnings,
-    wallClock: compiled.value.wallClock
+    warnings: compiled.warnings,
+    wallClock: compiled.wallClock
   })
 }
 
@@ -262,11 +244,8 @@ export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: strin
   @param tools - The functions the workflow may call. A step may only name one of these
   @param dir - The directory a workflow's local modules are named relative to
   """
-  const checked = _checked(workflow, tools, dir)
-  if (checked is failure) {
-    return failure(checked.error, checked.data)
-  }
-  return success(checked.value.warnings)
+  const checked = _checked(workflow, tools, dir)?
+  return success(checked.warnings)
 }
 
 /** One parameter a workflow step can pass to a tool. */
@@ -307,16 +286,13 @@ export idempotent def catalog(tools: any[], dir: string = ""): Result<CatalogEnt
   @param tools - The functions the workflow may call
   @param dir - The directory a workflow's local modules are named relative to
   """
-  const refs = _toolRefs(tools, dir)
-  if (refs is failure) {
-    return failure(refs.error, refs.data)
-  }
-  const signatures = _signatures(refs.value, dir)
+  const refs = _toolRefs(tools, dir)?
+  const signatures = _signatures(refs, dir)
   if (signatures is failure) {
     // Returned as it came, so a rejected read keeps its `rejected` flag.
     return signatures
   }
-  return success(_catalogEntries(tools, refs.value, signatures.value))
+  return success(_catalogEntries(tools, refs, signatures.value))
 }
 
 /** Check, ask, run. The check compiles the program and the run uses it. The
@@ -336,20 +312,14 @@ export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: stri
   @param dir - The directory a workflow's local modules are named relative to. Resolved to an absolute path, which is what an "always" answer to `std::workflow::run` pins, along with the workflow's name
   """
   const where = resolve(dir)
-  const checked = _checked(workflow, tools, where)
-  if (checked is failure) {
-    return failure(checked.error, checked.data)
-  }
+  const checked = _checked(workflow, tools, where)?
   return interrupt std::workflow::run("Run the workflow ${workflow.name}?", {
     name: workflow.name,
     dir: where,
     inputs: inputs
   })
-  const ran = run(compiled: checked.value.program, node: "main", args: { inputs: inputs }, wallClock: checked.value.wallClock)
-  if (ran is failure) {
-    return ran
-  }
-  return ran.value.data
+  const ran = run(compiled: checked.program, node: "main", args: { inputs: inputs }, wallClock: checked.wallClock)?
+  return ran.data
 }
 
 // ---- a workflow as a tool ----
@@ -387,15 +357,9 @@ export def workflowTool(workflow: Workflow, tools: any[], dir: string = ""): Res
   if (clash != null) {
     return failure(clash)
   }
-  const checked = _checked(workflow, tools, where)
-  if (checked is failure) {
-    return failure(checked.error, checked.data)
-  }
-  const inputsSchema = _inputsSchema(checked.value.program)
-  if (inputsSchema is failure) {
-    return inputsSchema
-  }
-  return success(toolFor(workflow, tools, where, inputsSchema.value))
+  const checked = _checked(workflow, tools, where)?
+  const inputsSchema = _inputsSchema(checked.program)?
+  return success(toolFor(workflow, tools, where, inputsSchema))
 }
 
 /** One saved workflow as a tool, or the reason it cannot be one. */
@@ -418,12 +382,9 @@ export def workflowTools(dir: string, tools: any[]): Result<any[]> {
   @param dir - The project directory the workflows were saved under
   @param tools - The functions the workflows may call. A workflow may not share a name with one of them
   """
-  const listed = listWorkflows(dir)
-  if (listed is failure) {
-    return listed
-  }
+  const listed = listWorkflows(dir)?
   const where = resolve(dir)
-  const built = map(listed.value, \entry -> toolForEntry(entry, tools, where))
+  const built = map(listed, \entry -> toolForEntry(entry, tools, where))
   const broken = find(built, \tool -> isFailure(tool))
   if (broken != null) {
     return broken
@@ -532,19 +493,13 @@ export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<
   @param tools - The functions the workflow may call, for the check
   @param dir - The project directory, which must exist. A local tool's file must be under it, since the workflow imports the tool by a path relative to it
   """
-  const root = expandRoot(dir)
-  if (root is failure) {
-    return root
-  }
-  if (!exists(root.value)) {
-    return failure("${root.value} does not exist; dir must name an existing project directory")
+  const root = expandRoot(dir)?
+  if (!exists(root)) {
+    return failure("${root} does not exist; dir must name an existing project directory")
   }
   // The check also proves `name` is an identifier, so it is safe in a file name.
-  const checked = _checked(workflow, tools, root.value)
-  if (checked is failure) {
-    return failure(checked.error, checked.data)
-  }
-  const folder = "${root.value}/${WORKFLOWS_DIR}"
+  const checked = _checked(workflow, tools, root)?
+  const folder = "${root}/${WORKFLOWS_DIR}"
   return interrupt std::workflow::save("Save the workflow ${workflow.name}?", {
     dir: folder,
     name: workflow.name,
@@ -552,30 +507,21 @@ export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<
   })
   // After the save prompt, so a rejected save starts no process, and
   // before the write, so a rejected `std::run` leaves nothing on disk.
-  const inputsSchema = _inputsSchema(checked.value.program)
-  if (inputsSchema is failure) {
-    return inputsSchema
-  }
+  const inputsSchema = _inputsSchema(checked.program)?
   const meta: WorkflowMeta = {
     savedAt: format(now()),
     savedBy: "writeWorkflow",
-    inputsSchema: inputsSchema.value
+    inputsSchema: inputsSchema
   }
   const file = savedFile(workflow.name)
   destructive {
-    const made = try _mkdir(folder)
-    if (made is failure) {
-      return made
-    }
+    const made = try _mkdir(folder)?
     const content = JSON.stringify({ workflow: workflow, meta: meta }, null, 2)
-    const wrote = try _write(root.value, file, content, "overwrite")
-    if (wrote is failure) {
-      return wrote
-    }
+    const wrote = try _write(root, file, content, "overwrite")?
   }
   return success({
     name: workflow.name,
-    path: "${root.value}/${file}",
+    path: "${root}/${file}",
     workflow: workflow,
     meta: meta
   })
@@ -642,19 +588,16 @@ export def loadWorkflow(name: string, dir: string): Result<WorkflowEntry> {
   if (problem != null) {
     return failure(problem)
   }
-  const root = expandRoot(dir)
-  if (root is failure) {
-    return root
-  }
+  const root = expandRoot(dir)?
   // Before the prompt, so a missing workflow fails without asking first,
   // as ls, grep, and glob do (docs/dev/stdlib/grep-flags.md).
-  if (!exists(savedFile(name), root.value)) {
-    return failure("no workflow named ${name} in ${root.value}/${WORKFLOWS_DIR}")
+  if (!exists(savedFile(name), root)) {
+    return failure("no workflow named ${name} in ${root}/${WORKFLOWS_DIR}")
   }
   return interrupt std::workflow::scan("Read the saved workflow ${name}?", {
-    dir: "${root.value}/${WORKFLOWS_DIR}"
+    dir: "${root}/${WORKFLOWS_DIR}"
   })
-  return entryFor(root.value, name)
+  return entryFor(root, name)
 }
 
 def workflowName(fileName: string): string {
@@ -673,11 +616,8 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
 
   @param dir - The project directory the workflows were saved under
   """
-  const root = expandRoot(dir)
-  if (root is failure) {
-    return root
-  }
-  const folder = "${root.value}/${WORKFLOWS_DIR}"
+  const root = expandRoot(dir)?
+  const folder = "${root}/${WORKFLOWS_DIR}"
   if (!exists(folder)) {
     return success([])
   }
@@ -685,16 +625,13 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
     dir: folder
   })
   // One more than the cap, so a folder that full is refused, not cut short.
-  const fileNames = try _glob(root.value, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)
-  if (fileNames is failure) {
-    return fileNames
-  }
-  if (fileNames.value.length > MAX_WORKFLOWS) {
+  const fileNames = try _glob(root, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)?
+  if (fileNames.length > MAX_WORKFLOWS) {
     return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
   }
-  const unsorted = map(filter(fileNames.value, isVisible), workflowName)
+  const unsorted = map(filter(fileNames, isVisible), workflowName)
   const names = sortBy(unsorted, \name -> name)
-  const entries = map(names, \name -> entryFor(root.value, name))
+  const entries = map(names, \name -> entryFor(root, name))
   const broken = find(entries, \entry -> isFailure(entry))
   if (broken != null) {
     return broken

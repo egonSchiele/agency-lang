@@ -300,3 +300,23 @@ A `def` parameter has an alias that is already taken by another parameter, as it
 An alias is a key a caller from outside the program may use for the parameter, written `def fetch(baseUrl | url: string)`. Every name and alias in one signature has to be distinct, otherwise a key would name two parameters.
 
 **How to fix:** remove or rename the alias.
+
+<a id="ag2023"></a>
+
+## AG2023 — `&#123;expr&#125;?` needs a `Result`, and `&#123;expr&#125;` is a `&#123;type&#125;`. Only a `Result` can be unwrapped with `?`.
+
+*Default severity: error.*
+
+The `?` operator reads a `Result`: it gives the success value, and if the Result is a failure it returns that failure from the enclosing function. The expression before this `?` is not a `Result`, so there is nothing to unwrap. The usual causes are a function that returns a plain value, or JavaScript-style optional chaining (`obj?.name`), which Agency does not have.
+
+**How to fix:** remove the `?` if the value is already plain. If you meant to tolerate a null, check for it with `if` or `??` instead.
+
+<a id="ag2024"></a>
+
+## AG2024 — `&#123;expr&#125;?` returns a failure from `&#123;name&#125;` when the Result fails, but `&#123;name&#125;` is declared to return `&#123;type&#125;`. Declare it as `Result&lt;&#123;type&#125;&gt;`, or unwrap with `match` or `catch` instead.
+
+*Default severity: error.*
+
+When the Result before a `?` is a failure, the operator returns that failure from the enclosing function. The function is declared to return a plain type, so a failure could never fit its declared type.
+
+**How to fix:** declare the function to return a `Result`, or keep the Result and unwrap it with `match` or `catch` so the function decides what to return.

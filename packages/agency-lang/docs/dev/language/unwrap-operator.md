@@ -33,6 +33,14 @@ skipping, so after a variable the `?` must be adjacent: `x ?` is not an
 unwrap. The call parser consumes the whitespace after `foo()`, so `foo() ?`
 does parse as an unwrap; it means the same as `foo()?`.
 
+After `try`, the `?` applies to the try: `try f()?` reads as `(try f())?`,
+and `try a().b()?.name` as `(try a().b())?.name`. The `try` covers the chain
+up to the first `?`. By precedence the `?` would sit inside the try operand,
+but that is a refused position (AG1021), so this is the only reading that
+can compile. `tryExpressionParser` does the split, and `processValueAccess`
+in the generator prints such an access without the parentheses it would
+give any other compound base, so the two spellings round-trip to one.
+
 Agency has no ternary. The refusal in `exprParser` looks for `? expr :` after
 an expression. When the expression already ends in an unwrap, the `?` of a
 ternary written without a space (`cond? a : b`) has been consumed, so

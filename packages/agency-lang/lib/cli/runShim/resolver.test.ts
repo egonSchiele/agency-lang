@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolve } from "./resolver.mjs";
+import { resolve, type ResolveContext } from "./resolver.mjs";
 
 function notFound(): Error & { code: string } {
   const err = new Error("Cannot find package") as Error & { code: string };
@@ -70,5 +70,96 @@ describe("resolver.mjs", () => {
       throw boom;
     };
     await expect(resolve("agency-lang", {}, next)).rejects.toBe(boom);
+  });
+
+  it("preserves the original error when the asynchronous fallback rejects", async () => {
+    const original = notFound();
+    const fallback = new Error("Fallback could not resolve the package");
+    let calls = 0;
+    const next = () => {
+      calls += 1;
+      return Promise.reject(calls === 1 ? original : fallback);
+    };
+    await expect(resolve("agency-lang/runtime", {}, next)).rejects.toBe(original);
+    expect(calls).toBe(2);
+  });
+});
+
+describe("synchronous resolver", () => {
+  it("returns the resolution directly without a Promise", () => {
+    const resolved = { url: "resolved:agency-lang", format: "module" };
+    const result = resolve("agency-lang", {}, () => resolved);
+    expect(result).toBe(resolved);
+    expect(result).not.toBeInstanceOf(Promise);
+  });
+
+  it.each(["agency-lang", "agency-lang/runtime"])(
+    "retries %s with the package parent and preserves the remaining context",
+    (specifier) => {
+      const context = {
+        parentURL: "file:///outside/main.mjs",
+        conditions: ["node", "import"],
+        importAttributes: {},
+      };
+      const contexts: ResolveContext[] = [];
+      const resolved = { url: "file:///install/runtime.mjs", format: "module" };
+      const next = (requested: string, received: ResolveContext) => {
+        expect(requested).toBe(specifier);
+        contexts.push(received);
+        if (contexts.length === 1) {
+          throw notFound();
+        }
+        return resolved;
+      };
+      expect(resolve(specifier, context, next)).toBe(resolved);
+      expect(contexts).toHaveLength(2);
+      expect(contexts[0]).toBe(context);
+      expect(contexts[1]).toEqual({
+        ...context,
+        parentURL: expect.stringMatching(/^file:.*\/package\.json$/),
+      });
+      expect(contexts[1].parentURL).not.toBe(context.parentURL);
+      expect(context.parentURL).toBe("file:///outside/main.mjs");
+    },
+  );
+
+  it.each(["lodash", "./missing.js", "agency-lang-other"])("does not retry %s", (specifier) => {
+    const original = notFound();
+    let calls = 0;
+    const next = () => {
+      calls += 1;
+      throw original;
+    };
+    expect(() => resolve(specifier, {}, next)).toThrow(original);
+    expect(calls).toBe(1);
+  });
+
+  it("propagates other errors without retrying", () => {
+    const original = new Error("Invalid package configuration");
+    let calls = 0;
+    const next = () => {
+      calls += 1;
+      throw original;
+    };
+    expect(() => resolve("agency-lang", {}, next)).toThrow(original);
+    expect(calls).toBe(1);
+  });
+
+  it("preserves the original error when the synchronous fallback throws", () => {
+    const original = notFound();
+    const fallback = new Error("Fallback could not resolve the package");
+    let calls = 0;
+    const next = () => {
+      calls += 1;
+      throw calls === 1 ? original : fallback;
+    };
+    let received: unknown;
+    try {
+      resolve("agency-lang/runtime", {}, next);
+    } catch (error) {
+      received = error;
+    }
+    expect(received).toBe(original);
+    expect(calls).toBe(2);
   });
 });

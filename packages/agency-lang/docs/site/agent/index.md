@@ -26,6 +26,17 @@ echo "summarize this file" | agency agent
 
 In this case, the agent will autonomously do the work and then exit.
 
+## Web search
+
+The agent offers at most one Brave or Tavily search tool. It uses Brave
+when `BRAVE_API_KEY` is set, otherwise Tavily when `TAVILY_API_KEY` is set.
+Empty values count as missing keys. With neither key set, the agent has
+no Brave or Tavily tool; supported models can still use hosted search.
+
+The code subagent keeps an explicit `/search` choice, including Tavily
+when both keys are set. `/search` also lets you choose hosted search or
+turn search off for that subagent.
+
 ## Tool output
 
 ```text

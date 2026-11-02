@@ -459,7 +459,7 @@ const SEARCH_HEADINGS: Record<SearchPhase, TraceSpan> = {
   failed: { text: "✗ Web search", style: "error" },
 };
 type TodoStatus = "pending" | "in_progress" | "completed";
-type Todo = { id: string; text: string; status: TodoStatus };
+type Todo = { text: string; status: TodoStatus };
 type TodoPresentation = { marker: TraceSpan; style?: TraceStyle; suffix: string };
 const TODO_STATUSES: Record<TodoStatus, TodoPresentation> = {
   pending: { marker: { text: "○", style: "muted" }, suffix: "" },
@@ -558,8 +558,9 @@ function describeToolEvent(event: ToolEvent, options: TraceOptions): TraceBlock 
     if (event.outcome === "failure") {
       return describeToolEnd(event, { text: "✗ Tasks failed", style: "error" });
     }
-    return isTodoList(event.value)
-      ? describeTodos(event.toolName, event.value, presentation.heading)
+    const todos = readTodos(event.value);
+    return todos !== null
+      ? describeTodos(event.toolName, todos, presentation.heading)
       : describeToolEnd(event, { text: "· Task result", style: "muted" });
   }
   const elapsed = elapsedText(event.timeTaken);
@@ -662,18 +663,38 @@ function describeSummary(
   };
 }
 
-function isTodoList(value: unknown): value is Todo[] {
-  return (
-    Array.isArray(value) &&
-    Array.from(value).every(
-      (todo) =>
-        isPlainObject(todo) &&
-        typeof todo.id === "string" &&
-        typeof todo.text === "string" &&
-        typeof todo.status === "string" &&
-        Object.hasOwn(TODO_STATUSES, todo.status),
-    )
-  );
+function readTodos(value: unknown): Todo[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const todos = Array.from(value, readTodo);
+  return todos.every((todo) => todo !== null) ? todos : null;
+}
+
+function readTodo(value: unknown): Todo | null {
+  if (!isPlainObject(value) || typeof value.text !== "string") {
+    return null;
+  }
+  if (
+    typeof value.id === "string" &&
+    typeof value.status === "string" &&
+    Object.hasOwn(TODO_STATUSES, value.status)
+  ) {
+    return { text: value.text, status: value.status as TodoStatus };
+  }
+  // Model-supplied lists can use done/active flags instead of the declared status.
+  if (typeof value.done !== "boolean" || typeof value.active !== "boolean") {
+    return null;
+  }
+  let status: TodoStatus;
+  if (value.done) {
+    status = "completed";
+  } else if (value.active) {
+    status = "in_progress";
+  } else {
+    status = "pending";
+  }
+  return { text: value.text, status };
 }
 
 function describeTodos(toolName: string, todos: Todo[], heading: TraceSpan): TraceBlock {

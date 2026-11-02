@@ -1,17 +1,14 @@
 ---
 name: "search"
-description: "Finds which web-search providers are usable right now and returns"
+description: "Selects one web-search provider from the configured API keys."
 ---
 
 # search
 
-their tools.
-
-  Client-side web search needs an API key, and which providers a user has
-  keys for varies. Agents ask for whatever is available instead of hardcoding
-  one provider, so an agent still runs with no keys at all, just without web
-  search. Adding a provider means appending one entry to the catalog here,
-  and every agent picks it up.
+Agents receive one client-side search tool: Brave when BRAVE_API_KEY is
+  set, otherwise Tavily when TAVILY_API_KEY is set. With neither key set,
+  they receive no client-side search tool. The catalog order sets the
+  preference for all agents that use this helper.
 
 ## Functions
 
@@ -21,8 +18,8 @@ their tools.
 searchTools(): any[]
 ```
 
-Return the web-search tools whose API key is set, or an empty array when
-  no search provider is configured.
+Return one web-search tool, preferring BRAVE_API_KEY over TAVILY_API_KEY.
+  Return an empty array when neither key is set.
 
 **Returns:** `any[]`
 
@@ -30,7 +27,7 @@ Return the web-search tools whose API key is set, or an empty array when
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L59))
 
 ### searchProviderName
 
@@ -51,7 +48,7 @@ Return a search tool's provider name from the catalog, or null for an
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L67))
 
 ### hostedSearchTools
 
@@ -76,7 +73,7 @@ Return the provider-hosted search capabilities available to a call on this
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L81))
 
 ### searchProviderNames
 
@@ -84,8 +81,8 @@ Return the provider-hosted search capabilities available to a call on this
 searchProviderNames(): string[]
 ```
 
-Return the names of the web-search providers whose API key is set, for
-  telling a user which search is active.
+Return the selected web-search provider's name, preferring Brave over
+  Tavily, or an empty array when neither API key is set.
 
 **Returns:** `string[]`
 
@@ -93,4 +90,4 @@ Return the names of the web-search providers whose API key is set, for
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L94))

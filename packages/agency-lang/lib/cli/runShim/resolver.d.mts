@@ -11,10 +11,13 @@ export type ResolveContext = {
   parentURL?: string;
 };
 
-export type NextResolve = (specifier: string, context: ResolveContext) => Promise<ResolveResult>;
+export type NextResolve = (
+  specifier: string,
+  context: ResolveContext,
+) => ResolveResult | Promise<ResolveResult>;
 
 export function resolve(
   specifier: string,
   context: ResolveContext,
   nextResolve: NextResolve,
-): Promise<ResolveResult>;
+): ResolveResult | Promise<ResolveResult>;

@@ -1,16 +1,16 @@
 import { searchTools, searchProviderNames, hostedSearchTools } from "std::agents/lib/search"
 
 // Which keys a developer has set varies, so this pins the invariants that
-// hold either way rather than a specific provider list: every name comes
-// from the catalog, and each available provider contributes exactly one
-// tool. An agent with no keys gets an empty array, never a failure.
+// hold either way: every name comes from the catalog, and the selected
+// provider contributes at most one tool. No keys means an empty array.
 node namesComeFromTheCatalog(): boolean {
   const known = ["Tavily", "Brave"]
   return every(searchProviderNames(), \name -> known.includes(name))
 }
 
-node oneToolPerAvailableProvider(): boolean {
-  return searchTools().length == searchProviderNames().length
+node atMostOneSearchTool(): boolean {
+  const tools = searchTools()
+  return tools.length <= 1 && tools.length == searchProviderNames().length
 }
 
 // Hosted search is requested from one place rather than hardcoded at each

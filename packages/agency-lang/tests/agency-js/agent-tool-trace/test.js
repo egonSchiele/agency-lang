@@ -7,6 +7,11 @@ const todos = [
   { id: "2", text: "Check availability", status: "in_progress" },
   { id: "3", text: "Compare hardware", status: "pending" },
 ];
+const booleanTodos = [
+  { active: false, done: true, text: 'Identify what "Fable 5.1" is and who publishes it' },
+  { active: true, done: false, text: "Read the announcement" },
+  { active: false, done: false, text: "Summarize the findings" },
+];
 const calls = [
   ["todoWrite", {}],
   ["todoWrite", { todos }],
@@ -21,6 +26,7 @@ const calls = [
   ["web_search_tavily", { query: 'site.example.com "quoted phrase"' }],
   ["web_search_brave", { query: "another query" }],
 ];
+const callRounds = [calls, [["todoWrite", { todos: booleanTodos }]], []];
 const hostedToolResults = [
   {
     tool: "web_search",
@@ -36,17 +42,17 @@ function makeClient() {
   return {
     async text() {
       requests += 1;
-      if (requests > 2) {
+      if (requests > callRounds.length) {
         throw new Error("Unexpected model request in tool trace fixture");
       }
       const first = requests === 1;
       return {
         success: true,
         value: {
-          output: first ? null : "done",
-          toolCalls: first
-            ? calls.map(([name, args], index) => new ToolCall(`call-${index}`, name, args))
-            : [],
+          output: requests === callRounds.length ? "done" : null,
+          toolCalls: callRounds[requests - 1].map(
+            ([name, args], index) => new ToolCall(`call-${requests}-${index}`, name, args),
+          ),
           hostedToolResults: first ? hostedToolResults : [],
           model: "test",
           usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 },
@@ -88,6 +94,8 @@ for (const [name, mode] of Object.entries(modes)) {
 
 const taskBlock =
   "✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ Verify rankings\n  │ › Check availability · in progress\n  │ ○ Compare hardware\n";
+const booleanTaskBlock =
+  '✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ Identify what "Fable 5.1" is and who publishes it\n  │ › Read the announcement · in progress\n  │ ○ Summarize the findings\n';
 function blockWith(output, heading) {
   return output.split("\n\n").find((block) => block.split("\n").includes(heading)) ?? "";
 }
@@ -95,6 +103,8 @@ function blockWith(output, heading) {
 function detailed(output) {
   return {
     oneTaskSnapshot: output.split(taskBlock).length === 2,
+    oneBooleanTaskSnapshot: output.split(booleanTaskBlock).length === 2,
+    noFallbackTodo: !output.includes("· Task result  todoWrite"),
     noGenericTodo: !/Tool (call|returned|finished|failed)  todoWrite/.test(output),
     failedTodoVisible: output.includes("✗ Tasks failed  todoWrite\n"),
     noTodoArgumentRows: !output.includes("  │ todos:"),

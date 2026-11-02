@@ -26,28 +26,38 @@ function isAgencyLangSpecifier(specifier) {
   return specifier === "agency-lang" || specifier.startsWith("agency-lang/");
 }
 
-export async function resolve(specifier, context, nextResolve) {
+// Modern hooks resolve synchronously; older Node versions return promises.
+function attemptResolution(operation, onError) {
   try {
-    return await nextResolve(specifier, context);
+    const result = operation();
+    return result instanceof Promise ? result.catch(onError) : result;
   } catch (err) {
-    if (err && err.code === "ERR_MODULE_NOT_FOUND" && isAgencyLangSpecifier(specifier)) {
-      // Retry only for agency-lang specifiers. If this also fails,
-      // fall through and rethrow the original error.
-      try {
-        return await nextResolve(specifier, {
-          ...context,
-          parentURL: fakeParentURL,
-        });
-      } catch (innerErr) {
-        // Set AGENCY_DEBUG_RESOLVER=1 to surface fallback failures.
-        // Normally we stay silent so the user only sees the original
-        // ERR_MODULE_NOT_FOUND from Node.
-        if (process.env.AGENCY_DEBUG_RESOLVER) {
-          const msg = innerErr && innerErr.message ? innerErr.message : String(innerErr);
-          process.stderr.write(`[agency resolver] fallback failed for ${specifier}: ${msg}\n`);
-        }
-      }
-    }
-    throw err;
+    return onError(err);
   }
+}
+
+export function resolve(specifier, context, nextResolve) {
+  return attemptResolution(
+    () => nextResolve(specifier, context),
+    (err) => {
+      if (err?.code !== "ERR_MODULE_NOT_FOUND" || !isAgencyLangSpecifier(specifier)) {
+        throw err;
+      }
+      // Retry only for agency-lang specifiers, preserving the original error.
+      return attemptResolution(
+        () =>
+          nextResolve(specifier, {
+            ...context,
+            parentURL: fakeParentURL,
+          }),
+        (innerErr) => {
+          if (process.env.AGENCY_DEBUG_RESOLVER) {
+            const msg = innerErr && innerErr.message ? innerErr.message : String(innerErr);
+            process.stderr.write(`[agency resolver] fallback failed for ${specifier}: ${msg}\n`);
+          }
+          throw err;
+        },
+      );
+    },
+  );
 }

@@ -1,0 +1,24 @@
+{
+  "both": {
+    "providerNames": ["Brave"],
+    "tools": [{ "name": "web_search_brave", "keyBound": true, "keyHidden": true }]
+  },
+  "braveOnly": {
+    "providerNames": ["Brave"],
+    "tools": [{ "name": "web_search_brave", "keyBound": true, "keyHidden": true }]
+  },
+  "tavilyOnly": {
+    "providerNames": ["Tavily"],
+    "tools": [{ "name": "web_search_tavily", "keyBound": true, "keyHidden": true }]
+  },
+  "neither": { "providerNames": [], "tools": [] },
+  "emptyKeys": { "providerNames": [], "tools": [] },
+  "emptyBrave": {
+    "providerNames": ["Tavily"],
+    "tools": [{ "name": "web_search_tavily", "keyBound": true, "keyHidden": true }]
+  },
+  "emptyTavily": {
+    "providerNames": ["Brave"],
+    "tools": [{ "name": "web_search_brave", "keyBound": true, "keyHidden": true }]
+  }
+}

@@ -210,6 +210,30 @@ describe("task lists", () => {
     expect(stripAnsi(output)).toContain("1/4 complete");
   });
 
+  it("renders task lists with done and active flags", () => {
+    const value = [
+      { active: false, done: true, text: 'Identify what "Fable 5.1" is and who publishes it' },
+      { active: true, done: false, text: "Check availability" },
+      { active: false, done: false, text: "Compare hardware" },
+      { active: true, done: true, text: "Verify rankings" },
+    ];
+    const output = formatAgentTrace(
+      { kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" },
+      { ...plain, color: true },
+    );
+    expect(stripAnsi(output)).toBe(
+      [
+        "✓ Tasks updated  todoWrite",
+        "  │ 2/4 complete",
+        '  │ ✓ Identify what "Fable 5.1" is and who publishes it',
+        "  │ › Check availability · in progress",
+        "  │ ○ Compare hardware",
+        "  │ ✓ Verify rankings",
+      ].join("\n"),
+    );
+    expect(output.match(/\x1b\[9m/g)).toHaveLength(2);
+  });
+
   it("shows empty, completed, and multiple active lists independently", () => {
     const render = (value: unknown) =>
       formatAgentTrace({ kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" }, plain);
@@ -249,6 +273,10 @@ describe("task lists", () => {
     [null],
     [{ text: "Missing id", status: "pending" }],
     [{ id: "1", text: "Unknown", status: "done" }],
+    [{ text: "Missing active", done: false }],
+    [{ text: "Missing done", active: false }],
+    [{ text: "Invalid flag", done: "false", active: true }],
+    [{ text: "Invalid flag", done: true, active: "false" }],
   ])("falls back for malformed tasks (%j)", (value) => {
     const output = formatAgentTrace(
       { kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" },

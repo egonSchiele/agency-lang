@@ -12,8 +12,8 @@
       ]
     },
     {
-      "nodeName": "oneToolPerAvailableProvider",
-      "description": "each available provider contributes exactly one tool",
+      "nodeName": "atMostOneSearchTool",
+      "description": "at most one selected provider contributes a search tool",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

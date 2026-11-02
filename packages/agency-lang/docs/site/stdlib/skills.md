@@ -1,6 +1,6 @@
 ---
 name: "skills"
-description: "Load skill files for LLMs and expand slash-command templates."
+description: "Load, save, and draft skill files for LLMs, and expand slash-command templates."
 ---
 
 # skills
@@ -50,7 +50,7 @@ export type SkillEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L64))
 
 ### SkillGroup
 
@@ -64,7 +64,7 @@ export type SkillGroup = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L324))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L339))
 
 ### SkillCommand
 
@@ -80,7 +80,7 @@ export type SkillCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L376))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L391))
 
 ### ClaudeSkillsScan
 
@@ -102,7 +102,7 @@ export type ClaudeSkillsScan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L388))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L403))
 
 ## Effects
 
@@ -116,7 +116,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L196))
 
 ### std::skills::commandsDir
 
@@ -127,7 +127,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L201))
 
 ### std::skills::save
 
@@ -140,7 +140,7 @@ effect std::skills::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L527))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L544))
 
 ### std::skills::review
 
@@ -153,7 +153,7 @@ effect std::skills::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L621))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L638))
 
 ## Constants
 
@@ -163,7 +163,7 @@ effect std::skills::review {
 export static const MAX_TOOL_NAME_LEN = 64
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L115))
 
 ## Functions
 
@@ -197,7 +197,7 @@ model call. Each later read through the tool requires approval.
 | name | `string` | "" |
 | brief | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L210))
 
 ### skillsDir
 
@@ -239,7 +239,7 @@ directory-derived names collide after sanitizing and shortening them.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L303))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L318))
 
 ### scanSkillsSubdirs
 
@@ -272,7 +272,7 @@ Every requested subdirectory gets a group, including empty or missing ones.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L335))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L350))
 
 ### scanClaudeSkills
 
@@ -308,7 +308,7 @@ The folder's scan approval covers both outputs, so reject
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L476))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L493))
 
 ### writeSkill
 
@@ -352,7 +352,7 @@ save approval. Use `designSkill` to collect feedback before saving.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L582))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L599))
 
 ### designSkill
 
@@ -406,7 +406,7 @@ approvals. Accepting the first draft makes no revision model call.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L729))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L746))
 
 ### docsEntries
 
@@ -429,7 +429,7 @@ and brief listings without rereading the packaged documentation.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L774))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L791))
 
 ### docsToolFromEntries
 
@@ -456,7 +456,7 @@ Reuse one scan to prepare full and brief docs tools for different context sizes.
 | entries | `SkillEntry[]` |  |
 | brief | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L783))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L800))
 
 ### docsSkill
 
@@ -477,7 +477,7 @@ Build a tool that lets an LLM read a section of the packaged Agency docs.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L799))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L816))
 
 ### bundledDocsDir
 
@@ -491,7 +491,7 @@ Use this directory to scope a handler or policy that approves packaged docs read
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L809))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L826))
 
 ### agentSkill
 
@@ -511,7 +511,7 @@ Build a tool that lets an LLM list and read an agent's packaged skills.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L817))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L834))
 
 ### agentPrompt
 
@@ -533,7 +533,7 @@ Read a prompt file packaged with the stdlib agents.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L830))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L847))
 
 ### commandsDir
 
@@ -569,7 +569,7 @@ Use `scanClaudeSkills` for the invocation switches in Claude Code SKILL.md files
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L875))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L896))
 
 ### expandSlash
 
@@ -593,7 +593,8 @@ at the end as `ARGUMENTS: <text>`.
 
 Leading and trailing whitespace do not affect command matching. Unknown
 commands and messages without a slash pass through unchanged. Expansion
-substitutes text only; it does not execute shell commands or positional arguments.
+only substitutes `$ARGUMENTS`; it runs no shell commands and ignores
+`$1`-style references.
 
 **Parameters:**
 
@@ -604,4 +605,4 @@ substitutes text only; it does not execute shell commands or positional argument
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L919))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L941))

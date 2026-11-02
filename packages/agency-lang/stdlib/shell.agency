@@ -31,6 +31,9 @@ import {
   ```
 */
 
+// Exported so `std::safeBash` can declare the same return type on both its
+// paths: a fast-path result and a real `bash()` result have to be the same
+// shape by construction, not by coincidence.
 /** Captured standard output, standard error, and exit code from a command. */
 export type ExecResult = {
   stdout: string;
@@ -211,7 +214,8 @@ export idempotent def ls(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  List directory entries, optionally including subdirectories.
+  List directory entries, optionally including subdirectories. A recursive
+  listing skips node_modules, .git, dist, build, .next, and .cache.
   Narrow dir or raise maxResults when the listing reaches its limit.
 
   @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
@@ -263,6 +267,7 @@ export idempotent def grep(
 ): Result {
   """
   Search a file or directory recursively with a JavaScript regular expression.
+  A directory search skips node_modules, .git, dist, build, .next, and .cache.
   Narrow path or refine the pattern when results reach maxResults.
 
   @param path - Directory or single file to search.

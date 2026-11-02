@@ -40,7 +40,7 @@ export type Critique = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L89))
 
 ## Functions
 
@@ -61,7 +61,7 @@ Run a block several times in parallel and collect the results in attempt order.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L31))
 
 ### consensus
 
@@ -80,7 +80,7 @@ Run a block several times in parallel and return its most common result.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L40))
 
 ### retry
 
@@ -101,7 +101,7 @@ Retry a block until its result passes a test.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L48))
 
 ### retryWithFeedback
 
@@ -128,7 +128,7 @@ Retry a block using the prior result to improve each attempt.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L63))
 
 ### revise
 
@@ -160,7 +160,7 @@ If no attempt completed, an attempt's saved draft can be used instead.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L98))
 
 ### firstValid
 
@@ -181,4 +181,4 @@ Run a block for each variant in parallel and return the first passing result
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L144))

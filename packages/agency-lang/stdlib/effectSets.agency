@@ -28,7 +28,8 @@ export effectSet FileWrite = <std::write, std::writeBinary, std::edit, std::appl
 /** Filesystem reads and writes covered by FileRead and FileWrite. */
 export effectSet FileSystem = <FileRead, FileWrite>
 
-/** Shell commands, program execution, and Agency subprocess runs. */
+/** Shell commands, program execution, and Agency subprocess runs. These can
+run any program, so approve them with care. */
 export effectSet Shell = <std::bash, std::exec, std::run>
 
 /** Network effects for HTTP, search, browsers, and service integrations. */
@@ -58,6 +59,7 @@ export effectSet Github = <GithubRead, GithubWrite>
 /**
 Finance connector effects for macroeconomic data and filings.
 Include Network as well for the HTTP effects their requests raise.
+GDELT news search lives in std::data/news and is not part of this set.
 */
 export effectSet DataFinance = <std::fred, std::edgar, std::dbnomics>
 

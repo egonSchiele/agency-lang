@@ -162,7 +162,7 @@ export def transcribe(
   @param allowedPaths - Only allow reading audio files under these path prefixes
   @param provider - Override the provider (normally derived from the model name)
   @param prompt - Optional text to bias decoding (names, jargon)
-  @param timestampGranularity - "segment" or "word" to request timestamps
+  @param timestampGranularity - "segment" or "word". The result is still plain text without timestamps.
   @param apiKey - Override the API key
   """
   if (model == "") {

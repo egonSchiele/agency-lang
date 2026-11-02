@@ -116,13 +116,13 @@ Build a horizontal bar chart to display with std::ui/layout render.
   Stacked values within each category must all have the same sign.
 
   @param mode - Grouped draws a bar per series; stacked combines them per category
-  @param keys - Series definitions; omitted colors and symbols are assigned automatically
+  @param keys - Series definitions. A color is a name like "blue" or a hex string like "#cc7a4a"; omitted colors and symbols are assigned automatically
   @param data - Categories with values aligned to keys by index
   @param showValues - Show the numeric value beside each bar
   @param legend - Show the series names and symbols
   @param max - Positive axis maximum; longer bars saturate at it, and 0 derives the maximum from data
   @param barChar - Default fill symbol for the first or only series
-  @param width - Columns, a percentage of the parent, or "full"
+  @param width - Columns, a percentage of the parent such as "50%", or "full"
 
 **Parameters:**
 

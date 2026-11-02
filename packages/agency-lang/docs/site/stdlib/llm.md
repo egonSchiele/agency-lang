@@ -445,6 +445,11 @@ Load a model-data JSON file into the catalog and return its model count.
 
   @param path - File produced by agency models refresh, relative to the working directory or absolute.
 
+Use the JSON produced by `agency models refresh` to add or update model
+metadata. Later files win on matching provider and model names, merging
+individual fields. Hosted-tool metadata also merges. The returned count is
+for this file, not the accumulated catalog.
+
 **Parameters:**
 
 | Name | Type | Default |

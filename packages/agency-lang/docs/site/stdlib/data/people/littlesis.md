@@ -165,7 +165,8 @@ littlesisRelationships(
 ): Result<Relationship[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
-List an entity’s relationships with roles, amounts, and dates.
+List an entity's relationships with roles, amounts, and dates. Edges carry
+  entity IDs, not names; use littlesisConnections for neighbor names.
 
   @param id - An entity ID returned by a LittleSis search or connection listing.
   @param category - Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories.
@@ -196,7 +197,8 @@ littlesisConnections(
 ): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
-List the people and organizations connected to an entity, by name.
+List the people and organizations connected to an entity, by name. The
+  preferred first hop for "who is X tied to".
 
   @param id - An entity ID returned by a LittleSis search or connection listing.
   @param category - Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories.
@@ -214,4 +216,4 @@ List the people and organizations connected to an entity, by name.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L282))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L283))

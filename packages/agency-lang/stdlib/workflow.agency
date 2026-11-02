@@ -143,6 +143,10 @@ type SignatureSource = {
   reExport: string | null
 }
 
+// A `std::` module is described from its re-export line. A local module is
+// read from `dir`, which asks for approval, and described with its path, so
+// its own imports of other local files resolve. Those files are read without
+// prompts of their own, as `_checked`'s type check already reads them.
 /**
 Describe a tool module with enough path context to resolve its local imports.
 */

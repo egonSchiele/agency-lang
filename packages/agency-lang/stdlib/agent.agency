@@ -69,7 +69,8 @@ A handler can answer with `approve("reply")`. */
 export def question(prompt: string): string {
   """
   Ask the user for information needed to continue and wait for their reply.
-  Use it for facts only the user can provide, after checking available sources.
+  Use it for facts only the user can provide. Do not ask for anything you can
+  look up, and do not guess at a fact you could ask for.
   """
   let answer = interrupt std::question(prompt, {
     prompt: prompt

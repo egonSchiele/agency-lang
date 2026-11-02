@@ -112,7 +112,7 @@ Find Wikidata entities by name and return their QIDs.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L220))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L219))
 
 ### wikidataEntity
 
@@ -122,7 +122,8 @@ wikidataEntity(
 ): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON>
 ```
 
-Read a Wikidata entity’s English profile and property claims.
+Read a Wikidata entity's English profile and property claims. Entity-valued
+  claims are QIDs; resolve them with another lookup to get their names.
 
   @param qid - A Wikidata entity ID such as "Q42", obtained from search or another claim.
 
@@ -138,7 +139,7 @@ Read a Wikidata entity’s English profile and property claims.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L231))
 
 ### wikidataQuery
 
@@ -148,7 +149,8 @@ wikidataQuery(
 ): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON>
 ```
 
-Run a SPARQL SELECT query against the Wikidata knowledge graph.
+Run a SPARQL SELECT query against the Wikidata knowledge graph. The
+  prefixes wd:, wdt:, and rdfs: and SERVICE wikibase:label are available.
 
   @param sparql - A complete SPARQL SELECT query.
 

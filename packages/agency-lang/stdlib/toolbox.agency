@@ -744,7 +744,7 @@ let _answered: Record<string, Answered[]> = {}
 def askAndRecord(stagingDir: string, prompt: string): string {
   """
   Ask for a fact only the user can supply, such as the intended address or account.
-  Do not guess or ask for facts you can look up.
+  Ask instead of guessing. Do not ask for anything you can look up.
   """
   const answer = question(prompt)
   if (answer != null) {
@@ -956,7 +956,8 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   if (compiled is failure(compileErr)) {
     return draftProblem("${compileErr}")
   }
-  // Typecheck the wrapper source in memory instead of reading it back.
+  // The compile does not report type errors; the typecheck does. It takes
+  // the source the template just produced, so nothing is read back.
   const report = typecheck(toolSource, dir: settings.stagingDir, strict: true)?
   if (report.errors.length > 0) {
     const messages = map(report.errors, \diag -> diag.message)

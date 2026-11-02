@@ -25,6 +25,12 @@ import {
   the nested nodes held in fields typed as `any[]`.
 */
 
+// Nested inline and recursive structures (e.g. `InlineBold` content,
+// `BlockQuote` blocks, frontmatter values) are typed as `any[]` / `any`
+// because Agency does not yet support self-referential type aliases. The
+// runtime shape still matches the documented types below. Tighten these
+// types once recursive aliases are supported.
+
 // Inline nodes
 
 /** A plain run of text. */
@@ -152,6 +158,8 @@ export type BlockQuote = {
   content: any[]
 }
 
+// `content` is `any[]` because Agency does not yet support mutual recursion
+// with `List.items: ListItem[]`.
 /** A list item with block nodes in `content`, including paragraphs and
     nested lists. For task lists, `checked` is `true` for `[x]` or `[X]`
     and `false` for `[ ]`. Plain items omit `checked`. */

@@ -154,7 +154,8 @@ export def edgarFilingsByCik(cik: string, formType: string = "", limit: number =
 @capabilities(network)
 export def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
-  List recent SEC filings for a company by stock ticker.
+  List recent SEC filings for a company by stock ticker. If you already know
+  the CIK, prefer edgarFilingsByCik to skip the ticker lookup.
 
   @param ticker - A stock ticker such as "AAPL", matched without regard to case.
   @param formType - A form such as "10-K" or "8-K", or empty for all forms.

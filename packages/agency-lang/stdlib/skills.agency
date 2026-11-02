@@ -3,6 +3,15 @@ import { mkdir } from "std::fs"
 import { frontmatter } from "std::markdown"
 import { exists } from "std::shell"
 
+// `skillsDir` / `commandsDir` raise ONE approval interrupt up front
+// ("scan this directory for skills?"). Reading the matched files is part
+// of fulfilling that approval, so we glob + read them with the
+// non-interrupt primitives (`_glob` / `_read`) rather than the
+// interrupt-raising `glob` / `read`. Otherwise every file would raise
+// its own std::glob / std::read interrupt, re-prompting the user (and,
+// for an agent that bundles 100+ doc files, flooding the handler chain
+// and statelog at startup). Only call these primitives where an
+// interrupt that covers the read has already been raised.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 import { _realDir } from "agency-lang/stdlib-lib/fs.js"
@@ -18,7 +27,7 @@ import {
 
 
 /** @module
-  @summary Load skill files for LLMs and expand slash-command templates.
+  @summary Load, save, and draft skill files for LLMs, and expand slash-command templates.
 
   ```ts
   import { skillsDir } from "std::skills"
@@ -58,6 +67,10 @@ export type SkillEntry = {
   location: string
 }
 
+// Every string spliced into the `<available_skills>` block comes from
+// user-authored frontmatter or filenames. Without escaping, a description
+// containing `&` or a closing tag would produce malformed markup and could
+// inject extra tags into the prompt. Escape every field `renderEntry` adds.
 def xmlEscape(s: string): string {
   """
   Escape characters that have special meaning in XML text and attributes.
@@ -96,6 +109,8 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
   }
 }
 
+// Providers cap tool-name length: OpenAI at 64 characters, Anthropic at 128.
+// Cap to the stricter 64 so a name is accepted everywhere.
 /** Maximum length of a generated tool name or a newly saved skill name. */
 export static const MAX_TOOL_NAME_LEN = 64
 
@@ -392,7 +407,8 @@ export type ClaudeSkillsScan = {
   commands: SkillCommand[]
 }
 
-// Limit each description in the Claude Code skills listing, including `when_to_use`.
+// Matches Claude Code, which cuts a skill's description, `when_to_use`
+// included, at this many characters in the skill listing.
 static const MAX_SKILL_DESCRIPTION_CHARS = 1536
 
 static const TRUE_WORDS = ["true", "yes", "on", "1"]
@@ -401,7 +417,8 @@ static const FALSE_WORDS = ["false", "no", "off", "0"]
 // Written with `\$` so it is the literal token, not an interpolation.
 static const CLAUDE_SKILL_DIR_TOKEN = "\${CLAUDE_SKILL_DIR}"
 
-// Accept boolean values and common text spellings regardless of letter case.
+// A frontmatter switch read the way Claude Code reads its boolean fields: a
+// YAML boolean, a number, or a word, in any letter case.
 def frontmatterFlagToBool(data: any, key: string, fallback: boolean): boolean {
   if (data == null || data[key] == null) {
     return fallback
@@ -837,6 +854,10 @@ export def agentPrompt(filename: string): Result<string> {
   return try _read(_agentPromptsDir(), filename, 0, 0)
 }
 
+// Slash commands are pure prompt templates. Deferred features (shell
+// injection, `$N` positional references, `allowed-tools` pre-approval) are
+// tracked in `docs/superpowers/plans/2026-06-05-slash-commands-v2.md`.
+
 // Remove frontmatter and one trailing newline. An unclosed frontmatter
 // fence produces an empty body.
 def stripFm(raw: string): string {
@@ -914,7 +935,8 @@ at the end as `ARGUMENTS: <text>`.
 
 Leading and trailing whitespace do not affect command matching. Unknown
 commands and messages without a slash pass through unchanged. Expansion
-substitutes text only; it does not execute shell commands or positional arguments.
+only substitutes `$ARGUMENTS`; it runs no shell commands and ignores
+`$1`-style references.
 */
 export def expandSlash(msg: string, commands: SkillCommand[]): string {
   """

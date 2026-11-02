@@ -115,7 +115,7 @@ grepSpill(
 Search saved tool output using JavaScript regular expressions. Returns matching
   lines with line numbers, grouped by pattern when morePatterns is supplied.
 
-  @param filename - The saved name from a "full output saved as" notice.
+  @param filename - The saved name from a "full output saved as" notice. A name only, never a path.
   @param maxResults - Maximum matches per pattern.
   @param morePatterns - Additional patterns to search in the same output.
 

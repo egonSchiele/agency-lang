@@ -1,5 +1,9 @@
-// These imports bring in effect declarations used to check the payloads
-// raised below. The prelude supplies std::write.
+// These imports are NOT unused. Effect declarations come with imports,
+// and without them the `raise std::bash(...)`, `raise std::grep(...)`, and
+// `raise std::git::*(...)` sites below compile with their payload
+// contracts UNENFORCED. Measured: dropping them makes
+// `raise std::git::status("...", { wrongField: x })` typecheck clean.
+// `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
 import { bash, grep, ls, glob, ExecResult } from "std::shell"
@@ -341,6 +345,8 @@ def literalTarget(word: Word): Result<string> {
   return literalWordText(word)
 }
 
+// The return type is narrowed rather than `string` so an invalid mode
+// cannot reach the `std::write` payload or the `_write` call.
 def writeMode(op: string): WriteMode {
   """
   Return append mode for >> and overwrite mode otherwise.
@@ -918,6 +924,10 @@ def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<E
   return failure("${verb} with no path reads stdin")
 }
 
+// A command that names no file and reads its stdin. Fed by a pipe, it reads
+// only the previous command's output, so it adds nothing beyond its
+// redirects. Anywhere else its stdin is safeBash's closed one, so the
+// command does nothing useful and stays unrecognized.
 def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Result {
   """
   Refuse program invocations whose input cannot be described by the execution payload.
@@ -1367,6 +1377,10 @@ def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]):
   return stdinStage("tr", readsStdin, redirects)
 }
 
+// A folder is refused because the program would read what no payload names
+// (`diff a b` of two folders reads every file under both, links followed).
+// A FIFO or a device is refused because a read of it may never return. A
+// missing path is refused too, so any doubt asks std::bash.
 @capabilities(fileRead)
 def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Result<ReadPath> {
   """
@@ -1610,6 +1624,10 @@ def leadingPositionals(command: SimpleCommand): number {
   return count
 }
 
+// The glob tool matches a whole relative path with `*` stopping at `/`,
+// while -name matches the last part at any depth, so -name's value gets a
+// `**/` in front unless the search stops at depth 1. With no -name, or with
+// a word that widens or inverts it, the pattern is everything.
 def findPattern(split: SplitArgs): string {
   """
   Build a glob pattern covering the paths selected by a find expression.
@@ -1666,6 +1684,10 @@ def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVer
  given as an operand is followed unless -F, -d, or -l is given. */
 static const LS_LINK_FLAGS: string[] = ["l", "d", "F"]
 
+// Only ls follows a folder link operand, and only without -l, -d, or -F.
+// du and tree follow a link operand only under -H, -L, or -l, and none of
+// those is in their rows. Adding one of those flags to a du or tree row
+// makes this function wrong.
 def followsFolderLink(verb: string, split: SplitArgs): boolean {
   """
   Determine whether the listing program follows a directory symlink operand.
@@ -1719,6 +1741,9 @@ def widened(kept: LsPayload, extra: LsPayload): LsPayload {
   }
 }
 
+// find never follows a link operand without -H or -L, which the ordering
+// rule refuses, so a linked path is refused here. A file is refused by
+// `requireFolder`.
 def findFolders(entries: ListTarget[]): Result<string[]> {
   """
   Return find's resolved directory operands, refusing files and final-component symlinks.
@@ -1894,9 +1919,14 @@ def chainLinks(commands: Command[]): Result<ChainLink[]> {
 }
 
 def linksOf(command: Command, join: Join): Result<ChainLink[]> {
-  // Unlike refusal checks, in-process chains stop at groups and pipelines:
-  // a flat list cannot reproduce skipping an entire group in a && (b || c).
-  // Simple chains follow the parser's left-associative join order.
+  // A second walk over the tree beside `flattenOne`, on purpose.
+  // `flattenOne` feeds the refuse wall, so it must see through
+  // parentheses and pipelines. A chain must stop at them: bash skips
+  // `(b || c)` in `a && (b || c)` as a whole, which a flat list cannot
+  // say. One walk answering both would give the wall a reason to skip a
+  // node. The parser is left-associative (`a && b || c` is
+  // `Or(And(a, b), c)`), so the flat list with a join per link runs in
+  // bash's order.
   return match(command) {
     { tag: "simpleCommand" } => success([{ join: join, command: command }])
     { tag: "and", left, right } => joinedLinks(left, join, right, "and")
@@ -2434,6 +2464,13 @@ export def isRefused(command: SimpleCommand): boolean {
   return isDestructiveGit(command)
 }
 
+// Only the FIRST argument is the subcommand. `git log reset` is a log, not
+// a reset, and matching a subcommand name anywhere in the arguments would
+// refuse it.
+//
+// `clean` and `restore` are destructive by purpose. `reset` and `checkout`
+// are only destructive in particular spellings, and refusing the whole
+// subcommand would refuse `git checkout main`, which agents do constantly.
 def isDestructiveGit(command: SimpleCommand): boolean {
   """
   Check the first argument and flags for explicitly refused destructive Git operations.
@@ -2495,6 +2532,9 @@ def renderFlag(flag: FlagWord): string {
   return "${flag.flagName}=${flag.flagValue}"
 }
 
+// Resolved once, at the top, and then carried on every action. An action
+// that did not carry it would run wherever the process happened to be,
+// which is the same command doing two different things.
 export def resolveCwd(cwd: string): string {
   """
   Use the requested directory, then the agent directory, then the process directory.
@@ -2506,7 +2546,8 @@ export def resolveCwd(cwd: string): string {
   if (agent != "") {
     return agent
   }
-  // An unset agent directory falls back to the process working directory.
+  // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
+  // nothing set one, which is the case the tests run in.
   return "."
 }
 
@@ -2516,9 +2557,12 @@ export def safeBash(
 ): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run Bash commands after approval of the actions they perform.
-  Return stdout on success and report nonzero exits with their code and output.
-  Read saved long output with readSpill or grepSpill.
+  Return stdout on success. A nonzero exit is a failure carrying the exit
+  code, stdout, and stderr, so there is no need to echo `$?` or re-run a
+  command to learn how it exited. Read saved long output with readSpill or
+  grepSpill, not with bash.
 
+  @param command - One or more bash commands.
   @param cwd - Working directory, defaulting to the agent directory or the process directory.
   """
   const dir = resolveCwd(cwd)
@@ -2596,6 +2640,8 @@ static const READ_TOOL_FOR_VERB: Record<string, string> = {
   find: "glob"
 }
 
+// safeBash cannot see the policy, so the sentence below does not claim the
+// tool needs no approval, only that a policy can approve its question.
 def toolHint(verbs: string[]): string {
   """
   Suggest equivalent read tools when every rejected command has one.
@@ -2667,6 +2713,16 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
 
 // Keep this dispatch exhaustive and typed so new effects need checked raise
 // sites. Include the full command in each payload for the approver to inspect.
+// An effect is raised at a named site, not by name-as-data, so this is a
+// closed dispatch with one arm per effect. That is also why safeBash
+// declares them all in its `raises` clause: it is how an agent author
+// discovers which handlers to write.
+//
+// The match is on `effect.name`, not on `effect` with object patterns:
+// matching a member path narrows its siblings per arm, so `effect.payload`
+// has the right variant type in each body. It is exhaustive with no
+// catch-all, so a new Effect variant without a raise site is a type error
+// here, not a runtime failure.
 @capabilities(fileRead, fileWrite, subprocess, env)
 def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   """

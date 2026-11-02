@@ -24,7 +24,7 @@ Return the Agency verifier's file inspection and command execution tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L31))
 
 ### agencyVerifierAgent
 
@@ -73,4 +73,4 @@ Run an Agency program and judge its result against a task.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L94))

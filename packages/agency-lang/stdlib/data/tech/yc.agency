@@ -218,7 +218,8 @@ export def ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fet
 @capabilities(network)
 export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
-  Read a curated YC company list.
+  Read a curated YC company list. "all" is large (about 6 MB); prefer a
+  batch, industry, or tag lookup when you only need part of the directory.
 
   @param list - Use "top", "all", "hiring", "nonprofit", "women-founded", "black-founded", or "hispanic-latino-founded".
   """
@@ -235,7 +236,7 @@ export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std:
 @capabilities(network)
 export def ycMeta(): Result<YcMeta> raises <std::yc, std::http::fetchJSON> {
   """
-  Discover available YC batch, industry, and tag slugs and the dataset’s update time.
+  Discover available YC batch, industry, and tag slugs and the dataset's update time.
   """
   return interrupt std::yc("Fetch the YC directory metadata?", { op: "meta", query: "" })
   const result = connectorFetch(YC_BASE, YC_DOMAINS, buildMetaPath()) with approve

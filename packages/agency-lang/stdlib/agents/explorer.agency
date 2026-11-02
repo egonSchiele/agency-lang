@@ -113,9 +113,11 @@ summary, which is the fastest way to answer "what exists".
 
 """
 
+// Read-only by design: the explorer surveys and describes, and a surveyor
+// that can edit is no longer a surveyor.
 export def buildTools(): any[] {
   """
-  Return the explorer's file and source lookup tools.
+  Return the explorer's file, source, and web lookup tools.
   """
   return [
     ...readOnlyFileTools(),
@@ -165,7 +167,9 @@ export handoff def explorerAgent(
 ): Result<string> {
   """
   Survey a codebase or documentation and return an organized answer with sources.
-  As an LLM tool, continue the caller's conversation and keep the research in its history.
+  It never changes anything. It continues your conversation, and every file it
+  reads stays in your history, so say how much ground to cover and scope the
+  question tightly.
 
   @param question - The question and the scope to cover.
   @param maxCost - Cost budget in USD.

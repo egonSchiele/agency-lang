@@ -52,10 +52,11 @@ effect std::remove { target: string }
 export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd: boolean = false): Result {
   """
   Apply text replacements in order, writing only if every edit succeeds.
-  Each oldText must match uniquely unless replaceAll is true. Use separate edits
-  for distant changes, with just enough oldText to identify each match.
+  Prefer one call with multiple edits over many separate calls. Each oldText
+  must match uniquely unless replaceAll is true. Use separate edits in the
+  same call for distant changes, with just enough oldText to identify each match.
 
-  @param filename - Relative path within dir, without upward traversal or symlink components.
+  @param filename - Relative path within dir, without upward traversal or symlink components. To reach another directory, pass it as dir.
   @param edits - Replacements to apply in order; replaceAll replaces every occurrence.
   @param dir - Directory containing the file.
   @param useAgentCwd - Resolve a relative dir against the agent working directory when set.

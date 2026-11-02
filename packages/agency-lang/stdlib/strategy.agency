@@ -21,6 +21,9 @@ node main() {
 Function budget decorators live in `std::decorators`.
 */
 
+// Private helper: return the most common element in an array (majority vote).
+// `mostCommon` used to be a public auto-imported stdlib function. We removed
+// it as too niche to auto-import, and consensus() is now its only consumer.
 def mostCommon(items: any[]): any {
   return _mostCommon(items)
 }

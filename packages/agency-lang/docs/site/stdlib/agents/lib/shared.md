@@ -17,7 +17,7 @@ read packaged documentation while rejecting other interrupts.
 export type ReasoningEffort = "low" | "medium" | "high"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L39))
 
 ## Constants
 
@@ -27,7 +27,7 @@ export type ReasoningEffort = "low" | "medium" | "high"
 export static const AGENT_SPILL_OVER = 100000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L18))
 
 ## Functions
 
@@ -50,7 +50,7 @@ Approves reads of the docs that ship in this package and rejects every
 |---|---|---|
 | intr |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L24))
 
 ### withContext
 
@@ -69,7 +69,7 @@ Append optional context to a task prompt, returning the task unchanged when cont
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L32))
 
 ### llmOptions
 
@@ -113,4 +113,4 @@ Build LLM options for an agent call, using the ambient model unless overridden.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L41))

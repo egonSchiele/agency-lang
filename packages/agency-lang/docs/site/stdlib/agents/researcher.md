@@ -11,7 +11,8 @@ if that follow-up is blank. No separate reviewer checks the answer.
 
 As an LLM tool, this handoff continues the caller's conversation. From code,
 use a `thread` block to isolate the research. `keepDraft: false` makes a
-budget stop a failure even when a draft is available.
+budget stop a failure even when a draft is available. The draft is then in
+the failure's data as `draft`.
 
 ## Types
 
@@ -31,7 +32,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L187))
 
 ## Functions
 
@@ -45,7 +46,7 @@ Return the researcher's source lookup and communication tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L44))
 
 ### researcherAgent
 
@@ -98,4 +99,4 @@ Answer a research question from web and Wikipedia sources and return a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L129))

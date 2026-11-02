@@ -91,7 +91,7 @@ export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: st
   @param timeMin - An ISO 8601 timestamp with timezone, or empty to start at the current time.
   @param timeMax - An ISO 8601 timestamp with timezone, or empty for no upper bound.
   @param query - Free-text terms to match against events.
-  @param calendarId - Use "primary" for the signed-in user’s primary calendar.
+  @param calendarId - Use "primary" for the signed-in user's primary calendar.
   """
   return interrupt std::listEvents("Are you sure you want to read your Google Calendar events?", {
     maxResults: maxResults,
@@ -119,7 +119,7 @@ export def createEvent(summary: string, start: string, end: string, description:
 
   @param start - An ISO 8601 timestamp with timezone, or YYYY-MM-DD for an all-day event.
   @param end - An ISO 8601 timestamp with timezone, or the exclusive end date for an all-day event.
-  @param calendarId - Use "primary" for the signed-in user’s primary calendar.
+  @param calendarId - Use "primary" for the signed-in user's primary calendar.
   """
   return interrupt std::createEvent("Are you sure you want to create this calendar event?", {
     summary: summary,

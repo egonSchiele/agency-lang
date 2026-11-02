@@ -218,8 +218,8 @@ evalJudge(
 Compare two saved agent responses against a grading goal.
 
   @param goal - The criteria the judge should use to compare the responses.
-  @param recordPathA - A statelog JSONL file containing the first run’s single trace.
-  @param recordPathB - A statelog JSONL file containing the second run’s single trace.
+  @param recordPathA - A statelog JSONL file containing the first run's single trace.
+  @param recordPathB - A statelog JSONL file containing the second run's single trace.
 
 Runs the bundled pairwise judge, making an LLM call for each comparison.
   The verdict names A, B, or tie, with confidence from zero to 100. For
@@ -259,7 +259,7 @@ Compare two evaluation run directories and aggregate their per-test verdicts.
   @param runB - The second run directory containing statelog traces and run annotations.
   @param samples - The number of judge calls for each comparable test.
   @param confidenceThreshold - Treat per-test confidence below this zero-to-100 threshold as a suite tie.
-  @param marginThreshold - Require the suite’s win-count difference to exceed this number.
+  @param marginThreshold - Require the suite's win-count difference to exceed this number.
   @param positionBias - Use swap to alternate response order across samples, or none to keep A first.
 
 Compares matching test IDs across two run directories. Goals and test

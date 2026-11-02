@@ -48,7 +48,8 @@ Review prose and return a rewrite with the findings applied.
   @param provider - Provider for the model override, ignored when model is empty.
 
 Start with one pass and increase `passes` when another review of the
-rewritten text is useful. The rewrite call receives the review findings
+rewritten text is useful. On the eval suite, two passes scored 0.795
+against 0.769 for one pass. The rewrite call receives the review findings
 and the original task and guidelines.
 
 **Parameters:**
@@ -69,4 +70,4 @@ and the original task and guidelines.
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L81))

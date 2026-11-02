@@ -52,7 +52,7 @@ export type Email = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L154))
 
 ### URLString
 
@@ -77,7 +77,7 @@ export type URLString = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L160))
 
 ### UUIDString
 
@@ -102,7 +102,7 @@ export type UUIDString = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L165))
 
 ### NumberInRange
 
@@ -133,7 +133,7 @@ export type NumberInRange(low: number, high: number) = number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L172))
 
 ### StringWithLength
 
@@ -160,7 +160,7 @@ export type StringWithLength(min: number, max: number) = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L180))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L177))
 
 ### MatchesPattern
 
@@ -185,7 +185,7 @@ export type MatchesPattern(pat: string) = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L182))
 
 ### BoundedArray
 
@@ -209,7 +209,7 @@ export type BoundedArray<T>(min: number, max: number) = T[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L186))
 
 ### Json
 
@@ -229,7 +229,7 @@ export type Json = any
 
 **Validators:** `isJsonValue`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L213))
 
 ### JsonObject
 
@@ -245,7 +245,7 @@ export type JsonObject = object
 
 **Validators:** `isJsonObject`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L218))
 
 ## Constants
 
@@ -257,7 +257,7 @@ export static const emailFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L131))
 
 ### urlFormat
 
@@ -267,7 +267,7 @@ export static const urlFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L134))
 
 ### uuidFormat
 
@@ -277,7 +277,7 @@ export static const uuidFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L137))
 
 ### dateTimeFormat
 
@@ -287,7 +287,7 @@ export static const dateTimeFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L140))
 
 ### dateFormat
 
@@ -297,7 +297,7 @@ export static const dateFormat = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L143))
 
 ### ipv4Format
 
@@ -307,7 +307,7 @@ export static const ipv4Format = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L146))
 
 ### ipv6Format
 
@@ -317,7 +317,7 @@ export static const ipv6Format = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L149))
 
 ## Functions
 
@@ -398,7 +398,7 @@ Returns success if value is an integer (no fractional component),
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L58))
 
 ### isPositive
 
@@ -416,7 +416,7 @@ Returns success if value > 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L66))
 
 ### isNegative
 
@@ -434,7 +434,7 @@ Returns success if value < 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L73))
 
 ### min
 
@@ -457,7 +457,7 @@ Bind `n` with partial application before use in `@validate(...)`, e.g. `@validat
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L81))
 
 ### max
 
@@ -480,7 +480,7 @@ Bind `n` with partial application before use in `@validate(...)`, e.g. `@validat
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L91))
 
 ### minLength
 
@@ -503,7 +503,7 @@ Bind `n` with partial application before use in `@validate(...)`, e.g. `@validat
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L101))
 
 ### maxLength
 
@@ -526,7 +526,7 @@ Bind `n` with partial application before use in `@validate(...)`, e.g. `@validat
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L111))
 
 ### matches
 
@@ -549,7 +549,7 @@ Bind `pattern` with partial application before use in `@validate(...)`, e.g. `@v
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L121))
 
 ### isJsonValue
 
@@ -569,7 +569,7 @@ Returns success if value is a plain JSON tree that round-trips through
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L188))
 
 ### isJsonObject
 
@@ -588,4 +588,4 @@ Returns success if value is a plain JSON-serializable object (non-null,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L197))

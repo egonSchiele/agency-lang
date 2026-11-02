@@ -64,10 +64,17 @@ available; the caller's handlers still decide their interrupts.
 ```ts
 import { readOnlyFileTools, communicationTools } from "std::agents/lib/toolkits"
 
-const tools = [...readOnlyFileTools(), ...communicationTools()]
-const answer: string = llm("Summarize README.md", { tools: tools })
+node main() {
+  const tools = [...readOnlyFileTools(), ...communicationTools()]
+  const answer: string = llm("Summarize README.md", { tools: tools })
+  print(answer)
+}
 ```
 */
+
+// Every bundle is a function rather than a constant, matching searchTools()
+// in std::agents/lib/search, which must be a function because it reads API
+// keys at call time.
 
 // Bundled Agency docs. `static` caches each tool across calls. Each gets an
 // explicit name: the name docsSkill derives from a directory embeds the
@@ -94,7 +101,7 @@ static const briefAgentSkill = docsToolFromEntries("agent", agentEntries, brief:
 
 export def whatIAmDoing(message: string): string {
   """
-  Report progress to the user when starting work or changing approach.
+  Tell the user what you are doing. Use this tool often to update the user on what you're up to.
   """
   print(message)
   return "Delivered message to user."
@@ -135,6 +142,11 @@ export def writableFileTools(): any[] {
   ]
 }
 
+// safeBash rather than raw bash: it raises the narrowest effects that
+// describe a command (a recognized write raises std::write, a git read raises
+// its git effect), so a policy can pre-approve what raw bash never could.
+// safeBash needs no useAgentCwd binding: its empty cwd already resolves to
+// the agent working directory (resolveCwd in std::safeBash).
 /** `safeBash` parses pipelines and raises effects for recognized operations.
 `exec` runs one binary with arguments. Both use the agent's working directory.
 The saved-output readers retrieve output too large to return inline. */
@@ -232,6 +244,12 @@ export def githubTools(): any[] {
   ]
 }
 
+// One fetch, not three. fetchMarkdown returns an HTML page as text the model
+// can read and any other body (JSON included) as it came, so it covers what
+// fetch and fetchJSON did. Three fetch tools meant three effects for a policy
+// to cover: in trace wX5GvrUq the user's policy approved two of them, the
+// model used the third, and 26 of 57 minutes went to approval prompts
+// (ADI-44).
 /** Add search tools when an agent must discover sources before fetching them.
 The HTTP tool returns HTML as Markdown and other bodies as received.
 Its `refresh` argument is bound to false to reuse a page within a conversation. */

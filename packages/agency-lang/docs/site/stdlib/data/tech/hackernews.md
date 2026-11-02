@@ -171,7 +171,7 @@ hnUser(
 ): Result<User> raises <std::hackernews, std::http::fetchJSON>
 ```
 
-Read a Hacker News user’s public profile and submitted item IDs.
+Read a Hacker News user's public profile and submitted item IDs.
 
   @param username - The case-sensitive Hacker News username.
 

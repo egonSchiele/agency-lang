@@ -7,7 +7,13 @@ description: "Answer Agency-language questions using bundled documentation and s
 
 Use this agent for syntax, types, control flow, CLI usage, diagnostics, and
 standard-library APIs. Its built-in tools include the packaged docs and
-source checks. It can also read the caller's project.
+source checks. It can also read the caller's project. For anything outside
+the language, use `researcherAgent` from `std::agents/researcher`, which
+searches the web and Wikipedia.
+
+This agent has no web or Wikipedia tools, on purpose: an answer about
+Agency assembled from the open web is usually an answer about some other
+language.
 
 As an LLM tool it continues the caller's conversation. From code, use a
 `thread` block when you want an isolated answer.
@@ -24,7 +30,7 @@ Return bundled documentation, project lookup, and Agency source-checking tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L42))
 
 ### agencyResearcherAgent
 
@@ -74,4 +80,4 @@ Answer a question about the Agency language from the bundled documentation,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L68))

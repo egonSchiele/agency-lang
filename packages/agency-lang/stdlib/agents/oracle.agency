@@ -83,6 +83,8 @@ authoritative — consult them rather than recalling.
   ambiguous — make a reasonable assumption, state it, and answer.${SAVE_DRAFT_HINT}
 """
 
+// Read-only by design: the oracle inspects, consults, and judges, and a
+// reviewer that can edit is no longer a reviewer.
 export def buildTools(): any[] {
   """
   Return the oracle's file, Agency-source, and web lookup tools.
@@ -135,7 +137,9 @@ export handoff def oracleAgent(
 ): Result<string> {
   """
   Read the code and give a focused second opinion on a plan, design, or bug.
-  As an LLM tool, use the caller's existing conversation for context.
+  It never changes anything. It continues your conversation and sees
+  everything said so far, so ask the question itself without restating the
+  context.
 
   @param maxCost - Cost budget in USD.
   @param maxTime - Time budget in milliseconds.

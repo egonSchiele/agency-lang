@@ -61,8 +61,13 @@ export def concurrencyPool(
 
   @param size - Positive whole number of workers.
   """
-  // Forks isolate local state. Give each worker a chunk and collect its
-  // return value, then restore input order using the saved indices.
+  // fork branches only share module globals (with shared: true), never
+  // function locals, so workers cannot pull from a shared queue or write
+  // into a shared results array. Instead: deal the items round-robin into
+  // one chunk per worker, fork over the chunks, and reassemble by index
+  // from the branch RETURN values, the one channel fork reports through.
+  // Pair each item with its index by hand: std map passes only the item to
+  // its function, never an index.
   const indexed: any[] = []
   let index = 0
   for (item in items) {

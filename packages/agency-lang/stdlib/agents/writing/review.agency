@@ -511,6 +511,13 @@ export type WritingReviewEvalInput = {
   sourceFile: string
 }
 
+// Any other reviewer scored on the same suite supplies a node with this
+// signature. Effects are decided at this boundary. Reading the seeded input
+// file is this node's own decision (`with approve`). The reviewer runs under
+// `docsOnlyHandler`, which lets it read the packaged docs and rejects every
+// other interrupt, so a budget trip stays a failure and the reviewer's
+// fail-open result comes back instead of an interrupt escaping the entry
+// point.
 /** Run this module through an eval suite with `agency eval run stdlib/agents/writing/review.agency:evalMain --suite <dir>`. */
 node evalMain(input: WritingReviewEvalInput): Feedback[] {
   evalValue(input)

@@ -212,9 +212,15 @@ you return and runs any tests after that. Do not look for the file or try
 to run its tests; when the draft typechecks, return it.
 Return only the complete program in the code field."""
 
-// Use packaged docs for Agency syntax and targeted fetches for caller-named resources.
+// No hosted web search here, unlike codingAgent. This agent writes one
+// language whose authoritative docs ship in this package, and an open-ended
+// search returns other languages' idioms, which is the exact failure the
+// system prompt above spends its length fighting. Targeted fetch is fine: it
+// retrieves a page the caller already named.
 static const skills = agentSkill("agency/coding")
 
+// Not testFile: the writer returns source it has not saved, so there is
+// nothing on disk for a harness to test yet.
 export def buildTools(strict: boolean = false, projectTools: boolean = true): any[] {
   """
   Return documentation, source checks, project lookups, and fetch tools for an Agency writer.
@@ -526,6 +532,14 @@ export type CodingEvalInput = {
   outFile: string
 }
 
+// Any other writer scored on the same suite supplies a node with this
+// signature. The writer returns source without saving it, so saving into the
+// workdir, where the suite's harness pairs grade it, is this node's own
+// decision (`with approve`). The writer runs under `docsOnlyHandler`, which
+// lets it read the packaged docs and rejects every other interrupt, so a
+// budget trip stays a failure. A failed run still saves its last draft:
+// harness grading is all-or-nothing, but the grade's per-case feedback then
+// names exactly which cases the draft fails.
 /** Run this module through an eval suite with `agency eval run stdlib/agents/agency/coding.agency:evalMain --suite <dir>`. The node saves returned source to the requested output file for harness grading. */
 node evalMain(input: CodingEvalInput): string {
   evalValue(input)

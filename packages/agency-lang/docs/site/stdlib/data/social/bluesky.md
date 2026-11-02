@@ -147,7 +147,7 @@ Search public Bluesky posts by keyword.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L252))
 
 ### bskyAuthorFeed
 
@@ -158,7 +158,7 @@ bskyAuthorFeed(
 ): Result<Post[]> raises <std::bluesky, std::http::fetchJSON>
 ```
 
-Read a Bluesky account’s recent posts, newest first.
+Read a Bluesky account's recent posts, newest first.
 
   @param handle - An account handle such as "user.bsky.social", or a DID.
   @param limit - The maximum posts, clamped to the range zero through 100.
@@ -176,7 +176,7 @@ Read a Bluesky account’s recent posts, newest first.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L262))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L266))
 
 ### bskyProfile
 
@@ -186,7 +186,7 @@ bskyProfile(
 ): Result<Profile> raises <std::bluesky, std::http::fetchJSON>
 ```
 
-Read a Bluesky account’s public profile and follower counts.
+Read a Bluesky account's public profile and follower counts.
 
   @param handle - An account handle such as "user.bsky.social", or a DID.
 
@@ -202,4 +202,4 @@ Read a Bluesky account’s public profile and follower counts.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L276))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L280))

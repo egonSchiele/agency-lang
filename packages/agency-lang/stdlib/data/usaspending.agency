@@ -237,9 +237,9 @@ export def usaspendingAwards(recipient: string = "", agency: string = "", awardT
 @capabilities(network)
 export def usaspendingAward(awardId: string): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON> {
   """
-  Read one federal award’s details, including subawards and executive compensation.
+  Read one federal award's details, including subawards and executive compensation.
 
-  @param awardId - A search result’s generatedId, or its numeric internalId converted to a string.
+  @param awardId - A search result's generatedId, or its numeric internalId converted to a string.
   """
   return interrupt std::usaspending("Fetch this USASpending award?", { op: "award", query: awardId })
   const result = connectorFetch(USA_BASE, USA_DOMAINS, buildAwardPath(awardId)) with approve

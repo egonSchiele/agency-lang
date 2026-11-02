@@ -10,6 +10,7 @@ description: "Read economic time series from DBnomics."
   Fetch economic data from [DBnomics](https://db.nomics.world/) using a
   provider, dataset, and series code. Browse the DBnomics directory to find
   codes for national or cross-country statistics. No API key is required.
+  For U.S. macro data, prefer `std::data/finance/fred`.
 
   Returns a series as a list of `{ period, value }` observations (period like "2025-01"; a
   missing value is null).
@@ -39,7 +40,7 @@ export type DbnomicsObservation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L30))
 
 ### DbnomicsSeries
 
@@ -57,7 +58,7 @@ export type DbnomicsSeries = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L36))
 
 ## Effects
 
@@ -71,7 +72,7 @@ effect std::dbnomics {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L27))
 
 ## Functions
 
@@ -85,7 +86,8 @@ dbnomicsSeries(
 ): Result<DbnomicsSeries> raises <std::dbnomics, std::http::fetchJSON>
 ```
 
-Fetch an economic time series from DBnomics.
+Fetch an economic time series from DBnomics. Use it for non-U.S. or
+  cross-country data; prefer fredSeries for U.S. macro data.
 
   @param provider - The DBnomics provider code, such as "BLS" or "IMF".
   @param dataset - The dataset code within that provider, such as "cu".
@@ -105,4 +107,4 @@ Fetch an economic time series from DBnomics.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L96))

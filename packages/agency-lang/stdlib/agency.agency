@@ -40,7 +40,7 @@ import { VERSION } from "agency-lang/stdlib-lib/version.js"
   @summary Compile, run, inspect, and generate Agency programs.
   Execute Agency source in a child process, inspect module exports and
   effects, or build source with AST and template helpers. Child operations
-  still consult the parent’s interrupt handlers.
+  still consult the parent's interrupt handlers.
 
   ```ts
   import { runCode } from "std::agency"
@@ -180,9 +180,9 @@ export idempotent def compile(source: string, dir: string = "", strict: boolean 
   maxDepth remains in force.
 
   Success carries the subprocess result envelope, including its `data`
-  value and usage information. Use `runCode` for just the node’s value.
+  value and usage information. Use `runCode` for just the node's value.
 
-  The run interrupt’s module and function labels describe a prepared call;
+  The run interrupt's module and function labels describe a prepared call;
   they do not verify compiled code stored in a checkpoint. Use
   module-specific approval rules only with trusted saved state. External
   hosts should verify checkpoint integrity before resuming saved code; see
@@ -213,9 +213,9 @@ export def run(
   @param ipcPayload - The limit per IPC message in bytes, up to 1gb, or null for the default.
   @param stdout - The combined stdout and stderr limit in bytes, up to 100mb, or null for the default.
   @param logFile - An optional statelog JSONL destination for this child run.
-  @param cwd - The child working directory, or empty to inherit the caller’s process directory.
+  @param cwd - The child working directory, or empty to inherit the caller's process directory.
   @param maxDepth - The subprocess nesting cap, up to ten, also bounded by ancestor caps.
-  @param maxCost - The child’s LLM spend limit in dollars, or null for no additional cost cap.
+  @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
   """
   return _runProgram(compiled, node, args, {
     wallClock: wallClock, memory: memory, ipcPayload: ipcPayload, stdout: stdout,
@@ -268,8 +268,10 @@ def _runProgram(
     function: originFunction
   })
 
-  // A negative guard cap disables that dimension. Map a missing cost
-  // limit to that value so both paths share one guarded call site.
+  // guard() disables a dimension on a NEGATIVE value (null for BOTH
+  // dimensions throws), so a null maxCost maps to the disable value and
+  // one guarded call site serves both cases. Safe since #513: block
+  // frames revive correctly across a nested subprocess pause.
   const NO_COST_CAP = -1.0
   const cap = if settings.maxCost != null then settings.maxCost else NO_COST_CAP
   const guarded = guard(cost: cap) {
@@ -364,7 +366,7 @@ export def _invokeLearned(target: any, args: Record<string, any>): any {
 }
 
 /**
-  Creates callable tools with the source functions’ descriptions, schemas,
+  Creates callable tools with the source functions' descriptions, schemas,
   aliases, and argument binding. Import preparation captures local source
   files, so later calls use those bytes. A namespace prefixes advertised
   names as `namespace_exportName`.
@@ -373,11 +375,13 @@ export def _invokeLearned(target: any, args: Record<string, any>): any {
   metadata. That can pause, fail, or be rejected; it does not call the
   selected bodies. Inspection and each later tool call use the normal run
   gate and parent handlers. The module and function labels follow the
-  trusted-state rules documented on `run`.
+  trusted-state rules documented on `run`; the inspection launch uses the
+  module label with `function` set to `<inspect>`, so a module-specific
+  `std::run` rule can match or refuse it.
 
   The whole batch fails if a selected function is a handoff, needs a
   required function argument, or lacks a concrete parameter schema. The
-  returned functions are not saved or added to an agent’s tool list.
+  returned functions are not saved or added to an agent's tool list.
 */
 @capabilities(fileRead, fileWrite, subprocess)
 export def learn(
@@ -444,7 +448,7 @@ export def runFile(
   @param memory - The V8 heap limit in bytes, up to 4gb.
   @param ipcPayload - The limit per IPC message in bytes, up to 1gb.
   @param stdout - The combined stdout and stderr limit in bytes, up to 100mb.
-  @param maxCost - The child’s LLM spend limit in dollars, or null for no additional cost cap.
+  @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
   """
   const compileResult = try _compileFile(dir, filename)
   if (isFailure(compileResult)) {
@@ -492,7 +496,7 @@ export type TestReport = {
 
 /**
   Each case runs in its own child process through `run`. Parent handlers
-  vote on both the launch and the tested code’s interrupts. Scripted
+  vote on both the launch and the tested code's interrupts. Scripted
   interrupt answers add handler votes in order; a parent rejection still
   wins. Exhausted answers let outer handlers decide. Leftover answers or
   an expected-message mismatch fail the case.
@@ -515,12 +519,12 @@ export def test(
 ): Result<TestReport> {
   """
   Run test cases against an Agency file in subprocesses and report each
-  case’s result. Only std:: and contained .agency imports are supported.
+  case's result. Only std:: and contained .agency imports are supported.
 
   @param dir - The directory containing the tested file and confining local imports.
   @param filename - A relative Agency source filename that stays inside dir.
   @param cases - Exported entry nodes, named arguments, expected values, and optional scripted interrupt answers.
-  @param wallClock - Milliseconds per case, overridden by a case’s own wallClock value.
+  @param wallClock - Milliseconds per case, overridden by a case's own wallClock value.
   @param memory - The V8 heap limit per case in bytes.
   @param ipcPayload - The byte limit per IPC message in each case.
   @param stdout - The combined stdout and stderr limit per case in bytes.
@@ -745,7 +749,7 @@ def checkRunCodeLimits(
 /**
   Use this when an LLM supplies source code to execute. It combines
   compilation and execution so the model does not need to copy a compiled
-  program value into another call. The node’s value is returned without
+  program value into another call. The node's value is returned without
   the subprocess envelope.
 
   Parent handlers, guards, and supported callbacks apply as in `run`.
@@ -755,7 +759,7 @@ def checkRunCodeLimits(
 
   The function is unmarked because arbitrary supplied code determines
   whether retrying is appropriate. Each new attempt raises the run gate
-  and the child’s own effects again.
+  and the child's own effects again.
 */
 @capabilities(fileRead)
 export def runCode(
@@ -771,8 +775,10 @@ export def runCode(
   dir: string = "",
 ): Result {
   """
-  Compile Agency source and execute an exported node in one call. Only
-  std:: and contained .agency imports are supported; splices are refused.
+  Compile Agency source and execute an exported node in one call. Prefer
+  this over separate compile and run calls. Only std:: and contained .agency
+  imports are supported; splices are refused. Compile errors come back as a
+  failure without running anything; fix the source and call again.
 
   @param node - The exported entry node to execute.
   @param args - Named arguments for the entry node.
@@ -780,8 +786,8 @@ export def runCode(
   @param memory - A positive V8 heap limit in bytes, up to 4gb.
   @param ipcPayload - A positive byte limit per IPC message, up to 1gb.
   @param stdout - A positive combined stdout and stderr byte limit, up to 100mb.
-  @param maxCost - The child’s LLM spend limit in dollars, or null for no additional cost cap.
-  @param cwd - The runtime working directory, or empty to inherit the caller’s process directory.
+  @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
+  @param cwd - The runtime working directory. Empty inherits the caller's process directory, which may not be where you want files; pass the agent working directory so the program's file writes land there.
   @param dir - Resolve and confine local imports within this directory, or leave empty to disallow them.
   """
   const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)
@@ -827,7 +833,10 @@ export idempotent def typecheck(
   strict: boolean = false,
 ): Result<TypeCheckReport> {
   """
-  Type-check Agency source and return errors and warnings.
+  Type-check Agency source and return errors and warnings. To check a file
+  already on disk, call typecheckFile with its path instead of pasting its
+  contents. A clean report does not mean compile or run will accept the code
+  unless strict is true.
 
   @param ignoreCodes - Diagnostic codes, such as AG3009, to omit from errors and warnings.
   @param dir - Resolve relative imports within this directory, or leave empty when no local imports are needed.
@@ -923,10 +932,10 @@ export type ModuleInfo = {
   Use export metadata when generating code from a module, for example
   one handler per effect its tools can raise. It uses the visibility
   rules of `agency doc`: hidden and underscore-prefixed exports are
-  omitted. The description is the module’s one-line summary.
+  omitted. The description is the module's one-line summary.
 
   For a module with local imports, supply its directory and filename along
-  with the file’s exact source text. The import closure is checked under
+  with the file's exact source text. The import closure is checked under
   the same restrictions as compilation. Imported source is read to compute
   metadata without a separate read interrupt. Relative re-exports remain
   entries with `unknown` effects; std:: re-exports resolve to full entries.
@@ -934,12 +943,12 @@ export type ModuleInfo = {
 @capabilities(fileRead)
 export idempotent def describe(source: string, dir: string = "", filename: string = ""): Result<ModuleInfo> {
   """
-  Describe an Agency module’s public exports, signatures, documentation,
+  Describe an Agency module's public exports, signatures, documentation,
   and statically known effects.
 
   @param source - Module source text matching the file exactly when a filename is supplied.
   @param dir - Supply with filename to resolve local imports within this directory.
-  @param filename - The module’s path relative to dir, or empty when describing source without local imports.
+  @param filename - The module's path relative to dir, or empty when describing source without local imports.
   """
   return try _describe(source, dir, filename)
 }
@@ -950,7 +959,7 @@ type FilterImportsResult = {
 }
 
 /**
-  Resolves imports relative to the file’s own directory. This check does
+  Resolves imports relative to the file's own directory. This check does
   not apply subprocess import restrictions, so a clean report can still be
   refused by `runFile`.
 */

@@ -25,6 +25,9 @@ For each finding, return a Feedback item: error=true when it fails the task (nam
 
 static const skills = agentSkill("agency/verifier")
 
+// The verifier reads and measures what the program left behind. It has no
+// write tools, because a verifier that can fix things is no longer a
+// verifier.
 export def buildTools(): any[] {
   """
   Return the Agency verifier's file inspection and command execution tools.

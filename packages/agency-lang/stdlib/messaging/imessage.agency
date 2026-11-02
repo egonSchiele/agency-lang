@@ -28,7 +28,7 @@ export def sendIMessage(to: string, message: string, allowList: string[] = [], b
   """
   Send an iMessage through the macOS Messages app.
 
-  @param to - The recipient’s phone number or iMessage email address.
+  @param to - The recipient's phone number or iMessage email address.
   @param message - Non-empty message text.
   @param allowList - Limit recipients to these addresses or numbers, or leave empty for no allow restriction.
   @param blockList - Reject these addresses or numbers even if they are allowed.

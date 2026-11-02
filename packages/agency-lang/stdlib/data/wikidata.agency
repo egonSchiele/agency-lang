@@ -63,24 +63,24 @@ export type EntityDetail = {
   claims: Record<string, string[]>
 }
 
-/* Build the entity-search path (wbsearchentities). */
+// Build the entity-search path (wbsearchentities).
 def buildSearchPath(name: string, limit: number): string {
   const q = encodeURIComponent(name)
   return "/w/api.php?action=wbsearchentities&search=${q}&language=en&format=json&limit=${limit}"
 }
 
-/* Build the entity-data path. */
+// Build the entity-data path.
 def buildEntityPath(qid: string): string {
   return "/wiki/Special:EntityData/${encodeURIComponent(qid)}.json"
 }
 
-/* Build the SPARQL path. */
+// Build the SPARQL path.
 def buildQueryPath(sparql: string): string {
   const q = encodeURIComponent(sparql)
   return "/sparql?query=${q}&format=json"
 }
 
-/* Reshape a wbsearchentities body into Entity[]. */
+// Reshape a wbsearchentities body into Entity[].
 def parseSearch(raw: any): Entity[] {
   const r: any = raw ?? {}
   const results = r.search ?? []
@@ -95,8 +95,7 @@ def parseSearch(raw: any): Entity[] {
   }
 }
 
-/* Reduce a claim's mainsnak to a string by datavalue type. A novalue/somevalue snak → "".
-    */
+// Reduce a claim's mainsnak to a string by datavalue type. A novalue/somevalue snak → "".
 def parseClaimValue(mainsnak: any): string {
   const snak: any = mainsnak ?? {}
   if ((snak.snaktype ?? "") != "value") {
@@ -126,7 +125,7 @@ def parseClaimValue(mainsnak: any): string {
   return ""
 }
 
-/* Map a property's statements to a list of stringified claim values. */
+// Map a property's statements to a list of stringified claim values.
 def parseClaimList(statements: any): string[] {
   const arr = statements ?? []
   return map(arr) as s {
@@ -135,7 +134,7 @@ def parseClaimList(statements: any): string[] {
   }
 }
 
-/* Reshape the claims object (PID → statements) into PID → string[]. */
+// Reshape the claims object (PID → statements) into PID → string[].
 def parseClaims(claims: any): Record<string, string[]> {
   const c: any = claims ?? {}
   return mapValues(c) as (statements, pid) {
@@ -143,7 +142,7 @@ def parseClaims(claims: any): Record<string, string[]> {
   }
 }
 
-/* Reshape an EntityData body into EntityDetail. `qid` is the fallback id. */
+// Reshape an EntityData body into EntityDetail. `qid` is the fallback id.
 def parseEntity(raw: any, qid: string): EntityDetail {
   const r: any = raw ?? {}
   const ents: any[] = values(r.entities ?? {})
@@ -166,7 +165,7 @@ def parseEntity(raw: any, qid: string): EntityDetail {
   }
 }
 
-/* Reshape a SPARQL body into rows (variable → value string). */
+// Reshape a SPARQL body into rows (variable → value string).
 def parseBindings(raw: any): Record<string, string>[] {
   const r: any = raw ?? {}
   const res: any = r.results ?? {}
@@ -180,12 +179,12 @@ def parseBindings(raw: any): Record<string, string>[] {
   }
 }
 
-/* Shared failure message for a failed Wikidata fetch (either host). */
+// Shared failure message for a failed Wikidata fetch (either host).
 def wikidataError(err: any): string {
   return "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): ${err.message ?? err}"
 }
 
-/* Turn a fetch Result into an Entity[] Result. */
+// Turn a fetch Result into an Entity[] Result.
 def searchFinalize(fetchResult: any): Result<Entity[]> {
   return match (fetchResult) {
     success(body) => success(parseSearch(body))
@@ -193,7 +192,7 @@ def searchFinalize(fetchResult: any): Result<Entity[]> {
   }
 }
 
-/* Turn a fetch Result into an EntityDetail Result; empty entities (unknown QID) → failure. */
+// Turn a fetch Result into an EntityDetail Result; empty entities (unknown QID) → failure.
 def entityFinalize(fetchResult: any, qid: string): Result<EntityDetail> {
   return match (fetchResult) {
     success(body) => {
@@ -208,7 +207,7 @@ def entityFinalize(fetchResult: any, qid: string): Result<EntityDetail> {
   }
 }
 
-/* Turn a SPARQL fetch Result into a rows Result. */
+// Turn a SPARQL fetch Result into a rows Result.
 def queryFinalize(fetchResult: any): Result<Record<string, string>[]> {
   return match (fetchResult) {
     success(body) => success(parseBindings(body))
@@ -231,7 +230,8 @@ export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> rai
 @capabilities(network)
 export def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON> {
   """
-  Read a Wikidata entity’s English profile and property claims.
+  Read a Wikidata entity's English profile and property claims. Entity-valued
+  claims are QIDs; resolve them with another lookup to get their names.
 
   @param qid - A Wikidata entity ID such as "Q42", obtained from search or another claim.
   """
@@ -254,7 +254,8 @@ export def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikida
 @capabilities(network)
 export def wikidataQuery(sparql: string): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON> {
   """
-  Run a SPARQL SELECT query against the Wikidata knowledge graph.
+  Run a SPARQL SELECT query against the Wikidata knowledge graph. The
+  prefixes wd:, wdt:, and rdfs: and SERVICE wikibase:label are available.
 
   @param sparql - A complete SPARQL SELECT query.
   """

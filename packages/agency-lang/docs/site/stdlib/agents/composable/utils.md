@@ -16,7 +16,7 @@ effect and a string reply, use `question` from `std::agent`.
 ask(question: string)
 ```
 
-Ask a question through an interrupt and return the responder's value.
+Ask the user a question and return their response.
 
 **Parameters:**
 

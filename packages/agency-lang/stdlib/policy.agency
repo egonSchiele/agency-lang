@@ -195,7 +195,10 @@ let globalCliPolicyOpts: CliPolicyOpts = {
 let _policy: Policy | null = null
 let _policyLoaded: boolean = false
 let _pendingSave: boolean = false
-// Reject unresolved interrupts when no user is available to answer prompts.
+// Whether a user is at a terminal to answer prompts. When false, an
+// interrupt the policy does not decide is rejected with a reason instead
+// of prompting (there is no one to answer, and a pending prompt starves
+// the event loop until the process dies).
 let _interactive: boolean = true
 // Name the handler's active policy-file operation so duplicate entries
 // of this handler can approve its read. Writes currently raise no interrupt.
@@ -449,8 +452,22 @@ export def writePolicyFile(
 // handler shares these globals and can hear the policy-file read. Match
 // both the active operation and filename before approving it, since other
 // branches can raise interrupts while that operation awaits I/O.
-// Only the filename is compared. A same-named file in another directory
-// can therefore match during this window. Writes currently raise no interrupt.
+//
+// The name and not the directory, because the directory the interrupt
+// reports is the one the containment layer resolved, the realpath, which
+// on macOS is not the string the caller passed (/tmp is /private/tmp),
+// and Agency exposes no realpath to compare with. A read of a same-named
+// file in another directory, from another branch, inside the window, is
+// what is left.
+//
+// Only the read half matches anything today. `_writePolicyFile`
+// (`lib/stdlib/policy.ts`) calls `writeText` straight, so a flush raises
+// no `std::write` for this to approve. The flag is still set around it,
+// because the window is real either way (the containment check it awaits
+// is time another branch can arrive in), and because a flush that ever
+// goes through Agency's own `write` should find the guard already here
+// rather than need it added. See "The handler's own file operations" in
+// docs/dev/agents/approval-policies.md.
 def isOwnPolicyIo(intr: any): boolean {
   if (_internalIo == "" || intr.effect != _internalIo) {
     return false

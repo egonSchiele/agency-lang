@@ -121,7 +121,7 @@ export def listModelNames(): ModelName[] {
 
 /**
   Writes the alias to the selected Agency configuration and returns that
-  file’s path. An alias with the same name as a curated entry takes precedence.
+  file's path. An alias with the same name as a curated entry takes precedence.
 */
 @capabilities(fileRead, fileWrite)
 export def aliasModel(name: string, uri: string): string {
@@ -134,7 +134,7 @@ export def aliasModel(name: string, uri: string): string {
 }
 
 /**
-  Removes the alias from its configuration file and returns that file’s
+  Removes the alias from its configuration file and returns that file's
   path. Downloaded model files remain on disk.
 */
 @capabilities(fileRead, fileWrite)
@@ -163,7 +163,7 @@ export def removeModel(name: string, cacheDir: string = ""): bool {
 
 export def localModelBackend(value: string): string {
   """
-  Identify a model’s backend: llama-cpp, mlx, or diffusers.
+  Identify a model's backend: llama-cpp, mlx, or diffusers.
 
   @param value - A catalog name, alias, model URI, GGUF path, or model directory.
   """
@@ -248,7 +248,7 @@ export def mlxServerModels(baseUrl: string = ""): string[] | null {
   """
   List the model IDs an MLX server reports, or null when the probe fails.
 
-  @param baseUrl - The server’s OpenAI-compatible base URL, or empty for the configured mlx endpoint.
+  @param baseUrl - The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint.
   """
   return _mlxServerModels(baseUrl)
 }
@@ -258,7 +258,7 @@ export def mlxServerRunning(baseUrl: string = ""): boolean {
   """
   Check whether the configured MLX endpoint answers the model-list probe.
 
-  @param baseUrl - The server’s OpenAI-compatible base URL, or empty for the configured mlx endpoint.
+  @param baseUrl - The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint.
   """
   return mlxServerModels(baseUrl) != null
 }
@@ -267,7 +267,8 @@ export def mlxServerRunning(baseUrl: string = ""): boolean {
   Performs the same refresh as `agency local refresh`. It updates aliases
   marked `source: "remote"`, adds new catalog entries, and removes entries
   the remote catalog dropped. User-owned aliases win name collisions.
-  Fetch, parse, or validation failures leave the configuration untouched.
+  A fetch, parse, or validation failure throws and leaves the configuration
+  untouched.
 */
 @capabilities(fileRead, fileWrite, network)
 export def refreshCatalog(url: string = ""): RefreshResult {

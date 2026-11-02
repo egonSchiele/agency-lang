@@ -20,11 +20,11 @@ From code, wrap the call in `thread { ... }` when you want an isolated survey.
 buildTools(): any[]
 ```
 
-Return the explorer's file and source lookup tools.
+Return the explorer's file, source, and web lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L118))
 
 ### explorerAgent
 
@@ -42,7 +42,9 @@ explorerAgent(
 ```
 
 Survey a codebase or documentation and return an organized answer with sources.
-  As an LLM tool, continue the caller's conversation and keep the research in its history.
+  It never changes anything. It continues your conversation, and every file it
+  reads stays in your history, so say how much ground to cover and scope the
+  question tightly.
 
   @param question - The question and the scope to cover.
   @param maxCost - Cost budget in USD.
@@ -71,4 +73,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L159))

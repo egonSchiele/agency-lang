@@ -19,6 +19,9 @@ Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your
     if (!isAuthorized("google-calendar")) {
       const clientId = env("GOOGLE_CLIENT_ID") with approve
       const clientSecret = env("GOOGLE_CLIENT_SECRET") with approve
+      if (clientId == null || clientSecret == null) {
+        return failure("Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first.")
+      }
       authorize("google-calendar",
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
@@ -56,7 +59,7 @@ effect std::authorize {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L49))
 
 ### std::getAccessToken
 
@@ -67,7 +70,7 @@ effect std::getAccessToken {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L51))
 
 ### std::revokeAuth
 
@@ -78,7 +81,7 @@ effect std::revokeAuth {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L53))
 
 ## Functions
 
@@ -131,7 +134,7 @@ Register the callback `http://127.0.0.1:8914/oauth/callback` with your
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L61))
 
 ### getAccessToken
 
@@ -158,7 +161,7 @@ Returns a failure when tokens are missing, refresh fails, or an expired
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L96))
 
 ### isAuthorized
 
@@ -180,7 +183,7 @@ Check whether OAuth tokens are stored for a provider, without verifying their va
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L110))
 
 ### revokeAuth
 
@@ -207,4 +210,4 @@ This removes local credentials. It does not call the provider to revoke
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L124))

@@ -324,7 +324,7 @@ future calls of the tool, rather than the drafting process.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1607))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1608))
 
 ### writeTool
 
@@ -376,7 +376,7 @@ The wrapper enforces `maxTime` and `maxCost` on later tool calls.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1666))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1667))
 
 ### runTool
 
@@ -413,4 +413,4 @@ does not change the tool's result. The result itself is not recorded there.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1718))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1719))

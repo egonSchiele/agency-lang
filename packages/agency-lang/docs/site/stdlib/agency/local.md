@@ -218,7 +218,7 @@ Save a short-name alias for a model target.
   @param uri - A model URI, GGUF path, or model directory to associate with the alias.
 
 Writes the alias to the selected Agency configuration and returns that
-  file’s path. An alias with the same name as a curated entry takes precedence.
+  file's path. An alias with the same name as a curated entry takes precedence.
 
 **Parameters:**
 
@@ -241,7 +241,7 @@ unaliasModel(name: string): string
 
 Remove a configured model alias.
 
-Removes the alias from its configuration file and returns that file’s
+Removes the alias from its configuration file and returns that file's
   path. Downloaded model files remain on disk.
 
 **Parameters:**
@@ -290,7 +290,7 @@ Deletes a cached file without removing its aliases. Returns false if
 localModelBackend(value: string): string
 ```
 
-Identify a model’s backend: llama-cpp, mlx, or diffusers.
+Identify a model's backend: llama-cpp, mlx, or diffusers.
 
   @param value - A catalog name, alias, model URI, GGUF path, or model directory.
 
@@ -388,7 +388,7 @@ mlxServerModels(baseUrl: string = ""): string[] | null
 
 List the model IDs an MLX server reports, or null when the probe fails.
 
-  @param baseUrl - The server’s OpenAI-compatible base URL, or empty for the configured mlx endpoint.
+  @param baseUrl - The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint.
 
 Use this to check the server before selecting a model. Null also covers
   an unsuccessful or unreadable response, so it does not prove the server
@@ -415,7 +415,7 @@ mlxServerRunning(baseUrl: string = ""): boolean
 
 Check whether the configured MLX endpoint answers the model-list probe.
 
-  @param baseUrl - The server’s OpenAI-compatible base URL, or empty for the configured mlx endpoint.
+  @param baseUrl - The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint.
 
 **Parameters:**
 
@@ -442,7 +442,8 @@ Refresh remote-managed model aliases from the model catalog, preserving user-own
 Performs the same refresh as `agency local refresh`. It updates aliases
   marked `source: "remote"`, adds new catalog entries, and removes entries
   the remote catalog dropped. User-owned aliases win name collisions.
-  Fetch, parse, or validation failures leave the configuration untouched.
+  A fetch, parse, or validation failure throws and leaves the configuration
+  untouched.
 
 **Parameters:**
 
@@ -454,4 +455,4 @@ Performs the same refresh as `agency local refresh`. It updates aliases
 
 **Needs:** `fileRead`, `fileWrite`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L273))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L274))

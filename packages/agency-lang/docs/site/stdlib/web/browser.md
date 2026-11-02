@@ -52,14 +52,14 @@ browserUse(
 Run a browser automation task described in plain language through Browser Use.
 
   @param task - Describe the goal, relevant pages, and when the task is complete.
-  @param model - A Browser Use model name, or empty for the service default.
+  @param model - "bu-mini", "bu-max", or "bu-ultra", or empty for the service default.
   @param maxCostUsd - The spend limit sent to the remote service, in USD.
   @param proxyCountryCode - A two-letter routing country code, such as "US" or "DE".
   @param timeout - How long to poll for completion in milliseconds, or zero for two minutes.
   @param apiKey - Leave empty to use BROWSER_USE_API_KEY.
   @param allowedDomains - Ask the remote browser agent to navigate only to these domains.
 
-Requires a Browser Use API key. The result includes the remote task’s
+Requires a Browser Use API key. The result includes the remote task's
   output, status, and session ID. Check the status before treating the
   output as a completed task.
 

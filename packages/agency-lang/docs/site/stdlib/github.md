@@ -505,8 +505,8 @@ ghPrGet(
 ): PrSummary raises <std::github::prGet>
 ```
 
-Read a pull request’s details and description.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+Read a pull request's details and description.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -542,7 +542,7 @@ List pull requests. Each item has no change counts; ghPrGet returns those.
   @param base - Only pull requests targeting this base branch ("" for any).
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -576,7 +576,7 @@ ghPrDiff(
 
 Read the full unified diff of a pull request as one string. GitHub refuses
   this for very large pull requests; use ghPrFiles for those.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -610,7 +610,7 @@ ghPrFiles(
 List the files a pull request changes, with per-file add/delete counts and patch hunks.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -646,7 +646,7 @@ ghPrReviews(
 Read the submitted reviews on a pull request.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -682,7 +682,7 @@ ghPrReviewComments(
 List the inline review comments on a pull request, with file and line.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -718,7 +718,7 @@ ghPrChecks(
 List the CI check runs on the head commit of a pull request.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -749,8 +749,8 @@ ghIssueGet(
 ): IssueSummary raises <std::github::issueGet>
 ```
 
-Read an issue’s details and description. Pull request numbers are rejected.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+Read an issue's details and description. Pull request numbers are rejected.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -784,10 +784,11 @@ ghIssueList(
 
 List issues, optionally filtered by labels. A short or empty page can
   still have later pages because pull requests are excluded from results.
+  To page through every issue exactly, use ghIssueSearch with "is:issue".
   @param labels - Only issues carrying all of these labels ([] for any).
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 GitHub includes pull requests in the underlying page, then this tool
@@ -828,7 +829,7 @@ ghIssueComments(
 List the comments on an issue.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -847,7 +848,7 @@ List the comments on an issue.
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L573))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L574))
 
 ### ghIssueSearch
 
@@ -866,7 +867,7 @@ Search issues and pull requests in one repository. The query must not
   @param query - GitHub search syntax, e.g. "crash in:title label:bug".
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -885,7 +886,7 @@ Search issues and pull requests in one repository. The query must not
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L602))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L603))
 
 ### ghPrReviewComment
 
@@ -902,13 +903,14 @@ ghPrReviewComment(
 ): ReviewCommentInfo raises <std::github::prReviewComment>
 ```
 
-Post one inline comment on a pull request diff.
+Post one inline comment on a pull request diff. For several comments at
+  once, use ghPrReview: one call, one approval.
   @param path - The repository-relative path shown in the pull request diff.
   @param line - The one-based file line on the chosen diff side, within a changed hunk.
   @param body - The comment text (markdown).
   @param side - Which side of the diff: "RIGHT" (new code) or "LEFT" (old).
   @param commitSha - The commit to anchor to. Empty means the PR head commit.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 Use `ghPrReview` to submit several inline comments in one review. The
@@ -933,7 +935,7 @@ Use `ghPrReview` to submit several inline comments in one review. The
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L640))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L641))
 
 ### ghPrReview
 
@@ -952,7 +954,7 @@ Submit a pull request review with an overall comment and optional inline
   comments, either commenting or requesting changes.
   @param body - Overall review text in Markdown, required when requesting changes.
   @param comments - Inline comments, each with path, line, body, and an optional side.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 Submit overall feedback and inline comments together. Use `ghPrApprove`
@@ -975,7 +977,7 @@ Submit overall feedback and inline comments together. Use `ghPrApprove`
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L696))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L698))
 
 ### ghPrApprove
 
@@ -991,7 +993,7 @@ ghPrApprove(
 Approve a pull request. This is a formal review approval that can satisfy
   branch protection and unblock a merge.
   @param body - Optional approval text (markdown).
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -1009,7 +1011,7 @@ Approve a pull request. This is a formal review approval that can satisfy
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L729))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L731))
 
 ### ghIssueCreate
 
@@ -1028,7 +1030,7 @@ Create an issue.
   @param body - The issue body (markdown).
   @param labels - Labels to apply on creation.
   @param assignees - Usernames to assign on creation.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -1048,7 +1050,7 @@ Create an issue.
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L756))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L758))
 
 ### ghIssueComment
 
@@ -1064,7 +1066,7 @@ ghIssueComment(
 Post a comment on an issue or pull request.
   @param number - The issue or pull request number.
   @param body - The comment text (markdown).
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -1082,7 +1084,7 @@ Post a comment on an issue or pull request.
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L787))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L789))
 
 ### ghIssueClose
 
@@ -1097,7 +1099,7 @@ ghIssueClose(
 
 Close an issue or pull request.
   @param number - The issue or pull request number.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -1115,7 +1117,7 @@ Close an issue or pull request.
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L814))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L816))
 
 ### ghIssueLabel
 
@@ -1131,7 +1133,7 @@ ghIssueLabel(
 Add labels to an issue or pull request. Returns the full label list after the change.
   @param number - The issue or pull request number.
   @param labels - The labels to add.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory’s origin remote.
+  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
   @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
@@ -1149,4 +1151,4 @@ Add labels to an issue or pull request. Returns the full label list after the ch
 
 **Needs:** `fileRead`, `network`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L841))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L843))

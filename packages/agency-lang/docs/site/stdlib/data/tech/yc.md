@@ -175,7 +175,8 @@ ycList(
 ): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
-Read a curated YC company list.
+Read a curated YC company list. "all" is large (about 6 MB); prefer a
+  batch, industry, or tag lookup when you only need part of the directory.
 
   @param list - Use "top", "all", "hiring", "nonprofit", "women-founded", "black-founded", or "hispanic-latino-founded".
 
@@ -202,7 +203,7 @@ The `all` list can be large. Prefer a batch, industry, or tag when you
 ycMeta(): Result<YcMeta> raises <std::yc, std::http::fetchJSON>
 ```
 
-Discover available YC batch, industry, and tag slugs and the dataset’s update time.
+Discover available YC batch, industry, and tag slugs and the dataset's update time.
 
 **Returns:** `Result<YcMeta>`
 
@@ -210,4 +211,4 @@ Discover available YC batch, industry, and tag slugs and the dataset’s update 
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L237))

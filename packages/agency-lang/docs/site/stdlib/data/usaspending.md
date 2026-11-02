@@ -156,9 +156,9 @@ usaspendingAward(
 ): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON>
 ```
 
-Read one federal award’s details, including subawards and executive compensation.
+Read one federal award's details, including subawards and executive compensation.
 
-  @param awardId - A search result’s generatedId, or its numeric internalId converted to a string.
+  @param awardId - A search result's generatedId, or its numeric internalId converted to a string.
 
 **Parameters:**
 

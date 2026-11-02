@@ -165,7 +165,8 @@ fredSeries(
 ```
 
 Fetch observations for a FRED economic series, ordered oldest first.
-  Requires FRED_API_KEY.
+  Requires FRED_API_KEY. For the most recent data, set observationStart
+  rather than relying on limit, which keeps the oldest observations.
 
   @param seriesId - A FRED series ID such as "UNRATE" or "CPIAUCSL".
   @param observationStart - The earliest YYYY-MM-DD date, or empty for no lower bound.
@@ -205,7 +206,7 @@ fredSeriesInfo(
 ): Result<FredSeriesInfo> raises <std::fred, std::env, std::http::fetchJSON>
 ```
 
-Fetch a FRED series’ title, display units, frequency, and coverage dates.
+Fetch a FRED series' title, display units, frequency, and coverage dates.
   Requires FRED_API_KEY.
 
   @param seriesId - A FRED series ID such as "UNRATE".
@@ -222,4 +223,4 @@ Fetch a FRED series’ title, display units, frequency, and coverage dates.
 
 **Needs:** `network`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L206))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L207))

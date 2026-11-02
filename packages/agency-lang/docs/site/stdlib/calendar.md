@@ -166,7 +166,7 @@ List Google Calendar events in start-time order.
   @param timeMin - An ISO 8601 timestamp with timezone, or empty to start at the current time.
   @param timeMax - An ISO 8601 timestamp with timezone, or empty for no upper bound.
   @param query - Free-text terms to match against events.
-  @param calendarId - Use "primary" for the signed-in user’s primary calendar.
+  @param calendarId - Use "primary" for the signed-in user's primary calendar.
 
 **Parameters:**
 
@@ -203,7 +203,7 @@ Create a Google Calendar event.
 
   @param start - An ISO 8601 timestamp with timezone, or YYYY-MM-DD for an all-day event.
   @param end - An ISO 8601 timestamp with timezone, or the exclusive end date for an all-day event.
-  @param calendarId - Use "primary" for the signed-in user’s primary calendar.
+  @param calendarId - Use "primary" for the signed-in user's primary calendar.
 
 For an all-day event, pass dates with an exclusive end date. For example,
   May 10 alone uses start `"2026-05-10"` and end `"2026-05-11"`.

@@ -286,13 +286,13 @@ effect std::read {
   filename: string
 }
 
+// Resolve before approval and refuse a link planted at the approved path.
 /**
 Use the JSON produced by `agency models refresh` to add or update model
 metadata. Later files win on matching provider and model names, merging
 individual fields. Hosted-tool metadata also merges. The returned count is
 for this file, not the accumulated catalog.
 */
-// Resolve before approval and refuse a link planted at the approved path.
 @capabilities(fileRead)
 export def loadModelData(path: string): Result<number> {
   """

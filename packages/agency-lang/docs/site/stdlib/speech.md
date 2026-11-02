@@ -182,7 +182,7 @@ Transcribe an audio file to text using a cloud speech provider (OpenAI
   @param allowedPaths - Only allow reading audio files under these path prefixes
   @param provider - Override the provider (normally derived from the model name)
   @param prompt - Optional text to bias decoding (names, jargon)
-  @param timestampGranularity - "segment" or "word" to request timestamps
+  @param timestampGranularity - "segment" or "word". The result is still plain text without timestamps.
   @param apiKey - Override the API key
 
 Transcription uses the active model client and counts toward usage.

@@ -104,7 +104,8 @@ question(prompt: string): string
 ```
 
 Ask the user for information needed to continue and wait for their reply.
-  Use it for facts only the user can provide, after checking available sources.
+  Use it for facts only the user can provide. Do not ask for anything you can
+  look up, and do not guess at a fact you could ask for.
 
 Use this for user input in terminal, hosted, or embedded runs.
 A handler can answer with `approve("reply")`.

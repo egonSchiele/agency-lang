@@ -58,7 +58,8 @@ import { parse, renderForHtml } from "std::markdown"
 
   Bind `folder` on tools before handing them to an agent. Search and list
   calls then stay within that folder. Reads, appends, and deletes fail if
-  the note belongs to another folder:
+  the note belongs to another folder. The model cannot see or change the
+  bound folder, because a bound parameter is removed from the tool's schema:
 
   ```ts
   import { listNotes, readNote } from "std::notes/apple"
@@ -70,7 +71,8 @@ import { parse, renderForHtml } from "std::markdown"
   }
   ```
 
-  These tools only list or read notes in Work.
+  These tools only list or read notes in Work. The model may pass any note
+  id it likes; anything outside Work fails closed.
 
   ## Deciding with a policy
 
@@ -197,7 +199,7 @@ export def createNote(title: string, body: string, folder: string = "Agency Note
   """
   Create a note in the macOS Notes app.
 
-  @param body - The note’s content as Markdown.
+  @param body - The note's content as Markdown.
   @param folder - The folder to use, creating it if missing.
   """
   const html = toHtml(body)
@@ -259,7 +261,7 @@ export def appendToNote(id: string, body: string, folder?: string): Result<Note>
 @capabilities(subprocess)
 export idempotent def readNote(id: string, folder?: string): Result<NoteContent> raises <std::notes::read> {
   """
-  Read a note’s contents as plain text.
+  Read a note's contents as plain text.
 
   @param id - A note ID from a listing, search, or create result.
   @param folder - If supplied, fail unless the note belongs to this folder.

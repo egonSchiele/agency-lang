@@ -23,7 +23,8 @@ if that follow-up is blank. No separate reviewer checks the answer.
 
 As an LLM tool, this handoff continues the caller's conversation. From code,
 use a `thread` block to isolate the research. `keepDraft: false` makes a
-budget stop a failure even when a draft is available.
+budget stop a failure even when a draft is available. The draft is then in
+the failure's data as `draft`.
 */
 
 static const systemPrompt = """You are a research analyst. Answer the task using your source tools.

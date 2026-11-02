@@ -15,9 +15,10 @@ Pass the work as text. The agent can consult web sources and read GitHub
 pull requests and issues. Use `verifierAgent` to run checks on work on disk,
 or `agencyReviewAgent` to include Agency parse and typecheck findings.
 
-By default, failed reviews return no findings and interrupted reviews may
-return saved partial findings. Pass `failOpen: false` when either outcome
-must be reported as a failure.
+By default, a review that could not run returns no findings, and a review
+the time or cost budget cut short returns the findings it saved. Pass
+`failOpen: false` when either outcome must be reported as a failure. The
+saved findings are then in the failure's data as `draft`.
 */
 
 static const systemPrompt = """You review a work product against a task. For each finding, return a Feedback item: error=true when the work fails the task on that point (name the specific problem), error=false for a satisfied point. When you checked a point against a page, put that page's URL in `source`, so the fix can cite it. Be brief and concrete. Judge only against the task and context given; do not invent requirements.
@@ -30,6 +31,9 @@ Check the work point by point, most important points first. After each point, ca
 
 static const skills = agentSkill("review")
 
+// The reviewer reads and checks; it has no tools that change anything. The
+// GitHub tools are the read bundle only, so it can read a pull request it is
+// asked to review and cannot post to it.
 export def buildTools(): any[] {
   """
   Return the reviewer's web and GitHub lookup tools.

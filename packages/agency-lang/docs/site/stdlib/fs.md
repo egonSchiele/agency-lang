@@ -106,10 +106,11 @@ edit(
 ```
 
 Apply text replacements in order, writing only if every edit succeeds.
-  Each oldText must match uniquely unless replaceAll is true. Use separate edits
-  for distant changes, with just enough oldText to identify each match.
+  Prefer one call with multiple edits over many separate calls. Each oldText
+  must match uniquely unless replaceAll is true. Use separate edits in the
+  same call for distant changes, with just enough oldText to identify each match.
 
-  @param filename - Relative path within dir, without upward traversal or symlink components.
+  @param filename - Relative path within dir, without upward traversal or symlink components. To reach another directory, pass it as dir.
   @param edits - Replacements to apply in order; replaceAll replaces every occurrence.
   @param dir - Directory containing the file.
   @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
@@ -160,7 +161,7 @@ Apply a unified diff to files, including file creation.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L93))
 
 ### mkdir
 
@@ -191,7 +192,7 @@ Create a directory and any missing parents. Succeeds if it already exists.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L115))
 
 ### copy
 
@@ -224,7 +225,7 @@ Copy a file or directory recursively.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L139))
 
 ### move
 
@@ -257,7 +258,7 @@ Move or rename a file or directory.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L169))
 
 ### remove
 
@@ -288,4 +289,4 @@ Delete a file or directory recursively. Succeeds if the target is missing.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L199))

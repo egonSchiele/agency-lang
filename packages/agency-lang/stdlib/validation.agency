@@ -51,7 +51,6 @@ export def isUuid(value: string): Result {
   """
   Returns success if value is a canonical UUID string
   (8-4-4-4-12 hex), failure otherwise.
-
   """
   return _isUuid(value)
 }
@@ -60,7 +59,6 @@ export def isInt(value: number): Result {
   """
   Returns success if value is an integer (no fractional component),
   failure otherwise.
-
   """
   return _isInt(value)
 }
@@ -68,7 +66,6 @@ export def isInt(value: number): Result {
 export def isPositive(value: number): Result {
   """
   Returns success if value > 0, failure otherwise.
-
   """
   return _isPositive(value)
 }
@@ -76,7 +73,6 @@ export def isPositive(value: number): Result {
 export def isNegative(value: number): Result {
   """
   Returns success if value < 0, failure otherwise.
-
   """
   return _isNegative(value)
 }
@@ -157,6 +153,7 @@ export static const ipv6Format = { format: "ipv6" }
 @jsonSchema({ ...emailFormat })
 export type Email = string
 
+// Named `URLString` so it does not shadow JavaScript's global `URL` constructor.
 /** A string with an http:// or https:// prefix and no whitespace. */
 @validate(isUrl)
 @jsonSchema({ ...urlFormat })
@@ -193,7 +190,6 @@ export def isJsonValue(value: any): Result {
   Returns success if value is a plain JSON tree that round-trips through
   JSON serialization unchanged, failure (naming the offending path)
   otherwise.
-
   """
   return _isJsonValue(value)
 }
@@ -202,7 +198,6 @@ export def isJsonObject(value: any): Result {
   """
   Returns success if value is a plain JSON-serializable object (non-null,
   non-array), failure otherwise.
-
   """
   if (value is object) {
     return isJsonValue(value)

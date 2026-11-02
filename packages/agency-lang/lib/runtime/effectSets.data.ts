@@ -61,7 +61,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "Shell": {
     "name": "Shell",
-    "doc": "Shell commands, program execution, and Agency subprocess runs.",
+    "doc": "Shell commands, program execution, and Agency subprocess runs. These can\nrun any program, so approve them with care.",
     "members": [
       "std::bash",
       "std::exec",
@@ -219,7 +219,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
   },
   "DataFinance": {
     "name": "DataFinance",
-    "doc": "Finance connector effects for macroeconomic data and filings.\nInclude Network as well for the HTTP effects their requests raise.",
+    "doc": "Finance connector effects for macroeconomic data and filings.\nInclude Network as well for the HTTP effects their requests raise.\nGDELT news search lives in std::data/news and is not part of this set.",
     "members": [
       "std::fred",
       "std::edgar",

@@ -9,9 +9,10 @@ Pass the work as text. The agent can consult web sources and read GitHub
 pull requests and issues. Use `verifierAgent` to run checks on work on disk,
 or `agencyReviewAgent` to include Agency parse and typecheck findings.
 
-By default, failed reviews return no findings and interrupted reviews may
-return saved partial findings. Pass `failOpen: false` when either outcome
-must be reported as a failure.
+By default, a review that could not run returns no findings, and a review
+the time or cost budget cut short returns the findings it saved. Pass
+`failOpen: false` when either outcome must be reported as a failure. The
+saved findings are then in the failure's data as `draft`.
 
 ## Functions
 
@@ -25,7 +26,7 @@ Return the reviewer's web and GitHub lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L37))
 
 ### reviewAgent
 
@@ -74,4 +75,4 @@ Review a work product against a task and return satisfied points and problems.
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L77))

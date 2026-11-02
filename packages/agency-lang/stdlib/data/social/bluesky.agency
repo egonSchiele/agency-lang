@@ -96,8 +96,12 @@ def buildPostUrl(uri: string, did: string, handle: string): string {
   return "https://bsky.app/profile/${who}/post/${parts[4]}"
 }
 
-// Validate required API fields before reshaping. Optional fields may be
-// absent in normal responses; validation strips fields not declared here.
+// Wire types: the fields the connector reads from API responses. Each
+// finalizer validates the body against one of these before reshaping, so API
+// drift on a required field fails loudly (with the mismatched paths in the
+// error) instead of silently reshaping to defaults. Optional fields are the
+// ones whose absence is a normal API state; unmodeled fields are stripped by
+// validation. Do not make a field optional just to quiet a validation failure.
 
 type WireAuthor = {
   did: string;
@@ -261,7 +265,7 @@ export idempotent def bskySearch(query: string, sort: BskySort = "latest", since
 @capabilities(network)
 export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
   """
-  Read a Bluesky account’s recent posts, newest first.
+  Read a Bluesky account's recent posts, newest first.
 
   @param handle - An account handle such as "user.bsky.social", or a DID.
   @param limit - The maximum posts, clamped to the range zero through 100.
@@ -275,7 +279,7 @@ export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result
 @capabilities(network)
 export idempotent def bskyProfile(handle: string): Result<Profile> raises <std::bluesky, std::http::fetchJSON> {
   """
-  Read a Bluesky account’s public profile and follower counts.
+  Read a Bluesky account's public profile and follower counts.
 
   @param handle - An account handle such as "user.bsky.social", or a DID.
   """

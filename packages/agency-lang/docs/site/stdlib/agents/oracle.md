@@ -24,7 +24,7 @@ Return the oracle's file, Agency-source, and web lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L88))
 
 ### oracleAgent
 
@@ -42,7 +42,9 @@ oracleAgent(
 ```
 
 Read the code and give a focused second opinion on a plan, design, or bug.
-  As an LLM tool, use the caller's existing conversation for context.
+  It never changes anything. It continues your conversation and sees
+  everything said so far, so ask the question itself without restating the
+  context.
 
   @param maxCost - Cost budget in USD.
   @param maxTime - Time budget in milliseconds.
@@ -70,4 +72,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L129))

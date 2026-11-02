@@ -312,7 +312,7 @@ read(
 
 Read the contents of a file and return it as a string.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
@@ -350,7 +350,7 @@ write(
 
 Write content to a file.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve a relative dir against the agent working directory
@@ -387,7 +387,7 @@ writeBinary(
 
 Decode base64 data and write the bytes to a file.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve a relative dir against the agent working directory
@@ -422,7 +422,7 @@ readBinary(
 
 Read a binary file as a base64-encoded string.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
   @param useAgentCwd - Resolve a relative dir against the agent working directory
 

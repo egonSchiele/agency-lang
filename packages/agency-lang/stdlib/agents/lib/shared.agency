@@ -8,6 +8,10 @@ apply model overrides consistently. `docsOnlyHandler` lets an eval worker
 read packaged documentation while rejecting other interrupts.
 */
 
+// 100,000 is the default maxToolResultChars (`DEFAULT_TOOL_RESULT_CHARS` in
+// lib/runtime/toolInvocation.ts), so with that limit or a lower one, an agent
+// saves exactly the results it saved before this option existed. Change the
+// two numbers together.
 /** Tool-result length threshold used by agents that offer saved-output readers.
 A longer result is saved in the run and replaced with a preview and a name
 for reading it back. A lower `maxToolResultChars` also triggers saving. */

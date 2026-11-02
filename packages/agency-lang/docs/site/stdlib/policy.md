@@ -241,7 +241,7 @@ export type ParsePolicyFailureStatus =
   | "policy-not-valid"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L368))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L371))
 
 ### ParsePolicyFailure
 
@@ -251,7 +251,7 @@ export type ParsePolicyFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L374))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L377))
 
 ## Constants
 
@@ -367,7 +367,7 @@ Use `cliPolicyHandler` when you also want terminal prompts and saved rules.
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L221))
 
 ### validatePolicy
 
@@ -388,7 +388,7 @@ Check user-supplied or hand-edited policy data before using it.
 
 **Returns:** `Result<void>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L233))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L236))
 
 ### alwaysScopeFor
 
@@ -407,7 +407,7 @@ List the fields declared by an effect's @always and @alwaysUnder tags.
 
 **Returns:** `ScopedField[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L240))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L243))
 
 ### defaultScopedFields
 
@@ -419,7 +419,7 @@ Return the declared approval scopes for all effects, keyed by effect name.
 
 **Returns:** [ScopedRuleFields](#scopedrulefields)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L251))
 
 ### buildScopedMatch
 
@@ -458,7 +458,7 @@ of the effect. `recordScopedRule` performs that check for you.
 
 **Returns:** `Record<string, string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L281))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L284))
 
 ### recordRule
 
@@ -491,7 +491,7 @@ a previous decision. The input policy remains unchanged.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L318))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L321))
 
 ### recordScopedRule
 
@@ -523,7 +523,7 @@ the input policy without adding a rule.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L342))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L345))
 
 ### parsePolicyFile
 
@@ -549,7 +549,7 @@ Its inner read uses `with approve`; an outer handler can still reject it.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L383))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L386))
 
 ### setPolicy
 
@@ -571,7 +571,7 @@ Later flushes still use the file configured by `cliPolicyHandler`.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L420))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L423))
 
 ### writePolicyFile
 
@@ -597,7 +597,7 @@ writing. Set `allowedPaths` to restrict the destination to known directories.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L435))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L438))
 
 ### missingPolicyRules
 
@@ -625,7 +625,7 @@ Pass accepted additions to `addPolicyRules`.
 
 **Needs:** `fileRead`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L515))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L532))
 
 ### addPolicyRules
 
@@ -650,7 +650,7 @@ fails, the active policy stays unchanged.
 
 **Needs:** `fileRead`, `fileWrite`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L530))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L547))
 
 ### flushPolicy
 
@@ -666,7 +666,7 @@ decision can otherwise remain unsaved. Does nothing without pending changes.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L554))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L571))
 
 ### cliPolicyHandler
 
@@ -723,4 +723,4 @@ overrides them. An empty override disables that choice for the effect.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1240))

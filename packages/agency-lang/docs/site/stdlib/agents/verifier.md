@@ -25,7 +25,7 @@ Return the verifier's file inspection, command execution, and Agency check tools
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L32))
 
 ### verifierAgent
 
@@ -73,4 +73,4 @@ Check work on disk against task criteria with tools and return findings.
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L79))

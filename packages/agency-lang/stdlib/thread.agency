@@ -1,3 +1,9 @@
+// `_*` exports read ctx/stack/threads from the current run (see
+// `lib/runtime/asyncContext.ts`) so message pushes target the active
+// scope's thread, cost/token reads see the branch-local
+// accumulators, and guard scopes push/pop on the right stack. The
+// deprecated `__internal_*` exports remain in `lib/stdlib/thread.ts`
+// for the migration window.
 import {
   _systemMessage,
   _userMessage,
@@ -55,6 +61,12 @@ node main() {
 `lazySummarize: false` to inspect the registry without generating summaries.
 */
 
+// The single source of truth for the attachment shape. `llm()`'s first-param
+// type in lib/typeChecker/builtins.ts references this `Attachment` alias by
+// name (no duplicated structure). The TS builders in lib/stdlib/thread.ts
+// (`_imageAttachment` / `_fileAttachment`) construct values of this shape at
+// runtime, so their return types must stay structurally compatible. The
+// end-to-end fixture in tests/agency-js/multimodal-attachments guards that.
 /** Attachment data can come from a path, a URL, or inline base64 with a MIME type.
 Use `image`, `file`, and `audio` to construct these values. */
 export type AttachmentSource =
@@ -62,11 +74,20 @@ export type AttachmentSource =
   | { kind: "url", url: string, mimeType?: string }
   | { kind: "base64", base64: string, mimeType: string }
 
+// The NARROW union `attachToReply` accepts. The reply pipeline
+// (lib/runtime/replyAttachments.ts) only handles image and file parts, so audio
+// is deliberately excluded here: passing audio() to attachToReply is a type
+// error, on purpose.
 /** An image or file that can be sent in a message or queued by `attachToReply`. */
 export type Attachment =
   | { type: "image", source: AttachmentSource }
   | { type: "file", source: AttachmentSource, filename?: string }
 
+// The WIDER union usable in ordinary user messages (userMessage / llm). Audio is
+// only supported in-message, not as a tool reply attachment. The image/file arms
+// are inlined (not `| Attachment`) because the typechecker resolves a union of
+// object arms, not a union that nests another alias. Kept structurally
+// compatible with `_imageAttachment`/`_fileAttachment`/`_audioAttachment`.
 /** An image, file, or audio input for `llm` or `userMessage`.
 Audio inputs require a model that supports audio. */
 export type MessageAttachment =
@@ -319,6 +340,10 @@ export type ModelCost = {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  // Tokens read back from a cache entry, and tokens written to a new one.
+  // Both are input-side and both are billed, at rates that differ from
+  // `inputTokens`, so a total that leaves them out understates a cached
+  // conversation by most of its size.
   cachedInputTokens: number;
   cacheCreationInputTokens: number;
   cost: number
@@ -438,7 +463,9 @@ export type GuardFailureData = {
   actualTime: number | null
 }
 
-// Test helper for simulating input waits without reading the terminal.
+// Test-only seam (`import test { _installSlowInput }`): simulates a slow
+// human without touching stdin. Guard fixtures use it to prove that time
+// spent waiting for input does not count against time budgets.
 def _installSlowInput(delayMs: number, answer: string) {
   """
   Simulate a delayed input response for tests.
@@ -471,7 +498,11 @@ def summarize(messages: ThreadMessage[]): string {
   """
   Summarize conversation messages in an isolated thread.
   """
-  // Exclude instructions from summaries, matching the eager path in lib/stdlib/threads.ts.
+  // System/developer messages are instructions, not conversation, and an
+  // agent's system prompt can run thousands of tokens. Keep them out of the
+  // summarizer prompt (mirrors the eager TS path in lib/stdlib/threads.ts).
+  // maxTokens caps the summarizer so a model that misses its stop token
+  // can't generate unboundedly.
   let transcript = ""
   for (m in messages) {
     if (m.role != "system" && m.role != "developer") {
@@ -494,7 +525,12 @@ def summarize(messages: ThreadMessage[]): string {
   return summary
 }
 
-// Call only for closed threads, and cache even an empty summary to avoid repeat calls.
+// Single owner of the "return cached summary, else LLM-summarize and
+// cache" rule. Call it only for closed threads: an in-flight conversation
+// should not be summarized mid-stream. An empty summary is cached too, so a
+// thread is never summarized twice. Accepting only a non-nullable `messages`
+// keeps the signature honest and avoids a flow-narrowing warning Agency's
+// typechecker can't currently prove.
 def summaryFor(id: string, existing: (string | null), messages: ThreadMessage[]): (string | null) {
   if (existing != null) {
     return existing

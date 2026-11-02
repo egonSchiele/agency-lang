@@ -564,7 +564,7 @@ Show a diff as a structured per-file summary plus the raw unified patch.
 gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show>
 ```
 
-Show a commit’s per-file changes and unified patch.
+Show a commit's per-file changes and unified patch.
   @param ref - A revision such as HEAD or a SHA, without a leading "-".
   @param cwd - An absolute repository directory, or empty to use the agent working directory.
 

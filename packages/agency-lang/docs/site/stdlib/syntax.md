@@ -141,7 +141,7 @@ export type ThemeName =
   | "a11y-light"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L106))
 
 ## Constants
 
@@ -207,7 +207,7 @@ Returns ANSI terminal styling. The `mode` parameter currently has no effect.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L121))
 
 ### diff
 
@@ -265,7 +265,7 @@ padding is limited to the terminal width. Use `patch` for output to apply with G
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L142))
 
 ### patch
 
@@ -303,4 +303,4 @@ a deletion patch. This function returns patch text without changing files.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L189))

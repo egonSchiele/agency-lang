@@ -1,0 +1,16 @@
+def parseName(text: string): Result<string> {
+  if (text == "") {
+    return failure("empty")
+  }
+  return success(text)
+}
+
+def greet(text: string): Result<string> {
+  const name = parseName(text)?
+  const upper = parseName(name)?.toUpperCase()
+  return success("hello ${upper}")
+}
+
+node main() {
+  return greet("x") catch "none"
+}

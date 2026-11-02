@@ -40,6 +40,7 @@ import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { TypeTestExpression } from "@/types/pattern.js";
 import { CastExpression } from "@/types/castExpression.js";
+import { UNWRAP_REACHED_CODEGEN } from "@/types/access.js";
 import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
@@ -1322,6 +1323,8 @@ export class TypeScriptBuilder {
           );
           break;
         }
+        case "unwrap":
+          throw new Error(UNWRAP_REACHED_CODEGEN);
       }
     }
     // Normalize the observable value of a *terminal* index read (`obj[key]`,

@@ -19,6 +19,12 @@ export type ValueAccess = BaseNode & {
   async?: boolean;
 };
 
+/** Thrown by codegen when a `?` reaches it. The hoist pass lowers every
+ *  `?` and the type checker refuses the positions it cannot lower from, so
+ *  a user can never see this; it marks a toolchain bug. */
+export const UNWRAP_REACHED_CODEGEN =
+  "An unwrap (?) reached codegen; the hoist pass should have lowered it. This is a toolchain bug.";
+
 export function isUnwrapElement(element: AccessChainElement): element is { kind: "unwrap" } {
   return element.kind === "unwrap";
 }

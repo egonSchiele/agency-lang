@@ -14,7 +14,7 @@ node main(args: { policyFile: string }): string {
   // Long enough that the prompt's table must wrap it to fit.
   const letter = "a"
   const longDir = "/work/${letter.repeat(200)}"
-  setPolicy(args.policyFile, POLICY)
+  setPolicy(args.policyFile, POLICY) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::write("write this file?", {
@@ -77,7 +77,7 @@ node main(args: { policyFile: string }): string {
 // A rule answers this one, so no prompt is drawn. The diff is then the
 // only place the user sees what the agent wrote.
 node autoApproved(args: { policyFile: string }): string {
-  setPolicy(args.policyFile, APPROVE_REVIEW)
+  setPolicy(args.policyFile, APPROVE_REVIEW) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::toolbox::review("review this tool?\u001b[2J\u061c", {
@@ -99,7 +99,7 @@ node autoApproved(args: { policyFile: string }): string {
 }
 
 node autoApprovedWrite(args: { policyFile: string }): string {
-  setPolicy(args.policyFile, APPROVE_WRITES)
+  setPolicy(args.policyFile, APPROVE_WRITES) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::write("append to this file?", {
@@ -115,7 +115,7 @@ node autoApprovedWrite(args: { policyFile: string }): string {
 // An interrupt with no data at all. Reading a field off it throws, and
 // the diff renderer runs in front of the guard that used to catch that.
 node nullPayload(args: { policyFile: string }): string {
-  setPolicy(args.policyFile, APPROVE_REVIEW)
+  setPolicy(args.policyFile, APPROVE_REVIEW) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::toolbox::review("review nothing?", null)

@@ -5,9 +5,9 @@ import { cliPolicyHandler, setPolicy, Policy, ScopedRuleFields } from "std::poli
 // handler's lazy load read its own policy file, which raised a nested
 // std::read that re-entered the handler while _policy was still null; the
 // default-reject vetoed the read's `with approve`, the load failed, the
-// policy fell back to {}, and every interrupt prompted. Mirrors the
-// agency-agent's exact setup (setPolicy + cliPolicyHandler + an inline
-// handler that returns handler(data)).
+// policy fell back to {}, and every interrupt prompted. The setup is a
+// saved policy file, cliPolicyHandler, and an inline handler that returns
+// handler(data). setPolicy raises std::write, approved here.
 
 const FIELDS: ScopedRuleFields = {
   "std::read": [{ field: "dir", matchSubpaths: true }],
@@ -18,7 +18,7 @@ const POLICY: Policy = {
 }
 
 node main(args: { policyFile: string }): string {
-  setPolicy(args.policyFile, POLICY)
+  setPolicy(args.policyFile, POLICY) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::read("read it", { dir: "/tmp", filename: "f" })

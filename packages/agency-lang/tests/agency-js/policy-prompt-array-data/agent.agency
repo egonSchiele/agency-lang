@@ -12,7 +12,7 @@ const FIELDS: ScopedRuleFields = {}
 const POLICY = {}
 
 node main(args: { policyFile: string }): string {
-  setPolicy(args.policyFile, POLICY)
+  setPolicy(args.policyFile, POLICY) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::edit("apply edits?", {

@@ -179,14 +179,11 @@ and sends whoever reads it looking for a policy bug.
 ## The handler's own file operations
 
 `_internalIo` names the operation open on the handler's own policy file,
-`"std::read"` while it loads and `"std::write"` while it flushes, and is
-`""` the rest of the time. Only the read half matches anything today:
-`_writePolicyFile` writes through `writeText` directly, so a flush raises
-no `std::write`. The flag is still set around it, because the window is
-real either way — the containment check it awaits is time another branch
-can arrive in — and a flush that ever goes through Agency's own `write`
-should find the guard already here. `isOwnPolicyIo` approves an interrupt without
+`"std::read"` while it loads and `"std::write"` while it saves, and is
+`""` the rest of the time. `isOwnPolicyIo` approves an interrupt without
 consulting the policy when it is that operation, on that file's name.
+The handler's saves are a flush of its "always" answers and
+`addPolicyRules`.
 
 It is worth being clear about what this is not for. A handler never hears
 its own raise: the chain walk skips an entry while that entry is
@@ -210,8 +207,47 @@ The name is matched, not the directory: the interrupt reports the
 directory the containment layer resolved, which is the realpath, and on
 macOS that is not the string the caller passed (`/tmp` against
 `/private/tmp`), and Agency exposes no realpath to compare with. A read
-of a same-named file in another directory, from another branch, inside
-the window, is what is left.
+or write of a same-named file in another directory, from another branch,
+inside the window, is what is left.
+
+## Saving a policy raises std::write
+
+Every save in `std::policy` goes through the private `writePolicyFile`,
+which raises `std::write` before it writes. The interrupt names the real
+file and carries its full new contents, so an approver sees what the
+policy will say.
+
+A save must raise an interrupt because the policy file decides which
+actions run without asking. If a save raised nothing, a program could
+replace the user's saved policy with one that approves everything, and
+nobody would be asked. The `recommended` policy approves `std::run`,
+because a child program's own effects come back to the parent's handlers.
+A save that raises nothing breaks that: a child program that called
+`setPolicy` would rewrite the file under one `std::run` approval.
+
+Who answers the interrupt depends on the caller:
+
+1. The handler's own saves (a flush, `flushPolicy`, `addPolicyRules`) set
+   `_internalIo`, and `isOwnPolicyIo` approves them. They also carry
+   `with approve` at the call site, because a flush runs inside the
+   handler, which never hears its own raise.
+2. `setPolicy` takes a path from its caller and carries no `with approve`.
+   The caller's handlers decide, the same as for `write`. It installs the
+   policy only after the save succeeds.
+
+`with approve` in library code is one vote. In a child program, the
+interrupt still reaches the parent's handlers, so a parent policy with no
+rule for that file sends it to a person.
+
+The coding agent saves the policy picked at first launch through its own
+`saveStartupPolicy` (`lib/agents/agency-agent/lib/policy.agency`), which
+calls `_writePolicyFile` and raises nothing. A new user's first prompt
+should not ask them to approve saving their approval policy. That function
+only ever writes `POLICY_PATH`, and agent-written code cannot import it:
+sandboxed compiles refuse TypeScript imports. When the file already
+exists, the agent does not rewrite it. It passes the policy it resolved to
+`cliPolicyHandler` as `policy`, so a session runs on that policy even if
+the first save failed.
 
 `cli-policy-handler-parallel-rule` and `-flush` put three branches in the
 handler while one of them reads or writes that file, with a policy that

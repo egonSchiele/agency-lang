@@ -1,6 +1,7 @@
 import { checkPolicy, validatePolicy } from "@/runtime/policy.js";
 import { currentRun } from "@/runtime/asyncContext.js";
 import { currentHost } from "@/runtime/currentHost.js";
+import path from "#path";
 import { assertContained } from "./assertContained.js";
 export { validatePolicy as _validatePolicy, escapeGlob as _escapeGlob } from "@/runtime/policy.js";
 
@@ -39,13 +40,42 @@ export {
   approveAllPolicy as _approveAllPolicy,
 } from "@/runtime/builtinPolicies.js";
 
-export async function _writePolicyFile(filePath: string, policy: Policy, allowedPaths?: string[]) {
+/** A policy save, worked out before its `std::write` interrupt: the real
+ *  directory and file name the interrupt names, and the exact text that
+ *  will be written, so the approver sees what the file will say. */
+export type PolicyWrite = { dir: string; filename: string; content: string };
+
+/** Validate a policy and resolve where it goes. Nothing is written. */
+export async function _preparePolicyWrite(
+  filePath: string,
+  policy: Policy,
+  allowedPaths?: string[],
+): Promise<PolicyWrite> {
   const host = currentHost();
   const result = validatePolicy(policy);
   if (!result.success) throw new Error(`Invalid policy: ${result.error}`);
   await assertContained(host, filePath, allowedPaths ?? []);
-  const located = await host.files.wholePath(filePath);
-  await host.files.writeText(located.root, located.target, JSON.stringify(policy, null, 2) + "\n", {
+  const real = await host.files.realPath(filePath);
+  return {
+    dir: path.dirname(real),
+    filename: path.basename(real),
+    content: JSON.stringify(policy, null, 2) + "\n",
+  };
+}
+
+/** Write a prepared policy to the directory its approval named. The file
+ *  is created readable by its owner only. */
+export async function _writePreparedPolicy(write: PolicyWrite): Promise<void> {
+  const host = currentHost();
+  await host.files.writeText(await host.files.fixedRoot(write.dir), write.filename, write.content, {
     fileMode: 0o600,
   });
+}
+
+/** Validate and write a policy with no interrupt. Only the bundled agents
+ *  call this, for a save their user asked for in the agent's own setup.
+ *  Agency code goes through `writePolicyFile` in std::policy, which raises
+ *  `std::write` first. */
+export async function _writePolicyFile(filePath: string, policy: Policy, allowedPaths?: string[]) {
+  await _writePreparedPolicy(await _preparePolicyWrite(filePath, policy, allowedPaths));
 }

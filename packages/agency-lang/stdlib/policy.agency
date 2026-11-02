@@ -11,7 +11,8 @@ import { table } from "std::ui/table"
 import {
   _checkPolicy,
   _validatePolicy,
-  _writePolicyFile,
+  _preparePolicyWrite,
+  _writePreparedPolicy,
   _builtinPolicy,
   _builtinPolicyNames,
   _BUILTIN_POLICIES,
@@ -417,33 +418,48 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
 }
 
 /**
-Replace the CLI handler's active policy and save a copy to `path`.
-Later flushes still use the file configured by `cliPolicyHandler`.
+Save a policy to `path`, then make it the CLI handler's active policy.
+The save raises `std::write`, so the caller's handlers decide whether it
+happens. If the save fails or is rejected, the active policy is unchanged.
+Later saves of "always" answers still go to the file passed to
+`cliPolicyHandler`.
 */
-export def setPolicy(path: string, policy: Policy) {
+export def setPolicy(path: string, policy: Policy): Result {
   """
-  Install a policy for the CLI handler and save it to a file.
+  Save a policy file and install it for the CLI approval handler.
   """
-  _policy = policy
-  _policyLoaded = true
-  writePolicyFile(path, policy, []) with approve
+  const written = writePolicyFile(path, policy, [])
+  if (written is success) {
+    _policy = policy
+    _policyLoaded = true
+  }
+  return written
 }
 
-// Not exported: this writes the policy file without raising std::write, so
-// only this module's own trusted callers may use it. Invalid policies fail
-// before anything is written. `allowedPaths` restricts the destination.
+// Validate a policy, then save it as JSON after a std::write interrupt that
+// names the real file and carries the full new contents. A policy file
+// decides which actions run without asking, so every save goes through the
+// caller's handlers like any other write. The handler's own saves mark
+// `_internalIo` so `isOwnPolicyIo` can approve them.
 @capabilities(fileRead, fileWrite)
 def writePolicyFile(
   path: string,
   policy: Policy,
   allowedPaths: string[] = [],
-) {
-  """
-  Validate a policy and save it as JSON, returning a failure on error.
-
-  @param allowedPaths - Allowed destination directories, or [] for no path restriction.
-  """
-  return try _writePolicyFile(path, policy, allowedPaths)
+): Result {
+  const prepared = try _preparePolicyWrite(path, policy, allowedPaths)
+  if (isFailure(prepared)) {
+    return prepared
+  }
+  return interrupt std::write("Are you sure you want to save this approval policy? It decides which actions run without asking you.", {
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
+    content: prepared.value.content,
+    mode: "overwrite"
+  })
+  destructive {
+    return try _writePreparedPolicy(prepared.value)
+  }
 }
 
 // A handler skips its own raises, but a second registration of the same
@@ -458,14 +474,9 @@ def writePolicyFile(
 // file in another directory, from another branch, inside the window, is
 // what is left.
 //
-// Only the read half matches anything today. `_writePolicyFile`
-// (`lib/stdlib/policy.ts`) calls `writeText` straight, so a flush raises
-// no `std::write` for this to approve. The flag is still set around it,
-// because the window is real either way (the containment check it awaits
-// is time another branch can arrive in), and because a flush that ever
-// goes through Agency's own `write` should find the guard already here
-// rather than need it added. See "The handler's own file operations" in
-// docs/dev/agents/approval-policies.md.
+// Both halves match: a load raises std::read, and a save of the handler's
+// own policy (a flush, or `addPolicyRules`) raises std::write. See "The
+// handler's own file operations" in docs/dev/agents/approval-policies.md.
 def isOwnPolicyIo(intr: any): boolean {
   if (_internalIo == "" || intr.effect != _internalIo) {
     return false

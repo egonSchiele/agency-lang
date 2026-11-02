@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "rejectedSaveWritesNothing",
+      "description": "a child's setPolicy raises std::write to the parent with the file and its contents; a reject writes nothing",
+      "input": "",
+      "expectedOutput": "[[\"std::run\",\"std::write\"],\"policy-probe.json\",true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

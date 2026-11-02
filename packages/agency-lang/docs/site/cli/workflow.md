@@ -170,7 +170,7 @@ The other `agency run` flags are left out. `--max-time` cannot stop a run while 
 
 ## Color
 
-On a terminal, the commands color their output: the result of `check` in green, problems in red, headings in bold, and effect names in cyan. Piped output and `--json` output are plain text.
+When standard output is a terminal, the commands color their output: the result of `check` in green, problems in red, headings in bold, and effect names in cyan. When standard output is piped, and in `--json` output, the text is plain.
 
 ## Exit codes
 

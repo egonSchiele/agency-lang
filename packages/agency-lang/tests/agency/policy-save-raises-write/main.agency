@@ -1,0 +1,37 @@
+import { runCode } from "std::agency"
+import { exists } from "std::shell"
+import { cwd } from "std::system"
+
+// A child program calls setPolicy under a parent that approves only the
+// launch, as the recommended policy does. The save must raise std::write
+// back to the parent, naming the file and carrying its new contents, so the
+// parent's reject stops it and nothing is written.
+
+static const CHILD = """
+import { setPolicy, approveAllPolicy } from "std::policy"
+
+export node main(target: string) {
+  return setPolicy(target, approveAllPolicy)
+}
+"""
+
+node rejectedSaveWritesNothing(): any {
+  const target = "${cwd()}/tests/agency/policy-save-raises-write/policy-probe.json"
+  let asked: string[] = []
+  let savedFile = ""
+  let savedContent = ""
+  handle {
+    runCode(CHILD, args: { target: target })
+  } with (intr) {
+    asked.push(intr.effect)
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    if (intr.effect == "std::write") {
+      savedFile = intr.data.filename
+      savedContent = intr.data.content
+    }
+    return reject()
+  }
+  return [asked, savedFile, savedContent.includes("\"*\""), exists(target)]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "the handler approves its own policy-file save only for that file name in that real directory, and only while the save runs",
+      "input": "",
+      "expectedOutput": "[true,false,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

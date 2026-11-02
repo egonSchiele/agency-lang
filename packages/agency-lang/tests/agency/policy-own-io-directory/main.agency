@@ -1,0 +1,21 @@
+import { cliPolicyHandler } from "std::policy"
+import test { beginOwnIo, endOwnIo, isOwnPolicyIo } from "std::policy"
+import { _policyFileDir } from "agency-lang/stdlib-lib/policy.js"
+import { cwd } from "std::system"
+
+// While the handler saves its own policy file, isOwnPolicyIo approves a
+// std::write for that file. It must not approve a file with the same name
+// in another directory, or anything once the save has ended.
+@capabilities(fileRead)
+node main(): any {
+  const file = "${cwd()}/tests/agency/policy-own-io-directory/policy.json"
+  const handler = cliPolicyHandler(file: file, interactive: false)
+  const realDir = _policyFileDir(file)
+  beginOwnIo("std::write")
+  const own = isOwnPolicyIo({ effect: "std::write", data: { dir: realDir, filename: "policy.json" } })
+  const otherDir = isOwnPolicyIo({ effect: "std::write", data: { dir: "/elsewhere", filename: "policy.json" } })
+  const otherEffect = isOwnPolicyIo({ effect: "std::read", data: { dir: realDir, filename: "policy.json" } })
+  endOwnIo()
+  const afterSave = isOwnPolicyIo({ effect: "std::write", data: { dir: realDir, filename: "policy.json" } })
+  return [own, otherDir, otherEffect, afterSave]
+}

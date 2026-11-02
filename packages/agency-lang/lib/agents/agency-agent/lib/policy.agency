@@ -3,7 +3,6 @@ import {
   ScopedRuleFields,
   cliPolicyHandler,
   parsePolicyFile,
-  setPolicy,
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
   builtinPolicy,
@@ -11,7 +10,7 @@ import {
   BUILTIN_POLICIES,
   Policy,
  } from "std::policy"
-import { _policyOverlayFromFlags } from "agency-lang/stdlib-lib/policy.js"
+import { _policyOverlayFromFlags, _writePolicyFile } from "agency-lang/stdlib-lib/policy.js"
 import { cwd } from "std::system"
 import { ChoiceItem, chooseOption } from "std::ui/cli"
 
@@ -58,12 +57,25 @@ export def givePolicyChoice() {
   }
 }
 
+// Save the policy picked at first launch. This skips the std::write
+// interrupt that std::policy raises: asking a new user to approve saving
+// the approval policy, before they have seen a single prompt, would be a
+// confusing first step. Only the agent's own startup calls this, always
+// with POLICY_PATH from config.agency. A failed save is not fatal: the
+// session still runs on the policy, and the next launch asks again.
+def saveStartupPolicy(policy: Policy) {
+  const saved = try _writePolicyFile(POLICY_PATH, policy, [])
+  if (saved is failure(f)) {
+    print(color.yellow("Could not save the policy to ${POLICY_PATH}: ${f}. This session uses it, and the next one will ask again."))
+  }
+}
+
 export def getPolicyForAgent(
   _policyArg: string,
   approveArg: string,
   rejectArg: string,
   interactive: boolean,
-): { policyFile: string; sessionPolicy: Policy | null } {
+): { policyFile: string; sessionPolicy: Policy | null; startPolicy: Policy | null } {
   let policyFile = POLICY_PATH
   let sessionPolicy: Policy | null = null
   // The resolved base policy value, for the --approve/--reject overlay below.
@@ -76,10 +88,10 @@ export def getPolicyForAgent(
         if (interactive) {
           print(color.yellow("No existing policy found at ${POLICY_PATH}."))
           const chosen = givePolicyChoice()
-          setPolicy(POLICY_PATH, chosen)
+          saveStartupPolicy(chosen)
           basePolicy = chosen
         } else {
-          setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
+          saveStartupPolicy(recommendedAutoApprovePolicy)
           basePolicy = recommendedAutoApprovePolicy
         }
       } else {
@@ -87,7 +99,6 @@ export def getPolicyForAgent(
         _exit(1)
       }
     } else {
-      setPolicy(POLICY_PATH, policy.value)
       basePolicy = policy.value
     }
   } else {
@@ -127,8 +138,11 @@ export def getPolicyForAgent(
     }
   }
 
+  // The handler starts from this policy instead of reading the file again,
+  // so a session runs on what was resolved here even if the save failed.
   return {
     policyFile: policyFile,
-    sessionPolicy: sessionPolicy
+    sessionPolicy: sessionPolicy,
+    startPolicy: sessionPolicy ?? basePolicy
   }
 }

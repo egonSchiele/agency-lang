@@ -11,7 +11,7 @@ def askForOne(): string {
 }
 
 node main(args: { policyFile: string }): string {
-  setPolicy(args.policyFile, APPROVE_ALL)
+  setPolicy(args.policyFile, APPROVE_ALL) with approve
   const handler = cliPolicyHandler(file: args.policyFile, fields: {}, interactive: false)
   let outcome = ""
   handle {

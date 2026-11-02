@@ -1,8 +1,9 @@
 import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "agency-lang/stdlib-lib/keyring.js"
 
 /** @module
+  @summary Store and retrieve secrets in the system keyring.
   Store and retrieve secrets in the operating system's keyring, so API keys
-  and tokens never touch plaintext files.
+  and tokens can be stored without plaintext credential files.
 
   ```ts
   import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::auth/keyring"
@@ -32,11 +33,11 @@ effect std::deleteSecret { key: string, service: string }
 @capabilities(subprocess)
 export def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
   """
-  Store a secret in the system keyring, overwriting any existing value for the same key.
+  Store a secret in the system keyring, replacing any existing value.
 
-  @param key - The secret key name
-  @param value - The secret value to store
-  @param service - Keyring namespace the secret is stored under
+  @param key - A non-empty name identifying the secret within its service.
+  @param value - The non-empty secret to store.
+  @param service - The namespace shared by calls that store and retrieve this secret.
   """
   return interrupt std::setSecret("Are you sure you want to store a secret in the system keyring?", {
     key: key,
@@ -51,10 +52,10 @@ export def setSecret(key: string, value: string, service: string = "agency-lang"
 @capabilities(subprocess)
 export def getSecret(key: string, service: string = "agency-lang"): Result {
   """
-  Retrieve a secret from the system keyring. Returns the secret value, or null if not found.
+  Retrieve a secret from the system keyring, or null when it is missing.
 
-  @param key - The secret key name
-  @param service - Keyring namespace to read from
+  @param key - The name used when storing the secret.
+  @param service - The namespace used when storing the secret.
   """
   return interrupt std::getSecret("Are you sure you want to read a secret from the system keyring?", {
     key: key,
@@ -67,10 +68,10 @@ export def getSecret(key: string, service: string = "agency-lang"): Result {
 @capabilities(subprocess)
 export def deleteSecret(key: string, service: string = "agency-lang"): Result {
   """
-  Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.
+  Delete a secret from the system keyring, returning whether it existed.
 
-  @param key - The secret key name
-  @param service - Keyring namespace to delete from
+  @param key - The name used when storing the secret.
+  @param service - The namespace used when storing the secret.
   """
   return interrupt std::deleteSecret("Are you sure you want to delete a secret from the system keyring?", {
     key: key,
@@ -82,10 +83,14 @@ export def deleteSecret(key: string, service: string = "agency-lang"): Result {
   }
 }
 
+/**
+  Checks whether macOS `security` or Linux `secret-tool` can run.
+  A successful check does not guarantee access to a stored secret.
+*/
 @capabilities(subprocess)
 export def isKeyringAvailable(): boolean {
   """
-  Check if the system keyring is available on this platform. Returns true on macOS and on Linux with secret-tool installed, false otherwise.
+  Check whether this platform has a supported keyring command available.
   """
   return _isKeyringAvailable()
 }

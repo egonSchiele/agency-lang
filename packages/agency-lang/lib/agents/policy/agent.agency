@@ -1,12 +1,12 @@
 import { map } from "std::array"
 import {
-  writePolicyFile,
   Policy,
   InterruptEffect,
   InterruptDataKey,
   InterruptDataVal,
  } from "std::policy"
 import { highlight } from "std::syntax"
+import { _writePolicyFile } from "agency-lang/stdlib-lib/policy.js"
 import { args } from "std::system"
 import { systemMessage, userMessage, assistantMessage } from "std::thread"
 
@@ -96,7 +96,7 @@ def savePolicy(path: string) {
 
   @param path - The file path where the policy should be saved.
   """
-  return writePolicyFile(path, currentPolicy)
+  return try _writePolicyFile(path, currentPolicy, [])
 }
 
 def get(array: any[], index: number) {

@@ -1,14 +1,12 @@
 ---
 name: "fs"
-description: "Tools for editing files and managing directories: apply text edits and patches, and create, copy, move, or remove files."
+description: "Edit files and create, copy, move, or remove filesystem entries."
 ---
 
 # fs
 
-Tools for editing files and managing directories: apply text edits and
-  patches, and create, copy, move, or remove files. Every operation raises an
-  approval interrupt before it touches the disk, so nothing is written until a
-  handler approves it.
+Apply text replacements or unified patches, and manage files and directories.
+  Mutations require approval through a handler or an interactive response.
 
   ```ts
   import { edit } from "std::fs"
@@ -35,7 +33,7 @@ effect std::edit {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L34))
 
 ### std::applyPatch
 
@@ -46,7 +44,7 @@ effect std::applyPatch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L35))
 
 ### std::mkdir
 
@@ -57,7 +55,7 @@ effect std::mkdir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
 
 ### std::copy
 
@@ -69,7 +67,7 @@ effect std::copy {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L39))
 
 ### std::move
 
@@ -81,7 +79,7 @@ effect std::move {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L41))
 
 ### std::remove
 
@@ -92,7 +90,7 @@ effect std::remove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L43))
 
 ## Functions
 
@@ -107,21 +105,20 @@ edit(
 ): Result
 ```
 
-Edit a single file by applying one or more text replacements atomically. Each edit's oldText must match a unique, non-overlapping region of the file as it stands when that edit runs (after earlier edits in the same call). If any edit fails, nothing is written.
+Apply text replacements in order, writing only if every edit succeeds.
+  Prefer one call with multiple edits over many separate calls. Each oldText
+  must match uniquely unless replaceAll is true. Use separate edits in the
+  same call for distant changes, with just enough oldText to identify each match.
 
-  Prefer one call with multiple edits over many separate calls. Keep each oldText as small as possible while still matching uniquely. Do not pad with unchanged context to bridge distant changes; split them into separate edits instead.
-
-  @param filename - The file to edit. Must stay inside dir: no absolute
-    paths, `~`, upward traversal, or symlinks that leave it. To edit another
-    directory, pass it in `dir`.
-  @param edits - Text replacements to apply in order; each has oldText, newText, and replaceAll (replace every occurrence when true)
-  @param dir - The directory to resolve the filename against
-  @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
+  @param filename - Relative path within dir, without upward traversal or symlink components. To reach another directory, pass it as dir.
+  @param edits - Replacements to apply in order; replaceAll replaces every occurrence.
+  @param dir - Directory containing the file.
+  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
 
 The `std::edit` interrupt carries the full `before` and `after` file contents
-in its data, so a handler can render a diff itself. A handler receives the
-whole interrupt object, so the contents are at `data.data.before` /
-`data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
+  in its data, so a handler can render a diff itself. A handler receives the
+  whole interrupt object, so the contents are at `data.data.before` /
+  `data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
 
 **Parameters:**
 
@@ -138,7 +135,7 @@ whole interrupt object, so the contents are at `data.data.before` /
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L52))
 
 ### applyPatch
 
@@ -146,10 +143,10 @@ whole interrupt object, so the contents are at `data.data.before` /
 applyPatch(patch: string, allowedPaths: string[] = []): Result
 ```
 
-Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
+Apply a unified diff to files, including file creation.
+  Fails on malformed patches or mismatched context.
 
-  @param patch - The unified diff to apply
-  @param allowedPaths - Only allow patches that touch files under these prefixes
+  @param allowedPaths - Restrict affected files to these directories, or leave empty for no restriction.
 
 **Parameters:**
 
@@ -164,7 +161,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L93))
 
 ### mkdir
 
@@ -176,11 +173,10 @@ mkdir(
 ): Result
 ```
 
-Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
+Create a directory and any missing parents. Succeeds if it already exists.
 
-  @param dir - The directory to create
-  @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
+  @param allowedPaths - Restrict creation to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
 
 **Parameters:**
 
@@ -196,7 +192,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L115))
 
 ### copy
 
@@ -209,12 +205,10 @@ copy(
 ): Result
 ```
 
-Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
+Copy a file or directory recursively.
 
-  @param src - The source path
-  @param dest - The destination path
-  @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory if one is set
+  @param allowedPaths - Restrict paths to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve relative paths against the agent working directory when set.
 
 **Parameters:**
 
@@ -231,7 +225,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L139))
 
 ### move
 
@@ -244,12 +238,10 @@ move(
 ): Result
 ```
 
-Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+Move or rename a file or directory.
 
-  @param src - The source path
-  @param dest - The destination path
-  @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve relative src/dest against the agent working directory if one is set
+  @param allowedPaths - Restrict paths to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve relative paths against the agent working directory when set.
 
 **Parameters:**
 
@@ -266,7 +258,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L169))
 
 ### remove
 
@@ -278,11 +270,10 @@ remove(
 ): Result
 ```
 
-Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.
+Delete a file or directory recursively. Succeeds if the target is missing.
 
-  @param target - The path to delete
-  @param allowedPaths - Only allow paths starting with these prefixes
-  @param useAgentCwd - When true, resolve a relative target against the agent working directory if one is set
+  @param allowedPaths - Restrict paths to these directories, or leave empty for no restriction.
+  @param useAgentCwd - Resolve relative paths against the agent working directory when set.
 
 **Parameters:**
 
@@ -298,4 +289,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L199))

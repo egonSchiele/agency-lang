@@ -53,15 +53,14 @@ export type DayOfWeek =
 now(): number
 ```
 
-Get the current instant as epoch milliseconds (a number). To display it as a
-  string, use format(now(), timezone). An instant is absolute and has no
-  timezone of its own.
+Get the current time as milliseconds since the Unix epoch.
 
-Get the current instant as epoch milliseconds.
+Use `format(now(), timezone)` to display the instant in a timezone.
+The numeric instant itself identifies the same moment in every timezone.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L34))
 
 ### today
 
@@ -72,8 +71,6 @@ today(timezone: string = ""): string
 Get today's date as a YYYY-MM-DD string (e.g. "2026-05-05").
 
   @param timezone - IANA timezone name (defaults to the local timezone)
-
-Get today's date as a YYYY-MM-DD string.
 
 **Parameters:**
 
@@ -95,8 +92,6 @@ Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06").
 
   @param timezone - IANA timezone name (defaults to the local timezone)
 
-Get tomorrow's date as a YYYY-MM-DD string.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -105,7 +100,7 @@ Get tomorrow's date as a YYYY-MM-DD string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L63))
 
 ### nextDayOfWeek
 
@@ -113,12 +108,9 @@ Get tomorrow's date as a YYYY-MM-DD string.
 nextDayOfWeek(day: DayOfWeek, timezone: string = ""): string
 ```
 
-Get the next occurrence of a given day of the week as a YYYY-MM-DD string. For example, passing "tuesday" returns the date of next Tuesday.
+Get the next occurrence of a weekday as a YYYY-MM-DD date.
 
-  @param day - The day of the week
-  @param timezone - IANA timezone name (defaults to the local timezone)
-
-Get the date of the next occurrence of a day of the week (e.g. "monday").
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
 **Parameters:**
 
@@ -129,7 +121,7 @@ Get the date of the next occurrence of a day of the week (e.g. "monday").
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L72))
 
 ### atTime
 
@@ -137,16 +129,14 @@ Get the date of the next occurrence of a day of the week (e.g. "monday").
 atTime(date: string, time: string, timezone: string = ""): number
 ```
 
-Get the instant (epoch milliseconds) of a wall-clock time on a calendar date,
-  in a timezone. Example: atTime("2026-05-05", "09:00", "America/New_York").
-  Throws if the date or time cannot be parsed, so bad input fails loudly instead
-  of becoming a silent NaN.
+Convert a calendar date and local time to epoch milliseconds.
 
-  @param date - The calendar date, "YYYY-MM-DD"
-  @param time - The wall-clock time, "HH:MM" or "HH:MM:SS"
-  @param timezone - IANA timezone name (defaults to local)
+  @param date - Calendar date in YYYY-MM-DD form.
+  @param time - Wall-clock time in HH:MM or HH:MM:SS form.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
-Get the instant of a wall-clock time on a calendar date, in a timezone.
+Use `atTime("2026-05-05", "09:00", "America/New_York")` to schedule a
+local wall-clock time. Invalid dates and times throw an error.
 
 **Parameters:**
 
@@ -166,13 +156,10 @@ Get the instant of a wall-clock time on a calendar date, in a timezone.
 startOfDay(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get midnight (00:00:00) of the day containing `instant`, in a timezone, as
-  epoch milliseconds. Defaults to now(). Display it with format(...).
+Get midnight of the day containing the instant, as epoch milliseconds.
 
-  @param instant - The instant whose day to use (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
-
-Get midnight of the day containing an instant, as epoch milliseconds.
+  @param instant - Epoch milliseconds within the day, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
 **Parameters:**
 
@@ -183,7 +170,7 @@ Get midnight of the day containing an instant, as epoch milliseconds.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L96))
 
 ### endOfDay
 
@@ -191,14 +178,10 @@ Get midnight of the day containing an instant, as epoch milliseconds.
 endOfDay(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get the last millisecond (23:59:59.999) of the day containing `instant`, in a
-  timezone, as epoch milliseconds. Defaults to now(). An instant is always
-  within [startOfDay, endOfDay] of its own day.
+Get the last millisecond of the day containing the instant.
 
-  @param instant - The instant whose day to use (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
-
-Get the last millisecond of the day containing an instant.
+  @param instant - Epoch milliseconds within the day, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
 **Parameters:**
 
@@ -209,7 +192,7 @@ Get the last millisecond of the day containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L107))
 
 ### startOfWeek
 
@@ -217,13 +200,10 @@ Get the last millisecond of the day containing an instant.
 startOfWeek(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get midnight on Sunday of the week containing `instant`, in a timezone, as
-  epoch milliseconds. Weeks begin on Sunday. Defaults to now().
+Get midnight on Sunday of the week containing the instant, as epoch milliseconds.
 
-  @param instant - An instant within the week (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
-
-Get midnight on Sunday of the week containing an instant.
+  @param instant - Epoch milliseconds within the week, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
 **Parameters:**
 
@@ -234,7 +214,7 @@ Get midnight on Sunday of the week containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L118))
 
 ### endOfWeek
 
@@ -242,14 +222,32 @@ Get midnight on Sunday of the week containing an instant.
 endOfWeek(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get the last millisecond (23:59:59.999) of Saturday of the week containing
-  `instant`, in a timezone, as epoch milliseconds. Weeks end on Saturday.
-  Defaults to now().
+Get the last millisecond of Saturday of the week containing the instant.
 
-  @param instant - An instant within the week (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
+  @param instant - Epoch milliseconds within the week, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
-Get the last millisecond of Saturday of the week containing an instant.
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| instant | `number \| null` | null |
+| timezone | `string` | "" |
+
+**Returns:** `number`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L129))
+
+### startOfMonth
+
+```ts
+startOfMonth(instant: number | null = null, timezone: string = ""): number
+```
+
+Get midnight on the first day of the month containing the instant, as epoch milliseconds.
+
+  @param instant - Epoch milliseconds within the month, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
 **Parameters:**
 
@@ -262,44 +260,16 @@ Get the last millisecond of Saturday of the week containing an instant.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L140))
 
-### startOfMonth
-
-```ts
-startOfMonth(instant: number | null = null, timezone: string = ""): number
-```
-
-Get midnight on the 1st of the month containing `instant`, in a timezone, as
-  epoch milliseconds. Defaults to now().
-
-  @param instant - An instant within the month (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
-
-Get midnight on the 1st of the month containing an instant.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
-
-**Returns:** `number`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L154))
-
 ### endOfMonth
 
 ```ts
 endOfMonth(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get the last millisecond (23:59:59.999) of the last day of the month
-  containing `instant`, in a timezone, as epoch milliseconds. Defaults to now().
+Get the last millisecond of the month containing the instant.
 
-  @param instant - An instant within the month (defaults to now())
-  @param timezone - IANA timezone name (defaults to local)
-
-Get the last millisecond of the last day of the month containing an instant.
+  @param instant - Epoch milliseconds within the month, or omit for now.
+  @param timezone - IANA timezone name, or empty for the local timezone.
 
 **Parameters:**
 
@@ -310,7 +280,7 @@ Get the last millisecond of the last day of the month containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L151))
 
 ### format
 
@@ -324,8 +294,6 @@ Format an instant (epoch milliseconds) as an ISO 8601 string with
   @param ms - The instant to format
   @param timezone - IANA timezone name (defaults to local)
 
-Format an instant as an ISO 8601 string with milliseconds and offset.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -335,7 +303,7 @@ Format an instant as an ISO 8601 string with milliseconds and offset.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L180))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L162))
 
 ### formatDate
 
@@ -348,8 +316,6 @@ Format an instant as the "YYYY-MM-DD" calendar date it falls on in a timezone.
   @param ms - The instant to format
   @param timezone - IANA timezone name (defaults to local)
 
-Format an instant as the "YYYY-MM-DD" calendar date it falls on.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -359,7 +325,7 @@ Format an instant as the "YYYY-MM-DD" calendar date it falls on.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L173))
 
 ### parse
 
@@ -367,14 +333,10 @@ Format an instant as the "YYYY-MM-DD" calendar date it falls on.
 parse(iso: string): number
 ```
 
-Parse an ISO 8601 datetime string into an instant (epoch milliseconds). Throws
-  if the string cannot be parsed, so bad input fails loudly instead of becoming
-  a silent NaN. Strictness matches JavaScript's Date, not RFC 3339: loosely
-  valid strings like "2026" or "2026-05" are accepted.
+Parse a datetime string into epoch milliseconds.
 
-  @param iso - The ISO 8601 datetime string
-
-Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
+Parsing follows JavaScript Date rules, so inputs such as `"2026"` and
+`"2026-05"` are also accepted. Invalid input throws an error.
 
 **Parameters:**
 
@@ -384,7 +346,7 @@ Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L203))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L187))
 
 ### formatDuration
 
@@ -392,12 +354,9 @@ Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
 formatDuration(ms: number): string
 ```
 
-Render a duration in milliseconds as a readable string like "5m 32s" or
-  "2w 3d". Whole-second granularity; largest unit is weeks.
+Format a duration in milliseconds as text such as "5m 32s".
 
-  @param ms - The duration in milliseconds
-
-Render a millisecond duration as a readable string like "5m 32s".
+Output uses whole seconds, with weeks as the largest unit.
 
 **Parameters:**
 
@@ -407,7 +366,7 @@ Render a millisecond duration as a readable string like "5m 32s".
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L197))
 
 ### elapsedTime
 
@@ -415,12 +374,9 @@ Render a millisecond duration as a readable string like "5m 32s".
 elapsedTime(since: number): string
 ```
 
-How much time has elapsed since the given instant, as a readable duration
-  like "5m 32s". Capture the start with now().
+Format the time since an earlier instant as a duration such as "5m 32s".
 
-  @param since - The starting instant, from now()
-
-How much time has elapsed since an instant, as a readable duration string.
+  @param since - Starting time in epoch milliseconds, such as a value from now().
 
 **Parameters:**
 
@@ -430,4 +386,4 @@ How much time has elapsed since an instant, as a readable duration string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L227))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L204))

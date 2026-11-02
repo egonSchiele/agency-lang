@@ -1,17 +1,22 @@
 ---
 name: "researcher"
-description: "Answers questions about the Agency language itself from the"
+description: "Answer Agency-language questions using bundled documentation and source."
 ---
 
 # researcher
 
-bundled documentation and from Agency source.
+Use this agent for syntax, types, control flow, CLI usage, diagnostics, and
+standard-library APIs. Its built-in tools include the packaged docs and
+source checks. It can also read the caller's project. For anything outside
+the language, use `researcherAgent` from `std::agents/researcher`, which
+searches the web and Wikipedia.
 
-  Use it for questions whose answer lives in the language: syntax, types,
-  control flow, the CLI, a diagnostic code, what a std:: module offers. For
-  anything outside the language, use researcherAgent, which searches the web
-  and Wikipedia. This agent has neither, on purpose: an answer about Agency
-  assembled from the open web is usually an answer about some other language.
+This agent has no web or Wikipedia tools, on purpose: an answer about
+Agency assembled from the open web is usually an answer about some other
+language.
+
+As an LLM tool it continues the caller's conversation. From code, use a
+`thread` block when you want an isolated answer.
 
 ## Functions
 
@@ -21,12 +26,11 @@ bundled documentation and from Agency source.
 buildTools(): any[]
 ```
 
-Return the Agency researcher's tools: the bundled documentation, read-only
-  access to the project, and the source inspectors it checks answers with.
+Return bundled documentation, project lookup, and Agency source-checking tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L42))
 
 ### agencyResearcherAgent
 
@@ -39,7 +43,6 @@ agencyResearcherAgent(
   maxTime: number = 10m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
   keepDraft: boolean = true,
 ): Result<string>
@@ -50,13 +53,12 @@ Answer a question about the Agency language from the bundled documentation,
 
   @param question - The question about Agency
   @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
+  @param provider - Provider for the model override, ignored when model is empty.
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param keepDraft - When false, a run the budget cut short is a failure naming the budget, even when a draft was saved; the draft is in the failure's data as `draft`
+  @param keepDraft - False returns a budget failure even when a draft was saved.
 
 **Parameters:**
 
@@ -68,7 +70,6 @@ Answer a question about the Agency language from the bundled documentation,
 | maxTime | `number` | 10m |
 | model | `string` | "" |
 | provider | `string` | "" |
-| session | `string` | "" |
 | extraTools | `any[]` | [] |
 | keepDraft | `boolean` | true |
 
@@ -76,4 +77,4 @@ Answer a question about the Agency language from the bundled documentation,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L68))

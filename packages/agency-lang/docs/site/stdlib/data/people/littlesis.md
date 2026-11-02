@@ -1,6 +1,6 @@
 ---
 name: "littlesis"
-description: "LittleSis — people, organizations, and the ties between them"
+description: "Research people, organizations, and their relationships in LittleSis."
 ---
 
 # littlesis
@@ -9,17 +9,15 @@ description: "LittleSis — people, organizations, and the ties between them"
 
   Query the [LittleSis](https://littlesis.org/api/) API — an open database of powerful
   people and organizations and their **relationships** (employment, board seats,
-  ownership/investment, donations). Use this connector when the question is about *entities and
-  the edges between them* (who worked where, who funds whom, who sits on which board), as opposed
-  to macro numbers (`std::data/finance/fred`), company filings (`std::data/finance/edgar`), or
-  news (`std::data/news/gdelt`).
+  ownership, investment, and donations). Use it to investigate who worked
+  where, who funds an organization, or who sits on a board.
 
   No API key required (the API is rate-limited; HTTP 503 means "Rate Limit Exceeded").
 
-  **Two-step recipe.** LittleSis edges carry entity *IDs*, not names. So:
-  use `littlesisConnections` to see *who* an entity is tied to (neighbor entities **by name**,
-  filtered by category); use `littlesisRelationships` to get the *terms* of a tie (amount, dates,
-  roles). Resolve a name to an id first with `littlesisSearch`.
+  Start with `littlesisSearch` to resolve a name to an ID. Then use
+  `littlesisConnections` for connected entities by name, or
+  `littlesisRelationships` for amounts, dates, and roles. Relationship
+  records identify both entities by ID.
 
   Relationship categories are friendly strings: `position` (employment/roles), `education`,
   `membership`, `family`, `donation`, `transaction`, `lobbying`, `social`, `professional`,
@@ -43,11 +41,11 @@ description: "LittleSis — people, organizations, and the ties between them"
 
 ### Entity
 
-A LittleSis person or organization. `type` is "Person" or "Org" (from primary_ext).
+A LittleSis person or organization. `type` is "Person" or "Org".
     `relationshipId`/`relationshipCategory` are populated only on connections results.
 
 ```ts
-/** A LittleSis person or organization. `type` is "Person" or "Org" (from primary_ext).
+/** A LittleSis person or organization. `type` is "Person" or "Org".
     `relationshipId`/`relationshipCategory` are populated only on connections results. */
 export type Entity = {
   id: number;
@@ -63,14 +61,14 @@ export type Entity = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L48))
 
 ### Relationship
 
-One typed edge. entity1Id/entity2Id are LittleSis entity IDs, NOT names.
+One relationship whose entity1Id and entity2Id identify LittleSis entities.
 
 ```ts
-/** One typed edge. entity1Id/entity2Id are LittleSis entity IDs, NOT names. */
+/** One relationship whose entity1Id and entity2Id identify LittleSis entities. */
 export type Relationship = {
   id: number;
   category: string;
@@ -86,7 +84,7 @@ export type Relationship = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L62))
 
 ## Effects
 
@@ -99,7 +97,7 @@ effect std::littlesis {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L38))
 
 ## Functions
 
@@ -112,12 +110,9 @@ littlesisSearch(
 ): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
-Search LittleSis for people and organizations by name. Returns matching entities (id, name,
-  type "Person"/"Org", blurb, aliases, website, url). Use the returned id with the other
-  littlesis functions. Empty result set returns an empty list.
+Find people and organizations in LittleSis by name.
 
-  @param name - The person or organization name to search for
-  @param page - Result page, 10 per page (default 1)
+  @param page - The result page, starting at one, with ten entries per page.
 
 **Parameters:**
 
@@ -132,7 +127,7 @@ Search LittleSis for people and organizations by name. Returns matching entities
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L239))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L235))
 
 ### littlesisEntity
 
@@ -142,10 +137,9 @@ littlesisEntity(
 ): Result<Entity> raises <std::littlesis, std::http::fetchJSON>
 ```
 
-Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the full profile
-  (name, type, blurb, aliases, website, url). Unknown id returns a failure.
+Read a LittleSis person or organization profile.
 
-  @param id - The LittleSis entity id
+  @param id - An entity ID returned by a LittleSis search or connection listing.
 
 **Parameters:**
 
@@ -159,7 +153,7 @@ Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L256))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L249))
 
 ### littlesisRelationships
 
@@ -171,13 +165,12 @@ littlesisRelationships(
 ): Result<Relationship[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
-List an entity's relationships (typed edges) by its id. Each edge carries the two entity IDs,
-  role labels (description1/description2), amount, dates, and category. Filter with a friendly
-  category name. Edges carry entity IDs, not names — use littlesisConnections for neighbor names.
+List an entity's relationships with roles, amounts, and dates. Edges carry
+  entity IDs, not names; use littlesisConnections for neighbor names.
 
-  @param id - The LittleSis entity id
-  @param category - Optional category filter: position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, generic (empty = all)
-  @param sort - Optional sort: "amount", "oldest", or "recent" (empty = default)
+  @param id - An entity ID returned by a LittleSis search or connection listing.
+  @param category - Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories.
+  @param sort - Use "amount", "oldest", or "recent", or empty for the source default.
 
 **Parameters:**
 
@@ -193,7 +186,7 @@ List an entity's relationships (typed edges) by its id. Each edge carries the tw
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L261))
 
 ### littlesisConnections
 
@@ -204,12 +197,11 @@ littlesisConnections(
 ): Result<Entity[]> raises <std::littlesis, std::http::fetchJSON>
 ```
 
-List the entities connected to an entity (neighbors, by name), optionally filtered by a
-  friendly category name. Lighter than littlesisRelationships and name-bearing — the preferred
-  first hop for "who is X tied to". Each result also carries the linking relationshipId/category.
+List the people and organizations connected to an entity, by name. The
+  preferred first hop for "who is X tied to".
 
-  @param id - The LittleSis entity id
-  @param category - Optional category filter: position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, generic (empty = all)
+  @param id - An entity ID returned by a LittleSis search or connection listing.
+  @param category - Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories.
 
 **Parameters:**
 
@@ -224,4 +216,4 @@ List the entities connected to an entity (neighbors, by name), optionally filter
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L294))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L283))

@@ -1,23 +1,3 @@
-/** @module
-@summary Read and share LLM conversation history across a run: inspect the current thread's messages, cost, and tokens, and reach into other threads.
-Read and share LLM conversation history across a run. Inspect the
-current thread's messages, cost, and token usage, and reach into
-other threads. `listThreads()` lists every thread in the run, active
-and closed. `getThread(id, offset, limit)` reads a slice of one
-thread's messages. These build on the public `agency.threads.*`
-primitives, so you can compose your own variants in user code.
-
-  ```ts
-  import { listThreads, getThread } from "std::thread"
-
-  // Inspect the run's other threads:
-  const info = listThreads()
-
-  // Read a slice of a prior thread's messages:
-  const lines = getThread("t1", 0, 20)
-  ```
-*/
-
 // `_*` exports read ctx/stack/threads from the current run (see
 // `lib/runtime/asyncContext.ts`) so message pushes target the active
 // scope's thread, cost/token reads see the branch-local
@@ -57,12 +37,38 @@ import {
   _sessionThreadId,
 } from "agency-lang/stdlib-lib/threads.js"
 
+/** @module
+@summary Manage LLM conversation history, attachments, and usage records.
+
+Use message helpers to seed the active conversation, attachment builders
+to provide images or files, and `lastReply` for reply metadata. The thread
+inspection helpers can read other conversations in the same run.
+
+```ts
+import { systemMessage, currentThreadId, getThread } from "std::thread"
+
+node main() {
+  thread {
+    systemMessage("Answer in one sentence.")
+    const answer: string = llm("What causes rain?")
+    const id = currentThreadId()
+    print(getThread(id))
+  }
+}
+```
+
+`listThreads` may call an LLM to summarize closed threads. Pass
+`lazySummarize: false` to inspect the registry without generating summaries.
+*/
+
 // The single source of truth for the attachment shape. `llm()`'s first-param
 // type in lib/typeChecker/builtins.ts references this `Attachment` alias by
 // name (no duplicated structure). The TS builders in lib/stdlib/thread.ts
 // (`_imageAttachment` / `_fileAttachment`) construct values of this shape at
 // runtime, so their return types must stay structurally compatible. The
 // end-to-end fixture in tests/agency-js/multimodal-attachments guards that.
+/** Attachment data can come from a path, a URL, or inline base64 with a MIME type.
+Use `image`, `file`, and `audio` to construct these values. */
 export type AttachmentSource =
   | { kind: "path", path: string, mimeType?: string }
   | { kind: "url", url: string, mimeType?: string }
@@ -70,8 +76,9 @@ export type AttachmentSource =
 
 // The NARROW union `attachToReply` accepts. The reply pipeline
 // (lib/runtime/replyAttachments.ts) only handles image and file parts, so audio
-// is deliberately excluded here — passing audio() to attachToReply is a type
+// is deliberately excluded here: passing audio() to attachToReply is a type
 // error, on purpose.
+/** An image or file that can be sent in a message or queued by `attachToReply`. */
 export type Attachment =
   | { type: "image", source: AttachmentSource }
   | { type: "file", source: AttachmentSource, filename?: string }
@@ -81,6 +88,8 @@ export type Attachment =
 // are inlined (not `| Attachment`) because the typechecker resolves a union of
 // object arms, not a union that nests another alias. Kept structurally
 // compatible with `_imageAttachment`/`_fileAttachment`/`_audioAttachment`.
+/** An image, file, or audio input for `llm` or `userMessage`.
+Audio inputs require a model that supports audio. */
 export type MessageAttachment =
   | { type: "image", source: AttachmentSource }
   | { type: "file", source: AttachmentSource, filename?: string }
@@ -116,6 +125,8 @@ export def userMessage(
   _userMessage(msg, label, expires)
 }
 
+/** Use this to record work done outside the model's tool loop. The model
+sees the synthetic call and result on its next request. */
 export def toolMessage(
   name: string,
   args: any,
@@ -123,16 +134,11 @@ export def toolMessage(
   label: string = "",
 ) {
   """
-  Add a synthetic tool call and its result to the current thread, as if the
-  model had made the call. Nothing runs; this only shapes the conversation the
-  model reads on its next llm() call. Use it to make the model see work a
-  scaffold did on its behalf. Call it at a clean point in the thread, not in
-  the middle of a tool exchange still waiting for its result.
+  Add a synthetic tool call and result to the active conversation without executing it.
+  Call only when no tool exchange is waiting for its result.
 
-  @param name - The tool name the model will see it "called"
-  @param args - The call arguments, as an object (serialized to JSON)
-  @param result - The tool response content
-  @param label - Optional debug tag shown in statelog. Never sent to the model.
+  @param args - Call arguments to serialize as JSON.
+  @param label - Debug tag in statelog that is not sent to the model.
   """
   _toolMessage(name, args, result, label)
 }
@@ -146,8 +152,8 @@ export def image(
   Build an image attachment for a multimodal llm() call. The source is
   read, fetched, and MIME-inferred when the message is sent.
 
-  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
-  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
+  @param mimeType - Overrides inference and is required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
   """
   return _imageAttachment(source, mimeType, base64)
@@ -162,9 +168,9 @@ export def file(
   """
   Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
-  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
-  @param filename - Name shown to the model; defaults to the source basename.
-  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
+  @param filename - Name shown to the model, defaulting to the source basename.
+  @param mimeType - Overrides inference and is required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
   """
   return _fileAttachment(source, filename, mimeType, base64)
@@ -178,55 +184,51 @@ export def audio(
 ): MessageAttachment {
   """
   Build an audio attachment for a multimodal llm() call. Only usable in
-  ordinary messages (llm() / userMessage()), not attachToReply(). Currently
-  supported only by models that accept audio input (e.g. gpt-audio-1.5).
+  `llm` and `userMessage` calls with a model that accepts audio input.
+  It cannot be queued with `attachToReply`.
 
-  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
-  @param filename - Name shown to the model; defaults to the source basename.
-  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
+  @param filename - Name shown to the model, defaulting to the source basename.
+  @param mimeType - Overrides inference and is required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
   """
   return _audioAttachment(source, filename, mimeType, base64)
 }
 
+/** Queued images and files appear in a user message after the tool round.
+Prefer path sources for generated files. The reply pipeline enforces model
+modality, size, and attachment-count limits. */
 @capabilities(fileRead)
 export def attachToReply(attachment: Attachment) {
   """
-  Queue an attachment to be shown to the model after the current tool
-  call completes. Only meaningful while running as a tool inside an
-  llm() call: the attachment follows the tool's text result as a user
-  message the model can see. Prefer path-based sources. Outside a tool
-  invocation the attachment is dropped.
-
-  @param attachment - The attachment to show the model
+  Show an image or file to the model after the current tool call finishes.
+  Use only inside a tool invoked by `llm`; calls elsewhere have no effect.
   """
   _attachToReply(attachment)
 }
 
+/** The tool's result must match the caller's output contract. Failed tools,
+ordinary tools sharing a round, incompatible return values, and queued
+attachments cause the LLM call to continue. A handoff can end the call after
+other tools in its round, since it runs last. Code after `endTurn` still runs. */
 export def endTurn(scope: "llm" | "turn" = "llm") {
   """
-  End the current llm() call when this tool returns. The tool's return
-  value becomes the answer and no follow-up LLM call is made. Only
-  meaningful while running as a tool inside an llm() call; ignored
-  elsewhere. The turn still goes on if the tool fails, if it ran beside
-  other tool calls in the same response (a handoff is exempt, since it
-  runs last), if the value is not a string (or does not match the
-  caller's structured output type), or if a reply attachment is waiting.
+  Use the current tool's return value as the LLM answer without a follow-up call.
+  Call only inside an LLM tool invocation with a successful result matching
+  the caller's requested output type and no queued reply attachments.
 
-  @param scope - "llm" ends the nearest enclosing llm() call. "turn" also ends every llm() call above it, up to the user's turn; use it only when the answer covers the whole request.
+  @param scope - Use "turn" only when the answer covers the whole request and should end enclosing LLM calls too.
   """
   _endTurn(scope)
 }
 
+/** This replaces the default user-role message after a handoff returns.
+An empty message, a rejected handoff, or a successful `endTurn` leaves the
+custom message unused. Calls from ordinary tools have no effect. */
 export def handBack(message: string) {
   """
-  For a handoff function: the message that hands control back to the
-  caller when this handoff returns, in place of the default one, which
-  repeats the result and asks the caller to continue. Ignored
-  from an ordinary tool, when the handoff was rejected, when the message
-  is empty, and when endTurn() ends the turn.
-
-  @param message - The user-role message to put on the thread
+  Set the message that returns control to the caller after a handoff.
+  Call from inside a handoff function invoked as an LLM tool.
   """
   _handBack(message)
 }
@@ -290,15 +292,12 @@ export def assistantMessage(msg: string, label: string = "") {
   _assistantMessage(msg, label)
 }
 
-/** Inside a fork/race branch this includes the parent's accumulated cost
- *  plus what this branch has spent so far. After branches join, the parent
- *  sees its own cost plus every branch's cost, including race losers.
- *  Their LLM calls really happened and cost real money. To measure a
- *  section, capture the value before and after and subtract. */
+/** A fork branch includes its parent's accumulated cost plus its own spend.
+After joining, the parent includes every branch, including race losers.
+Subtract values taken before and after a section to measure its cost. */
 export def getCost(): number {
   """
-  Return the cumulative cost in USD of all LLM calls contributing to the
-  current execution branch.
+  Return cumulative usage cost in USD for the current execution branch.
   """
   return _getCost()
 }
@@ -312,8 +311,8 @@ export idempotent def threadIsNew(): boolean {
 }
 
 /** For an agent's persona. An agent called twice from code on one thread
- *  keeps one persona; a handoff, whose system messages are removed when it
- *  hands back, pushes the persona fresh on every dispatch. */
+  keeps one persona; a handoff, whose system messages are removed when it
+  hands back, pushes the persona fresh on every dispatch. */
 export def ensureSystemMessage(msg: string) {
   """
   Push `msg` as a system message unless the active thread already holds it.
@@ -332,6 +331,9 @@ export def getTokens(): number {
   return _getTokens()
 }
 
+/** Usage for one kind and model across the run. `cost` is in USD.
+Cache-read and cache-creation tokens are billed separately from ordinary
+input tokens. */
 export type ModelCost = {
   // "completion", "image", "embedding", "transcription", "speech" or "manual".
   kind: string;
@@ -340,7 +342,7 @@ export type ModelCost = {
   outputTokens: number;
   // Tokens read back from a cache entry, and tokens written to a new one.
   // Both are input-side and both are billed, at rates that differ from
-  // `inputTokens` — so a total that leaves them out understates a cached
+  // `inputTokens`, so a total that leaves them out understates a cached
   // conversation by most of its size.
   cachedInputTokens: number;
   cacheCreationInputTokens: number;
@@ -348,14 +350,11 @@ export type ModelCost = {
 }
 
 /** Unlike the per-branch cost/token accessors, this covers every branch of
- *  the run, so it attributes spend per model even for
- *  subagents and tool calls that run on a different model. */
+  the run, so it attributes spend per model even for
+  subagents and tool calls that run on a different model. */
 export def getModelCosts(): ModelCost[] {
   """
-  Return what the run has spent since it began, one entry per kind
-  and model (completions, images, embeddings, speech), sorted by cost
-  descending. This is the same figure the host reads from the run result's
-  usage entries.
+  Return total run usage by kind and model, sorted by cost from highest to lowest.
   """
   return _getModelCosts()
 }
@@ -435,40 +434,19 @@ export type Reply = {
   rawData: any
 }
 
-/**
-Reads the last assistant message on the active thread. A message a program
-pushed with `assistantMessage()` counts as a reply here too — to the thread
-it is an assistant message like any other — so this returns the most recent
-one either way.
-*/
+/** Call after `llm` to inspect decision answers, thinking, log probabilities,
+and usage. `answers.answer` holds a bare decision answer; object annotations
+use the corresponding field names. Check an answer's `type` before reading
+its fields.
+
+For text models, request token probabilities with `logprobs: { top: 3 }`.
+Providers that do not return log probabilities leave `logprobs` empty.
+Values are natural logarithms, so zero means probability one.
+Messages added by `assistantMessage` also count as replies. */
 export def lastReply(): Reply | null {
   """
-  Return what the model attached to its last reply on the current thread,
-  or null if the thread has no reply yet. Use it right after an `llm()` call
-  to read what the call's return value leaves out: a decision model's answers
-  and probabilities, a reasoning model's thinking, and the reply's tokens and
-  cost. For a decision model, `answers` holds one answer per question —
-  `answers.answer` for a bare annotation, `answers.<field>` for an object one;
-  check an answer's `type` before reading its fields.
-
-  For a text model, `logprobs` holds one entry per generated token when the
-  call asked for them with `llm(prompt, { logprobs: { top: 3 } })`. Only
-  OpenAI models return them today; other providers leave the list empty. Each
-  value is the natural log of the token's probability, so a value near 0
-  means near certainty and -2.3 means about one chance in ten.
-
-  ```ts
-  type Dept = "billing" | "support" | "sales"
-  const dept: Dept = llm("Which team should handle this?", { model: "jev-1.13" })
-  const reply = lastReply()
-  if (reply == null || reply.answers == null) {
-    return dept
-  }
-  const answer = reply.answers.answer
-  if (answer.type == "choice" && answer.confidence < 0.6) {
-    // not sure enough: hand it to a person
-  }
-  ```
+  Return the last assistant reply and its metadata on the active thread,
+  or null when there is no reply.
   """
   return _lastReply()
 }
@@ -485,25 +463,23 @@ export type GuardFailureData = {
   actualTime: number | null
 }
 
-/** Test-only seam (import test { _installSlowInput }): install an input()
-override that answers after a delay, simulating a slow human without
-touching stdin. Guard fixtures use it to prove input-wait does not count
-against time budgets. */
+// Test-only seam (`import test { _installSlowInput }`): simulates a slow
+// human without touching stdin. Guard fixtures use it to prove that time
+// spent waiting for input does not count against time budgets.
 def _installSlowInput(delayMs: number, answer: string) {
   """
-  Test-only: make input() resolve with `answer` after `delayMs` milliseconds.
-
-  @param delayMs - How long the simulated human takes to answer.
-  @param answer - The answer input() resolves with.
+  Simulate a delayed input response for tests.
   """
   _installSlowInputImpl(delayMs, answer)
 }
 
+/** A thread message rendered as text, with placeholders for attachments. */
 export type ThreadMessage = {
   role: string,
   content: string,
 }
 
+/** A conversation registered in the current run, including its parent and activity state. */
 export type ThreadInfo = {
   id: string,
   label?: string,
@@ -520,19 +496,13 @@ type SummaryResult = {
 
 def summarize(messages: ThreadMessage[]): string {
   """
-  One-shot LLM summarization used by the lazy summarize path.
-  Wrapped in a `thread {}` block so the summarizer prompt runs on
-  an isolated message history and doesn't pollute the agent's main
-  conversation. Uses structured output so the returned text comes
-  back on a known field instead of free-form completion text.
-
-  @param messages - The thread's messages to summarize
+  Summarize conversation messages in an isolated thread.
   """
-  // System/developer messages are instructions, not conversation --
-  // and an agent's system prompt can run thousands of tokens. Keep
-  // them out of the summarizer prompt (mirrors the eager TS path in
-  // lib/stdlib/threads.ts). maxTokens caps the summarizer so a model
-  // that misses its stop token can't generate unboundedly.
+  // System/developer messages are instructions, not conversation, and an
+  // agent's system prompt can run thousands of tokens. Keep them out of the
+  // summarizer prompt (mirrors the eager TS path in lib/stdlib/threads.ts).
+  // maxTokens caps the summarizer so a model that misses its stop token
+  // can't generate unboundedly.
   let transcript = ""
   for (m in messages) {
     if (m.role != "system" && m.role != "developer") {
@@ -556,10 +526,10 @@ def summarize(messages: ThreadMessage[]): string {
 }
 
 // Single owner of the "return cached summary, else LLM-summarize and
-// cache" rule. Callers must skip the call for active threads
-// themselves (the in-flight conversation should not be summarized
-// mid-stream). Accepting only a non-nullable `messages` keeps the
-// type signature honest and avoids a flow-narrowing warning Agency's
+// cache" rule. Call it only for closed threads: an in-flight conversation
+// should not be summarized mid-stream. An empty summary is cached too, so a
+// thread is never summarized twice. Accepting only a non-nullable `messages`
+// keeps the signature honest and avoids a flow-narrowing warning Agency's
 // typechecker can't currently prove.
 def summaryFor(id: string, existing: (string | null), messages: ThreadMessage[]): (string | null) {
   if (existing != null) {
@@ -570,23 +540,16 @@ def summaryFor(id: string, existing: (string | null), messages: ThreadMessage[])
   return s
 }
 
-/** Summary sourcing: threads opened with `thread(summarize: true)` are
- *  summarized eagerly when they close, so their summary is already cached
- *  here. Other closed threads are summarized on first read via one LLM
- *  round-trip, and the result is cached for later calls. The active thread
- *  is never summarized (the in-flight conversation should not be
- *  summarized mid-stream). A cached summary is reused without re-prompting. */
+/** Success holds a `ThreadInfo[]` list. Failure means thread inspection could not run.
+Closed threads may already have summaries from `thread(summarize: true)`.
+With lazy summarization enabled, missing summaries are generated and cached.
+Active threads are left unsummarized. Disable lazy summarization to use a
+cached summary, the label, or an empty string without another LLM call. */
 export def listThreads(lazySummarize: boolean = true): Result {
   """
-  Return every thread in the current run, including the active one, as a
-  `Result`: success holds `ThreadInfo[]`, failure holds the error (e.g.
-  called outside an Agency frame). Each closed thread carries a short
-  summary; the active thread is not summarized.
+  List active and closed conversations in the current run.
 
-  @param lazySummarize - When true (default), generate a summary
-                         on-demand for any closed thread that lacks one.
-                         When false, skip the LLM call and fall back to
-                         the thread's label (or `""`).
+  @param lazySummarize - False avoids LLM calls and uses cached summaries or labels for missing summaries.
   """
   const raw = try _listThreadsRaw()
   if (isFailure(raw)) {
@@ -637,31 +600,23 @@ export def sessionThreadId(name: string): string {
   return _sessionThreadId(name)
 }
 
+/** Save this id before leaving a thread block when you want to reopen it
+later with `thread(continue: id)`. */
 export def currentThreadId(): string {
   """
-  Slug-form id of the active thread (e.g. "t3"), or `""` outside any
-  runtime frame. Useful with `thread(continue: id)` when you want to
-  capture a thread's id at the moment it was active so you can
-  resume it later.
+  Return the active thread id, such as "t3", or "" outside a runtime frame.
   """
   return _currentThreadId()
 }
 
+/** Success holds a `ThreadMessage[]` slice. Tool calls and structured content
+are rendered as text, and attachment payloads become placeholders. */
 export def getThread(id: string, offset: number = 0, limit: number = 50): Result {
   """
-  Read a slice of a thread's messages. Returns success holding `[]`
-  for an unknown id; returns failure when called outside an Agency
-  frame.
+  Read a slice of a conversation's messages, returning an empty list for an unknown id.
 
-  Pagination: `offset` is 0-indexed; `limit` defaults to 50. Pass
-  larger explicit values for full-thread reads.
-
-  Returns a `Result` — success holds `ThreadMessage[]`. See
-  [error handling](https://agency-lang.com/guide/error-handling).
-
-  @param id - Thread slug (e.g. "t1") from `listThreads()`
-  @param offset - 0-indexed start of the message slice
-  @param limit - Maximum number of messages to return
+  @param id - Thread id from `listThreads` or `currentThreadId`.
+  @param offset - Zero-based index of the first message to return.
   """
   return try _getThread(id, offset, limit)
 }

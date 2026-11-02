@@ -2,15 +2,13 @@ import { connectorFetch } from "std::data/connector"
 import { env } from "std::system"
 
 /** @module
-  @summary FRED — U.S. macroeconomic time-series
+  @summary Read FRED economic series and their metadata.
   ## FRED — U.S. macroeconomic time-series
 
   Fetch U.S. economic data from the Federal Reserve Bank of St. Louis
   [FRED API](https://fred.stlouisfed.org/docs/api/fred/): interest rates, CPI (inflation),
-  unemployment, GDP, and ~800k other series, each addressed by its `series_id`
-  (e.g. `UNRATE`, `CPIAUCSL`, `FEDFUNDS`). This is the curated gold standard for *U.S.*
-  macro; for non-U.S. or cross-country data use `std::data/finance/dbnomics`; for news use
-  `std::data/news/gdelt`.
+  unemployment, and GDP. Use a series ID such as `UNRATE`, `CPIAUCSL`,
+  or `FEDFUNDS`. For other providers, see `std::data/finance/dbnomics`.
 
   Returns a series as a list of `{ date, value }` observations (a missing value is `null`),
   oldest-first, plus a `fredSeriesInfo` call for a series' title/display-units/frequency/coverage.
@@ -23,9 +21,7 @@ import { env } from "std::system"
   > **Note:** FRED's API v1 accepts the key only as a URL query parameter, so when
   > `observability` is enabled the key appears in statelog `fetchJSON` interrupt payloads
   > (the URL is logged). This is a general property of any secret passed in a URL with
-  > `std::http`; a follow-up will add URL-secret redaction to statelog. If this matters for
-  > your deployment, avoid enabling observability on runs that call FRED, or route statelog
-  > to a trusted sink.
+  > `std::http`. Use a trusted statelog destination for runs that call FRED.
 
   ### Usage
 
@@ -49,15 +45,15 @@ export type FredObservation = {
   value: number | null
 }
 
-/** A FRED data series. `units` is the requested units *transform code* (e.g. "lin", "pch"),
-    not the display label — use fredSeriesInfo for the display units. */
+/** A FRED series whose `units` is a transform code, such as "lin" or "pch".
+    Use `fredSeriesInfo` for display units. */
 export type FredSeries = {
   seriesId: string;
   units: string;
   observations: FredObservation[]
 }
 
-/** Metadata about a FRED series. `units` here IS the human display label (e.g. "Percent"). */
+/** Metadata about a FRED series, with display units such as "Percent". */
 export type FredSeriesInfo = {
   id: string;
   title: string;
@@ -80,7 +76,7 @@ export type FredUnits = "lin" | "chg" | "ch1" | "pch" | "pc1" | "pca" | "cch" | 
     Includes the weekly-ending variants (wef, weth, …). */
 export type FredFrequency = "d" | "w" | "bw" | "m" | "q" | "sa" | "a" | "wef" | "weth" | "wetu" | "wew" | "wetdt" | "wem" | "wesun"
 
-/** Append "&key=value" only when value is non-empty (value is URL-encoded). Pure. */
+/* Append "&key=value" only when value is non-empty (value is URL-encoded). */
 def appendParam(path: string, key: string, value: string): string {
   if (value == "") {
     return path
@@ -88,7 +84,7 @@ def appendParam(path: string, key: string, value: string): string {
   return "${path}&${key}=${encodeURIComponent(value)}"
 }
 
-/** Build the series/observations query path. Pure — no network. */
+/* Build the series/observations query path. */
 def buildFredObservationsPath(seriesId: string, apiKey: string, observationStart: string, observationEnd: string, frequency: string, units: string, limit: number): string {
   let path = "series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json"
   path = appendParam(path, "observation_start", observationStart)
@@ -102,12 +98,12 @@ def buildFredObservationsPath(seriesId: string, apiKey: string, observationStart
   return appendParam(path, "limit", limitStr)
 }
 
-/** Build the series (metadata) query path. Pure — no network. */
+/* Build the series (metadata) query path. */
 def buildFredSeriesPath(seriesId: string, apiKey: string): string {
   return "series?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json"
 }
 
-/** Convert a FRED value string to a number, or null for the missing marker "." or a non-number. Pure. */
+/* Convert a FRED value string to a number, or null for the missing marker "." or a non-number. */
 def toFredValue(raw: string): number | null {
   if (raw == ".") {
     return null
@@ -119,7 +115,7 @@ def toFredValue(raw: string): number | null {
   return n
 }
 
-/** Reshape a series/observations response. Pure — total on missing/null input. */
+/* Reshape a series/observations response. */
 def parseFredObservations(seriesId: string, raw: any): FredSeries {
   const r: any = raw ?? {}
   const rawObs = r.observations ?? []
@@ -129,7 +125,7 @@ def parseFredObservations(seriesId: string, raw: any): FredSeries {
   return { seriesId: seriesId, units: r.units ?? "", observations: observations }
 }
 
-/** Reshape a series (metadata) response, taking the first series. Pure — total on null input. */
+/* Reshape a series (metadata) response, taking the first series. */
 def parseFredInfo(raw: any): FredSeriesInfo {
   const r: any = raw ?? {}
   const list = r.seriess ?? []
@@ -145,7 +141,7 @@ def parseFredInfo(raw: any): FredSeriesInfo {
   }
 }
 
-/** Finalize an observations fetch into a Result. Pure. */
+/* Finalize an observations fetch into a Result. */
 def fredObservationsFinalize(seriesId: string, fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
@@ -158,7 +154,7 @@ def fredObservationsFinalize(seriesId: string, fetchResult: any): Result {
   }
 }
 
-/** Finalize a series-info fetch into a Result. Pure. */
+/* Finalize a series-info fetch into a Result. */
 def fredInfoFinalize(fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
@@ -175,21 +171,24 @@ def fredInfoFinalize(fetchResult: any): Result {
 // std::env is in the raises clauses below even though both reads are
 // approved at the site: `with approve` answers the interrupt at runtime,
 // it does not discharge the effect.
+/**
+  Set the observation start date when you want recent data. A limit takes
+  observations from the oldest end of the selected range. Missing source
+  values become null.
+*/
 @capabilities(network)
 export def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::env, std::http::fetchJSON> {
   """
-  Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
-  unemployment rate, "CPIAUCSL" for CPI, "FEDFUNDS" for the fed funds rate). Returns the
-  series and a list of { date, value } observations, ordered oldest-first (value is null when
-  missing). For the most recent data, set observationStart rather than relying on limit
-  (limit caps from the oldest observation). Requires the FRED_API_KEY environment variable.
+  Fetch observations for a FRED economic series, ordered oldest first.
+  Requires FRED_API_KEY. For the most recent data, set observationStart
+  rather than relying on limit, which keeps the oldest observations.
 
-  @param seriesId - FRED series id, e.g. "UNRATE"
-  @param observationStart - Optional earliest date, "YYYY-MM-DD" (empty for no bound)
-  @param observationEnd - Optional latest date, "YYYY-MM-DD" (empty for no bound)
-  @param frequency - Optional frequency aggregation code, e.g. "m", "q", "a" (null for native)
-  @param units - Optional units transform code, e.g. "pch" for percent change (null for "lin")
-  @param limit - Optional max observations from the oldest, 0 means no limit
+  @param seriesId - A FRED series ID such as "UNRATE" or "CPIAUCSL".
+  @param observationStart - The earliest YYYY-MM-DD date, or empty for no lower bound.
+  @param observationEnd - The latest YYYY-MM-DD date, or empty for no upper bound.
+  @param frequency - The aggregation frequency, or null to keep the native frequency.
+  @param units - The units transform, such as "pch" for percent change, or null for native values.
+  @param limit - The maximum observations from the oldest, or zero for the API default.
   """
   const fredKey = env("FRED_API_KEY") with approve
   const apiKey = fredKey ?? ""
@@ -207,10 +206,10 @@ export def fredSeries(seriesId: string, observationStart: string = "", observati
 @capabilities(network)
 export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::env, std::http::fetchJSON> {
   """
-  Fetch metadata about a FRED series by its id: its human title, display units, frequency, and
-  the date range it covers. Requires the FRED_API_KEY environment variable.
+  Fetch a FRED series' title, display units, frequency, and coverage dates.
+  Requires FRED_API_KEY.
 
-  @param seriesId - FRED series id, e.g. "UNRATE"
+  @param seriesId - A FRED series ID such as "UNRATE".
   """
   const fredKey = env("FRED_API_KEY") with approve
   const apiKey = fredKey ?? ""

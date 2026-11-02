@@ -1,6 +1,6 @@
 ---
 name: "cli"
-description: "The terminal front end for CLI agents: a line-mode REPL driven by Node's readline, and prompts for one-off questions."
+description: "Terminal conversations, menus, text entry, and approval prompts."
 ---
 
 # cli
@@ -14,7 +14,13 @@ The terminal front end for CLI agents. `repl` is a line-mode REPL driven
   `std::policy` uses.
 
   ```ts
-  import { repl, chooseOption } from "std::ui/cli"
+  import { chooseOption } from "std::ui/cli"
+
+  const choice = chooseOption("Next step", "", [
+    { key: "continue", label: "Continue working" },
+    { key: "stop", label: "Stop here" },
+  ])
+  print(choice)
   ```
 
 ## Types
@@ -26,16 +32,16 @@ A row in a choice prompt: the `key` is what the prompt returns, the
 
 ```ts
 /**
- * A row in a choice prompt: the `key` is what the prompt returns, the
- * `label` is the text shown to the user.
- */
+A row in a choice prompt: the `key` is what the prompt returns, the
+`label` is the text shown to the user.
+*/
 export type ChoiceItem = {
   key: string;
   label: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L130))
 
 ## Functions
 
@@ -53,28 +59,23 @@ repl(
 )
 ```
 
-A line-mode REPL in the terminal's own scrollback.
+Run a terminal conversation loop, calling onSubmit for each submitted line.
 
-  Each iteration prints `prompt`, awaits one line of input (full line
-  editing, history, bracketed paste), and calls `onSubmit(line)`.
-  Returning false exits; returning a non-empty string prints it;
-  returning a list of interrupts prints each one and says the turn has no
-  reply; anything else is ignored. Also exits on Ctrl+D (EOF) or Ctrl+C at an
-  idle prompt. Type `/paste` (TTY only) to open a multi-line editor:
-  Enter inserts a newline, Ctrl+D submits the whole buffer as one
-  message, and Ctrl+C / Esc cancels.
+  @param status - Callback returning {left, right, context} strings for the footer, or null
+  @param onSubmit - Return false to exit, a string to print, or interrupts that stopped the turn
+  @param historyFile - JSON history path; empty disables persistence
+  @param historyMax - Maximum number of recent history entries to retain
+  @param paletteCommands - Object mapping /commands to descriptions; null uses setSlashPalette
+  @param herdrName - Name shown in a Herdr pane; empty disables state reporting
 
-  @param status - Callback returning {left, right, context}
-  @param onSubmit - Called with the submitted line; return false to exit, a string to print, or the interrupts that stopped the turn
-  @param prompt - String shown before the input buffer (default "> ")
-  @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
-  @param historyMax - Trim history to this many most-recent entries
-  @param paletteCommands - Map of /cmd -> description; null uses the palette from `setSlashPalette`
-  @param herdrName - The name Herdr shows for this program when it runs in a Herdr pane, with its idle, working, and blocked states. Empty (the default) reports nothing to Herdr.
+Each non-empty submitted line calls `onSubmit`. Returning false exits; a
+non-empty string is printed, and a list of interrupts is shown as a turn
+without a reply. Other return values are ignored.
 
-Current limitations: `status` is accepted but not yet rendered;
-`paletteCommands` has no tab completion yet; there is no busy
-spinner and no Ctrl+C cancel of an in-flight turn.
+The terminal supports line editing, history, slash-command completion, and
+a busy indicator. Escape cancels an active turn; Ctrl+D or Ctrl+C exits at
+an idle prompt. `/paste` opens a multi-line editor: Enter adds a newline,
+Ctrl+D submits, and Ctrl+C or Escape cancels the paste.
 
 **Parameters:**
 
@@ -90,7 +91,7 @@ spinner and no Ctrl+C cancel of an in-flight turn.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L59))
 
 ### setSlashPalette
 
@@ -110,7 +111,7 @@ The map is kept outside the execution model, so call this before any
 |---|---|---|
 | paletteCommands | `Record<string, string>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L95))
 
 ### clearScreen
 
@@ -122,7 +123,7 @@ Clear the terminal screen.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L101))
 
 ### clearHistory
 
@@ -130,11 +131,10 @@ Clear the terminal screen.
 clearHistory()
 ```
 
-Clear the input history of the currently running `repl()` session: both
-  its in-session up-arrow recall and the `historyFile` that session was started
-  with. A no-op when called outside an interactive `repl()`.
+Clear the active repl session's input recall and saved history file.
+  Does nothing outside an interactive repl.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
 
 ### hline
 
@@ -156,7 +156,7 @@ Return a horizontal rule: `char` repeated `width` times (terminal
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L119))
 
 ### pushMessage
 
@@ -164,9 +164,7 @@ Return a horizontal rule: `char` repeated `width` times (terminal
 pushMessage(message: string)
 ```
 
-Print a message to the terminal. The string may include style markup.
-
-  @param message - Styled or plain text to print
+Print a message to the terminal.
 
 **Parameters:**
 
@@ -176,7 +174,7 @@ Print a message to the terminal. The string may include style markup.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L136))
 
 ### select
 
@@ -189,18 +187,13 @@ select(
 ): Result<string>
 ```
 
-Ask the user to pick from a list with arrow keys (no type-to-filter).
-  Returns `success(key)` with the chosen item's `key`, or
-  `failure("cancelled")` if the user pressed Ctrl+C / Escape. When
-  `allowFreeText` is true, the list appends an extra "enter free text"
-  row. Picking it prompts for text and returns that instead of a key.
+Ask the user to choose with arrow keys in a terminal. Returns the selected
+  key, free text when enabled, or a failure if cancelled.
 
-  @param message - The question shown above the choices
-  @param items - The {key, label} rows to choose from
-  @param allowFreeText - Append a free-text entry row
-  @param hint - Dim hint shown after the message
+  @param allowFreeText - Add a choice that opens a text-entry prompt
+  @param hint - Dim hint shown after the question
 
-Needs a terminal: raises when stdout is not a TTY. There is no
+Requires stdout to be a terminal. Ctrl+C exits the process. There is no
 non-TTY fallback, so a scripted caller must route around it
 (`chooseOption` does).
 
@@ -231,23 +224,15 @@ autocomplete(
 ): Result<string>
 ```
 
-Ask the user to pick from a list, filtering by typed text. Returns
-  `success(key)` with the chosen item's `key`, or `failure("cancelled")`
-  on Ctrl+C / Escape. The filter keeps the items whose `key` contains
-  the typed text (case-insensitive); labels are not searched. When
-  `allowFreeText` is true and the
-  typed input matches no item, picking it returns the typed text
-  verbatim instead of a key.
+Ask the user to choose in a terminal, filtering keys by case-insensitive
+  substring. Returns the selected key, free text when enabled, or a failure
+  if cancelled.
 
-  @param message - The question shown above the choices
-  @param items - The {key, label} rows to choose from
-  @param allowFreeText - Return the typed input verbatim when no item matches
-  @param hint - Dim hint shown after the message
-  @param cancelOnEscape - When true, Escape raises a cancellation that
-    unwinds the current run instead of returning `failure("cancelled")`.
-    Use it where Escape should abort the whole request rather than re-ask
+  @param allowFreeText - Offer the typed text when no key matches
+  @param hint - Dim hint shown after the question
+  @param cancelOnEscape - Cancel the current request instead of returning a cancellation failure
 
-Needs a terminal: raises when stdout is not a TTY.
+Requires stdout to be a terminal. Ctrl+C exits the process.
 
 **Parameters:**
 
@@ -263,7 +248,7 @@ Needs a terminal: raises when stdout is not a TTY.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L174))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L169))
 
 ### prompt
 
@@ -276,19 +261,15 @@ prompt(
 ): Result<string>
 ```
 
-Ask the user for a line of free-form text. Returns `success(typed)`
-  or `failure("cancelled")`. The empty string is a legitimate value, so
-  check the Result tag rather than truthiness. When `validate` is
-  supplied, it runs on each submission: return `true` to accept, or an
-  error string to reject and re-ask.
+Ask the user for a line of text in a terminal, or return a cancellation failure.
 
-  @param message - The question shown to the user
-  @param initial - Pre-filled value
-  @param hint - Dim hint shown after the message
-  @param validate - Optional `(value) => true | "error message"` validator
+  @param initial - Prefilled answer
+  @param hint - Dim hint shown after the question
+  @param validate - Callback returning true to accept, or an error message to ask again
 
-Needs a terminal: raises when stdout is not a TTY.
+Requires stdout to be a terminal. Ctrl+C exits the process.
 
+An empty string is a valid answer; check the Result tag rather than truthiness.
 Bind `validate` via `.partial()` before handing `prompt` to an LLM as
 a tool so the LLM cannot override the constraint.
 
@@ -305,7 +286,7 @@ a tool so the LLM cannot override the constraint.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L196))
 
 ### confirm
 
@@ -313,14 +294,10 @@ a tool so the LLM cannot override the constraint.
 confirm(message: string, initial: boolean = false): Result<boolean>
 ```
 
-Ask the user a yes/no question. Returns `success(true)`,
-  `success(false)`, or `failure("cancelled")`. That is three outcomes,
-  so check the Result tag rather than treating it as a boolean.
+Ask a yes/no question in a terminal. Returns success(true), success(false),
+  or a cancellation failure; check the Result tag before reading the answer.
 
-  @param message - The question shown to the user
-  @param initial - Default position (false = "no")
-
-Needs a terminal: raises when stdout is not a TTY.
+Requires stdout to be a terminal. Ctrl+C exits the process.
 
 **Parameters:**
 
@@ -333,7 +310,7 @@ Needs a terminal: raises when stdout is not a TTY.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L233))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L216))
 
 ### chooseOption
 
@@ -347,24 +324,17 @@ chooseOption(
 ): string
 ```
 
-Show a menu and block until the user picks an entry. Returns the
-  chosen item's `key`. In a terminal, typing narrows the visible items
-  to those whose `key` contains the typed text; otherwise the user
-  types a key at a plain prompt. When `allowFreeText` is true and the typed
-  text matches no item, it returns that text instead of re-asking
-  (empty input still re-asks).
+Ask the user to select a key, using a terminal picker or a plain input prompt.
+  Invalid answers are requested again.
 
-  @param title - Heading (e.g. "Approve interrupt: shell::exec")
-  @param body - Multi-line context shown above the choices (or "")
-  @param items - The set of {key, label} choices to pick from
-  @param allowFreeText - Accept free-form text in addition to item keys
-  @param allowCancel - When true, Escape cancels the whole request,
-    raising a cancellation that unwinds the run, instead of re-prompting.
-    The default of false enforces a "must answer" contract
+  @param body - Additional context shown above the choices; empty omits it
+  @param allowFreeText - Accept a non-empty answer that matches no item key
+  @param allowCancel - In a terminal, let Escape cancel the request instead of asking again
 
 In a terminal this is an arrow-key picker. Otherwise it prints the
 title and body and reads a key with `input()`, which is what scripted
-and headless runs see. Both branches re-ask until the user answers.
+and headless runs see. Both branches re-ask after a cancelled choice unless `allowCancel` is true.
+In a terminal, Ctrl+C exits the process regardless of `allowCancel`.
 std::policy uses it for its approve/reject menus.
 
 **Parameters:**
@@ -381,7 +351,7 @@ std::policy uses it for its approve/reject menus.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L254))
 
 ### interruptBodyWidth
 
@@ -395,7 +365,7 @@ The width, in columns, that the approval prompt wraps its body to. Render a tabl
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L375))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L345))
 
 ### interruptChoice
 
@@ -410,18 +380,18 @@ interruptChoice(
 ): string
 ```
 
-Approval prompt for line mode: renders a sticky footer pinned to the
-  bottom of the terminal so concurrent tool-call output streams above it
-  instead of burying the prompt. Type an option key or a rejection reason,
-  then press Enter. Falls back to `chooseOption` when no line-mode `repl()`
-  is running, which includes non-terminal and headless runs.
+Ask for an approval choice or a free-text answer, using the active terminal
+  conversation when available.
 
-  @param title - Prompt heading (the interrupt message).
-  @param body - Multi-line context shown under the title (or "").
-  @param items - The {key, label} choices.
-  @param allowFreeText - Accept a free-form rejection reason.
-  @param allowCancel - When true, Escape cancels the whole request.
-  @param expectsValue - True when the interrupt wants a value back, so the text the user types is their answer. Otherwise typed text is a rejection reason.
+  @param body - Additional context shown below the heading
+  @param items - Choices with key and label fields
+  @param allowFreeText - Accept an answer outside the listed choices
+  @param allowCancel - Let Escape cancel the current request in a terminal
+  @param expectsValue - Treat free text as an answer value instead of a rejection reason
+
+During a line-mode `repl`, the prompt stays at the bottom of the terminal
+while tool output appears above it. Outside that session, this delegates
+to `chooseOption`, including its plain-input fallback.
 
 **Parameters:**
 
@@ -438,4 +408,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L383))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L358))

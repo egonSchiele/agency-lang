@@ -1,15 +1,15 @@
 ---
 name: "yc"
-description: "Y Combinator — the YC company directory"
+description: "Browse the Y Combinator company directory by batch, industry, or tag."
 ---
 
 # yc
 
 ## Y Combinator — the YC company directory
 
-  Query the [yc-oss](https://github.com/yc-oss/api) community dataset: every company Y Combinator
-  has funded, sliced by batch, industry, tag, or a curated list. Use this connector to track the
-  newest YC startups and what they do — batch, one-liner, industry, stage, team size, and status.
+  Query the [yc-oss](https://github.com/yc-oss/api) community dataset by
+  batch, industry, tag, or curated list. Company profiles include their
+  descriptions, funding batch, team size, and status.
 
   The data is static JSON refreshed daily, and there is no server-side search. Fetch a slice (a
   batch, industry, or tag) and filter in Agency. `ycMeta` lists the available slugs, so an agent
@@ -32,10 +32,10 @@ description: "Y Combinator — the YC company directory"
 
 ### Company
 
-A YC company — a curated subset of the yc-oss record. `launchedAt` is a Unix timestamp.
+A YC company profile, with `launchedAt` in Unix seconds.
 
 ```ts
-/** A YC company — a curated subset of the yc-oss record. `launchedAt` is a Unix timestamp. */
+/** A YC company profile, with `launchedAt` in Unix seconds. */
 export type Company = {
   id: number;
   name: string;
@@ -60,7 +60,7 @@ export type Company = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L39))
 
 ### YcMeta
 
@@ -76,7 +76,7 @@ export type YcMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L63))
 
 ## Effects
 
@@ -89,7 +89,7 @@ effect std::yc {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L30))
 
 ## Functions
 
@@ -99,10 +99,9 @@ effect std::yc {
 ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
-Fetch the YC companies in a batch. Returns each company's id, name, one-liner, batch, status,
-  stage, team size, industry, tags, and URL. An unknown batch returns a failure.
+List YC companies in a funding batch.
 
-  @param batch - The YC batch, e.g. "Winter 2025" or "winter-2025"
+  @param batch - A batch label or slug, such as "Winter 2025" or "winter-2025".
 
 **Parameters:**
 
@@ -116,7 +115,7 @@ Fetch the YC companies in a batch. Returns each company's id, name, one-liner, b
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L179))
 
 ### ycIndustry
 
@@ -126,10 +125,9 @@ ycIndustry(
 ): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
-Fetch the YC companies in an industry. Returns each company's profile. An unknown industry
-  returns a failure.
+List YC companies in an industry.
 
-  @param industry - The industry, e.g. "fintech" or "Healthcare"
+  @param industry - An industry label or slug from the directory metadata, such as "fintech".
 
 **Parameters:**
 
@@ -151,10 +149,9 @@ Fetch the YC companies in an industry. Returns each company's profile. An unknow
 ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
-Fetch the YC companies with a tag. Returns each company's profile. An unknown tag returns a
-  failure.
+List YC companies carrying a directory tag.
 
-  @param tag - The tag, e.g. "ai" or "SaaS"
+  @param tag - A tag label or slug from the directory metadata, such as "SaaS".
 
 **Parameters:**
 
@@ -168,7 +165,7 @@ Fetch the YC companies with a tag. Returns each company's profile. An unknown ta
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L203))
 
 ### ycList
 
@@ -178,11 +175,13 @@ ycList(
 ): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 ```
 
-Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-founded",
-  "black-founded", or "hispanic-latino-founded". "all" is large (~6 MB); prefer a batch, industry,
-  or tag slice when you can.
+Read a curated YC company list. "all" is large (about 6 MB); prefer a
+  batch, industry, or tag lookup when you only need part of the directory.
 
-  @param list - The curated list name
+  @param list - Use "top", "all", "hiring", "nonprofit", "women-founded", "black-founded", or "hispanic-latino-founded".
+
+The `all` list can be large. Prefer a batch, industry, or tag when you
+  only need part of the directory.
 
 **Parameters:**
 
@@ -196,7 +195,7 @@ Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-fou
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L217))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L219))
 
 ### ycMeta
 
@@ -204,8 +203,7 @@ Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-fou
 ycMeta(): Result<YcMeta> raises <std::yc, std::http::fetchJSON>
 ```
 
-Fetch the YC directory metadata: the available batch, industry, and tag slugs plus the
-  last-updated timestamp. Use it to discover the newest batch slug before calling ycBatch.
+Discover available YC batch, industry, and tag slugs and the dataset's update time.
 
 **Returns:** `Result<YcMeta>`
 
@@ -213,4 +211,4 @@ Fetch the YC directory metadata: the available batch, industry, and tag slugs pl
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L237))

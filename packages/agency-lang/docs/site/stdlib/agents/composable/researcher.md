@@ -1,8 +1,13 @@
 ---
 name: "researcher"
+description: "Research a topic in an isolated conversation with source tools."
 ---
 
 # researcher
+
+This composable researcher returns the model's answer directly. Use
+`std::agents/researcher` when you need configurable budgets, model overrides,
+and the shared-conversation handoff behavior.
 
 ## Functions
 
@@ -12,13 +17,11 @@ name: "researcher"
 buildTools(): any[]
 ```
 
-Return the researcher's tools: the encyclopedia and fetch tools that need
-  no key, a local file read for material the caller points at, and whichever
-  search providers the environment has a key for.
+Return source lookup tools for the composable researcher.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L17))
 
 ### researcherAgent
 
@@ -26,7 +29,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 researcherAgent(topic: string): string
 ```
 
-Research a topic in depth and give a response.
+Research a topic with source tools and return a cited answer.
 
 **Parameters:**
 
@@ -36,4 +39,4 @@ Research a topic in depth and give a response.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L45))

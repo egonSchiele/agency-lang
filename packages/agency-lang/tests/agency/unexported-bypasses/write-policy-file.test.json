@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "Function 'writePolicyFile' in 'std::policy' is not exported.",
+  "description": "writePolicyFile is not importable, because it writes the policy file without raising std::write"
+}

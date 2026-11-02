@@ -1,8 +1,3 @@
-/** @module
-The always-available prelude: printing, input, file I/O, and the array
-helpers. Every `.agency` file auto-imports these, so you can call them
-without an import.
-*/
 import { _callback } from "agency-lang/stdlib-lib/callback.js"
 import {
   _print,
@@ -28,6 +23,19 @@ import {
   _runGuarded,
   _popGuard,
  } from "agency-lang/stdlib-lib/thread.js"
+
+/** @module
+@summary Printing, input, file access, and collection helpers available without imports.
+The always-available prelude: printing, input, file I/O, and the array
+helpers. Every `.agency` file auto-imports these, so you can call them
+without an import.
+
+```ts
+const names = ["Ada", "Grace"]
+print(names)
+print(range(3))
+```
+*/
 
 // Payload types for the interrupt effects raised by this module.
 // `std::read`/`std::write` are shared file-access effects, also raised by
@@ -85,8 +93,6 @@ export type Call = { name: string, args: object, id: string, inToolCall: boolean
 export def print(...messages: any[]) {
   """
   Print a message to the console.
-
-  @param messages - The values to print
   """
   _print(...messages)
   return "Message printed."
@@ -95,7 +101,7 @@ export def print(...messages: any[]) {
 // The agent's working directory: a branch-scoped override that
 // path-taking stdlib tools resolve relative paths against. Empty string
 // means "unset", so tools keep their default base. Distinct from `cwd()`
-// (the OS process cwd) on purpose: an agent sets this to point the file
+// (the run host's working directory) on purpose: an agent sets this to point the file
 // and shell tools at the user's directory without changing the process.
 // Lives here in `std::index` (not `std::system`) because `index` is the
 // auto-imported barrel: every stdlib module already imports it, so the
@@ -113,7 +119,7 @@ let _agentCwd = ""
 */
 export def setAgentCwd(dir: string) {
   """
-  Set the working directory that path-taking tools resolve relative paths against.
+  Set the base for relative paths in tools called with useAgentCwd: true.
 
   @param dir - The absolute directory to use as the agent working directory
   """
@@ -127,10 +133,14 @@ export def getAgentCwd(): string {
   return _agentCwd
 }
 
+/**
+File and shell tools call this when their `useAgentCwd` option is true.
+*/
 export def applyAgentCwd(dir: string): string {
-  """Resolve a relative path against the agent working directory (set with
-  setAgentCwd). Absolute paths and an unset working directory pass through
-  unchanged. read, write, and the other file tools already call this."""
+  """
+  Resolve a relative path against the agent working directory. Absolute paths
+  and paths with no agent working directory set pass through unchanged.
+  """
   const base = getAgentCwd()
   if (base == "") {
     return dir
@@ -143,7 +153,6 @@ export def printJSON(obj: any, highlight: boolean = false) {
   """
   Print an object as formatted JSON to the console.
 
-  @param obj - The object to print
   @param highlight - Whether to syntax-highlight the output
   """
   if (highlight) {
@@ -160,8 +169,6 @@ prompt, which surfaces as an AgencyCancelledError. */
 export def input(prompt: string): string {
   """
   Prompt the user for input and return their response.
-
-  @param prompt - The message to show the user
   """
   return _input(prompt)
 }
@@ -171,26 +178,24 @@ A long sleep wakes immediately on Ctrl-C, race-loser, or time-guard abort. */
 export def sleep(ms: number) {
   """
   Pause execution for the given duration in milliseconds.
-
-  @param ms - The number of milliseconds to pause
   """
   _sleep(ms)
 }
 
+/**
+Use this to retain a partial answer when a guard stops unfinished work.
+The last saved value wins and must match the enclosing scope's return type.
+Drafts belong to their function, node, or guard block; a caller can pass a
+callee's draft onward with `return callee()`, or save a draft of its own.
+Calling at module scope is an error. Without a guard, saving a draft does
+not affect the normal return value.
+*/
 export def saveDraft(value: any) {
   """
-  Record a best-so-far value for the current function or guarded block. If an
-  enclosing `guard(...)` trips before this scope returns, the guard yields the
-  last saved draft instead of a failure — an "anytime" result you can always
-  fall back to. Call it repeatedly as your result improves; the last value
-  wins. With no enclosing guard it is a harmless no-op. Calling it at module
-  top level is an error: there is no enclosing scope to save a draft for.
+  Save the current scope's best answer so far for recovery if a guard stops it.
+  Call again as the answer improves.
 
-  The value is type-checked against the enclosing scope's return type — a
-  function/node body, or a `guard` block (whose return type is inferred from its
-  `return`).
-
-  @param value - The best-so-far value. Should match the enclosing scope's return type.
+  @param value - A partial result matching the enclosing scope's return type
   """
   _saveDraft(value)
 }
@@ -206,13 +211,11 @@ export idempotent def read(
   """
   Read the contents of a file and return it as a string.
 
-  @param filename - The file to read. Must stay inside dir: no absolute
-    paths, `~`, upward traversal, or symlinks that leave it. To touch another
-    directory, pass it in `dir`.
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param dir - Base directory for filename
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
-  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
+  @param useAgentCwd - Resolve a relative dir against the agent working directory
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -241,13 +244,10 @@ export def write(
   """
   Write content to a file.
 
-  @param filename - The file to write. Must stay inside dir: no absolute
-    paths, `~`, upward traversal, or symlinks that leave it. To touch another
-    directory, pass it in `dir`.
-  @param content - The content to write
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param dir - Base directory for filename
   @param mode - How to handle an existing file
-  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
+  @param useAgentCwd - Resolve a relative dir against the agent working directory
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -276,16 +276,12 @@ export def writeBinary(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
-  binary. Decodes the base64 and writes raw bytes rather than UTF-8 text.
+  Decode base64 data and write the bytes to a file.
 
-  @param filename - The file to write. Must stay inside dir: no absolute
-    paths, `~`, upward traversal, or symlinks that leave it. To touch another
-    directory, pass it in `dir`.
-  @param base64 - The binary content, base64-encoded
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param dir - Base directory for filename
   @param mode - How to handle an existing file
-  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
+  @param useAgentCwd - Resolve a relative dir against the agent working directory
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -311,14 +307,11 @@ export idempotent def readBinary(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  Read a file and return its contents as a Base64-encoded string. Works for any
-  binary file: images, audio, video, PDFs.
+  Read a binary file as a base64-encoded string.
 
-  @param filename - The file to read. Must stay inside dir: no absolute
-    paths, `~`, upward traversal, or symlinks that leave it. To touch another
-    directory, pass it in `dir`.
-  @param dir - The directory to resolve the filename against (defaults to ".")
-  @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param dir - Base directory for filename
+  @param useAgentCwd - Resolve a relative dir against the agent working directory
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -349,18 +342,14 @@ export def range(start: number, end: number = -1): number[] {
 }
 
 // --- Array helpers (auto-imported) ---------------------------------------
-// These collection primitives live in `std::index` so they ride the single
-// auto-import prelude line into every file. Agency has no `.map()` method
-// syntax, so these free functions are the only way to operate on arrays,
-// which is why they belong in the always-available set. `std::array`
-// re-exports them for backward compatibility.
+// These helpers are auto-imported through std::index. std::array
+// re-exports them for callers using explicit imports.
 
 export def map(arr: any[], func: (any) -> any): any[] {
   """
   Map a function over an array, returning a new array of results.
 
-  @param arr - The array to map over
-  @param func - The mapping function
+  @param func - Called with each element
   """
   const newArr = []
   for (item in arr) {
@@ -386,7 +375,6 @@ export def mapWithIndex(arr: any[], func: (any, any) -> any): any[] {
   Apply a function to each item of an array along with its index, and
   return a new array of the results.
 
-  @param arr - The array to map over
   @param func - Called with the item and its zero-based index
   """
   return map(_pairsOf(arr)) as pair { return func(pair[0], pair[1]) }
@@ -396,8 +384,7 @@ export def filter(arr: any[], func: (any) -> any): any[] {
   """
   Return a new array containing only the elements for which the function returns true.
 
-  @param arr - The array to filter
-  @param func - The filter function
+  @param func - Called with each element; return true to keep it
   """
   const result = []
   for (item in arr) {
@@ -412,8 +399,7 @@ export def exclude(arr: any[], func: (any) -> any): any[] {
   """
   Return a new array excluding elements for which the function returns true.
 
-  @param arr - The array to filter
-  @param func - The exclusion predicate
+  @param func - Called with each element; return true to exclude it
   """
   const result = []
   for (item in arr) {
@@ -428,8 +414,7 @@ export def find(arr: any[], func: (any) -> any): any {
   """
   Return the first element for which the function returns true, or null if none match.
 
-  @param arr - The array to search
-  @param func - The predicate function
+  @param func - Called with each element
   """
   for (item in arr) {
     if (func(item)) {
@@ -443,8 +428,7 @@ export def findIndex(arr: any[], func: (any) -> any): number {
   """
   Return the index of the first element for which the function returns true, or -1 if none match.
 
-  @param arr - The array to search
-  @param func - The predicate function
+  @param func - Called with each element
   """
   for (item, index in arr) {
     if (func(item)) {
@@ -458,7 +442,6 @@ export def reduce(arr: any[], initial: any, func: (any, any) -> any): any {
   """
   Reduce an array to a single value by applying a function to an accumulator and each element.
 
-  @param arr - The array to reduce
   @param initial - The initial accumulator value
   @param func - The reducer function receiving (accumulator, element)
   """
@@ -473,8 +456,7 @@ export def flatMap(arr: any[], func: (any) -> any): any[] {
   """
   Map a function over an array and flatten the results by one level.
 
-  @param arr - The array to map over
-  @param func - The mapping function
+  @param func - Called with each element
   """
   const result = []
   for (item in arr) {
@@ -489,8 +471,6 @@ export def flatMap(arr: any[], func: (any) -> any): any[] {
 export def flatten(arr: any[]): any[] {
   """
   Flatten an array of arrays by one level.
-
-  @param arr - The array to flatten
   """
   const result = []
   for (item in arr) {
@@ -505,8 +485,7 @@ export def every(arr: any[], func: (any) -> any): boolean {
   """
   Return true if the function returns true for every element in the array.
 
-  @param arr - The array to test
-  @param func - The predicate function
+  @param func - Called with each element
   """
   for (item in arr) {
     if (func(item) == false) {
@@ -520,8 +499,7 @@ export def some(arr: any[], func: (any) -> any): boolean {
   """
   Return true if the function returns true for at least one element in the array.
 
-  @param arr - The array to test
-  @param func - The predicate function
+  @param func - Called with each element
   """
   for (item in arr) {
     if (func(item)) {
@@ -535,8 +513,7 @@ export def count(arr: any[], func: (any) -> any): number {
   """
   Count the number of elements in the array for which the function returns true.
 
-  @param arr - The array to count in
-  @param func - The predicate function
+  @param func - Called with each element
   """
   let n = 0
   for (item in arr) {
@@ -551,8 +528,7 @@ export def sortBy(arr: any[], func: (any) -> any): any[] {
   """
   Return a new array sorted by the values returned by the function, in ascending order.
 
-  @param arr - The array to sort
-  @param func - The sort-key function
+  @param func - Returns the sort key for each element
   """
   const result = []
   for (item in arr) {
@@ -578,8 +554,7 @@ export def unique(arr: any[], func: (any) -> any): any[] {
   """
   Return a new array with duplicate elements removed, using the function to determine the identity of each element.
 
-  @param arr - The array to deduplicate
-  @param func - The identity-key function
+  @param func - Returns the identity key for each element
   """
   const result = []
   const seen = []
@@ -603,8 +578,7 @@ export def groupBy(arr: any[], func: (any) -> any): any {
   """
   Group elements of an array by the value returned by the function. Returns an object where keys are group names and values are arrays of elements.
 
-  @param arr - The array to group
-  @param func - The group-key function
+  @param func - Returns the group key for each element
   """
   // Null-prototype object so a user-supplied key like "__proto__" or
   // "constructor" is stored as a plain own property instead of hitting
@@ -633,27 +607,25 @@ export def callback(name: string, fn: any) {
 
 // Block has `= null` so the parser accepts trailing optional params;
 // the desugared construct call always supplies it.
-/**
- * Time semantics are compute-time: the clock only ticks while a Runner is
- * actively executing inside the guarded scope. Time spent paused on an
- * interrupt (e.g. waiting for user input) does not count. On resume the
- * timer is re-armed with the remaining budget.
- *
- * Nested guards are independent. An inner trip does not trip an outer
- * guard. Across fork/race branches, cost guards are SHARED (every branch
- * charges the same counter in real time), while time guards are cloned
- * per branch: each branch gets the parent's remaining budget as its own
- * countdown, a branch's input-wait pauses only its own clock, and the
- * parent's clock advances by the longest branch's working time at the
- * join. `thread`/`subthread` isolate message history but not cost or
- * abort plumbing, so a guard sees every LLM call inside them.
- *
- * Limitations: a tool whose body is a JS function (not Agency code) cannot
- * be aborted mid-execution. It runs to completion in the background, and
- * its result is discarded. Memory-layer LLM calls currently bypass cost
- * guards. Cost from inside a fork only propagates to an outer cost guard at
- * fork completion, not mid-flight.
- */
+/*
+Time semantics are compute-time: the clock only ticks while a Runner is
+actively executing inside the guarded scope. Time spent paused on an
+interrupt (e.g. waiting for user input) does not count. On resume the
+timer is re-armed with the remaining budget.
+
+Nested guards are independent. An inner trip does not trip an outer
+guard. Across fork/race branches, cost guards are SHARED (every branch
+charges the same counter in real time), while time guards are cloned
+per branch: each branch gets the parent's remaining budget as its own
+countdown, a branch's input-wait pauses only its own clock, and the
+parent's clock advances by the longest branch's working time at the
+join. `thread`/`subthread` isolate message history but not cost or
+abort plumbing, so a guard sees every LLM call inside them.
+
+Limitations: a tool whose body is a JS function (not Agency code) cannot
+be aborted mid-execution. It runs to completion in the background, and
+its result is discarded.
+*/
 export def _guard(
   cost: number | null = null,
   time: number | null = null,
@@ -688,7 +660,7 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
   return "${value}\n\n[${name}: the ${trip.dimension} budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]"
 }
 
-/** Internal: what a budgeted agent call reports, given the Result its
+/* Internal: what a budgeted agent call reports, given the Result its
   guard returned and the guard's trip interrupt data (`null` when the guard
   did not trip). The rule is written once here, for the `@guarded`
   decorator in `std::decorators`:

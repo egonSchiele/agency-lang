@@ -1,38 +1,35 @@
 ---
 name: "policy"
-description: "Decide whether to approve or reject the interrupts an agent raises, without prompting the user every time."
+description: "Match interrupts against saved approval rules."
 ---
 
 # policy
 
-Decide whether to approve or reject the interrupts an agent raises,
-  without prompting the user every time. A `Policy` is an ordered list of
-  glob-pattern rules per interrupt effect, evaluated first-match-wins.
+```ts
+import { checkPolicy } from "std::policy"
 
-  `cliPolicyHandler` is the common entry point: it loads a policy file,
-  prompts the user on each new interrupt, remembers "always" decisions, and
-  replays matching rules so each pattern is only asked about once.
+const policy = {
+  "std::read": [{ action: "approve" }],
+  "std::write": [{ action: "reject", rejectMessage: "Leave files unchanged." }]
+}
 
-  ```ts
-  import { cliPolicyHandler } from "std::policy"
-
-  node main() {
-    const home = env("HOME") with approve
-    // Bind to a variable — the `with` clause only accepts an identifier.
-    const handler = cliPolicyHandler(
-      file: "${home}/.myapp/policy.json",
-      fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
-    )
-    handle {
-      llm("hi", { tools: [...] })
-    } with handler
+node main() {
+  handle {
+    return read("README.md")
+  } with (intr) {
+    return checkPolicy(policy, intr)
   }
-  ```
+}
+```
 
-  For a different UI (a web prompt, a Slack bot, a non-interactive CI mode),
-  build your own handler on the pure primitives: `checkPolicy`, `recordRule`,
-  `recordScopedRule`, `parsePolicyFile`, `writePolicyFile`, `validatePolicy`,
-  and `buildScopedMatch`.
+Rules match an effect and optional glob patterns over its data. The first
+matching rule decides. If no effect-specific rule matches, `checkPolicy`
+tries the `"*"` rules, then returns `propagate()` to request a user decision.
+Other handlers can still reject an approved interrupt.
+
+Use `cliPolicyHandler` for a terminal prompt that remembers "always"
+answers in a JSON policy file. Use the rule-building functions below when
+your application provides its own approval UI.
 
 ## Types
 
@@ -45,67 +42,67 @@ Key of an interrupt's `data` object (e.g. `"dir"`, `"command"`).
 export type InterruptDataKey = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L61))
 
 ### InterruptDataVal
 
 Glob pattern used to match an interrupt-data value. Patterns are
-picomatch globs. They support `*`, `**`, and brace-expansion like
-`{a,b}` for unions. A literal string with no glob metacharacters
-matches only that exact value.
+ picomatch globs. They support `*`, `**`, and brace-expansion like
+ `{a,b}` for unions. A literal string with no glob metacharacters
+ matches only that exact value.
 
 ```ts
 /**
- * Glob pattern used to match an interrupt-data value. Patterns are
- * picomatch globs. They support `*`, `**`, and brace-expansion like
- * `{a,b}` for unions. A literal string with no glob metacharacters
- * matches only that exact value.
+ Glob pattern used to match an interrupt-data value. Patterns are
+ picomatch globs. They support `*`, `**`, and brace-expansion like
+ `{a,b}` for unions. A literal string with no glob metacharacters
+ matches only that exact value.
  */
 export type InterruptDataVal = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L69))
 
 ### InterruptEffect
 
 Identifier for an interrupt's effect (e.g. `"std::read"`,
-`"myapp::deploy"`).
+ `"myapp::deploy"`).
 
 ```ts
 /**
- * Identifier for an interrupt's effect (e.g. `"std::read"`,
- * `"myapp::deploy"`).
+ Identifier for an interrupt's effect (e.g. `"std::read"`,
+ `"myapp::deploy"`).
  */
 export type InterruptEffect = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L75))
 
 ### PolicyRule
 
 One row of a `Policy`. A rule passes if every key in `match` is
-present in the interrupt's `data` and its value matches the glob
-pattern. Omit `match` (or set it to `{}`) for a catch-all that
-applies to every interrupt of the parent effect.
+ present in the interrupt's `data` and its value matches the glob
+ pattern. Omit `match` (or set it to `{}`) for a catch-all that
+ applies to every interrupt of the parent effect.
 
-A reject rule may carry a `rejectMessage`: the message the rejection
-hands back to whoever raised the interrupt. For a rejected tool call
-this is what the model reads, so it can steer the next attempt — for
-example, a rule rejecting `std::bash` with
-`rejectMessage: "Use safeBash instead"`.
+ A reject rule may carry a `rejectMessage`: the message the rejection
+ hands back to whoever raised the interrupt. For a rejected tool call
+ this is what the model reads, so it can steer the next attempt — for
+ example, a rule rejecting `std::bash` with
+ `rejectMessage: "Use safeBash instead"`.
 
 ```ts
 /**
- * One row of a `Policy`. A rule passes if every key in `match` is
- * present in the interrupt's `data` and its value matches the glob
- * pattern. Omit `match` (or set it to `{}`) for a catch-all that
- * applies to every interrupt of the parent effect.
- *
- * A reject rule may carry a `rejectMessage`: the message the rejection
- * hands back to whoever raised the interrupt. For a rejected tool call
- * this is what the model reads, so it can steer the next attempt — for
- * example, a rule rejecting `std::bash` with
- * `rejectMessage: "Use safeBash instead"`.
+ One row of a `Policy`. A rule passes if every key in `match` is
+ present in the interrupt's `data` and its value matches the glob
+ pattern. Omit `match` (or set it to `{}`) for a catch-all that
+ applies to every interrupt of the parent effect.
+
+ A reject rule may carry a `rejectMessage`: the message the rejection
+ hands back to whoever raised the interrupt. For a rejected tool call
+ this is what the model reads, so it can steer the next attempt — for
+ example, a rule rejecting `std::bash` with
+ `rejectMessage: "Use safeBash instead"`.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
@@ -114,49 +111,39 @@ export type PolicyRule = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L89))
 
 ### Policy
 
-A policy: ordered rules per interrupt effect. `checkPolicy` walks
-the array for `intr.effect` in order and returns on the first
-matching rule. If no rule for the effect exists, evaluation falls
-through to `propagate` (i.e. ask the next handler in the chain).
+Ordered rules per effect, with optional `"*"` fallback rules.
+`checkPolicy` returns the first matching decision, or `propagate()`
+when no rule matches. Propagation requests a user decision unless a
+handler rejects the interrupt.
 
 ```ts
 /**
- * A policy: ordered rules per interrupt effect. `checkPolicy` walks
- * the array for `intr.effect` in order and returns on the first
- * matching rule. If no rule for the effect exists, evaluation falls
- * through to `propagate` (i.e. ask the next handler in the chain).
+ Ordered rules per effect, with optional `"*"` fallback rules.
+`checkPolicy` returns the first matching decision, or `propagate()`
+when no rule matches. Propagation requests a user decision unless a
+handler rejects the interrupt.
  */
 export type Policy = Record<InterruptEffect, PolicyRule[]>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L101))
 
 ### Decision
 
-The five answers `cliPolicyHandler`'s prompt accepts:
-- `"approve"` / `"reject"` — one-off (a) / (r).
-- `"approve-always"` / `"reject-always"` — (aa) / (rr). Records a
-  catch-all rule for the effect, so future interrupts of this effect
-  resolve without prompting.
-- `"approve-always-here"` — (ap). Records a scoped rule pinned to
-  whichever fields you listed in `ScopedRuleFields` for this effect.
-  Only offered when the effect has an entry in the config.
+CLI approval choices. "Always" choices save an effect-wide rule;
+"approve-always-here" saves a rule scoped to selected interrupt data.
+Questions that need a value offer one-time choices only.
 
 ```ts
 /**
- * The five answers `cliPolicyHandler`'s prompt accepts:
- * - `"approve"` / `"reject"` — one-off (a) / (r).
- * - `"approve-always"` / `"reject-always"` — (aa) / (rr). Records a
- *   catch-all rule for the effect, so future interrupts of this effect
- *   resolve without prompting.
- * - `"approve-always-here"` — (ap). Records a scoped rule pinned to
- *   whichever fields you listed in `ScopedRuleFields` for this effect.
- *   Only offered when the effect has an entry in the config.
- */
+CLI approval choices. "Always" choices save an effect-wide rule;
+"approve-always-here" saves a rule scoped to selected interrupt data.
+Questions that need a value offer one-time choices only.
+*/
 export type Decision =
   | "approve"
   | "reject"
@@ -165,31 +152,31 @@ export type Decision =
   | "reject-always"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L140))
 
 ### ScopedField
 
 One column in a `ScopedRuleFields` entry — names an interrupt-data
-field that the "approve-always-here" rule should pin.
+ field that the "approve-always-here" rule should pin.
 
-- `field` — the key in `intr.data` to pin (e.g. `"dir"`).
-- `matchSubpaths` — when `true`, brace-expand the value so the
-  rule matches both the exact value AND any nested path under it.
-  Pass `true` for directory-like fields (so approving `/tmp/x`
-  also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
-  identifiers (commands, IDs, env names) that shouldn't fan out.
+ - `field` — the key in `intr.data` to pin (e.g. `"dir"`).
+ - `matchSubpaths` — when `true`, brace-expand the value so the
+   rule matches both the exact value AND any nested path under it.
+   Pass `true` for directory-like fields (so approving `/tmp/x`
+   also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
+   identifiers (commands, IDs, env names) that shouldn't fan out.
 
 ```ts
 /**
- * One column in a `ScopedRuleFields` entry — names an interrupt-data
- * field that the "approve-always-here" rule should pin.
- *
- * - `field` — the key in `intr.data` to pin (e.g. `"dir"`).
- * - `matchSubpaths` — when `true`, brace-expand the value so the
- *   rule matches both the exact value AND any nested path under it.
- *   Pass `true` for directory-like fields (so approving `/tmp/x`
- *   also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
- *   identifiers (commands, IDs, env names) that shouldn't fan out.
+ One column in a `ScopedRuleFields` entry — names an interrupt-data
+ field that the "approve-always-here" rule should pin.
+
+ - `field` — the key in `intr.data` to pin (e.g. `"dir"`).
+ - `matchSubpaths` — when `true`, brace-expand the value so the
+   rule matches both the exact value AND any nested path under it.
+   Pass `true` for directory-like fields (so approving `/tmp/x`
+   also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
+   identifiers (commands, IDs, env names) that shouldn't fan out.
  */
 export type ScopedField = {
   field: string;
@@ -197,52 +184,52 @@ export type ScopedField = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L158))
 
 ### ScopedRuleFields
 
 Per-effect override consumed by `buildScopedMatch` and the
-`cliPolicyHandler`. Maps an interrupt effect to the fields its
-"approve-always-here" rule should pin. Effects not present in this
-map fall back to the scope their `effect` declaration carries
-(`@always` / `@alwaysUnder`); an empty list turns the (ap) option
-off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
+ `cliPolicyHandler`. Maps an interrupt effect to the fields its
+ "approve-always-here" rule should pin. Effects not present in this
+ map fall back to the scope their `effect` declaration carries
+ (`@always` / `@alwaysUnder`); an empty list turns the (ap) option
+ off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
 
-Example:
-```ts
-const FIELDS: ScopedRuleFields = {
-  "std::read":  [{ field: "dir", matchSubpaths: true }],
-  "std::exec":  [
-    { field: "command",    matchSubpaths: false },
-    { field: "subcommand", matchSubpaths: false },
-  ],
-}
-```
+ Example:
+ ```ts
+ const FIELDS: ScopedRuleFields = {
+   "std::read":  [{ field: "dir", matchSubpaths: true }],
+   "std::exec":  [
+     { field: "command",    matchSubpaths: false },
+     { field: "subcommand", matchSubpaths: false },
+   ],
+ }
+ ```
 
 ````ts
 /**
- * Per-effect override consumed by `buildScopedMatch` and the
- * `cliPolicyHandler`. Maps an interrupt effect to the fields its
- * "approve-always-here" rule should pin. Effects not present in this
- * map fall back to the scope their `effect` declaration carries
- * (`@always` / `@alwaysUnder`); an empty list turns the (ap) option
- * off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
- *
- * Example:
- * ```ts
- * const FIELDS: ScopedRuleFields = {
- *   "std::read":  [{ field: "dir", matchSubpaths: true }],
- *   "std::exec":  [
- *     { field: "command",    matchSubpaths: false },
- *     { field: "subcommand", matchSubpaths: false },
- *   ],
- * }
- * ```
+ Per-effect override consumed by `buildScopedMatch` and the
+ `cliPolicyHandler`. Maps an interrupt effect to the fields its
+ "approve-always-here" rule should pin. Effects not present in this
+ map fall back to the scope their `effect` declaration carries
+ (`@always` / `@alwaysUnder`); an empty list turns the (ap) option
+ off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
+
+ Example:
+ ```ts
+ const FIELDS: ScopedRuleFields = {
+   "std::read":  [{ field: "dir", matchSubpaths: true }],
+   "std::exec":  [
+     { field: "command",    matchSubpaths: false },
+     { field: "subcommand", matchSubpaths: false },
+   ],
+ }
+ ```
  */
 export type ScopedRuleFields = Record<InterruptEffect, ScopedField[]>
 ````
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L182))
 
 ### ParsePolicyFailureStatus
 
@@ -254,7 +241,7 @@ export type ParsePolicyFailureStatus =
   | "policy-not-valid"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L434))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L371))
 
 ### ParsePolicyFailure
 
@@ -264,7 +251,7 @@ export type ParsePolicyFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L440))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L377))
 
 ## Constants
 
@@ -274,7 +261,7 @@ export type ParsePolicyFailure = {
 export static const minimalAutoApprovePolicy = _minimalAutoApprovePolicy
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L104))
 
 ### recommendedAutoApprovePolicy
 
@@ -282,7 +269,7 @@ export static const minimalAutoApprovePolicy = _minimalAutoApprovePolicy
 export static const recommendedAutoApprovePolicy = _recommendedAutoApprovePolicy
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L106))
 
 ### approveAllPolicy
 
@@ -290,7 +277,7 @@ export static const recommendedAutoApprovePolicy = _recommendedAutoApprovePolicy
 export static const approveAllPolicy = _approveAllPolicy
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L108))
 
 ### BUILTIN_POLICIES
 
@@ -298,7 +285,7 @@ export static const approveAllPolicy = _approveAllPolicy
 export static const BUILTIN_POLICIES = _BUILTIN_POLICIES
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L110))
 
 ## Functions
 
@@ -308,8 +295,7 @@ export static const BUILTIN_POLICIES = _BUILTIN_POLICIES
 withWritesPolicy(baseDir: string)
 ```
 
-The recommended policy plus file-system and git-write effects, each
-  scoped to `baseDir` and its children.
+Return the recommended policy with file and Git writes scoped to a directory.
 
 **Parameters:**
 
@@ -317,7 +303,7 @@ The recommended policy plus file-system and git-write effects, each
 |---|---|---|
 | baseDir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L112))
 
 ### builtinPolicy
 
@@ -325,8 +311,9 @@ The recommended policy plus file-system and git-write effects, each
 builtinPolicy(name: string, baseDir: string): Policy | null
 ```
 
-Resolve a built-in policy name to a concrete Policy, scoping
-  cwd-relative variants to `baseDir`. Returns null for an unknown name.
+Resolve a built-in policy name, or return null for an unknown name.
+
+  @param baseDir - Directory scope for the with-writes policy.
 
 **Parameters:**
 
@@ -337,7 +324,7 @@ Resolve a built-in policy name to a concrete Policy, scoping
 
 **Returns:** `Policy | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L119))
 
 ### builtinPolicyNames
 
@@ -345,11 +332,11 @@ Resolve a built-in policy name to a concrete Policy, scoping
 builtinPolicyNames(): string[]
 ```
 
-The names accepted by builtinPolicy, e.g. for an approval prompt.
+List the policy names accepted by builtinPolicy and the CLI.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L128))
 
 ### checkPolicy
 
@@ -357,24 +344,21 @@ The names accepted by builtinPolicy, e.g. for an approval prompt.
 checkPolicy(policy: Record<string, any>, interrupt: Record<string, any>)
 ```
 
-Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule. A reject carries the rule's rejectMessage as .message when one was set.
+Find the first matching approval rule for an interrupt.
+  Return approve, reject, or propagate when no rule matches.
 
-  @param policy - Ordered rules keyed by interrupt effect; each rule has optional glob-pattern match fields, an action, and (on reject rules) an optional rejectMessage.
-  @param interrupt - The interrupt to evaluate.
+```ts
+handle {
+  return read("README.md")
+} with (intr) {
+  return checkPolicy(policy, intr)
+}
+```
 
-Evaluate a policy against a single interrupt. Returns the result
-of `approve()`, `reject()`, or `propagate()` corresponding to the
-first matching rule for `interrupt.effect`. If no rule matches
-(no rules for the effect, or every rule's `match` failed), returns
-`propagate()` so the next handler in the chain runs.
-
-A reject result carries the matched rule's `rejectMessage` (when the
-rule set one) as `.message`, so a handler can pass it on with
-`reject(decision.message)`. Returning the result directly from a
-handler (`return checkPolicy(policy, intr)`) also carries the message.
-
-Designed for use inside a custom handler. The CLI sugar
-(`cliPolicyHandler`) calls this for you.
+Return this decision directly from a custom handler. A rejection includes
+the rule's `rejectMessage`. No matching rule returns `propagate()`, which
+requests a user decision even if another handler approves.
+Use `cliPolicyHandler` when you also want terminal prompts and saved rules.
 
 **Parameters:**
 
@@ -383,7 +367,7 @@ Designed for use inside a custom handler. The CLI sugar
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L221))
 
 ### validatePolicy
 
@@ -391,17 +375,10 @@ Designed for use inside a custom handler. The CLI sugar
 validatePolicy(policy: Record<string, any>): Result<void>
 ```
 
-Validate that a policy object is well-formed. Returns { success: true } if valid, or { success: false, error } describing the problem.
+Validate a policy object, returning a failure that describes invalid rules.
 
-  @param policy - The policy object to validate.
-
-Check that a `Policy` is structurally valid (every entry is an
-array of `PolicyRule` with a recognised `action`, every `match`
-is a flat string→string map, etc.). Returns
-`{ success: true }` or `{ success: false, error: string }`.
-
-Call before persisting user-supplied or hand-edited policy data;
-`writePolicyFile` calls this internally before writing.
+Check user-supplied or hand-edited policy data before using it.
+`setPolicy` and `addPolicyRules` also validate before saving.
 
 **Parameters:**
 
@@ -411,7 +388,7 @@ Call before persisting user-supplied or hand-edited policy data;
 
 **Returns:** `Result<void>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L258))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L236))
 
 ### alwaysScopeFor
 
@@ -419,9 +396,8 @@ Call before persisting user-supplied or hand-edited policy data;
 alwaysScopeFor(effect: string): ScopedField[]
 ```
 
-The fields an "approve always here" rule pins for `effect`, from the effect's `@always` / `@alwaysUnder` declaration. Empty when the effect declares none.
-
-  @param effect - The interrupt effect name, e.g. "std::env".
+List the fields declared by an effect's @always and @alwaysUnder tags.
+  Return an empty list when the effect declares no scope.
 
 **Parameters:**
 
@@ -431,7 +407,7 @@ The fields an "approve always here" rule pins for `effect`, from the effect's `@
 
 **Returns:** `ScopedField[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L267))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L243))
 
 ### defaultScopedFields
 
@@ -439,11 +415,11 @@ The fields an "approve always here" rule pins for `effect`, from the effect's `@
 defaultScopedFields(): ScopedRuleFields
 ```
 
-Every declared always-scope, keyed by effect. What `cliPolicyHandler` uses when its caller passes no `fields`.
+Return the declared approval scopes for all effects, keyed by effect name.
 
 **Returns:** [ScopedRuleFields](#scopedrulefields)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L276))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L251))
 
 ### buildScopedMatch
 
@@ -454,39 +430,24 @@ buildScopedMatch(
 ): Record<string, string>
 ```
 
-Build a match object for an interrupt, pinned to its scoped fields. Values are escaped so they match literally. Returns {} when the effect has no scope or the interrupt data lacks a scoped field.
+Build glob patterns that pin an interrupt's scoped field values.
+  Return {} if there is no scope or a scoped value is missing.
 
-  @param intr - The interrupt whose data fields to pin.
-  @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
+  @param fields - Per-effect scope overrides, with unlisted effects using their declared scopes.
 
-Build the `match` map for a scoped rule by reading the scoped
-fields out of `intr.data`. The returned object is shaped to plug
-straight into a `PolicyRule.match`:
+Use this to preview a scoped rule in a custom approval UI:
 
 ```ts
 const match = buildScopedMatch(intr)
-const rule: PolicyRule = { match: match, action: "approve" }
 ```
 
-Which fields: the `fields` entry for `intr.effect` when the caller
-passed one, otherwise the effect's declared `@always` scope.
-For each `ScopedField`:
-- The field's value is read from `intr.data` and escaped, so a value
-  like `ls *.md` matches only that exact command, never a glob.
-- If `matchSubpaths: true`, the value is wrapped as
-  `"{value,value/**}"` so the resulting glob matches both the
-  exact value and any subpath under it.
-- If `matchSubpaths: false`, the escaped value is used as-is.
+Directory fields can match the selected directory and its subpaths; other
+fields match their escaped literal values. Overrides in `fields` replace
+declared scopes.
 
-If any scoped field is absent from `intr.data` (`null` / `undefined`)
-the result is `{}`: a rule missing one of its pins would be wider than
-the user was shown, and a rule with an empty match approves every
-future interrupt of the effect. An effect with no scope returns `{}`.
-
-Most callers should use `recordScopedRule` instead, which calls
-this internally. `buildScopedMatch` is exposed for callers
-assembling rules by hand or implementing a custom UI that needs
-to preview the match before recording.
+An absent scope or missing scoped value returns `{}`. Check for an empty
+result before making a rule: an empty `match` applies to every interrupt
+of the effect. `recordScopedRule` performs that check for you.
 
 **Parameters:**
 
@@ -497,7 +458,7 @@ to preview the match before recording.
 
 **Returns:** `Record<string, string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L322))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L284))
 
 ### recordRule
 
@@ -509,31 +470,16 @@ recordRule(
 ): Policy
 ```
 
-Return a new policy with a catch-all rule for an effect appended. A single bare rule covers every future interrupt of that effect.
-
-  @param policy - The policy to extend (not mutated).
-  @param effect - The interrupt effect the rule applies to.
-  @param action - Whether to approve or reject matching interrupts.
-
-Return a new policy with a catch-all rule (`{ action }` with no
-`match`) for `effect` appended. Pure — does not mutate the input.
-
-## Precedence trap
-
-Evaluation is first-match-wins, so **append order matters**. A
-second call for the same effect with a different action is dead
-code:
+Append an effect-wide approval or rejection rule and return a new policy.
 
 ```ts
-let p = recordRule({}, "std::read", "reject")
-p = recordRule(p, "std::read", "approve")  // never reached
+let policy = recordRule({}, "std::read", "reject")
+policy = recordRule(policy, "std::read", "approve")
 ```
 
-If you're flipping a previously-recorded decision, decide
-explicitly: either reset the effect's rules first
-(`{ ...policy, "std::read": [] }` and re-record), or hand-edit
-`policy[effect]` to replace the offending rule. This function does
-not try to detect or warn about shadowing on your behalf.
+The first rule still rejects: evaluation uses the first match, and this
+function appends rules. Replace or clear an existing rule when changing
+a previous decision. The input policy remains unchanged.
 
 **Parameters:**
 
@@ -545,7 +491,7 @@ not try to detect or warn about shadowing on your behalf.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L370))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L321))
 
 ### recordScopedRule
 
@@ -557,25 +503,15 @@ recordScopedRule(
 ): Policy
 ```
 
-Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the scoped fields, so it approves only future interrupts matching this one's field values. Returns the policy unchanged when there is nothing to pin, because a rule with an empty match would approve every future interrupt of the effect.
+Prepend an approval rule scoped to an interrupt's field values.
+  Return the policy unchanged when there is no scope to pin.
 
-  @param policy - The policy to extend (not mutated).
-  @param intr - The interrupt whose field values to pin.
-  @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
+  @param fields - Per-effect scope overrides, with unlisted effects using their declared scopes.
 
-Return a new policy with a scoped approve rule prepended for
-`intr.effect`. The rule's `match` is built by `buildScopedMatch`,
-so it pins whichever fields are configured for the effect. Pure.
-
-Prepended (not appended) so the new, more-specific rule wins
-over any pre-existing catch-all in first-match-wins order. This
-makes scoped rules safe to add even if the effect already has a
-broader rejection: the scoped approval applies first when it
-matches, otherwise the catch-all takes over.
-
-The action is always `"approve"`, because the (ap) UI affordance
-only makes sense in the affirmative direction. Build a scoped
-reject by hand if you need one.
+Use this for an "approve always here" choice. It prepends an approval,
+so a matching scoped rule takes precedence over existing catch-all rules.
+The input policy remains unchanged. If no scope can be built, it returns
+the input policy without adding a rule.
 
 **Parameters:**
 
@@ -587,7 +523,7 @@ reject by hand if you need one.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L407))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L345))
 
 ### parsePolicyFile
 
@@ -595,20 +531,11 @@ reject by hand if you need one.
 parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure>
 ```
 
-Read + parse + validate a policy file from disk. Returns {} on any
-  failure (missing, unreadable, malformed JSON, invalid schema) with a
-  warning to the user.
+Read a JSON policy file and validate its rules, returning a failure on error.
 
-  @param path - The policy file path
-
-Read + JSON-parse + validate a policy file from disk. Returns a
-`Failure` naming the exact problem: a missing file, unreadable
-permissions, malformed JSON, or a schema-validation error. It prints
-nothing — callers decide how loudly to surface the failure.
-
-Raises `std::read` (so the caller's handler chain controls
-whether the read is approved). The CLI handler auto-approves
-this via `with approve`.
+Use the failure's `data.status` to distinguish a missing file, a failed
+read, malformed JSON, and an invalid policy. The function prints no warnings.
+Its inner read uses `with approve`; an outer handler can still reject it.
 
 **Parameters:**
 
@@ -622,7 +549,7 @@ this via `with approve`.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L454))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L386))
 
 ### setPolicy
 
@@ -630,13 +557,10 @@ this via `with approve`.
 setPolicy(path: string, policy: Policy)
 ```
 
-Install `policy` as the active policy and persist it to `path`.
+Install a policy for the CLI handler and save it to a file.
 
-Set the policy to be used with the CLI handler
-returned by `cliPolicyHandler`. The handler's internal state
-is module-level, so this sets the policy for the handler
-to consult on every interrupt. Call this after loading a policy
-with `parsePolicyFile` or constructing one by hand.
+Replace the CLI handler's active policy and save a copy to `path`.
+Later flushes still use the file configured by `cliPolicyHandler`.
 
 **Parameters:**
 
@@ -647,40 +571,7 @@ with `parsePolicyFile` or constructing one by hand.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L498))
-
-### writePolicyFile
-
-```ts
-writePolicyFile(path: string, policy: Policy, allowedPaths: string[] = [])
-```
-
-Validate and write a policy to a JSON file. Throws if the policy is invalid.
-
-  @param path - The destination file path.
-  @param policy - The policy to write.
-  @param allowedPaths - Restrict writes to these path prefixes; empty allows any path.
-
-Validate a `Policy` and write it as JSON to `path`. Throws (returns
-`Failure`) if validation fails. Invalid policies are never
-persisted.
-
-`allowedPaths` is a defense-in-depth allow-list passed straight
-through to the underlying `write`. Pass `[]` (the default) only
-when the path is trusted. Otherwise restrict it to a known
-directory like `["/home/you/.myapp"]`.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| policy | [Policy](#policy) |  |
-| allowedPaths | `string[]` | [] |
-
-**Needs:** `fileRead`, `fileWrite`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L516))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L423))
 
 ### missingPolicyRules
 
@@ -688,15 +579,13 @@ directory like `["/home/you/.myapp"]`.
 missingPolicyRules(base: Policy): Policy
 ```
 
-The rules `base` has that the `cliPolicyHandler`'s active policy lacks, keyed by effect. An effect the active policy already decides with a rule that has no `match` is left out, because a rule added after it could never match.
+Find rules in a base policy that the CLI handler's active policy lacks.
 
-  @param base - The policy to compare against, such as `recommendedAutoApprovePolicy`.
+  @param base - Policy to compare against, such as recommendedAutoApprovePolicy.
 
-A saved policy file is a copy of a built-in policy from the day it was
-created, plus the user's own "always" answers, so a rule added to the
-built-in later never reaches it. These two functions let a program
-show the user what their file lacks and add it when they say so.
-Neither runs on its own, and nothing is added without being asked for.
+Use this to offer updates when a saved policy lacks rules added to a newer
+built-in policy. Effects already covered by a catch-all are left out.
+Pass accepted additions to `addPolicyRules`.
 
 **Parameters:**
 
@@ -710,7 +599,7 @@ Neither runs on its own, and nothing is added without being asked for.
 
 **Needs:** `fileRead`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L629))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L530))
 
 ### addPolicyRules
 
@@ -718,9 +607,12 @@ Neither runs on its own, and nothing is added without being asked for.
 addPolicyRules(additions: Policy)
 ```
 
-Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. When the write fails, the active policy is left as it was and the failure is returned. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
+Append rules to the CLI handler's active policy and save it immediately.
 
-  @param additions - The rules to append, keyed by effect, such as the result of `missingPolicyRules`.
+  @param additions - Rules to add, such as the result of missingPolicyRules.
+
+Append accepted additions without overriding earlier decisions. If saving
+fails, the active policy stays unchanged.
 
 **Parameters:**
 
@@ -732,7 +624,7 @@ Append rules to the `cliPolicyHandler`'s active policy and write the policy file
 
 **Needs:** `fileRead`, `fileWrite`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L640))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L545))
 
 ### flushPolicy
 
@@ -742,19 +634,13 @@ flushPolicy()
 
 Write any pending always-rule additions to the policy file now.
 
-Force-write the `cliPolicyHandler`'s in-memory policy to disk
-now. Use between user turns when you want the **last** decision
-of a session persisted. The handler's own auto-flush runs at the
-top of the next interrupt, so a decision recorded on the final
-interrupt of a turn won't survive a crash unless you call this.
-
-No-op when there are no pending changes. Auto-approves its own
-`std::write` via `with approve` (you opted in by installing the
-handler).
+Call between user turns or before process exit to persist the last "always"
+decision. Automatic flushing happens at the next interrupt, so the final
+decision can otherwise remain unsaved. Does nothing without pending changes.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L670))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L569))
 
 ### cliPolicyHandler
 
@@ -767,71 +653,38 @@ cliPolicyHandler(
 ): any
 ```
 
-CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
+Build a CLI approval handler that remembers decisions in a policy file.
+  Call once per program and bind the result before installing it.
 
-  @param file - Path to the on-disk policy file.
-  @param fields - Per-effect override of which data fields the approve-always-here rule pins. Effects not listed use the scope their `effect` declaration carries; an empty list turns the option off for that effect.
-  @param policy - Optional in-memory policy to use directly instead of loading `file` on startup.
-  @param interactive - Whether a user is at a terminal. When false, an interrupt the policy does not decide is rejected with a reason (surfaced to the raise site, and so to an LLM whose tool raised it) instead of prompting.
-
-Drop-in policy handler for interactive CLI agents. Returns a
-function ref you bind to a local variable and install on a `handle`
-block:
+  @param file - Policy file path whose parent directory already exists.
+  @param fields - Per-effect scope overrides, with [] disabling scoped approval for an effect.
+  @param policy - Initial rules to use instead of reading the file, or null to load it.
+  @param interactive - Prompt for unresolved interrupts when true, or reject them when false.
 
 ```ts
-const home = env("HOME") with approve
-const handler = cliPolicyHandler(
-  file: "${home}/.myapp/policy.json",
-  fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
-)
+const handler = cliPolicyHandler(file: "/home/me/.myapp/policy.json")
 handle {
-  // every interrupt raised here is filtered through the handler
+  return read("README.md")
 } with handler
 ```
 
-What the handler does:
+Bind the returned function before using it in a `with` clause. Call once
+per program: the handler shares module-level policy state, and another call
+replaces its options and active policy.
 
-1. **Loads** the policy file on first invocation. Missing /
-   malformed files are treated as `{}` with a warning.
-2. **Consults the loaded policy** via `checkPolicy`. If a rule
-   matches, approves or rejects without prompting.
-3. **Prompts the user** when no rule applies, showing
-   (a)/(r)/(aa)/(ap)/(rr). The (ap) option appears only when
-   `fields` has an entry for the interrupt's effect.
-4. **Records "always" decisions** in memory and flushes them to
-   disk at the top of the next interrupt. Use `flushPolicy()` if
-   you need the final decision of a session persisted before
-   process exit.
+It loads the file on the first interrupt unless you supply `policy`.
+A missing file starts with an empty policy. Other load errors also start
+empty and print a warning. Rules approve or reject matching interrupts;
+questions that need a value still require an answer. Unresolved interrupts
+prompt when interactive and fail when noninteractive.
 
-## Singleton state
+"Always" decisions persist at the next interrupt. Call `flushPolicy` before
+exiting to save the final decision. Supplying `policy` skips the initial
+read; later decisions still save to `file`. The file's parent directory
+must already exist.
 
-Internal state (loaded policy, pending-save flag, options) is
-module-level. Calling `cliPolicyHandler` more than once in the
-same program silently overwrites the previous options. Only the
-last `file` / `fields` win. For multi-policy agents, fork the
-module or use the pure primitives directly.
-
-## Bind-to-variable requirement
-
-The `with` clause only accepts an identifier (not a call
-expression), so you MUST bind the return value to a `const`
-before using it. This also bypasses the typechecker's
-handler-raises-interrupt rule, which only resolves direct
-functionRef names. The flip-flag-first pattern inside the handler
-provides runtime safety.
-
-@param file - Path to the on-disk policy file. Created on first
-  save. The containing directory must already exist.
-@param fields - Per-effect override of which data fields the (ap)
-  rule pins. Effects not listed use the scope their `effect`
-  declaration carries; an empty list turns (ap) off for that effect.
-@param policy - Optional in-memory policy to start from. When
-  provided, the handler uses it directly and does NOT read `file` on
-  startup (so there is no load-time `std::read` and no dependency on
-  `file` existing). New "always" decisions still persist to `file`.
-  Use for a per-run override that must not be seeded from — or written
-  over — a saved policy on disk. Omit (null) for the normal
-  load-from-`file` behavior.
+"Approve always here" uses scopes from effect declarations unless `fields`
+overrides them. An empty override disables that choice for the effect.
 
 **Parameters:**
 
@@ -844,4 +697,4 @@ provides runtime safety.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1377))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1238))

@@ -1,38 +1,35 @@
 ---
 name: "actions"
-description: "What safeBash decides, and the three ways it can carry that out."
+description: "Represent and execute plans made by safeBash."
 ---
 
 # actions
 
-What safeBash decides, and the three ways it can carry that out.
+Use `safeBash` from `std::safeBash` to run commands. This module holds the
+types that describe a plan: the approvals it asks for and what runs after
+they are granted. The code that runs a plan lives in `std::safeBash` and is
+not exported, because it skips the approvals the plan already raised.
 
-  A `Plan` is the whole decision about one call, made before anything
-  happens: which interrupts to raise, and what to run if they are all
-  approved. Deciding and doing are separate steps so the deciding half can
-  be tested by handing in a string and looking at the plan.
+```ts
+import { outcomeOf, planFor } from "std::safeBash"
 
-  The executors call the NON-RAISING internals (`_bash`, `_write`) rather
-  than the `bash` and `write` tools, because those raise their own
-  interrupts and the caller has already raised a narrower one. See the
-  comment on `runBash`.
+node main() {
+  const plan = planFor("git status", "/project")
+  print(outcomeOf(plan))
+}
+```
+
+A plan pairs the required approvals with an execution. Inspect the plan to
+test classification without executing its commands.
 
 ## Types
 
 ### Effect
 
-One interrupt a command needs raised before it may run.
-
-A discriminated union rather than a bag of `any`: the effect set is
-closed, so each payload can be typed, and typing them is what makes the
-raise sites check that every payload satisfies its effect's contract.
+A required approval, with a payload checked for its effect.
 
 ```ts
-/** One interrupt a command needs raised before it may run.
- *
- * A discriminated union rather than a bag of `any`: the effect set is
- * closed, so each payload can be typed, and typing them is what makes the
- * raise sites check that every payload satisfies its effect's contract. */
+/** A required approval, with a payload checked for its effect. */
 export type Effect =
   | { name: "std::bash" }
   | { name: "std::write"; payload: WritePayload }
@@ -46,7 +43,7 @@ export type Effect =
   | { name: "std::exec"; payload: ExecPayload }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L26))
 
 ### WritePayload
 
@@ -59,7 +56,7 @@ export type WritePayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L38))
 
 ### GrepPayload
 
@@ -80,34 +77,34 @@ export type GrepPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L68))
 
 ### ReadPayload
 
 The fields the read tool's own std::read interrupt is keyed on: the
-real parent of the file, and its name.
+ real parent of the file, and its name.
 
 ```ts
 /** The fields the read tool's own std::read interrupt is keyed on: the
- * real parent of the file, and its name. */
+ real parent of the file, and its name. */
 export type ReadPayload = {
   dir: string;
   filename: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L90))
 
 ### LsPayload
 
 The fields the ls tool's own std::ls interrupt is keyed on. On the
-bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
-everything.
+ bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
+ everything.
 
 ```ts
 /** The fields the ls tool's own std::ls interrupt is keyed on. On the
- * bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
- * everything. */
+ bash path `maxResults` is 0, meaning no cap: real ls, tree, and du list
+ everything. */
 export type LsPayload = {
   dir: string;
   recursive: boolean;
@@ -115,18 +112,18 @@ export type LsPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L106))
 
 ### GlobPayload
 
 The fields the glob tool's own std::glob interrupt is keyed on. On the
-bash path `maxResults` is 0, meaning no cap: real find lists
-everything.
+ bash path `maxResults` is 0, meaning no cap: real find lists
+ everything.
 
 ```ts
 /** The fields the glob tool's own std::glob interrupt is keyed on. On the
- * bash path `maxResults` is 0, meaning no cap: real find lists
- * everything. */
+ bash path `maxResults` is 0, meaning no cap: real find lists
+ everything. */
 export type GlobPayload = {
   pattern: string;
   dir: string;
@@ -134,20 +131,20 @@ export type GlobPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L123))
 
 ### ExecPayload
 
 The fields the exec tool's own std::exec interrupt carries. From
-safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
-0 and `stdin` is empty, which is how safeBash runs the line, and an
-argument may be an unexpanded glob or `~` that bash expands.
+ safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
+ 0 and `stdin` is empty, which is how safeBash runs the line, and an
+ argument may be an unexpanded glob or `~` that bash expands.
 
 ```ts
 /** The fields the exec tool's own std::exec interrupt carries. From
- * safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
- * 0 and `stdin` is empty, which is how safeBash runs the line, and an
- * argument may be an unexpanded glob or `~` that bash expands. */
+ safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
+ 0 and `stdin` is empty, which is how safeBash runs the line, and an
+ argument may be an unexpanded glob or `~` that bash expands. */
 export type ExecPayload = {
   command: string;
   args: string[];
@@ -158,7 +155,7 @@ export type ExecPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L141))
 
 ### GitDiffPayload
 
@@ -172,24 +169,14 @@ export type GitDiffPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L158))
 
 ### Execution
 
 What happens if every effect in the plan is approved.
 
-One variant per way a plan can be carried out, each carrying only the
-fields that way needs. The dispatch in `safeBash` matches over this
-union exhaustively, so adding a variant is a type error at the dispatch
-rather than a silent fall-through.
-
 ```ts
-/** What happens if every effect in the plan is approved.
- *
- * One variant per way a plan can be carried out, each carrying only the
- * fields that way needs. The dispatch in `safeBash` matches over this
- * union exhaustively, so adding a variant is a type error at the dispatch
- * rather than a silent fall-through. */
+/** What happens if every effect in the plan is approved. */
 export type Execution =
   | BashExec
   | EchoExec
@@ -201,7 +188,7 @@ export type Execution =
   | ChainExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L171))
 
 ### BashExec
 
@@ -212,7 +199,7 @@ export type BashExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L173))
 
 ### EchoExec
 
@@ -223,7 +210,7 @@ export type EchoExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L178))
 
 ### AgencyExec
 
@@ -237,7 +224,7 @@ export type AgencyExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L184))
 
 ### WriteExec
 
@@ -251,33 +238,33 @@ export type WriteExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L189))
 
 ### GrepFileNames
 
 Whether grep prints file names: `-H` gives "always", `-h` gives
-"never", neither gives "default".
+ "never", neither gives "default".
 
 ```ts
 /** Whether grep prints file names: `-H` gives "always", `-h` gives
- * "never", neither gives "default". */
+ "never", neither gives "default". */
 export type GrepFileNames = "default" | "always" | "never"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L194))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L199))
 
 ### GrepRender
 
 What a grep command said about printing. The rules that turn this
-into grep's output live in `_renderGrepOutput`
-(lib/stdlib/grepDialect.ts), whose type of the same name must keep
-these fields.
+ into grep's output live in `_renderGrepOutput`
+ (lib/stdlib/grepDialect.ts), whose type of the same name must keep
+ these fields.
 
 ```ts
 /** What a grep command said about printing. The rules that turn this
- * into grep's output live in `_renderGrepOutput`
- * (lib/stdlib/grepDialect.ts), whose type of the same name must keep
- * these fields. */
+ into grep's output live in `_renderGrepOutput`
+ (lib/stdlib/grepDialect.ts), whose type of the same name must keep
+ these fields. */
 export type GrepRender = {
   /** `-n` was given. */
   lineNumbers: boolean;
@@ -289,18 +276,18 @@ export type GrepRender = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L205))
 
 ### GrepExec
 
 A lone grep, run through the grep tool's own search with no shell.
-The search reads only what `payload` says, so the approval means what
-the grep tool's approval means.
+ The search reads only what `payload` says, so the approval means what
+ the grep tool's approval means.
 
 ```ts
 /** A lone grep, run through the grep tool's own search with no shell.
- * The search reads only what `payload` says, so the approval means what
- * the grep tool's approval means. */
+ The search reads only what `payload` says, so the approval means what
+ the grep tool's approval means. */
 export type GrepExec = {
   kind: "grep";
   payload: GrepPayload;
@@ -308,20 +295,20 @@ export type GrepExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L218))
 
 ### ReadView
 
 How the shell-free path prints a file: whole, numbered (cat -n), the
-first `lines` lines (head), or the last `lines` lines (tail). The rules
-live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
-the same name must keep these fields.
+ first `lines` lines (head), or the last `lines` lines (tail). The rules
+ live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
+ the same name must keep these fields.
 
 ```ts
 /** How the shell-free path prints a file: whole, numbered (cat -n), the
- * first `lines` lines (head), or the last `lines` lines (tail). The rules
- * live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
- * the same name must keep these fields. */
+ first `lines` lines (head), or the last `lines` lines (tail). The rules
+ live in `_renderReadView` (lib/stdlib/readDialect.ts), whose type of
+ the same name must keep these fields. */
 export type ReadView =
   | { kind: "whole" }
   | { kind: "numbered" }
@@ -329,20 +316,20 @@ export type ReadView =
   | { kind: "tail"; lines: number }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L233))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L240))
 
 ### ReadExec
 
 A lone cat of one or more files, or a head or tail of one, run
-through the read tool's own read with no shell. The read covers only
-what `payloads` names, so the approval means what the read tool's
-approval means.
+ through the read tool's own read with no shell. The read covers only
+ what `payloads` names, so the approval means what the read tool's
+ approval means.
 
 ```ts
 /** A lone cat of one or more files, or a head or tail of one, run
- * through the read tool's own read with no shell. The read covers only
- * what `payloads` names, so the approval means what the read tool's
- * approval means. */
+ through the read tool's own read with no shell. The read covers only
+ what `payloads` names, so the approval means what the read tool's
+ approval means. */
 export type ReadExec = {
   kind: "read";
   payloads: ReadPayload[];
@@ -350,33 +337,33 @@ export type ReadExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L243))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L250))
 
 ### Join
 
 How a chain step follows the one before it: `;` always runs it, `&&`
-only after a success, `||` only after a failure.
+ only after a success, `||` only after a failure.
 
 ```ts
 /** How a chain step follows the one before it: `;` always runs it, `&&`
- * only after a success, `||` only after a failure. */
+ only after a success, `||` only after a failure. */
 export type Join = "seq" | "and" | "or"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L251))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L258))
 
 ### StepExec
 
 The executions a chain may hold: every in-process kind, and nothing
-that spawns a shell.
+ that spawns a shell.
 
 ```ts
 /** The executions a chain may hold: every in-process kind, and nothing
- * that spawns a shell. */
+ that spawns a shell. */
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L262))
 
 ### ChainStep
 
@@ -387,23 +374,23 @@ export type ChainStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L257))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L264))
 
 ### ChainExec
 
 Several in-process commands joined by `;`, `&&`, or `||`, run left to
-right with bash's rule for each join.
+ right with bash's rule for each join.
 
 ```ts
 /** Several in-process commands joined by `;`, `&&`, or `||`, run left to
- * right with bash's rule for each join. */
+ right with bash's rule for each join. */
 export type ChainExec = {
   kind: "chain";
   steps: ChainStep[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L264))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L271))
 
 ### RefuseExec
 
@@ -414,20 +401,20 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L279))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L288))
 
 ### BroadReason
 
 Why a plan asks the broad std::bash question. `detail` is the parser
-message for `unparseable`, the first unrecognized command's message for
-`unrecognized`, the render failure for `unrenderable`, and "" for
-`noEffects`.
+ message for `unparseable`, the first unrecognized command's message for
+ `unrecognized`, the render failure for `unrenderable`, and "" for
+ `noEffects`.
 
 ```ts
 /** Why a plan asks the broad std::bash question. `detail` is the parser
- * message for `unparseable`, the first unrecognized command's message for
- * `unrecognized`, the render failure for `unrenderable`, and "" for
- * `noEffects`. */
+ message for `unparseable`, the first unrecognized command's message for
+ `unrecognized`, the render failure for `unrenderable`, and "" for
+ `noEffects`. */
 export type BroadReason = {
   kind:
   | "unparseable"
@@ -438,7 +425,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L288))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L297))
 
 ### Plan
 
@@ -452,12 +439,12 @@ export type Plan = {
   /** Why the plan asks the broad std::bash question, or null when it does not. */
   broadReason?: BroadReason;
   /** The command word of every simple command planFor decided over, in
-   *  order; "" for an assignment-only command; [] when unparseable. */
+    order; "" for an assignment-only command; [] when unparseable. */
   verbs: string[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L294))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L303))
 
 ## Functions
 
@@ -467,8 +454,9 @@ export type Plan = {
 writeEffect(write: WritePayload): Effect
 ```
 
-Both plan sides derive from one WritePayload, so payload/execution
-  parity holds by construction.
+Build a write approval descriptor without raising it.
+
+Build the write approval from the same payload used by `writeExecution`.
 
 **Parameters:**
 
@@ -478,13 +466,15 @@ Both plan sides derive from one WritePayload, so payload/execution
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L48))
 
 ### writeExecution
 
 ```ts
 writeExecution(write: WritePayload): WriteExec
 ```
+
+Build a file-write execution plan without running it.
 
 **Parameters:**
 
@@ -502,6 +492,8 @@ writeExecution(write: WritePayload): WriteExec
 grepEffect(payload: GrepPayload): Effect
 ```
 
+Build a grep approval descriptor without raising it.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -510,13 +502,15 @@ grepEffect(payload: GrepPayload): Effect
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L80))
 
 ### readEffect
 
 ```ts
 readEffect(payload: ReadPayload): Effect
 ```
+
+Build a file-read approval descriptor without raising it.
 
 **Parameters:**
 
@@ -526,13 +520,15 @@ readEffect(payload: ReadPayload): Effect
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L95))
 
 ### lsEffect
 
 ```ts
 lsEffect(payload: LsPayload): Effect
 ```
+
+Build a directory-listing approval descriptor without raising it.
 
 **Parameters:**
 
@@ -542,13 +538,15 @@ lsEffect(payload: LsPayload): Effect
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L112))
 
 ### globEffect
 
 ```ts
 globEffect(payload: GlobPayload): Effect
 ```
+
+Build a file-search approval descriptor without raising it.
 
 **Parameters:**
 
@@ -558,13 +556,15 @@ globEffect(payload: GlobPayload): Effect
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L129))
 
 ### execEffect
 
 ```ts
 execEffect(payload: ExecPayload): Effect
 ```
+
+Build a command-execution approval descriptor without raising it.
 
 **Parameters:**
 
@@ -574,7 +574,7 @@ execEffect(payload: ExecPayload): Effect
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L150))
 
 ### grepExecution
 
@@ -582,8 +582,9 @@ execEffect(payload: ExecPayload): Effect
 grepExecution(payload: GrepPayload, render: GrepRender): GrepExec
 ```
 
-Both plan sides derive from one GrepPayload, so the question asked and
-the search run cannot disagree.
+Build a grep execution plan without running the search.
+
+Build the search execution from the same payload used by `grepEffect`.
 
 **Parameters:**
 
@@ -594,7 +595,7 @@ the search run cannot disagree.
 
 **Returns:** [GrepExec](#grepexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L227))
 
 ### readExecution
 
@@ -602,8 +603,9 @@ the search run cannot disagree.
 readExecution(payloads: ReadPayload[], view: ReadView): ReadExec
 ```
 
-Both plan sides derive from the same ReadPayloads, so the questions
-asked and the files read cannot disagree.
+Build a file-read execution plan without reading files.
+
+Build file reads from the same payloads used by `readEffect`.
 
 **Parameters:**
 
@@ -614,178 +616,4 @@ asked and the files read cannot disagree.
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L271))
-
-### runBash
-
-```ts
-runBash(command: string, cwd: string, source: string = ""): Result<string>
-```
-
-Run a command string through bash and return what it printed.
-
-  The script runs under bash, found on the search path. When there is no
-  bash the result is a failure that says so; nothing falls back to
-  another shell.
-
-  On success the value is bash's stdout, raw — nothing added, nothing
-  stripped. stderr is discarded on success and reported on failure: two
-  captured pipes cannot interleave the way a terminal does, so this is a
-  policy either way, and discarding on success keeps the value exactly
-  equal to bash's stdout.
-
-  A non-zero exit is a failure, which `&&` and `||` require. The known
-  cost: `grep` exits 1 when it finds nothing and `diff` exits 1 when files
-  differ, and neither is an error.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| command | `string` |  |
-| cwd | `string` |  |
-| source | `string` | "" |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`, `subprocess`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L305))
-
-### runGrep
-
-```ts
-runGrep(exec: GrepExec, command: string): Result<string>
-```
-
-Run a lone grep through the grep tool's own search and print what grep
-  would print. No match is the failure grep's exit code 1 would give.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [GrepExec](#grepexec) |  |
-| command | `string` |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L368))
-
-### printGrep
-
-```ts
-printGrep(exec: GrepExec): Result<string>
-```
-
-What a shell-free grep prints, before long output is saved. No match is
-  a failure carrying the notes, the text grep would write to stderr.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [GrepExec](#grepexec) |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L385))
-
-### runRead
-
-```ts
-runRead(exec: ReadExec, command: string): Result<string>
-```
-
-Run a lone cat, head, or tail through the read tool's own read and
-  print what the program would print.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [ReadExec](#readexec) |  |
-| command | `string` |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L429))
-
-### printRead
-
-```ts
-printRead(exec: ReadExec): Result<string>
-```
-
-What a shell-free read prints, before long output is saved: each file
-  read in order, the texts joined, and the joined text rendered once. A
-  first file with no final newline runs into the second, as real cat
-  prints it.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [ReadExec](#readexec) |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L441))
-
-### runWrite
-
-```ts
-runWrite(exec: WriteExec): Result<string>
-```
-
-Perform the write a redirected echo asked for. Returns the empty string,
-  which is what bash's stdout for `echo hi > f` is.
-
-  `_write`, NOT `write`, for the same reason `runBash` uses `_bash`: the
-  `write` tool raises its own `std::write`, and the caller already raised
-  one carrying the content.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [WriteExec](#writeexec) |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`, `fileWrite`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L480))
-
-### runChain
-
-```ts
-runChain(exec: ChainExec, command: string): Result<string>
-```
-
-Run a chain of in-process commands left to right with bash's rule: `;`
-  runs the next step whatever happened, `&&` only after a success, `||`
-  only after a failure. A skipped step changes nothing. The chain fails
-  when the last step that ran failed. A failed step adds no text, the way
-  a failing program's complaint goes to stderr.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| exec | [ChainExec](#chainexec) |  |
-| command | `string` |  |
-
-**Returns:** `Result<string>`
-
-**Needs:** `fileRead`, `fileWrite`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L503))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L279))

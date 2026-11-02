@@ -1,17 +1,16 @@
 import { connectorFetch } from "std::data/connector"
 
 /** @module
+  @summary Read economic time series from DBnomics.
   ## DBnomics — world macroeconomic time-series
 
-  Fetch economic data from [DBnomics](https://db.nomics.world/), an aggregator that re-serves
-  80+ statistical providers (Eurostat, IMF, World Bank, OECD, BLS, national statistics offices)
-  through one keyless API. Use this connector for *non-U.S.* or cross-country data, or a
-  provider FRED does not carry. Each series is addressed by a `provider / dataset / series`
-  code triple (browse db.nomics.world to find codes). For U.S. macro prefer
-  `std::data/finance/fred`; for news use `std::data/news/gdelt`.
+  Fetch economic data from [DBnomics](https://db.nomics.world/) using a
+  provider, dataset, and series code. Browse the DBnomics directory to find
+  codes for national or cross-country statistics. No API key is required.
+  For U.S. macro data, prefer `std::data/finance/fred`.
 
   Returns a series as a list of `{ period, value }` observations (period like "2025-01"; a
-  missing value is null). No API key required.
+  missing value is null).
 
   ### Usage
 
@@ -48,7 +47,7 @@ export type DbnomicsSeries = {
 const DBNOMICS_BASE = "https://api.db.nomics.world/v22/"
 const DBNOMICS_DOMAINS = ["api.db.nomics.world"]
 
-/** Build the DBnomics series path (codes are URL-encoded). Pure — no network. */
+/* Build the DBnomics series path (codes are URL-encoded). */
 def buildDbnomicsPath(provider: string, dataset: string, series: string): string {
   const p = encodeURIComponent(provider)
   const d = encodeURIComponent(dataset)
@@ -56,7 +55,7 @@ def buildDbnomicsPath(provider: string, dataset: string, series: string): string
   return "series/${p}/${d}/${s}?observations=1"
 }
 
-/** Reshape a DBnomics series response (zips parallel period/value arrays). Pure — total on null input. */
+/* Reshape a DBnomics series response (zips parallel period/value arrays). */
 def parseDbnomics(raw: any): DbnomicsSeries {
   const r: any = raw ?? {}
   const series: any = r.series ?? {}
@@ -77,7 +76,7 @@ def parseDbnomics(raw: any): DbnomicsSeries {
   }
 }
 
-/** Finalize a DBnomics fetch into a Result. Pure — total on missing `series`. */
+/* Finalize a DBnomics fetch into a Result. */
 def dbnomicsFinalize(fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => {
@@ -96,14 +95,12 @@ def dbnomicsFinalize(fetchResult: any): Result {
 @capabilities(network)
 export def dbnomicsSeries(provider: string, dataset: string, series: string): Result<DbnomicsSeries> raises <std::dbnomics, std::http::fetchJSON> {
   """
-  Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series codes
-  (e.g. provider "BLS", dataset "cu", series "CUUR0000SA0" for U.S. CPI). Returns the series
-  name, frequency, and a list of { period, value } observations. Use for non-U.S. or
-  cross-country economic data. No API key required.
+  Fetch an economic time series from DBnomics. Use it for non-U.S. or
+  cross-country data; prefer fredSeries for U.S. macro data.
 
-  @param provider - DBnomics provider code, e.g. "Eurostat", "IMF", "BLS"
-  @param dataset - Dataset code within the provider, e.g. "cu"
-  @param series - Series code within the dataset, e.g. "CUUR0000SA0"
+  @param provider - The DBnomics provider code, such as "BLS" or "IMF".
+  @param dataset - The dataset code within that provider, such as "cu".
+  @param series - The series code within that dataset, such as "CUUR0000SA0".
   """
   return interrupt std::dbnomics("Fetch this DBnomics series?", {
     provider: provider,

@@ -1,6 +1,6 @@
 ---
 name: "bluesky"
-description: "Bluesky — keyword search, author feeds, and profiles"
+description: "Search Bluesky posts and read public feeds and profiles."
 ---
 
 # bluesky
@@ -54,18 +54,16 @@ Result ordering for `bskySearch`.
 export type BskySort = "latest" | "top"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L51))
 
 ### Post
 
-A Bluesky post. `createdAt` is epoch milliseconds (0 when the source
-    timestamp was malformed). `url` is the human-facing bsky.app link,
-    constructed from the post's at:// uri.
+A Bluesky post with a browser link and epoch-millisecond `createdAt`.
+    A malformed source timestamp becomes zero.
 
 ```ts
-/** A Bluesky post. `createdAt` is epoch milliseconds (0 when the source
-    timestamp was malformed). `url` is the human-facing bsky.app link,
-    constructed from the post's at:// uri. */
+/** A Bluesky post with a browser link and epoch-millisecond `createdAt`.
+    A malformed source timestamp becomes zero. */
 export type Post = {
   uri: string;
   url: string;
@@ -114,7 +112,7 @@ effect std::bluesky {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L45))
 
 ## Functions
 
@@ -129,13 +127,10 @@ bskySearch(
 ): Result<Post[]> raises <std::bluesky, std::http::fetchJSON>
 ```
 
-Search Bluesky posts by keyword. Returns matching posts with author, text,
-  engagement counts, and a bsky.app link.
+Search public Bluesky posts by keyword.
 
-  @param query - The search keywords
-  @param sort - Result ordering
-  @param since - Only include posts created at or after this instant, as epoch milliseconds (0 means no time filter)
-  @param limit - Maximum results (capped at 100)
+  @param since - Include posts at or after this epoch-millisecond timestamp, or zero for no time filter.
+  @param limit - The maximum results, clamped to the range zero through 100.
 
 **Parameters:**
 
@@ -163,11 +158,10 @@ bskyAuthorFeed(
 ): Result<Post[]> raises <std::bluesky, std::http::fetchJSON>
 ```
 
-Fetch a Bluesky account's recent posts, newest first. Returns posts with
-  text, engagement counts, and a bsky.app link.
+Read a Bluesky account's recent posts, newest first.
 
-  @param handle - The account's handle (like "user.bsky.social") or did
-  @param limit - Maximum posts (capped at 100)
+  @param handle - An account handle such as "user.bsky.social", or a DID.
+  @param limit - The maximum posts, clamped to the range zero through 100.
 
 **Parameters:**
 
@@ -182,7 +176,7 @@ Fetch a Bluesky account's recent posts, newest first. Returns posts with
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L266))
 
 ### bskyProfile
 
@@ -192,10 +186,9 @@ bskyProfile(
 ): Result<Profile> raises <std::bluesky, std::http::fetchJSON>
 ```
 
-Fetch a Bluesky account's public profile: display name, description, and
-  follower, follow, and post counts. An unknown handle returns a failure.
+Read a Bluesky account's public profile and follower counts.
 
-  @param handle - The account's handle (like "user.bsky.social") or did
+  @param handle - An account handle such as "user.bsky.social", or a DID.
 
 **Parameters:**
 
@@ -209,4 +202,4 @@ Fetch a Bluesky account's public profile: display name, description, and
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L280))

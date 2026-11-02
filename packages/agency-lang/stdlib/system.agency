@@ -41,10 +41,7 @@ effect std::notify { title: string, body: string }
 @capabilities(subprocess)
 export def notify(title: string, message: string): boolean {
   """
-  Show a native OS notification. Returns true if the notification was sent.
-
-  @param title - The notification title
-  @param message - The notification body text
+  Show a native OS notification. Returns true if it was sent.
   """
   return interrupt std::notify("Are you sure you want to show this notification?", {
     title: title,
@@ -82,10 +79,15 @@ export def screenshot(
   _screenshot(real, x, y, width, height, allowedPaths)
 }
 
+/**
+Flushes pending Statelog deliveries before terminating. Other pending work
+and cleanup may not finish.
+*/
 export def exit(code: number = 0) {
   """
-  Terminate the process with the given exit code. Use with caution. This skips any cleanup or pending operations, except that it first sends any logs still on their way to a Statelog server.
-  @param code - Exit code (0 for success, non-zero for failure)
+  Terminate the process with an exit code.
+
+  @param code - Zero for success, nonzero for failure.
   """
   return interrupt std::exit("Are you sure you want to exit the process?", {
     code: code
@@ -102,14 +104,12 @@ export def args(): string[] {
 
 export def cwd(): string {
   """
-  Return the absolute path of the current working directory of the Agency process.
+  Return the run's current working directory as an absolute path.
   """
   return _cwd()
 }
 
-/** Raises std::env, so a handler or policy can allow or deny the read.
- *  Returns a Failure when denied, which the declared type cannot express —
- *  that is what `env` below checks for. */
+// A denied interrupt returns a failure that env converts to null.
 @capabilities(env)
 def requestEnvRead(name: string): string | null {
   return interrupt std::env("Are you sure you want to read this environment variable?", {
@@ -120,10 +120,7 @@ def requestEnvRead(name: string): string | null {
 
 export idempotent def env(name: string): string | null {
   """
-  Read an environment variable. Returns null if the variable is not set, or if
-  the read was denied.
-
-  @param name - The environment variable name
+  Read an environment variable, or return null if unset or access is denied.
   """
   const value = requestEnvRead(name)
   if (isFailure(value)) {
@@ -135,13 +132,17 @@ export idempotent def env(name: string): string | null {
   return value
 }
 
+/**
+On the Node host, the change affects this process and child processes
+started afterward. It does not change the launching shell's environment.
+*/
 @capabilities(env)
 export def setEnv(name: string, value: string): Result {
   """
-  Set an environment variable in the current process. Fails if the name is empty or contains '='. The change is visible to child processes spawned afterward but does not persist outside the current process.
+  Set an environment variable on the host.
 
-  @param name - The environment variable name
-  @param value - The value to set
+  @param name - A nonempty variable name without = or NUL bytes
+  @param value - Must not contain NUL bytes
   """
   return interrupt std::setEnv("Are you sure you want to set this environment variable?", {
     name: name,
@@ -150,10 +151,13 @@ export def setEnv(name: string, value: string): Result {
   return try _setEnv(name, value)
 }
 
+/**
+Use this to distinguish interactive input from piped or redirected input.
+*/
 @capabilities(terminal)
 export def isTTY(): boolean {
   """
-  Return true if standard input is connected to a terminal. Returns false when stdin is piped or redirected from a file. Use this to detect non-interactive invocations (e.g. `echo "hi" | my-agent`) and adjust output accordingly.
+  Return whether standard input is connected to a terminal.
   """
   return _isTTY()
 }
@@ -161,7 +165,7 @@ export def isTTY(): boolean {
 @capabilities(terminal)
 export def readStdin(): string {
   """
-  Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program.
+  Read piped or redirected standard input as text, waiting until the stream closes.
   """
   return _readStdin()
 }
@@ -178,8 +182,6 @@ def urlHost(url: string): string {
 export def openUrl(url: string): Result {
   """
   Open a URL in the user's default browser.
-
-  @param url - The URL to open
   """
   return interrupt std::openUrl("Are you sure you want to open this URL in the browser?", {
     url: url,
@@ -189,11 +191,13 @@ export def openUrl(url: string): Result {
   return try _openUrl(url)
 }
 
+/**
+Use a descriptive title to distinguish several running agents in system
+monitors and `ps` output.
+*/
 export def setTitle(title: string): void {
   """
-  Set the process title (as shown in system monitors, `ps` output, and the terminal window). This can help users identify the process, especially when running multiple agents simultaneously.
-
-  @param title - The new process title
+  Set the process title shown in system monitors.
   """
   return _setTitle(title)
 }

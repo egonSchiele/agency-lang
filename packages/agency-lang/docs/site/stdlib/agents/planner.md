@@ -1,25 +1,26 @@
 ---
 name: "planner"
-description: "The plan-as-code meta-agent: given a task, generates an Agency program that composes worker agents and tools to solve it."
+description: "Generate and run an Agency program that composes agents for a task."
 ---
 
 # planner
 
-plannerAgent: the plan-as-code meta-agent. Given a task, generate an Agency
-  program (an agent-as-plan) that composes the worker agents and tools to solve
-  it, show the plan, source, and capability envelope for approval, run it in a
-  handler-sandboxed subprocess, verify, and fall back to codingAgent on failure.
+`plannerAgent` drafts a plan, generates source, and requests approval with
+the plan, source, and detected effects before running it. It checks the
+result with `verifierAgent` and can regenerate the program after findings.
+A source-generation failure invokes `codingAgent` directly.
+
+Use `codingAgent` for a task that does not need a generated orchestration
+program. An optional `plan` skips the initial planning call.
 
 ## Effects
 
 ### std::agents::planApprove
 
-Raised before a generated plan-agent runs, so the plan, source, and
-  capability envelope can be shown and approved. Reject halts and fails.
+Approve a generated program after inspecting its plan, source, and detected effects.
 
 ```ts
-/** Raised before a generated plan-agent runs, so the plan, source, and
-  capability envelope can be shown and approved. Reject halts and fails. */
+/** Approve a generated program after inspecting its plan, source, and detected effects. */
 effect std::agents::planApprove {
   plan: string;
   source: string;
@@ -27,7 +28,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L36))
 
 ## Functions
 
@@ -37,12 +38,11 @@ effect std::agents::planApprove {
 buildTools(): any[]
 ```
 
-Return the planner's tools: read-only access to the project it is planning
-  for, plus its skills.
+Return the planner's project lookup, skill, and communication tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L28))
 
 ### planCodePrompt
 
@@ -50,8 +50,7 @@ Return the planner's tools: read-only access to the project it is planning
 planCodePrompt(task: string, planText: string): string
 ```
 
-Build the code-generation instruction: emit a program whose node main
-  composes the building blocks to carry out planText for task.
+Build an instruction to generate an Agency program for a task and plan.
 
 **Parameters:**
 
@@ -62,7 +61,7 @@ Build the code-generation instruction: emit a program whose node main
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L70))
 
 ### renderEffects
 
@@ -70,8 +69,7 @@ Build the code-generation instruction: emit a program whose node main
 renderEffects(effects: Result<EffectsByExport>): string
 ```
 
-Human-readable capability envelope for the approval prompt, or an
-  honest note when the effects could not be computed.
+Render detected interrupt effects for approval, or explain that analysis failed.
 
 **Parameters:**
 
@@ -81,7 +79,7 @@ Human-readable capability envelope for the approval prompt, or an
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L99))
 
 ### runApproved
 
@@ -94,9 +92,7 @@ runApproved(
 ): PlanState raises <std::agents::planApprove, std::guard, std::run>
 ```
 
-Gate generated code behind user approval, then run it: shows the plan,
-  source, and capability envelope, and returns a rejected state instead of
-  running when approval is declined.
+Show a generated plan and source for approval, then run and verify it if approved.
 
 **Parameters:**
 
@@ -132,21 +128,16 @@ plannerAgent(
 ): Result<string> raises <std::agents::planApprove, std::guard, std::run>
 ```
 
-Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
-  task, show the plan/source/effects for approval, run it in a sandboxed
-  subprocess, and verify. Falls back to codingAgent on generation failure or
-  repeated verification gaps. Recursion (a generated agent calling plannerAgent)
-  is bounded by the runtime's subprocess maxDepth and by maxCost/maxTime.
+Generate an Agency program that composes agents to solve a complex task,
+  request approval, run it, and check the result.
 
-  @param task - what to accomplish.
-  @param context - optional extra material.
-  @param plan - optional seed plan; when non-empty the analysis step is skipped.
-  @param maxCost - hard spend cap for the whole tree (default $100).
-  @param maxTime - hard wall-clock cap (default 60 minutes).
-  @param model - model override for the planning step only, or "" for the ambient model.
-  @param provider - provider for the model override.
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param plan - Seed plan that skips the planning call when nonempty.
+  @param maxCost - Cost budget in USD across the generated work.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override for the planning call only, or "" for the ambient model.
+  @param provider - Provider for the planning model, ignored when model is empty.
+  @param session - Named conversation for the planning call, unused when a seed plan is given.
+  @param extraTools - Tools added to the planning call only.
 
 **Parameters:**
 

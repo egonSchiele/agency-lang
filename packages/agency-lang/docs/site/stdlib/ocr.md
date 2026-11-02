@@ -42,7 +42,7 @@ export type BoundingBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L46))
 
 ### TextBlock
 
@@ -57,7 +57,7 @@ export type TextBlock = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L54))
 
 ## Effects
 
@@ -71,7 +71,7 @@ effect std::ocr {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L31))
 
 ### std::ocrCloud
 
@@ -84,7 +84,7 @@ effect std::ocrCloud {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L37))
 
 ## Functions
 
@@ -98,14 +98,12 @@ readTextBlocks(
 ): Result<TextBlock[]>
 ```
 
-Recognize the text in an image with macOS Vision and return each line
-  with its confidence and normalized top-left bounding box. Runs on the
-  machine; nothing is uploaded. Fails on any platform that is not macOS.
-  Prefer readText unless you need positions.
+Read text from an image with confidence scores and bounding boxes.
+  Uses macOS Vision locally; requires macOS and does not upload the image.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image
-  @param language - Recognition language such as "en-US"; empty lets Vision choose
-  @param fast - Use Vision's fast recognition level instead of accurate
+  @param path - Path to a PNG, JPEG, GIF, or WebP image.
+  @param language - Recognition language such as "en-US", or empty for automatic selection.
+  @param fast - Use fast recognition instead of accurate recognition.
 
 **Parameters:**
 
@@ -121,7 +119,7 @@ Recognize the text in an image with macOS Vision and return each line
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L63))
 
 ### readText
 
@@ -133,13 +131,12 @@ readText(
 ): Result<string>
 ```
 
-Recognize the text in an image with macOS Vision and return it as one
-  string, one recognized line per line. Runs on the machine; nothing is
-  uploaded. Fails on any platform that is not macOS.
+Read text from an image as a string with one recognized line per line.
+  Uses macOS Vision locally; requires macOS and does not upload the image.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image
-  @param language - Recognition language such as "en-US"; empty lets Vision choose
-  @param fast - Use Vision's fast recognition level instead of accurate
+  @param path - Path to a PNG, JPEG, GIF, or WebP image.
+  @param language - Recognition language such as "en-US", or empty for automatic selection.
+  @param fast - Use fast recognition instead of accurate recognition.
 
 **Parameters:**
 
@@ -155,7 +152,7 @@ Recognize the text in an image with macOS Vision and return it as one
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L89))
 
 ### readTextWithModel
 
@@ -168,17 +165,17 @@ readTextWithModel(
 ): Result<string>
 ```
 
-Send an image to a vision model and return the text it reads. The
-  image leaves the machine. A model generates text rather than
-  recognizing it, so it can return plausible content that is not on the
-  page; prefer readText when the output must be trusted, or check the
-  result against the image. Runs in its own thread so the image and the
-  instruction do not stay in your conversation.
+Send an image to a vision model to transcribe its text. The result may contain
+  invented or misread text; use readText for local OCR on macOS.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image
-  @param model - Model to use; empty means the run's default model
-  @param provider - Provider override; normally derived from the model name
-  @param prompt - Extra instruction, such as jargon or field names to expect
+  @param path - Path to a PNG, JPEG, GIF, or WebP image.
+  @param model - Model to use, or empty for the run's default.
+  @param provider - Override the provider derived from the model name.
+  @param prompt - Additional transcription instructions, such as names or jargon.
+
+Runs in a separate conversation thread, so the image and transcription
+instructions do not remain in the caller's conversation. Check the result
+against the image when exact transcription matters.
 
 **Parameters:**
 
@@ -195,4 +192,4 @@ Send an image to a vision model and return the text it reads. The
 
 **Needs:** `fileRead`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L118))

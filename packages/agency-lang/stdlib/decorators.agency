@@ -1,42 +1,30 @@
 /** @module
-The decorators the standard library ships. A decorator is a `decorator
-def` written above another def as `@name(...)`; it receives the call and
-the body as a block, and decides what to run. This module is where every
-stdlib decorator lives, so there is one import line to look for:
+@summary Apply cost and time budgets to whole functions.
 
 ```ts
 import { guarded } from "std::decorators"
+
+@guarded(cost: $1.00, time: 5m)
+def summarize(text: string): Result<string> {
+  return llm("Summarize: ${text}", { tools: [saveDraft] })
+}
 ```
 
-Today it holds `@guarded`, which runs a whole function under a cost and
-time budget. To write your own, see [Decorators](/guide/decorators).
+`guarded` limits a function call and returns its saved draft if the budget
+runs out. To write your own decorator, see [Decorators](/guide/decorators).
 */
 
-/** The `@guarded` decorator: the `guard` block put around a whole function,
-  with three rules added. If the body finishes, its result is the result
-  (a finished `""` is a failure, "it returned no answer"). If the budget
-  runs out, the best answer the body had is the result: what it saved with
-  `saveDraft`, or handed up through a `finalize`, with a line appended to
-  a string saying it may be unfinished. With nothing saved, the result is
-  a failure naming the budget, "its time budget of 30m ran out".
-  `keepDraft: false` makes every budget trip that failure, with the saved
-  draft in its data, for a caller that must not take a partial result for
-  a finished one.
+/**
+Use `saveDraft` or `finalize` to preserve work if the budget runs out.
+A saved string returns with a note that it may be unfinished. Without a
+saved value, a budget trip returns a failure naming the limit.
+Set `keepDraft: false` when a partial answer must count as a failure;
+the failure's data still includes the draft.
 
-  ```ts
-  import { guarded } from "std::decorators"
-
-  @guarded(cost: $1.00, time: 5m)
-  def summarize(text: string): Result<string> {
-    return llm("Summarize: ${text}", { tools: [saveDraft] })
-  }
-  ```
-
-  The body runs with the arguments as passed (`block(call.args)`). Its draft
-  reaches the guard the way any partial result does: by return position, or
-  through a `finalize`. The decorator answers its own budget trip, so a
-  caller cannot grant more budget; pass a larger limit instead. See
-  docs/dev/agents/subagent-budgets.md. */
+A completed empty string returns a failure saying there was no answer.
+The decorator rejects its own budget trip, so callers must pass larger
+limits to allow more work. See `docs/dev/agents/subagent-budgets.md`.
+*/
 export decorator def guarded(
   cost: number | null = null,
   time: number | null = null,
@@ -46,22 +34,19 @@ export decorator def guarded(
   block: (args: object) -> any,
 ): Result raises <std::guard> {
   """
-  Run the decorated function under a cost and time budget, labelled with
-  the function's name. If the budget runs out, the draft the function saved
-  is the result, marked as possibly unfinished; with nothing saved, the
-  result is a failure naming the budget.
+  Run the decorated function under cost and working-time budgets.
+  Return its saved draft when a budget runs out, or a failure if none exists.
 
-  @param cost - Spend cap in dollars, or null for none
-  @param time - Working-time cap, or null for none
-  @param label - The guard's label; the function's name when null
-  @param keepDraft - When false, a budget that runs out is always a failure naming the budget, with any saved draft in the failure's data as `draft`
+  @param cost - Spend cap in dollars, or null for no cap.
+  @param time - Working-time cap in milliseconds, or null for no cap.
+  @param label - Guard label, defaulting to the function name.
+  @param keepDraft - Return a failure on every budget trip when false, with any draft in the failure data.
   """
   const name = label ?? call.name
   let trip: any = null
   let result: Result = failure("${name} never ran")
   handle {
-    // Return position: a draft the body saved reaches the guard, which
-    // returns it as the backup answer when the budget runs out.
+    // Return the body directly so its saved draft reaches the guard.
     result = guard(cost: cost, time: time, label: name) {
       return block(call.args)
     }

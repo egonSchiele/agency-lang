@@ -1,12 +1,13 @@
 ---
 name: "search"
-description: "Search the web from Agency code, backed by the Brave Search API (https://brave.com/search/api/)."
+description: "Search the web with Brave or Tavily."
 ---
 
 # search
 
 Search the web from Agency code, backed by the Brave Search API
-  (https://brave.com/search/api/). Use `tavilySearch` for AI-optimized results.
+  (https://brave.com/search/api/), or use Tavily as an alternative. Configure
+  `BRAVE_API_KEY` or `TAVILY_API_KEY` for the provider you use.
 
   ```ts
   import { search } from "std::web/search"
@@ -32,7 +33,7 @@ effect std::search {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L25))
 
 ### std::tavilySearch
 
@@ -45,7 +46,7 @@ effect std::tavilySearch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L26))
 
 ## Functions
 
@@ -63,15 +64,13 @@ search(
 ): SearchResult[]
 ```
 
-Search the web. Returns a list of results with title, url, and description.
+Search the web with Brave.
 
-  @param query - The search query
-  @param count - Number of results to return
-  @param apiKey - Brave Search API key (defaults to the BRAVE_API_KEY env var)
-  @param country - Two-letter country code to localize results (e.g. "US")
-  @param searchLang - Language code for results (e.g. "en")
-  @param safesearch - Safe search level: "off", "moderate", or "strict"
-  @param freshness - Time filter: "pd" (past day), "pw" (past week), "pm" (past month), "py" (past year)
+  @param apiKey - Leave empty to use BRAVE_API_KEY.
+  @param country - A two-letter country code to localize results, such as "US".
+  @param searchLang - A result language code, such as "en".
+  @param safesearch - Use "off", "moderate", or "strict", or empty for the provider default.
+  @param freshness - Use "pd", "pw", "pm", or "py" for the past day, week, month, or year.
 
 **Parameters:**
 
@@ -91,7 +90,7 @@ Search the web. Returns a list of results with title, url, and description.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L29))
 
 ### tavilySearch
 
@@ -105,15 +104,13 @@ tavilySearch(
 ): SearchResult[]
 ```
 
-Search the web with Tavily, a search API built for AI agents. Returns a list of results with title, url, and description.
+Search the web with Tavily and return source links with extracted snippets.
 
-  @param query - The search query
-  @param count - Number of results to return
-  @param apiKey - Tavily API key (defaults to the TAVILY_API_KEY env var)
-  @param searchDepth - "basic" for fast results or "advanced" for deeper retrieval
-  @param topic - "general" or "news"
+  @param apiKey - Leave empty to use TAVILY_API_KEY.
+  @param searchDepth - Use "basic" for faster retrieval or "advanced" for deeper retrieval.
+  @param topic - Search "general" web content or "news".
 
-Get a free Tavily key (no credit card) at https://tavily.com.
+Configure a Tavily API key at https://tavily.com before using this provider.
 
 **Parameters:**
 
@@ -131,4 +128,4 @@ Get a free Tavily key (no credit card) at https://tavily.com.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L70))

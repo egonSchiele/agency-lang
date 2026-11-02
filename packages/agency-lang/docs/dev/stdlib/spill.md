@@ -76,7 +76,7 @@ A `fork` or `parallel` branch runs on a copy of the globals, so an output saved 
 - `lib/runtime/prompt.ts`: `capForLlm`, the one closure the three cap sites (a result, a failure message, a rejection reason) call, with the spill settings found once per call.
 - `lib/stdlib/spill.ts`: `MAX_STDOUT_LEN`, `_keepOutput`, `_readSpill`, `_grepSpill` over `currentRun()`.
 - `stdlib/spill.agency`: `keepOutput`, `readSpill`, `grepSpill`.
-- `stdlib/safeBash.agency` and `stdlib/safeBash/actions.agency` call `keepOutput` on every output path.
+- `stdlib/safeBash.agency` calls `keepOutput` on every output path.
 - `stdlib/agents/lib/toolkits.agency`: `shellTools()` with the readers, and `spillTools()` for the agents that fetch without it.
 - `stdlib/agents/lib/shared.agency`: `AGENT_SPILL_OVER` and the `spillToolResultsOver` parameter of `llmOptions`.
 - Tests: `lib/runtime/toolOutputStore.test.ts`, the `capToolResultForLlm` cases in `lib/runtime/prompt.test.ts`, `lib/stdlib/spill.test.ts`, `tests/agency/spill.agency` (eviction, a miss, a checkpoint round trip, a result saved through the loop, a result cut though the readers are offered, the refusal without `readSpill`, and a result cut without the readers), `longOutputIsKept` and `spillToolsTakeNamesOnly` in `tests/agency/safeBash.agency`, and `everyAgentCarriesTheReadersOnce` in `tests/agency/agents/toolkits.agency`.

@@ -1,14 +1,3 @@
-/** @module
-  @summary Rewrite prose from the writing reviewer's findings and return the new text.
-
-  The writing reviewer (`std::agents/writing/review`) returns a list of
-  findings. That suits a caller that wants to apply them itself. A caller
-  that wants the finished text instead calls this agent: it runs the
-  reviewer, hands the findings and the text to one rewriting call, and
-  returns the rewritten text. With `passes` above 1 the rewritten text is
-  reviewed and rewritten again, up to that many times; a review with no
-  findings ends the loop early.
-*/
 import { Feedback } from "std::agents/lib/feedback"
 import {
   llmOptions,
@@ -21,6 +10,22 @@ import {
  } from "std::agents/writing/review"
 import { guarded } from "std::decorators"
 import { evalValue, setAgentName } from "std::statelog"
+
+/** @module
+@summary Review prose and return a rewrite with the findings applied.
+
+`writingRewriteAgent` reviews the text, then rewrites it when the review
+has findings. `passes` bounds the number of review-and-rewrite rounds.
+A review without findings ends the loop, and a failed review fails the call.
+
+```ts
+import { writingRewriteAgent } from "std::agents/writing/rewrite"
+
+node main() {
+  print(writingRewriteAgent(text: "The report was written by Alice."))
+}
+```
+*/
 
 static const rewritePrompt = """You rewrite prose to apply a reviewer's findings. You get the text, the task it was written for, and the findings. Return the rewritten text and nothing else: no preamble, no notes, no list of what you changed.
 
@@ -68,21 +73,10 @@ ${text}
   return llm(prompt, llmOptions(model: model, provider: provider))
 }
 
-/**
- * Rewrites a piece of text according to the findings of a writing review.
- *
- * Quick note on the `passes` parameter: a single pass is usually enough.
- * Running the eval suite comparing one pass to two passes,
- * the accuracy went from 0.769 -> 0.795.
- *
- * Usage example:
- *
- * ```ts
- * const rewritten = writingRewriteAgent(
- *   text: "Original text",
- * )
- * ```
- */
+/** Start with one pass and increase `passes` when another review of the
+rewritten text is useful. On the eval suite, two passes scored 0.795
+against 0.769 for one pass. The rewrite call receives the review findings
+and the original task and guidelines. */
 @guarded(cost: maxCost, time: maxTime)
 export def writingRewriteAgent(
   text: string,
@@ -96,21 +90,16 @@ export def writingRewriteAgent(
   provider: string = "",
 ): Result<string> {
   """
-  Review prose and return it rewritten with the findings applied. If
-  the reviewer finds nothing wrong with the text, send it back unchanged.
+  Review prose and return a rewrite with the findings applied.
+  Return unchanged text when the review has no findings.
 
-  @param text - The text to rewrite
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, as text, or ""
-    for the reviewer's built-in catalog alone
-  @param context - Extra material for the judgment, or ""
-  @param passes - How many review-and-rewrite rounds to run at most. Each
-    round reviews the current text and rewrites it; a round whose review
-    finds nothing ends the loop.
-  @param maxCost - Hard spend cap for all rounds together
-  @param maxTime - Hard wall-clock cap for all rounds together
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param task - The intended reader and what the text must communicate.
+  @param guidelines - Writing guidelines that override conflicting built-in review rules.
+  @param passes - Maximum review-and-rewrite rounds, stopping early when a review has no findings.
+  @param maxCost - Cost budget in USD for all rounds together.
+  @param maxTime - Time budget in milliseconds for all rounds together.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
   """
   let current = text
   let remaining = passes
@@ -151,12 +140,12 @@ export def writingRewriteAgent(
   return current
 }
 
-/** Eval entry point: `agency eval run stdlib/agents/writing/rewrite.agency:evalMain
-  --suite <dir>`. Takes the same input as the reviewer's `evalMain` and
-  returns the rewritten text. Effects are decided here as in the reviewer:
-  the seeded input file is read `with approve`, and the agent runs under
-  `docsOnlyHandler`, so a budget trip comes back as text rather than an
-  interrupt escaping the entry point. */
+// Takes the same input as the reviewer's `evalMain` in
+// std::agents/writing/review. Effects are decided here as in the reviewer:
+// the seeded input file is read `with approve`, and the agent runs under
+// `docsOnlyHandler`, so a budget trip comes back as text rather than an
+// interrupt escaping the entry point.
+/** Run this module through an eval suite with `agency eval run stdlib/agents/writing/rewrite.agency:evalMain --suite <dir>`. */
 node evalMain(input: WritingReviewEvalInput): string {
   setAgentName("writing-rewrite")
   evalValue(input)

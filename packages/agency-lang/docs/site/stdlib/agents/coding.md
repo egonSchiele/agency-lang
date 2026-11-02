@@ -1,23 +1,22 @@
 ---
 name: "coding"
-description: "Writes, edits, and runs code to complete a task on disk. One"
+description: "Write, edit, and run code to complete a task on disk."
 ---
 
 # coding
 
-honest pass: it works until it believes the task is done, then returns a
-  summary.
+The returned string summarizes the work. Files and other effects are the
+deliverable. Use `verifierAgent` afterwards to check the result against the
+task, or `std::agents/agency/coding` to generate Agency source as text.
 
-  The real output is filesystem side effects; the returned string is a
-  summary. This agent does not verify its own work against the task. To add
-  verify-and-fix, compose it with verifierAgent, or run it under supervise
-  (std::supervise) for mid-run course correction:
+```ts
+import { codingAgent } from "std::agents/coding"
 
-    supervise(every: 5m, maxTime: 30m, check: myCheck) {
-      return codingAgent(task, maxTime: 30m)
-    }
-
-  For an Agency-specific coding agent, use std::agents/agency/coding.
+node main() {
+  const result = codingAgent("Create a CSV report in report.csv")
+  print(result)
+}
+```
 
 ## Functions
 
@@ -27,8 +26,7 @@ honest pass: it works until it believes the task is done, then returns a
 buildTools(): any[]
 ```
 
-Return the coding agent's tools. Exported so a caller can inspect what the
-  agent may do, and so tests can assert it.
+Return the coding agent's built-in tools for inspection or extension.
 
 **Returns:** `any[]`
 
@@ -55,10 +53,10 @@ Write, edit, and run code to complete a task on disk. Returns a short
 
   @param task - What to accomplish
   @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  @param provider - Provider for the model override, ignored when model is empty.
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
@@ -79,4 +77,4 @@ Write, edit, and run code to complete a task on disk. Returns a short
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L110))

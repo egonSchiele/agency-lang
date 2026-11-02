@@ -1,32 +1,40 @@
 ---
 name: "thread"
-description: "Read and share LLM conversation history across a run: inspect the current thread's messages, cost, and tokens, and reach into other threads."
+description: "Manage LLM conversation history, attachments, and usage records."
 ---
 
 # thread
 
-Read and share LLM conversation history across a run. Inspect the
-current thread's messages, cost, and token usage, and reach into
-other threads. `listThreads()` lists every thread in the run, active
-and closed. `getThread(id, offset, limit)` reads a slice of one
-thread's messages. These build on the public `agency.threads.*`
-primitives, so you can compose your own variants in user code.
+Use message helpers to seed the active conversation, attachment builders
+to provide images or files, and `lastReply` for reply metadata. The thread
+inspection helpers can read other conversations in the same run.
 
-  ```ts
-  import { listThreads, getThread } from "std::thread"
+```ts
+import { systemMessage, currentThreadId, getThread } from "std::thread"
 
-  // Inspect the run's other threads:
-  const info = listThreads()
+node main() {
+  thread {
+    systemMessage("Answer in one sentence.")
+    const answer: string = llm("What causes rain?")
+    const id = currentThreadId()
+    print(getThread(id))
+  }
+}
+```
 
-  // Read a slice of a prior thread's messages:
-  const lines = getThread("t1", 0, 20)
-  ```
+`listThreads` may call an LLM to summarize closed threads. Pass
+`lazySummarize: false` to inspect the registry without generating summaries.
 
 ## Types
 
 ### AttachmentSource
 
+Attachment data can come from a path, a URL, or inline base64 with a MIME type.
+Use `image`, `file`, and `audio` to construct these values.
+
 ```ts
+/** Attachment data can come from a path, a URL, or inline base64 with a MIME type.
+Use `image`, `file`, and `audio` to construct these values. */
 export type AttachmentSource =
   | { kind: "path"; path: string; mimeType: string
   | null }
@@ -35,22 +43,30 @@ export type AttachmentSource =
   | { kind: "base64"; base64: string; mimeType: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L72))
 
 ### Attachment
 
+An image or file that can be sent in a message or queued by `attachToReply`.
+
 ```ts
+/** An image or file that can be sent in a message or queued by `attachToReply`. */
 export type Attachment =
   | { type: "image"; source: AttachmentSource }
   | { type: "file"; source: AttachmentSource; filename: string
   | null }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L82))
 
 ### MessageAttachment
 
+An image, file, or audio input for `llm` or `userMessage`.
+Audio inputs require a model that supports audio.
+
 ```ts
+/** An image, file, or audio input for `llm` or `userMessage`.
+Audio inputs require a model that supports audio. */
 export type MessageAttachment =
   | { type: "image"; source: AttachmentSource }
   | { type: "file"; source: AttachmentSource; filename: string
@@ -59,11 +75,18 @@ export type MessageAttachment =
   | null }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L93))
 
 ### ModelCost
 
+Usage for one kind and model across the run. `cost` is in USD.
+Cache-read and cache-creation tokens are billed separately from ordinary
+input tokens.
+
 ```ts
+/** Usage for one kind and model across the run. `cost` is in USD.
+Cache-read and cache-creation tokens are billed separately from ordinary
+input tokens. */
 export type ModelCost = {
   // "completion", "image", "embedding", "transcription", "speech" or "manual".
   kind: string;
@@ -72,7 +95,7 @@ export type ModelCost = {
   outputTokens: number;
   // Tokens read back from a cache entry, and tokens written to a new one.
   // Both are input-side and both are billed, at rates that differ from
-  // `inputTokens` — so a total that leaves them out understates a cached
+  // `inputTokens`, so a total that leaves them out understates a cached
   // conversation by most of its size.
   cachedInputTokens: number;
   cacheCreationInputTokens: number;
@@ -80,7 +103,7 @@ export type ModelCost = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L335))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L337))
 
 ### ThinkingBlock
 
@@ -96,7 +119,7 @@ export type ThinkingBlock = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L365))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L364))
 
 ### ReplyUsage
 
@@ -110,7 +133,7 @@ export type ReplyUsage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L371))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L370))
 
 ### NoulAnswer
 
@@ -126,7 +149,7 @@ export type NoulAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L378))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L377))
 
 ### ChoiceAnswer
 
@@ -146,7 +169,7 @@ export type ChoiceAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L386))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L385))
 
 ### ScoreAnswer
 
@@ -167,7 +190,7 @@ export type ScoreAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L396))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L395))
 
 ### DecisionAnswer
 
@@ -180,7 +203,7 @@ One answer from a decision model. Check `type` before reading the rest:
 export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L406))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L405))
 
 ### TokenAlternative
 
@@ -196,7 +219,7 @@ export type TokenAlternative = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L410))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L409))
 
 ### TokenLogprob
 
@@ -215,7 +238,7 @@ export type TokenLogprob = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L418))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L417))
 
 ### Reply
 
@@ -240,7 +263,7 @@ export type Reply = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L428))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L427))
 
 ### GuardFailureData
 
@@ -262,22 +285,28 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L479))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L457))
 
 ### ThreadMessage
 
+A thread message rendered as text, with placeholders for attachments.
+
 ```ts
+/** A thread message rendered as text, with placeholders for attachments. */
 export type ThreadMessage = {
   role: string;
   content: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L502))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L477))
 
 ### ThreadInfo
 
+A conversation registered in the current run, including its parent and activity state.
+
 ```ts
+/** A conversation registered in the current run, including its parent and activity state. */
 export type ThreadInfo = {
   id: string;
   label?: string;
@@ -289,7 +318,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L507))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L483))
 
 ## Effects
 
@@ -303,7 +332,7 @@ effect std::viewFile {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L238))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L240))
 
 ## Functions
 
@@ -333,7 +362,7 @@ Add a system message to the current thread's message history.
 | label | `string` | "" |
 | expires | `"never" \| "llmCall"` | "never" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L98))
 
 ### userMessage
 
@@ -361,7 +390,7 @@ Add a user message to the current thread's message history. Use this
 | label | `string` | "" |
 | expires | `"never" \| "llmCall"` | "never" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L111))
 
 ### toolMessage
 
@@ -369,16 +398,14 @@ Add a user message to the current thread's message history. Use this
 toolMessage(name: string, args: any, result: string, label: string = "")
 ```
 
-Add a synthetic tool call and its result to the current thread, as if the
-  model had made the call. Nothing runs; this only shapes the conversation the
-  model reads on its next llm() call. Use it to make the model see work a
-  scaffold did on its behalf. Call it at a clean point in the thread, not in
-  the middle of a tool exchange still waiting for its result.
+Add a synthetic tool call and result to the active conversation without executing it.
+  Call only when no tool exchange is waiting for its result.
 
-  @param name - The tool name the model will see it "called"
-  @param args - The call arguments, as an object (serialized to JSON)
-  @param result - The tool response content
-  @param label - Optional debug tag shown in statelog. Never sent to the model.
+  @param args - Call arguments to serialize as JSON.
+  @param label - Debug tag in statelog that is not sent to the model.
+
+Use this to record work done outside the model's tool loop. The model
+sees the synthetic call and result on its next request.
 
 **Parameters:**
 
@@ -389,7 +416,7 @@ Add a synthetic tool call and its result to the current thread, as if the
 | result | `string` |  |
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L130))
 
 ### image
 
@@ -404,8 +431,8 @@ image(
 Build an image attachment for a multimodal llm() call. The source is
   read, fetched, and MIME-inferred when the message is sent.
 
-  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
-  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
+  @param mimeType - Overrides inference and is required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
 
 **Parameters:**
@@ -418,7 +445,7 @@ Build an image attachment for a multimodal llm() call. The source is
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L146))
 
 ### file
 
@@ -433,9 +460,9 @@ file(
 
 Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
-  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
-  @param filename - Name shown to the model; defaults to the source basename.
-  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
+  @param filename - Name shown to the model, defaulting to the source basename.
+  @param mimeType - Overrides inference and is required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
 
 **Parameters:**
@@ -449,7 +476,7 @@ Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L162))
 
 ### audio
 
@@ -463,12 +490,12 @@ audio(
 ```
 
 Build an audio attachment for a multimodal llm() call. Only usable in
-  ordinary messages (llm() / userMessage()), not attachToReply(). Currently
-  supported only by models that accept audio input (e.g. gpt-audio-1.5).
+  `llm` and `userMessage` calls with a model that accepts audio input.
+  It cannot be queued with `attachToReply`.
 
-  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
-  @param filename - Name shown to the model; defaults to the source basename.
-  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
+  @param filename - Name shown to the model, defaulting to the source basename.
+  @param mimeType - Overrides inference and is required for raw base64.
   @param base64 - When true, treat `source` as raw base64 data.
 
 **Parameters:**
@@ -482,7 +509,7 @@ Build an audio attachment for a multimodal llm() call. Only usable in
 
 **Returns:** [MessageAttachment](#messageattachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L179))
 
 ### attachToReply
 
@@ -490,13 +517,12 @@ Build an audio attachment for a multimodal llm() call. Only usable in
 attachToReply(attachment: Attachment)
 ```
 
-Queue an attachment to be shown to the model after the current tool
-  call completes. Only meaningful while running as a tool inside an
-  llm() call: the attachment follows the tool's text result as a user
-  message the model can see. Prefer path-based sources. Outside a tool
-  invocation the attachment is dropped.
+Show an image or file to the model after the current tool call finishes.
+  Use only inside a tool invoked by `llm`; calls elsewhere have no effect.
 
-  @param attachment - The attachment to show the model
+Queued images and files appear in a user message after the tool round.
+Prefer path sources for generated files. The reply pipeline enforces model
+modality, size, and attachment-count limits.
 
 **Parameters:**
 
@@ -506,7 +532,7 @@ Queue an attachment to be shown to the model after the current tool
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L202))
 
 ### endTurn
 
@@ -514,15 +540,16 @@ Queue an attachment to be shown to the model after the current tool
 endTurn(scope: "llm" | "turn" = "llm")
 ```
 
-End the current llm() call when this tool returns. The tool's return
-  value becomes the answer and no follow-up LLM call is made. Only
-  meaningful while running as a tool inside an llm() call; ignored
-  elsewhere. The turn still goes on if the tool fails, if it ran beside
-  other tool calls in the same response (a handoff is exempt, since it
-  runs last), if the value is not a string (or does not match the
-  caller's structured output type), or if a reply attachment is waiting.
+Use the current tool's return value as the LLM answer without a follow-up call.
+  Call only inside an LLM tool invocation with a successful result matching
+  the caller's requested output type and no queued reply attachments.
 
-  @param scope - "llm" ends the nearest enclosing llm() call. "turn" also ends every llm() call above it, up to the user's turn; use it only when the answer covers the whole request.
+  @param scope - Use "turn" only when the answer covers the whole request and should end enclosing LLM calls too.
+
+The tool's result must match the caller's output contract. Failed tools,
+ordinary tools sharing a round, incompatible return values, and queued
+attachments cause the LLM call to continue. A handoff can end the call after
+other tools in its round, since it runs last. Code after `endTurn` still runs.
 
 **Parameters:**
 
@@ -530,7 +557,7 @@ End the current llm() call when this tool returns. The tool's return
 |---|---|---|
 | scope | `"llm" \| "turn"` | "llm" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L206))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L214))
 
 ### handBack
 
@@ -538,13 +565,12 @@ End the current llm() call when this tool returns. The tool's return
 handBack(message: string)
 ```
 
-For a handoff function: the message that hands control back to the
-  caller when this handoff returns, in place of the default one, which
-  repeats the result and asks the caller to continue. Ignored
-  from an ordinary tool, when the handoff was rejected, when the message
-  is empty, and when endTurn() ends the turn.
+Set the message that returns control to the caller after a handoff.
+  Call from inside a handoff function invoked as an LLM tool.
 
-  @param message - The user-role message to put on the thread
+This replaces the default user-role message after a handoff returns.
+An empty message, a rejected handoff, or a successful `endTurn` leaves the
+custom message unused. Calls from ordinary tools have no effect.
 
 **Parameters:**
 
@@ -552,7 +578,7 @@ For a handoff function: the message that hands control back to the
 |---|---|---|
 | message | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L228))
 
 ### viewFile
 
@@ -579,7 +605,7 @@ Show an image or PDF file to yourself. The file is attached to the
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L243))
 
 ### assistantMessage
 
@@ -601,7 +627,7 @@ Add an assistant message to the current thread's message history.
 | msg | `string` |  |
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L281))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L283))
 
 ### getCost
 
@@ -609,14 +635,11 @@ Add an assistant message to the current thread's message history.
 getCost(): number
 ```
 
-Return the cumulative cost in USD of all LLM calls contributing to the
-  current execution branch.
+Return cumulative usage cost in USD for the current execution branch.
 
-Inside a fork/race branch this includes the parent's accumulated cost
- plus what this branch has spent so far. After branches join, the parent
- sees its own cost plus every branch's cost, including race losers.
- Their LLM calls really happened and cost real money. To measure a
- section, capture the value before and after and subtract.
+A fork branch includes its parent's accumulated cost plus its own spend.
+After joining, the parent includes every branch, including race losers.
+Subtract values taken before and after a section to measure its cost.
 
 **Returns:** `number`
 
@@ -633,7 +656,7 @@ True when the current message thread has no messages yet. Use it inside a
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L306))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L305))
 
 ### ensureSystemMessage
 
@@ -646,8 +669,8 @@ Push `msg` as a system message unless the active thread already holds it.
   @param msg - The system message
 
 For an agent's persona. An agent called twice from code on one thread
- keeps one persona; a handoff, whose system messages are removed when it
- hands back, pushes the persona fresh on every dispatch.
+  keeps one persona; a handoff, whose system messages are removed when it
+  hands back, pushes the persona fresh on every dispatch.
 
 **Parameters:**
 
@@ -655,7 +678,7 @@ For an agent's persona. An agent called twice from code on one thread
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L317))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L316))
 
 ### getTokens
 
@@ -667,7 +690,7 @@ Return the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L328))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L327))
 
 ### getModelCosts
 
@@ -675,18 +698,15 @@ Return the cumulative token count for the current execution branch.
 getModelCosts(): ModelCost[]
 ```
 
-Return what the run has spent since it began, one entry per kind
-  and model (completions, images, embeddings, speech), sorted by cost
-  descending. This is the same figure the host reads from the run result's
-  usage entries.
+Return total run usage by kind and model, sorted by cost from highest to lowest.
 
 Unlike the per-branch cost/token accessors, this covers every branch of
- the run, so it attributes spend per model even for
- subagents and tool calls that run on a different model.
+  the run, so it attributes spend per model even for
+  subagents and tool calls that run on a different model.
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L353))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L355))
 
 ### lastReply
 
@@ -694,41 +714,22 @@ Unlike the per-branch cost/token accessors, this covers every branch of
 lastReply(): Reply | null
 ```
 
-Return what the model attached to its last reply on the current thread,
-  or null if the thread has no reply yet. Use it right after an `llm()` call
-  to read what the call's return value leaves out: a decision model's answers
-  and probabilities, a reasoning model's thinking, and the reply's tokens and
-  cost. For a decision model, `answers` holds one answer per question —
-  `answers.answer` for a bare annotation, `answers.<field>` for an object one;
-  check an answer's `type` before reading its fields.
+Return the last assistant reply and its metadata on the active thread,
+  or null when there is no reply.
 
-  For a text model, `logprobs` holds one entry per generated token when the
-  call asked for them with `llm(prompt, { logprobs: { top: 3 } })`. Only
-  OpenAI models return them today; other providers leave the list empty. Each
-  value is the natural log of the token's probability, so a value near 0
-  means near certainty and -2.3 means about one chance in ten.
+Call after `llm` to inspect decision answers, thinking, log probabilities,
+and usage. `answers.answer` holds a bare decision answer; object annotations
+use the corresponding field names. Check an answer's `type` before reading
+its fields.
 
-  ```ts
-  type Dept = "billing" | "support" | "sales"
-  const dept: Dept = llm("Which team should handle this?", { model: "jev-1.13" })
-  const reply = lastReply()
-  if (reply == null || reply.answers == null) {
-    return dept
-  }
-  const answer = reply.answers.answer
-  if (answer.type == "choice" && answer.confidence < 0.6) {
-    // not sure enough: hand it to a person
-  }
-  ```
-
-Reads the last assistant message on the active thread. A message a program
-pushed with `assistantMessage()` counts as a reply here too — to the thread
-it is an assistant message like any other — so this returns the most recent
-one either way.
+For text models, request token probabilities with `logprobs: { top: 3 }`.
+Providers that do not return log probabilities leave `logprobs` empty.
+Values are natural logarithms, so zero means probability one.
+Messages added by `assistantMessage` also count as replies.
 
 **Returns:** `Reply | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L444))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L446))
 
 ### listThreads
 
@@ -736,22 +737,15 @@ one either way.
 listThreads(lazySummarize: boolean = true): Result
 ```
 
-Return every thread in the current run, including the active one, as a
-  `Result`: success holds `ThreadInfo[]`, failure holds the error (e.g.
-  called outside an Agency frame). Each closed thread carries a short
-  summary; the active thread is not summarized.
+List active and closed conversations in the current run.
 
-  @param lazySummarize - When true (default), generate a summary
-                         on-demand for any closed thread that lacks one.
-                         When false, skip the LLM call and fall back to
-                         the thread's label (or `""`).
+  @param lazySummarize - False avoids LLM calls and uses cached summaries or labels for missing summaries.
 
-Summary sourcing: threads opened with `thread(summarize: true)` are
- summarized eagerly when they close, so their summary is already cached
- here. Other closed threads are summarized on first read via one LLM
- round-trip, and the result is cached for later calls. The active thread
- is never summarized (the in-flight conversation should not be
- summarized mid-stream). A cached summary is reused without re-prompting.
+Success holds a `ThreadInfo[]` list. Failure means thread inspection could not run.
+Closed threads may already have summaries from `thread(summarize: true)`.
+With lazy summarization enabled, missing summaries are generated and cached.
+Active threads are left unsummarized. Disable lazy summarization to use a
+cached summary, the label, or an empty string without another LLM call.
 
 **Parameters:**
 
@@ -761,7 +755,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L579))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L548))
 
 ### sessionThreadId
 
@@ -780,7 +774,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L632))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L595))
 
 ### currentThreadId
 
@@ -788,14 +782,14 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 currentThreadId(): string
 ```
 
-Slug-form id of the active thread (e.g. "t3"), or `""` outside any
-  runtime frame. Useful with `thread(continue: id)` when you want to
-  capture a thread's id at the moment it was active so you can
-  resume it later.
+Return the active thread id, such as "t3", or "" outside a runtime frame.
+
+Save this id before leaving a thread block when you want to reopen it
+later with `thread(continue: id)`.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L640))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L605))
 
 ### getThread
 
@@ -803,19 +797,13 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 getThread(id: string, offset: number = 0, limit: number = 50): Result
 ```
 
-Read a slice of a thread's messages. Returns success holding `[]`
-  for an unknown id; returns failure when called outside an Agency
-  frame.
+Read a slice of a conversation's messages, returning an empty list for an unknown id.
 
-  Pagination: `offset` is 0-indexed; `limit` defaults to 50. Pass
-  larger explicit values for full-thread reads.
+  @param id - Thread id from `listThreads` or `currentThreadId`.
+  @param offset - Zero-based index of the first message to return.
 
-  Returns a `Result` — success holds `ThreadMessage[]`. See
-  [error handling](https://agency-lang.com/guide/error-handling).
-
-  @param id - Thread slug (e.g. "t1") from `listThreads()`
-  @param offset - 0-indexed start of the message slice
-  @param limit - Maximum number of messages to return
+Success holds a `ThreadMessage[]` slice. Tool calls and structured content
+are rendered as text, and attachment payloads become placeholders.
 
 **Parameters:**
 
@@ -827,4 +815,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L650))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L614))

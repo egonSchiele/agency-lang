@@ -1,9 +1,9 @@
 // These imports are NOT unused. Effect declarations come with imports,
 // and without them the `raise std::bash(...)`, `raise std::grep(...)`, and
 // `raise std::git::*(...)` sites below compile with their payload
-// contracts UNENFORCED. Measured:
-// dropping them makes `raise std::git::status("...", { wrongField: x })`
-// typecheck clean. `std::write` is covered by the auto-imported prelude.
+// contracts UNENFORCED. Measured: dropping them makes
+// `raise std::git::status("...", { wrongField: x })` typecheck clean.
+// `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
 import { bash, grep, ls, glob, ExecResult } from "std::shell"
@@ -29,13 +29,11 @@ import {
   ReadPayload,
   ReadView,
   readExecution,
-  runRead,
-  runGrep,
+  ReadExec,
+  GrepExec,
   GrepRender,
   GrepFileNames,
-  runBash,
-  runWrite,
-  runChain,
+  ChainExec,
   Execution,
   StepExec,
   ChainStep,
@@ -43,13 +41,39 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
-import { _addLine } from "agency-lang/stdlib-lib/builtins.js"
+import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
-import { _searchTargetIn } from "agency-lang/stdlib-lib/shell.js"
+import { _searchTargetIn, _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
-import { _grepPatternToRegex } from "agency-lang/stdlib-lib/grepDialect.js"
+import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
+import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
 import { _ignoredFromAbove } from "agency-lang/stdlib-lib/gitignore.js"
+
+/** @module
+@summary Run Bash commands with approvals matched to their actions.
+
+```ts
+import { safeBash } from "std::safeBash"
+
+node main() {
+  return safeBash("git status")
+}
+```
+
+Recognized commands ask for specific approvals such as a file read or Git
+status. When a command cannot be described that way, the whole command
+asks for `std::bash` approval. Handlers and policies decide the requests
+before execution begins.
+
+Some echo, grep, cat, head, and tail commands run in process. Other commands
+run under Bash, preserving the command's control flow. Explicit destructive
+spellings such as `rm` and `git reset --hard` are refused. That list does not
+cover every way to perform a destructive action; approval rules still apply.
+
+Use `planFor` to inspect the planned effects and execution without running
+the command. See `docs/dev/stdlib/safe-bash.md` for classification rules.
+*/
 
 export { MAX_STDOUT_LEN } from "std::spill"
 
@@ -76,8 +100,8 @@ export type PathWord = {
 }
 
 /** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
- * so it is never mistaken for the quoted text `'*.ts'`; no rule here
- * treats it as a literal. */
+ so it is never mistaken for the quoted text `'*.ts'`; no rule here
+ treats it as a literal. */
 export type GlobWord = {
   tag: "glob";
   text: string
@@ -106,10 +130,7 @@ export type VariableWord = {
   name: string
 }
 
-/** A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
- * `"$HOME"/x`. These are ONE word in bash; split into separate words they
- * become separate arguments and the command means something else.
- */
+/** Adjacent word parts, such as `$HOME.txt` or `"a"b`, that form one Bash argument. */
 export type InterpolatedVariableWord = {
   tag: "interpolatedVariable";
   parts: (
@@ -127,9 +148,9 @@ export type Assignment = {
 }
 
 /** A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
- * the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
- * explicit file descriptor (`2` in `2>`), or undefined for the default.
- * Heredocs and here-strings are rejected rather than parsed. */
+ the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
+ explicit file descriptor (`2` in `2>`), or undefined for the default.
+ Heredocs and here-strings are rejected rather than parsed. */
 export type Redirect = {
   tag: "redirect";
   fd?: number;
@@ -141,12 +162,9 @@ export type SimpleCommand = {
   tag: "simpleCommand";
   assignments: Assignment[];
   /* The command name, or null for an assignment-only line (`FOO=bar`).
-   *  Bash requires at least one of a command name or an assignment. */
+    Bash requires at least one of a command name or an assignment. */
   command?: ScriptName;
-  /** Every word after the command name, in source order. There is no
-   *  `subcommands` field: no syntactic rule separates `git status` from
-   *  `echo status`, so splitting them would put a command's real
-   *  arguments in whichever bucket the preceding word happened to pick. */
+  /** Every word after the command name, in source order. */
   args: Word[];
   redirects: Redirect[]
 }
@@ -189,14 +207,10 @@ export type BashNode =
 
 export type BashAST = Command[]
 
+// Flags are classified separately so git diff --staged can reach its rule.
 def literalArgs(command: SimpleCommand): Result<string[]> {
   """
-  A command's non-flag arguments as text, but only when every one is a
-  plain literal.
-
-  Flags are SKIPPED, not rejected: they are collected separately by
-  `flagNames`, and rejecting them here would make `git diff --staged`
-  unrecognized before any rule saw it.
+  Return literal non-flag arguments, failing if another argument needs expansion.
   """
   let out: string[] = []
   for (arg in command.args) {
@@ -213,7 +227,7 @@ def literalArgs(command: SimpleCommand): Result<string[]> {
 
 def flagNames(command: SimpleCommand): string[] {
   """
-  Every flag on the command, in source form (`--staged`, `-n`).
+  Return the command's flags as written.
   """
   let out: string[] = []
   for (arg in command.args) {
@@ -224,7 +238,7 @@ def flagNames(command: SimpleCommand): string[] {
   return out
 }
 
-/** Bash expands `~` only when unquoted, so only the unquoted word tags
+/* Bash expands `~` only when unquoted, so only the unquoted word tags
   expand; everything else literalTarget accepts stays literal. */
 def tildeModeFor(word: Word): string {
   return match(word) {
@@ -234,7 +248,7 @@ def tildeModeFor(word: Word): string {
   }
 }
 
-/** The one owner of redirect-write preparation: validate the redirect,
+/* The one owner of redirect-write preparation: validate the redirect,
   extract the literal target, resolve it (quote-aware tilde, strict
   symlink walk), and return the payload both plan sides derive from. Any
   failure sends the whole command to the broad std::bash question. */
@@ -262,20 +276,11 @@ def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
   })
 }
 
+// Account for redirects independently of the verb. A Git read with an output
+// redirect also needs write approval. Unresolved targets require broad approval.
 def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   """
-  What a command's redirects contribute, independently of its verb.
-
-  A redirect writes a file whatever the command is, so it has to be
-  accounted for on its own. Without this, `echo pwned >> .bashrc; git
-  status` would classify as a git read and ride along under whatever
-  approves git reads.
-
-  A `<` redirect reads its target, so it raises std::read, the mirror of
-  `>` raising std::write. One input redirect and one output redirect may
-  both appear. Anything else, or a target that is not literal, is a
-  failure, which sends the whole string to `std::bash`. A variable target
-  cannot fill the payload without expanding it ourselves.
+  Determine the file-read and file-write effects contributed by redirects.
   """
   // A dup redirect (`2>&1`) moves a stream and writes no file, so it
   // contributes nothing; it is the only `>&` form the parser accepts.
@@ -312,9 +317,7 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
 @capabilities(fileRead)
 def inputRedirectRead(redirect: Redirect, cwd: string): Result<ReadPayload> {
   """
-  The file a `<` redirect reads, under the rules a read verb's path
-  follows: literal, and a regular file. A folder, a FIFO, or a missing
-  file is a failure.
+  Resolve a literal input redirect to a regular file.
   """
   if (redirect.fd != null) {
     return failure("redirect with an explicit file descriptor")
@@ -333,24 +336,19 @@ def inputRedirectRead(redirect: Redirect, cwd: string): Result<ReadPayload> {
   })
 }
 
+// The payload must name the target without evaluating shell variables.
 def literalTarget(word: Word): Result<string> {
   """
-  A redirect target's text, when the target is fully literal.
-
-  A variable target cannot fill the `std::write` payload without expanding
-  it ourselves, which is the one thing this module never does. A quoted
-  target with no variable in it is fine — `> "my file.txt"` names a real
-  file — so this is the same question `echoWords` asks of an argument.
+  Return a redirect target's text if it needs no shell expansion.
   """
   return literalWordText(word)
 }
 
+// The return type is narrowed rather than `string` so an invalid mode
+// cannot reach the `std::write` payload or the `_write` call.
 def writeMode(op: string): WriteMode {
   """
-  `>` truncates, `>>` appends.
-
-  The return type is narrowed rather than `string` so an invalid mode
-  cannot reach the `std::write` payload or the `_write` call.
+  Return append mode for >> and overwrite mode otherwise.
   """
   return match(op) {
     ">>" => "append"
@@ -360,15 +358,11 @@ def writeMode(op: string): WriteMode {
 
 export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean = false): Result<Effect[]> {
   """
-  Which interrupts this one command needs raised.
+  Classify the approvals needed by one simple command.
+  Return a failure when it needs the broader Bash approval.
 
-  A failure means the command is not recognized. The caller turns that
-  into a `std::bash` question for the whole string rather than trying to
-  ask a narrow question about part of it.
-
-  @param command - One simple command from the parsed AST
-  @param cwd - The resolved working directory, for payloads that need it
-  @param readsStdin - True when a pipe feeds this command its stdin
+  @param cwd - The resolved working directory used in approval payloads.
+  @param readsStdin - Whether a pipe supplies this command's input.
   """
   const name = command.command
   if (name == null) {
@@ -380,9 +374,8 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
   if (name.tag != "literal") {
     return failure("the command word is not a literal")
   }
-  // `GIT_DIR=/elsewhere git status` reads a DIFFERENT repository than the
-  // payload would claim. Rather than model what each assignment means,
-  // any command carrying one is unrecognized.
+  // Leading assignments can change the repository or other behavior beyond
+  // what a narrow payload describes, as with GIT_DIR=/elsewhere git status.
   if (command.assignments.length > 0) {
     return failure("a leading assignment changes what the command does")
   }
@@ -405,9 +398,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
       failure(why) => failure(why)
     }
     "git" => {
-      // Both links can fail, which is what earns the pipe. Appending the
-      // redirect contribution cannot, so it stays inline rather than
-      // becoming a third link that pretends it could.
+      // Validate literal arguments before applying the Git rule.
       const git: Result<Effect[]> = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
       if (git is failure(why)) {
         return failure(why)
@@ -423,10 +414,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
 @capabilities(fileRead)
 def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  The effects of a verb with no arm of its own in `effectsFor`: a listing
-  asks std::ls for each folder it names, a read verb asks std::read for
-  each file it names, and reading its stdin from a pipe adds nothing. Any
-  other verb is a program, which asks std::exec (see `execEffects`).
+  Classify a file read, directory listing, or external program invocation.
   """
   const listing = LIST_VERBS[verb]
   if (listing != null) {
@@ -443,11 +431,11 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
 }
 
 /** Bash builtins. The exec tool cannot run one, so no std::exec payload
- * can describe it, and some change what later commands run (`cd`,
- * `hash -p`, `enable -f`, `export`). `bash -c 'compgen -b'` on bash 3.2,
- * plus mapfile, readarray, and compopt from bash 5. kill, printf, pwd,
- * and test are also programs, but bash runs the builtin of that name, so
- * the builtin rule is the one that describes them. */
+ can describe it, and some change what later commands run (`cd`,
+ `hash -p`, `enable -f`, `export`). `bash -c 'compgen -b'` on bash 3.2,
+ plus mapfile, readarray, and compopt from bash 5. kill, printf, pwd,
+ and test are also programs, but bash runs the builtin of that name, so
+ the builtin rule is the one that describes them. */
 static const BUILTIN_VERBS: string[] = [
   ".", ":", "[", "alias", "bg", "bind", "break", "builtin", "caller", "cd",
   "command", "compgen", "complete", "compopt", "continue", "declare",
@@ -482,16 +470,12 @@ static const NO_EXEC_PROGRAMS: string[] = [
 
 def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  A program no arm or table owns asks std::exec, the question the exec
-  tool asks for the same program and arguments. Bash builtins, programs
-  that run other programs, and a program whose stdin the payload cannot
-  describe ask std::bash.
+  Build an execution approval for a program whose arguments and input can be described.
   """
   if (BUILTIN_VERBS.includes(verb)) {
     return failure("`${verb}` is a bash builtin, not a program")
   }
-  // The same text as before this rule existed: safeBash has no rule for
-  // a wrapper, and the rejection fixtures pin the sentence.
+  // Wrapper programs need the broad Bash question.
   if (NO_EXEC_PROGRAMS.includes(verb)) {
     return failure("no rule for `${verb}`")
   }
@@ -514,8 +498,8 @@ def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: b
   return success([execEffect(payload), ...redirects])
 }
 
-/** The first argument, which the exec tool and its `@always` call the
- * subcommand, or "" for a bare program. */
+/* The first argument, which the exec tool and its `@always` call the
+ subcommand, or "" for a bare program. */
 def subcommandOf(args: string[]): string {
   if (args.length == 0) {
     return ""
@@ -525,9 +509,7 @@ def subcommandOf(args: string[]): string {
 
 def execArgs(verb: string, words: Word[]): Result<string[]> {
   """
-  A program's arguments as the payload carries them: a flag as typed, a
-  glob unexpanded (bash expands it), and any other fully literal word as
-  its text. A variable or an interpolation makes the program unrecognized.
+  Return program arguments as payload text, failing on variables or interpolations.
   """
   let out: string[] = []
   for (word in words) {
@@ -559,14 +541,10 @@ def fileReadEffects(verb: string, found: FileRead, readsStdin: boolean, redirect
   }
 }
 
+// Unlisted flags require broad approval rather than an incomplete Git payload.
 def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
   """
-  The four git reads we recognize, one arm per rule, guarded by the flags
-  each rule tolerates.
-
-  An unrecognized flag is a failure rather than something to ignore.
-  Answering `git log --graph` with a plain `std::git::log` would tell the
-  model it asked one question when it asked another.
+  Classify supported Git reads, rejecting arguments or flags without an exact rule.
   """
   if (args.length != 1) {
     return failure("only a bare git subcommand is recognized")
@@ -628,31 +606,31 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
 }
 
 /** Which flags a verb takes. Short letters are listed one per entry, so a
- * combined `-rn` is checked letter by letter. A long flag that takes no
- * value is listed as written (`--color=never`). */
+ combined `-rn` is checked letter by letter. A long flag that takes no
+ value is listed as written (`--color=never`). */
 export type FlagSpec = {
   /** Flags that stand alone. */
   plain: string[];
   /** Flags that take a value, from the rest of the word (`-A3`), after
-   * `=` (`--regexp=x`), or from the next word (`-A 3`). Each may appear
-   * once. */
+   `=` (`--regexp=x`), or from the next word (`-A 3`). Each may appear
+   once. */
   valued: string[];
   /** Every flag must come before the first positional word. True for a
-   * command real grep will run: BSD grep, and GNU grep with
-   * POSIXLY_CORRECT set, read a later `-s` as a file to search. */
+   command real grep will run: BSD grep, and GNU grep with
+   POSIXLY_CORRECT set, read a later `-s` as a file to search. */
   optionsFirst: boolean;
   /** The valued flag a bare digit flag stands for: with `n`, head's `-20`
-   * is `-n 20`. A digit flag after a valued flag is that flag's value,
-   * so `head -n -5` stays a refused value. */
+   is `-n 20`. A digit flag after a valued flag is that flag's value,
+   so `head -n -5` stays a refused value. */
   digitFlag?: string;
   /** A single-dash flag is one word, listed with its dash (`-name`), and
-   * never a run of letters. True for find. No verb mixes the two kinds,
-   * so a table holds letters or words, not both. */
+   never a run of letters. True for find. No verb mixes the two kinds,
+   so a table holds letters or words, not both. */
   wholeWords?: boolean
 }
 
 /** One valued flag and its value. `flag` is the letter for a short flag
- * (`A`) and the whole name for a long one (`--regexp`). */
+ (`A`) and the whole name for a long one (`--regexp`). */
 export type FlagValue = {
   flag: string;
   value: string
@@ -666,7 +644,7 @@ export type SplitArgs = {
 }
 
 /** What one flag word contributed, and how many words it used: 2 when
- * its value was the next word. */
+ its value was the next word. */
 type FlagRead = {
   plain: string[];
   values: FlagValue[];
@@ -674,20 +652,20 @@ type FlagRead = {
 }
 
 /** The grep flags safeBash can describe exactly. An allowlist: it has to
- * hold for GNU grep (Linux), BSD grep (macOS), and a grep a user put on
- * their PATH such as ugrep, because the bash path runs whichever grep the
- * shell finds. Left out on purpose, so a grep using
- * one asks std::bash:
- * - `-R`: GNU grep follows every symlink below the path.
- * - `-f`, `--exclude-from`, `--include-from` read another file.
- * - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
- *   carry them out, and the bash path is narrow only for one named file,
- *   where they change nothing.
- * - `-m` counts per file, and the payload's maxResults is a total.
- * - `-P` is missing from BSD grep.
- * - `-z`, `-d`, `-D` mean different things in different greps.
- * - ugrep's `--filter` runs a program and `--save-config` writes a file.
- * - The long spellings of short flags (`--recursive`, `--ignore-case`). */
+ hold for GNU grep (Linux), BSD grep (macOS), and a grep a user put on
+ their PATH such as ugrep, because the bash path runs whichever grep the
+ shell finds. Left out on purpose, so a grep using
+ one asks std::bash:
+ - `-R`: GNU grep follows every symlink below the path.
+ - `-f`, `--exclude-from`, `--include-from` read another file.
+ - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
+   carry them out, and the bash path is narrow only for one named file,
+   where they change nothing.
+ - `-m` counts per file, and the payload's maxResults is a total.
+ - `-P` is missing from BSD grep.
+ - `-z`, `-d`, `-D` mean different things in different greps.
+ - ugrep's `--filter` runs a program and `--save-config` writes a file.
+ - The long spellings of short flags (`--recursive`, `--ignore-case`). */
 export static const GREP_FLAGS: FlagSpec = {
   plain: ["n", "r", "i", "w", "l", "v", "E", "F", "c", "h", "H", "o", "s", "--color=never"],
   valued: ["e", "A", "B", "C"],
@@ -696,13 +674,7 @@ export static const GREP_FLAGS: FlagSpec = {
 
 def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<SplitArgs> {
   """
-  Check a command's arguments against a flag table, and split them into
-  the flags it found, their values, and the remaining positional words.
-
-  Any flag the table does not list is a failure, because a payload that
-  ignored it would describe a different command. Positional words are
-  returned as they are, literal or not; the caller decides what each one
-  must be.
+  Validate arguments against a flag table and separate flags, values, and positional words.
   """
   const args = command.args
   let plain: string[] = []
@@ -749,9 +721,7 @@ def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<Spl
 
 def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
   """
-  One flag word checked against the table: a long flag whole, or a short
-  one letter by letter. A valued letter takes the rest of the word as its
-  value (`-A3`), or the next word when nothing follows it.
+  Read one flag word and its value according to the flag table.
   """
   if (word.flagName.startsWith("--")) {
     return readLongFlag(verb, word, next, spec)
@@ -809,7 +779,7 @@ def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
   })
 }
 
-/** A single-dash flag looked up whole, for a table of whole words. */
+/* A single-dash flag looked up whole, for a table of whole words. */
 def readWholeWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
   const name = word.flagName
   if (spec.plain.includes(name)) {
@@ -870,14 +840,12 @@ def readLongFlag(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec
 
 def nextWordValue(verb: string, flag: string, next: Word | null): Result<string> {
   """
-  A valued flag's value taken from the word after it. It must be literal,
-  and like any other word, a quoted one that starts with `-` is refused.
+  Read the literal word after a valued flag, refusing a leading dash.
   """
   if (next == null) {
     return failure("${verb}'s `${flagDisplay(flag)}` needs a value")
   }
-  // The parser makes a word that starts with a dash a flag word, so
-  // `-size -1M` and `head -n -5` land here with a literal value.
+  // The parser represents a leading dash as a flag, including negative counts.
   if (next is { tag: "flag" }) {
     return failure("the value of `${flagDisplay(flag)}` starts with a dash")
   }
@@ -894,8 +862,7 @@ def nextWordValue(verb: string, flag: string, next: Word | null): Result<string>
 
 def refuseQuotedOption(verb: string, word: Word): Result {
   """
-  A quoted word that starts with `-` is still an option to the program:
-  bash strips the quotes, so `grep "-R" src` runs `grep -R src`.
+  Reject a quoted word that the program would interpret as an option.
   """
   const text = literalWordText(word)
   if (text is success(written)) {
@@ -906,7 +873,7 @@ def refuseQuotedOption(verb: string, word: Word): Result {
   return success(null)
 }
 
-/** A flag as the model wrote it: `-A` for a letter, `--regexp` as is. */
+/* A flag as the model wrote it: `-A` for a letter, `--regexp` as is. */
 def flagDisplay(flag: string): string {
   if (flag.startsWith("-")) {
     return flag
@@ -915,8 +882,8 @@ def flagDisplay(flag: string): string {
 }
 
 /** A path resolved for safeBash: a grep's, a read's, or a listing's.
- * Mirrors `GrepTarget` in lib/stdlib/shell.ts: `file` is null for a
- * folder, and `argument` is the path as bash hands it to the program. */
+ Mirrors `GrepTarget` in lib/stdlib/shell.ts: `file` is null for a
+ folder, and `argument` is the path as bash hands it to the program. */
 type PathTarget = {
   dir: string;
   file: string | null;
@@ -929,7 +896,7 @@ type GrepCall = {
   /** The pattern as the command wrote it. */
   pattern: string;
   /** The resolved path. Its `argument` is "" when -r searched "." because
-   * no path was written, since grep then prints bare names. */
+   no path was written, since grep then prints bare names. */
   target: PathTarget
 }
 
@@ -943,15 +910,12 @@ type GrepWords = {
 static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
 
 /** What a grep command reads: the path it names (or `.` with -r), or
- * its stdin when it names no path. */
+ its stdin when it names no path. */
 type GrepRead = { kind: "stdin" } | { kind: "search"; call: GrepCall }
 
 def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  A command that names no file and reads its stdin. Fed by a pipe, it
-  reads only the previous command's output, so it adds nothing beyond its
-  redirects. Anywhere else its stdin is safeBash's closed one, so the
-  command does nothing useful and stays unrecognized.
+  Accept a command that reads no files only when a pipe supplies its input.
   """
   if (readsStdin) {
     return success(redirects)
@@ -959,13 +923,13 @@ def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<E
   return failure("${verb} with no path reads stdin")
 }
 
+// A command that names no file and reads its stdin. Fed by a pipe, it reads
+// only the previous command's output, so it adds nothing beyond its
+// redirects. Anywhere else its stdin is safeBash's closed one, so the
+// command does nothing useful and stays unrecognized.
 def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Result {
   """
-  The counterpart of `stdinStage` for a program std::exec describes. The
-  payload's `stdin` is empty, so a program fed by a pipe or by `<` would
-  be misdescribed, and it stays unrecognized. The `<` is read from the
-  command's own redirects, not the effects: by now it has become a
-  std::read effect, which does not say which command it came from.
+  Refuse program invocations whose input cannot be described by the execution payload.
   """
   if (readsStdin) {
     return failure("`${verb}` reads a pipe, and std::exec cannot say what it reads")
@@ -980,9 +944,7 @@ def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Res
 @capabilities(fileRead)
 def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRead> {
   """
-  A grep command checked against `spec`: what it reads, with its pattern
-  and its one path resolved the way the grep tool resolves a path. Any
-  doubt is a failure, which sends the command to the broad question.
+  Validate a grep command and resolve the pattern and path it searches.
   """
   const split = splitFlags("grep", command, spec)
   if (isFailure(split)) {
@@ -1024,9 +986,9 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
   })
 }
 
-/** With no path, `-r` searches the working directory and grep prints bare
- * names. That check comes first: a pipe does not stop `-r` from reading
- * files (ugrep reads both). Without `-r`, grep reads its stdin. */
+/* With no path, `-r` searches the working directory and grep prints bare
+ names. That check comes first: a pipe does not stop `-r` from reading
+ files (ugrep reads both). Without `-r`, grep reads its stdin. */
 @capabilities(fileRead)
 def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> {
   if (!args.plain.includes("r")) {
@@ -1052,8 +1014,7 @@ def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> 
 
 def grepWords(args: SplitArgs): Result<GrepWords> {
   """
-  With `-e`, the pattern is its value and every positional is a path.
-  Otherwise the first positional is the pattern and the rest are paths.
+  Separate the grep pattern from paths, honoring the -e flag.
   """
   const fromFlag = [entry.value for entry in args.values if entry.flag == "e"]
   if (fromFlag.length > 0) {
@@ -1084,9 +1045,7 @@ def isDigits(text: string): boolean {
 
 def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: number): GrepPayload {
   """
-  The one place a grep command's flags become std::grep's fields. Both
-  paths call it; they differ only in the pattern, its regex flags, and
-  the cap they pass.
+  Build an approval payload from a validated grep call.
   """
   const letters = call.split.plain
   return {
@@ -1102,7 +1061,7 @@ def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: numb
   }
 }
 
-/** The effects of a grep that runs through bash, by what it reads. */
+/* The effects of a grep that runs through bash, by what it reads. */
 def grepReadEffects(found: GrepRead, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   return match(found) {
     { kind: "stdin" } => stdinStage("grep", readsStdin, redirects)
@@ -1110,12 +1069,11 @@ def grepReadEffects(found: GrepRead, readsStdin: boolean, redirects: Effect[]): 
   }
 }
 
+// The grep tool skips files such as .git and ignored directories. A real
+// directory grep could read them, so it cannot reuse the tool's narrow approval.
 def grepSearchEffects(call: GrepCall, redirects: Effect[]): Result<Effect[]> {
   """
-  A grep of a path that runs through bash. It asks std::grep only for one
-  named file, which real grep and the grep tool read the same way. A
-  directory search through bash reads files the tool skips (.git,
-  node_modules, ignored files), so it asks std::bash.
+  Describe a Bash grep of one named file, refusing directory searches.
   """
   if (call.target.file == null) {
     return failure("grep through bash would search a directory, and reads files the grep tool skips")
@@ -1125,10 +1083,10 @@ def grepSearchEffects(call: GrepCall, redirects: Effect[]): Result<Effect[]> {
 }
 
 /** The flags the grep tool's search can carry out exactly. A lone grep
- * that uses only these runs shell-free. -c, -o, -A, -B, and -C have no
- * equivalent in the tool, so a grep using them runs through bash. No real
- * grep reads these arguments, so a flag may follow the pattern, as GNU
- * grep allows. */
+ that uses only these runs shell-free. -c, -o, -A, -B, and -C have no
+ equivalent in the tool, so a grep using them runs through bash. No real
+ grep reads these arguments, so a flag may follow the pattern, as GNU
+ grep allows. */
 static const SHELL_FREE_GREP_FLAGS: FlagSpec = {
   plain: ["n", "r", "i", "w", "l", "v", "E", "F", "h", "H", "s", "--color=never"],
   valued: ["e"],
@@ -1136,7 +1094,7 @@ static const SHELL_FREE_GREP_FLAGS: FlagSpec = {
 }
 
 /** The regex flags a shell-free search runs with. `u` makes `.` match a
- * whole character, as grep does in a UTF-8 locale, not half of an emoji. */
+ whole character, as grep does in a UTF-8 locale, not half of an emoji. */
 static const SHELL_FREE_REGEX_FLAGS = "u"
 
 /** The most matches a shell-free grep returns; the output says so when it stops. */
@@ -1145,11 +1103,7 @@ static const SHELL_FREE_GREP_CAP = 1000
 @capabilities(fileRead)
 def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  A lone grep, run through the grep tool's own search instead of the grep
-  program, so its approval means what the grep tool's approval means.
-  Applies only when every flag and every character of the pattern means
-  the same thing to grep and to the tool. A failure means "not this
-  path"; the general rules then decide.
+  Plan an in-process grep when its pattern and flags translate to the grep tool.
   """
   const name = command.command
   if (name == null || name.tag != "literal" || name.text != "grep") {
@@ -1159,22 +1113,22 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
     return failure("not a lone grep")
   }
   return match(readGrep(command, cwd, SHELL_FREE_GREP_FLAGS)) {
-    success(found) => shellFreeGrepRead(found, command, cwd)
+    success(found) => shellFreeGrepRead(found, command)
     failure(why) => failure(why)
   }
 }
 
-def shellFreeGrepRead(found: GrepRead, command: SimpleCommand, cwd: string): Result<Plan> {
+def shellFreeGrepRead(found: GrepRead, command: SimpleCommand): Result<Plan> {
   return match(found) {
     { kind: "stdin" } => failure("a lone grep with no path reads stdin")
-    { kind: "search", call } => shellFreeGrepPlan(call, command, cwd)
+    { kind: "search", call } => shellFreeGrepPlan(call, command)
   }
 }
 
 @capabilities(fileRead)
-def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand, cwd: string): Result<Plan> {
+def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<Plan> {
   """
-  The plan for a lone grep of a path, once its flags and path are read.
+  Build an in-process search plan from a validated grep call.
   """
   const letters = call.split.plain
   const target = call.target
@@ -1223,7 +1177,7 @@ def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand, cwd: string): Resu
   })
 }
 
-/** Which pattern syntax the letters choose. GNU grep refuses -E with -F. */
+/* Which pattern syntax the letters choose. GNU grep refuses -E with -F. */
 def grepSyntax(letters: string[]): Result<"basic" | "extended" | "fixed"> {
   if (letters.includes("E") && letters.includes("F")) {
     return failure("grep with both -E and -F")
@@ -1248,7 +1202,7 @@ def grepFileNames(letters: string[]): GrepFileNames {
 }
 
 /** How many of something a command takes: at least `least`, and at most
- * `most`, or any number when `most` is null. */
+ `most`, or any number when `most` is null. */
 type CountRange = {
   least: number;
   most: number | null
@@ -1266,8 +1220,8 @@ def countFits(given: number, range: CountRange): boolean {
   return most == null || given <= most
 }
 
-/** How many `noun`s a range allows, for a message: `2 paths`, `at most 1
- * path`, `1 to 2 sets`. */
+/* How many `noun`s a range allows, for a message: `2 paths`, `at most 1
+ path`, `1 to 2 sets`. */
 def describeCount(range: CountRange, noun: string): string {
   const most = range.most
   if (most == null) {
@@ -1284,27 +1238,27 @@ def describeCount(range: CountRange, noun: string): string {
 }
 
 /** A read verb's flags, how many paths it takes, and which of its valued
- * flags hold a count. */
+ flags hold a count. */
 export type ReadVerb = {
   flags: FlagSpec;
   /** head and tail take one path, because several files print headers;
-   * uniq takes one, because a second positional is its output file; diff
-   * and cmp compare exactly two. */
+   uniq takes one, because a second positional is its output file; diff
+   and cmp compare exactly two. */
   paths: CountRange;
   /** The valued flags whose value must be digits, such as `-n` on head. */
   countFlags: string[]
 }
 
 /** The verbs that read the files they name, or their stdin when they
- * name none. Every letter means the same thing in GNU, BSD, and busybox
- * coreutils. Left out: cat -A -e -t -v (GNU and BSD spell the escapes
- * differently); tail -f (never returns); tail -r (BSD only); wc -L (GNU
- * only); diff -r (reads a whole tree under a question that names one
- * folder) and -y (column width depends on the terminal); sort -o
- * (writes a file), -m, -c; uniq's second positional. tac is not on
- * macOS; the line is recognized and the shell reports it missing. sort
- * may spill a large input to files under $TMPDIR, which no payload
- * names. */
+ name none. Every letter means the same thing in GNU, BSD, and busybox
+ coreutils. Left out: cat -A -e -t -v (GNU and BSD spell the escapes
+ differently); tail -f (never returns); tail -r (BSD only); wc -L (GNU
+ only); diff -r (reads a whole tree under a question that names one
+ folder) and -y (column width depends on the terminal); sort -o
+ (writes a file), -m, -c; uniq's second positional. tac is not on
+ macOS; the line is recognized and the shell reports it missing. sort
+ may spill a large input to files under $TMPDIR, which no payload
+ names. */
 export static const READ_VERBS: Record<string, ReadVerb> = {
   cat: {
     flags: { plain: ["n", "b", "s"], valued: [], optionsFirst: true },
@@ -1369,7 +1323,7 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
 }
 
 /** One resolved path of a read verb. `argument` is the path as bash hands
- * it to the program. */
+ it to the program. */
 type ReadPath = {
   dir: string;
   filename: string;
@@ -1380,8 +1334,8 @@ type ReadPath = {
 type FileRead = { kind: "stdin" } | { kind: "files"; paths: ReadPath[]; split: SplitArgs }
 
 /** tr reads only its stdin; its positionals are character sets, not
- * paths. optionsFirst stays true: BSD tr reads `tr a b -d` as three
- * operands and prints a usage error, GNU reads -d as a flag. */
+ paths. optionsFirst stays true: BSD tr reads `tr a b -d` as three
+ operands and prints a usage error, GNU reads -d as a flag. */
 static const TR_FLAGS: FlagSpec = {
   plain: ["d", "s"],
   valued: [],
@@ -1389,7 +1343,7 @@ static const TR_FLAGS: FlagSpec = {
 }
 
 /** How many sets tr takes, by its plain flags sorted and joined. `tr -s
- * a b` squeezes after translating, so -s takes one set or two. */
+ a b` squeezes after translating, so -s takes one set or two. */
 static const TR_SET_COUNTS: Record<string, CountRange> = {
   "": { least: 2, most: 2 },
   d: { least: 1, most: 1 },
@@ -1399,9 +1353,7 @@ static const TR_SET_COUNTS: Record<string, CountRange> = {
 
 def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  tr in a pipe translates the previous stage's output and reads no file,
-  so it adds nothing beyond its redirects. Its sets must be literal, and
-  as many as its flags take.
+  Validate a piped tr filter and return its redirect effects.
   """
   const split = splitFlags("tr", command, TR_FLAGS)
   if (isFailure(split)) {
@@ -1424,15 +1376,14 @@ def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]):
   return stdinStage("tr", readsStdin, redirects)
 }
 
+// A folder is refused because the program would read what no payload names
+// (`diff a b` of two folders reads every file under both, links followed).
+// A FIFO or a device is refused because a read of it may never return. A
+// missing path is refused too, so any doubt asks std::bash.
 @capabilities(fileRead)
 def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Result<ReadPath> {
   """
-  A path a command reads, resolved with `_searchTargetIn` to a regular
-  file. A folder is refused because the program would read what no
-  payload names (`diff a b` of two folders reads every file under both,
-  links followed). A FIFO or a device is refused because a read of it may
-  never return. A missing path is refused too, so any doubt asks
-  std::bash. `subject` names the reader in the folder message.
+  Resolve a literal read path to a regular file, failing for directories or special files.
   """
   const target = resolveTarget(text, word, cwd)
   if (isFailure(target)) {
@@ -1452,10 +1403,7 @@ def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Res
 @capabilities(fileRead)
 def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
   """
-  A path resolved against safeBash's cwd with `_searchTargetIn`: the real
-  folder, and the file name when it is a regular file. A missing path or
-  a special file is a failure. The one resolver behind a grep's path, a
-  read verb's, `<`, and a listing's.
+  Resolve a path against the working directory and distinguish files from directories.
   """
   return try _searchTargetIn(text, cwd, tildeModeFor(word))
 }
@@ -1469,10 +1417,7 @@ type ListTarget = {
 @capabilities(fileRead)
 def resolveTargets(verb: string, words: Word[], cwd: string): Result<ListTarget[]> {
   """
-  The paths a listing or a find names, each literal, resolved to its real
-  location, and paired with whether its last step is a link. What to do
-  about a file or a link is each verb's decision, in `listingOf` and
-  `findFolders`.
+  Resolve listing operands and record whether each final component is a symlink.
   """
   let out: ListTarget[] = []
   for (word in words) {
@@ -1494,17 +1439,15 @@ def resolveTargets(verb: string, words: Word[], cwd: string): Result<ListTarget[
 }
 
 /** Last segments that can never be a link: `.`, `..`, and the empty one
- * of `/`. `.` is also what a listing with no path lists. */
+ of `/`. `.` is also what a listing with no path lists. */
 static const UNLINKED_SEGMENTS: string[] = [".", "..", ""]
 
+// Compare the written final component and its real parent with the resolved
+// target. Links earlier in the path do not affect this comparison.
 @capabilities(fileRead)
 def lastStepIsLink(target: PathTarget, cwd: string): Result<boolean> {
   """
-  Whether the path as written ends in a symlink. The resolver follows
-  every link, so the path's last step was a link exactly when its last
-  segment differs from the real one, or its parent's real folder differs
-  from the real parent. A link earlier in the path is fine: both sides
-  are realpathed through it. Decides nothing about verbs.
+  Determine whether the operand's final path component was a symlink.
   """
   const written = lastSegment(target.argument)
   if (UNLINKED_SEGMENTS.includes(written)) {
@@ -1541,8 +1484,7 @@ def realParent(target: PathTarget): string {
 
 def requireFolder(verb: string, target: PathTarget): Result<string> {
   """
-  The real folder a listing or a find names, or a failure for a file.
-  The one place this refusal is written.
+  Return the resolved directory or fail if the operand is a file.
   """
   if (target.file != null) {
     return failure("${verb} of a file is not a listing")
@@ -1552,8 +1494,7 @@ def requireFolder(verb: string, target: PathTarget): Result<string> {
 
 def checkCountFlags(split: SplitArgs, countFlags: string[]): Result {
   """
-  The valued flags whose value must be digits, checked once for every
-  verb table: head's -n, tree's -L, find's -maxdepth.
+  Check that count-valued flags contain digits.
   """
   for (entry in split.values) {
     if (countFlags.includes(entry.flag) && !isDigits(entry.value)) {
@@ -1567,11 +1508,11 @@ def checkCountFlags(split: SplitArgs, countFlags: string[]): Result {
 export type ListWalk = "always" | "withR"
 
 /** What a listing verb does with a path that names a file: list the
- * folder that holds it, or refuse. */
+ folder that holds it, or refuse. */
 export type FileArgument = "folder" | "refuse"
 
 /** A verb that lists directories: its flags, which valued flags hold a
- * count, and whether it walks the tree. */
+ count, and whether it walks the tree. */
 export type ListVerb = {
   flags: FlagSpec;
   /** The valued flags whose value must be digits, such as `-L` on tree. */
@@ -1582,15 +1523,15 @@ export type ListVerb = {
 }
 
 /** The verbs that list the folders they name, or `.` when they name
- * none. Every letter means the same thing in GNU and BSD. Left out: `-L`
- * on every verb (follows symlinks out of the folder) and `ls -G` (color
- * on macOS, no group column on GNU). tree is not on macOS by default;
- * the line is recognized and the shell reports it missing. A recursive
- * listing through bash shows the entries under `.git` and `node_modules`
- * that the ls tool's walk leaves out, and no file's contents. Given a
- * file, ls prints that one entry and du that one file's size, so both
- * ask for the folder that holds it, with no walk even though du always
- * walks a folder. tree prints the name and an error, so it refuses. */
+ none. Every letter means the same thing in GNU and BSD. Left out: `-L`
+ on every verb (follows symlinks out of the folder) and `ls -G` (color
+ on macOS, no group column on GNU). tree is not on macOS by default;
+ the line is recognized and the shell reports it missing. A recursive
+ listing through bash shows the entries under `.git` and `node_modules`
+ that the ls tool's walk leaves out, and no file's contents. Given a
+ file, ls prints that one entry and du that one file's size, so both
+ ask for the folder that holds it, with no walk even though du always
+ walks a folder. tree prints the name and an error, so it refuses. */
 export static const LIST_VERBS: Record<string, ListVerb> = {
   ls: {
     flags: { plain: ["l", "a", "A", "h", "1", "t", "r", "S", "R", "d", "p", "F", "--color=never"], valued: [], optionsFirst: true },
@@ -1613,12 +1554,12 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
 }
 
 /** find's expression, as whole words. An allowlist: an unlisted word is
- * unrecognized, which is what keeps -exec, -delete, -fprint, -L, and the
- * ones this list forgot on the std::bash path. -newer is out because it
- * reads another file's time. -iname is out because the glob tool's
- * pattern is case-sensitive and the payload would say so. -H and -P are
- * out because find takes them only before its paths, where the ordering
- * rule refuses them. */
+ unrecognized, which is what keeps -exec, -delete, -fprint, -L, and the
+ ones this list forgot on the std::bash path. -newer is out because it
+ reads another file's time. -iname is out because the glob tool's
+ pattern is case-sensitive and the payload would say so. -H and -P are
+ out because find takes them only before its paths, where the ordering
+ rule refuses them. */
 static const FIND_FLAGS: FlagSpec = {
   plain: ["-not", "-o", "-a", "-prune", "-print", "-print0"],
   valued: ["-name", "-path", "-type", "-maxdepth", "-mindepth", "-size"],
@@ -1627,8 +1568,8 @@ static const FIND_FLAGS: FlagSpec = {
 }
 
 /** The expression words that widen or invert what -name selects. With
- * any of them the pattern is `**`, because `-not -name x` lists the
- * opposite of x and `-name x -o -type d` lists more than x. */
+ any of them the pattern is `**`, because `-not -name x` lists the
+ opposite of x and `-name x -o -type d` lists more than x. */
 static const FIND_WIDENING_WORDS: string[] = ["-not", "-o", "-prune"]
 
 static const FIND_COUNT_FLAGS: string[] = ["-maxdepth", "-mindepth"]
@@ -1636,9 +1577,7 @@ static const FIND_COUNT_FLAGS: string[] = ["-maxdepth", "-mindepth"]
 @capabilities(fileRead)
 def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Result<Effect[]> {
   """
-  A find asks std::glob for each path it searches, as the glob tool
-  does. Its paths come first and its expression after, as find's grammar
-  says, and every path must be a folder.
+  Build search approvals for the literal directories a supported find command searches.
   """
   const split = splitFlags("find", command, FIND_FLAGS)
   if (isFailure(split)) {
@@ -1672,7 +1611,7 @@ def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Resul
   return success([...searches, ...redirects])
 }
 
-/** How many of a command's arguments come before its first flag word. */
+/* How many of a command's arguments come before its first flag word. */
 def leadingPositionals(command: SimpleCommand): number {
   let count = 0
   for (word in command.args) {
@@ -1684,13 +1623,13 @@ def leadingPositionals(command: SimpleCommand): number {
   return count
 }
 
+// The glob tool matches a whole relative path with `*` stopping at `/`,
+// while -name matches the last part at any depth, so -name's value gets a
+// `**/` in front unless the search stops at depth 1. With no -name, or with
+// a word that widens or inverts it, the pattern is everything.
 def findPattern(split: SplitArgs): string {
   """
-  The glob pattern that describes find's search, or a wider one. The
-  glob tool matches a whole relative path with `*` stopping at `/`,
-  while -name matches the last part at any depth, so -name's value gets
-  a `**/` in front unless the search stops at depth 1. With no -name, or
-  with a word that widens or inverts it, the pattern is everything.
+  Build a glob pattern covering the paths selected by a find expression.
   """
   const names = [entry.value for entry in split.values if entry.flag == "-name"]
   const widened = [word for word in split.plain if FIND_WIDENING_WORDS.includes(word)]
@@ -1709,10 +1648,7 @@ static const CURRENT_DIR_WORD: Word = { tag: "literal", text: "." }
 @capabilities(fileRead)
 def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVerb, redirects: Effect[]): Result<Effect[]> {
   """
-  A listing asks std::ls for each folder it names, as the ls tool does,
-  and for the folder that holds each file it names when its row allows
-  it, one question per folder. A listing ignores its stdin, so a pipe
-  into it changes nothing.
+  Build one listing approval for each directory a supported listing command inspects.
   """
   const split = splitFlags(verb, command, spec.flags)
   if (isFailure(split)) {
@@ -1743,15 +1679,17 @@ def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVer
 }
 
 /** The ls flags under which a folder link given as an operand is printed
- * as itself instead of followed. POSIX: a symbolic link to a directory
- * given as an operand is followed unless -F, -d, or -l is given. */
+ as itself instead of followed. POSIX: a symbolic link to a directory
+ given as an operand is followed unless -F, -d, or -l is given. */
 static const LS_LINK_FLAGS: string[] = ["l", "d", "F"]
 
+// Only ls follows a folder link operand, and only without -l, -d, or -F.
+// du and tree follow a link operand only under -H, -L, or -l, and none of
+// those is in their rows. Adding one of those flags to a du or tree row
+// makes this function wrong.
 def followsFolderLink(verb: string, split: SplitArgs): boolean {
   """
-  Whether the program lists what a folder link operand points to. Only
-  ls does, and only without -l, -d, or -F. du and tree follow a link
-  operand only under -H, -L, or -l, and none of those is in their rows.
+  Determine whether the listing program follows a directory symlink operand.
   """
   const printsLink = [flag for flag in LS_LINK_FLAGS if split.plain.includes(flag)]
   return verb == "ls" && printsLink.length == 0
@@ -1759,10 +1697,7 @@ def followsFolderLink(verb: string, split: SplitArgs): boolean {
 
 def listingOf(verb: string, spec: ListVerb, entry: ListTarget, walk: boolean, follows: boolean): Result<LsPayload> {
   """
-  One path's std::ls payload. A path whose last step is a link is refused
-  when the program prints the link itself: always for a file, and for a
-  folder unless the program follows it. A file under a `folder` row is
-  its folder with no walk; one under a `refuse` row is refused.
+  Build a listing payload for an operand, refusing undescribed symlink behavior.
   """
   const target = entry.target
   if (entry.linked && (target.file != null || !follows)) {
@@ -1779,9 +1714,7 @@ def listingOf(verb: string, spec: ListVerb, entry: ListTarget, walk: boolean, fo
 
 def mergeListings(payloads: LsPayload[]): LsPayload[] {
   """
-  One payload per folder, in order of first appearance. A folder named
-  twice is recursive if either path walks it: a walk covers a look at
-  one entry. `ls -R . .` and `ls one.txt two.txt` ask once.
+  Combine listing approvals for the same directory, keeping recursive scope when needed.
   """
   let out: LsPayload[] = []
   for (payload in payloads) {
@@ -1795,7 +1728,7 @@ def mergeListings(payloads: LsPayload[]): LsPayload[] {
   return out
 }
 
-/** `kept`, recursive if `extra` walks the same folder. */
+/* `kept`, recursive if `extra` walks the same folder. */
 def widened(kept: LsPayload, extra: LsPayload): LsPayload {
   if (kept.dir != extra.dir) {
     return kept
@@ -1807,11 +1740,12 @@ def widened(kept: LsPayload, extra: LsPayload): LsPayload {
   }
 }
 
+// find never follows a link operand without -H or -L, which the ordering
+// rule refuses, so a linked path is refused here. A file is refused by
+// `requireFolder`.
 def findFolders(entries: ListTarget[]): Result<string[]> {
   """
-  The real folders a find searches. find never follows a link operand
-  without -H or -L, which the ordering rule refuses, so a linked path is
-  refused, and a file is refused by `requireFolder`.
+  Return find's resolved directory operands, refusing files and final-component symlinks.
   """
   let dirs: string[] = []
   for (entry in entries) {
@@ -1830,8 +1764,7 @@ def findFolders(entries: ListTarget[]): Result<string[]> {
 @capabilities(fileRead)
 def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVerb): Result<FileRead> {
   """
-  A read verb's command checked against its row: the files it reads,
-  each resolved to a regular file, or its stdin when it names none.
+  Validate a file-reading command and resolve its operands, or identify stdin input.
   """
   const split = splitFlags(verb, command, spec.flags)
   if (isFailure(split)) {
@@ -1876,11 +1809,7 @@ static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
 @capabilities(fileRead)
 def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  A lone cat of one or more files, or a head or tail of one, run through
-  the read tool's own read instead of the program, so its approval means what the read
-  tool's approval means. Applies only to the flags `_renderReadView`
-  prints exactly. A failure means "not this path"; the general rules
-  then decide.
+  Plan an in-process cat, head, or tail when its output can be reproduced.
   """
   const name = command.command
   if (name == null || name.tag != "literal" || !SHELL_FREE_READ_VERBS.includes(name.text)) {
@@ -1903,10 +1832,7 @@ def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
 @capabilities(fileRead)
 def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  The plan for one command that runs in process with no shell: an echo
-  (redirected or not), a grep that translates, or a cat, head, or tail
-  that translates. The one list of in-process planners, used for a lone
-  command and for each step of a chain. A failure means "not in process".
+  Plan one supported echo, grep, or file read for in-process execution.
   """
   const echo = trySeeIfShellFree(command, cwd)
   if (echo is success(plan)) {
@@ -1928,9 +1854,7 @@ type ChainLink = {
 @capabilities(fileRead)
 def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
   """
-  A line of commands joined by `;`, `&&`, or `||` where every command
-  runs in process on its own. All or nothing: one command that does not
-  sends the whole line down the general path, where the refuse wall runs.
+  Plan a chain only when every command can run in process.
   """
   const links = chainLinks(commands)
   if (isFailure(links)) {
@@ -1961,11 +1885,10 @@ def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
   })
 }
 
+// Keep this match exhaustive so every new execution kind gets a chain decision.
 def stepExecOf(exec: Execution): Result<StepExec> {
   """
-  An in-process execution as a chain step. Exhaustive with no catch-all,
-  so a new execution kind is a type error here until someone decides
-  whether a chain may hold it.
+  Return an in-process execution suitable for a chain step.
   """
   return match(exec) {
     { kind: "echo" } => success(exec)
@@ -1981,8 +1904,7 @@ def stepExecOf(exec: Execution): Result<StepExec> {
 
 def chainLinks(commands: Command[]): Result<ChainLink[]> {
   """
-  The commands of a line in the order bash runs them, each with the join
-  before it. The top-level list is joined by `;`.
+  Flatten a command line into simple commands and their preceding joins.
   """
   let out: ChainLink[] = []
   for (command in commands) {
@@ -2048,14 +1970,11 @@ def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command
   })
 }
 
+// Only render forms with matching GNU and BSD output. They disagree on
+// cat -n across several files and on head -n 0.
 def readViewFor(verb: string, split: SplitArgs, pathCount: number): Result<ReadView> {
   """
-  How the shell-free path prints this command, or a failure for a flag it
-  does not print. cat takes only -n, and -n of one file only: GNU numbers
-  several files as one stream and BSD starts again at 1 for each. head
-  and tail take only -n with a count of at least 1. BSD `head -n 0`
-  prints an error and exits 1 while GNU prints nothing, so no one
-  rendering of 0 is right everywhere.
+  Choose an in-process rendering for supported cat, head, or tail options.
   """
   if (verb == "cat") {
     const others = [letter for letter in split.plain if letter != "n"]
@@ -2085,7 +2004,7 @@ def readViewFor(verb: string, split: SplitArgs, pathCount: number): Result<ReadV
   return success({ kind: "tail", lines: lines })
 }
 
-/** The number a string of digits spells. The caller checked `isDigits`. */
+/* The number a string of digits spells. The caller checked `isDigits`. */
 def digitsValue(text: string): number {
   let value = 0
   for (char in text.split("")) {
@@ -2126,12 +2045,12 @@ def bashPlan(command: string, effects: Effect[], verbs: string[], broadReason: B
   }
 }
 
-/** The broad question for the whole string, with the reason it came to that. */
+/* The broad question for the whole string, with the reason it came to that. */
 def broadPlan(command: string, verbs: string[], reason: BroadReason): Plan {
   return bashPlan(command, [BASH_EFFECT], verbs, reason)
 }
 
-/** The command word of each simple command, "" for an assignment-only one. */
+/* The command word of each simple command, "" for an assignment-only one. */
 def verbNames(commands: SimpleCommand[]): string[] {
   return [verbName(command) for command in commands]
 }
@@ -2146,8 +2065,7 @@ def verbName(command: SimpleCommand): string {
 
 export def outcomeOf(plan: Plan): string {
   """
-  Name the outcome of a plan: refuse, shellFree, agency, narrow, or broad.
-  Exhaustive over Execution, so a new execution kind is a type error here.
+  Name a plan's outcome: refuse, shellFree, agency, narrow, or broad.
   """
   return match(plan.execution.kind) {
     "refuse" => "refuse"
@@ -2168,22 +2086,17 @@ def bashOutcome(plan: Plan): string {
   return "broad"
 }
 
-/** One simple command from a flattened line, and whether a pipe feeds
- * it its stdin. Not named `Stage`: `PipelineStage` is a parsed pipe
- * stage, which may be a whole parenthesized group. */
+/** A flattened simple command and whether a pipe supplies its input. */
 export type FlatCommand = {
   command: SimpleCommand;
   readsStdin: boolean
 }
 
+// Inspect commands inside chains, parentheses, and pipelines so none can
+// hide a refused verb from the classifier.
 def flattenCommands(commands: Command[]): FlatCommand[] {
   """
-  Every simple command in the string, including the halves of a chain.
-
-  Used for BOTH the refuse wall and classification, because a wall that
-  only looks at the top level is bypassed by two characters
-  (`true && rm -rf /`), and a classifier that only looks at the top level
-  demotes every chained invocation to the broad question.
+  Return every simple command for refusal checks and effect classification.
   """
   let out: FlatCommand[] = []
   for (command in commands) {
@@ -2193,10 +2106,7 @@ def flattenCommands(commands: Command[]): FlatCommand[] {
 }
 
 def flattenOne(command: Command): FlatCommand[] {
-  // Exhaustive with no catch-all, so a fifth command shape becomes a type
-  // error here instead of silently flattening to nothing — this feeds the
-  // refuse wall, where silently-empty is the one result that must never
-  // happen.
+  // Keep this exhaustive so a new command shape cannot skip refusal checks.
   return match(command) {
     { tag: "simpleCommand" } => [{ command: command, readsStdin: false }]
     { tag: "pipeline", stages } => pipelineCommands(stages)
@@ -2206,9 +2116,9 @@ def flattenOne(command: Command): FlatCommand[] {
   }
 }
 
-/** A pipe's commands: the first stage as it is, and every command in a
- * later stage marked as reading the pipe. In `a | (b && c)`, both `b`
- * and `c` read it, because the group's stdin is the pipe. */
+/* A pipe's commands: the first stage as it is, and every command in a
+ later stage marked as reading the pipe. In `a | (b && c)`, both `b`
+ and `c` read it, because the group's stdin is the pipe. */
 def pipelineCommands(stages: PipelineStage[]): FlatCommand[] {
   let out: FlatCommand[] = flattenOne(stages[0])
   for (stage in stages.slice(1)) {
@@ -2218,14 +2128,10 @@ def pipelineCommands(stages: PipelineStage[]): FlatCommand[] {
   return out
 }
 
+// Run the classified tree after narrow approval so execution matches its payloads.
 def rebuild(commands: Command[]): Result<string> {
   """
-  The command string, rendered back from the tree we classified.
-
-  Used only when every command was recognized. We claimed the string is
-  `git status`, so we must run what we classified rather than text we only
-  assumed matched it. A parser bug then degrades to running what we
-  thought we read.
+  Render the classified command tree back to Bash source.
   """
   let parts: string[] = []
   for (command in commands) {
@@ -2240,8 +2146,7 @@ def rebuild(commands: Command[]): Result<string> {
 
 def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  A shell-free path applies only to a single `echo`, and only when the
-  wall has nothing to say about it.
+  Plan a literal echo command for in-process execution.
   """
   if (isRefused(command)) {
     return failure("refused")
@@ -2264,12 +2169,7 @@ def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<Plan> {
 
 def tryAgencyPlan(command: SimpleCommand): Result<Plan> {
   """
-  The plan (what to raise, what to run) for a command line about the
-  agency CLI, or a failure meaning "not one of those". `agency <sub>
-  <file>` runs in-process through std::agency's cli(). Looking the binary
-  up is refused with the functions to call: `which`/`type` look up every
-  argument; `command` runs or looks up its first, so `command echo
-  agency` is an ordinary echo.
+  Plan an Agency CLI command or refuse an Agency binary lookup.
   """
   const name = command.command
   if (name == null || name.tag != "literal" || command.assignments.length > 0) {
@@ -2286,7 +2186,7 @@ def tryAgencyPlan(command: SimpleCommand): Result<Plan> {
   }
 }
 
-/** The literal non-flag arguments, or none when any is not literal. */
+/* The literal non-flag arguments, or none when any is not literal. */
 def literalNames(command: SimpleCommand): string[] {
   return match(literalArgs(command)) {
     success(names) => names
@@ -2303,7 +2203,7 @@ def refuseIfLookingUpAgency(lookingUp: boolean, verbs: string[]): Result<Plan> {
 
 def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
   """
-  A redirect or a non-literal argument has no in-process meaning.
+  Plan an Agency command with literal arguments and no redirects.
   """
   if (command.redirects.length > 0) {
     return success(refusePlan(CLI_NOT_AVAILABLE, verbNames([command])))
@@ -2322,15 +2222,10 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
   }
 }
 
+// This path never invokes a shell, so it cannot expand variables or globs.
 def echoWords(words: Word[]): Result<string[]> {
   """
-  Words as text, but only when every one is fully literal.
-
-  A plain word, a path, or a single-quoted string qualifies. A variable
-  does not, and neither does a double-quoted string containing one: this
-  path never invokes a shell, so there is nothing here to expand a
-  variable, and expanding it ourselves is where v2's divergence bugs
-  lived.
+  Return argument text only when every word is fully literal.
   """
   let out: string[] = []
   for (arg in words) {
@@ -2355,7 +2250,7 @@ def literalWordText(word: Word): Result<string> {
 
 def literalParts(parts: Word[]): Result<string> {
   """
-  The text of a double-quoted word, when it contains no expansions.
+  Return the text of a double-quoted word that contains no expansions.
   """
   let out = ""
   for (part in parts) {
@@ -2368,10 +2263,10 @@ def literalParts(parts: Word[]): Result<string> {
 }
 
 /** The flags the shell-free echo prints, modeled on bash's builtin echo.
- * `-n` drops the trailing newline. `-e` and `-E` are left out, because
- * the shell-free path does not read backslash escapes. bash's echo reads
- * flags only at the front (`echo hi -n` prints `hi -n`), so a later one
- * sends the line to bash. */
+ `-n` drops the trailing newline. `-e` and `-E` are left out, because
+ the shell-free path does not read backslash escapes. bash's echo reads
+ flags only at the front (`echo hi -n` prints `hi -n`), so a later one
+ sends the line to bash. */
 static const ECHO_FLAGS: FlagSpec = {
   plain: ["n"],
   valued: [],
@@ -2380,11 +2275,7 @@ static const ECHO_FLAGS: FlagSpec = {
 
 def echoText(command: SimpleCommand): Result<string> {
   """
-  What an `echo` prints: its arguments joined by single spaces, then a
-  newline unless `-n` was given. Bare `echo` is still a newline. A
-  failure means the shell-free path cannot say: a flag it does not
-  model, a quoted word that starts with `-` (bash reads it as an option),
-  or an argument that is not fully literal.
+  Compute echo output for supported literal arguments and the optional -n flag.
   """
   const split = splitFlags("echo", command, ECHO_FLAGS)
   if (isFailure(split)) {
@@ -2400,11 +2291,7 @@ def echoText(command: SimpleCommand): Result<string> {
 
 def echoPlan(command: SimpleCommand): Result<Plan> {
   """
-  A single `echo` with nothing else in the string and no redirect.
-
-  Nothing here can write a file or reach the network no matter how wrong
-  the classifier is, because all it does is build a string. That is the
-  one place v2's structural safety was free.
+  Plan a literal echo without redirects, returning its output without a shell.
   """
   if (command.redirects.length > 0) {
     return failure("a redirected echo is handled elsewhere")
@@ -2428,12 +2315,7 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
 
 def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  A single `echo` redirected to a literal file.
-
-  The content is computed rather than produced by running anything, so no
-  shell is spawned and the bytes are in the approval payload before anyone
-  approves. If the equivalence claim is good enough to say what `echo`
-  prints, it is good enough to say what `echo` writes.
+  Plan a redirected literal echo, including the exact bytes in its write approval.
   """
   if (command.redirects.length != 1) {
     return failure("not a single redirect")
@@ -2459,7 +2341,7 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
 
 def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   """
-  The two paths that never invoke a shell, tried in order.
+  Try an in-process echo, with or without an output redirect.
   """
   const bare = echoPlan(command)
   if (bare is success(plan)) {
@@ -2470,14 +2352,9 @@ def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
 
 export def planFor(source: string, cwd: string): Plan {
   """
-  Decide everything about a call before any of it happens.
+  Plan approvals and execution for Bash source without running the command.
 
-  Parses the string, classifies every command, and works out which
-  interrupts to raise and what to run. Nothing here has an effect, which
-  is what makes the decision testable: hand in a string, look at the plan.
-
-  @param source - One or more bash commands
-  @param cwd - The resolved working directory
+  @param cwd - The working directory used to resolve paths during classification.
   """
   const parsed = bashParser(source)
   if (parsed is failure(why)) {
@@ -2562,7 +2439,7 @@ static const REFUSED_COMMANDS: string[] = ["rm", "rmdir", "dd", "shred", "mkfs",
 
 def baseName(text: string): string {
   """
-  The last part of a path. `/bin/rm` is `rm`.
+  Return the last component of a slash-separated path.
   """
   const parts = text.split("/")
   return parts[parts.length - 1]
@@ -2570,14 +2447,7 @@ def baseName(text: string): string {
 
 export def isRefused(command: SimpleCommand): boolean {
   """
-  True when this command must not run, whatever anyone approves.
-
-  Matches the command word, including the last part of a path, so `rm`,
-  `/bin/rm` and `./rm` are all refused.
-
-  This wall is friction against the obvious spelling, not a guarantee.
-  `find . -delete` and `xargs rm` get past it and are approvable under
-  `std::bash`, which is where the actual control lives.
+  Check whether a command matches an explicitly refused destructive spelling.
   """
   const name = command.command
   if (name == null) {
@@ -2593,17 +2463,16 @@ export def isRefused(command: SimpleCommand): boolean {
   return isDestructiveGit(command)
 }
 
+// Only the FIRST argument is the subcommand. `git log reset` is a log, not
+// a reset, and matching a subcommand name anywhere in the arguments would
+// refuse it.
+//
+// `clean` and `restore` are destructive by purpose. `reset` and `checkout`
+// are only destructive in particular spellings, and refusing the whole
+// subcommand would refuse `git checkout main`, which agents do constantly.
 def isDestructiveGit(command: SimpleCommand): boolean {
   """
-  The git subcommands that throw work away.
-
-  Only the FIRST argument is the subcommand. `git log reset` is a log, not
-  a reset, and matching a subcommand name anywhere in the arguments would
-  refuse it.
-
-  `clean` and `restore` are destructive by purpose. `reset` and `checkout`
-  are only destructive in particular spellings, and refusing the whole
-  subcommand would refuse `git checkout main`, which agents do constantly.
+  Check the first argument and flags for explicitly refused destructive Git operations.
   """
   if (command.args.length == 0) {
     return false
@@ -2612,11 +2481,8 @@ def isDestructiveGit(command: SimpleCommand): boolean {
   if (first.tag != "literal") {
     return false
   }
-  // `git checkout .` discards working-tree changes; `git checkout main`
-  // does not. `git checkout -- .` is NOT handled here, and cannot be: the
-  // parser rejects a bare `--`, so that string never reaches
-  // classification at all. It falls through as unparseable and is
-  // approvable under `std::bash`.
+  // Recognize checkout's explicit discard spelling. A bare -- is not
+  // parsed, so git checkout -- . instead requires broad Bash approval.
   return match(first.text) {
     "clean" => true
     "restore" => true
@@ -2657,10 +2523,7 @@ export def bashParser(code: string): Result<BashAST> {
 
 def renderFlag(flag: FlagWord): string {
   """
-  A flag back in the form it was written: `-n`, `--staged`, `--format=x`.
-
-  `flagName` already carries its dashes, so this only has to put a
-  `--name=value` flag back together.
+  Reconstruct a flag as written, including an optional =value.
   """
   if (flag.flagValue == null) {
     return flag.flagName
@@ -2668,14 +2531,12 @@ def renderFlag(flag: FlagWord): string {
   return "${flag.flagName}=${flag.flagValue}"
 }
 
+// Resolved once, at the top, and then carried on every action. An action
+// that did not carry it would run wherever the process happened to be,
+// which is the same command doing two different things.
 export def resolveCwd(cwd: string): string {
   """
-  Which directory a command runs in: the caller's, or the agent's when the
-  caller did not say.
-
-  Resolved once, at the top, and then carried on every action. An action
-  that did not carry it would run wherever the process happened to be,
-  which is the same command doing two different things.
+  Use the requested directory, then the agent directory, then the process directory.
   """
   if (cwd != "") {
     return cwd
@@ -2685,7 +2546,7 @@ export def resolveCwd(cwd: string): string {
     return agent
   }
   // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
-  // nothing set one — which is the case the tests run in.
+  // nothing set one, which is the case the tests run in.
   return "."
 }
 
@@ -2694,26 +2555,14 @@ export def safeBash(
   cwd: string = "",
 ): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
-  Run a shell command, asking the narrowest question that describes it.
+  Run Bash commands after approval of the actions they perform.
+  Return stdout on success. A nonzero exit is a failure carrying the exit
+  code, stdout, and stderr, so there is no need to echo `$?` or re-run a
+  command to learn how it exited. Read saved long output with readSpill or
+  grepSpill, not with bash.
 
-  `bash` cannot be pre-approved, because a command is a string and a
-  string could do anything, so every call needs a human. Many of the
-  commands an agent writes can be identified, and for those we ask a more
-  specific question — one a policy can answer in advance.
-
-  Nothing runs until every question is answered. If everything is
-  approved, the whole string goes to bash in one call, so bash does the
-  control flow and produces the output.
-
-  A success result means the command exited 0, and its value is the
-  command's stdout. A non-zero exit is a failure whose message carries
-  the exit code, stdout, and stderr. There is no need to echo `$?` or
-  re-run a command to learn how it exited. Output longer than a couple of
-  thousand characters is saved and replaced by a preview that names it;
-  read it with readSpill or grepSpill, not with bash.
-
-  @param command - One or more bash commands
-  @param cwd - Working directory. Defaults to the agent working directory.
+  @param command - One or more bash commands.
+  @param cwd - Working directory, defaulting to the agent directory or the process directory.
   """
   const dir = resolveCwd(cwd)
   const plan = planFor(command, dir)
@@ -2745,15 +2594,8 @@ export def safeBash(
     return _addLine(raised, "${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
   }
 
-  // Echo output is truncated like every other path: a long echo returning
-  // in full while a long `ls` came back capped would be exactly the
-  // distinguishability this design exists to remove. For bash, `planFor`
-  // already decided which text to run — rebuilt when it asked narrow
-  // questions, original when it asked the broad one. There is no fallback
-  // here: choosing the original AFTER raising narrow effects would break
-  // the design's first hard rule. The write arm passes the narrowed exec
-  // through whole, so a field the type gains later cannot be silently
-  // dropped by a rebuild.
+  // Use the planned text: rebuilt for narrow approval, original for broad
+  // approval. Every executor applies the same long-output handling.
   return match(exec) {
     { kind: "write" } => runWrite(exec)
     { kind: "echo", content } => success(keepOutput(content, 0, command))
@@ -2785,8 +2627,8 @@ def broadExplanation(reason: BroadReason): string {
 }
 
 /** The tool to suggest when a broad command made only of these verbs is
- * rejected. Not wc: the read tool cannot count lines. Not du: the ls
- * tool gives each entry's size and no folder total. */
+ rejected. Not wc: the read tool cannot count lines. Not du: the ls
+ tool gives each entry's size and no folder total. */
 static const READ_TOOL_FOR_VERB: Record<string, string> = {
   grep: "grep",
   cat: "read",
@@ -2797,12 +2639,11 @@ static const READ_TOOL_FOR_VERB: Record<string, string> = {
   find: "glob"
 }
 
+// safeBash cannot see the policy, so the sentence below does not claim the
+// tool needs no approval, only that a policy can approve its question.
 def toolHint(verbs: string[]): string {
   """
-  A sentence pointing the model at the tool that does what its rejected
-  command did, when every verb in the command has one. safeBash cannot
-  see the policy, so the sentence does not claim the tool needs no
-  approval, only that a policy can approve its question.
+  Suggest equivalent read tools when every rejected command has one.
   """
   let tools: string[] = []
   for (verb in verbs) {
@@ -2820,7 +2661,7 @@ def toolHint(verbs: string[]): string {
   return " Call the ${tools.join(" or ")} tool instead: a policy can approve its question in advance."
 }
 
-/** What the debug event says about one plan: the decision and why. */
+/* What the debug event says about one plan: the decision and why. */
 def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
   let reason = ""
   let detail = ""
@@ -2841,9 +2682,7 @@ def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
 
 def runAgency(args: string[], cwd: string, source: string): Result<string> {
   """
-  What the CLI would have printed. A non-zero exit is a failure carrying
-  the output, the way a failing bash command is. `source` is the command
-  the user saw, kept beside any saved output.
+  Run an in-process Agency CLI command and return its output.
   """
   return match(cli(args, cwd)) {
     success(result) => cliOutcome(result, source)
@@ -2860,7 +2699,7 @@ def cliOutcome(result: ExecResult, source: string): Result<string> {
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   """
-  Ask every question the plan needs answered, before anything happens.
+  Request every planned approval before executing any command.
   """
   for (effect in effects) {
     const answered = raiseOne(effect, fullCommand, cwd)
@@ -2871,26 +2710,22 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   return success(null)
 }
 
+// Keep this dispatch exhaustive and typed so new effects need checked raise
+// sites. Include the full command in each payload for the approver to inspect.
+// An effect is raised at a named site, not by name-as-data, so this is a
+// closed dispatch with one arm per effect. That is also why safeBash
+// declares them all in its `raises` clause: it is how an agent author
+// discovers which handlers to write.
+//
+// The match is on `effect.name`, not on `effect` with object patterns:
+// matching a member path narrows its siblings per arm, so `effect.payload`
+// has the right variant type in each body. It is exhaustive with no
+// catch-all, so a new Effect variant without a raise site is a type error
+// here, not a runtime failure.
 @capabilities(fileRead, fileWrite, subprocess, env)
 def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   """
-  Raise one effect.
-
-  An effect is raised at a named site, not by name-as-data, so this is a
-  closed dispatch with one arm per effect. That is also why safeBash
-  declares them all in its `raises` clause: it is how an agent author
-  discovers which handlers to write.
-
-  The match is on `effect.name`, not on `effect` with object patterns:
-  matching a member path narrows its siblings per arm, so `effect.payload`
-  has the right variant type in each body — the same idiom handlers use
-  on `data.effect`. It is exhaustive with no catch-all, so a new Effect
-  variant without a raise site is a type error here, not a runtime
-  failure.
-
-  Every payload carries the full command string. A human approving a git
-  read inside `echo hi; git status` needs to see the whole thing, not the
-  fragment.
+  Raise a planned effect with its typed payload and the original command text.
   """
   return match(effect.name) {
     "std::bash" => {
@@ -2996,4 +2831,253 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
     }
   }
   return success(null)
+}
+
+// ---------------------------------------------------------------------------
+// Executors. These run an approved plan, so they call the non-raising
+// internals (`_bash`, `_write`, `_read`, `_grep`). They are not exported:
+// an exported executor would let any program skip the approvals.
+// ---------------------------------------------------------------------------
+
+/**
+Requires Bash on the search path. Successful stderr is omitted from the
+result. Nonzero exits return failures, including grep's "no match" and
+diff's "files differ" statuses. Long output is saved with a preview.
+*/
+@capabilities(fileRead, subprocess)
+def runBash(command: string, cwd: string, source: string = ""): Result<string> {
+  """
+  Execute a Bash command after its planned effects have been approved.
+  Return stdout on success, or an exit failure with output on nonzero exit.
+  """
+  // `_bash`, NOT `bash`. The `bash` tool raises `std::bash` itself, so
+  // calling it here would ask the broad question again, after the human
+  // already answered a narrower one, and the entire feature would be a
+  // no-op.
+  //
+  // Bypassing a tool's interrupt is normally forbidden: handlers are
+  // safety infrastructure. It is correct here for one specific reason,
+  // and only while that reason holds: the narrow interrupt REPLACES the
+  // broad one, and the only path into this function runs through a
+  // `raiseAll` that raised every effect in the plan and returned success.
+  // Every plan raises at least one effect, so no classification bug can
+  // turn into an ungated shell call. Do not add a caller that skips
+  // `raiseAll`, and do not copy this call anywhere else.
+  const attempt = try _bash(command, cwd, 0, "", {})
+  if (attempt is failure(why)) {
+    return failure("`${command}` was not run: ${why}")
+  }
+  // try wraps the returned ExecResult in the success value.
+  const result: any = attempt.value
+  // `source` is the command as the user typed it, which can differ from
+  // the narrowed text this function ran; the trace names the original.
+  const label = if (source == "") then command else source
+  if (result.exitCode != 0) {
+    return exitFailure(command, result.exitCode, result.stdout, result.stderr, label)
+  }
+  return success(keepOutput(result.stdout, result.exitCode, label))
+}
+
+// Include the exit code and both streams, saving long output for later retrieval.
+def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string): Result<string> {
+  const out = keepOutput(stdout, exitCode, label)
+  return failure(
+    JSON.stringify(
+    {
+    command: command,
+    exitCode: exitCode,
+    stderr: keepOutput(stderr, exitCode, label),
+    stdout: out
+  },
+  ),
+  )
+}
+
+@capabilities(fileRead)
+def runGrep(exec: GrepExec, command: string): Result<string> {
+  """
+  Execute an approved in-process grep plan and return its rendered output.
+  No matches return an exit-code-1 failure.
+  """
+  const found = grepResults(exec)
+  if (isFailure(found)) {
+    return found
+  }
+  const results: any[] = found.value
+  if (results.length == 0) {
+    return exitFailure(command, 1, "", grepNotes(exec.payload, 0), command)
+  }
+  return success(keepOutput(grepText(exec, results), 0, command))
+}
+
+@capabilities(fileRead)
+def printGrep(exec: GrepExec): Result<string> {
+  """
+  Execute an approved grep plan and return its full output.
+  No matches return a failure carrying any search notes.
+  """
+  const found = grepResults(exec)
+  if (isFailure(found)) {
+    return found
+  }
+  const results: any[] = found.value
+  if (results.length == 0) {
+    return failure(grepNotes(exec.payload, 0))
+  }
+  return success(grepText(exec, results))
+}
+
+@capabilities(fileRead)
+def grepResults(exec: GrepExec): Result<any[]> {
+  // `_grep`, NOT `grep`, for the reason `runBash` gives: the `grep` tool
+  // raises its own std::grep, and the caller already raised one carrying
+  // this same payload. The only path here runs through `raiseAll`.
+  const payload = exec.payload
+  const query = {
+    pattern: payload.pattern,
+    flags: payload.flags,
+    ignoreCase: payload.ignoreCase,
+    wholeWord: payload.wholeWord,
+    filesOnly: payload.filesOnly,
+    invert: payload.invert
+  }
+  return try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
+}
+
+// Append search notes after the rendered matches.
+def grepText(exec: GrepExec, results: any[]): string {
+  const printed = _renderGrepOutput(results, exec.render)
+  const notes = grepNotes(exec.payload, results.length)
+  if (notes == "") {
+    return printed
+  }
+  return printed + notes + "\n"
+}
+
+@capabilities(fileRead)
+def runRead(exec: ReadExec, command: string): Result<string> {
+  """
+  Execute approved file reads and return cat, head, or tail output.
+  """
+  return match(printRead(exec)) {
+    success(text) => success(keepOutput(text, 0, command))
+    failure(why) => failure(why)
+  }
+}
+
+/**
+Files are concatenated before rendering, so a missing final newline joins
+the next file's first line. A failed read drops previously collected text.
+*/
+@capabilities(fileRead)
+def printRead(exec: ReadExec): Result<string> {
+  """
+  Execute approved file reads and return their full rendered output.
+  """
+  // `_read`, NOT `read`, for the reason `runBash` gives: the `read` tool
+  // raises its own std::read, and the caller already raised one carrying
+  // each of these payloads. The only path here runs through `raiseAll`.
+  //
+  // The plan refused a missing file or a folder before anything ran, so
+  // a failure here is a race or a permission error, and `_read`'s own
+  // message says which.
+  let joined = ""
+  for (payload in exec.payloads) {
+    const text = try _read(payload.dir, payload.filename)
+    if (isFailure(text)) {
+      return text
+    }
+    joined = joined + text.value
+  }
+  return success(_renderReadView(joined, exec.view))
+}
+
+// Report skipped folders and any match limit reached by the in-process grep.
+def grepNotes(payload: GrepPayload, found: number): string {
+  let notes: string[] = []
+  if (payload.file == null) {
+    notes.push(_skippedDirsNote())
+  }
+  if (found >= payload.maxResults) {
+    notes.push("(safeBash stopped after ${payload.maxResults} matches. Narrow the pattern or the path.)")
+  }
+  return notes.join("\n")
+}
+
+@capabilities(fileRead, fileWrite)
+def runWrite(exec: WriteExec): Result<string> {
+  """
+  Execute an approved redirected echo write and return an empty stdout string.
+  """
+  // `_write`, NOT `write`, for the same reason `runBash` uses `_bash`: the
+  // `write` tool raises its own `std::write`, and the caller already raised
+  // one carrying the content. The only path here runs through `raiseAll`.
+  //
+  // `destructive { }` because `write()` wraps `_write` in one, and that
+  // marker feeds the tool-loop retry rules. Calling `_write` directly
+  // without it would give this write a different retry classification
+  // from the tool it replaces.
+  destructive {
+    const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
+    if (isFailure(written)) {
+      return written
+    }
+  }
+  return success("")
+}
+
+@capabilities(fileRead, fileWrite)
+def runChain(exec: ChainExec, command: string): Result<string> {
+  """
+  Execute approved in-process commands with Bash-style ;, &&, and || joins.
+  Return a failure when the last command executed failed.
+  """
+  let out = ""
+  let ok = true
+  let lastError = ""
+  for (step in exec.steps) {
+    if (skipsStep(step.join, ok)) {
+      continue
+    }
+    let printed: Result<string> = success("")
+    if (step.execution.kind == "write") {
+      // Mark this activation too: a later failure must not let the tool
+      // loop retry the chain and repeat an earlier write.
+      destructive {
+        printed = printStep(step.execution)
+      }
+    } else {
+      printed = printStep(step.execution)
+    }
+    if (printed is success(text)) {
+      out = out + text
+      ok = true
+    } else if (printed is failure(why)) {
+      ok = false
+      lastError = "${why}"
+    }
+  }
+  if (!ok) {
+    return exitFailure(command, 1, out, lastError, command)
+  }
+  return success(keepOutput(out, 0, command))
+}
+
+/** Whether bash skips a step after this join, given how the last step that
+ ran ended. */
+def skipsStep(join: Join, ok: boolean): boolean {
+  return (join == "and" && !ok) || (join == "or" && ok)
+}
+
+@capabilities(fileRead, fileWrite)
+def printStep(exec: StepExec): Result<string> {
+  """
+  Execute an approved chain step before saving long output.
+  """
+  return match(exec) {
+    { kind: "echo", content } => success(content)
+    { kind: "write" } => runWrite(exec)
+    { kind: "grep" } => printGrep(exec)
+    { kind: "read" } => printRead(exec)
+  }
 }

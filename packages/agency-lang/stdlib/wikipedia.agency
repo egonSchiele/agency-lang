@@ -1,18 +1,21 @@
+import { _search, _summary, _article } from "agency-lang/stdlib-lib/wikipedia.js"
+
 /** @module
-  Search Wikipedia and read article summaries or full text from Agency code.
+  @summary Search English Wikipedia and read article introductions or full text.
+  Search English Wikipedia and read article summaries or full text.
 
   ```ts
   import { search, summary } from "std::wikipedia"
 
   node main() {
     const results = search("Ada Lovelace")
-    const intro = summary(results[0].title)
-    print(intro.extract)
+    if (results.length > 0) {
+      const intro = summary(results[0].title)
+      print(intro.extract)
+    }
   }
   ```
 */
-
-import { _search, _summary, _article } from "agency-lang/stdlib-lib/wikipedia.js"
 
 type WikiSearchResult = {
   title: string;
@@ -40,10 +43,7 @@ effect std::wikipedia::article { title: string }
 @capabilities(network)
 export def search(query: string, limit: number = 5): WikiSearchResult[] {
   """
-  Search Wikipedia for articles matching a query. Each result has a title, description, and excerpt.
-
-  @param query - The search query
-  @param limit - Maximum number of results to return
+  Find English Wikipedia articles matching a search query.
   """
   return interrupt std::wikipedia::search("Are you sure you want to search Wikipedia?", {
     query: query,
@@ -56,9 +56,9 @@ export def search(query: string, limit: number = 5): WikiSearchResult[] {
 @capabilities(network)
 export def summary(title: string): WikiSummary {
   """
-  Get a summary of a Wikipedia article. Returns the title, description, intro extract, and URL.
+  Read the introductory summary of a Wikipedia article.
 
-  @param title - The article title
+  @param title - An article title returned by Wikipedia search.
   """
   return interrupt std::wikipedia::summary("Are you sure you want to fetch this Wikipedia article summary?", {
     title: title
@@ -70,9 +70,9 @@ export def summary(title: string): WikiSummary {
 @capabilities(network)
 export def article(title: string): WikiArticle {
   """
-  Get the full text of a Wikipedia article. Returns the title, plain-text content, and URL.
+  Read the full plain text of a Wikipedia article.
 
-  @param title - The article title
+  @param title - An article title returned by Wikipedia search.
   """
   return interrupt std::wikipedia::article("Are you sure you want to fetch this Wikipedia article?", {
     title: title

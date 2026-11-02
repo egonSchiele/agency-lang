@@ -2,11 +2,12 @@ import { connectorFetch } from "std::data/connector"
 import { keys } from "std::object"
 
 /** @module
+  @summary Browse the Y Combinator company directory by batch, industry, or tag.
   ## Y Combinator — the YC company directory
 
-  Query the [yc-oss](https://github.com/yc-oss/api) community dataset: every company Y Combinator
-  has funded, sliced by batch, industry, tag, or a curated list. Use this connector to track the
-  newest YC startups and what they do — batch, one-liner, industry, stage, team size, and status.
+  Query the [yc-oss](https://github.com/yc-oss/api) community dataset by
+  batch, industry, tag, or curated list. Company profiles include their
+  descriptions, funding batch, team size, and status.
 
   The data is static JSON refreshed daily, and there is no server-side search. Fetch a slice (a
   batch, industry, or tag) and filter in Agency. `ycMeta` lists the available slugs, so an agent
@@ -34,7 +35,7 @@ static const YC_DOMAINS = ["yc-oss.github.io"]
 // The curated company lists yc-oss serves at companies/<name>.json.
 static const YC_LISTS = ["top", "all", "hiring", "nonprofit", "women-founded", "black-founded", "hispanic-latino-founded"]
 
-/** A YC company — a curated subset of the yc-oss record. `launchedAt` is a Unix timestamp. */
+/** A YC company profile, with `launchedAt` in Unix seconds. */
 export type Company = {
   id: number;
   name: string;
@@ -66,18 +67,18 @@ export type YcMeta = {
   tags: string[]
 }
 
-/** Normalize a human label to a yc-oss slug: lowercase, trim, spaces/underscores → hyphens.
-    So "Winter 2025" → "winter-2025". Pure. */
+/* Normalize a human label to a yc-oss slug: lowercase, trim, spaces/underscores → hyphens.
+    So "Winter 2025" → "winter-2025". */
 def slugify(s: string): string {
   return s.toLowerCase().trim().replaceAll(" ", "-").replaceAll("_", "-")
 }
 
-/** The curated-list names as a comma-separated string. Single source of truth for error messages. */
+/* The curated-list names as a comma-separated string. Single source of truth for error messages. */
 def ycListsList(): string {
   return YC_LISTS.join(", ")
 }
 
-/** Validate a curated-list name (lenient: slugified first). Unknown → failure listing valid names. */
+/* Validate a curated-list name (lenient: slugified first). Unknown → failure listing valid names. */
 def parseListName(list: string): Result<string> {
   const slug = slugify(list)
   if (YC_LISTS.indexOf(slug) < 0) {
@@ -86,32 +87,32 @@ def parseListName(list: string): Result<string> {
   return success(slug)
 }
 
-/** Build the batch-slice path (caller slugifies). Pure. */
+/* Build the batch-slice path (caller slugifies). */
 def buildBatchPath(slug: string): string {
   return "/batches/${slug}.json"
 }
 
-/** Build the industry-slice path. Pure. */
+/* Build the industry-slice path. */
 def buildIndustryPath(slug: string): string {
   return "/industries/${slug}.json"
 }
 
-/** Build the tag-slice path. Pure. */
+/* Build the tag-slice path. */
 def buildTagPath(slug: string): string {
   return "/tags/${slug}.json"
 }
 
-/** Build the curated-list path (name already validated by parseListName). Pure. */
+/* Build the curated-list path (name already validated by parseListName). */
 def buildListPath(name: string): string {
   return "/companies/${name}.json"
 }
 
-/** Build the metadata path. Pure. */
+/* Build the metadata path. */
 def buildMetaPath(): string {
   return "/meta.json"
 }
 
-/** Reshape a yc-oss company array into Company[]. A slice body is a bare JSON array. Pure/total. */
+/* Reshape a yc-oss company array into Company[]. A slice body is a bare JSON array. */
 def parseCompanies(raw: any): Company[] {
   const arr = raw ?? []
   return map(arr) as c {
@@ -141,8 +142,8 @@ def parseCompanies(raw: any): Company[] {
   }
 }
 
-/** Reshape meta.json into YcMeta. batches/industries/tags are slug-keyed objects → take the keys.
-    Pure/total. */
+/* Reshape meta.json into YcMeta. batches/industries/tags are slug-keyed objects → take the keys.
+    */
 def parseMeta(raw: any): YcMeta {
   const r: any = raw ?? {}
   return {
@@ -153,12 +154,12 @@ def parseMeta(raw: any): YcMeta {
   }
 }
 
-/** Shared failure message for a failed YC fetch. Pure. */
+/* Shared failure message for a failed YC fetch. */
 def ycError(err: any): string {
   return "YC request failed (the data is static JSON on GitHub Pages; an unknown batch/industry/tag slug 404s): ${err.message ?? err}"
 }
 
-/** Turn a fetch Result into a Company[] Result. Pure — testable with mock Results. */
+/* Turn a fetch Result into a Company[] Result. */
 def companiesFinalize(fetchResult: any): Result<Company[]> {
   return match (fetchResult) {
     success(body) => success(parseCompanies(body))
@@ -166,7 +167,7 @@ def companiesFinalize(fetchResult: any): Result<Company[]> {
   }
 }
 
-/** Turn a fetch Result into a YcMeta Result. Pure. */
+/* Turn a fetch Result into a YcMeta Result. */
 def metaFinalize(fetchResult: any): Result<YcMeta> {
   return match (fetchResult) {
     success(body) => success(parseMeta(body))
@@ -177,10 +178,9 @@ def metaFinalize(fetchResult: any): Result<YcMeta> {
 @capabilities(network)
 export def ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
-  Fetch the YC companies in a batch. Returns each company's id, name, one-liner, batch, status,
-  stage, team size, industry, tags, and URL. An unknown batch returns a failure.
+  List YC companies in a funding batch.
 
-  @param batch - The YC batch, e.g. "Winter 2025" or "winter-2025"
+  @param batch - A batch label or slug, such as "Winter 2025" or "winter-2025".
   """
   return interrupt std::yc("Fetch YC companies for this batch?", { op: "batch", query: batch })
   const result = connectorFetch(YC_BASE, YC_DOMAINS, buildBatchPath(slugify(batch))) with approve
@@ -190,10 +190,9 @@ export def ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http:
 @capabilities(network)
 export def ycIndustry(industry: string): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
-  Fetch the YC companies in an industry. Returns each company's profile. An unknown industry
-  returns a failure.
+  List YC companies in an industry.
 
-  @param industry - The industry, e.g. "fintech" or "Healthcare"
+  @param industry - An industry label or slug from the directory metadata, such as "fintech".
   """
   return interrupt std::yc("Fetch YC companies for this industry?", { op: "industry", query: industry })
   const result = connectorFetch(YC_BASE, YC_DOMAINS, buildIndustryPath(slugify(industry))) with approve
@@ -203,24 +202,26 @@ export def ycIndustry(industry: string): Result<Company[]> raises <std::yc, std:
 @capabilities(network)
 export def ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
-  Fetch the YC companies with a tag. Returns each company's profile. An unknown tag returns a
-  failure.
+  List YC companies carrying a directory tag.
 
-  @param tag - The tag, e.g. "ai" or "SaaS"
+  @param tag - A tag label or slug from the directory metadata, such as "SaaS".
   """
   return interrupt std::yc("Fetch YC companies for this tag?", { op: "tag", query: tag })
   const result = connectorFetch(YC_BASE, YC_DOMAINS, buildTagPath(slugify(tag))) with approve
   return companiesFinalize(result)
 }
 
+/**
+  The `all` list can be large. Prefer a batch, industry, or tag when you
+  only need part of the directory.
+*/
 @capabilities(network)
 export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
-  Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-founded",
-  "black-founded", or "hispanic-latino-founded". "all" is large (~6 MB); prefer a batch, industry,
-  or tag slice when you can.
+  Read a curated YC company list. "all" is large (about 6 MB); prefer a
+  batch, industry, or tag lookup when you only need part of the directory.
 
-  @param list - The curated list name
+  @param list - Use "top", "all", "hiring", "nonprofit", "women-founded", "black-founded", or "hispanic-latino-founded".
   """
   const nameResult = parseListName(list)
   if (isFailure(nameResult)) {
@@ -235,8 +236,7 @@ export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std:
 @capabilities(network)
 export def ycMeta(): Result<YcMeta> raises <std::yc, std::http::fetchJSON> {
   """
-  Fetch the YC directory metadata: the available batch, industry, and tag slugs plus the
-  last-updated timestamp. Use it to discover the newest batch slug before calling ycBatch.
+  Discover available YC batch, industry, and tag slugs and the dataset's update time.
   """
   return interrupt std::yc("Fetch the YC directory metadata?", { op: "meta", query: "" })
   const result = connectorFetch(YC_BASE, YC_DOMAINS, buildMetaPath()) with approve

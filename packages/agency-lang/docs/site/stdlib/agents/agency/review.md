@@ -1,15 +1,16 @@
 ---
 name: "review"
-description: "Reviews Agency source code: parse findings, typecheck findings, and"
+description: "Check Agency source and optionally review it against a task."
 ---
 
 # review
 
-an optional LLM judgment of whether the code accomplishes a task.
+`agencyReviewAgent` reports parse errors and, when parsing succeeds,
+typecheck errors and warnings. Supplying `task` adds an LLM review with
+access to the bundled documentation and web sources.
 
-  Review reads the work and looks things up. The verifier runs the work and
-  measures it. This agent never executes the code it reviews, but it can
-  consult the bundled Agency documentation and the web to check a claim.
+The source is not executed. Use `agencyVerifierAgent` to run it.
+A failed LLM review contributes no findings, while static findings remain.
 
 ## Functions
 
@@ -30,7 +31,7 @@ Convert a typecheck report into findings: one error item per error,
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L132))
 
 ### buildTools
 
@@ -38,12 +39,11 @@ Convert a typecheck report into findings: one error item per error,
 buildTools(): any[]
 ```
 
-Return the Agency reviewer's lookup tools: the bundled language
-  documentation, plus web lookups for anything outside it.
+Return the Agency reviewer's documentation and web lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L147))
 
 ### agencyReviewAgent
 
@@ -63,21 +63,18 @@ agencyReviewAgent(
 ): Result<Feedback[]>
 ```
 
-Review Agency source code and return findings. Always includes parse and
-  typecheck findings. When a task is given, an LLM also judges whether the
-  code accomplishes it.
+Check Agency source for parse and type errors, and review it against a task when given.
+  A failed LLM review contributes no findings.
 
-  @param source - Agency source code to review
-  @param task - What the code should do, or "" for static checks only
-  @param context - Extra material for the judgment, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param dir - Directory the source's relative imports resolve against, or "" when it imports no local files
-  @param strict - Typecheck with the name checks a sandboxed compile uses; see `typecheck` in std::agency
+  @param task - What the code should do, or "" for static checks only.
+  @param maxCost - Cost budget in USD for the task review.
+  @param maxTime - Time budget in milliseconds for the task review.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
+  @param extraTools - Tools added to the LLM review.
+  @param dir - Base directory for the source's relative imports.
+  @param strict - True uses the name checks applied during sandboxed compilation.
 
 **Parameters:**
 
@@ -101,4 +98,4 @@ Review Agency source code and return findings. Always includes parse and
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L211))

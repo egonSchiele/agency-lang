@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "Symbol 'runBash' is not defined in 'std::safeBash/actions'",
+  "description": "safeBash's executors are not importable, because they run commands without raising approvals"
+}

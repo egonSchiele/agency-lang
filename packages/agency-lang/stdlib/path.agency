@@ -1,9 +1,9 @@
 import { _join, _resolve, _basename, _dirname, _extname, _relative, _isAbsolute } from "agency-lang/stdlib-lib/path.js"
 
 /** @module
-  Pure helpers for building and taking apart file paths: join, resolve,
-  basename, dirname, extname, relative, and isAbsolute. None of these touch the
-  filesystem.
+  @summary Build and take apart file paths without accessing the filesystem.
+  Build file paths and extract their directory, filename, or extension.
+  These helpers work on path strings without checking whether a file exists.
 
   ```ts
   import { join, extname } from "std::path"
@@ -13,22 +13,27 @@ import { _join, _resolve, _basename, _dirname, _extname, _relative, _isAbsolute 
     print(extname(p))
   }
   ```
+
+  Use `join` to combine path segments. Use `resolve` when you need an
+  absolute path, or `relative` to express one path relative to another.
 */
 
 export def join(...parts: string[]): string {
   """
   Join path segments using the platform separator and normalize the result.
-
-  @param parts - Path segments to join
   """
   return _join(parts)
 }
 
+/**
+  Relative paths start at the run's working directory. An absolute segment
+  replaces the segments before it: `resolve("src", "/tmp", "out")` returns
+  `"/tmp/out"` on macOS and Linux. With no segments, returns the run's
+  working directory.
+*/
 export def resolve(...parts: string[]): string {
   """
-  Resolve path segments into an absolute path, relative to the current working directory.
-
-  @param parts - Path segments to resolve
+  Resolve path segments into an absolute path using the run's working directory.
   """
   return _resolve(parts)
 }
@@ -37,8 +42,7 @@ export def basename(p: string, ext: string = ""): string {
   """
   Return the last portion of a path.
 
-  @param p - The file path
-  @param ext - If given and the path ends with this extension, it is trimmed off the result
+  @param ext - Exact suffix to remove from the filename, including any leading dot
   """
   return _basename(p, ext)
 }
@@ -46,27 +50,25 @@ export def basename(p: string, ext: string = ""): string {
 export def dirname(p: string): string {
   """
   Return the directory portion of a path.
-
-  @param p - The file path
   """
   return _dirname(p)
 }
 
 export def extname(p: string): string {
   """
-  Return the extension of a path (including the leading dot), or an empty string if there is none.
-
-  @param p - The file path
+  Return the file extension, including the leading dot, or an empty string if there is none.
   """
   return _extname(p)
 }
 
+/**
+  Both paths resolve from the run's working directory. For example,
+  `relative("src", "src/lib/main.agency")` returns `"lib/main.agency"`
+  on macOS and Linux. Identical resolved paths produce an empty string.
+*/
 export def relative(from: string, to: string): string {
   """
-  Return the relative path from one path to another.
-
-  @param from - The starting path
-  @param to - The target path
+  Return the path from `from` to `to`, resolving relative inputs from the run's working directory.
   """
   return _relative(from, to)
 }
@@ -74,8 +76,6 @@ export def relative(from: string, to: string): string {
 export def isAbsolute(p: string): boolean {
   """
   Return true if the path is absolute.
-
-  @param p - The path to check
   """
   return _isAbsolute(p)
 }

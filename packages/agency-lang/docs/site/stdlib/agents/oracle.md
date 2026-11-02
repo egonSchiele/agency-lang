@@ -1,19 +1,16 @@
 ---
 name: "oracle"
-description: "A read-only senior reviewer: give it a hard problem and it reads"
+description: "Get a focused second opinion on a plan, design, or persistent bug."
 ---
 
 # oracle
 
-the code, thinks, and returns a direct verdict.
+The oracle reads the code and returns an analysis with a recommendation.
+Its built-in tools inspect files and sources. Use `explorerAgent` for a
+broad overview of a codebase or body of documentation.
 
-  Reach for it before acting, when a second opinion is worth more than
-  another attempt: is this plan sound, does this already exist, why does this
-  bug persist, what is wrong with this design. It reads and reasons; it never
-  changes anything.
-
-  Sharp and narrow, where explorerAgent is broad and descriptive. Ask the
-  oracle to judge one thing; ask the explorer to survey many.
+When called as an LLM tool, the oracle continues the caller's conversation.
+From code, wrap the call in `thread { ... }` when you want an isolated consult.
 
 ## Functions
 
@@ -23,12 +20,11 @@ the code, thinks, and returns a direct verdict.
 buildTools(): any[]
 ```
 
-Return the oracle's tools. Read-only by design: it inspects, consults, and
-  judges, and a reviewer that can edit is no longer a reviewer.
+Return the oracle's file, Agency-source, and web lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L88))
 
 ### oracleAgent
 
@@ -45,26 +41,20 @@ oracleAgent(
 ): Result<string>
 ```
 
-Ask for a second opinion on a hard problem: whether a plan is sound,
-  whether the code already exists, why a bug persists, what is wrong with a
-  design. Reads the code and returns a written analysis ending in a concrete
-  recommendation. It never changes anything.
+Read the code and give a focused second opinion on a plan, design, or bug.
+  It never changes anything. It continues your conversation and sees
+  everything said so far, so ask the question itself without restating the
+  context.
 
-  The oracle continues your conversation: it sees everything said so far,
-  and its reading and reasoning stay in your history when it hands back.
-  Ask the question itself; there is no need to restate the context.
-
-  @param question - The question
-  @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param extraTools - Tools to add to the built-in lookup tools.
 
 Called from code, this runs on the caller's thread like any function:
- the system prompt, the reads, and the answer stay there. Wrap the call
- in `thread { ... }` for an isolated consult.
+  the system prompt, the reads, and the answer stay there. Wrap the call
+  in `thread { ... }` for an isolated consult.
 
 **Parameters:**
 

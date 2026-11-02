@@ -276,7 +276,7 @@ The functions that raise nothing and touch the host carry their own tag:
 | `std::skills` | the scans (`docsSkill`, `agentSkill`, `agentPrompt`, `scanEntries`, `checkSkillInputs`): `fileRead`. |
 | `std::toolbox`, `std::speech`, `std::thread` | the private readers (`expandRoot`, `moduleFacts`, `metaFacts`, `realOutput`) and `attachToReply`: `fileRead`. |
 | `std::memory` | `memory`, the block that persists its frame: `fileRead, fileWrite`. |
-| `std::policy`, `std::safeBash` | `writePolicyFile`, `addPolicyRules`, `runWrite`: `fileRead, fileWrite`. `missingPolicyRules`, `prepareRedirectWrite`: `fileRead`. |
+| `std::policy`, `std::safeBash` | `addPolicyRules`, `runWrite` (private): `fileRead, fileWrite`. `missingPolicyRules`, `prepareRedirectWrite`: `fileRead`. |
 | `std::mcp` | `readProjectMcpConfig`: `fileRead`. `loadMcpTools`, `loadMcpToolsWithStatus`: `fileRead, fileWrite, subprocess, network`. |
 | `std::agency`, `std::agency/eval` | the functions that compile or read a file: `fileRead`. `run` and its siblings: `subprocess, fileWrite` as well. |
 | `std::agency/local` | per function: downloading needs `fileRead, fileWrite, network`; listing needs `fileRead`; asking the server needs `network`. |

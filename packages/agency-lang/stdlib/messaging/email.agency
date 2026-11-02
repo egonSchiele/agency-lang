@@ -5,7 +5,7 @@ import {
  } from "agency-lang/stdlib-lib/email.js"
 
 /** @module
-  @summary Send email from Agency code through Resend, SendGrid, or Mailgun, each reading its own API key from the environment.
+  @summary Send email through Resend, SendGrid, or Mailgun.
   Send email from Agency code through Resend, SendGrid, or Mailgun. Each
   provider reads its own API key from the environment: `RESEND_API_KEY`,
   `SENDGRID_API_KEY`, or `MAILGUN_API_KEY` plus `MAILGUN_DOMAIN` (and optional
@@ -47,7 +47,7 @@ effect std::sendEmail {
   subject: string
 }
 
-/** Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly. */
+/** Configure a verified sender and a Resend API key before sending. */
 @capabilities(network)
 export def sendWithResend(
   from: string,
@@ -63,19 +63,17 @@ export def sendWithResend(
   blockList: string[] = [],
 ): Result {
   """
-  Send an email using the Resend API.
+  Send an email through Resend.
 
-  @param from - Sender email address
-  @param to - Recipient email address
-  @param subject - Email subject
-  @param html - HTML content
-  @param text - Plain text content
-  @param cc - CC recipients
-  @param bcc - BCC recipients
-  @param replyTo - Reply-to address
-  @param apiKey - Resend API key
-  @param allowList - Only allow sending to these addresses
-  @param blockList - Block sending to these addresses
+  @param from - An email address authorized to send through this provider.
+  @param html - An HTML message body, which may accompany a plain-text alternative.
+  @param text - A plain-text message body, which may accompany an HTML version.
+  @param cc - One optional copy recipient address.
+  @param bcc - One optional hidden-copy recipient address.
+  @param replyTo - Direct replies to this address instead of the sender.
+  @param apiKey - Leave empty to use RESEND_API_KEY.
+  @param allowList - Limit to, cc, and bcc to these addresses, or leave empty for no allow restriction.
+  @param blockList - Reject any to, cc, or bcc address on this list, even if allowed.
   """
   return interrupt std::sendEmail("Are you sure you want to send this email via Resend?", {
     from: from,
@@ -104,7 +102,7 @@ export def sendWithResend(
   }
 }
 
-/** Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly. */
+/** Configure a verified sender and a SendGrid API key before sending. */
 @capabilities(network)
 export def sendWithSendGrid(
   from: string,
@@ -120,19 +118,17 @@ export def sendWithSendGrid(
   blockList: string[] = [],
 ): Result {
   """
-  Send an email using the SendGrid API.
+  Send an email through SendGrid.
 
-  @param from - Sender email address
-  @param to - Recipient email address
-  @param subject - Email subject
-  @param html - HTML content
-  @param text - Plain text content
-  @param cc - CC recipients
-  @param bcc - BCC recipients
-  @param replyTo - Reply-to address
-  @param apiKey - SendGrid API key
-  @param allowList - Only allow sending to these addresses
-  @param blockList - Block sending to these addresses
+  @param from - An email address authorized to send through this provider.
+  @param html - An HTML message body, which may accompany a plain-text alternative.
+  @param text - A plain-text message body, which may accompany an HTML version.
+  @param cc - One optional copy recipient address.
+  @param bcc - One optional hidden-copy recipient address.
+  @param replyTo - Direct replies to this address instead of the sender.
+  @param apiKey - Leave empty to use SENDGRID_API_KEY.
+  @param allowList - Limit to, cc, and bcc to these addresses, or leave empty for no allow restriction.
+  @param blockList - Reject any to, cc, or bcc address on this list, even if allowed.
   """
   return interrupt std::sendEmail("Are you sure you want to send this email via SendGrid?", {
     from: from,
@@ -161,7 +157,7 @@ export def sendWithSendGrid(
   }
 }
 
-/** Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint. */
+/** Configure a Mailgun sending domain and API key before sending. */
 @capabilities(network)
 export def sendWithMailgun(
   from: string,
@@ -179,21 +175,19 @@ export def sendWithMailgun(
   blockList: string[] = [],
 ): Result {
   """
-  Send an email using the Mailgun API.
+  Send an email through Mailgun.
 
-  @param from - Sender email address
-  @param to - Recipient email address
-  @param subject - Email subject
-  @param html - HTML content
-  @param text - Plain text content
-  @param cc - CC recipients
-  @param bcc - BCC recipients
-  @param replyTo - Reply-to address
-  @param apiKey - Mailgun API key
-  @param domain - Mailgun domain
-  @param region - Mailgun region ("eu" for EU)
-  @param allowList - Only allow sending to these addresses
-  @param blockList - Block sending to these addresses
+  @param from - An email address authorized to send through this provider.
+  @param html - An HTML message body, which may accompany a plain-text alternative.
+  @param text - A plain-text message body, which may accompany an HTML version.
+  @param cc - One optional copy recipient address.
+  @param bcc - One optional hidden-copy recipient address.
+  @param replyTo - Direct replies to this address instead of the sender.
+  @param apiKey - Leave empty to use MAILGUN_API_KEY.
+  @param domain - Leave empty to use MAILGUN_DOMAIN.
+  @param region - Use "eu" for the EU endpoint, or empty to use MAILGUN_REGION then "us".
+  @param allowList - Limit to, cc, and bcc to these addresses, or leave empty for no allow restriction.
+  @param blockList - Reject any to, cc, or bcc address on this list, even if allowed.
   """
   return interrupt std::sendEmail("Are you sure you want to send this email via Mailgun?", {
     from: from,

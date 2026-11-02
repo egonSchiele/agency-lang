@@ -32,8 +32,6 @@ keys(obj: any): string[]
 
 Return an array of an object's own enumerable property names.
 
-  @param obj - The object
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -42,7 +40,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L22))
 
 ### values
 
@@ -51,8 +49,6 @@ values(obj: any): any[]
 ```
 
 Return an array of an object's own enumerable property values.
-
-  @param obj - The object
 
 **Parameters:**
 
@@ -72,8 +68,6 @@ entries(obj: any): any[]
 
 Return an array of an object's own enumerable entries, each as { key, value }.
 
-  @param obj - The object
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -82,7 +76,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L38))
 
 ### mapValues
 
@@ -92,7 +86,6 @@ mapValues(obj: any, func: (any, string) -> any): any
 
 Return a new object with the same keys, but with each value transformed by the function.
 
-  @param obj - The object to transform
   @param func - The function receiving (value, key)
 
 **Parameters:**
@@ -104,7 +97,7 @@ Return a new object with the same keys, but with each value transformed by the f
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L46))
 
 ### mapEntries
 
@@ -114,7 +107,6 @@ mapEntries(obj: any, func: (any, string) -> any): any
 
 Return a new object by applying the function to each entry.
 
-  @param obj - The object to transform
   @param func - The function receiving (value, key) returning {key, value}
 
 **Parameters:**
@@ -126,7 +118,7 @@ Return a new object by applying the function to each entry.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L59))
 
 ### filterEntries
 
@@ -136,7 +128,6 @@ filterEntries(obj: any, func: (any, string) -> boolean): any
 
 Return a new object containing only the entries for which the function returns true.
 
-  @param obj - The object to filter
   @param func - The predicate receiving (value, key)
 
 **Parameters:**
@@ -148,7 +139,7 @@ Return a new object containing only the entries for which the function returns t
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L73))
 
 ### everyEntry
 
@@ -158,7 +149,6 @@ everyEntry(obj: any, func: (any, string) -> boolean): boolean
 
 Return true if the function returns true for every entry in the object.
 
-  @param obj - The object to test
   @param func - The predicate receiving (value, key)
 
 **Parameters:**
@@ -170,7 +160,7 @@ Return true if the function returns true for every entry in the object.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L88))
 
 ### someEntry
 
@@ -180,7 +170,6 @@ someEntry(obj: any, func: (any, string) -> boolean): boolean
 
 Return true if the function returns true for at least one entry in the object.
 
-  @param obj - The object to test
   @param func - The predicate receiving (value, key)
 
 **Parameters:**
@@ -192,4 +181,4 @@ Return true if the function returns true for at least one entry in the object.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/object.agency#L102))

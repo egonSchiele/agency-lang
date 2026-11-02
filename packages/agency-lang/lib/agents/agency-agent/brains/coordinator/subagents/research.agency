@@ -59,7 +59,6 @@ export handoff def researchAgent(
       context: context,
       maxCost: maxDollars ?? $10.00,
       maxTime: timeBudget(maxSeconds, 10m),
-      session: "research",
       extraTools: [...researchTools, question],
       keepDraft: false,
     )
@@ -69,7 +68,6 @@ export handoff def researchAgent(
       context: context,
       maxCost: maxDollars ?? $50.00,
       maxTime: timeBudget(maxSeconds, 30m),
-      session: "research",
       extraTools: researchTools,
       keepDraft: false,
     )

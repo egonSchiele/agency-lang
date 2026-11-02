@@ -1,31 +1,47 @@
 ---
 name: "statelog"
-description: "Record and read back eval data from the statelog, marking an agent's input and response for later analysis."
+description: "Record agent inputs and outputs for evaluation, and inspect saved traces."
 ---
 
 # statelog
 
-Record and read back eval data from the statelog. Call `evalValue` and
-  `evalOutput` inside an agent to mark its user-facing input and response,
-  then read them from a saved trace with `evalValues`, `evalOutputs`,
-  `finalEvalOutput`, or the full `evalRecord`. `emit` sends a custom event
-  straight to the host.
+Enable observability and configure a log file to save eval annotations.
 
   ```ts
   import { evalValue, evalOutput } from "std::statelog"
 
   node main(question: string) {
     evalValue(question)
-    let answer: string = llm(question)
+    const answer: string = llm(question)
     evalOutput(answer)
   }
   ```
+
+  Use `evalOutput` when the response you want graded differs from the
+  entry node's return value. Read a saved run with `evalRecord`, or use
+  `finalEvalOutput` when you only need its last output:
+
+  ```ts
+  import { finalEvalOutput } from "std::statelog"
+
+  node main() {
+    const output = finalEvalOutput("./statelog.jsonl")
+    return output
+  }
+  ```
+
+  `setAgentName` groups runs by agent. `turnStart` marks messages from a
+  person for the logs viewer. `emit` sends custom data to the host's
+  `onEmit` callback.
 
 ## Types
 
 ### StatelogEvalValue
 
+An eval input or output with its thread and time in milliseconds since trace start.
+
 ```ts
+/** An eval input or output with its thread and time in milliseconds since trace start. */
 export type StatelogEvalValue = {
   value: any;
   threadId?: string;
@@ -34,11 +50,14 @@ export type StatelogEvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L46))
 
 ### StatelogEvalRecord
 
+A normalized view of one saved run for grading and analysis.
+
 ```ts
+/** A normalized view of one saved run for grading and analysis. */
 export type StatelogEvalRecord = {
   traceId: string;
   recordVersion: number;
@@ -59,7 +78,7 @@ export type StatelogEvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L54))
 
 ## Functions
 
@@ -71,9 +90,9 @@ emit(data: any)
 
 Emit a custom event to the calling TypeScript code.
 
-  @param data - The event payload to emit.
+  @param data - The payload the host's `onEmit` callback should receive.
 
-Delivered to the host via the `onEmit` callback.
+Use with the host's `onEmit` callback to deliver progress or other application events.
 
 **Parameters:**
 
@@ -81,7 +100,7 @@ Delivered to the host via the `onEmit` callback.
 |---|---|---|
 | data | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L74))
 
 ### setAgentName
 
@@ -91,17 +110,11 @@ setAgentName(name: string)
 
 Set a stable display name for this agent, used to group its runs.
 
-  Names use letters, digits, ".", "_", "-" and "/" (to nest a family's
-  variants, as in "agency-agent/coordinator"): no spaces, at most 200
-  characters, and no empty, "." or ".." segment between slashes.
+  @param name - Use 1–200 ASCII letters, digits, ".", "_", "-", or "/", with no empty, ".", or ".." path segments.
 
-  @param name - The agent name, e.g. "gcode-v2".
-
-Names this agent in the statelog. Cross-run tools (the runs explorer,
-statelog's eval pages) group runs under this identity instead of the
-launch command. Call it once, early; the last call in a trace wins. The
-name is also a URL path segment on statelog, so an invalid one throws
-rather than producing a trace that cannot be grouped.
+Call once near startup so the runs explorer and statelog's eval pages
+  group this agent's runs under a stable name. The last call in a trace
+  wins. Use slashes to group variants, such as "agency-agent/coordinator".
 
 **Parameters:**
 
@@ -109,7 +122,7 @@ rather than producing a trace that cannot be grouped.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L88))
 
 ### turnStart
 
@@ -117,17 +130,17 @@ rather than producing a trace that cannot be grouped.
 turnStart(message: string)
 ```
 
-Mark the start of a turn: a message a person sent this program. The logs viewer draws each turn on its own axis and reports the time between turns as waiting for the person.
+Mark the start of a turn when a person sends this program a message.
 
   @param message - The message the person sent.
 
 Records a `turnStart` event. The logs viewer splits a session into turns
-at these events: each turn runs from its message to the next, and the
-time after a turn's last event is shown as waiting for the person. The
-`repl` function in `std::ui/cli` logs one for every line
-a person submits that is not a slash command, so a program that takes
-its messages another way (a seeded first prompt, a chat server) calls
-this itself.
+  at these events: each turn runs from its message to the next, and the
+  time after a turn's last event is shown as waiting for the person. The
+  `repl` function in `std::ui/cli` logs one for every line
+  a person submits that is not a slash command, so a program that takes
+  its messages another way (a seeded first prompt, a chat server) calls
+  this itself.
 
 **Parameters:**
 
@@ -135,7 +148,7 @@ this itself.
 |---|---|---|
 | message | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L106))
 
 ### evalValue
 
@@ -143,9 +156,18 @@ this itself.
 evalValue(value: any)
 ```
 
-Record a value as part of the user-facing input to this agent. May be called multiple times per trace; all firings are collected in order.
+Record an input to this agent for evaluation.
 
-  @param value - The value to record. Any JSON-serializable type is accepted.
+  @param value - A JSON-serializable value representing the input the user supplied.
+
+Mark the actual input at the point your agent receives it, so evaluators
+  do not have to infer it from the conversation. Without an annotation,
+  extraction uses the last user-role message in the first LLM completion
+  on the top-level thread and adds a warning.
+
+  Repeated calls contribute separate entries to `evalValues` in order.
+  Values follow JSON serialization rules. Circular references, `bigint`,
+  and top-level functions or symbols throw at the call site.
 
 **Parameters:**
 
@@ -153,7 +175,7 @@ Record a value as part of the user-facing input to this agent. May be called mul
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L125))
 
 ### evalOutput
 
@@ -161,19 +183,18 @@ Record a value as part of the user-facing input to this agent. May be called mul
 evalOutput(value: any)
 ```
 
-Record a value as the agent's user-facing response. May be called multiple times per trace; all firings are collected in order.
+Record the agent's response for evaluation.
 
-  @param value - The value to record. Any JSON-serializable type is accepted.
+  @param value - A JSON-serializable value representing the response the user receives.
 
-Records the value in the statelog as an `evalOutputRecorded` event, which
-`agency eval extract` surfaces on the `evalOutputs[]` field. When no eval
-annotation exists in a trace, `eval extract` falls back to a heuristic
-(last LLM completion on the top-level thread) and emits a warning.
-Annotating explicitly is preferred, since the heuristic does not account
-for post-LLM processing the agent applies before showing a response. The
-consuming eval / judge / task definition decides what to do with multiple
-firings (e.g. a pairwise judge can use the last firing). Same
-serialization rules as `evalValue`.
+Use when the response to grade differs from the entry node's return
+  value, or the node returns nothing. Explicit outputs replace the return
+  value in the eval record. Without an annotation, extraction uses the
+  entry node's non-null return value.
+
+  Repeated calls contribute separate entries to `evalOutputs` in order.
+  `finalEvalOutput` selects the last entry. Values follow the same JSON
+  serialization rules as `evalValue`.
 
 **Parameters:**
 
@@ -181,7 +202,7 @@ serialization rules as `evalValue`.
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L144))
 
 ### evalRecord
 
@@ -192,13 +213,15 @@ evalRecord(
 ): StatelogEvalRecord
 ```
 
-Parse a statelog JSONL file and return the same structured EvalRecord
-  produced by `agency eval extract`. Use this when an agent needs to inspect
-  a previous run without shelling out to the CLI.
+Read a saved statelog trace for evaluation or analysis.
 
-  @param statelogPath - Path to the statelog JSONL file to parse
-  @param allowedPaths - Optional allow-list of path prefixes. When provided,
-    statelogPath must resolve under one of these prefixes.
+  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
+  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
+
+Inspect a previous run from Agency code without invoking the CLI.
+  Returns the same record as `agency eval extract`, including eval values,
+  outputs, conversation activity, metrics, and extraction warnings.
+  The file must contain a single trace.
 
 **Parameters:**
 
@@ -209,7 +232,7 @@ Parse a statelog JSONL file and return the same structured EvalRecord
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L159))
 
 ### evalValues
 
@@ -220,12 +243,13 @@ evalValues(
 ): StatelogEvalValue[]
 ```
 
-Parse a statelog JSONL file and return the values recorded as eval values.
+Read the evaluation inputs from a saved statelog trace.
 
-  @param statelogPath - Path to the statelog JSONL file to parse.
-  @param allowedPaths - Optional allow-list of path prefixes; statelogPath must resolve under one.
+  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
+  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
 
-Mirrors `new StatelogParser(path).evalValues()` in TypeScript.
+Read the inputs used for evaluation without the full run record.
+  Includes inferred input when the agent did not call `evalValue`.
 
 **Parameters:**
 
@@ -236,7 +260,7 @@ Mirrors `new StatelogParser(path).evalValues()` in TypeScript.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L173))
 
 ### evalOutputs
 
@@ -247,12 +271,14 @@ evalOutputs(
 ): StatelogEvalValue[]
 ```
 
-Parse a statelog JSONL file and return the values recorded as eval outputs.
+Read the evaluation outputs from a saved statelog trace.
 
-  @param statelogPath - Path to the statelog JSONL file to parse.
-  @param allowedPaths - Optional allow-list of path prefixes; statelogPath must resolve under one.
+  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
+  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
 
-Mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
+Read all outputs used for evaluation, preserving their order.
+  Uses explicit `evalOutput` annotations when present, otherwise the entry
+  node's non-null return value. Returns an empty array when neither exists.
 
 **Parameters:**
 
@@ -263,7 +289,7 @@ Mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L188))
 
 ### finalEvalOutput
 
@@ -274,12 +300,13 @@ finalEvalOutput(
 ): StatelogEvalValue | null
 ```
 
-Parse a statelog JSONL file and return the final eval output, or null when
-  the trace has no output. This is the canonical judge-ready final-output
-  selection rule.
+Read the last evaluation output from a saved statelog trace, or null if none exists.
 
-  @param statelogPath - Path to the statelog JSONL file to parse
-  @param allowedPaths - Optional allow-list of path prefixes
+  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
+  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
+
+Select the last entry from `evalOutputs` for a judge that needs one answer.
+  The result includes the value's thread and time, as well as its payload.
 
 **Parameters:**
 
@@ -290,4 +317,4 @@ Parse a statelog JSONL file and return the final eval output, or null when
 
 **Returns:** `StatelogEvalValue | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L202))

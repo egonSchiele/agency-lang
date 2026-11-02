@@ -1,6 +1,7 @@
 import { _sendIMessage } from "agency-lang/stdlib-lib/imessage.js"
 
 /** @module
+  @summary Send iMessages through the macOS Messages app.
   Send an iMessage from Agency code via the macOS Messages app. Works on
   macOS only, with Messages.app signed in to iMessage. No API key required.
 
@@ -25,12 +26,12 @@ effect std::sendIMessage { to: string }
 @capabilities(subprocess)
 export def sendIMessage(to: string, message: string, allowList: string[] = [], blockList: string[] = []): Result {
   """
-  Send an iMessage via the macOS Messages app.
+  Send an iMessage through the macOS Messages app.
 
-  @param to - Phone number or email of the recipient
-  @param message - The text to send
-  @param allowList - Only allow sending to these addresses/numbers
-  @param blockList - Block sending to these addresses/numbers
+  @param to - The recipient's phone number or iMessage email address.
+  @param message - Non-empty message text.
+  @param allowList - Limit recipients to these addresses or numbers, or leave empty for no allow restriction.
+  @param blockList - Reject these addresses or numbers even if they are allowed.
   """
   return interrupt std::sendIMessage("Are you sure you want to send this iMessage?", {
     to: to

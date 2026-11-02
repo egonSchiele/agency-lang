@@ -1,3 +1,5 @@
+import { _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
+
 /** @module
 Helpers for working with objects: read their keys, values, and entries,
 and transform them with `mapValues`, `mapEntries`, and `filterEntries`.
@@ -16,13 +18,11 @@ node main() {
 }
 ```
 */
-import { _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
 
 export def keys(obj: any): string[] {
   """
   Return an array of an object's own enumerable property names.
 
-  @param obj - The object
   """
   return _keys(obj)
 }
@@ -31,7 +31,6 @@ export def values(obj: any): any[] {
   """
   Return an array of an object's own enumerable property values.
 
-  @param obj - The object
   """
   return _values(obj)
 }
@@ -40,7 +39,6 @@ export def entries(obj: any): any[] {
   """
   Return an array of an object's own enumerable entries, each as { key, value }.
 
-  @param obj - The object
   """
   return _entries(obj)
 }
@@ -49,7 +47,6 @@ export def mapValues(obj: any, func: (any, string) -> any): any {
   """
   Return a new object with the same keys, but with each value transformed by the function.
 
-  @param obj - The object to transform
   @param func - The function receiving (value, key)
   """
   const result = {}
@@ -63,7 +60,6 @@ export def mapEntries(obj: any, func: (any, string) -> any): any {
   """
   Return a new object by applying the function to each entry.
 
-  @param obj - The object to transform
   @param func - The function receiving (value, key) returning {key, value}
   """
   const result = {}
@@ -78,7 +74,6 @@ export def filterEntries(obj: any, func: (any, string) -> boolean): any {
   """
   Return a new object containing only the entries for which the function returns true.
 
-  @param obj - The object to filter
   @param func - The predicate receiving (value, key)
   """
   const result = {}
@@ -94,7 +89,6 @@ export def everyEntry(obj: any, func: (any, string) -> boolean): boolean {
   """
   Return true if the function returns true for every entry in the object.
 
-  @param obj - The object to test
   @param func - The predicate receiving (value, key)
   """
   for (k in keys(obj)) {
@@ -109,7 +103,6 @@ export def someEntry(obj: any, func: (any, string) -> boolean): boolean {
   """
   Return true if the function returns true for at least one entry in the object.
 
-  @param obj - The object to test
   @param func - The predicate receiving (value, key)
   """
   for (k in keys(obj)) {

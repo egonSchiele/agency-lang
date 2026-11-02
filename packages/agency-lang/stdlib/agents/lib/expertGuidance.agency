@@ -1,12 +1,14 @@
 /** @module
-  @summary The ExpertGuidance type shared by the expert agents, with render
-  and fail-open helpers.
+@summary Render expert guidance for a solver and handle failed consultations.
+
+Expert agents return `ExpertGuidance`. Pass it through `renderGuidance` for
+a coding agent's context and use its `checklist` as acceptance criteria.
+`guidanceOrEmpty` turns a failed consultation into empty guidance.
 */
 
-/** What an expert consult returns.
-- `rules` are for the solver to read;
-- `checklist` are concrete, checkable acceptance criteria.
-Empty rules and checklist means "nothing domain-specific here". */
+/** Guidance for a solver: domain conventions in `rules` and checkable
+acceptance criteria in `checklist`. Empty lists mean the consult supplied
+no domain-specific guidance. */
 export type ExpertGuidance = {
   domain: string;
   rules: string[];
@@ -31,8 +33,9 @@ export def renderGuidance(guidance: ExpertGuidance): string {
 }
 
 export def guidanceOrEmpty(result: Result<ExpertGuidance>): ExpertGuidance {
-  """Unwrap a consult Result, failing open: a consult that errored yields
-  empty guidance, so the caller proceeds as if no consult happened."""
+  """
+  Return expert guidance, or empty guidance if the consultation failed.
+  """
   return match(result) {
     success(guidance) => guidance
     failure(_) => emptyGuidance

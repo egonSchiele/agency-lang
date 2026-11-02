@@ -1,14 +1,3 @@
-/** @module
-  @summary Reviews prose for readability: the judgment layer above spelling
-  and grammar.
-
-  The reviewer takes the text itself or a request naming the files that hold
-  it, and reads those files itself. It judges whether a reader can follow
-  the writing, using a small catalog of readability principles, and a
-  caller can supply its own writing guidelines to extend or override them.
-  It carries write and edit tools so it can apply its fixes, but only when
-  the request asks for that; by default it reports and changes nothing.
-*/
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import {
   llmOptions,
@@ -26,6 +15,17 @@ import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
+
+/** @module
+@summary Review prose for readability using built-in or caller-supplied guidelines.
+
+Pass prose or a request naming files. The reviewer reports findings and
+can apply edits when the request explicitly asks for them. Separate passes
+look for unnecessary passages, verbal tics, and readability problems.
+
+By default, a failed review returns no findings. Pass `failOpen: false` to
+receive failures. A budget stop may still return saved partial findings.
+*/
 
 optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.
 
@@ -128,15 +128,7 @@ def findCuts(
   provider: string,
 ): Feedback[] {
   """
-  Find the parts of the text this reader does not need and return them as
-  cut findings.
-
-  @param text - The text under review, or a request naming the files that hold it
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, or ""
-  @param context - Extra material for the judgment, or ""
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  Find passages the intended reader does not need and return cut findings.
   """
   let found: Feedback[] = []
   thread(label: "cuts") {
@@ -161,15 +153,7 @@ def cutsOrNothing(
   provider: string,
 ): Feedback[] {
   """
-  findCuts, with a failed call reported as no findings, so the main review
-  is not lost because this pass could not run.
-
-  @param text - The text under review, or a request naming the files that hold it
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, or ""
-  @param context - Extra material for the judgment, or ""
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  Find unnecessary passages, returning no findings when that pass fails.
   """
   const found = try findCuts(
     text: text,
@@ -308,14 +292,7 @@ def findVerbalTics(
   provider: string,
 ): Feedback[] {
   """
-  Find verbal tics in the text and return them as advisory findings.
-
-  @param text - The text under review, or a request naming the files that hold it
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, or ""
-  @param context - Extra material for the judgment, or ""
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  Find verbal tics and return advisory findings.
   """
   let found: Feedback[] = []
   thread(label: "verbalTics") {
@@ -343,15 +320,7 @@ def verbalTicsOrNothing(
   provider: string,
 ): Feedback[] {
   """
-  findVerbalTics, with a failed call reported as no findings. The main
-  review must not be lost because this advisory pass could not run.
-
-  @param text - The text under review, or a request naming the files that hold it
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, or ""
-  @param context - Extra material for the judgment, or ""
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
+  Find verbal tics, returning no findings when that pass fails.
   """
   const found = try findVerbalTics(
     text: text,
@@ -371,9 +340,7 @@ static const skills = agentSkill("writing/review")
 
 export def buildTools(): any[] {
   """
-  Return the writing reviewer's tools: the file tools (to read the text
-  under review, and to apply fixes when asked), the shipped skills, and
-  progress reporting.
+  Return the writing reviewer's file editing, skill, and communication tools.
   """
   return [...writableFileTools(), skills, ...communicationTools()]
 }
@@ -440,27 +407,18 @@ export def writingReviewAgent(
   failOpen: boolean = true,
 ): Result<Feedback[]> {
   """
-  Review prose for readability and return findings. error=true marks a
-  passage a reader will misread or lose; error=false is advisory polish.
-  Spelling and grammar are assumed checked separately: this agent reports
-  only what needs judgment.
+  Review prose for readability and return findings, applying edits only when requested.
 
-  @param text - The text under review, or a request naming the files that
-    hold it (and, if the caller wants the fixes applied, saying so)
-  @param task - Who the text is for and what it must get across, or ""
-  @param guidelines - The caller's own writing guidelines, as text (for
-    example the contents of a project's writing-tips document). Outranks
-    the built-in catalog where they conflict; "" for the built-in catalog alone
-  @param context - Extra material for the judgment, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param failOpen - When true, a review that could not run (budget, policy,
-    model error) returns no findings instead of a failure. Pass false to get
-    the failure, for callers that must not mistake a failed review for a clean one
+  @param text - Prose or a request naming files, explicitly asking for edits if wanted.
+  @param task - The intended reader and what the text must communicate.
+  @param guidelines - Writing guidelines that override conflicting built-in review rules.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param session - Name a conversation for the main review, or "" for an isolated thread.
+  @param extraTools - Tools added to the main review only.
+  @param failOpen - False returns review failures, while saved partial findings can still succeed.
   """
   const captured = writingReviewUnderBudget(
     text: text,
@@ -553,16 +511,14 @@ export type WritingReviewEvalInput = {
   sourceFile: string
 }
 
-/** Eval entry point: `agency eval run stdlib/agents/writing/review.agency:evalMain
-  --suite <dir>`. A node in a library module never runs when the module is
-  imported; it only exists so a suite can score this reviewer without a
-  wrapper file. Any other reviewer scored on the same suite supplies a node
-  with this signature. Effects are decided at this boundary: reading the
-  seeded input file is this node's own doing (`with approve`), and a budget
-  reviewer runs under `docsOnlyHandler`, which lets it read the packaged docs
-  and rejects every other interrupt, so a budget trip stays a failure and
-  the reviewer's fail-open result comes back instead of an interrupt
-  escaping the entry point. */
+// Any other reviewer scored on the same suite supplies a node with this
+// signature. Effects are decided at this boundary. Reading the seeded input
+// file is this node's own decision (`with approve`). The reviewer runs under
+// `docsOnlyHandler`, which lets it read the packaged docs and rejects every
+// other interrupt, so a budget trip stays a failure and the reviewer's
+// fail-open result comes back instead of an interrupt escaping the entry
+// point.
+/** Run this module through an eval suite with `agency eval run stdlib/agents/writing/review.agency:evalMain --suite <dir>`. */
 node evalMain(input: WritingReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve

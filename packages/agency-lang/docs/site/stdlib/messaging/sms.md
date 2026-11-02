@@ -1,6 +1,6 @@
 ---
 name: "sms"
-description: "Send SMS text messages from Agency code via Twilio."
+description: "Send SMS messages through Twilio."
 ---
 
 # sms
@@ -29,7 +29,7 @@ effect std::sendSms {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L25))
 
 ## Functions
 
@@ -47,15 +47,15 @@ sendSms(
 ): Result
 ```
 
-Send an SMS text message via the Twilio API.
+Send an SMS text message through Twilio.
 
-  @param to - Recipient phone number (E.164 format)
-  @param body - Message text
-  @param from - Sender phone number
-  @param accountSid - Twilio account SID
-  @param authToken - Twilio auth token
-  @param allowList - Only allow sending to these numbers
-  @param blockList - Block sending to these numbers
+  @param to - A phone number in E.164 format, such as "+15551234567".
+  @param body - Non-empty message text.
+  @param from - A Twilio sender number, or empty to use TWILIO_FROM_NUMBER.
+  @param accountSid - Leave empty to use TWILIO_ACCOUNT_SID.
+  @param authToken - Leave empty to use TWILIO_AUTH_TOKEN.
+  @param allowList - Limit recipients to these numbers, or leave empty for no allow restriction.
+  @param blockList - Reject these numbers even if they are allowed.
 
 Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env vars, or pass them directly.
 
@@ -77,4 +77,4 @@ Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L29))

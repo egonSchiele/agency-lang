@@ -1,14 +1,3 @@
-/** @module
-  @summary Reviews TypeScript code for readability and architecture.
-
-  The judgment layer above what compilers and linters catch.
-
-  Review reads the work and looks things up. This agent never executes the
-  code it reviews and never changes anything, but unlike the other
-  reviewers it carries read-only repository tools: its central checks —
-  "does this duplicate a helper the codebase already has", "does this
-  follow the conventions around it" — cannot be made from the diff alone.
-*/
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
@@ -25,6 +14,17 @@ import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
+
+/** @module
+@summary Review TypeScript readability, architecture, and project conventions.
+
+Pass a diff or source text and optional project guidelines. The reviewer
+can read repository files and Git history to check duplication and
+conventions. It assumes compilers, linters, and tests run separately.
+
+A stopped review may return saved partial findings. A failed review
+returns no findings, so an empty list alone does not prove a completed review.
+*/
 
 static const systemPrompt = """You review TypeScript code for readability and architecture.
 Correctness is not your lane: compilers, linters, formatters, and tests
@@ -86,9 +86,7 @@ static const skills = agentSkill("typescript/review")
 
 export def buildTools(): any[] {
   """
-  Return the TypeScript reviewer's lookup tools: read-only access to the
-  repository under review (for duplication and convention checks), plus
-  web lookups for API claims. Nothing that changes anything.
+  Return repository and web lookup tools for TypeScript reviews.
   """
   return [
     ...readOnlyFileTools(),
@@ -160,23 +158,17 @@ export def typescriptReviewAgent(
   extraTools: any[] = [],
 ): Result<Feedback[]> {
   """
-  Review TypeScript code for readability and architecture and return
-  findings. error=true marks a problem the change should not merge with;
-  error=false is advisory. Compilers and linters are assumed to run
-  separately: this agent reports only what needs human-style judgment.
+  Review TypeScript readability, architecture, and project conventions.
+  A failed review returns no findings.
 
-  @param work - The code under review: a diff, a file, or several files as text
-  @param task - What the change is supposed to accomplish, or ""
-  @param guidelines - The project's own coding standards, as text (for
-    example the contents of its anti-pattern catalog). Outranks the
-    built-in catalog where they conflict; "" for the built-in catalog alone
-  @param context - Extra material for the judgment, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param work - A diff, a file, or several files supplied as text.
+  @param guidelines - Project standards that override conflicting built-in review rules.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
+  @param extraTools - Tools added to the repository and source lookup tools.
   """
   return failOpenFeedback(typescriptReviewUnderBudget(
     work: work,
@@ -231,16 +223,14 @@ export type TsReviewEvalInput = {
   sourceFile: string
 }
 
-/** Eval entry point: `agency eval run stdlib/agents/typescript/review.agency:evalMain
-  --suite <dir>`. A node in a library module never runs when the module is
-  imported; it only exists so a suite can score this reviewer without a
-  wrapper file. Any other reviewer scored on the same suite supplies a node
-  with this signature. Effects are decided at this boundary: reading the
-  seeded input file is this node's own doing (`with approve`), and a budget
-  reviewer runs under `docsOnlyHandler`, which lets it read the packaged docs
-  and rejects every other interrupt, so a budget trip stays a failure and
-  the reviewer's fail-open result comes back instead of an interrupt
-  escaping the entry point. */
+// Any other reviewer scored on the same suite supplies a node with this
+// signature. Effects are decided at this boundary. Reading the seeded input
+// file is this node's own decision (`with approve`). The reviewer runs under
+// `docsOnlyHandler`, which lets it read the packaged docs and rejects every
+// other interrupt, so a budget trip stays a failure and the reviewer's
+// fail-open result comes back instead of an interrupt escaping the entry
+// point.
+/** Run this module through an eval suite with `agency eval run stdlib/agents/typescript/review.agency:evalMain --suite <dir>`. */
 node evalMain(input: TsReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve

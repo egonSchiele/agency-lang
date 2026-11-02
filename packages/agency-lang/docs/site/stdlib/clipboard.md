@@ -44,8 +44,6 @@ copy(text: string)
 
 Copy text to the system clipboard.
 
-  @param text - The text to copy
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -64,7 +62,7 @@ Copy text to the system clipboard.
 paste(): string
 ```
 
-Read text from the system clipboard and return it.
+Read text from the system clipboard.
 
 **Returns:** `string`
 
@@ -72,4 +70,4 @@ Read text from the system clipboard and return it.
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L31))

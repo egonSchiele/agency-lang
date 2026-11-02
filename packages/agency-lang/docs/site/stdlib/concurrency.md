@@ -1,6 +1,6 @@
 ---
 name: "concurrency"
-description: "Concurrency primitives for coordinating work inside one Agency run."
+description: "Coordinate concurrent work with locks and worker pools."
 ---
 
 # concurrency
@@ -12,13 +12,15 @@ Concurrency primitives for coordinating work inside one Agency run. Use
   ```ts
   import { withLock } from "std::concurrency"
 
+  let counter = 0
+
   node main() {
     fork(range(5), shared: true) as _ {
       withLock("counter") as {
-        // only one branch runs this block at a time
-        updateSharedState()
+        counter = counter + 1
       }
     }
+    print(counter)
   }
   ```
 
@@ -35,26 +37,19 @@ withLock(
 ): any
 ```
 
-Run a block while holding a named per-run mutex. Branches of the same run
-  that use the same lock name execute this block one at a time. Branches
-  using different names continue concurrently. The lock is released
-  automatically when the block returns, throws, or unwinds for an interrupt.
+Run a block while holding a named lock shared by branches of one run.
 
-  @param name - Lock name; use stable names like "std::tty" for shared resources
-  @param timeoutMs - Maximum time to wait before failing without acquiring the lock; null waits indefinitely
-  @param warnAfterMs - Wait time before printing a diagnostic warning; defaults to 30s
-  @param block - The work to run while holding the lock
+  @param timeoutMs - Maximum wait to acquire the lock, or null to wait indefinitely.
+  @param warnAfterMs - Wait before a diagnostic warning, or null for the 30-second default.
 
-Caller notes:
-    - In subprocesses launched with `std::agency.run()`, the lock is coordinated by
-      the parent process, so parent and child code share the same mutex.
-    - Same-owner reentrancy on the same lock throws immediately.
-    - Multi-lock deadlock cycles are not detected automatically; use `timeoutMs`
-      when a bounded wait is required.
-    - A fork branch may run inside a lock as long as it does not reacquire the same
-      lock. Reacquiring the same lock from a fork spawned inside the lock can deadlock,
-      because the outer scope waits for the fork while the branch waits for the outer
-      lock to release.
+Use a stable, namespaced name such as "std::tty" for a shared resource.
+Parent and child code launched with `std::agency.run()` share the lock.
+The lock releases when the block returns, throws, or unwinds for an interrupt.
+
+Reacquiring a held lock from the same owner throws. A fork inside a locked
+block can deadlock if it tries to acquire that lock: the outer block waits
+for the fork while holding the lock. Use `timeoutMs` to bound waits when
+several locks could form a cycle.
 
 **Parameters:**
 
@@ -67,7 +62,7 @@ Caller notes:
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L35))
 
 ### concurrencyPool
 
@@ -75,11 +70,12 @@ Caller notes:
 concurrencyPool(size: number, items: any[], block: (item: any) -> any): any[]
 ```
 
-Run a block in parallel across a bounded pool of workers.
+Process items concurrently with at most `size` workers.
 
-  @param size - Number of concurrent workers to run
-  @param items - The items to process
-  @param block - The work to run in each worker
+  @param size - Positive whole number of workers.
+
+Results follow the input order. Items are assigned to workers round-robin,
+so a worker processes its own items in sequence.
 
 **Parameters:**
 
@@ -91,4 +87,4 @@ Run a block in parallel across a bounded pool of workers.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L54))

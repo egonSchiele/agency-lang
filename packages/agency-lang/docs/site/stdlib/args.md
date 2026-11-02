@@ -1,6 +1,6 @@
 ---
 name: "args"
-description: "Parse command-line flags."
+description: "Parse command-line flags with validation and generated help."
 ---
 
 # args
@@ -62,13 +62,13 @@ A compiled or packed program works the same way:
 
 ```
 $ agency compile greet.agency
-$ node greet.js --name alice
+$ node greet.js --name alice --out result.txt
 Hello, alice!
 ```
 
 Do not carry a `--` over to that form. `--` means "stop reading flags" to
 `parseArgs`, so anything after it becomes a positional argument.
-`node greet.js -- --name alice` greets the world and puts `--name` and `alice`
+`node greet.js --out result.txt -- --name alice` greets the world and puts `--name` and `alice`
 in `positionals`.
 
 ```
@@ -109,7 +109,7 @@ Boolean flags default to `false` when no default is set. `default: true` is reje
 String flags can constrain values to an enumerated set:
 
 ```ts
-format: { type: "string", choices: ["json", "yaml", "toml"], default: "json" }
+const formatFlag = { type: "string", choices: ["json", "yaml", "toml"], default: "json" }
 ```
 
 Comparison is case-sensitive.
@@ -121,7 +121,7 @@ Comparison is case-sensitive.
 `--version` / `-V` are auto-injected **only** when `schema.version` is set:
 
 ```ts
-parseArgs({ version: "1.2.3" ... })
+parseArgs({ version: "1.2.3", flags: {} })
 ```
 
 When `--version` is passed, the parser prints the version and exits.
@@ -147,8 +147,8 @@ Description of a single flag.
 - `default` and `required` are mutually exclusive.
 - `choices` constrains string flags to a fixed set of values.
 - `hidden` flags still parse but are omitted from `--help`.
-- a bare `--flag` is a missing-value error unless `optional` is set,
-  in which case it yields "" instead of an error.
+- `optional` lets a string flag appear without a value, yielding "".
+  It cannot be combined with `choices`.
 
 ```ts
 /** Description of a single flag.
@@ -157,8 +157,8 @@ Description of a single flag.
 - `default` and `required` are mutually exclusive.
 - `choices` constrains string flags to a fixed set of values.
 - `hidden` flags still parse but are omitted from `--help`.
-- a bare `--flag` is a missing-value error unless `optional` is set,
-  in which case it yields "" instead of an error. */
+- `optional` lets a string flag appear without a value, yielding "".
+  It cannot be combined with `choices`. */
 export type FlagSpec = {
   type: "string" | "number" | "boolean";
   short?: string;
@@ -171,7 +171,7 @@ export type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L147))
 
 ### FlagGroups
 
@@ -191,7 +191,7 @@ export type FlagGroups = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L162))
 
 ### ArgsSchema
 
@@ -215,7 +215,7 @@ export type ArgsSchema = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L170))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L171))
 
 ### ParsedArgs
 
@@ -237,7 +237,7 @@ export type ParsedArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L185))
 
 ## Functions
 
@@ -247,7 +247,8 @@ export type ParsedArgs = {
 parseArgs(schema: ArgsSchema): ParsedArgs
 ```
 
-Given the schema, parse `process.argv`.
+Parse this program's command-line flags according to a schema.
+  Print help or version and exit when requested; exit with code 2 on invalid arguments.
 
 **Parameters:**
 
@@ -257,4 +258,4 @@ Given the schema, parse `process.argv`.
 
 **Returns:** [ParsedArgs](#parsedargs)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L190))

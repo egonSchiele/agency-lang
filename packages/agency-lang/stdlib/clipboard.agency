@@ -19,8 +19,6 @@ effect std::clipboardPaste {}
 export def copy(text: string) {
   """
   Copy text to the system clipboard.
-
-  @param text - The text to copy
   """
   return interrupt std::clipboardCopy("Are you sure you want to copy text to the clipboard?")
 
@@ -32,7 +30,7 @@ export def copy(text: string) {
 @capabilities(subprocess)
 export def paste(): string {
   """
-  Read text from the system clipboard and return it.
+  Read text from the system clipboard.
   """
   return interrupt std::clipboardPaste("Are you sure you want to read from the clipboard? It may contain sensitive data such as passwords.")
 

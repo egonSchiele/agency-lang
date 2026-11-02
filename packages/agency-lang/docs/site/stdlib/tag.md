@@ -1,35 +1,28 @@
 ---
 name: "tag"
-description: "Attach arbitrary tags to values and read them back anywhere in your program."
+description: "Tag values and redact them in state logs."
 ---
 
 # tag
 
-Attach arbitrary tags to values and read them back anywhere in
-your program.
+```ts
+import { redact } from "std::tag"
 
-Tags are stored in a side table, so nothing is attached to the value itself
-and TypeScript interop is unaffected. Two semantics, by value kind:
+def hideSecret(apiKey: string) {
+  redact(apiKey)
+}
+```
 
-- **Primitives** (string, number, boolean) are keyed by **value**: tagging one
-  copy of `"secret"` tags every equal `"secret"` in the current branch.
-- **Objects and arrays** are keyed by **reference**: tagging one object does
-  not tag a structurally-equal but distinct object.
+`redact` replaces a tagged value with `[REDACTED]` in state logs.
+Pass a label to choose a different marker.
 
-The built-in `redact` tag marks a value so it is replaced with `"[REDACTED]"`
-in state logs — useful for API keys and other secrets.
+Primitive tags follow equal values: tagging one "secret" tags other equal
+strings in the branch. Object and array tags follow their references,
+so two objects with equal fields can have different tags.
 
-  ```ts
-  import { redact } from "std::tag"
-
-  def callApi(apiKey: string) {
-    redact(apiKey)          // apiKey shows as "[REDACTED]" in state logs
-    return fetch("https://api.example.com", { headers: { key: apiKey } })
-  }
-  ```
-
-Note: object/array tags are branch-local — they do not survive `fork`/`race`/
-`parallel` branches or interrupt/resume. Primitive (value) tags survive both.
+Tags on primitives, extensible plain objects, and arrays survive forks and
+checkpoint resume. Other objects, including ones already frozen when tagged,
+use branch-local storage. Tags do not appear in ordinary JSON output.
 
 ## Functions
 
@@ -39,8 +32,8 @@ Note: object/array tags are branch-local — they do not survive `fork`/`race`/
 tag(value: any, key: string, val: any = true): any
 ```
 
-Attach a tag to a value. Primitives are keyed by value; objects by
-  reference. `val` defaults to `true`. Returns the value's current tags.
+Attach a tag to a value and return its current tags.
+  Primitives share tags by value; objects use reference identity.
 
 **Parameters:**
 
@@ -52,7 +45,7 @@ Attach a tag to a value. Primitives are keyed by value; objects by
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L26))
 
 ### setTags
 
@@ -60,8 +53,7 @@ Attach a tag to a value. Primitives are keyed by value; objects by
 setTags(value: any, tags: any): any
 ```
 
-Attach multiple tags at once from a `{ key: value }` object. Returns the
-  value's current tags.
+Attach the entries of a tag object to a value and return its current tags.
 
 **Parameters:**
 
@@ -72,7 +64,7 @@ Attach multiple tags at once from a `{ key: value }` object. Returns the
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L34))
 
 ### getTags
 
@@ -80,8 +72,9 @@ Attach multiple tags at once from a `{ key: value }` object. Returns the
 getTags(value: any): any
 ```
 
-Return all tags on a value as an object, or an empty object if none. The
-  result is a shallow copy; nested tag values are shared references.
+Return a value's tags, or an empty object if it has none.
+
+The returned object is a shallow copy; nested tag values remain shared.
 
 **Parameters:**
 
@@ -99,11 +92,9 @@ Return all tags on a value as an object, or an empty object if none. The
 redact(value: any, label: string = ""): any
 ```
 
-Mark a value so state logs show a marker instead of its real content.
-  With no `label` the marker is "[REDACTED]"; pass `label` to customize it.
-  Returns the value's current tags.
-  @param value - The value to redact in state logs
-  @param label - Custom marker text (optional; defaults to "[REDACTED]")
+Mark a value for replacement in state logs and return its current tags.
+
+  @param label - Replacement text, or "" for "[REDACTED]".
 
 **Parameters:**
 
@@ -114,7 +105,7 @@ Mark a value so state logs show a marker instead of its real content.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L49))
 
 ### removeTag
 
@@ -133,7 +124,7 @@ Remove a single tag from a value. Returns the value's remaining tags.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L59))
 
 ### removeAllTags
 
@@ -151,4 +142,4 @@ Remove all tags from a value. Returns an empty object.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L64))

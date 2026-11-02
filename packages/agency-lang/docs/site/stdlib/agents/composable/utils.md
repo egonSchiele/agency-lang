@@ -1,8 +1,12 @@
 ---
 name: "utils"
+description: "Ask for a reply through a generic interrupt."
 ---
 
 # utils
+
+`ask` lets the host or a handler supply a value. For a named user-question
+effect and a string reply, use `question` from `std::agent`.
 
 ## Functions
 
@@ -12,7 +16,7 @@ name: "utils"
 ask(question: string)
 ```
 
-Ask the user a question and get a response
+Ask the user a question and return their response.
 
 **Parameters:**
 
@@ -22,4 +26,4 @@ Ask the user a question and get a response
 
 **Throws:** `unknown`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/utils.agency#L1))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/utils.agency#L8))

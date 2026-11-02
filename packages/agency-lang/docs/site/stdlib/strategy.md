@@ -1,27 +1,26 @@
 ---
 name: "strategy"
-description: "Run a block several times and combine the results."
+description: "Sample alternatives, retry work, and revise results using feedback."
 ---
 
 # strategy
 
-Run a block several times and combine the results. `sample` collects
-every result, `consensus` takes the majority vote, and `retry` /
-`retryWithFeedback` re-run a block until one result passes a test. The
-`@guarded` decorator, which runs a whole function under a budget, lives
-in `std::decorators`.
+Use `sample` to collect parallel attempts and `consensus` to choose the
+most common result. `retry` accepts the first result that passes a test.
+`revise` gives each new attempt the prior attempt's critique.
 
 ```ts
-import { consensus } from "std::strategy"
+import { retry } from "std::strategy"
 
 node main() {
-  // Run the same prompt 5 times and keep the majority answer.
-  let answer = consensus(5) as {
-    return llm("Is 17 prime? Answer yes or no.")
+  const answer = retry(3, test: \text -> text.length > 0) as {
+    return llm("Suggest a short title for a gardening guide")
   }
   print(answer)
 }
 ```
+
+Function budget decorators live in `std::decorators`.
 
 ## Types
 
@@ -41,7 +40,7 @@ export type Critique = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L89))
 
 ## Functions
 
@@ -51,10 +50,7 @@ export type Critique = {
 sample(n: number, block: () -> any): any[]
 ```
 
-Run a block n times in parallel. Returns an array of all results.
-
-  @param n - Number of times to run
-  @param block - The block to execute
+Run a block several times in parallel and collect the results in attempt order.
 
 **Parameters:**
 
@@ -65,7 +61,7 @@ Run a block n times in parallel. Returns an array of all results.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L31))
 
 ### consensus
 
@@ -73,10 +69,7 @@ Run a block n times in parallel. Returns an array of all results.
 consensus(n: number, block: () -> any): any
 ```
 
-Run a block n times in parallel and return the most common result (majority vote).
-
-  @param n - Number of times to run
-  @param block - The block to execute
+Run a block several times in parallel and return its most common result.
 
 **Parameters:**
 
@@ -87,7 +80,7 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L40))
 
 ### retry
 
@@ -95,11 +88,8 @@ Run a block n times in parallel and return the most common result (majority vote
 retry(n: number, test: (any) -> boolean, block: () -> any): any
 ```
 
-Run a block up to n times. Returns the first result that passes the test function. Returns null if all attempts fail.
-
-  @param n - Maximum number of attempts
-  @param test - The function that returns true when the result is acceptable
-  @param block - The block to execute
+Retry a block until its result passes a test.
+  Return the first passing result, or null when no attempt passes.
 
 **Parameters:**
 
@@ -111,7 +101,7 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L48))
 
 ### retryWithFeedback
 
@@ -123,11 +113,10 @@ retryWithFeedback(
 ): any
 ```
 
-Run a block up to n times. Each attempt receives the previous result and the attempt number (starting from 1). Returns the first result that passes the test, or the last result if all fail.
+Retry a block using the prior result to improve each attempt.
+  Return the first passing result, or the last result if no attempt passes.
 
-  @param n - Maximum number of attempts
-  @param test - The function that returns true when the result is acceptable
-  @param block - The block receiving (previousResult, attemptNumber)
+  @param block - Receives null on the first attempt, then the previous result, followed by a one-based attempt number.
 
 **Parameters:**
 
@@ -139,7 +128,7 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L63))
 
 ### revise
 
@@ -151,16 +140,15 @@ revise(
 ): any
 ```
 
-Run a block until its result is accepted, up to maxAttempts times. Each
-  rejected attempt passes its critique to the next one, which receives it as
-  its argument (an empty string on the first attempt). Returns the first
-  accepted result, or the last result when every attempt is rejected. If a
-  guard's budget runs out partway, the guard gets the last completed
-  attempt, or the draft an unfinished first attempt saved.
+Revise work using critiques until a check accepts it or attempts run out.
+  Return the accepted result, or the last result when all attempts are rejected.
 
-  @param maxAttempts - Maximum number of attempts
-  @param check - Judges a result and returns the critique to address next
-  @param block - The work, receiving the previous critique
+  @param block - Receives an empty string first, then the prior critique's feedback.
+
+The first attempt receives an empty critique. Later attempts receive the
+feedback from the last rejected result. When a budget guard stops the work,
+the last completed attempt can reach the guard as a partial result.
+If no attempt completed, an attempt's saved draft can be used instead.
 
 **Parameters:**
 
@@ -172,7 +160,7 @@ Run a block until its result is accepted, up to maxAttempts times. Each
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L98))
 
 ### firstValid
 
@@ -180,11 +168,8 @@ Run a block until its result is accepted, up to maxAttempts times. Each
 firstValid(variants: any[], test: (any) -> boolean, block: (any) -> any): any
 ```
 
-Run a block for each variant in parallel, then return the first result that passes the test. Returns null if none pass.
-
-  @param variants - Array of variants to try
-  @param test - The function that returns true for valid results
-  @param block - The block receiving each variant
+Run a block for each variant in parallel and return the first passing result
+  in input order, or null when none passes.
 
 **Parameters:**
 
@@ -196,4 +181,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L144))

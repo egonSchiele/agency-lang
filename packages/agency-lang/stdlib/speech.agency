@@ -24,7 +24,7 @@ import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 cloud, and record from the microphone.
 
   ```ts
-  import { record, transcribe, speak, say } from "std::speech"
+  import { record, transcribe, speak, speakLocal, say } from "std::speech"
 
   node main() {
     const audio = record()
@@ -68,9 +68,6 @@ effect std::localSpeech {
   format: string,
 }
 
-/** Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
-playback. */
-
 // The real spelling of an output file, so the interrupt names the file
 // that will be written. An empty outputFile means a temporary file the
 // runtime picks, and passes through. A path that cannot be resolved is
@@ -87,6 +84,10 @@ def realOutput(outputFile: string): string {
   return real.value
 }
 
+/**
+Ctrl-C, a race loss, or a time-guard abort stops in-progress playback.
+Use `speak` for cloud synthesis or `speakLocal` for a local model that writes audio.
+*/
 @capabilities(fileRead, fileWrite, subprocess)
 export def say(
   text: string,
@@ -96,15 +97,12 @@ export def say(
   allowedPaths: string[] = [],
 ) {
   """
-  Speak text aloud locally using the operating system's text-to-speech
-  (macOS only). For cloud text-to-speech that returns an audio file, use
-  `speak()` instead.
+  Speak text aloud using macOS text-to-speech.
 
-  @param text - The text to speak
-  @param voice - Voice name to use
-  @param rate - Speaking rate in words per minute
-  @param outputFile - When set, save the audio to this file instead of playing it
-  @param allowedPaths - Only allow saving under these path prefixes
+  @param voice - macOS voice name, or empty for the default.
+  @param rate - Words per minute, or zero for the default.
+  @param outputFile - Save audio here instead of playing it when nonempty.
+  @param allowedPaths - Restrict outputFile to these directories, or leave empty for no restriction.
   """
   const out = realOutput(outputFile)
   return interrupt std::say("Allow local text-to-speech playback?", {
@@ -116,15 +114,15 @@ export def say(
 }
 
 /**
- * `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
- * `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
- *
- * Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
- * which surfaces as an AgencyCancelledError.
- *
- * An empty `outputFile` is auto-generated under the system temp directory and
- * is not subject to the `allowedPaths` allow-list.
- */
+  `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
+  `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
+
+  Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
+  which surfaces as an AgencyCancelledError.
+
+  An empty `outputFile` is auto-generated under the system temp directory and
+  is not subject to the `allowedPaths` allow-list.
+*/
 @capabilities(fileRead, fileWrite, subprocess, terminal)
 export def record(outputFile: string = "", silenceTimeout: number = 2000, allowedPaths: string[] = []): string {
   """
@@ -142,8 +140,9 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000, allowe
   return _record(out, silenceTimeout, allowedPaths)
 }
 
-/** A cloud transcription request tears down on Ctrl-C, race-loser, or
-time-guard abort. Cost, spend guards, and statelog apply. */
+/** Transcription uses the active model client and counts toward usage.
+Cancellation stops the request. Even when timestampGranularity is supplied,
+this function returns only the transcript text. */
 @capabilities(fileRead, llm)
 export def transcribe(
   filepath: string,
@@ -159,13 +158,11 @@ export def transcribe(
   Transcribe an audio file to text using a cloud speech provider (OpenAI
   Whisper by default). Returns the transcript text; throws on failure.
 
-  @param filepath - Path to the audio file
   @param language - Language code (e.g. "en") for better accuracy
   @param allowedPaths - Only allow reading audio files under these path prefixes
-  @param model - Transcription model (default "whisper-1")
   @param provider - Override the provider (normally derived from the model name)
   @param prompt - Optional text to bias decoding (names, jargon)
-  @param timestampGranularity - "segment" or "word" to request timestamps
+  @param timestampGranularity - "segment" or "word". The result is still plain text without timestamps.
   @param apiKey - Override the API key
   """
   if (model == "") {
@@ -216,10 +213,7 @@ export def speak(
   by default), writing the audio to a file and returning its path. For local
   playback through the speakers, use `say()` instead.
 
-  @param text - The text to synthesize
   @param outputFile - Where to write the audio (auto-generated temp file if empty). Never overwrites an existing file.
-  @param voice - Voice name (default "alloy")
-  @param model - Speech model (default "tts-1")
   @param provider - Override the provider (normally derived from the model name)
   @param format - Output audio format: mp3 (default), opus, aac, flac, wav, or pcm
   @param speed - Speaking speed (0.25 to 4.0)
@@ -258,11 +252,9 @@ export def speak(
   )
 }
 
-/** Use this for speech that must not leave the machine, and for the
-emotion a local model can perform that a cloud voice cannot. Long text is
-sent to the server in pieces, so Ctrl-C stops within one piece and writes
-no file. The usage record costs nothing, and statelog gets one event per
-call however many pieces the text becomes.
+/** Use this to generate speech locally. Long text is sent in pieces, so
+Ctrl-C stops within one piece and writes no file. The run records one
+usage event per call with zero provider cost.
 
 Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 `speakLocal` refuses such a call before raising any interrupt when

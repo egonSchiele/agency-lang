@@ -1,12 +1,12 @@
 ---
 name: "keyring"
-description: "Store and retrieve secrets in the operating system's keyring, so API keys and tokens never touch plaintext files."
+description: "Store and retrieve secrets in the system keyring."
 ---
 
 # keyring
 
 Store and retrieve secrets in the operating system's keyring, so API keys
-  and tokens never touch plaintext files.
+  and tokens can be stored without plaintext credential files.
 
   ```ts
   import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::auth/keyring"
@@ -37,7 +37,7 @@ effect std::setSecret {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L27))
 
 ### std::getSecret
 
@@ -49,7 +49,7 @@ effect std::getSecret {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L29))
 
 ### std::deleteSecret
 
@@ -61,7 +61,7 @@ effect std::deleteSecret {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L31))
 
 ## Functions
 
@@ -71,11 +71,11 @@ effect std::deleteSecret {
 setSecret(key: string, value: string, service: string = "agency-lang"): Result
 ```
 
-Store a secret in the system keyring, overwriting any existing value for the same key.
+Store a secret in the system keyring, replacing any existing value.
 
-  @param key - The secret key name
-  @param value - The secret value to store
-  @param service - Keyring namespace the secret is stored under
+  @param key - A non-empty name identifying the secret within its service.
+  @param value - The non-empty secret to store.
+  @param service - The namespace shared by calls that store and retrieve this secret.
 
 **Parameters:**
 
@@ -91,7 +91,7 @@ Store a secret in the system keyring, overwriting any existing value for the sam
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L34))
 
 ### getSecret
 
@@ -99,10 +99,10 @@ Store a secret in the system keyring, overwriting any existing value for the sam
 getSecret(key: string, service: string = "agency-lang"): Result
 ```
 
-Retrieve a secret from the system keyring. Returns the secret value, or null if not found.
+Retrieve a secret from the system keyring, or null when it is missing.
 
-  @param key - The secret key name
-  @param service - Keyring namespace to read from
+  @param key - The name used when storing the secret.
+  @param service - The namespace used when storing the secret.
 
 **Parameters:**
 
@@ -117,7 +117,7 @@ Retrieve a secret from the system keyring. Returns the secret value, or null if 
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L53))
 
 ### deleteSecret
 
@@ -125,10 +125,10 @@ Retrieve a secret from the system keyring. Returns the secret value, or null if 
 deleteSecret(key: string, service: string = "agency-lang"): Result
 ```
 
-Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.
+Delete a secret from the system keyring, returning whether it existed.
 
-  @param key - The secret key name
-  @param service - Keyring namespace to delete from
+  @param key - The name used when storing the secret.
+  @param service - The namespace used when storing the secret.
 
 **Parameters:**
 
@@ -143,7 +143,7 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L69))
 
 ### isKeyringAvailable
 
@@ -151,10 +151,13 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 isKeyringAvailable(): boolean
 ```
 
-Check if the system keyring is available on this platform. Returns true on macOS and on Linux with secret-tool installed, false otherwise.
+Check whether this platform has a supported keyring command available.
+
+Checks whether macOS `security` or Linux `secret-tool` can run.
+  A successful check does not guarantee access to a stored secret.
 
 **Returns:** `boolean`
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L91))

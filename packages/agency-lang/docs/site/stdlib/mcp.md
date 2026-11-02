@@ -1,21 +1,37 @@
 ---
 name: "mcp"
+description: "Load MCP tools and report server connection status."
 ---
 
 # mcp
+
+Read project server settings, merge them with global settings, and load
+  tools for use in `llm()`. Calls to loaded tools raise `mcp::call` so handlers
+  and policies can approve or reject them.
+
+  ```ts
+  import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
+
+  const servers = readProjectMcpConfig(".")
+  const loaded = loadMcpToolsWithStatus(servers)
+  printJSON(loaded.status)
+  ```
 
 ## Types
 
 ### McpLoadResult
 
+Loaded tools and each server's "connected" or "unavailable" status.
+
 ```ts
+/** Loaded tools and each server's "connected" or "unavailable" status. */
 export type McpLoadResult = {
   tools: any[];
   status: Record<string, string>
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L25))
 
 ## Effects
 
@@ -30,7 +46,7 @@ effect mcp::call {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L34))
 
 ## Functions
 
@@ -44,7 +60,7 @@ True when the @agency-lang/mcp package is installed and reachable.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
 
 ### readProjectMcpConfig
 
@@ -64,7 +80,7 @@ Read the mcpServers block from the project agency.json under `dir`.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L46))
 
 ### mergeMcpServers
 
@@ -86,7 +102,7 @@ Merge global and project mcpServers configs (project wins on collision).
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))
 
 ### loadMcpTools
 
@@ -108,7 +124,7 @@ Load gated MCP tools for every server in `merged`. Returns [] when the
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L57))
 
 ### loadMcpToolsWithStatus
 
@@ -119,7 +135,9 @@ loadMcpToolsWithStatus(
 ): McpLoadResult
 ```
 
-Like loadMcpTools, but also returns a per-server status map for /mcp.
+Load MCP tools and report which servers connected.
+
+  @param merged - Server configurations, such as the output of mergeMcpServers.
 
 **Parameters:**
 
@@ -132,4 +150,4 @@ Like loadMcpTools, but also returns a per-server status map for /mcp.
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L64))

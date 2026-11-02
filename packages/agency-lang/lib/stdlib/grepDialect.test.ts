@@ -180,11 +180,11 @@ describe("_skippedDirsNote", () => {
 describe("the grep tool's docstring", () => {
   it("names every folder the walk skips, so a folder added to SKIP_DIRS fails here until the docstring says so", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../stdlib/shell.agency"), "utf8");
-    const docstring =
-      source.split("Search a directory or a single file for a regular expression")[1] ?? "";
-    const sentence = docstring.split("\n")[0];
+    const afterSignature = source.split("export idempotent def grep(")[1] ?? "";
+    const description = afterSignature.split('"""')[1]?.split("@param")[0] ?? "";
+    expect(description).not.toBe("");
     for (const name of SKIP_DIRS) {
-      expect(sentence).toContain(name);
+      expect(description).toContain(name);
     }
   });
 });

@@ -1,18 +1,16 @@
 ---
 name: "explorer"
-description: "A read-only surveyor: give it a broad question about a codebase or"
+description: "Survey a codebase or documentation and return an organized answer."
 ---
 
 # explorer
 
-a body of docs and it reads widely, then synthesizes an organized answer.
+Use `explorerAgent` for documentation summaries, module tours, and explanations
+that span many files. Its built-in tools read files and sources. Use
+`oracleAgent` for a focused design judgment.
 
-  Reach for it when the answer needs many files read and pulled together:
-  summarize these docs, tour this module, explain how this works across the
-  codebase. It reads and organizes; it never changes anything.
-
-  Broad and descriptive, where oracleAgent is sharp and narrow. Ask the
-  explorer to survey many things; ask the oracle to judge one.
+When called as an LLM tool, the explorer continues the caller's conversation.
+From code, wrap the call in `thread { ... }` when you want an isolated survey.
 
 ## Functions
 
@@ -22,12 +20,11 @@ a body of docs and it reads widely, then synthesizes an organized answer.
 buildTools(): any[]
 ```
 
-Return the explorer's tools. Read-only by design: it surveys and
-  describes, and a surveyor that can edit is no longer a surveyor.
+Return the explorer's file, source, and web lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L118))
 
 ### explorerAgent
 
@@ -44,26 +41,21 @@ explorerAgent(
 ): Result<string>
 ```
 
-Survey a codebase or a body of documentation and return an organized
-  answer: a summary, a tour, or an explanation of how something works across
-  many files. Reads widely before synthesizing, and cites what it read. It
-  never changes anything.
+Survey a codebase or documentation and return an organized answer with sources.
+  It never changes anything. It continues your conversation, and every file it
+  reads stays in your history, so say how much ground to cover and scope the
+  question tightly.
 
-  The explorer continues your conversation: it sees everything said so
-  far, and every file it reads stays in your history when it hands back.
-  Say how much ground to cover, and scope the question tightly.
-
-  @param question - The question, and the scope you want covered
-  @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Hard spend cap
-  @param maxTime - Hard wall-clock cap
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param question - The question and the scope to cover.
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param extraTools - Tools to add to the built-in lookup tools.
 
 Called from code, this runs on the caller's thread like any function:
- the system prompt, the reads, and the answer stay there. Wrap the call
- in `thread { ... }` for an isolated survey.
+  the system prompt, the reads, and the answer stay there. Wrap the call
+  in `thread { ... }` for an isolated survey.
 
 **Parameters:**
 

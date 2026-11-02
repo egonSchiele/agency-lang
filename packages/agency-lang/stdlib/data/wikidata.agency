@@ -3,6 +3,7 @@ import { env } from "std::system"
 import { mapValues, values } from "std::object"
 
 /** @module
+  @summary Find Wikidata entities, read claims, and query the knowledge graph.
   ## Wikidata — the open knowledge graph
 
   Query [Wikidata](https://www.wikidata.org), the free structured database behind Wikipedia:
@@ -62,24 +63,24 @@ export type EntityDetail = {
   claims: Record<string, string[]>
 }
 
-/** Build the entity-search path (wbsearchentities). Pure. */
+// Build the entity-search path (wbsearchentities).
 def buildSearchPath(name: string, limit: number): string {
   const q = encodeURIComponent(name)
   return "/w/api.php?action=wbsearchentities&search=${q}&language=en&format=json&limit=${limit}"
 }
 
-/** Build the entity-data path. Pure. */
+// Build the entity-data path.
 def buildEntityPath(qid: string): string {
   return "/wiki/Special:EntityData/${encodeURIComponent(qid)}.json"
 }
 
-/** Build the SPARQL path. Pure. */
+// Build the SPARQL path.
 def buildQueryPath(sparql: string): string {
   const q = encodeURIComponent(sparql)
   return "/sparql?query=${q}&format=json"
 }
 
-/** Reshape a wbsearchentities body into Entity[]. Pure/total. */
+// Reshape a wbsearchentities body into Entity[].
 def parseSearch(raw: any): Entity[] {
   const r: any = raw ?? {}
   const results = r.search ?? []
@@ -94,8 +95,7 @@ def parseSearch(raw: any): Entity[] {
   }
 }
 
-/** Reduce a claim's mainsnak to a string by datavalue type. A novalue/somevalue snak → "".
-    Pure/total. */
+// Reduce a claim's mainsnak to a string by datavalue type. A novalue/somevalue snak → "".
 def parseClaimValue(mainsnak: any): string {
   const snak: any = mainsnak ?? {}
   if ((snak.snaktype ?? "") != "value") {
@@ -125,7 +125,7 @@ def parseClaimValue(mainsnak: any): string {
   return ""
 }
 
-/** Map a property's statements to a list of stringified claim values. Pure/total. */
+// Map a property's statements to a list of stringified claim values.
 def parseClaimList(statements: any): string[] {
   const arr = statements ?? []
   return map(arr) as s {
@@ -134,7 +134,7 @@ def parseClaimList(statements: any): string[] {
   }
 }
 
-/** Reshape the claims object (PID → statements) into PID → string[]. Pure/total. */
+// Reshape the claims object (PID → statements) into PID → string[].
 def parseClaims(claims: any): Record<string, string[]> {
   const c: any = claims ?? {}
   return mapValues(c) as (statements, pid) {
@@ -142,7 +142,7 @@ def parseClaims(claims: any): Record<string, string[]> {
   }
 }
 
-/** Reshape an EntityData body into EntityDetail. `qid` is the fallback id. Pure/total. */
+// Reshape an EntityData body into EntityDetail. `qid` is the fallback id.
 def parseEntity(raw: any, qid: string): EntityDetail {
   const r: any = raw ?? {}
   const ents: any[] = values(r.entities ?? {})
@@ -165,7 +165,7 @@ def parseEntity(raw: any, qid: string): EntityDetail {
   }
 }
 
-/** Reshape a SPARQL body into rows (variable → value string). Pure/total. */
+// Reshape a SPARQL body into rows (variable → value string).
 def parseBindings(raw: any): Record<string, string>[] {
   const r: any = raw ?? {}
   const res: any = r.results ?? {}
@@ -179,12 +179,12 @@ def parseBindings(raw: any): Record<string, string>[] {
   }
 }
 
-/** Shared failure message for a failed Wikidata fetch (either host). Pure. */
+// Shared failure message for a failed Wikidata fetch (either host).
 def wikidataError(err: any): string {
   return "Wikidata request failed (the API is rate-limited and expects a descriptive User-Agent): ${err.message ?? err}"
 }
 
-/** Turn a fetch Result into an Entity[] Result. Pure. */
+// Turn a fetch Result into an Entity[] Result.
 def searchFinalize(fetchResult: any): Result<Entity[]> {
   return match (fetchResult) {
     success(body) => success(parseSearch(body))
@@ -192,7 +192,7 @@ def searchFinalize(fetchResult: any): Result<Entity[]> {
   }
 }
 
-/** Turn a fetch Result into an EntityDetail Result; empty entities (unknown QID) → failure. Pure. */
+// Turn a fetch Result into an EntityDetail Result; empty entities (unknown QID) → failure.
 def entityFinalize(fetchResult: any, qid: string): Result<EntityDetail> {
   return match (fetchResult) {
     success(body) => {
@@ -207,7 +207,7 @@ def entityFinalize(fetchResult: any, qid: string): Result<EntityDetail> {
   }
 }
 
-/** Turn a SPARQL fetch Result into a rows Result. Pure. */
+// Turn a SPARQL fetch Result into a rows Result.
 def queryFinalize(fetchResult: any): Result<Record<string, string>[]> {
   return match (fetchResult) {
     success(body) => success(parseBindings(body))
@@ -218,12 +218,9 @@ def queryFinalize(fetchResult: any): Result<Record<string, string>[]> {
 @capabilities(network)
 export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON> {
   """
-  Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
-  QID identifies the entity for a follow-up entity fetch or SPARQL query. Empty result set returns an
-  empty list.
+  Find Wikidata entities by name and return their QIDs.
 
-  @param name - The person, organization, place, or thing to search for
-  @param limit - Maximum number of matches to return (default 5)
+  @param name - A person, organization, place, or topic to look up.
   """
   return interrupt std::wikidata("Search Wikidata for this name?", { op: "search", query: name })
   const result = connectorFetch(WD_BASE, WD_DOMAINS, buildSearchPath(name, limit), headers: WD_HEADERS) with approve
@@ -233,25 +230,34 @@ export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> rai
 @capabilities(network)
 export def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON> {
   """
-  Fetch one Wikidata entity by its QID. Returns the English label, description, aliases, and claims
-  (property id to values; entity-valued claims are QIDs to resolve separately). Unknown QID returns
-  a failure.
+  Read a Wikidata entity's English profile and property claims. Entity-valued
+  claims are QIDs; resolve them with another lookup to get their names.
 
-  @param qid - The Wikidata entity id, e.g. "Q42"
+  @param qid - A Wikidata entity ID such as "Q42", obtained from search or another claim.
   """
   return interrupt std::wikidata("Fetch this Wikidata entity?", { op: "entity", query: qid })
   const result = connectorFetch(WD_BASE, WD_DOMAINS, buildEntityPath(qid), headers: WD_HEADERS) with approve
   return entityFinalize(result, qid)
 }
 
+/**
+  Use SELECT queries to retrieve rows. Each row maps a selected variable
+  name to its string value. Ask for labels when you need names for QIDs:
+
+  ```sparql
+  SELECT ?item ?itemLabel WHERE {
+    ?item wdt:P31 wd:Q5 .
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+  } LIMIT 10
+  ```
+*/
 @capabilities(network)
 export def wikidataQuery(sparql: string): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON> {
   """
-  Run a SPARQL query against the Wikidata Query Service and return rows (each a map of the SELECTed
-  variable names to string values). Prefixes wd:/wdt:/rdfs: and SERVICE wikibase:label are available.
-  Example: SELECT ?item ?itemLabel WHERE { ?item wdt:P31 wd:Q5 . SERVICE wikibase:label { bd:serviceParam wikibase:language "en" } } LIMIT 10
+  Run a SPARQL SELECT query against the Wikidata knowledge graph. The
+  prefixes wd:, wdt:, and rdfs: and SERVICE wikibase:label are available.
 
-  @param sparql - The SPARQL query text
+  @param sparql - A complete SPARQL SELECT query.
   """
   return interrupt std::wikidata("Run this SPARQL query against Wikidata?", { op: "query", query: sparql })
   const result = connectorFetch(WDQS_BASE, WDQS_DOMAINS, buildQueryPath(sparql), headers: WD_HEADERS) with approve

@@ -16,11 +16,9 @@ and a divide that returns a Result so you can handle division by zero.
 round(num: number, precision: number = 0): number
 ```
 
-Round a number to a given number of decimal places. With no precision it
-  rounds to a whole number.
+Round a number to the requested decimal places.
 
-  @param num - The number to round
-  @param precision - The number of decimal places. Defaults to 0.
+  @param precision - Number of digits after the decimal point.
 
 **Parameters:**
 
@@ -31,7 +29,7 @@ Round a number to a given number of decimal places. With no precision it
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L7))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L8))
 
 ### add
 
@@ -50,7 +48,7 @@ Add two numbers.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L17))
 
 ### subtract
 
@@ -69,7 +67,7 @@ Subtract b from a.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L22))
 
 ### multiply
 
@@ -88,7 +86,7 @@ Multiply two numbers.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L27))
 
 ### divide
 
@@ -107,4 +105,4 @@ Divide a by b. Fails when b is zero.
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L32))

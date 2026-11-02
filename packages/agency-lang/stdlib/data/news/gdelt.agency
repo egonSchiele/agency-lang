@@ -1,15 +1,12 @@
 import { connectorFetch } from "std::data/connector"
 
 /** @module
+  @summary Search recent worldwide news coverage with GDELT.
   ## GDELT — worldwide news coverage
 
   Search global online news via the [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/).
-  Use this connector for the *qualitative, fast-moving* signal — what the world is reporting
-  right now about an event, company, or topic. It returns recent matching articles (title,
-  URL, source domain, language, source country, and GDELT's seen-date). It tells you what is
-  being *said*, not what is *true* — for authoritative company facts use
-  `std::data/finance/edgar`; for economic numbers use `std::data/finance/fred` or
-  `std::data/finance/dbnomics`.
+  Find recent articles about an event, company, or topic. Results include
+  source links and publication metadata for checking the reporting.
 
   No API key required. GDELT asks callers to make at most one request every 5 seconds; on a
   zero-match query it returns no `articles` (this connector returns an empty list).
@@ -40,22 +37,19 @@ export type NewsArticle = {
   seenDate: string
 }
 
-// Fetch config. The std::gdelt interrupt gates the call; the connector approves the
-// underlying fetch at the call site (an outer handler can still reject the std::http::fetchJSON
-// interrupt (concrete "fetch this URL?") and can gate either. The baseUrl ends at ".../doc"
-// (not ".../doc/doc") because resolveUrl inserts a "/" before the path, and buildGdeltPath
-// returns a path beginning "doc?..." (see resolveUrl in lib/stdlib/http.ts).
+// resolveUrl adds a slash before the path; buildGdeltPath supplies "doc?...".
+// Together they produce the DOC endpoint /api/v2/doc/doc with its query.
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc"
 const GDELT_DOMAINS = ["api.gdeltproject.org"]
 
-/** Build the GDELT DOC query path (query is URL-encoded). Pure — no network. */
+/* Build the GDELT DOC query path (query is URL-encoded). */
 def buildGdeltPath(query: string, maxRecords: number, timespan: string): string {
   const q = encodeURIComponent(query)
   const t = encodeURIComponent(timespan)
   return "doc?query=${q}&mode=artlist&format=json&maxrecords=${maxRecords}&timespan=${t}"
 }
 
-/** Reshape a raw GDELT DOC response body into NewsArticle[]. Pure — total on missing/null input. */
+/* Reshape a raw GDELT DOC response body into NewsArticle[]. */
 def parseGdelt(raw: any): NewsArticle[] {
   const r: any = raw ?? {}
   const articles = r.articles ?? []
@@ -71,7 +65,7 @@ def parseGdelt(raw: any): NewsArticle[] {
   }
 }
 
-/** Turn a fetchJSON Result into the final Result. Pure — testable with mock Results. */
+/* Turn a fetchJSON Result into the final Result. */
 def gdeltFinalize(fetchResult: any): Result {
   return match (fetchResult) {
     success(body) => success(parseGdelt(body))
@@ -82,14 +76,12 @@ def gdeltFinalize(fetchResult: any): Result {
 @capabilities(network)
 export def gdeltNews(query: string, maxRecords: number = 25, timespan: string = "3d"): Result<NewsArticle[]> raises <std::gdelt, std::http::fetchJSON> {
   """
-  Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns recent
-  matching articles (title, URL, source domain, language, source country, and the GDELT
-  seen-date); a zero-match query returns an empty list. Use for current events, public
-  attention, and sentiment. Note: GDELT is rate-limited to about one request every 5 seconds.
+  Search recent worldwide news coverage with GDELT. Allow five seconds
+  between requests.
 
-  @param query - Search terms in GDELT DOC query syntax, e.g. "Federal Reserve rate cut"
-  @param maxRecords - Maximum number of articles to return, 1-250 (default 25)
-  @param timespan - How far back to search, e.g. "24h", "3d", "1w" (default "3d")
+  @param query - GDELT DOC search syntax, such as "Federal Reserve rate cut".
+  @param maxRecords - Request from 1 through 250 articles.
+  @param timespan - How far back to search, such as "24h", "3d", or "1w".
   """
   return interrupt std::gdelt("Search GDELT news for this query?", { query: query })
   // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at

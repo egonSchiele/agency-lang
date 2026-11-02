@@ -1,14 +1,15 @@
-/** @module
-  @summary Selects one web-search provider from the configured API keys.
-
-  Agents receive one client-side search tool: Brave when BRAVE_API_KEY is
-  set, otherwise Tavily when TAVILY_API_KEY is set. With neither key set,
-  they receive no client-side search tool. The catalog order sets the
-  preference for all agents that use this helper.
-*/
 import { _hostedSearchTools } from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
 import { search as braveSearch, tavilySearch } from "std::web/search"
+
+/** @module
+@summary Select client-side and provider-hosted search tools for agents.
+
+`searchTools` selects Brave when `BRAVE_API_KEY` is available, then Tavily
+when `TAVILY_API_KEY` is available, or no client-side tool without a key.
+`hostedSearchTools` selects hosted search for the model and provider route
+used by an LLM call. Both can be offered together.
+*/
 
 type SearchProvider = {
   name: string;
@@ -46,12 +47,7 @@ def selectedProviders(): SearchProvider[] {
 }
 
 def boundTool(provider: SearchProvider): any {
-  // The key is bound here rather than left to the tool's own env fallback,
-  // which only applies when `apiKey` arrives empty. Handing the model an
-  // `apiKey` slot means it fills one: a real run had it send
-  // `"</antml_parameter>\n<parameter name=..."` as the key, which reached
-  // the HTTP layer and failed the search outright. A bound argument is not
-  // in the schema at all, so there is nothing to fill.
+  // Bind the key so it is absent from the tool schema and the model cannot replace it.
   const key = env(provider.envKey) with approve
   return provider.tool.partial(apiKey: key).rename(provider.toolName)
 }
@@ -66,10 +62,7 @@ export def searchTools(): any[] {
 
 export def searchProviderName(toolName: string): string | null {
   """
-  Return a search tool's provider name from the catalog, or null for an
-  unknown tool. This lookup does not read API keys or contact a provider.
-
-  @param toolName - The name assigned to the search tool
+  Return the catalog provider name for a search tool, or null when its name is unknown.
   """
   const provider = find(providers, \provider -> provider.toolName == toolName)
   if (provider == null) {
@@ -80,13 +73,10 @@ export def searchProviderName(toolName: string): string | null {
 
 export def hostedSearchTools(model: string = "", provider: string = ""): string[] {
   """
-  Return the provider-hosted search capabilities available to a call on this
-  model through this provider, or an empty array when that route offers none
-  (the base "openai" client, local models). Pass the same model and provider
-  the call will use: the answer depends on the route, not the model alone.
+  Select provider-hosted search for an LLM call's model and provider route.
 
-  @param model - The model that will run the call, or "" for the ambient default
-  @param provider - The provider the call will route through, or "" for the ambient default
+  @param model - Use the same model as the call, or "" for the ambient model.
+  @param provider - Use the same provider as the call, or "" for automatic resolution.
   """
   return _hostedSearchTools(model, provider)
 }

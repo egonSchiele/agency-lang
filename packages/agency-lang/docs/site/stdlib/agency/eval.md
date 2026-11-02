@@ -1,23 +1,12 @@
 ---
 name: "eval"
-description: "Helpers for judging eval runs from Agency code."
+description: "Extract run records and compare agent responses with LLM judges."
 ---
 
 # eval
 
-Helpers for judging eval runs from Agency code. (Running suites from
-  Agency was removed 2026-07-30: the old binding predated workdir seeding
-  and diverged from `agency eval run` semantics. Run suites with the CLI.
-
-  SAFETY CONSTRAINT for whoever adds run-from-Agency back: the old binding
-  routed every task through `std::agency.run` SPECIFICALLY so subprocess
-  interrupts hit the CALLING AGENT's handler stack. A thin binding over
-  runSuite would lose that: runSuite's default runner blanket-approves
-  every child interrupt from TypeScript — correct for a headless CLI
-  invocation, wrong for a suite launched by an agent whose handlers were
-  meant to gate those interrupts. A future binding must route execution
-  through std::agency.run, or inject a runner that defers to the caller's
-  handlers — never runSuite's default.)
+Inspect saved statelog traces, compare two responses against a goal, or
+  compare two whole run directories. Use the CLI to run evaluation suites.
 
   ## Extract and judge eval records
 
@@ -25,13 +14,13 @@ Helpers for judging eval runs from Agency code. (Running suites from
   import { evalExtract, evalJudge } from "std::agency/eval"
 
   node main() {
-    const record = evalExtract("runs/demo/inputs/capital-france/statelog.jsonl")
+    const record = evalExtract("runs/demo/statelog.jsonl")
     print(record.evalOutputs)
 
     const verdict = evalJudge(
       "Prefer the answer that names the capital exactly.",
-      "runs/a/inputs/capital-france/eval-record.json",
-      "runs/b/inputs/capital-france/eval-record.json",
+      "runs/a/statelog.jsonl",
+      "runs/b/statelog.jsonl",
     )
     print(verdict.winner)
   }
@@ -61,7 +50,7 @@ export type EvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L51))
 
 ### EvalRecord
 
@@ -84,7 +73,7 @@ export type EvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L58))
 
 ### PairwiseVerdictInput
 
@@ -96,7 +85,7 @@ export type PairwiseVerdictInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L94))
 
 ### PairwiseVerdict
 
@@ -112,7 +101,7 @@ export type PairwiseVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L100))
 
 ### JudgeAggregationPolicy
 
@@ -125,7 +114,7 @@ export type JudgeAggregationPolicy = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L132))
 
 ### VerdictSide
 
@@ -139,7 +128,7 @@ export type VerdictSide = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L139))
 
 ### JudgeSample
 
@@ -152,7 +141,7 @@ export type JudgeSample = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L147))
 
 ### InputVerdict
 
@@ -169,7 +158,7 @@ export type InputVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L154))
 
 ### SuiteVerdict
 
@@ -186,7 +175,7 @@ export type SuiteVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L165))
 
 ## Functions
 
@@ -196,15 +185,13 @@ export type SuiteVerdict = {
 evalExtract(statelogPath: string): EvalRecord
 ```
 
-Extract a structured eval record from a statelog file. Returns the same record `agency eval extract` writes to disk, but directly, so eval pipelines composed in Agency can inspect or judge it without going through a temporary file.
+Read a structured evaluation record from a statelog trace.
 
-  @param statelogPath - Path to a .statelog.jsonl file produced by an agent run (e.g. the file under `runs/<run-id>/inputs/<input-id>/` after an eval run)
+  @param statelogPath - A statelog JSONL file containing exactly one trace.
 
-The shape mirrors the on-disk eval-record format. Top-level fields (traceId,
-  durationMs, evalValues, evalOutputs, warnings) are the most commonly consumed.
-  The nested arrays (threads, events, interrupts, errors, incomplete) are loosely
-  typed because their schemas are large and evolve independently. Consumers can
-  JSON-inspect as needed.
+Read one trace as a normalized record for analysis. The record is
+  computed from the statelog rather than stored as a separate file.
+  Use `evalOutputs` to inspect what will be graded.
 
 **Parameters:**
 
@@ -216,7 +203,7 @@ The shape mirrors the on-disk eval-record format. Top-level fields (traceId,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L81))
 
 ### evalJudge
 
@@ -228,17 +215,16 @@ evalJudge(
 ): PairwiseVerdict
 ```
 
-Pairwise-judge two eval records against a goal. Returns a structured verdict naming the winner ("A", "B", or "tie"), the judge's confidence as an integer from 0 to 100, and the reasoning the judge produced. Both record paths must point at JSON files in the EvalRecord shape produced by extracting an eval record.
+Compare two saved agent responses against a grading goal.
 
-  @param goal - What the judge should grade against (typically a per-input goal from an eval suite)
-  @param recordPathA - Path to the first eval record JSON file
-  @param recordPathB - Path to the second eval record JSON file
+  @param goal - The criteria the judge should use to compare the responses.
+  @param recordPathA - A statelog JSONL file containing the first run's single trace.
+  @param recordPathB - A statelog JSONL file containing the second run's single trace.
 
-Runs the bundled pairwise-judge program in a subprocess, so a real LLM call
-  happens per invocation. Budget accordingly when looping. Argument order can
-  matter: judge LLMs slightly prefer one position over the other, so
-  high-precision callers should invoke twice with swapped order and reconcile the
-  verdicts.
+Runs the bundled pairwise judge, making an LLM call for each comparison.
+  The verdict names A, B, or tie, with confidence from zero to 100. For
+  comparisons sensitive to response order, judge both orders and reconcile
+  the results. Each path must name a single-trace statelog.
 
 **Parameters:**
 
@@ -252,7 +238,7 @@ Runs the bundled pairwise-judge program in a subprocess, so a real LLM call
 
 **Needs:** `fileRead`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L117))
 
 ### evalJudgeSuite
 
@@ -267,14 +253,23 @@ evalJudgeSuite(
 ): SuiteVerdict
 ```
 
-Judge two eval run directories by input id and aggregate the results into a suite verdict. Input ids and goals come from each run directory itself (the input.json files the run wrote). Missing or failed input records are handled deterministically without calling the LLM judge; successful inputs are judged pairwise.
+Compare two evaluation run directories and aggregate their per-test verdicts.
 
-  @param runA - Path to the first eval run directory
-  @param runB - Path to the second eval run directory
-  @param samples - Judge samples per input
-  @param confidenceThreshold - Minimum input confidence counted as a suite win
-  @param marginThreshold - Suite win margin required to avoid an overall tie
-  @param positionBias - Whether to swap A/B order across samples to cancel judge position bias
+  @param runA - The first run directory containing statelog traces and run annotations.
+  @param runB - The second run directory containing statelog traces and run annotations.
+  @param samples - The number of judge calls for each comparable test.
+  @param confidenceThreshold - Treat per-test confidence below this zero-to-100 threshold as a suite tie.
+  @param marginThreshold - Require the suite's win-count difference to exceed this number.
+  @param positionBias - Use swap to alternate response order across samples, or none to keep A first.
+
+Compares matching test IDs across two run directories. Goals and test
+  IDs come from the run annotations saved with each trace. Missing or
+  failed runs and missing goals get deterministic verdicts without an LLM
+  call. Successful comparisons make the requested number of judge calls.
+
+  Per-test winners below the confidence threshold count as suite ties. The
+  overall win-count difference must exceed the margin threshold to choose
+  a suite winner.
 
 **Parameters:**
 
@@ -291,4 +286,4 @@ Judge two eval run directories by input id and aggregate the results into a suit
 
 **Needs:** `fileRead`, `llm`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L187))

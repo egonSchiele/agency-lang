@@ -1,11 +1,11 @@
 import { LayoutNode, Width } from "std::ui/layout"
 
 /** @module
-  @summary Draws horizontal bar charts for terminal output; barChart(...) returns a layout node you render with std::ui/layout.
+  @summary Build horizontal bar charts for terminal layouts.
   Draws horizontal bar charts for terminal output. `barChart(...)` returns a
   layout node. Render it with `render` from `std::ui/layout`, so a chart
   nests inside `box` / `row` / `column`. Pass the series and categories
-  directly (data form, JSON-friendly and LLM-callable) or build them up in a
+  directly or build them up in a
   trailing block. Each series gets a distinct color and fill symbol when you
   omit them, so charts stay readable even with color disabled. Negative
   values draw left of a zero baseline. Stacked bars must be uniform-sign.
@@ -96,20 +96,17 @@ export def barChart(
   block: (ChartBuilder) -> void = null,
 ): LayoutNode {
   """
-  Build a horizontal bar chart as a layout node. Pass the data form:
-  `keys` (one per series) and `data` (one entry per category, whose
-  `values` array lines up with `keys` by index). Render the returned
-  node to display it.
+  Build a horizontal bar chart to display with std::ui/layout render.
+  Stacked values within each category must all have the same sign.
 
-  @param title - Heading shown above the chart
-  @param mode - "grouped" draws one bar per key; "stacked" stacks the keys into one bar
-  @param keys - Series definitions. Each key may set a color (a color name like "blue" or a hex string like "#cc7a4a") and a fill symbol. Both auto-assign when omitted
-  @param data - Categories to plot. Each has a `label` and a positional `values` array aligned to `keys`
+  @param mode - Grouped draws a bar per series; stacked combines them per category
+  @param keys - Series definitions. A color is a name like "blue" or a hex string like "#cc7a4a"; omitted colors and symbols are assigned automatically
+  @param data - Categories with values aligned to keys by index
   @param showValues - Show the numeric value beside each bar
-  @param legend - Show a legend listing the named keys
-  @param max - Fix the axis maximum to a positive number; values beyond it saturate at a full bar. 0 derives it from the data
-  @param barChar - Default fill cell for the first / single series
-  @param width - Chart width in cells, or "full" / "N%"
+  @param legend - Show the series names and symbols
+  @param max - Positive axis maximum; longer bars saturate at it, and 0 derives the maximum from data
+  @param barChar - Default fill symbol for the first or only series
+  @param width - Columns, a percentage of the parent such as "50%", or "full"
   """
   const keysArr: any[] = []
   if (keys != null) {

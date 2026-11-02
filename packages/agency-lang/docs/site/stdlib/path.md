@@ -1,13 +1,12 @@
 ---
 name: "path"
-description: "Pure helpers for building and taking apart file paths: join, resolve, basename, dirname, extname, relative, and isAbsolute."
+description: "Build and take apart file paths without accessing the filesystem."
 ---
 
 # path
 
-Pure helpers for building and taking apart file paths: join, resolve,
-  basename, dirname, extname, relative, and isAbsolute. None of these touch the
-  filesystem.
+Build file paths and extract their directory, filename, or extension.
+  These helpers work on path strings without checking whether a file exists.
 
   ```ts
   import { join, extname } from "std::path"
@@ -17,6 +16,9 @@ Pure helpers for building and taking apart file paths: join, resolve,
     print(extname(p))
   }
   ```
+
+  Use `join` to combine path segments. Use `resolve` when you need an
+  absolute path, or `relative` to express one path relative to another.
 
 ## Functions
 
@@ -28,8 +30,6 @@ join(...parts: string[]): string
 
 Join path segments using the platform separator and normalize the result.
 
-  @param parts - Path segments to join
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -38,7 +38,7 @@ Join path segments using the platform separator and normalize the result.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L21))
 
 ### resolve
 
@@ -46,9 +46,12 @@ Join path segments using the platform separator and normalize the result.
 resolve(...parts: string[]): string
 ```
 
-Resolve path segments into an absolute path, relative to the current working directory.
+Resolve path segments into an absolute path using the run's working directory.
 
-  @param parts - Path segments to resolve
+Relative paths start at the run's working directory. An absolute segment
+  replaces the segments before it: `resolve("src", "/tmp", "out")` returns
+  `"/tmp/out"` on macOS and Linux. With no segments, returns the run's
+  working directory.
 
 **Parameters:**
 
@@ -58,7 +61,7 @@ Resolve path segments into an absolute path, relative to the current working dir
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L34))
 
 ### basename
 
@@ -68,8 +71,7 @@ basename(p: string, ext: string = ""): string
 
 Return the last portion of a path.
 
-  @param p - The file path
-  @param ext - If given and the path ends with this extension, it is trimmed off the result
+  @param ext - Exact suffix to remove from the filename, including any leading dot
 
 **Parameters:**
 
@@ -80,7 +82,7 @@ Return the last portion of a path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L41))
 
 ### dirname
 
@@ -90,8 +92,6 @@ dirname(p: string): string
 
 Return the directory portion of a path.
 
-  @param p - The file path
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -100,7 +100,7 @@ Return the directory portion of a path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L50))
 
 ### extname
 
@@ -108,9 +108,7 @@ Return the directory portion of a path.
 extname(p: string): string
 ```
 
-Return the extension of a path (including the leading dot), or an empty string if there is none.
-
-  @param p - The file path
+Return the file extension, including the leading dot, or an empty string if there is none.
 
 **Parameters:**
 
@@ -120,7 +118,7 @@ Return the extension of a path (including the leading dot), or an empty string i
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L57))
 
 ### relative
 
@@ -128,10 +126,11 @@ Return the extension of a path (including the leading dot), or an empty string i
 relative(from: string, to: string): string
 ```
 
-Return the relative path from one path to another.
+Return the path from `from` to `to`, resolving relative inputs from the run's working directory.
 
-  @param from - The starting path
-  @param to - The target path
+Both paths resolve from the run's working directory. For example,
+  `relative("src", "src/lib/main.agency")` returns `"lib/main.agency"`
+  on macOS and Linux. Identical resolved paths produce an empty string.
 
 **Parameters:**
 
@@ -142,7 +141,7 @@ Return the relative path from one path to another.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L69))
 
 ### isAbsolute
 
@@ -152,8 +151,6 @@ isAbsolute(p: string): boolean
 
 Return true if the path is absolute.
 
-  @param p - The path to check
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -162,4 +159,4 @@ Return true if the path is absolute.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/path.agency#L76))

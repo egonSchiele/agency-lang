@@ -1,24 +1,27 @@
 ---
 name: "feedback"
-description: "The Feedback type the agents use to report findings, with helpers"
+description: "Combine and inspect findings returned by reviewer and verifier agents."
 ---
 
 # feedback
 
-to merge, flatten, render, and inspect feedback lists.
+Use `feedbackHasErrors` to decide whether another attempt is needed and
+`renderFeedback` to give the findings to that attempt. `mergeFeedback` and
+`flattenFeedback` preserve failures. `failOpenFeedback` discards failures
+when the caller deliberately allows an unavailable review.
 
 ## Types
 
 ### Feedback
 
-One finding. `source` is the URL of the page the reviewer checked the
-  point against, when it checked one, so the agent being reviewed can
-  cite it instead of finding it again.
+One review or verification finding. `error` marks a blocking problem.
+A false value can mark advice or a satisfied point. `source` links to a
+page used to check the finding.
 
 ```ts
-/** One finding. `source` is the URL of the page the reviewer checked the
-  point against, when it checked one, so the agent being reviewed can
-  cite it instead of finding it again. */
+/** One review or verification finding. `error` marks a blocking problem.
+A false value can mark advice or a satisfied point. `source` links to a
+page used to check the finding. */
 export type Feedback = {
   error: boolean;
   feedback: string;
@@ -26,7 +29,7 @@ export type Feedback = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L13))
 
 ## Functions
 
@@ -36,11 +39,7 @@ export type Feedback = {
 mergeFeedback(a: Result<Feedback[]>, b: Result<Feedback[]>): Result<Feedback[]>
 ```
 
-Merge two feedback Results by concatenating their success arrays or
-  returning the first failure.
-
-  @param a - First feedback Result
-  @param b - Second feedback Result
+Concatenate successful finding lists, returning the first failure if either input failed.
 
 **Parameters:**
 
@@ -51,7 +50,7 @@ Merge two feedback Results by concatenating their success arrays or
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L19))
 
 ### flattenFeedback
 
@@ -59,9 +58,7 @@ Merge two feedback Results by concatenating their success arrays or
 flattenFeedback(feedback: Result<Feedback[]>[]): Result<Feedback[]>
 ```
 
-Flatten an array of feedback Results into a single Result.
-
-  @param feedback - An array of feedback Results
+Combine finding lists, returning the first failed Result if one is present.
 
 **Parameters:**
 
@@ -79,9 +76,7 @@ Flatten an array of feedback Results into a single Result.
 renderFeedback(feedback: Result<Feedback[]>): string
 ```
 
-Render a feedback Result as human-readable text, one line per finding.
-
-  @param feedback - The Result review() returned
+Render findings as paragraphs, or return the failure message when the review failed.
 
 **Parameters:**
 
@@ -91,7 +86,7 @@ Render a feedback Result as human-readable text, one line per finding.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L60))
 
 ### feedbackHasErrors
 
@@ -99,10 +94,7 @@ Render a feedback Result as human-readable text, one line per finding.
 feedbackHasErrors(feedback: Result<Feedback[]>): boolean
 ```
 
-True when any finding is an error, or when the feedback Result itself
-  is a failure.
-
-  @param feedback - The feedback wrapped in a Result
+Return whether findings include an error or the review itself failed.
 
 **Parameters:**
 
@@ -112,7 +104,7 @@ True when any finding is an error, or when the feedback Result itself
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L70))
 
 ### failOpenFeedback
 
@@ -120,9 +112,7 @@ True when any finding is an error, or when the feedback Result itself
 failOpenFeedback(feedback: Result<Feedback[]>): Result<Feedback[]>
 ```
 
-Pass a successful feedback list through unchanged; map any failure to
-  no findings, so a checker that could not run reports nothing rather than
-  a blocking error.
+Keep successful findings and turn failures into an empty finding list.
 
 **Parameters:**
 
@@ -132,4 +122,4 @@ Pass a successful feedback list through unchanged; map any failure to
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L80))

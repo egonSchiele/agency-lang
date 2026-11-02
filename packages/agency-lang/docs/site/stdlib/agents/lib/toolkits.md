@@ -1,18 +1,24 @@
 ---
 name: "toolkits"
-description: "Named bundles of tools that agents compose into their tool lists."
+description: "Compose agents from named bundles of file, web, GitHub, and other tools."
 ---
 
 # toolkits
 
-An agent's tool list should read as a description of what that agent may
-  do. Bundling also means a tool added to a category reaches every agent that
-  claimed the category, instead of drifting between hand-maintained arrays.
+Build an agent's tool list by combining the bundles it needs. Construct
+lists inside a function when they include `searchTools`, so API-key
+selection happens at call time. Bundle membership describes the tools
+available; the caller's handlers still decide their interrupts.
 
-  Every bundle is a function rather than a constant, matching searchTools() in
-  std::agents/lib/search, which must be a function because it reads API keys
-  at call time. An agent whose list includes searchTools() must build that
-  list inside a function too, or it freezes the environment at module load.
+```ts
+import { readOnlyFileTools, communicationTools } from "std::agents/lib/toolkits"
+
+node main() {
+  const tools = [...readOnlyFileTools(), ...communicationTools()]
+  const answer: string = llm("Summarize README.md", { tools: tools })
+  print(answer)
+}
+```
 
 ## Constants
 
@@ -22,7 +28,7 @@ An agent's tool list should read as a description of what that agent may
 export static const ASK_USER_HINT = "\n\nWhen the work turns on something only the user can tell you — which account they mean, which of two readings of the request, a value you cannot look up — ask with the `question` tool, and ask before you build on the guess rather than after. Do not ask for anything you could find yourself, and do not ask the user to narrow a scope they left broad on purpose. When nobody can answer, your question comes back rejected; when that happens, pick the most reasonable reading, say which one you picked, and carry on."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L334))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L321))
 
 ### SAVE_DRAFT_HINT
 
@@ -30,7 +36,7 @@ export static const ASK_USER_HINT = "\n\nWhen the work turns on something only t
 export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L339))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L326))
 
 ## Functions
 
@@ -52,7 +58,7 @@ Tell the user what you are doing. Use this tool often to update the user on what
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L102))
 
 ### communicationTools
 
@@ -60,18 +66,15 @@ Tell the user what you are doing. Use this tool often to update the user on what
 communicationTools(): any[]
 ```
 
-Return tools that help the agent communicate with the user: `whatIAmDoing`
-  to report progress, and `question` to ask for a fact only the user has.
+Return progress-reporting and user-question tools.
 
-  `question` raises an interrupt rather than reading the terminal, so whoever
-  hosts the agent can answer it: a person at a prompt, an HTTP host, or a
-  handler in a test. A run with no one to ask rejects it. An approval policy
-  rule can never answer it, because the answer is a value and `approve()`
-  carries none; see `docs/dev/stdlib/asking-the-user.md`.
+`question` raises an interrupt the host or a handler answers with a value.
+Use it in hosted as well as terminal agents. Approval policy rules cannot
+supply a question's reply.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L113))
 
 ### readOnlyFileTools
 
@@ -79,15 +82,14 @@ Return tools that help the agent communicate with the user: `whatIAmDoing`
 readOnlyFileTools(): any[]
 ```
 
-Return tools that inspect the file system without changing it: read, list,
-  glob, and grep, resolved against the agent working directory.
+Return file inspection tools rooted in the agent's working directory.
 
-  grep honours .gitignore, and the setting is locked by partial application
-  so the model cannot turn it off and search generated files.
+The grep tool always respects `.gitignore`. The setting is bound so the
+model cannot include ignored files by changing an argument.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L122))
 
 ### writableFileTools
 
@@ -95,11 +97,11 @@ Return tools that inspect the file system without changing it: read, list,
 writableFileTools(): any[]
 ```
 
-Return the read-only file tools plus write and edit.
+Return file inspection, write, and edit tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L134))
 
 ### shellTools
 
@@ -107,19 +109,15 @@ Return the read-only file tools plus write and edit.
 shellTools(): any[]
 ```
 
-Return tools that run commands: safeBash for a shell pipeline, exec for
-  a single binary with arguments. safeBash rather than raw bash: it
-  parses the command and raises the narrowest effects that describe it
-  (a recognized write raises std::write, a git read raises its git
-  effect), so a policy can pre-approve what raw bash never could. It
-  needs no useAgentCwd binding — its empty cwd already resolves to the
-  agent working directory (resolveCwd in std::safeBash). readSpill and
-  grepSpill read back the output safeBash saved when a command printed
-  too much to return inline.
+Return command execution and saved-output readers for the agent's working directory.
+
+`safeBash` parses pipelines and raises effects for recognized operations.
+`exec` runs one binary with arguments. Both use the agent's working directory.
+The saved-output readers retrieve output too large to return inline.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L153))
 
 ### spillTools
 
@@ -127,18 +125,14 @@ Return tools that run commands: safeBash for a shell pipeline, exec for
 spillTools(): any[]
 ```
 
-Return the two tools that read saved tool output back: readSpill for the
-  whole text or a slice of lines, grepSpill to search it. A long command
-  output is saved in the run and the model gets a preview naming it
-  (std::spill); so is any long tool result, such as a fetched page, when
-  the llm() call sets spillToolResultsOver. shellTools() already includes
-  these; add spillTools() to an agent that fetches pages without it. They
-  raise no interrupt: the output was already in the conversation the name
-  arrived in.
+Return tools for reading and searching saved tool output.
+
+Add these when an agent enables `spillToolResultsOver`, so it can retrieve
+long tool results. `shellTools` already includes them.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L162))
 
 ### readOnlyGitTools
 
@@ -146,17 +140,14 @@ Return the two tools that read saved tool output back: readSpill for the
 readOnlyGitTools(): any[]
 ```
 
-Return the read-only git tools: history, diffs, status, branches. Nothing
-  here changes the repository, so read-only agents (verifiers, reviewers,
-  writers with read-only project access) can carry them. gitIsRepo is
-  included because "am I inside a repo?" is the question an agent otherwise
-  answers by probing for a `.git` directory by hand — which fails in a
-  monorepo, where `.git` lives above the package directory (git itself
-  walks up; a manual probe does not).
+Return Git repository inspection tools.
+
+Use `gitIsRepo` to detect a repository from a package subdirectory.
+Git finds the repository root even when `.git` is in a parent directory.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L171))
 
 ### gitTools
 
@@ -164,12 +155,14 @@ Return the read-only git tools: history, diffs, status, branches. Nothing
 gitTools(): any[]
 ```
 
-Return the git tools. The read-only ones run without an approval prompt;
-  the ones that change the repository prompt for approval.
+Return Git repository inspection and modification tools.
+
+Repository modifications raise approval interrupts. The inspection tools
+are also available separately from `readOnlyGitTools`.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L190))
 
 ### githubReadTools
 
@@ -177,15 +170,14 @@ Return the git tools. The read-only ones run without an approval prompt;
 githubReadTools(): any[]
 ```
 
-Return the read-only GitHub tools: pull requests, their diffs, files,
-  reviews, and checks; issues, their comments, and search. Nothing here
-  posts anything, so read-only agents (reviewers) can carry them. Each
-  tool resolves the repository from the origin remote of the agent working
-  directory, so an agent with these tools needs a working directory set.
+Return tools for reading GitHub pull requests, issues, and their comments.
+
+The tools resolve the repository from the origin remote under the agent's
+working directory. They read remote data and cannot post reviews or comments.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L210))
 
 ### githubTools
 
@@ -193,16 +185,14 @@ Return the read-only GitHub tools: pull requests, their diffs, files,
 githubTools(): any[]
 ```
 
-Return the GitHub tools. The read-only ones are in githubReadTools; the
-  rest post comments and reviews, and create, comment on, close, and label
-  issues. Every write prompts for approval unless a policy approves it.
-  ghPrApprove raises its own effect (std::github::prApprove), so a policy
-  can forbid approving a pull request while allowing every other review
-  action.
+Return GitHub lookup, review, comment, and issue-management tools.
+
+Each remote write raises an approval interrupt. Pull-request approval
+has its own effect, so policies can permit comments while refusing approvals.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L234))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L231))
 
 ### webTools
 
@@ -210,24 +200,15 @@ Return the GitHub tools. The read-only ones are in githubReadTools; the
 webTools(): any[]
 ```
 
-Return tools that retrieve a named web resource: one HTTP fetch and the
-  Wikipedia lookups. These retrieve something you can already name; to
-  discover a source you cannot name yet, add a search tool as well.
+Return HTTP and Wikipedia lookup tools for named sources.
 
-  One fetch, not three. fetchMarkdown returns an HTML page as text the
-  model can read and any other body (JSON included) as it came, so it
-  covers what fetch and fetchJSON did. Three fetch tools meant three
-  effects for a policy to cover: in trace wX5GvrUq the user's policy
-  approved two of them, the model used the third, and 26 of 57 minutes
-  went to approval prompts (ADI-44).
-
-  The fetch has `refresh` bound to false. A repeat fetch in the same
-  conversation returns the stored page, and a model offered `refresh`
-  re-downloads pages it already has.
+Add search tools when an agent must discover sources before fetching them.
+The HTTP tool returns HTML as Markdown and other bodies as received.
+Its `refresh` argument is bound to false to reuse a page within a conversation.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L256))
 
 ### agencyDocTools
 
@@ -235,13 +216,14 @@ Return tools that retrieve a named web resource: one HTTP fetch and the
 agencyDocTools(): any[]
 ```
 
-Return the bundled Agency documentation tools: the language guide, the CLI
-  reference, the type-checker diagnostic codes, and the standard-library
-  reference.
+Return the five packaged Agency documentation tools.
+
+The bundles cover the guide, CLI, diagnostics, stdlib, and agent docs.
+Reads through these tools still raise `std::read`.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L280))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L270))
 
 ### agencyDocToolsBrief
 
@@ -249,14 +231,14 @@ Return the bundled Agency documentation tools: the language guide, the CLI
 agencyDocToolsBrief(): any[]
 ```
 
-Return the same five documentation tools as agencyDocTools, under the same
-  names, with each page listed as one `path - description` line. For an agent
-  whose prompt already teaches the language. Offer one set or the other: the
-  names collide.
+Return packaged documentation tools with compact page listings.
+
+Use compact listings when the prompt already teaches the language.
+Offer this bundle or `agencyDocTools`: both use the same tool names.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L289))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L279))
 
 ### agencyCodeTools
 
@@ -264,12 +246,14 @@ Return the same five documentation tools as agencyDocTools, under the same
 agencyCodeTools(): any[]
 ```
 
-Return tools for checking Agency source: the type checker, the parser,
-  and testFile, which runs a .test.json harness in a sandboxed subprocess.
+Return Agency parsing, typechecking, and test-harness tools.
+
+`testFile` runs a saved `.test.json` harness in a subprocess.
+Use parse and typecheck for source text that has not been saved.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L305))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L294))
 
 ### memoryTools
 
@@ -277,11 +261,11 @@ Return tools for checking Agency source: the type checker, the parser,
 memoryTools(): any[]
 ```
 
-Return tools that persist and retrieve facts across sessions.
+Return fact storage and retrieval tools for enabled memory.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L313))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L301))
 
 ### planningTools
 
@@ -289,9 +273,8 @@ Return tools that persist and retrieve facts across sessions.
 planningTools(): any[]
 ```
 
-Return tools an agent uses to organize a long run: writing and reading a
-  todo list.
+Return tools for replacing and reading the agent's todo list.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L323))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L311))

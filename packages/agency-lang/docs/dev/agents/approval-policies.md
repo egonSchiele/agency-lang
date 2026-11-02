@@ -180,10 +180,11 @@ and sends whoever reads it looking for a policy bug.
 
 `_internalIo` names the operation open on the handler's own policy file,
 `"std::read"` while it loads and `"std::write"` while it saves, and is
-`""` the rest of the time. `isOwnPolicyIo` approves an interrupt without
-consulting the policy when it is that operation, on that file's name.
-The handler's saves are a flush of its "always" answers and
-`addPolicyRules`.
+`""` the rest of the time. `_internalIoDir` holds the real directory of
+the file for the same span. `isOwnPolicyIo` approves an interrupt without
+consulting the policy when it is that operation, on that file name, in
+that directory. The handler's saves are a flush of its "always" answers
+and `addPolicyRules`.
 
 It is worth being clear about what this is not for. A handler never hears
 its own raise: the chain walk skips an entry while that entry is
@@ -203,12 +204,14 @@ fork — have their own entries and are not excluded from anything. A bare
 whatever any branch raises for the length of a file read, with no check
 at all.
 
-The name is matched, not the directory: the interrupt reports the
-directory the containment layer resolved, which is the realpath, and on
-macOS that is not the string the caller passed (`/tmp` against
-`/private/tmp`), and Agency exposes no realpath to compare with. A read
-or write of a same-named file in another directory, from another branch,
-inside the window, is what is left.
+The window is longer for a save than for a load. A save's `std::write`
+walks every other handler in the chain, and when the handler runs in a
+child program that walk includes a round trip to the parent. So the check
+compares the directory as well as the name. Both payloads carry the real
+directory, which on macOS is not always the string the caller passed
+(`/tmp` is `/private/tmp`), so `beginOwnIo` resolves the policy file's real
+directory with `_policyFileDir` before it sets the flag. If that fails,
+`_internalIoDir` stays empty, nothing matches, and the policy decides.
 
 ## Saving a policy raises std::write
 
@@ -234,6 +237,13 @@ Who answers the interrupt depends on the caller:
 2. `setPolicy` takes a path from its caller and carries no `with approve`.
    The caller's handlers decide, the same as for `write`. It installs the
    policy only after the save succeeds.
+
+A save the handler makes for itself can still be refused by another
+handler in the chain, for example an outer handler that rejects writes
+outside the project directory. `maybeFlush` (and `flushPolicy`, which
+calls it) then keeps the answers pending, so the next interrupt tries
+again, and prints a warning the first time. The answers still apply for
+the rest of the session.
 
 `with approve` in library code is one vote. In a child program, the
 interrupt still reaches the parent's handlers, so a parent policy with no

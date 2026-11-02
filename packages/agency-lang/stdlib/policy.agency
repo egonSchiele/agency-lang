@@ -13,6 +13,7 @@ import {
   _validatePolicy,
   _preparePolicyWrite,
   _writePreparedPolicy,
+  _policyFileDir,
   _builtinPolicy,
   _builtinPolicyNames,
   _BUILTIN_POLICIES,
@@ -201,9 +202,14 @@ let _pendingSave: boolean = false
 // of prompting (there is no one to answer, and a pending prompt starves
 // the event loop until the process dies).
 let _interactive: boolean = true
-// Name the handler's active policy-file operation so duplicate entries
-// of this handler can approve its read. Writes currently raise no interrupt.
+// Name the handler's active operation on its own policy file, a load
+// (std::read) or a save (std::write), so `isOwnPolicyIo` can approve it.
 let _internalIo: string = ""
+// The real directory of the policy file while `_internalIo` is set.
+let _internalIoDir: string = ""
+// Whether the last save of pending "always" answers failed, so the warning
+// prints once and not on every retry.
+let _saveFailing: boolean = false
 
 /**
 ```ts
@@ -424,7 +430,7 @@ happens. If the save fails or is rejected, the active policy is unchanged.
 Later saves of "always" answers still go to the file passed to
 `cliPolicyHandler`.
 */
-export def setPolicy(path: string, policy: Policy): Result {
+export def setPolicy(path: string, policy: Policy): Result raises <std::write> {
   """
   Save a policy file and install it for the CLI approval handler.
   """
@@ -462,21 +468,27 @@ def writePolicyFile(
   }
 }
 
+// Mark the start of the handler's own operation on its policy file. The
+// directory is the real one, spelled the way read and write payloads spell
+// it. If it cannot be resolved, nothing matches and the policy decides.
+def beginOwnIo(effect: string) {
+  const dir = try _policyFileDir(globalCliPolicyOpts.file)
+  _internalIoDir = dir catch ""
+  _internalIo = effect
+}
+
+def endOwnIo() {
+  _internalIo = ""
+  _internalIoDir = ""
+}
+
 // A handler skips its own raises, but a second registration of the same
-// handler shares these globals and can hear the policy-file read. Match
-// both the active operation and filename before approving it, since other
-// branches can raise interrupts while that operation awaits I/O.
-//
-// The name and not the directory, because the directory the interrupt
-// reports is the one the containment layer resolved, the realpath, which
-// on macOS is not the string the caller passed (/tmp is /private/tmp),
-// and Agency exposes no realpath to compare with. A read of a same-named
-// file in another directory, from another branch, inside the window, is
-// what is left.
-//
-// Both halves match: a load raises std::read, and a save of the handler's
-// own policy (a flush, or `addPolicyRules`) raises std::write. See "The
-// handler's own file operations" in docs/dev/agents/approval-policies.md.
+// handler shares these globals and can hear the policy-file read. A save
+// also reaches every other handler in the chain, which can include a round
+// trip to a parent process. Other branches can raise interrupts during
+// that time, so match the operation, the file name, and the real directory
+// before approving. See "The handler's own file operations" in
+// docs/dev/agents/approval-policies.md.
 def isOwnPolicyIo(intr: any): boolean {
   if (_internalIo == "" || intr.effect != _internalIo) {
     return false
@@ -484,7 +496,7 @@ def isOwnPolicyIo(intr: any): boolean {
   if (intr.data == null) {
     return false
   }
-  return intr.data.filename == basename(globalCliPolicyOpts.file)
+  return intr.data.filename == basename(globalCliPolicyOpts.file) && intr.data.dir == _internalIoDir
 }
 
 // Lazy-load the on-disk policy on first handler invocation. Uses
@@ -495,9 +507,9 @@ def isOwnPolicyIo(intr: any): boolean {
 def maybeLoadPolicy() {
   if (!_policyLoaded) {
     _policyLoaded = true
-    _internalIo = "std::read"
+    beginOwnIo("std::read")
     const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
-    _internalIo = ""
+    endOwnIo()
     if (isFailure(loaded)) {
       // A missing file is a normal first run. Anything else means the
       // user's saved decisions are NOT in effect — say so, or a
@@ -517,6 +529,10 @@ def maybeLoadPolicy() {
 // decision recorded on turn N is on disk before turn N+1's first
 // interrupt fires. Decisions on the FINAL interrupt of a session
 // may not flush. `flushPolicy()` is the escape hatch for that.
+//
+// The save raises std::write, so another handler in the chain can refuse
+// it. A refused or failed save keeps the answers pending, so the next
+// interrupt tries again, and prints a warning once.
 def maybeFlush() {
   if (_pendingSave) {
     // Clear before writing so re-entry cannot repeat the flush.
@@ -525,9 +541,18 @@ def maybeFlush() {
     // sets `_policy` — but if that invariant ever breaks, skip the write
     // rather than clobber the policy file with `null`.
     if (_policy != null) {
-      _internalIo = "std::write"
-      writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      _internalIo = ""
+      beginOwnIo("std::write")
+      const written = writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
+      endOwnIo()
+      if (written is failure(why)) {
+        _pendingSave = true
+        if (!_saveFailing) {
+          print("Warning: could not save your new approval rules to ${globalCliPolicyOpts.file}: ${why}. They apply for the rest of this session, and the next prompt tries to save them again.")
+        }
+        _saveFailing = true
+      } else {
+        _saveFailing = false
+      }
     }
   }
 }
@@ -553,7 +578,7 @@ Append accepted additions without overriding earlier decisions. If saving
 fails, the active policy stays unchanged.
 */
 @capabilities(fileRead, fileWrite)
-export def addPolicyRules(additions: Policy) {
+export def addPolicyRules(additions: Policy) raises <std::read, std::write> {
   """
   Append rules to the CLI handler's active policy and save it immediately.
 
@@ -561,9 +586,9 @@ export def addPolicyRules(additions: Policy) {
   """
   maybeLoadPolicy()
   const merged = _appendPolicyRules(_policy ?? {}, additions)
-  _internalIo = "std::write"
+  beginOwnIo("std::write")
   const written = writePolicyFile(globalCliPolicyOpts.file, merged, []) with approve
-  _internalIo = ""
+  endOwnIo()
   // Only a saved rule takes effect. Otherwise the session would approve
   // under rules the user was just told could not be saved.
   if (written is success) {
@@ -576,17 +601,11 @@ export def addPolicyRules(additions: Policy) {
 Call between user turns or before process exit to persist the last "always"
 decision. Automatic flushing happens at the next interrupt, so the final
 decision can otherwise remain unsaved. Does nothing without pending changes.
+If a handler refuses the save, the answers stay pending and a warning prints.
 */
-export def flushPolicy() {
+export def flushPolicy() raises <std::write> {
   """Write any pending always-rule additions to the policy file now."""
-  if (_pendingSave) {
-    _pendingSave = false
-    if (_policy != null) {
-      _internalIo = "std::write"
-      writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      _internalIo = ""
-    }
-  }
+  maybeFlush()
 }
 
 // Human-readable summary of the match `buildScopedMatch` would
@@ -1266,6 +1285,7 @@ export def cliPolicyHandler(
     fields: fields
   }
   _interactive = interactive
+  _saveFailing = false
   if (policy != null) {
     // Seed from the caller and mark loaded so `maybeLoadPolicy` skips the
     // file read; persistence of later decisions still targets `file`.

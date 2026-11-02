@@ -1,0 +1,28 @@
+import { cliPolicyHandler } from "std::policy"
+
+def deploy(name: string): string {
+  interrupt myapp::deploy(name, { env: "prod" })
+  return name
+}
+
+// The user answers "approve always" for the first deploy, which leaves a
+// rule waiting to be saved. The next two deploys each start by saving it,
+// and the outer handler rejects every std::write, so both saves are
+// refused. The rule still approves both deploys for this session, the
+// warning prints once, and the policy file is never written.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    handle {
+      deploy("one")
+      deploy("two")
+      deploy("three")
+    } with handler
+  } with (intr) {
+    if (intr.effect == "std::write") {
+      return reject()
+    }
+    return pass()
+  }
+  return "pass"
+}

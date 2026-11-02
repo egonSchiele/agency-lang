@@ -63,6 +63,14 @@ export async function _preparePolicyWrite(
   };
 }
 
+/** The real directory of a policy file, spelled the way a `std::read` or
+ *  `std::write` payload spells it. The CLI handler compares it with the
+ *  payload to recognize interrupts for its own file. */
+export async function _policyFileDir(filePath: string): Promise<string> {
+  const host = currentHost();
+  return path.dirname(await host.files.realPath(filePath));
+}
+
 /** Write a prepared policy to the directory its approval named. The file
  *  is created readable by its owner only. */
 export async function _writePreparedPolicy(write: PolicyWrite): Promise<void> {

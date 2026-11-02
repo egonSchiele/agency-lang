@@ -131,27 +131,19 @@ plannerAgent(
 Generate an Agency program that composes agents to solve a complex task,
   request approval, run it, and check the result.
 
-  @param plan - Seed plan that skips the planning call when nonempty.
-  @param maxCost - Cost budget in USD across the generated work.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override for the planning call only, or "" for the ambient model.
-  @param provider - Provider for the planning model, ignored when model is empty.
-  @param session - Named conversation for the planning call, unused when a seed plan is given.
-  @param extraTools - Tools added to the planning call only.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| task | `string` |  |
-| context | `string` | "" |
-| plan | `string` | "" |
-| maxCost | `number` | $100.00 |
-| maxTime | `number` | 60m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| task | `string` |  |  |
+| context | `string` | "" |  |
+| plan | `string` | "" | Seed plan that skips the planning call when nonempty. |
+| maxCost | `number` | $100.00 | Cost budget in USD across the generated work. |
+| maxTime | `number` | 60m | Time budget in milliseconds. |
+| model | `string` | "" | Model override for the planning call only, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the planning model, ignored when model is empty. |
+| session | `string` | "" | Named conversation for the planning call, unused when a seed plan is given. |
+| extraTools | `any[]` | [] | Tools added to the planning call only. |
 
 **Returns:** `Result<string>`
 

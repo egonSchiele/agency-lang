@@ -73,17 +73,13 @@ setSecret(key: string, value: string, service: string = "agency-lang"): Result
 
 Store a secret in the system keyring, replacing any existing value.
 
-  @param key - A non-empty name identifying the secret within its service.
-  @param value - The non-empty secret to store.
-  @param service - The namespace shared by calls that store and retrieve this secret.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| key | `string` |  |
-| value | `string` |  |
-| service | `string` | "agency-lang" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| key | `string` |  | A non-empty name identifying the secret within its service. |
+| value | `string` |  | The non-empty secret to store. |
+| service | `string` | "agency-lang" | The namespace shared by calls that store and retrieve this secret. |
 
 **Returns:** `Result`
 
@@ -101,15 +97,12 @@ getSecret(key: string, service: string = "agency-lang"): Result
 
 Retrieve a secret from the system keyring, or null when it is missing.
 
-  @param key - The name used when storing the secret.
-  @param service - The namespace used when storing the secret.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| key | `string` |  |
-| service | `string` | "agency-lang" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| key | `string` |  | The name used when storing the secret. |
+| service | `string` | "agency-lang" | The namespace used when storing the secret. |
 
 **Returns:** `Result`
 
@@ -127,15 +120,12 @@ deleteSecret(key: string, service: string = "agency-lang"): Result
 
 Delete a secret from the system keyring, returning whether it existed.
 
-  @param key - The name used when storing the secret.
-  @param service - The namespace used when storing the secret.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| key | `string` |  |
-| service | `string` | "agency-lang" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| key | `string` |  | The name used when storing the secret. |
+| service | `string` | "agency-lang" | The namespace used when storing the secret. |
 
 **Returns:** `Result`
 

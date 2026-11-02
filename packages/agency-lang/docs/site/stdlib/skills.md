@@ -159,7 +159,10 @@ effect std::skills::review {
 
 ### MAX_TOOL_NAME_LEN
 
+Maximum length of a generated tool name or a newly saved skill name.
+
 ```ts
+/** Maximum length of a generated tool name or a newly saved skill name. */
 export static const MAX_TOOL_NAME_LEN = 64
 ```
 
@@ -180,22 +183,18 @@ skillsToolFromEntries(
 
 Build a skills tool from entries scanned from the same directory.
 
-  @param dir - The scanned directory, or the group's own `dir` for scanSkillsSubdirs results.
-  @param name - Override the directory-derived tool name, with punctuation replaced by underscores and a 64-character limit.
-  @param brief - List each file as one `path - description` line instead of XML.
-
 Use cached scan results to build a skills tool without reading the directory
 again. Choose `brief` for large catalogs to reduce the listing sent on each
 model call. Each later read through the tool requires approval.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| entries | `SkillEntry[]` |  |
-| name | `string` | "" |
-| brief | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The scanned directory, or the group's own `dir` for scanSkillsSubdirs results. |
+| entries | `SkillEntry[]` |  |  |
+| name | `string` | "" | Override the directory-derived tool name, with punctuation replaced by underscores and a 64-character limit. |
+| brief | `boolean` | false | List each file as one `path - description` line instead of XML. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L210))
 
@@ -210,9 +209,6 @@ skillsDir(
 ```
 
 Build a tool that lets an LLM list and read skills from a directory.
-
-  @param layout - Use "standard" for `<name>/SKILL.md` or "flat" for loose Markdown files.
-  @param name - Override the directory-derived tool name, with punctuation replaced by underscores and a 64-character limit.
 
 Use this to give a model access to skills without loading every body into
 its prompt. The tool description lists each skill's name, description, and
@@ -229,11 +225,11 @@ directory-derived names collide after sanitizing and shortening them.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| layout | `"flat" \| "standard"` | "standard" |
-| name | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  |  |
+| layout | `"flat" \| "standard"` | "standard" | Use "standard" for `<name>/SKILL.md` or "flat" for loose Markdown files. |
+| name | `string` | "" | Override the directory-derived tool name, with punctuation replaced by underscores and a 64-character limit. |
 
 **Throws:** `std::skills::skillsDir`
 
@@ -252,19 +248,16 @@ scanSkillsSubdirs(
 
 Scan direct subdirectories for flat-layout skills and group them by name.
 
-  @param root - The nonempty directory holding the agents' skills directories.
-  @param subdirs - Bare directory names, excluding empty names, `.`, `..`, and path separators.
-
 Use this when several agents keep flat-layout skills in separate directories
 under one root. Build each agent's tool from its group's `dir` and `entries`.
 Every requested subdirectory gets a group, including empty or missing ones.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| root | `string` |  |
-| subdirs | `string[]` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| root | `string` |  | The nonempty directory holding the agents' skills directories. |
+| subdirs | `string[]` |  | Bare directory names, excluding empty names, `.`, `..`, and path separators. |
 
 **Returns:** `Result<Record<string, SkillGroup>>`
 
@@ -284,8 +277,6 @@ scanClaudeSkills(
 
 Scan a Claude Code skills folder for model-readable skills and slash commands.
 
-  @param dir - The folder containing `<name>/SKILL.md` files.
-
 Use this when one Claude Code skills folder supplies both an LLM skills
 listing and user slash commands. `disable-model-invocation: true` hides a
 skill from `entries`. `user-invocable: false` hides it from `commands`.
@@ -298,9 +289,9 @@ The folder's scan approval covers both outputs, so reject
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The folder containing `<name>/SKILL.md` files. |
 
 **Returns:** `Result<ClaudeSkillsScan>`
 
@@ -324,11 +315,6 @@ writeSkill(
 Save a new skill after approval without overwriting an existing file.
   Use designSkill if the user should review and revise a draft first.
 
-  @param dir - The nonempty skills directory to write into.
-  @param name - An unused name of at most 64 characters, using lowercase letters and digits separated by single hyphens.
-  @param description - One line telling the reading agent when to use the skill.
-  @param body - The skill's Markdown instructions.
-
 Use this when you already have a finished skill. It creates `<name>.md` in
 the flat layout, with name and description frontmatter followed by the body.
 It refuses to overwrite an existing file.
@@ -339,12 +325,12 @@ save approval. Use `designSkill` to collect feedback before saving.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| name | `string` |  |
-| description | `string` |  |
-| body | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The nonempty skills directory to write into. |
+| name | `string` |  | An unused name of at most 64 characters, using lowercase letters and digits separated by single hyphens. |
+| description | `string` |  | One line telling the reading agent when to use the skill. |
+| body | `string` |  | The skill's Markdown instructions. |
 
 **Returns:** `Result<SkillEntry>`
 
@@ -371,14 +357,6 @@ designSkill(
 Show a draft skill to the user, revise it on their feedback, and save it
   once they accept.
 
-  @param dir - The nonempty skills directory to write into.
-  @param name - An unused name of at most 64 characters, using lowercase letters and digits separated by single hyphens.
-  @param description - One line telling the reading agent when to use the skill.
-  @param body - The first draft of the skill's Markdown instructions.
-  @param maxRounds - Maximum number of reviews before returning a failure.
-  @param model - Model to use for revisions, or "" for the configured model.
-  @param provider - Provider for the model override, ignored when model is "".
-
 Give this tool to a model that can write the first draft from the conversation.
 The user sees that draft before any revision call. A bare approval or `accept`
 accepts it; other nonempty text asks the model to revise the description and body.
@@ -390,15 +368,15 @@ approvals. Accepting the first draft makes no revision model call.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| name | `string` |  |
-| description | `string` |  |
-| body | `string` |  |
-| maxRounds | `number` | 3 |
-| model | `string` | "" |
-| provider | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The nonempty skills directory to write into. |
+| name | `string` |  | An unused name of at most 64 characters, using lowercase letters and digits separated by single hyphens. |
+| description | `string` |  | One line telling the reading agent when to use the skill. |
+| body | `string` |  | The first draft of the skill's Markdown instructions. |
+| maxRounds | `number` | 3 | Maximum number of reviews before returning a failure. |
+| model | `string` | "" | Model to use for revisions, or "" for the configured model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is "". |
 
 **Returns:** `Result<SkillEntry>`
 
@@ -443,18 +421,15 @@ docsToolFromEntries(
 
 Build a documentation tool from pages listed by docsEntries.
 
-  @param section - The section used to obtain the entries.
-  @param brief - List each page as one `path - description` line.
-
 Reuse one scan to prepare full and brief docs tools for different context sizes.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| section | `DocsSection` |  |
-| entries | `SkillEntry[]` |  |
-| brief | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| section | `DocsSection` |  | The section used to obtain the entries. |
+| entries | `SkillEntry[]` |  |  |
+| brief | `boolean` | false | List each page as one `path - description` line. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L800))
 
@@ -466,14 +441,12 @@ docsSkill(section: DocsSection, brief: boolean = false)
 
 Build a tool that lets an LLM read a section of the packaged Agency docs.
 
-  @param brief - List each page as one `path - description` line.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| section | `DocsSection` |  |
-| brief | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| section | `DocsSection` |  |  |
+| brief | `boolean` | false | List each page as one `path - description` line. |
 
 **Needs:** `fileRead`
 
@@ -501,13 +474,11 @@ agentSkill(agent: string)
 
 Build a tool that lets an LLM list and read an agent's packaged skills.
 
-  @param agent - The agent's path under the packaged skills directory.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| agent | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| agent | `string` |  | The agent's path under the packaged skills directory. |
 
 **Needs:** `fileRead`
 
@@ -521,13 +492,11 @@ agentPrompt(filename: string): Result<string>
 
 Read a prompt file packaged with the stdlib agents.
 
-  @param filename - The prompt's path relative to the packaged prompts directory.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | The prompt's path relative to the packaged prompts directory. |
 
 **Returns:** `Result<string>`
 
@@ -580,8 +549,6 @@ expandSlash(msg: string, commands: SkillCommand[]): string
 Expand a slash command into its prompt template, substituting $ARGUMENTS.
   Return the original message when no command matches.
 
-  @param commands - Templates from commandsDir or scanClaudeSkills, with the first matching name taking precedence.
-
 ```ts
 const prompt = expandSlash("/review src/main.ts", commands)
 ```
@@ -598,10 +565,10 @@ only substitutes `$ARGUMENTS`; it runs no shell commands and ignores
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| msg | `string` |  |
-| commands | `SkillCommand[]` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| msg | `string` |  |  |
+| commands | `SkillCommand[]` |  | Templates from commandsDir or scanClaudeSkills, with the first matching name taking precedence. |
 
 **Returns:** `string`
 

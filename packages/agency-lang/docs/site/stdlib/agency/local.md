@@ -130,13 +130,11 @@ resolveModelName(value: string): string
 
 Resolve a local-model short name or alias to its URI or filesystem target.
 
-  @param value - A catalog name, alias, model URI, GGUF path, or model directory.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `string` |  | A catalog name, alias, model URI, GGUF path, or model directory. |
 
 **Returns:** `string`
 
@@ -150,9 +148,6 @@ downloadModel(value: string, cacheDir: string = ""): string
 
 Download a local model or find its existing cached copy.
 
-  @param value - A catalog name, alias, model URI, GGUF path, or model directory.
-  @param cacheDir - The models directory, or empty to use the configured per-user cache.
-
 Reuses cached files and resumes interrupted served-model downloads.
   Returns the local GGUF file path or served-model directory. The default
   cache comes from `AGENCY_MODELS_DIR`, then `client.modelsDir`, then
@@ -160,10 +155,10 @@ Reuses cached files and resumes interrupted served-model downloads.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `string` |  |
-| cacheDir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `string` |  | A catalog name, alias, model URI, GGUF path, or model directory. |
+| cacheDir | `string` | "" | The models directory, or empty to use the configured per-user cache. |
 
 **Returns:** `string`
 
@@ -179,13 +174,11 @@ listDownloadedModels(cacheDir: string = ""): DownloadedModel[]
 
 List downloaded GGUF files and served-model directories.
 
-  @param cacheDir - The models directory, or empty to use the configured per-user cache.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cacheDir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cacheDir | `string` | "" | The models directory, or empty to use the configured per-user cache. |
 
 **Returns:** `DownloadedModel[]`
 
@@ -215,17 +208,15 @@ aliasModel(name: string, uri: string): string
 
 Save a short-name alias for a model target.
 
-  @param uri - A model URI, GGUF path, or model directory to associate with the alias.
-
 Writes the alias to the selected Agency configuration and returns that
   file's path. An alias with the same name as a curated entry takes precedence.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| uri | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  |  |
+| uri | `string` |  | A model URI, GGUF path, or model directory to associate with the alias. |
 
 **Returns:** `string`
 
@@ -264,19 +255,16 @@ removeModel(name: string, cacheDir: string = ""): bool
 
 Delete a downloaded model file from the models cache.
 
-  @param name - The model filename within the cache, rather than an alias or model directory.
-  @param cacheDir - The models directory, or empty to use the configured per-user cache.
-
 Deletes a cached file without removing its aliases. Returns false if
   the target is missing or is a directory. Use `unaliasModel` when you only
   want to remove the short name.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| cacheDir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The model filename within the cache, rather than an alias or model directory. |
+| cacheDir | `string` | "" | The models directory, or empty to use the configured per-user cache. |
 
 **Returns:** `bool`
 
@@ -292,13 +280,11 @@ localModelBackend(value: string): string
 
 Identify a model's backend: llama-cpp, mlx, or diffusers.
 
-  @param value - A catalog name, alias, model URI, GGUF path, or model directory.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `string` |  | A catalog name, alias, model URI, GGUF path, or model directory. |
 
 **Returns:** `string`
 
@@ -312,16 +298,14 @@ mlxServedName(value: string): string
 
 Resolve the model name to send to an MLX server.
 
-  @param value - An MLX model name, alias, URI, or model directory.
-
 For an MLX URI, returns the repository ID. For a model directory, returns
   its absolute path. Configure the server with the same model name.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `string` |  | An MLX model name, alias, URI, or model directory. |
 
 **Returns:** `string`
 
@@ -345,9 +329,6 @@ registerLocalModel(value: string, cacheDir: string = ""): string
 
 Prepare a GGUF model for local inference, or resolve an MLX server model name.
 
-  @param value - A GGUF or MLX catalog name, alias, URI, file path, or model directory.
-  @param cacheDir - The GGUF download directory, or empty to use the configured per-user cache.
-
 For GGUF, registers llama-cpp and downloads the model if needed, then
   returns its local path. For MLX, returns the server model name without
   downloading or starting a server. Start the server before calling the
@@ -355,10 +336,10 @@ For GGUF, registers llama-cpp and downloads the model if needed, then
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `string` |  |
-| cacheDir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `string` |  | A GGUF or MLX catalog name, alias, URI, file path, or model directory. |
+| cacheDir | `string` | "" | The GGUF download directory, or empty to use the configured per-user cache. |
 
 **Returns:** `string`
 
@@ -388,8 +369,6 @@ mlxServerModels(baseUrl: string = ""): string[] | null
 
 List the model IDs an MLX server reports, or null when the probe fails.
 
-  @param baseUrl - The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint.
-
 Use this to check the server before selecting a model. Null also covers
   an unsuccessful or unreadable response, so it does not prove the server
   process is absent. URL precedence is the explicit argument,
@@ -397,9 +376,9 @@ Use this to check the server before selecting a model. Null also covers
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| baseUrl | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| baseUrl | `string` | "" | The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint. |
 
 **Returns:** `string[] | null`
 
@@ -415,13 +394,11 @@ mlxServerRunning(baseUrl: string = ""): boolean
 
 Check whether the configured MLX endpoint answers the model-list probe.
 
-  @param baseUrl - The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| baseUrl | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| baseUrl | `string` | "" | The server's OpenAI-compatible base URL, or empty for the configured mlx endpoint. |
 
 **Returns:** `boolean`
 
@@ -437,8 +414,6 @@ refreshCatalog(url: string = ""): RefreshResult
 
 Refresh remote-managed model aliases from the model catalog, preserving user-owned aliases.
 
-  @param url - Leave empty to use AGENCY_MODEL_CATALOG_URL, then client.modelCatalogUrl, then the built-in catalog URL.
-
 Performs the same refresh as `agency local refresh`. It updates aliases
   marked `source: "remote"`, adds new catalog entries, and removes entries
   the remote catalog dropped. User-owned aliases win name collisions.
@@ -447,9 +422,9 @@ Performs the same refresh as `agency local refresh`. It updates aliases
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| url | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| url | `string` | "" | Leave empty to use AGENCY_MODEL_CATALOG_URL, then client.modelCatalogUrl, then the built-in catalog URL. |
 
 **Returns:** [RefreshResult](#refreshresult)
 

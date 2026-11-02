@@ -506,16 +506,14 @@ ghPrGet(
 ```
 
 Read a pull request's details and description.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [PrSummary](#prsummary)
 
@@ -539,22 +537,17 @@ ghPrList(
 ```
 
 List pull requests. Each item has no change counts; ghPrGet returns those.
-  @param base - Only pull requests targeting this base branch ("" for any).
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| state | [PrState](#prstate) | "open" |
-| base | `string` | "" |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| state | [PrState](#prstate) | "open" |  |
+| base | `string` | "" | Only pull requests targeting this base branch ("" for any). |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `PrListItem[]`
 
@@ -576,16 +569,14 @@ ghPrDiff(
 
 Read the full unified diff of a pull request as one string. GitHub refuses
   this for very large pull requests; use ghPrFiles for those.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `string`
 
@@ -608,20 +599,16 @@ ghPrFiles(
 ```
 
 List the files a pull request changes, with per-file add/delete counts and patch hunks.
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| perPage | `number` | 100 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| perPage | `number` | 100 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `PrFile[]`
 
@@ -644,20 +631,16 @@ ghPrReviews(
 ```
 
 Read the submitted reviews on a pull request.
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `ReviewSummary[]`
 
@@ -680,20 +663,16 @@ ghPrReviewComments(
 ```
 
 List the inline review comments on a pull request, with file and line.
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `ReviewCommentInfo[]`
 
@@ -716,20 +695,16 @@ ghPrChecks(
 ```
 
 List the CI check runs on the head commit of a pull request.
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `CheckRun[]`
 
@@ -750,16 +725,14 @@ ghIssueGet(
 ```
 
 Read an issue's details and description. Pull request numbers are rejected.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [IssueSummary](#issuesummary)
 
@@ -785,11 +758,6 @@ ghIssueList(
 List issues, optionally filtered by labels. A short or empty page can
   still have later pages because pull requests are excluded from results.
   To page through every issue exactly, use ghIssueSearch with "is:issue".
-  @param labels - Only issues carrying all of these labels ([] for any).
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 GitHub includes pull requests in the underlying page, then this tool
   removes them. Use `ghIssueSearch` with `is:issue` when you need pagination
@@ -797,14 +765,14 @@ GitHub includes pull requests in the underlying page, then this tool
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| state | [IssueState](#issuestate) | "open" |
-| labels | `string[]` | [] |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| state | [IssueState](#issuestate) | "open" |  |
+| labels | `string[]` | [] | Only issues carrying all of these labels ([] for any). |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `IssueSummary[]`
 
@@ -827,20 +795,16 @@ ghIssueComments(
 ```
 
 List the comments on an issue.
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `CommentInfo[]`
 
@@ -864,21 +828,16 @@ ghIssueSearch(
 
 Search issues and pull requests in one repository. The query must not
   contain a repo:, org:, or user: qualifier.
-  @param query - GitHub search syntax, e.g. "crash in:title label:bug".
-  @param perPage - Results per page, at most 100.
-  @param page - Page number, starting at 1.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| perPage | `number` | 30 |
-| page | `number` | 1 |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  | GitHub search syntax, e.g. "crash in:title label:bug". |
+| perPage | `number` | 30 | Results per page, at most 100. |
+| page | `number` | 1 | Page number, starting at 1. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `IssueSummary[]`
 
@@ -905,29 +864,22 @@ ghPrReviewComment(
 
 Post one inline comment on a pull request diff. For several comments at
   once, use ghPrReview: one call, one approval.
-  @param path - The repository-relative path shown in the pull request diff.
-  @param line - The one-based file line on the chosen diff side, within a changed hunk.
-  @param body - The comment text (markdown).
-  @param side - Which side of the diff: "RIGHT" (new code) or "LEFT" (old).
-  @param commitSha - The commit to anchor to. Empty means the PR head commit.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 Use `ghPrReview` to submit several inline comments in one review. The
   comment attaches to the selected commit, defaulting to the PR head.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| path | `string` |  |
-| line | `number` |  |
-| body | `string` |  |
-| side | [DiffSide](#diffside) | "RIGHT" |
-| commitSha | `string` | "" |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| path | `string` |  | The repository-relative path shown in the pull request diff. |
+| line | `number` |  | The one-based file line on the chosen diff side, within a changed hunk. |
+| body | `string` |  | The comment text (markdown). |
+| side | [DiffSide](#diffside) | "RIGHT" | Which side of the diff: "RIGHT" (new code) or "LEFT" (old). |
+| commitSha | `string` | "" | The commit to anchor to. Empty means the PR head commit. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [ReviewCommentInfo](#reviewcommentinfo)
 
@@ -952,24 +904,20 @@ ghPrReview(
 
 Submit a pull request review with an overall comment and optional inline
   comments, either commenting or requesting changes.
-  @param body - Overall review text in Markdown, required when requesting changes.
-  @param comments - Inline comments, each with path, line, body, and an optional side.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 Submit overall feedback and inline comments together. Use `ghPrApprove`
   for a formal approval, which has its own effect.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| event | [ReviewEvent](#reviewevent) | "COMMENT" |
-| body | `string` | "" |
-| comments | `ReviewComment[]` | [] |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| event | [ReviewEvent](#reviewevent) | "COMMENT" |  |
+| body | `string` | "" | Overall review text in Markdown, required when requesting changes. |
+| comments | `ReviewComment[]` | [] | Inline comments, each with path, line, body, and an optional side. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [ReviewSummary](#reviewsummary)
 
@@ -992,18 +940,15 @@ ghPrApprove(
 
 Approve a pull request. This is a formal review approval that can satisfy
   branch protection and unblock a merge.
-  @param body - Optional approval text (markdown).
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| body | `string` | "" |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  |  |
+| body | `string` | "" | Optional approval text (markdown). |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [ReviewSummary](#reviewsummary)
 
@@ -1027,22 +972,17 @@ ghIssueCreate(
 ```
 
 Create an issue.
-  @param body - The issue body (markdown).
-  @param labels - Labels to apply on creation.
-  @param assignees - Usernames to assign on creation.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
-| body | `string` |  |
-| labels | `string[]` | [] |
-| assignees | `string[]` | [] |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  |  |
+| body | `string` |  | The issue body (markdown). |
+| labels | `string[]` | [] | Labels to apply on creation. |
+| assignees | `string[]` | [] | Usernames to assign on creation. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [IssueSummary](#issuesummary)
 
@@ -1064,19 +1004,15 @@ ghIssueComment(
 ```
 
 Post a comment on an issue or pull request.
-  @param number - The issue or pull request number.
-  @param body - The comment text (markdown).
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| body | `string` |  |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  | The issue or pull request number. |
+| body | `string` |  | The comment text (markdown). |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [CommentInfo](#commentinfo)
 
@@ -1098,18 +1034,15 @@ ghIssueClose(
 ```
 
 Close an issue or pull request.
-  @param number - The issue or pull request number.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| reason | [CloseReason](#closereason) | "completed" |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  | The issue or pull request number. |
+| reason | [CloseReason](#closereason) | "completed" |  |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** [IssueSummary](#issuesummary)
 
@@ -1131,19 +1064,15 @@ ghIssueLabel(
 ```
 
 Add labels to an issue or pull request. Returns the full label list after the change.
-  @param number - The issue or pull request number.
-  @param labels - The labels to add.
-  @param owner - Pass with repo, or leave both empty to use the agent working directory's origin remote.
-  @param repo - The repository name without the owner, supplied together with owner.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| number | `number` |  |
-| labels | `string[]` |  |
-| owner | `string` | "" |
-| repo | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| number | `number` |  | The issue or pull request number. |
+| labels | `string[]` |  | The labels to add. |
+| owner | `string` | "" | Pass with repo, or leave both empty to use the agent working directory's origin remote. |
+| repo | `string` | "" | The repository name without the owner, supplied together with owner. |
 
 **Returns:** `string[]`
 

@@ -50,27 +50,18 @@ dataAgent(
 Answer a question from structured public-data APIs, naming the source and
   identifier behind every figure.
 
-  @param task - The question to answer
-  @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| task | `string` |  |
-| context | `string` | "" |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| task | `string` |  | The question to answer |
+| context | `string` | "" | Extra material folded into the prompt, or "" |
+| maxCost | `number` | $20.00 | Cost budget in USD. |
+| maxTime | `number` | 15m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Session name to share a thread across calls, or "" for isolated |
+| extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
 
 **Returns:** `Result<string>`
 

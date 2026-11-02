@@ -83,22 +83,16 @@ embed(
 
 Turn one piece of text into an embedding vector.
 
-  @param model - Embedding model (default: text-embedding-3-small). For a local provider (mlx, llama-cpp) this may be a catalog name, alias, or path
-  @param provider - Override the provider (normally derived from the model name)
-  @param dimensions - Shorten the vector to this length, for models that support it (0 means the model's full length)
-  @param apiKey - Override the API key
-  @param baseUrl - Base URL for the ollama, deepinfra, litellm, openai-compat, or mlx provider
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| text | `string` |  |
-| model | `string` | "" |
-| provider | `string` | "" |
-| dimensions | `number` | 0 |
-| apiKey | `string` | "" |
-| baseUrl | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| text | `string` |  |  |
+| model | `string` | "" | Embedding model (default: text-embedding-3-small). For a local provider (mlx, llama-cpp) this may be a catalog name, alias, or path |
+| provider | `string` | "" | Override the provider (normally derived from the model name) |
+| dimensions | `number` | 0 | Shorten the vector to this length, for models that support it (0 means the model's full length) |
+| apiKey | `string` | "" | Override the API key |
+| baseUrl | `string` | "" | Base URL for the ollama, deepinfra, litellm, openai-compat, or mlx provider |
 
 **Returns:** `Result<Embedding>`
 
@@ -121,22 +115,16 @@ embedMany(
 
 Turn a list of texts into embedding vectors in one call, one vector per text in the same order.
 
-  @param model - Embedding model (default: text-embedding-3-small). For a local provider (mlx, llama-cpp) this may be a catalog name, alias, or path
-  @param provider - Override the provider (normally derived from the model name)
-  @param dimensions - Shorten each vector to this length, for models that support it (0 means the model's full length)
-  @param apiKey - Override the API key
-  @param baseUrl - Base URL for the ollama, deepinfra, litellm, openai-compat, or mlx provider
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| texts | `string[]` |  |
-| model | `string` | "" |
-| provider | `string` | "" |
-| dimensions | `number` | 0 |
-| apiKey | `string` | "" |
-| baseUrl | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| texts | `string[]` |  |  |
+| model | `string` | "" | Embedding model (default: text-embedding-3-small). For a local provider (mlx, llama-cpp) this may be a catalog name, alias, or path |
+| provider | `string` | "" | Override the provider (normally derived from the model name) |
+| dimensions | `number` | 0 | Shorten each vector to this length, for models that support it (0 means the model's full length) |
+| apiKey | `string` | "" | Override the API key |
+| baseUrl | `string` | "" | Base URL for the ollama, deepinfra, litellm, openai-compat, or mlx provider |
 
 **Returns:** `Result<Embeddings>`
 

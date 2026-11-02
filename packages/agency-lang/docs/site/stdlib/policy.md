@@ -257,7 +257,10 @@ export type ParsePolicyFailure = {
 
 ### minimalAutoApprovePolicy
 
+The minimal built-in policy used by `agency run --policy minimal`.
+
 ```ts
+/** The minimal built-in policy used by `agency run --policy minimal`. */
 export static const minimalAutoApprovePolicy = _minimalAutoApprovePolicy
 ```
 
@@ -265,7 +268,10 @@ export static const minimalAutoApprovePolicy = _minimalAutoApprovePolicy
 
 ### recommendedAutoApprovePolicy
 
+The recommended policy, with scoped file reads and service reads.
+
 ```ts
+/** The recommended policy, with scoped file reads and service reads. */
 export static const recommendedAutoApprovePolicy = _recommendedAutoApprovePolicy
 ```
 
@@ -273,7 +279,10 @@ export static const recommendedAutoApprovePolicy = _recommendedAutoApprovePolicy
 
 ### approveAllPolicy
 
+Approve every effect; value-seeking interrupts still need an answer in the CLI handler.
+
 ```ts
+/** Approve every effect; value-seeking interrupts still need an answer in the CLI handler. */
 export static const approveAllPolicy = _approveAllPolicy
 ```
 
@@ -281,7 +290,10 @@ export static const approveAllPolicy = _approveAllPolicy
 
 ### BUILTIN_POLICIES
 
+Built-in policy names and their descriptions, shared with the CLI.
+
 ```ts
+/** Built-in policy names and their descriptions, shared with the CLI. */
 export static const BUILTIN_POLICIES = _BUILTIN_POLICIES
 ```
 
@@ -313,14 +325,12 @@ builtinPolicy(name: string, baseDir: string): Policy | null
 
 Resolve a built-in policy name, or return null for an unknown name.
 
-  @param baseDir - Directory scope for the with-writes policy.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| baseDir | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  |  |
+| baseDir | `string` |  | Directory scope for the with-writes policy. |
 
 **Returns:** `Policy | null`
 
@@ -433,8 +443,6 @@ buildScopedMatch(
 Build glob patterns that pin an interrupt's scoped field values.
   Return {} if there is no scope or a scoped value is missing.
 
-  @param fields - Per-effect scope overrides, with unlisted effects using their declared scopes.
-
 Use this to preview a scoped rule in a custom approval UI:
 
 ```ts
@@ -451,10 +459,10 @@ of the effect. `recordScopedRule` performs that check for you.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| intr | `Record<string, any>` |  |
-| fields | [ScopedRuleFields](#scopedrulefields) | {} |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| intr | `Record<string, any>` |  |  |
+| fields | [ScopedRuleFields](#scopedrulefields) | {} | Per-effect scope overrides, with unlisted effects using their declared scopes. |
 
 **Returns:** `Record<string, string>`
 
@@ -506,8 +514,6 @@ recordScopedRule(
 Prepend an approval rule scoped to an interrupt's field values.
   Return the policy unchanged when there is no scope to pin.
 
-  @param fields - Per-effect scope overrides, with unlisted effects using their declared scopes.
-
 Use this for an "approve always here" choice. It prepends an approval,
 so a matching scoped rule takes precedence over existing catch-all rules.
 The input policy remains unchanged. If no scope can be built, it returns
@@ -515,11 +521,11 @@ the input policy without adding a rule.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| policy | [Policy](#policy) |  |
-| intr | `Record<string, any>` |  |
-| fields | [ScopedRuleFields](#scopedrulefields) | {} |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| policy | [Policy](#policy) |  |  |
+| intr | `Record<string, any>` |  |  |
+| fields | [ScopedRuleFields](#scopedrulefields) | {} | Per-effect scope overrides, with unlisted effects using their declared scopes. |
 
 **Returns:** [Policy](#policy)
 
@@ -581,17 +587,15 @@ missingPolicyRules(base: Policy): Policy
 
 Find rules in a base policy that the CLI handler's active policy lacks.
 
-  @param base - Policy to compare against, such as recommendedAutoApprovePolicy.
-
 Use this to offer updates when a saved policy lacks rules added to a newer
 built-in policy. Effects already covered by a catch-all are left out.
 Pass accepted additions to `addPolicyRules`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| base | [Policy](#policy) |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| base | [Policy](#policy) |  | Policy to compare against, such as recommendedAutoApprovePolicy. |
 
 **Returns:** [Policy](#policy)
 
@@ -609,16 +613,14 @@ addPolicyRules(additions: Policy)
 
 Append rules to the CLI handler's active policy and save it immediately.
 
-  @param additions - Rules to add, such as the result of missingPolicyRules.
-
 Append accepted additions without overriding earlier decisions. If saving
 fails, the active policy stays unchanged.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| additions | [Policy](#policy) |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| additions | [Policy](#policy) |  | Rules to add, such as the result of missingPolicyRules. |
 
 **Throws:** `std::read`
 
@@ -656,11 +658,6 @@ cliPolicyHandler(
 Build a CLI approval handler that remembers decisions in a policy file.
   Call once per program and bind the result before installing it.
 
-  @param file - Policy file path whose parent directory already exists.
-  @param fields - Per-effect scope overrides, with [] disabling scoped approval for an effect.
-  @param policy - Initial rules to use instead of reading the file, or null to load it.
-  @param interactive - Prompt for unresolved interrupts when true, or reject them when false.
-
 ```ts
 const handler = cliPolicyHandler(file: "/home/me/.myapp/policy.json")
 handle {
@@ -688,12 +685,12 @@ overrides them. An empty override disables that choice for the effect.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| file | `string` |  |
-| fields | [ScopedRuleFields](#scopedrulefields) | {} |
-| policy | `Policy \| null` | null |
-| interactive | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| file | `string` |  | Policy file path whose parent directory already exists. |
+| fields | [ScopedRuleFields](#scopedrulefields) | {} | Per-effect scope overrides, with [] disabling scoped approval for an effect. |
+| policy | `Policy \| null` | null | Initial rules to use instead of reading the file, or null to load it. |
+| interactive | `boolean` | true | Prompt for unresolved interrupts when true, or reject them when false. |
 
 **Returns:** `any`
 

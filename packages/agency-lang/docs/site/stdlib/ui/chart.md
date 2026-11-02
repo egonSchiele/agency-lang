@@ -115,29 +115,20 @@ barChart(
 Build a horizontal bar chart to display with std::ui/layout render.
   Stacked values within each category must all have the same sign.
 
-  @param mode - Grouped draws a bar per series; stacked combines them per category
-  @param keys - Series definitions. A color is a name like "blue" or a hex string like "#cc7a4a"; omitted colors and symbols are assigned automatically
-  @param data - Categories with values aligned to keys by index
-  @param showValues - Show the numeric value beside each bar
-  @param legend - Show the series names and symbols
-  @param max - Positive axis maximum; longer bars saturate at it, and 0 derives the maximum from data
-  @param barChar - Default fill symbol for the first or only series
-  @param width - Columns, a percentage of the parent such as "50%", or "full"
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` | "" |
-| mode | [BarMode](#barmode) | "grouped" |
-| keys | `BarKey[]` | null |
-| data | `Bar[]` | null |
-| showValues | `boolean` | true |
-| legend | `boolean` | true |
-| max | `number` | 0 |
-| barChar | `string` | "█" |
-| width | [Width](layout.md#width) | null |
-| block | `(ChartBuilder) => void` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` | "" |  |
+| mode | [BarMode](#barmode) | "grouped" | Grouped draws a bar per series; stacked combines them per category |
+| keys | `BarKey[]` | null | Series definitions. A color is a name like "blue" or a hex string like "#cc7a4a"; omitted colors and symbols are assigned automatically |
+| data | `Bar[]` | null | Categories with values aligned to keys by index |
+| showValues | `boolean` | true | Show the numeric value beside each bar |
+| legend | `boolean` | true | Show the series names and symbols |
+| max | `number` | 0 | Positive axis maximum; longer bars saturate at it, and 0 derives the maximum from data |
+| barChar | `string` | "█" | Default fill symbol for the first or only series |
+| width | [Width](layout.md#width) | null | Columns, a percentage of the parent such as "50%", or "full" |
+| block | `(ChartBuilder) => void` | null |  |
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 

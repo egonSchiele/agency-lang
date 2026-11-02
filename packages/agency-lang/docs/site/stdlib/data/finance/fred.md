@@ -168,27 +168,20 @@ Fetch observations for a FRED economic series, ordered oldest first.
   Requires FRED_API_KEY. For the most recent data, set observationStart
   rather than relying on limit, which keeps the oldest observations.
 
-  @param seriesId - A FRED series ID such as "UNRATE" or "CPIAUCSL".
-  @param observationStart - The earliest YYYY-MM-DD date, or empty for no lower bound.
-  @param observationEnd - The latest YYYY-MM-DD date, or empty for no upper bound.
-  @param frequency - The aggregation frequency, or null to keep the native frequency.
-  @param units - The units transform, such as "pch" for percent change, or null for native values.
-  @param limit - The maximum observations from the oldest, or zero for the API default.
-
 Set the observation start date when you want recent data. A limit takes
   observations from the oldest end of the selected range. Missing source
   values become null.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| seriesId | `string` |  |
-| observationStart | `string` | "" |
-| observationEnd | `string` | "" |
-| frequency | `FredFrequency \| null` | null |
-| units | `FredUnits \| null` | null |
-| limit | `number` | 0 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| seriesId | `string` |  | A FRED series ID such as "UNRATE" or "CPIAUCSL". |
+| observationStart | `string` | "" | The earliest YYYY-MM-DD date, or empty for no lower bound. |
+| observationEnd | `string` | "" | The latest YYYY-MM-DD date, or empty for no upper bound. |
+| frequency | `FredFrequency \| null` | null | The aggregation frequency, or null to keep the native frequency. |
+| units | `FredUnits \| null` | null | The units transform, such as "pch" for percent change, or null for native values. |
+| limit | `number` | 0 | The maximum observations from the oldest, or zero for the API default. |
 
 **Returns:** `Result<FredSeries>`
 
@@ -209,13 +202,11 @@ fredSeriesInfo(
 Fetch a FRED series' title, display units, frequency, and coverage dates.
   Requires FRED_API_KEY.
 
-  @param seriesId - A FRED series ID such as "UNRATE".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| seriesId | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| seriesId | `string` |  | A FRED series ID such as "UNRATE". |
 
 **Returns:** `Result<FredSeriesInfo>`
 

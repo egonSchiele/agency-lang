@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
 import { AgencyProgram } from "../types.js";
 import { walkNodesArray } from "@/utils/node.js";
+import { parseAgency } from "../parser.js";
 
 describe("TypescriptPreprocessor Core Functionality", () => {
   describe("getFunctionDefinitions", () => {
@@ -348,6 +349,79 @@ describe("TypescriptPreprocessor Core Functionality", () => {
   });
 
   describe("attachDocComments", () => {
+    it.each(["const", "static const", "let"])(
+      "attaches a doc comment to a %s declaration",
+      (declaration) => {
+        const parsed = parseAgency(
+          `/** Limit docs. */\nexport ${declaration} limit = 5`,
+          {},
+          false,
+        );
+        expect(parsed.success).toBe(true);
+        if (!parsed.success) {
+          throw new Error(parsed.message);
+        }
+
+        const preprocessor = new TypescriptPreprocessor(parsed.result);
+        preprocessor.attachDocComments();
+
+        expect(parsed.result.nodes.find((node) => node.type === "assignment")).toMatchObject({
+          variableName: "limit",
+          docComment: { content: " Limit docs. ", isDoc: true },
+        });
+        expect(parsed.result.nodes.filter((node) => node.type === "multiLineComment")).toEqual([]);
+      },
+    );
+
+    it.each(["validate(isPositive)", "hidden"])(
+      "keeps @%s attached to a documented constant",
+      (annotation) => {
+        const parsed = parseAgency(
+          `/** Limit docs. */\n\n@${annotation}\nexport const limit = 5`,
+          {},
+          false,
+        );
+        expect(parsed.success).toBe(true);
+        if (!parsed.success) {
+          throw new Error(parsed.message);
+        }
+
+        const preprocessor = new TypescriptPreprocessor(parsed.result);
+        preprocessor.attachDocComments();
+        preprocessor.attachTags();
+
+        expect(parsed.result.nodes.find((node) => node.type === "assignment")).toMatchObject({
+          variableName: "limit",
+          docComment: { content: " Limit docs. ", isDoc: true },
+          tags: [{ name: annotation.split("(")[0] }],
+        });
+        expect(parsed.result.nodes.filter((node) => node.type === "tag")).toEqual([]);
+      },
+    );
+
+    it("leaves a doc comment before a reassignment in the statement list", () => {
+      const parsed = parseAgency(
+        "let limit = 5\n/** This updates the limit. */\nlimit = 10\nconst other = 20",
+        {},
+        false,
+      );
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) {
+        throw new Error(parsed.message);
+      }
+
+      new TypescriptPreprocessor(parsed.result).attachDocComments();
+
+      const assignments = parsed.result.nodes.filter((node) => node.type === "assignment");
+      expect(assignments).toHaveLength(3);
+      for (const assignment of assignments) {
+        expect(assignment).not.toHaveProperty("docComment");
+      }
+      expect(parsed.result.nodes.filter((node) => node.type === "multiLineComment")).toMatchObject([
+        { content: " This updates the limit. ", isDoc: true },
+      ]);
+    });
+
     it("should attach a @module doc comment to program.docComment", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",

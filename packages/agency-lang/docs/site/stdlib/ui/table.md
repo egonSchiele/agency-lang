@@ -170,15 +170,6 @@ table(
 Build a terminal table. Every row must have the same number of cells.
   Call `render` from `std::ui/layout` to display it.
 
-  @param title - Title above the rows, placed in the top border when it fits
-  @param borderStyle - Outer frame style; "none" leaves the divider flags in effect
-  @param caption - Caption shown beneath the table
-  @param cellPadding - Blank terminal cells on each side of a cell's content
-  @param width - Total width in terminal cells, "full", or "N%" of the available width
-  @param columns - One specification per column; percentage widths need a table width set or inherited
-  @param rowDividers - Draw a divider between body rows
-  @param columnGap - Blank terminal cells between columns when columnDividers is false
-
 Use the array arguments for existing data, or a trailing block to build
   rows in a loop. The block can replace the header, columns, and caption,
   and append to the supplied body and footer rows.
@@ -195,25 +186,25 @@ Use the array arguments for existing data, or a trailing block to build
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` | "" |
-| titleColor | `string` | "" |
-| borderStyle | [BorderStyle](layout.md#borderstyle) | "rounded" |
-| borderColor | `string` | "" |
-| caption | `string` | "" |
-| cellPadding | `number` | 1 |
-| width | [Width](layout.md#width) | null |
-| columns | `ColumnSpec[]` | null |
-| header | `Cell[]` | null |
-| body | `CellRow[]` | null |
-| footer | `CellRow[]` | null |
-| headerDivider | `boolean` | true |
-| footerDivider | `boolean` | true |
-| rowDividers | `boolean` | false |
-| columnDividers | `boolean` | true |
-| columnGap | `number` | 0 |
-| block | `(TableBuilder) => void` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` | "" | Title above the rows, placed in the top border when it fits |
+| titleColor | `string` | "" |  |
+| borderStyle | [BorderStyle](layout.md#borderstyle) | "rounded" | Outer frame style; "none" leaves the divider flags in effect |
+| borderColor | `string` | "" |  |
+| caption | `string` | "" | Caption shown beneath the table |
+| cellPadding | `number` | 1 | Blank terminal cells on each side of a cell's content |
+| width | [Width](layout.md#width) | null | Total width in terminal cells, "full", or "N%" of the available width |
+| columns | `ColumnSpec[]` | null | One specification per column; percentage widths need a table width set or inherited |
+| header | `Cell[]` | null |  |
+| body | `CellRow[]` | null |  |
+| footer | `CellRow[]` | null |  |
+| headerDivider | `boolean` | true |  |
+| footerDivider | `boolean` | true |  |
+| rowDividers | `boolean` | false | Draw a divider between body rows |
+| columnDividers | `boolean` | true |  |
+| columnGap | `number` | 0 | Blank terminal cells between columns when columnDividers is false |
+| block | `(TableBuilder) => void` | null |  |
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 

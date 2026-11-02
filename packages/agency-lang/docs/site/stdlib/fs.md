@@ -110,11 +110,6 @@ Apply text replacements in order, writing only if every edit succeeds.
   must match uniquely unless replaceAll is true. Use separate edits in the
   same call for distant changes, with just enough oldText to identify each match.
 
-  @param filename - Relative path within dir, without upward traversal or symlink components. To reach another directory, pass it as dir.
-  @param edits - Replacements to apply in order; replaceAll replaces every occurrence.
-  @param dir - Directory containing the file.
-  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
-
 The `std::edit` interrupt carries the full `before` and `after` file contents
   in its data, so a handler can render a diff itself. A handler receives the
   whole interrupt object, so the contents are at `data.data.before` /
@@ -122,12 +117,12 @@ The `std::edit` interrupt carries the full `before` and `after` file contents
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| edits | `Edit[]` |  |
-| dir | `string` | "." |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | Relative path within dir, without upward traversal or symlink components. To reach another directory, pass it as dir. |
+| edits | `Edit[]` |  | Replacements to apply in order; replaceAll replaces every occurrence. |
+| dir | `string` | "." | Directory containing the file. |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory when set. |
 
 **Returns:** `Result`
 
@@ -146,14 +141,12 @@ applyPatch(patch: string, allowedPaths: string[] = []): Result
 Apply a unified diff to files, including file creation.
   Fails on malformed patches or mismatched context.
 
-  @param allowedPaths - Restrict affected files to these directories, or leave empty for no restriction.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| patch | `string` |  |
-| allowedPaths | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| patch | `string` |  |  |
+| allowedPaths | `string[]` | [] | Restrict affected files to these directories, or leave empty for no restriction. |
 
 **Returns:** `Result`
 
@@ -175,16 +168,13 @@ mkdir(
 
 Create a directory and any missing parents. Succeeds if it already exists.
 
-  @param allowedPaths - Restrict creation to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  |  |
+| allowedPaths | `string[]` | [] | Restrict creation to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory when set. |
 
 **Returns:** `Result`
 
@@ -207,17 +197,14 @@ copy(
 
 Copy a file or directory recursively.
 
-  @param allowedPaths - Restrict paths to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve relative paths against the agent working directory when set.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| src | `string` |  |
-| dest | `string` |  |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| src | `string` |  |  |
+| dest | `string` |  |  |
+| allowedPaths | `string[]` | [] | Restrict paths to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve relative paths against the agent working directory when set. |
 
 **Returns:** `Result`
 
@@ -240,17 +227,14 @@ move(
 
 Move or rename a file or directory.
 
-  @param allowedPaths - Restrict paths to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve relative paths against the agent working directory when set.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| src | `string` |  |
-| dest | `string` |  |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| src | `string` |  |  |
+| dest | `string` |  |  |
+| allowedPaths | `string[]` | [] | Restrict paths to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve relative paths against the agent working directory when set. |
 
 **Returns:** `Result`
 
@@ -272,16 +256,13 @@ remove(
 
 Delete a file or directory recursively. Succeeds if the target is missing.
 
-  @param allowedPaths - Restrict paths to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve relative paths against the agent working directory when set.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| target | `string` |  |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| target | `string` |  |  |
+| allowedPaths | `string[]` | [] | Restrict paths to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve relative paths against the agent working directory when set. |
 
 **Returns:** `Result`
 

@@ -68,32 +68,21 @@ writingReviewAgent(
 
 Review prose for readability and return findings, applying edits only when requested.
 
-  @param text - Prose or a request naming files, explicitly asking for edits if wanted.
-  @param task - The intended reader and what the text must communicate.
-  @param guidelines - Writing guidelines that override conflicting built-in review rules.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Name a conversation for the main review, or "" for an isolated thread.
-  @param extraTools - Tools added to the main review only.
-  @param failOpen - False returns review failures, while saved partial findings can still succeed.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| text | `string` |  |
-| task | `string` | "" |
-| guidelines | `string` | "" |
-| context | `string` | "" |
-| maxCost | `number` | $5.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
-| failOpen | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| text | `string` |  | Prose or a request naming files, explicitly asking for edits if wanted. |
+| task | `string` | "" | The intended reader and what the text must communicate. |
+| guidelines | `string` | "" | Writing guidelines that override conflicting built-in review rules. |
+| context | `string` | "" |  |
+| maxCost | `number` | $5.00 | Cost budget in USD. |
+| maxTime | `number` | 10m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Name a conversation for the main review, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Tools added to the main review only. |
+| failOpen | `boolean` | true | False returns review failures, while saved partial findings can still succeed. |
 
 **Returns:** `Result<Feedback[]>`
 

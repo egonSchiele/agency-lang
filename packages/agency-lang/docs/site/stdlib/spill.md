@@ -42,7 +42,12 @@ Use saved output to inspect long command results without sending the whole
 
 ### MAX_STDOUT_LEN
 
+How much of a command's output comes back inline. Anything longer is
+  saved and replaced by a preview (see `keepOutput`).
+
 ```ts
+/** How much of a command's output comes back inline. Anything longer is
+  saved and replaced by a preview (see `keepOutput`). */
 export static const MAX_STDOUT_LEN = 2000
 ```
 
@@ -58,8 +63,6 @@ keepOutput(text: string, exitCode: number, source: string = ""): string
 
 Save long command output and return a preview with its saved name.
 
-  @param source - The command that produced the output, or an empty string when none applies.
-
 Use this when returning command output to an LLM. Short text passes through
 unchanged. Long text becomes a preview that includes the exit code and a
 saved name. Include `readSpill` and `grepSpill` in the model's tools so it can
@@ -67,11 +70,11 @@ inspect the complete output.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| text | `string` |  |
-| exitCode | `number` |  |
-| source | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| text | `string` |  |  |
+| exitCode | `number` |  |  |
+| source | `string` | "" | The command that produced the output, or an empty string when none applies. |
 
 **Returns:** `string`
 
@@ -85,17 +88,13 @@ readSpill(filename: string, offset: number = 0, limit: number = 0): Result
 
 Read saved tool output, named in a "full output saved as" notice. Returns the whole text, or a slice of lines when offset or limit is set.
 
-  @param filename - The name from the notice, such as 2026-09-04T01-02-03-000Z-a1b2c3.log. A name only, never a path.
-  @param offset - 1-indexed line to start at (0 means start of the text)
-  @param limit - Maximum number of lines to return (0 means read to the end)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| offset | `number` | 0 |
-| limit | `number` | 0 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | The name from the notice, such as 2026-09-04T01-02-03-000Z-a1b2c3.log. A name only, never a path. |
+| offset | `number` | 0 | 1-indexed line to start at (0 means start of the text) |
+| limit | `number` | 0 | Maximum number of lines to return (0 means read to the end) |
 
 **Returns:** `Result`
 
@@ -115,18 +114,14 @@ grepSpill(
 Search saved tool output using JavaScript regular expressions. Returns matching
   lines with line numbers, grouped by pattern when morePatterns is supplied.
 
-  @param filename - The saved name from a "full output saved as" notice. A name only, never a path.
-  @param maxResults - Maximum matches per pattern.
-  @param morePatterns - Additional patterns to search in the same output.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| pattern | `string` |  |
-| filename | `string` |  |
-| maxResults | `number` | 100 |
-| morePatterns | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| pattern | `string` |  |  |
+| filename | `string` |  | The saved name from a "full output saved as" notice. A name only, never a path. |
+| maxResults | `number` | 100 | Maximum matches per pattern. |
+| morePatterns | `string[]` | [] | Additional patterns to search in the same output. |
 
 **Returns:** `Result`
 

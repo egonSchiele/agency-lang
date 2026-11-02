@@ -122,3 +122,28 @@ See also: writeFile`;
 See also: writeFile`);
   });
 });
+
+describe("parameter entries in Markdown examples", () => {
+  it.each(["```", "~~~", "````"])("preserves entries inside %s fences", (fence) => {
+    const example = `${fence}text\n@param input - Example only.\n${fence}`;
+    const description = `Read text.\n\n${example}\n\n@param input - Actual input.\n`;
+    expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
+    expect(stripBoundParams(description, ["input"])).toBe(`Read text.\n\n${example}\n`);
+    expect(withoutParamDocs(description)).toBe(`Read text.\n\n${example}\n`);
+  });
+
+  it("does not end a fence at a shorter fence inside the example", () => {
+    const description =
+      "````text\n```\n@param input - Still an example.\n````\n\n@param input - Actual input.";
+    expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
+  });
+});
+
+describe("inline code before parameter documentation", () => {
+  it("does not treat backticks inside the opening line as a fenced example", () => {
+    const prose = "```literal``` is inline code.";
+    const description = prose + "\n@param input - Actual input.";
+    expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
+    expect(stripBoundParams(description, ["input"])).toBe(prose);
+  });
+});

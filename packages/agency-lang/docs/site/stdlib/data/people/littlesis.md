@@ -112,14 +112,12 @@ littlesisSearch(
 
 Find people and organizations in LittleSis by name.
 
-  @param page - The result page, starting at one, with ten entries per page.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| page | `number` | 1 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  |  |
+| page | `number` | 1 | The result page, starting at one, with ten entries per page. |
 
 **Returns:** `Result<Entity[]>`
 
@@ -139,13 +137,11 @@ littlesisEntity(
 
 Read a LittleSis person or organization profile.
 
-  @param id - An entity ID returned by a LittleSis search or connection listing.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `number` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `number` |  | An entity ID returned by a LittleSis search or connection listing. |
 
 **Returns:** `Result<Entity>`
 
@@ -168,17 +164,13 @@ littlesisRelationships(
 List an entity's relationships with roles, amounts, and dates. Edges carry
   entity IDs, not names; use littlesisConnections for neighbor names.
 
-  @param id - An entity ID returned by a LittleSis search or connection listing.
-  @param category - Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories.
-  @param sort - Use "amount", "oldest", or "recent", or empty for the source default.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `number` |  |
-| category | `string` | "" |
-| sort | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `number` |  | An entity ID returned by a LittleSis search or connection listing. |
+| category | `string` | "" | Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories. |
+| sort | `string` | "" | Use "amount", "oldest", or "recent", or empty for the source default. |
 
 **Returns:** `Result<Relationship[]>`
 
@@ -200,15 +192,12 @@ littlesisConnections(
 List the people and organizations connected to an entity, by name. The
   preferred first hop for "who is X tied to".
 
-  @param id - An entity ID returned by a LittleSis search or connection listing.
-  @param category - Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `number` |  |
-| category | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `number` |  | An entity ID returned by a LittleSis search or connection listing. |
+| category | `string` | "" | Use position, education, membership, family, donation, transaction, lobbying, social, professional, ownership, hierarchy, or generic, or empty for all categories. |
 
 **Returns:** `Result<Entity[]>`
 

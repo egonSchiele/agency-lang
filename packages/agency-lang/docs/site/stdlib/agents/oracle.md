@@ -46,27 +46,21 @@ Read the code and give a focused second opinion on a plan, design, or bug.
   everything said so far, so ask the question itself without restating the
   context.
 
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param extraTools - Tools to add to the built-in lookup tools.
-
 Called from code, this runs on the caller's thread like any function:
   the system prompt, the reads, and the answer stay there. Wrap the call
   in `thread { ... }` for an isolated consult.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| question | `string` |  |
-| context | `string` | "" |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| question | `string` |  |  |
+| context | `string` | "" |  |
+| maxCost | `number` | $20.00 | Cost budget in USD. |
+| maxTime | `number` | 15m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| extraTools | `any[]` | [] | Tools to add to the built-in lookup tools. |
 
 **Returns:** `Result<string>`
 

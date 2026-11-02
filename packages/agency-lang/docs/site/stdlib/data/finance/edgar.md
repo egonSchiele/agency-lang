@@ -76,17 +76,13 @@ edgarFilingsByCik(
 
 List recent SEC filings for a company by CIK.
 
-  @param cik - The company Central Index Key, with or without leading zeros.
-  @param formType - A form such as "10-K" or "8-K", or empty for all forms.
-  @param limit - The maximum filings to return, or zero or less for all recent filings.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cik | `string` |  |
-| formType | `string` | "" |
-| limit | `number` | 20 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cik | `string` |  | The company Central Index Key, with or without leading zeros. |
+| formType | `string` | "" | A form such as "10-K" or "8-K", or empty for all forms. |
+| limit | `number` | 20 | The maximum filings to return, or zero or less for all recent filings. |
 
 **Returns:** `Result<Filing[]>`
 
@@ -109,21 +105,17 @@ edgarFilings(
 List recent SEC filings for a company by stock ticker. If you already know
   the CIK, prefer edgarFilingsByCik to skip the ticker lookup.
 
-  @param ticker - A stock ticker such as "AAPL", matched without regard to case.
-  @param formType - A form such as "10-K" or "8-K", or empty for all forms.
-  @param limit - The maximum filings to return, or zero or less for all recent filings.
-
 Use `edgarFilingsByCik` when you already know the company CIK to skip
   the ticker-directory request. These functions read the recent-filings
   section of SEC submissions data, rather than the full filing archive.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ticker | `string` |  |
-| formType | `string` | "" |
-| limit | `number` | 20 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ticker | `string` |  | A stock ticker such as "AAPL", matched without regard to case. |
+| formType | `string` | "" | A form such as "10-K" or "8-K", or empty for all forms. |
+| limit | `number` | 20 | The maximum filings to return, or zero or less for all recent filings. |
 
 **Returns:** `Result<Filing[]>`
 

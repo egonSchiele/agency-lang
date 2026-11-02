@@ -39,14 +39,6 @@ writingRewriteAgent(
 Review prose and return a rewrite with the findings applied.
   Return unchanged text when the review has no findings.
 
-  @param task - The intended reader and what the text must communicate.
-  @param guidelines - Writing guidelines that override conflicting built-in review rules.
-  @param passes - Maximum review-and-rewrite rounds, stopping early when a review has no findings.
-  @param maxCost - Cost budget in USD for all rounds together.
-  @param maxTime - Time budget in milliseconds for all rounds together.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-
 Start with one pass and increase `passes` when another review of the
 rewritten text is useful. On the eval suite, two passes scored 0.795
 against 0.769 for one pass. The rewrite call receives the review findings
@@ -54,17 +46,17 @@ and the original task and guidelines.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| text | `string` |  |
-| task | `string` | "" |
-| guidelines | `string` | "" |
-| context | `string` | "" |
-| passes | `number` | 1 |
-| maxCost | `number` | $5.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| text | `string` |  |  |
+| task | `string` | "" | The intended reader and what the text must communicate. |
+| guidelines | `string` | "" | Writing guidelines that override conflicting built-in review rules. |
+| context | `string` | "" |  |
+| passes | `number` | 1 | Maximum review-and-rewrite rounds, stopping early when a review has no findings. |
+| maxCost | `number` | $5.00 | Cost budget in USD for all rounds together. |
+| maxTime | `number` | 10m | Time budget in milliseconds for all rounds together. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
 
 **Returns:** `Result<string>`
 

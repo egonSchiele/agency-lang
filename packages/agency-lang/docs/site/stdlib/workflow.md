@@ -277,20 +277,17 @@ compileWorkflow(
 Generate Agency source for a workflow without running it.
   Failures identify the step and field with a problem.
 
-  @param tools - Original exported Agency functions available to the workflow's steps.
-  @param dir - Directory containing any local tool modules and resolving their paths.
-
 Use the generated source to inspect what a workflow will do, or pass it to
 `compile` or `typecheck` from `std::agency`. Use `checkWorkflow` to run both
 checks and report diagnostics against the workflow's steps and fields.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| workflow | [Workflow](#workflow) |  |
-| tools | `any[]` |  |
-| dir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| workflow | [Workflow](#workflow) |  |  |
+| tools | `any[]` |  | Original exported Agency functions available to the workflow's steps. |
+| dir | `string` | "" | Directory containing any local tool modules and resolving their paths. |
 
 **Returns:** `Result<string, WorkflowFailure>`
 
@@ -312,20 +309,17 @@ checkWorkflow(
 
 Check a workflow without executing its steps, returning warnings on success.
 
-  @param tools - Original exported Agency functions available to the workflow's steps.
-  @param dir - Directory containing any local tool modules and resolving their paths.
-
 Use this before presenting or saving a workflow. Errors identify their step
 and field. Success contains warnings for values that cannot be fully checked
 until runtime, such as references into a tool result with no declared type.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| workflow | [Workflow](#workflow) |  |
-| tools | `any[]` |  |
-| dir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| workflow | [Workflow](#workflow) |  |  |
+| tools | `any[]` |  | Original exported Agency functions available to the workflow's steps. |
+| dir | `string` | "" | Directory containing any local tool modules and resolving their paths. |
 
 **Returns:** `Result<WorkflowProblem[], WorkflowFailure>`
 
@@ -343,9 +337,6 @@ catalog(tools: any[], dir: string = ""): Result<CatalogEntry[]>
 
 Describe workflow tools with their parameters, schemas, return types, and effects.
 
-  @param tools - Original exported Agency functions to describe.
-  @param dir - Directory containing any local tool modules and resolving their paths.
-
 Use this to populate a workflow editor or inspect what arguments a step can
 pass. Entries follow the supplied tool order. Invalid tool lists return
 problems in failure data; a rejected or failed module read returns its own
@@ -353,10 +344,10 @@ failure instead.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| tools | `any[]` |  |
-| dir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| tools | `any[]` |  | Original exported Agency functions to describe. |
+| dir | `string` | "" | Directory containing any local tool modules and resolving their paths. |
 
 **Returns:** `Result<CatalogEntry[]>`
 
@@ -379,10 +370,6 @@ runWorkflow(
 
 Check a workflow, request approval, and execute its steps in a subprocess.
 
-  @param inputs - A value matching the workflow's inputs type.
-  @param tools - Original exported Agency functions available to the workflow's steps.
-  @param dir - Directory containing local tool modules, defaulting to the working directory.
-
 Validation completes before run approval or subprocess startup. Step
 failures identify the step that stopped the workflow. Each step's interrupts
 still reach the caller's handlers.
@@ -397,12 +384,12 @@ It does not pin the inputs or the workflow's contents.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| workflow | [Workflow](#workflow) |  |
-| inputs | [Json](validation.md#json) |  |
-| tools | `any[]` |  |
-| dir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| workflow | [Workflow](#workflow) |  |  |
+| inputs | [Json](validation.md#json) |  | A value matching the workflow's inputs type. |
+| tools | `any[]` |  | Original exported Agency functions available to the workflow's steps. |
+| dir | `string` | "" | Directory containing local tool modules, defaulting to the working directory. |
 
 **Returns:** `Result<Json>`
 
@@ -420,9 +407,6 @@ workflowTool(workflow: Workflow, tools: any[], dir: string = ""): Result
 
 Build an LLM-callable tool for a checked workflow.
 
-  @param tools - Original exported Agency functions the workflow may call, with names distinct from the workflow.
-  @param dir - Directory containing local tool modules, defaulting to the working directory.
-
 The returned tool uses the workflow's name and description. Its `inputs`
 parameter has the workflow's input schema. Building it checks the workflow
 and runs a schema node in a subprocess; calling it later runs the workflow.
@@ -430,11 +414,11 @@ A name shared with a supplied tool is refused.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| workflow | [Workflow](#workflow) |  |
-| tools | `any[]` |  |
-| dir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| workflow | [Workflow](#workflow) |  |  |
+| tools | `any[]` |  | Original exported Agency functions the workflow may call, with names distinct from the workflow. |
+| dir | `string` | "" | Directory containing local tool modules, defaulting to the working directory. |
 
 **Returns:** `Result`
 
@@ -452,19 +436,16 @@ workflowTools(dir: string, tools: any[]): Result<any[]>
 
 Build one LLM-callable tool per saved workflow, in name order.
 
-  @param dir - Nonempty project directory holding the workflows folder.
-  @param tools - Original exported Agency functions the workflows may call, with names distinct from the workflows.
-
 Use saved input schemas to build tools without starting a subprocess.
 Saved workflows are checked against the current tools when called.
 A missing schema requires saving the workflow again with `writeWorkflow`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| tools | `any[]` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | Nonempty project directory holding the workflows folder. |
+| tools | `any[]` |  | Original exported Agency functions the workflows may call, with names distinct from the workflows. |
 
 **Returns:** `Result<any[]>`
 
@@ -487,9 +468,6 @@ writeWorkflow(
 Check and save a workflow as `<dir>/workflows/<name>.json` after approval.
   An existing workflow with that name is replaced.
 
-  @param tools - Original exported Agency functions available to the workflow's steps.
-  @param dir - Existing project directory containing any local tool modules.
-
 Checks the workflow before requesting save approval. It then derives the
 input schema in a subprocess and saves it alongside the workflow.
 Neither a rejected save nor a rejected schema run writes the workflow.
@@ -497,11 +475,11 @@ Saving an existing name replaces its file.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| workflow | [Workflow](#workflow) |  |
-| tools | `any[]` |  |
-| dir | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| workflow | [Workflow](#workflow) |  |  |
+| tools | `any[]` |  | Original exported Agency functions available to the workflow's steps. |
+| dir | `string` |  | Existing project directory containing any local tool modules. |
 
 **Returns:** `Result<WorkflowEntry>`
 
@@ -519,18 +497,15 @@ loadWorkflow(name: string, dir: string): Result<WorkflowEntry>
 
 Read a saved workflow by name.
 
-  @param name - Saved workflow identifier, excluding path syntax.
-  @param dir - Nonempty project directory holding the workflows folder.
-
 The saved workflow's name must match its filename. Loading reads the file
 and checks its shape; it does not check the steps against available tools.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| dir | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | Saved workflow identifier, excluding path syntax. |
+| dir | `string` |  | Nonempty project directory holding the workflows folder. |
 
 **Returns:** `Result<WorkflowEntry>`
 
@@ -548,16 +523,14 @@ listWorkflows(dir: string): Result<WorkflowEntry[]>
 
 List saved workflows in name order.
 
-  @param dir - Nonempty project directory holding the workflows folder.
-
 A project without a workflows folder returns an empty list. An unreadable
 or invalid saved file fails the listing with a message naming it.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | Nonempty project directory holding the workflows folder. |
 
 **Returns:** `Result<WorkflowEntry[]>`
 

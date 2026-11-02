@@ -353,7 +353,7 @@ export function buildDocFreshnessContext(
     stdlibDir,
     stdlibHash: computeStdlibHash(stdlibDir),
     stdlibNamesHash: computeStdlibNamesHash(stdlibDir),
-    compilerStamp: computeCompilerStamp(distLib, docGenerator),
+    compilerStamp: computeCompilerStamp(distLib, docGenerator, { includeRuntime: true }),
   };
 }
 

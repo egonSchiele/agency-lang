@@ -120,23 +120,18 @@ text(
 
 A styled run of text. Newlines split it into multiple lines.
 
-  @param fgColor - Foreground color, named ("red") or hex ("#cc7a4a")
-  @param bgColor - Background color, named or hex
-  @param dim - Use reduced intensity
-  @param align - For multi-line text, how shorter lines align to the longest
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| content | `string` |  |
-| fgColor | `string` | "" |
-| bgColor | `string` | "" |
-| bold | `boolean` | false |
-| italic | `boolean` | false |
-| dim | `boolean` | false |
-| underline | `boolean` | false |
-| align | [Alignment](#alignment) | "start" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| content | `string` |  |  |
+| fgColor | `string` | "" | Foreground color, named ("red") or hex ("#cc7a4a") |
+| bgColor | `string` | "" | Background color, named or hex |
+| bold | `boolean` | false |  |
+| italic | `boolean` | false |  |
+| dim | `boolean` | false | Use reduced intensity |
+| underline | `boolean` | false |  |
+| align | [Alignment](#alignment) | "start" | For multi-line text, how shorter lines align to the longest |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -154,19 +149,16 @@ raw(
 
 Build a layout node from text with existing ANSI styling or newlines.
 
-  @param align - How shorter lines align to the longest
-  @param wrap - Reflow to the container width; false preserves exact spacing
-
 Use `wrap: false` for ASCII art or tables whose spacing must stay intact.
 Wrapping preserves ANSI colors without bleeding into surrounding borders.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| content | `string` |  |
-| align | [Alignment](#alignment) | "start" |
-| wrap | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| content | `string` |  |  |
+| align | [Alignment](#alignment) | "start" | How shorter lines align to the longest |
+| wrap | `boolean` | true | Reflow to the container width; false preserves exact spacing |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -180,13 +172,11 @@ space(count: number = 1): LayoutNode
 
 Blank space. Inside a row it adds columns; inside a column, rows.
 
-  @param count - Number of cells of blank space
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| count | `number` | 1 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| count | `number` | 1 | Number of cells of blank space |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -206,20 +196,15 @@ hline(
 
 A horizontal rule. Inside a column, leave length at 0 to span the column's width.
 
-  @param char - The character to repeat
-  @param length - Explicit length (0 lets the parent size it)
-  @param fgColor - Color of the line
-  @param dim - Use reduced intensity
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| char | `string` | "─" |
-| length | `number` | 0 |
-| fgColor | `string` | "" |
-| bold | `boolean` | false |
-| dim | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| char | `string` | "─" | The character to repeat |
+| length | `number` | 0 | Explicit length (0 lets the parent size it) |
+| fgColor | `string` | "" | Color of the line |
+| bold | `boolean` | false |  |
+| dim | `boolean` | false | Use reduced intensity |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -239,20 +224,15 @@ vline(
 
 A vertical rule. Inside a row, leave length at 0 to span the row's height.
 
-  @param char - The character to repeat
-  @param length - Explicit length (0 lets the parent size it)
-  @param fgColor - Color of the line
-  @param dim - Use reduced intensity
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| char | `string` | "│" |
-| length | `number` | 0 |
-| fgColor | `string` | "" |
-| bold | `boolean` | false |
-| dim | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| char | `string` | "│" | The character to repeat |
+| length | `number` | 0 | Explicit length (0 lets the parent size it) |
+| fgColor | `string` | "" | Color of the line |
+| bold | `boolean` | false |  |
+| dim | `boolean` | false | Use reduced intensity |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -272,21 +252,15 @@ row(
 
 A horizontal container. Children render left to right.
 
-  @param gap - Cells of blank space between children
-  @param align - Vertical alignment of shorter children
-  @param width - Columns, a percentage of the parent, or "full" for the parent width
-  @param children - Pre-built child nodes
-  @param block - Trailing builder block, appended after children
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| gap | `number` | 0 |
-| align | [Alignment](#alignment) | "start" |
-| width | [Width](#width) | null |
-| children | `LayoutNode[]` | null |
-| block | `(LayoutBuilder) => void` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| gap | `number` | 0 | Cells of blank space between children |
+| align | [Alignment](#alignment) | "start" | Vertical alignment of shorter children |
+| width | [Width](#width) | null | Columns, a percentage of the parent, or "full" for the parent width |
+| children | `LayoutNode[]` | null | Pre-built child nodes |
+| block | `(LayoutBuilder) => void` | null | Trailing builder block, appended after children |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -306,21 +280,15 @@ column(
 
 A vertical container. Children render top to bottom.
 
-  @param gap - Blank rows between children
-  @param align - Horizontal alignment of narrower children
-  @param width - Columns, a percentage of the parent, or "full" for the parent width
-  @param children - Pre-built child nodes
-  @param block - Trailing builder block, appended after children
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| gap | `number` | 0 |
-| align | [Alignment](#alignment) | "start" |
-| width | [Width](#width) | null |
-| children | `LayoutNode[]` | null |
-| block | `(LayoutBuilder) => void` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| gap | `number` | 0 | Blank rows between children |
+| align | [Alignment](#alignment) | "start" | Horizontal alignment of narrower children |
+| width | [Width](#width) | null | Columns, a percentage of the parent, or "full" for the parent width |
+| children | `LayoutNode[]` | null | Pre-built child nodes |
+| block | `(LayoutBuilder) => void` | null | Trailing builder block, appended after children |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -343,29 +311,18 @@ box(
 
 A bordered panel. Multiple children stack vertically inside it.
 
-  @param title - Text shown in the top border (empty for none)
-  @param titleColor - Color of the title text
-  @param borderStyle - The border character style; "none" draws no
-    frame (padding and title still apply, the title as a plain first
-    line)
-  @param borderColor - Color of the border
-  @param padding - Cells of padding between the border and content
-  @param width - Columns, a percentage of the parent, or "full" for the parent width
-  @param children - Pre-built child nodes
-  @param block - Trailing builder block, appended after children
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` | "" |
-| titleColor | `string` | "" |
-| borderStyle | [BorderStyle](#borderstyle) | "rounded" |
-| borderColor | `string` | "" |
-| padding | `number` | 1 |
-| width | [Width](#width) | null |
-| children | `LayoutNode[]` | null |
-| block | `(LayoutBuilder) => void` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` | "" | Text shown in the top border (empty for none) |
+| titleColor | `string` | "" | Color of the title text |
+| borderStyle | [BorderStyle](#borderstyle) | "rounded" | The border character style; "none" draws no frame (padding and title still apply, the title as a plain first line) |
+| borderColor | `string` | "" | Color of the border |
+| padding | `number` | 1 | Cells of padding between the border and content |
+| width | [Width](#width) | null | Columns, a percentage of the parent, or "full" for the parent width |
+| children | `LayoutNode[]` | null | Pre-built child nodes |
+| block | `(LayoutBuilder) => void` | null | Trailing builder block, appended after children |
 
 **Returns:** [LayoutNode](#layoutnode)
 
@@ -384,18 +341,14 @@ render(
 
 Render a layout tree to a styled, multi-line string ready to print.
 
-  @param color - "auto" uses terminal color support; true always; false strips styling
-  @param cols - Width override in columns (0 auto-detects)
-  @param rows - Height override in rows (0 uses the default)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| node | [LayoutNode](#layoutnode) |  |
-| color | `"auto" \| boolean` | "auto" |
-| cols | `number` | 0 |
-| rows | `number` | 0 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| node | [LayoutNode](#layoutnode) |  |  |
+| color | `"auto" \| boolean` | "auto" | "auto" uses terminal color support; true always; false strips styling |
+| cols | `number` | 0 | Width override in columns (0 auto-detects) |
+| rows | `number` | 0 | Height override in rows (0 uses the default) |
 
 **Returns:** `string`
 

@@ -113,19 +113,16 @@ authorizeCalendar(clientId: string, clientSecret: string): Result
 
 Open the browser to authorize Google Calendar access.
 
-  @param clientId - The client ID from Google OAuth desktop credentials.
-  @param clientSecret - The matching Google OAuth client secret.
-
 Set up Google OAuth desktop credentials before authorizing. Tokens use
   the `google-calendar` provider in `std::auth/oauth` and refresh when
   possible. Use that module directly for custom scopes or callback ports.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| clientId | `string` |  |
-| clientSecret | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| clientId | `string` |  | The client ID from Google OAuth desktop credentials. |
+| clientSecret | `string` |  | The matching Google OAuth client secret. |
 
 **Returns:** `Result`
 
@@ -163,20 +160,15 @@ listEvents(
 
 List Google Calendar events in start-time order.
 
-  @param timeMin - An ISO 8601 timestamp with timezone, or empty to start at the current time.
-  @param timeMax - An ISO 8601 timestamp with timezone, or empty for no upper bound.
-  @param query - Free-text terms to match against events.
-  @param calendarId - Use "primary" for the signed-in user's primary calendar.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| maxResults | `number` | 10 |
-| timeMin | `string` | "" |
-| timeMax | `string` | "" |
-| query | `string` | "" |
-| calendarId | `string` | "primary" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| maxResults | `number` | 10 |  |
+| timeMin | `string` | "" | An ISO 8601 timestamp with timezone, or empty to start at the current time. |
+| timeMax | `string` | "" | An ISO 8601 timestamp with timezone, or empty for no upper bound. |
+| query | `string` | "" | Free-text terms to match against events. |
+| calendarId | `string` | "primary" | Use "primary" for the signed-in user's primary calendar. |
 
 **Returns:** `Result`
 
@@ -201,23 +193,19 @@ createEvent(
 
 Create a Google Calendar event.
 
-  @param start - An ISO 8601 timestamp with timezone, or YYYY-MM-DD for an all-day event.
-  @param end - An ISO 8601 timestamp with timezone, or the exclusive end date for an all-day event.
-  @param calendarId - Use "primary" for the signed-in user's primary calendar.
-
 For an all-day event, pass dates with an exclusive end date. For example,
   May 10 alone uses start `"2026-05-10"` and end `"2026-05-11"`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| summary | `string` |  |
-| start | `string` |  |
-| end | `string` |  |
-| description | `string` | "" |
-| location | `string` | "" |
-| calendarId | `string` | "primary" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| summary | `string` |  |  |
+| start | `string` |  | An ISO 8601 timestamp with timezone, or YYYY-MM-DD for an all-day event. |
+| end | `string` |  | An ISO 8601 timestamp with timezone, or the exclusive end date for an all-day event. |
+| description | `string` | "" |  |
+| location | `string` | "" |  |
+| calendarId | `string` | "primary" | Use "primary" for the signed-in user's primary calendar. |
 
 **Returns:** `Result`
 
@@ -243,22 +231,17 @@ updateEvent(
 
 Update the supplied fields of a Google Calendar event, leaving empty fields unchanged.
 
-  @param eventId - The event id returned by a calendar listing or creation.
-  @param start - A timestamp with timezone or all-day date, or empty to leave unchanged.
-  @param end - A timestamp with timezone or exclusive all-day end date, or empty to leave unchanged.
-  @param calendarId - The calendar containing the event.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| eventId | `string` |  |
-| summary | `string` | "" |
-| start | `string` | "" |
-| end | `string` | "" |
-| description | `string` | "" |
-| location | `string` | "" |
-| calendarId | `string` | "primary" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| eventId | `string` |  | The event id returned by a calendar listing or creation. |
+| summary | `string` | "" |  |
+| start | `string` | "" | A timestamp with timezone or all-day date, or empty to leave unchanged. |
+| end | `string` | "" | A timestamp with timezone or exclusive all-day end date, or empty to leave unchanged. |
+| description | `string` | "" |  |
+| location | `string` | "" |  |
+| calendarId | `string` | "primary" | The calendar containing the event. |
 
 **Returns:** `Result`
 
@@ -276,15 +259,12 @@ deleteEvent(eventId: string, calendarId: string = "primary"): Result
 
 Delete a Google Calendar event.
 
-  @param eventId - The event id returned by a calendar listing or creation.
-  @param calendarId - The calendar containing the event.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| eventId | `string` |  |
-| calendarId | `string` | "primary" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| eventId | `string` |  | The event id returned by a calendar listing or creation. |
+| calendarId | `string` | "primary" | The calendar containing the event. |
 
 **Returns:** `Result`
 

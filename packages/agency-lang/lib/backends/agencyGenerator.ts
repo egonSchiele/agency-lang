@@ -1017,6 +1017,7 @@ export class AgencyGenerator {
       valueCode = this.processNode(node.value).trim();
     }
     return (
+      this.formatDocComment(node) +
       tags +
       this.indentStr(
         `${exportPrefix}${optimizePrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`,

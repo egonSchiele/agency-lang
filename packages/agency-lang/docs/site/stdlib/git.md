@@ -430,13 +430,11 @@ gitIsRepo(cwd: string = ""): boolean raises <std::git::status>
 
 Check whether a directory is inside a Git worktree, returning false for a missing or non-repository directory.
 
-  @param cwd - An absolute directory, or empty to use the agent working directory.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cwd | `string` | "" | An absolute directory, or empty to use the agent working directory. |
 
 **Returns:** `boolean`
 
@@ -453,13 +451,12 @@ gitStatus(cwd: string = ""): GitStatus raises <std::git::status>
 ```
 
 Inspect staged and unstaged repository changes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** [GitStatus](#gitstatus)
 
@@ -484,28 +481,21 @@ gitLog(
 ```
 
 Show commit history as structured commits.
-  @param n - The maximum commits to return, or zero or less for all matching commits.
-  @param oneline - Omit commit bodies.
-  @param path - Limit to commits touching this path (may not start with "-").
-  @param ref - Start from this revision, such as HEAD~5 or a SHA, without a leading "-".
-  @param author - Filter by author substring.
-  @param allowedPaths - If non-empty, path must fall under one of these prefixes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may query.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| n | `number` | 20 |
-| oneline | `boolean` | false |
-| path | `string` | "" |
-| ref | `string` | "" |
-| author | `string` | "" |
-| allowedPaths | `string[]` | [] |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| n | `number` | 20 | The maximum commits to return, or zero or less for all matching commits. |
+| oneline | `boolean` | false | Omit commit bodies. |
+| path | `string` | "" | Limit to commits touching this path (may not start with "-"). |
+| ref | `string` | "" | Start from this revision, such as HEAD~5 or a SHA, without a leading "-". |
+| author | `string` | "" | Filter by author substring. |
+| allowedPaths | `string[]` | [] | If non-empty, path must fall under one of these prefixes. |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** [GitLog](#gitlog)
 
@@ -529,26 +519,20 @@ gitDiff(
 ```
 
 Show a diff as a structured per-file summary plus the raw unified patch.
-  @param ref - Compare against this revision (default: working tree vs index).
-  @param ref2 - Compare ref against this second revision, without a leading "-".
-  @param staged - Diff the index (staged changes) instead of the working tree.
-  @param path - Limit the diff to this path (may not start with "-").
-  @param allowedPaths - If non-empty, path must fall under one of these prefixes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may diff.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ref | `string` | "" |
-| ref2 | `string` | "" |
-| staged | `boolean` | false |
-| path | `string` | "" |
-| allowedPaths | `string[]` | [] |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ref | `string` | "" | Compare against this revision (default: working tree vs index). |
+| ref2 | `string` | "" | Compare ref against this second revision, without a leading "-". |
+| staged | `boolean` | false | Diff the index (staged changes) instead of the working tree. |
+| path | `string` | "" | Limit the diff to this path (may not start with "-"). |
+| allowedPaths | `string[]` | [] | If non-empty, path must fall under one of these prefixes. |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** [GitDiff](#gitdiff)
 
@@ -565,18 +549,16 @@ gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show>
 ```
 
 Show a commit's per-file changes and unified patch.
-  @param ref - A revision such as HEAD or a SHA, without a leading "-".
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 Line counts are approximate for merge commits because combined diffs
   are not counted by the summary parser.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ref | `string` | "HEAD" |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ref | `string` | "HEAD" | A revision such as HEAD or a SHA, without a leading "-". |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** [GitDiff](#gitdiff)
 
@@ -593,13 +575,12 @@ gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList>
 ```
 
 List local Git branches.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `GitBranch[]`
 
@@ -616,13 +597,12 @@ gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList>
 ```
 
 List configured remotes with their fetch/push URLs.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `GitRemote[]`
 
@@ -643,17 +623,14 @@ gitBlame(
 ```
 
 Show line-by-line authorship for a file.
-  @param path - The file to blame (may not start with "-").
-  @param ref - A revision without a leading "-", or empty for the working tree.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| ref | `string` | "" |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | The file to blame (may not start with "-"). |
+| ref | `string` | "" | A revision without a leading "-", or empty for the working tree. |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `BlameLine[]`
 
@@ -670,13 +647,12 @@ gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList>
 ```
 
 List stashes with their ref and description.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `GitStash[]`
 
@@ -698,10 +674,6 @@ gitAdd(
 ```
 
 Stage changes for commit.
-  @param paths - Files to stage (may not start with "-").
-  @param all - Stage all repository changes, which cannot be combined with allowedPaths.
-  @param allowedPaths - If non-empty, each path must fall under one of these prefixes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 `all` and `allowedPaths` are developer guardrails: bind `all: false` and/or
     a prefix list for `allowedPaths` via `.partial()` before handing this to an
@@ -709,12 +681,12 @@ Stage changes for commit.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| paths | `string[]` | [] |
-| all | `boolean` | false |
-| allowedPaths | `string[]` | [] |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| paths | `string[]` | [] | Files to stage (may not start with "-"). |
+| all | `boolean` | false | Stage all repository changes, which cannot be combined with allowedPaths. |
+| allowedPaths | `string[]` | [] | If non-empty, each path must fall under one of these prefixes. |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -731,14 +703,13 @@ gitCommit(message: string, cwd: string = ""): string raises <std::git::commit>
 ```
 
 Create a commit from the staged changes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| message | `string` |  |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| message | `string` |  |  |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -759,19 +730,16 @@ gitCheckout(
 ```
 
 Check out a branch, commit, or path.
-  @param target - The branch/commit/path (may not start with "-").
-  @param force - Discard local changes while checking out (git checkout --force).
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 Bind `force: false` via `.partial()` to forbid discarding local changes.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| target | `string` |  |
-| force | `boolean` | false |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| target | `string` |  | The branch/commit/path (may not start with "-"). |
+| force | `boolean` | false | Discard local changes while checking out (git checkout --force). |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -792,17 +760,14 @@ gitSwitch(
 ```
 
 Switch to a branch.
-  @param branch - The branch to switch to (may not start with "-").
-  @param create - Create the branch first (git switch -c).
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| branch | `string` |  |
-| create | `boolean` | false |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| branch | `string` |  | The branch to switch to (may not start with "-"). |
+| create | `boolean` | false | Create the branch first (git switch -c). |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -822,15 +787,13 @@ gitBranchCreate(
 ```
 
 Create a new branch at HEAD (does not switch to it).
-  @param branch - The new branch name (may not start with "-").
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| branch | `string` |  |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| branch | `string` |  | The new branch name (may not start with "-"). |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -852,22 +815,18 @@ gitBranchDelete(
 ```
 
 Delete a local branch.
-  @param branch - The branch to delete (may not start with "-").
-  @param force - Delete even if the branch is unmerged (git branch -D).
-  @param protectedBranches - Branch names that may never be deleted (e.g. ["main", "master"]).
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 Guardrails: bind `force: false` and/or a `protectedBranches` list via
     `.partial()` before handing this to an agent.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| branch | `string` |  |
-| force | `boolean` | false |
-| protectedBranches | `string[]` | [] |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| branch | `string` |  | The branch to delete (may not start with "-"). |
+| force | `boolean` | false | Delete even if the branch is unmerged (git branch -D). |
+| protectedBranches | `string[]` | [] | Branch names that may never be deleted (e.g. ["main", "master"]). |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -887,14 +846,13 @@ gitStashPush(
 ```
 
 Stash the working-tree changes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| message | `string` | "" |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| message | `string` | "" |  |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -911,13 +869,12 @@ gitStashPop(cwd: string = ""): string raises <std::git::stashPop>
 ```
 
 Apply and drop the most recent stash.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 
@@ -939,22 +896,18 @@ gitRestore(
 ```
 
 Restore files to a previous state.
-  @param paths - Files to restore (may not start with "-").
-  @param staged - Unstage the files instead of discarding working-tree changes.
-  @param allowedPaths - If non-empty, each path must fall under one of these prefixes.
-  @param cwd - An absolute repository directory, or empty to use the agent working directory.
 
 `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may restore.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| paths | `string[]` |  |
-| staged | `boolean` | false |
-| allowedPaths | `string[]` | [] |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| paths | `string[]` |  | Files to restore (may not start with "-"). |
+| staged | `boolean` | false | Unstage the files instead of discarding working-tree changes. |
+| allowedPaths | `string[]` | [] | If non-empty, each path must fall under one of these prefixes. |
+| cwd | `string` | "" | An absolute repository directory, or empty to use the agent working directory. |
 
 **Returns:** `string`
 

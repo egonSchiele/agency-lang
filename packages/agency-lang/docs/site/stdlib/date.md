@@ -70,13 +70,11 @@ today(timezone: string = ""): string
 
 Get today's date as a YYYY-MM-DD string (e.g. "2026-05-05").
 
-  @param timezone - IANA timezone name (defaults to the local timezone)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| timezone | `string` | "" | IANA timezone name (defaults to the local timezone) |
 
 **Returns:** `string`
 
@@ -90,13 +88,11 @@ tomorrow(timezone: string = ""): string
 
 Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06").
 
-  @param timezone - IANA timezone name (defaults to the local timezone)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| timezone | `string` | "" | IANA timezone name (defaults to the local timezone) |
 
 **Returns:** `string`
 
@@ -110,14 +106,12 @@ nextDayOfWeek(day: DayOfWeek, timezone: string = ""): string
 
 Get the next occurrence of a weekday as a YYYY-MM-DD date.
 
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| day | [DayOfWeek](#dayofweek) |  |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| day | [DayOfWeek](#dayofweek) |  |  |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `string`
 
@@ -131,20 +125,16 @@ atTime(date: string, time: string, timezone: string = ""): number
 
 Convert a calendar date and local time to epoch milliseconds.
 
-  @param date - Calendar date in YYYY-MM-DD form.
-  @param time - Wall-clock time in HH:MM or HH:MM:SS form.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 Use `atTime("2026-05-05", "09:00", "America/New_York")` to schedule a
 local wall-clock time. Invalid dates and times throw an error.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| date | `string` |  |
-| time | `string` |  |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| date | `string` |  | Calendar date in YYYY-MM-DD form. |
+| time | `string` |  | Wall-clock time in HH:MM or HH:MM:SS form. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -158,15 +148,12 @@ startOfDay(instant: number | null = null, timezone: string = ""): number
 
 Get midnight of the day containing the instant, as epoch milliseconds.
 
-  @param instant - Epoch milliseconds within the day, or omit for now.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| instant | `number \| null` | null | Epoch milliseconds within the day, or omit for now. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -180,15 +167,12 @@ endOfDay(instant: number | null = null, timezone: string = ""): number
 
 Get the last millisecond of the day containing the instant.
 
-  @param instant - Epoch milliseconds within the day, or omit for now.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| instant | `number \| null` | null | Epoch milliseconds within the day, or omit for now. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -202,15 +186,12 @@ startOfWeek(instant: number | null = null, timezone: string = ""): number
 
 Get midnight on Sunday of the week containing the instant, as epoch milliseconds.
 
-  @param instant - Epoch milliseconds within the week, or omit for now.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| instant | `number \| null` | null | Epoch milliseconds within the week, or omit for now. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -224,15 +205,12 @@ endOfWeek(instant: number | null = null, timezone: string = ""): number
 
 Get the last millisecond of Saturday of the week containing the instant.
 
-  @param instant - Epoch milliseconds within the week, or omit for now.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| instant | `number \| null` | null | Epoch milliseconds within the week, or omit for now. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -246,15 +224,12 @@ startOfMonth(instant: number | null = null, timezone: string = ""): number
 
 Get midnight on the first day of the month containing the instant, as epoch milliseconds.
 
-  @param instant - Epoch milliseconds within the month, or omit for now.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| instant | `number \| null` | null | Epoch milliseconds within the month, or omit for now. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -268,15 +243,12 @@ endOfMonth(instant: number | null = null, timezone: string = ""): number
 
 Get the last millisecond of the month containing the instant.
 
-  @param instant - Epoch milliseconds within the month, or omit for now.
-  @param timezone - IANA timezone name, or empty for the local timezone.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| instant | `number \| null` | null |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| instant | `number \| null` | null | Epoch milliseconds within the month, or omit for now. |
+| timezone | `string` | "" | IANA timezone name, or empty for the local timezone. |
 
 **Returns:** `number`
 
@@ -291,15 +263,12 @@ format(ms: number, timezone: string = ""): string
 Format an instant (epoch milliseconds) as an ISO 8601 string with
   milliseconds and offset, e.g. "2026-05-05T10:30:00.123-07:00".
 
-  @param ms - The instant to format
-  @param timezone - IANA timezone name (defaults to local)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ms | `number` |  |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ms | `number` |  | The instant to format |
+| timezone | `string` | "" | IANA timezone name (defaults to local) |
 
 **Returns:** `string`
 
@@ -313,15 +282,12 @@ formatDate(ms: number, timezone: string = ""): string
 
 Format an instant as the "YYYY-MM-DD" calendar date it falls on in a timezone.
 
-  @param ms - The instant to format
-  @param timezone - IANA timezone name (defaults to local)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ms | `number` |  |
-| timezone | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ms | `number` |  | The instant to format |
+| timezone | `string` | "" | IANA timezone name (defaults to local) |
 
 **Returns:** `string`
 
@@ -376,13 +342,11 @@ elapsedTime(since: number): string
 
 Format the time since an earlier instant as a duration such as "5m 32s".
 
-  @param since - Starting time in epoch milliseconds, such as a value from now().
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| since | `number` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| since | `number` |  | Starting time in epoch milliseconds, such as a value from now(). |
 
 **Returns:** `string`
 

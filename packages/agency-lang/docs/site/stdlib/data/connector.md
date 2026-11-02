@@ -37,10 +37,6 @@ connectorFetch(
 
 Fetch a JSON API path within the allowed domains.
 
-  @param base - The API base URL to resolve the path against.
-  @param domains - Hostnames that the request is allowed to reach.
-  @param path - The API path and query string, with user-supplied values URL-encoded.
-
 In a custom connector, raise your connector's effect before calling this
   helper with `with approve`. That avoids a separate interactive prompt
   for each HTTP request. Outer handlers still receive the HTTP interrupt
@@ -48,14 +44,14 @@ In a custom connector, raise your connector's effect before calling this
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| base | `string` |  |
-| domains | `string[]` |  |
-| path | `string` |  |
-| headers | `Record<string, any>` | {} |
-| method | [HttpMethod](../http.md#httpmethod) | "GET" |
-| body | `Record<string, any> \| string \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| base | `string` |  | The API base URL to resolve the path against. |
+| domains | `string[]` |  | Hostnames that the request is allowed to reach. |
+| path | `string` |  | The API path and query string, with user-supplied values URL-encoded. |
+| headers | `Record<string, any>` | {} |  |
+| method | [HttpMethod](../http.md#httpmethod) | "GET" |  |
+| body | `Record<string, any> \| string \| null` | null |  |
 
 **Returns:** `Result`
 

@@ -118,18 +118,15 @@ hnStories(
 
 Read stories from a ranked Hacker News list.
 
-  @param list - Use "top", "new", "best", "ask", "show", or "job".
-  @param limit - The maximum stories to fetch, clamped to the range zero through 100.
-
 This requests the ranked ID list and then one item per requested story.
   Use a small limit to reduce requests. Items whose fetch fails are skipped.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| list | `string` | "top" |
-| limit | `number` | 30 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| list | `string` | "top" | Use "top", "new", "best", "ask", "show", or "job". |
+| limit | `number` | 30 | The maximum stories to fetch, clamped to the range zero through 100. |
 
 **Returns:** `Result<Story[]>`
 
@@ -147,13 +144,11 @@ hnItem(id: number): Result<Item> raises <std::hackernews, std::http::fetchJSON>
 
 Read a Hacker News story, comment, job, or poll, including its child IDs.
 
-  @param id - A Hacker News item ID from a story listing, search, or parent item.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `number` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `number` |  | A Hacker News item ID from a story listing, search, or parent item. |
 
 **Returns:** `Result<Item>`
 
@@ -173,13 +168,11 @@ hnUser(
 
 Read a Hacker News user's public profile and submitted item IDs.
 
-  @param username - The case-sensitive Hacker News username.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| username | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| username | `string` |  | The case-sensitive Hacker News username. |
 
 **Returns:** `Result<User>`
 
@@ -202,18 +195,14 @@ hnSearch(
 
 Search Hacker News through its Algolia index.
 
-  @param sort - Order results by "relevance" or "recent".
-  @param tags - Algolia tag filters, such as "story", "comment", "ask_hn", or "show_hn".
-  @param limit - The maximum results, clamped to the range zero through 50.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| sort | `string` | "relevance" |
-| tags | `string` | "story" |
-| limit | `number` | 20 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  |  |
+| sort | `string` | "relevance" | Order results by "relevance" or "recent". |
+| tags | `string` | "story" | Algolia tag filters, such as "story", "comment", "ask_hn", or "show_hn". |
+| limit | `number` | 20 | The maximum results, clamped to the range zero through 50. |
 
 **Returns:** `Result<Story[]>`
 

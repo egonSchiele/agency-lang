@@ -126,26 +126,19 @@ screenshot(
 
 Take a screenshot and save it to a file. Pass x, y, width, and height to capture a specific region.
 
-  @param filepath - Path to save the screenshot
-  @param x - X coordinate of the capture region; -1 for the full screen
-  @param y - Y coordinate of the capture region; -1 for the full screen
-  @param width - Width of the capture region; -1 for the full screen
-  @param height - Height of the capture region; -1 for the full screen
-  @param allowedPaths - Only allow saving under these path prefixes
-
 Ctrl-C, a race loss, or a time-guard abort interrupts an in-progress
 screencapture.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filepath | `string` |  |
-| x | `number` | -1 |
-| y | `number` | -1 |
-| width | `number` | -1 |
-| height | `number` | -1 |
-| allowedPaths | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filepath | `string` |  | Path to save the screenshot |
+| x | `number` | -1 | X coordinate of the capture region; -1 for the full screen |
+| y | `number` | -1 | Y coordinate of the capture region; -1 for the full screen |
+| width | `number` | -1 | Width of the capture region; -1 for the full screen |
+| height | `number` | -1 | Height of the capture region; -1 for the full screen |
+| allowedPaths | `string[]` | [] | Only allow saving under these path prefixes |
 
 **Throws:** `std::screenshot`
 
@@ -161,16 +154,14 @@ exit(code: number = 0)
 
 Terminate the process with an exit code.
 
-  @param code - Zero for success, nonzero for failure.
-
 Flushes pending Statelog deliveries before terminating. Other pending work
 and cleanup may not finish.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| code | `number` | 0 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| code | `number` | 0 | Zero for success, nonzero for failure. |
 
 **Throws:** `std::exit`
 
@@ -230,18 +221,15 @@ setEnv(name: string, value: string): Result
 
 Set an environment variable on the host.
 
-  @param name - A nonempty variable name without = or NUL bytes
-  @param value - Must not contain NUL bytes
-
 On the Node host, the change affects this process and child processes
 started afterward. It does not change the launching shell's environment.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | A nonempty variable name without = or NUL bytes |
+| value | `string` |  | Must not contain NUL bytes |
 
 **Returns:** `Result`
 

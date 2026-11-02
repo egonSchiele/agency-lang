@@ -90,15 +90,13 @@ emit(data: any)
 
 Emit a custom event to the calling TypeScript code.
 
-  @param data - The payload the host's `onEmit` callback should receive.
-
 Use with the host's `onEmit` callback to deliver progress or other application events.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| data | `any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| data | `any` |  | The payload the host's `onEmit` callback should receive. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L74))
 
@@ -110,17 +108,15 @@ setAgentName(name: string)
 
 Set a stable display name for this agent, used to group its runs.
 
-  @param name - Use 1–200 ASCII letters, digits, ".", "_", "-", or "/", with no empty, ".", or ".." path segments.
-
 Call once near startup so the runs explorer and statelog's eval pages
   group this agent's runs under a stable name. The last call in a trace
   wins. Use slashes to group variants, such as "agency-agent/coordinator".
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | Use 1–200 ASCII letters, digits, ".", "_", "-", or "/", with no empty, ".", or ".." path segments. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L88))
 
@@ -132,8 +128,6 @@ turnStart(message: string)
 
 Mark the start of a turn when a person sends this program a message.
 
-  @param message - The message the person sent.
-
 Records a `turnStart` event. The logs viewer splits a session into turns
   at these events: each turn runs from its message to the next, and the
   time after a turn's last event is shown as waiting for the person. The
@@ -144,9 +138,9 @@ Records a `turnStart` event. The logs viewer splits a session into turns
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| message | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| message | `string` |  | The message the person sent. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L106))
 
@@ -157,8 +151,6 @@ evalValue(value: any)
 ```
 
 Record an input to this agent for evaluation.
-
-  @param value - A JSON-serializable value representing the input the user supplied.
 
 Mark the actual input at the point your agent receives it, so evaluators
   do not have to infer it from the conversation. Without an annotation,
@@ -171,9 +163,9 @@ Mark the actual input at the point your agent receives it, so evaluators
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `any` |  | A JSON-serializable value representing the input the user supplied. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L125))
 
@@ -184,8 +176,6 @@ evalOutput(value: any)
 ```
 
 Record the agent's response for evaluation.
-
-  @param value - A JSON-serializable value representing the response the user receives.
 
 Use when the response to grade differs from the entry node's return
   value, or the node returns nothing. Explicit outputs replace the return
@@ -198,9 +188,9 @@ Use when the response to grade differs from the entry node's return
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `any` |  | A JSON-serializable value representing the response the user receives. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L144))
 
@@ -215,9 +205,6 @@ evalRecord(
 
 Read a saved statelog trace for evaluation or analysis.
 
-  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
-  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
-
 Inspect a previous run from Agency code without invoking the CLI.
   Returns the same record as `agency eval extract`, including eval values,
   outputs, conversation activity, metrics, and extraction warnings.
@@ -225,10 +212,10 @@ Inspect a previous run from Agency code without invoking the CLI.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| statelogPath | `string` |  |
-| allowedPaths | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| statelogPath | `string` |  | A JSONL file containing one trace, relative to the working directory or absolute. |
+| allowedPaths | `string[]` | [] | Restrict reads to these directories, or leave empty to allow any path. |
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
@@ -245,18 +232,15 @@ evalValues(
 
 Read the evaluation inputs from a saved statelog trace.
 
-  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
-  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
-
 Read the inputs used for evaluation without the full run record.
   Includes inferred input when the agent did not call `evalValue`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| statelogPath | `string` |  |
-| allowedPaths | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| statelogPath | `string` |  | A JSONL file containing one trace, relative to the working directory or absolute. |
+| allowedPaths | `string[]` | [] | Restrict reads to these directories, or leave empty to allow any path. |
 
 **Returns:** `StatelogEvalValue[]`
 
@@ -273,19 +257,16 @@ evalOutputs(
 
 Read the evaluation outputs from a saved statelog trace.
 
-  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
-  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
-
 Read all outputs used for evaluation, preserving their order.
   Uses explicit `evalOutput` annotations when present, otherwise the entry
   node's non-null return value. Returns an empty array when neither exists.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| statelogPath | `string` |  |
-| allowedPaths | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| statelogPath | `string` |  | A JSONL file containing one trace, relative to the working directory or absolute. |
+| allowedPaths | `string[]` | [] | Restrict reads to these directories, or leave empty to allow any path. |
 
 **Returns:** `StatelogEvalValue[]`
 
@@ -302,18 +283,15 @@ finalEvalOutput(
 
 Read the last evaluation output from a saved statelog trace, or null if none exists.
 
-  @param statelogPath - A JSONL file containing one trace, relative to the working directory or absolute.
-  @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
-
 Select the last entry from `evalOutputs` for a judge that needs one answer.
   The result includes the value's thread and time, as well as its payload.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| statelogPath | `string` |  |
-| allowedPaths | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| statelogPath | `string` |  | A JSONL file containing one trace, relative to the working directory or absolute. |
+| allowedPaths | `string[]` | [] | Restrict reads to these directories, or leave empty to allow any path. |
 
 **Returns:** `StatelogEvalValue | null`
 

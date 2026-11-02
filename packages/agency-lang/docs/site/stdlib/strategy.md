@@ -116,15 +116,13 @@ retryWithFeedback(
 Retry a block using the prior result to improve each attempt.
   Return the first passing result, or the last result if no attempt passes.
 
-  @param block - Receives null on the first attempt, then the previous result, followed by a one-based attempt number.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| n | `number` |  |
-| test | `(any) => boolean` |  |
-| block | `(any, number) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| n | `number` |  |  |
+| test | `(any) => boolean` |  |  |
+| block | `(any, number) => any` |  | Receives null on the first attempt, then the previous result, followed by a one-based attempt number. |
 
 **Returns:** `any`
 
@@ -143,8 +141,6 @@ revise(
 Revise work using critiques until a check accepts it or attempts run out.
   Return the accepted result, or the last result when all attempts are rejected.
 
-  @param block - Receives an empty string first, then the prior critique's feedback.
-
 The first attempt receives an empty critique. Later attempts receive the
 feedback from the last rejected result. When a budget guard stops the work,
 the last completed attempt can reach the guard as a partial result.
@@ -152,11 +148,11 @@ If no attempt completed, an attempt's saved draft can be used instead.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| maxAttempts | `number` |  |
-| check | `(any) => Critique` |  |
-| block | `(string) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| maxAttempts | `number` |  |  |
+| check | `(any) => Critique` |  |  |
+| block | `(string) => any` |  | Receives an empty string first, then the prior critique's feedback. |
 
 **Returns:** `any`
 

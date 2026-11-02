@@ -276,13 +276,11 @@ setLlmOptions(opts: LlmDefaults)
 Set default options for subsequent llm() calls. Only the fields you
   pass are changed. A per-call llm(..., { ... }) option overrides them.
 
-  @param opts - The default LLM options to merge in
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| opts | [LlmDefaults](#llmdefaults) |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| opts | [LlmDefaults](#llmdefaults) |  | The default LLM options to merge in |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L141))
 
@@ -336,13 +334,11 @@ Return the first provider in `order` whose API-key environment variable
   google, openai, openrouter, and litellm; unrecognized names in `order`
   are skipped.
 
-  @param order - Providers to check, highest preference first
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| order | `string[]` | ["anthropic", "google", "openai"] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| order | `string[]` | ["anthropic", "google", "openai"] | Providers to check, highest preference first |
 
 **Returns:** `Result<string>`
 
@@ -361,13 +357,11 @@ registerProviderModule(path: string): Result
 Load a provider module by path at runtime and register its custom provider
   for llm() calls. The module must export register({ registerProvider }).
 
-  @param path - Path to the provider module (.mjs/.js)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to the provider module (.mjs/.js) |
 
 **Returns:** `Result`
 
@@ -399,13 +393,11 @@ hostedModelInfo(name: string): HostedModelInfo | null
 Metadata for one hosted model by name, or null if the name is unknown or
   is not a text model.
 
-  @param name - The hosted model name (e.g. "gpt-4o-mini")
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The hosted model name (e.g. "gpt-4o-mini") |
 
 **Returns:** `HostedModelInfo | null`
 
@@ -419,17 +411,15 @@ modelSupportsInput(model: string, modality: string): boolean | null
 
 Check catalog support for an input modality; null means unknown.
 
-  @param modality - "image" or "pdf".
-
 Use this to decide whether to offer an image or PDF to a model. A null
 answer means the catalog has no information; it does not prove incompatibility.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| model | `string` |  |
-| modality | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| model | `string` |  |  |
+| modality | `string` |  | "image" or "pdf". |
 
 **Returns:** `boolean | null`
 
@@ -443,8 +433,6 @@ loadModelData(path: string): Result<number>
 
 Load a model-data JSON file into the catalog and return its model count.
 
-  @param path - File produced by agency models refresh, relative to the working directory or absolute.
-
 Use the JSON produced by `agency models refresh` to add or update model
 metadata. Later files win on matching provider and model names, merging
 individual fields. Hosted-tool metadata also merges. The returned count is
@@ -452,9 +440,9 @@ for this file, not the accumulated catalog.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | File produced by agency models refresh, relative to the working directory or absolute. |
 
 **Returns:** `Result<number>`
 

@@ -396,7 +396,10 @@ effect std::run {
 
 ### CLI_NOT_AVAILABLE
 
+Guidance for environments where the Agency CLI is not installed.
+
 ```ts
+/** Guidance for environments where the Agency CLI is not installed. */
 export static const CLI_NOT_AVAILABLE = "The agency command line is not available here. Use the tools instead: typecheck(source) or typecheckFile(dir, filename) for type errors; testFile(dir, filename) to run a .test.json harness (write the files it tests first); runFile(dir, filename, node) to run a program; parseAST, format, describe for source analysis."
 ```
 
@@ -413,9 +416,6 @@ compile(source: string, dir: string = "", strict: boolean = false): Result
 Compile Agency source for a later subprocess run. Only std:: and local
   .agency imports are supported; compile-time splices are refused.
 
-  @param dir - Resolve and confine local imports within this directory, or leave empty to disallow them.
-  @param strict - Also reject unresolved names and JavaScript globals outside the sandbox allowlist.
-
 Use `runCode` to execute source supplied by an LLM in one call. Use
   `compile` and `run` separately when Agency code can retain the full
   compiled value between calls. Compilation permits standard-library
@@ -424,11 +424,11 @@ Use `runCode` to execute source supplied by an LLM in one call. Use
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| dir | `string` | "" |
-| strict | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| dir | `string` | "" | Resolve and confine local imports within this directory, or leave empty to disallow them. |
+| strict | `boolean` | false | Also reject unresolved names and JavaScript globals outside the sandbox allowlist. |
 
 **Returns:** `Result`
 
@@ -456,18 +456,6 @@ run(
 
 Execute a compiled Agency program in a subprocess.
 
-  @param compiled - The complete value returned by compile, including its captured code.
-  @param node - The exported entry node to execute.
-  @param args - Named arguments for the entry node.
-  @param wallClock - The execution time limit in milliseconds, up to one hour, or null for the default.
-  @param memory - The V8 heap limit in bytes, up to 4gb, or null for the default.
-  @param ipcPayload - The limit per IPC message in bytes, up to 1gb, or null for the default.
-  @param stdout - The combined stdout and stderr limit in bytes, up to 100mb, or null for the default.
-  @param logFile - An optional statelog JSONL destination for this child run.
-  @param cwd - The child working directory, or empty to inherit the caller's process directory.
-  @param maxDepth - The subprocess nesting cap, up to ten, also bounded by ancestor caps.
-  @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
-
 Run a compiled program in a child process. Parent handlers and guards
   apply to the child, and supported lifecycle callbacks are forwarded.
   Streaming callbacks are not forwarded. A resource-limit failure reports
@@ -486,19 +474,19 @@ Run a compiled program in a child process. Parent handlers and guards
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| compiled | [CompiledProgram](#compiledprogram) |  |
-| node | `string` |  |
-| args | `Record<string, any>` | {} |
-| wallClock | `number \| null` | null |
-| memory | `number \| null` | null |
-| ipcPayload | `number \| null` | null |
-| stdout | `number \| null` | null |
-| logFile | `string \| null` | null |
-| cwd | `string \| null` | null |
-| maxDepth | `number \| null` | null |
-| maxCost | `number \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| compiled | [CompiledProgram](#compiledprogram) |  | The complete value returned by compile, including its captured code. |
+| node | `string` |  | The exported entry node to execute. |
+| args | `Record<string, any>` | {} | Named arguments for the entry node. |
+| wallClock | `number \| null` | null | The execution time limit in milliseconds, up to one hour, or null for the default. |
+| memory | `number \| null` | null | The V8 heap limit in bytes, up to 4gb, or null for the default. |
+| ipcPayload | `number \| null` | null | The limit per IPC message in bytes, up to 1gb, or null for the default. |
+| stdout | `number \| null` | null | The combined stdout and stderr limit in bytes, up to 100mb, or null for the default. |
+| logFile | `string \| null` | null | An optional statelog JSONL destination for this child run. |
+| cwd | `string \| null` | null | The child working directory, or empty to inherit the caller's process directory. |
+| maxDepth | `number \| null` | null | The subprocess nesting cap, up to ten, also bounded by ancestor caps. |
+| maxCost | `number \| null` | null | The child's LLM spend limit in dollars, or null for no additional cost cap. |
 
 **Returns:** `Result`
 
@@ -521,11 +509,6 @@ runFunction(
 
 Call a public exported Agency function in a fresh subprocess.
 
-  @param source - A std:: module, contained Agency file, or complete Agency source program.
-  @param functionName - The public exported def to call, excluding nodes and handoff functions.
-  @param args - Named arguments, with ordinary Agency defaults and aliases.
-  @param options - Per-call resource limits, statelog destination, and working directory.
-
 Call a public exported def without writing an entry node. The source
   can name a std:: module, a file inside a directory, or source text or
   complete Template Agency Code. Local imports must remain inside the
@@ -538,12 +521,12 @@ Call a public exported def without writing an entry node. The source
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | [AgencySource](#agencysource) |  |
-| functionName | `string` |  |
-| args | `Record<string, any>` | {} |
-| options | [RunOptions](#runoptions) | {} |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | [AgencySource](#agencysource) |  | A std:: module, contained Agency file, or complete Agency source program. |
+| functionName | `string` |  | The public exported def to call, excluding nodes and handoff functions. |
+| args | `Record<string, any>` | {} | Named arguments, with ordinary Agency defaults and aliases. |
+| options | [RunOptions](#runoptions) | {} | Per-call resource limits, statelog destination, and working directory. |
 
 **Returns:** `Result`
 
@@ -569,11 +552,6 @@ Create callable tools from public exported Agency functions. Module
   if any selected def is a handoff, requires a function argument, or lacks a
   concrete parameter schema.
 
-  @param source - A std:: module, contained Agency file, or complete Agency source program.
-  @param names - Public exported defs to select, or empty for all public defs.
-  @param namespace - An optional prefix using letters, digits, underscores, or hyphens, keeping each full tool name within 64 characters.
-  @param options - Resource limits, statelog destination, and working directory for inspection and calls.
-
 Creates callable tools with the source functions' descriptions, schemas,
   aliases, and argument binding. Import preparation captures local source
   files, so later calls use those bytes. A namespace prefixes advertised
@@ -593,12 +571,12 @@ Creates callable tools with the source functions' descriptions, schemas,
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | [AgencySource](#agencysource) |  |
-| names | `string[]` | [] |
-| namespace | `string` | "" |
-| options | [RunOptions](#runoptions) | {} |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | [AgencySource](#agencysource) |  | A std:: module, contained Agency file, or complete Agency source program. |
+| names | `string[]` | [] | Public exported defs to select, or empty for all public defs. |
+| namespace | `string` | "" | An optional prefix using letters, digits, underscores, or hyphens, keeping each full tool name within 64 characters. |
+| options | [RunOptions](#runoptions) | {} | Resource limits, statelog destination, and working directory for inspection and calls. |
 
 **Returns:** `Result<any[]>`
 
@@ -627,16 +605,6 @@ runFile(
 Compile an Agency file and execute its exported node in a subprocess.
   Only std:: and contained .agency imports are supported.
 
-  @param dir - The directory containing the file and confining its local imports.
-  @param filename - A relative Agency filename that stays inside dir.
-  @param node - The exported entry node to execute.
-  @param args - Named arguments for the entry node.
-  @param wallClock - The execution time limit in milliseconds, up to one hour.
-  @param memory - The V8 heap limit in bytes, up to 4gb.
-  @param ipcPayload - The limit per IPC message in bytes, up to 1gb.
-  @param stdout - The combined stdout and stderr limit in bytes, up to 100mb.
-  @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
-
 Compiles a file and runs its exported node through `run`, with the same
   parent handlers, guards, callbacks, and subprocess limits. Local imports
   remain within the supplied directory. The import restrictions on
@@ -644,17 +612,17 @@ Compiles a file and runs its exported node through `run`, with the same
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
-| node | `string` |  |
-| args | `Record<string, any>` | {} |
-| wallClock | `number` | 60s |
-| memory | `number` | 512mb |
-| ipcPayload | `number` | 100mb |
-| stdout | `number` | 1mb |
-| maxCost | `number \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The directory containing the file and confining its local imports. |
+| filename | `string` |  | A relative Agency filename that stays inside dir. |
+| node | `string` |  | The exported entry node to execute. |
+| args | `Record<string, any>` | {} | Named arguments for the entry node. |
+| wallClock | `number` | 60s | The execution time limit in milliseconds, up to one hour. |
+| memory | `number` | 512mb | The V8 heap limit in bytes, up to 4gb. |
+| ipcPayload | `number` | 100mb | The limit per IPC message in bytes, up to 1gb. |
+| stdout | `number` | 1mb | The combined stdout and stderr limit in bytes, up to 100mb. |
+| maxCost | `number \| null` | null | The child's LLM spend limit in dollars, or null for no additional cost cap. |
 
 **Returns:** `Result`
 
@@ -682,15 +650,6 @@ test(
 Run test cases against an Agency file in subprocesses and report each
   case's result. Only std:: and contained .agency imports are supported.
 
-  @param dir - The directory containing the tested file and confining local imports.
-  @param filename - A relative Agency source filename that stays inside dir.
-  @param cases - Exported entry nodes, named arguments, expected values, and optional scripted interrupt answers.
-  @param wallClock - Milliseconds per case, overridden by a case's own wallClock value.
-  @param memory - The V8 heap limit per case in bytes.
-  @param ipcPayload - The byte limit per IPC message in each case.
-  @param stdout - The combined stdout and stderr limit per case in bytes.
-  @param maxCost - The LLM spend limit in dollars for the whole batch, or null for no additional cost cap.
-
 Each case runs in its own child process through `run`. Parent handlers
   vote on both the launch and the tested code's interrupts. Scripted
   interrupt answers add handler votes in order; a parent rejection still
@@ -704,16 +663,16 @@ Each case runs in its own child process through `run`. Parent handlers
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
-| cases | `AgencyTestCase[]` |  |
-| wallClock | `number` | 60s |
-| memory | `number` | 512mb |
-| ipcPayload | `number` | 100mb |
-| stdout | `number` | 1mb |
-| maxCost | `number \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The directory containing the tested file and confining local imports. |
+| filename | `string` |  | A relative Agency source filename that stays inside dir. |
+| cases | `AgencyTestCase[]` |  | Exported entry nodes, named arguments, expected values, and optional scripted interrupt answers. |
+| wallClock | `number` | 60s | Milliseconds per case, overridden by a case's own wallClock value. |
+| memory | `number` | 512mb | The V8 heap limit per case in bytes. |
+| ipcPayload | `number` | 100mb | The byte limit per IPC message in each case. |
+| stdout | `number` | 1mb | The combined stdout and stderr limit per case in bytes. |
+| maxCost | `number \| null` | null | The LLM spend limit in dollars for the whole batch, or null for no additional cost cap. |
 
 **Returns:** `Result<TestReport>`
 
@@ -735,17 +694,13 @@ testFile(
 
 Run the test cases declared in an Agency .test.json file.
 
-  @param dir - The directory containing the test file and its source file.
-  @param filename - A relative .test.json filename that stays inside dir.
-  @param maxCost - The LLM spend limit in dollars for the whole batch, or null for no additional cost cap.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
-| maxCost | `number \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The directory containing the test file and its source file. |
+| filename | `string` |  | A relative .test.json filename that stays inside dir. |
+| maxCost | `number \| null` | null | The LLM spend limit in dollars for the whole batch, or null for no additional cost cap. |
 
 **Returns:** `Result<TestReport>`
 
@@ -777,16 +732,6 @@ Compile Agency source and execute an exported node in one call. Prefer
   imports are supported; splices are refused. Compile errors come back as a
   failure without running anything; fix the source and call again.
 
-  @param node - The exported entry node to execute.
-  @param args - Named arguments for the entry node.
-  @param wallClock - A positive execution time limit in milliseconds, up to one hour.
-  @param memory - A positive V8 heap limit in bytes, up to 4gb.
-  @param ipcPayload - A positive byte limit per IPC message, up to 1gb.
-  @param stdout - A positive combined stdout and stderr byte limit, up to 100mb.
-  @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
-  @param cwd - The runtime working directory. Empty inherits the caller's process directory, which may not be where you want files; pass the agent working directory so the program's file writes land there.
-  @param dir - Resolve and confine local imports within this directory, or leave empty to disallow them.
-
 Use this when an LLM supplies source code to execute. It combines
   compilation and execution so the model does not need to copy a compiled
   program value into another call. The node's value is returned without
@@ -803,18 +748,18 @@ Use this when an LLM supplies source code to execute. It combines
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| node | `string` | "main" |
-| args | `Record<string, any>` | {} |
-| wallClock | `number` | 60s |
-| memory | `number` | 512mb |
-| ipcPayload | `number` | 100mb |
-| stdout | `number` | 1mb |
-| maxCost | `number \| null` | null |
-| cwd | `string` | "" |
-| dir | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| node | `string` | "main" | The exported entry node to execute. |
+| args | `Record<string, any>` | {} | Named arguments for the entry node. |
+| wallClock | `number` | 60s | A positive execution time limit in milliseconds, up to one hour. |
+| memory | `number` | 512mb | A positive V8 heap limit in bytes, up to 4gb. |
+| ipcPayload | `number` | 100mb | A positive byte limit per IPC message, up to 1gb. |
+| stdout | `number` | 1mb | A positive combined stdout and stderr byte limit, up to 100mb. |
+| maxCost | `number \| null` | null | The child's LLM spend limit in dollars, or null for no additional cost cap. |
+| cwd | `string` | "" | The runtime working directory. Empty inherits the caller's process directory, which may not be where you want files; pass the agent working directory so the program's file writes land there. |
+| dir | `string` | "" | Resolve and confine local imports within this directory, or leave empty to disallow them. |
 
 **Returns:** `Result`
 
@@ -840,10 +785,6 @@ Type-check Agency source and return errors and warnings. To check a file
   contents. A clean report does not mean compile or run will accept the code
   unless strict is true.
 
-  @param ignoreCodes - Diagnostic codes, such as AG3009, to omit from errors and warnings.
-  @param dir - Resolve relative imports within this directory, or leave empty when no local imports are needed.
-  @param strict - Also report sandbox import violations, unresolved names, and disallowed JavaScript globals.
-
 Checks source text without writing it. With a directory, relative
   imports resolve as if the source were a file there. Use `typecheckFile`
   for an existing file.
@@ -854,12 +795,12 @@ Checks source text without writing it. With a directory, relative
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| ignoreCodes | `string[]` | [] |
-| dir | `string` | "" |
-| strict | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| ignoreCodes | `string[]` | [] | Diagnostic codes, such as AG3009, to omit from errors and warnings. |
+| dir | `string` | "" | Resolve relative imports within this directory, or leave empty when no local imports are needed. |
+| strict | `boolean` | false | Also report sandbox import violations, unresolved names, and disallowed JavaScript globals. |
 
 **Returns:** `Result<TypeCheckReport>`
 
@@ -908,10 +849,6 @@ describe(
 Describe an Agency module's public exports, signatures, documentation,
   and statically known effects.
 
-  @param source - Module source text matching the file exactly when a filename is supplied.
-  @param dir - Supply with filename to resolve local imports within this directory.
-  @param filename - The module's path relative to dir, or empty when describing source without local imports.
-
 Use export metadata when generating code from a module, for example
   one handler per effect its tools can raise. It uses the visibility
   rules of `agency doc`: hidden and underscore-prefixed exports are
@@ -925,11 +862,11 @@ Use export metadata when generating code from a module, for example
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| dir | `string` | "" |
-| filename | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  | Module source text matching the file exactly when a filename is supplied. |
+| dir | `string` | "" | Supply with filename to resolve local imports within this directory. |
+| filename | `string` | "" | The module's path relative to dir, or empty when describing source without local imports. |
 
 **Returns:** `Result<ModuleInfo>`
 
@@ -945,18 +882,16 @@ typecheckFile(dir: string, filename: string): Result
 
 Type-check an Agency file on disk.
 
-  @param filename - A relative Agency filename that stays inside dir.
-
 Resolves imports relative to the file's own directory. This check does
   not apply subprocess import restrictions, so a clean report can still be
   refused by `runFile`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  |  |
+| filename | `string` |  | A relative Agency filename that stays inside dir. |
 
 **Returns:** `Result`
 
@@ -997,21 +932,18 @@ writeAST(
 
 Format an Agency AST as source and write it to a file.
 
-  @param filename - A relative output filename that stays inside dir.
-  @param overwrite - If false, fail when the output file already exists.
-
 Writes the canonical formatter output, preserving comments while
   normalizing whitespace. The target must stay inside the supplied
   directory; symlinks below that directory are refused.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ast | [AST](#ast) |  |
-| dir | `string` |  |
-| filename | `string` |  |
-| overwrite | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ast | [AST](#ast) |  |  |
+| dir | `string` |  |  |
+| filename | `string` |  | A relative output filename that stays inside dir. |
+| overwrite | `boolean` | true | If false, fail when the output file already exists. |
 
 **Returns:** `Result`
 
@@ -1047,14 +979,12 @@ loadTemplate(dir: string, filename: string): Result<Code>
 
 Read an Agency file containing template holes.
 
-  @param filename - A relative template filename that stays inside dir.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  |  |
+| filename | `string` |  | A relative template filename that stays inside dir. |
 
 **Returns:** `Result<Code>`
 
@@ -1094,18 +1024,16 @@ fill(template: Code, values: Record<string, Json | Code>): Result<Code>
 
 Fill selected holes in an Agency code template.
 
-  @param values - Map existing hole names to literal data or Code fragments of the required kind.
-
 Plain values become literal nodes; Code fragments are inserted as
   trees. String values are not parsed as source. A partial fill returns
   a template whose remaining holes can be filled later.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| template | [Code](#code) |  |
-| values | `Record<string, Json \| Code>` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| template | [Code](#code) |  |  |
+| values | `Record<string, Json \| Code>` |  | Map existing hole names to literal data or Code fragments of the required kind. |
 
 **Returns:** `Result<Code>`
 
@@ -1197,17 +1125,15 @@ formatFile(dir: string, filename: string): Result
 
 Format an Agency file in place.
 
-  @param filename - A relative Agency filename that stays inside dir.
-
 Read and write happen inside the same interrupt, so approving it approves both.
   If the file is already formatted, no write occurs and its mtime is preserved.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-| filename | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  |  |
+| filename | `string` |  | A relative Agency filename that stays inside dir. |
 
 **Returns:** `Result`
 
@@ -1225,8 +1151,6 @@ walkAST(ast: AST, visitor: (node: any, ancestors: any[]) -> any): AST
 
 Visit and modify nodes in a cloned Agency AST.
 
-  @param visitor - Called with the node and its ancestors, allowing in-place edits and ignoring the return value.
-
 Visits parents before children in a deep-cloned tree. Mutate each
   visited node in place to transform the returned clone. The original
   tree is unchanged.
@@ -1238,10 +1162,10 @@ Visits parents before children in a deep-cloned tree. Mutate each
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| ast | [AST](#ast) |  |
-| visitor | `(node: any, ancestors: any[]) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| ast | [AST](#ast) |  |  |
+| visitor | `(node: any, ancestors: any[]) => any` |  | Called with the node and its ancestors, allowing in-place edits and ignoring the return value. |
 
 **Returns:** [AST](#ast)
 
@@ -1255,14 +1179,12 @@ getNodesOfType(source: string, types: string[]): Result<any[]>
 
 Parse Agency source and find AST nodes matching the requested kinds.
 
-  @param types - AST discriminants such as "function", "graphNode", or "importStatement".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| types | `string[]` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| types | `string[]` |  | AST discriminants such as "function", "graphNode", or "importStatement". |
 
 **Returns:** `Result<any[]>`
 
@@ -1337,11 +1259,6 @@ filterImports(
 Remove imports that fail the supplied allow and exclude rules. Excludes
   win; empty rule lists permit every import.
 
-  @param allowedPackages - Import-path globs to retain, unless an exclude rule matches.
-  @param excludedPackages - Import-path globs to remove even when allowed elsewhere.
-  @param allowKinds - Retain imports of kind stdlib, pkg, local, or node.
-  @param excludeKinds - Remove imports of these kinds even when allowed elsewhere.
-
 Use to remove unwanted imports from generated source before further
   checking. This only filters import statements; it does not validate the
   remaining dependency closure. The returned source is formatted.
@@ -1354,13 +1271,13 @@ Use to remove unwanted imports from generated source before further
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| allowedPackages | `string[]` | [] |
-| excludedPackages | `string[]` | [] |
-| allowKinds | `string[]` | [] |
-| excludeKinds | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| allowedPackages | `string[]` | [] | Import-path globs to retain, unless an exclude rule matches. |
+| excludedPackages | `string[]` | [] | Import-path globs to remove even when allowed elsewhere. |
+| allowKinds | `string[]` | [] | Retain imports of kind stdlib, pkg, local, or node. |
+| excludeKinds | `string[]` | [] | Remove imports of these kinds even when allowed elsewhere. |
 
 **Returns:** `Result<{ source: string; filtered: boolean }>`
 
@@ -1404,9 +1321,6 @@ cli(args: string[], cwd: string = "."): Result<ExecResult>
 
 Run a supported Agency file command and return stdout, stderr, and exitCode.
 
-  @param args - Exactly a supported subcommand and filename, such as ["test", "x.test.json"].
-  @param cwd - The directory containing the file argument.
-
 Runs supported file commands through the matching functions in this
   module, without spawning an installed Agency CLI. Supports test,
   typecheck/tc, ast, fmt, and run. The run command selects node main.
@@ -1415,10 +1329,10 @@ Runs supported file commands through the matching functions in this
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| args | `string[]` |  |
-| cwd | `string` | "." |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| args | `string[]` |  | Exactly a supported subcommand and filename, such as ["test", "x.test.json"]. |
+| cwd | `string` | "." | The directory containing the file argument. |
 
 **Returns:** `Result<ExecResult>`
 

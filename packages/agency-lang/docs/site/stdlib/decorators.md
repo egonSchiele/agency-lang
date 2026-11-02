@@ -35,11 +35,6 @@ guarded(
 Run the decorated function under cost and working-time budgets.
   Return its saved draft when a budget runs out, or a failure if none exists.
 
-  @param cost - Spend cap in dollars, or null for no cap.
-  @param time - Working-time cap in milliseconds, or null for no cap.
-  @param label - Guard label, defaulting to the function name.
-  @param keepDraft - Return a failure on every budget trip when false, with any draft in the failure data.
-
 Use `saveDraft` or `finalize` to preserve work if the budget runs out.
 A saved string returns with a note that it may be unfinished. Without a
 saved value, a budget trip returns a failure naming the limit.
@@ -52,14 +47,14 @@ limits to allow more work. See `docs/dev/agents/subagent-budgets.md`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| cost | `number \| null` | null |
-| time | `number \| null` | null |
-| label | `string \| null` | null |
-| keepDraft | `boolean` | true |
-| call | [Call](index.md#call) |  |
-| block | `(args: Record<string, any>) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| cost | `number \| null` | null | Spend cap in dollars, or null for no cap. |
+| time | `number \| null` | null | Working-time cap in milliseconds, or null for no cap. |
+| label | `string \| null` | null | Guard label, defaulting to the function name. |
+| keepDraft | `boolean` | true | Return a failure on every budget trip when false, with any draft in the failure data. |
+| call | [Call](index.md#call) |  |  |
+| block | `(args: Record<string, any>) => any` |  |  |
 
 **Returns:** `Result`
 

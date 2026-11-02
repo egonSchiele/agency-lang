@@ -74,17 +74,13 @@ gdeltNews(
 Search recent worldwide news coverage with GDELT. Allow five seconds
   between requests.
 
-  @param query - GDELT DOC search syntax, such as "Federal Reserve rate cut".
-  @param maxRecords - Request from 1 through 250 articles.
-  @param timespan - How far back to search, such as "24h", "3d", or "1w".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| maxRecords | `number` | 25 |
-| timespan | `string` | "3d" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  | GDELT DOC search syntax, such as "Federal Reserve rate cut". |
+| maxRecords | `number` | 25 | Request from 1 through 250 articles. |
+| timespan | `string` | "3d" | How far back to search, such as "24h", "3d", or "1w". |
 
 **Returns:** `Result<NewsArticle[]>`
 

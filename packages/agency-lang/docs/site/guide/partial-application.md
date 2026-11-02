@@ -63,6 +63,11 @@ def readFile(filename: string, dir: string): string {
 
 When you use `.partial()`, any `@param` lines in the function's docstring for bound parameters are automatically stripped.
 
+[`agency doc`](/cli/doc#parameter-descriptions) uses the same entries to fill the
+Description column in the generated parameter table. You can wrap a description
+onto following lines. A blank line ends the entry. Entries inside fenced code
+examples remain part of the example.
+
 ### Custom descriptions with `.describe()`
 
 If you want to override the docstring completely, use `.describe()`:

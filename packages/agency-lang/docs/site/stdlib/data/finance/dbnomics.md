@@ -89,17 +89,13 @@ dbnomicsSeries(
 Fetch an economic time series from DBnomics. Use it for non-U.S. or
   cross-country data; prefer fredSeries for U.S. macro data.
 
-  @param provider - The DBnomics provider code, such as "BLS" or "IMF".
-  @param dataset - The dataset code within that provider, such as "cu".
-  @param series - The series code within that dataset, such as "CUUR0000SA0".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| provider | `string` |  |
-| dataset | `string` |  |
-| series | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| provider | `string` |  | The DBnomics provider code, such as "BLS" or "IMF". |
+| dataset | `string` |  | The dataset code within that provider, such as "cu". |
+| series | `string` |  | The series code within that dataset, such as "CUUR0000SA0". |
 
 **Returns:** `Result<DbnomicsSeries>`
 

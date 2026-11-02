@@ -102,31 +102,22 @@ authorize(
 
 Open the browser to authorize an API provider and save its OAuth tokens.
 
-  @param name - Start with an ASCII letter or digit and use only letters, digits, dots, hyphens, or underscores.
-  @param authUrl - The provider authorization endpoint, using HTTPS except on localhost.
-  @param tokenUrl - The provider token endpoint, using HTTPS except on localhost.
-  @param clientId - The client ID registered with the provider.
-  @param clientSecret - The registered client secret, or empty for a public client.
-  @param scopes - Space-separated permissions to request.
-  @param port - The port registered for the local OAuth callback.
-  @param extraAuthParams - Space-separated key=value pairs, such as "access_type=offline prompt=consent".
-
 Register the callback `http://127.0.0.1:8914/oauth/callback` with your
   provider, adjusting the port if needed. The user grants consent in a
   browser. Authorize again if credentials expire without a refresh token.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| authUrl | `string` |  |
-| tokenUrl | `string` |  |
-| clientId | `string` |  |
-| clientSecret | `string` |  |
-| scopes | `string` |  |
-| port | `number` | 8914 |
-| extraAuthParams | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | Start with an ASCII letter or digit and use only letters, digits, dots, hyphens, or underscores. |
+| authUrl | `string` |  | The provider authorization endpoint, using HTTPS except on localhost. |
+| tokenUrl | `string` |  | The provider token endpoint, using HTTPS except on localhost. |
+| clientId | `string` |  | The client ID registered with the provider. |
+| clientSecret | `string` |  | The registered client secret, or empty for a public client. |
+| scopes | `string` |  | Space-separated permissions to request. |
+| port | `number` | 8914 | The port registered for the local OAuth callback. |
+| extraAuthParams | `string` | "" | Space-separated key=value pairs, such as "access_type=offline prompt=consent". |
 
 **Returns:** `Result`
 
@@ -144,16 +135,14 @@ getAccessToken(name: string): Result
 
 Get an access token for an authorized provider, refreshing it when needed.
 
-  @param name - The provider identifier used during authorization.
-
 Returns a failure when tokens are missing, refresh fails, or an expired
   token has no refresh token. In those cases, authorize the provider again.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The provider identifier used during authorization. |
 
 **Returns:** `Result`
 
@@ -171,13 +160,11 @@ isAuthorized(name: string): boolean
 
 Check whether OAuth tokens are stored for a provider, without verifying their validity.
 
-  @param name - The provider identifier used during authorization.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The provider identifier used during authorization. |
 
 **Returns:** `boolean`
 
@@ -193,16 +180,14 @@ revokeAuth(name: string): Result
 
 Delete the locally stored OAuth tokens for a provider.
 
-  @param name - The provider identifier used during authorization.
-
 This removes local credentials. It does not call the provider to revoke
   the tokens remotely. Authorize again before using the provider locally.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The provider identifier used during authorization. |
 
 **Returns:** `Result`
 

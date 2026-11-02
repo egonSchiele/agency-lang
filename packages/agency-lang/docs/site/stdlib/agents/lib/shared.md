@@ -23,7 +23,14 @@ export type ReasoningEffort = "low" | "medium" | "high"
 
 ### AGENT_SPILL_OVER
 
+Tool-result length threshold used by agents that offer saved-output readers.
+A longer result is saved in the run and replaced with a preview and a name
+for reading it back. A lower `maxToolResultChars` also triggers saving.
+
 ```ts
+/** Tool-result length threshold used by agents that offer saved-output readers.
+A longer result is saved in the run and replaced with a preview and a name
+for reading it back. A lower `maxToolResultChars` also triggers saving. */
 export static const AGENT_SPILL_OVER = 100000
 ```
 
@@ -89,27 +96,19 @@ llmOptions(
 
 Build LLM options for an agent call, using the ambient model unless overridden.
 
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the override, ignored when model is empty.
-  @param hostedTools - Provider-hosted tool identifiers to enable.
-  @param reasoningEffort - Requested reasoning level, or null to leave it unset.
-  @param validationRetries - Retries after structured-output validation fails, or zero to leave the option unset.
-  @param maxToolCallRounds - Maximum tool rounds, or zero for the configured default.
-  @param spillToolResultsOver - Save results above this threshold, requiring `readSpill` in tools, or zero to leave spilling unset.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| model | `string` |  |
-| provider | `string` |  |
-| tools | `any[]` | [] |
-| hostedTools | `string[]` | [] |
-| reasoningEffort | `ReasoningEffort \| null` | null |
-| thinking | `boolean` | false |
-| validationRetries | `number` | 0 |
-| maxToolCallRounds | `number` | 0 |
-| spillToolResultsOver | `number` | 0 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| model | `string` |  | Model override, or "" for the ambient model. |
+| provider | `string` |  | Provider for the override, ignored when model is empty. |
+| tools | `any[]` | [] |  |
+| hostedTools | `string[]` | [] | Provider-hosted tool identifiers to enable. |
+| reasoningEffort | `ReasoningEffort \| null` | null | Requested reasoning level, or null to leave it unset. |
+| thinking | `boolean` | false |  |
+| validationRetries | `number` | 0 | Retries after structured-output validation fails, or zero to leave the option unset. |
+| maxToolCallRounds | `number` | 0 | Maximum tool rounds, or zero for the configured default. |
+| spillToolResultsOver | `number` | 0 | Save results above this threshold, requiring `readSpill` in tools, or zero to leave spilling unset. |
 
 **Returns:** `any`
 

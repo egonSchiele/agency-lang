@@ -56,27 +56,18 @@ expertAgent(
 Consult a domain expert: identify the task's technical domain and return
   the rules and acceptance checklist a solver needs to get it right.
 
-  @param task - The task to advise on
-  @param context - Extra material, or ""
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Session name to share a thread across calls, or "" for isolated
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| task | `string` |  |
-| context | `string` | "" |
-| maxCost | `number` | $10.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| task | `string` |  | The task to advise on |
+| context | `string` | "" | Extra material, or "" |
+| maxCost | `number` | $10.00 | Cost budget in USD. |
+| maxTime | `number` | 10m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Session name to share a thread across calls, or "" for isolated |
+| extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
 
 **Returns:** `Result<ExpertGuidance>`
 

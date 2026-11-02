@@ -97,14 +97,12 @@ wikidataSearch(
 
 Find Wikidata entities by name and return their QIDs.
 
-  @param name - A person, organization, place, or topic to look up.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| limit | `number` | 5 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | A person, organization, place, or topic to look up. |
+| limit | `number` | 5 |  |
 
 **Returns:** `Result<Entity[]>`
 
@@ -125,13 +123,11 @@ wikidataEntity(
 Read a Wikidata entity's English profile and property claims. Entity-valued
   claims are QIDs; resolve them with another lookup to get their names.
 
-  @param qid - A Wikidata entity ID such as "Q42", obtained from search or another claim.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| qid | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| qid | `string` |  | A Wikidata entity ID such as "Q42", obtained from search or another claim. |
 
 **Returns:** `Result<EntityDetail>`
 
@@ -152,8 +148,6 @@ wikidataQuery(
 Run a SPARQL SELECT query against the Wikidata knowledge graph. The
   prefixes wd:, wdt:, and rdfs: and SERVICE wikibase:label are available.
 
-  @param sparql - A complete SPARQL SELECT query.
-
 Use SELECT queries to retrieve rows. Each row maps a selected variable
   name to its string value. Ask for labels when you need names for QIDs:
 
@@ -166,9 +160,9 @@ Use SELECT queries to retrieve rows. Each row maps a selected variable
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| sparql | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| sparql | `string` |  | A complete SPARQL SELECT query. |
 
 **Returns:** `Result<Record<string, string>[]>`
 

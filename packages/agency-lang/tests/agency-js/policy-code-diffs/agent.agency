@@ -1,14 +1,14 @@
 import { cliPolicyHandler, setPolicy, Policy, ScopedRuleFields } from "std::policy"
 
-// The two effects that carry source code show it as a diff printed above
-// the approval prompt, not as source inside the prompt's own body, where
-// the footer would cut it off after a few lines. The diff prints whether
+// File contents and code diffs print above the approval prompt, whose
+// body would cut them off after a few lines. The preview prints whether
 // a rule decided the interrupt or the user was asked, so an auto-approved
 // change is still visible.
 
 const FIELDS: ScopedRuleFields = {}
 const POLICY = {}
 const APPROVE_REVIEW: Policy = { "std::toolbox::review": [{ action: "approve" }] }
+const APPROVE_WRITES: Policy = { "std::write": [{ action: "approve" }] }
 
 node main(args: { policyFile: string }): string {
   // Long enough that the prompt's table must wrap it to fit.
@@ -17,6 +17,22 @@ node main(args: { policyFile: string }): string {
   setPolicy(args.policyFile, POLICY)
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
+    interrupt std::write("write this file?", {
+      dir: "/work",
+      filename: "write.js\u001b[2J\u202e",
+      mode: "overwrite",
+      content: "function writePreview() {\n  const first = 1;\n  const second = 2;\n  const third = 3;\n  const fourth = 4;\n  const fifth = 5;\n  const total = first + second + third + fourth + fifth;\n  return \"write-preview-tail\" + total;\n}\u001b[2J\u202e"
+    })
+    interrupt std::write("create an empty file?", {
+      dir: "/work", filename: "empty.js", mode: "create-only", content: ""
+    })
+    // AST and formatter writes carry no content in their interrupt.
+    interrupt std::write("write an AST?", {
+      dir: "/work", filename: "metadata.agency", overwrite: true
+    })
+    interrupt std::write("write custom content?", {
+      dir: "/work", filename: "custom.txt", content: { value: "structured-write-content" }
+    })
     interrupt std::edit("apply this edit?", {
       dir: longDir,
       filename: "greet.agency",
@@ -75,6 +91,20 @@ node autoApproved(args: { policyFile: string }): string {
       blocking: [],
       unresolved: [],
       resumed: false
+    })
+  } with (data) {
+    return handler(data)
+  }
+  return "completed"
+}
+
+node autoApprovedWrite(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, APPROVE_WRITES)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::write("append to this file?", {
+      dir: "/work", filename: "append.js", mode: "append",
+      content: "console.log(\"auto-write-preview\");"
     })
   } with (data) {
     return handler(data)

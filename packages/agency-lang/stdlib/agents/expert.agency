@@ -9,8 +9,12 @@ import { systemMessage, threadIsNew } from "std::thread"
 /** @module
 @summary Get domain rules and acceptance criteria before solving a task.
 
-`expertAgent` returns `ExpertGuidance` for a solver or verifier to use.
-`guidanceOrEmpty` lets a caller continue if the consultation fails.
+Call `expertAgent` before solving a task in an unfamiliar domain. A model
+often fails such a task because it does not know a convention of the
+domain, such as the rules of a file format. `expertAgent` returns those
+rules and an acceptance checklist as `ExpertGuidance`, for a solver or
+verifier to use. `guidanceOrEmpty` lets a caller continue if the
+consultation fails.
 For Agency-language guidance, use `agencyExpertAgent`.
 
 ```ts

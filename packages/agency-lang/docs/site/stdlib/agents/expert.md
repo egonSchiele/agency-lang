@@ -5,8 +5,12 @@ description: "Get domain rules and acceptance criteria before solving a task."
 
 # expert
 
-`expertAgent` returns `ExpertGuidance` for a solver or verifier to use.
-`guidanceOrEmpty` lets a caller continue if the consultation fails.
+Call `expertAgent` before solving a task in an unfamiliar domain. A model
+often fails such a task because it does not know a convention of the
+domain, such as the rules of a file format. `expertAgent` returns those
+rules and an acceptance checklist as `ExpertGuidance`, for a solver or
+verifier to use. `guidanceOrEmpty` lets a caller continue if the
+consultation fails.
 For Agency-language guidance, use `agencyExpertAgent`.
 
 ```ts
@@ -31,7 +35,7 @@ Return the expert agent's web lookup and saved-output tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L33))
 
 ### expertAgent
 
@@ -78,4 +82,4 @@ Consult a domain expert: identify the task's technical domain and return
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L77))

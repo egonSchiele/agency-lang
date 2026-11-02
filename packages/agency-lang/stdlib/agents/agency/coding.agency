@@ -386,7 +386,8 @@ def generateLoop(
   }
   const opening = "${deliverable}\n<task>\n${withContext(task: task, context: context)}\n</task>"
   return revise(maxAttempts: maxAttempts, check: critiqueOf) as critique {
-    // Keep this branch explicit; see tests/agency/agents/blockProbe.agency.
+    // if/else, not a ternary: a ternary inside a block evaluates to null.
+    // See tests/agency/agents/blockProbe.agency.
     let prompt = critique
     if (critique == "") {
       prompt = opening

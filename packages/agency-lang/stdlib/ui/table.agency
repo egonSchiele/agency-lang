@@ -40,6 +40,8 @@ import { LayoutNode, Width, Alignment, BorderStyle } from "std::ui/layout"
 */
 export type Cell = string | LayoutNode
 
+// The parser does not accept `Cell[][]` when `Cell` is a union, so the row
+// type gets its own alias.
 /** One row of cells in a table's body or footer. */
 export type CellRow = Cell[]
 

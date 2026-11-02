@@ -62,7 +62,7 @@ One row of cells in a table's body or footer.
 export type CellRow = Cell[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L46))
 
 ### ColumnSpec
 
@@ -104,7 +104,7 @@ export type ColumnSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L63))
 
 ### TableBuilder
 
@@ -139,7 +139,7 @@ export type TableBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L81))
 
 ## Functions
 
@@ -217,4 +217,4 @@ Use the array arguments for existing data, or a trailing block to build
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L139))

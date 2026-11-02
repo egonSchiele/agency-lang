@@ -25,6 +25,15 @@ import {
 /** @module
 @summary Check, run, and save workflows described as JSON steps.
 
+Use a workflow when an agent should do the same task the same way every
+time. A skill is a set of instructions that the agent reads and then decides
+how to follow. A workflow is a fixed list of steps, so it runs the same way
+on every call, and a person can still read it as easily as a skill.
+
+A workflow has tool steps, LLM steps, and references from one step to an
+earlier step's result. Anything else belongs in an Agency function that a
+tool step calls.
+
 ```ts
 import { add } from "std::math"
 import { runWorkflow, Workflow } from "std::workflow"

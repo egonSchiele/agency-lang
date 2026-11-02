@@ -36,8 +36,7 @@ describe("firstSentence", () => {
   });
 
   it("renders the real Calendar doc whole", () => {
-    // The doc that motivated the boundary rule: "incl." must not truncate.
-    expect(firstSentence(sets["Calendar"].doc)).toContain("authorization)");
+    expect(firstSentence(sets["Calendar"].doc)).toBe(sets["Calendar"].doc);
   });
 });
 

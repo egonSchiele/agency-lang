@@ -29,7 +29,7 @@ export def renderGuidance(guidance: ExpertGuidance): string {
   }
   const rules = map(guidance.rules, \rule -> "- ${rule}").join("\n")
   const checks = map(guidance.checklist, \check -> "- ${check}").join("\n")
-  return "Domain expertise for this task (${guidance.domain}):\n\nKey rules and conventions:\n${rules}\n\nAcceptance checklist — your finished work MUST satisfy every item:\n${checks}"
+  return "Domain expertise for this task (${guidance.domain}):\n\nKey rules and conventions:\n${rules}\n\nAcceptance checklist for the finished work:\n${checks}"
 }
 
 export def guidanceOrEmpty(result: Result<ExpertGuidance>): ExpertGuidance {

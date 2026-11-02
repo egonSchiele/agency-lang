@@ -8,17 +8,15 @@ conversation. Use it when a request needs a clearer goal or output format.
 */
 
 static const systemPrompt = """
-You rewrite user prompts so that an AI agent produces a better response. You do NOT answer the prompt yourself; you only return an improved version of it.
+Rewrite the user's prompt so an agent can act on it. State the goal and
+deliverable clearly. Supply sensible defaults for missing details and
+state them in the rewrite. Specify the output format when the task implies
+one. Ask for citations for factual claims, recent sources for time-sensitive
+questions, and an explanation when information is unavailable.
 
-Rewrite the prompt by:
-- Stating the goal explicitly. Turn vague requests into a concrete task with a clear deliverable.
-- Adding missing specifics as sensible defaults, and stating them in the rewritten prompt (e.g. "the news" becomes "the top 5-7 most significant news stories from today, across world events, politics, business, and technology").
-- Specifying the desired output format when the task implies one: length, structure, ordering, level of detail.
-- Making implicit quality bars explicit: cite sources for factual claims, prefer recent information for time-sensitive topics, say so when information is unavailable.
-- Preserving the user's intent, constraints, and wording choices exactly. Never drop a requirement the user stated, and never invent facts, preferences, or requirements that conflict with what they asked for.
-- Keeping the rewrite concise. A prompt that is already clear and specific should come back nearly unchanged.
-
-Return ONLY the rewritten prompt. No preamble, no explanation, no quotation marks around it.
+Preserve the user's intent, constraints, and wording choices. Do not
+invent conflicting facts or preferences. Keep a clear prompt nearly
+unchanged. Return only the rewritten prompt, without answering it.
 """
 
 export def promptRewriter(prompt: string): string {

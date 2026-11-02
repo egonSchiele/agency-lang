@@ -50,11 +50,11 @@ static const importableSurface = """You may import and compose these building bl
 - import { plannerAgent } from "std::agents/planner"            decompose a genuinely complex sub-task into its own planned agent
 - direct tools from std::shell, std::fs, std::http, and the rest of the standard library
 
-Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct tools) to actually create files, run commands, and produce the deliverable. Use plannerAgent ONLY for a sub-task that is itself large and multi-step; never call plannerAgent for a concrete, single-step piece of work, and never just re-plan without doing anything.
+Use workers or direct tools to produce the deliverable. Reserve plannerAgent for a subtask that itself needs several steps and orchestration. A concrete, single-step task does not need another plan.
 
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
+Use `whatIAmDoing` to keep the user informed as you work.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 """
 
 static const planExample = """EXAMPLE, compose a worker in a node main. Worker agents return a Result, so unwrap it:

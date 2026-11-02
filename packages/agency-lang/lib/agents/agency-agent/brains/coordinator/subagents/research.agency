@@ -22,11 +22,7 @@ import { timeBudget } from "../lib/budgets.agency"
 
 export static const researchTools: any[] = [...memoryTools(), ...planningTools()]
 
-static const replStyle = """Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest.
-
-For a question spanning more than two sources, call `todoWrite` first and tick each item off as you finish that source.
-
-Keep replies brief. Cite sources. Show, do not lecture."""
+static const replStyle = """Reply in concise Markdown with source citations. Put a blank line after each heading so the terminal renderer displays the following content. Use `todoWrite` to track substantial research when it helps keep the requested coverage complete."""
 
 export handoff def researchAgent(
   userMsg: string,

@@ -110,11 +110,9 @@ export static const codeTools: any[] = [
 
 // Appended to the system prompt only when a web-search backend is active
 static const WEB_SEARCH_NOTE = """
-You have **web search**. Use it directly whenever a task needs current or
-external information — a fact to verify, a library or API to check, a
-dataset or leaderboard to consult. Do NOT ask the user to look things up,
-and do NOT decline a task as "needs research / out of scope": search for
-what you need and keep going."""
+Web search is available. Use it to check current facts and external API or
+library documentation when the task needs them. Gather that information
+yourself and continue the task."""
 
 // Appended in one-shot / autonomous mode (`agency agent -p`)
 static const ONE_SHOT_NOTE = promptFile("oneShot.md")

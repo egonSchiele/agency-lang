@@ -64,25 +64,22 @@ static const systemPrompt = """You write code in the Agency language.
 ${tutorialText}
 </agency_tutorial>
 
-Agency syntax rules you MUST follow:
+Agency syntax:
 - Functions: def name(param: Type): ReturnType { ... }
-- Nodes: node name() { ... } — export the entry node.
-- if / while / for require parentheses AND curly braces: if (x > 5) { ... }
-- The ONLY for loop is for-in: for (item in items) { ... }
-  There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
-  while loop:
+- Nodes: node name() { ... }. Export the entry node.
+- if / while / for require parentheses and braces: if (x > 5) { ... }
+- Use for-in: for (item in items) { ... }. Use while to count:
     let i = 1
     while (i <= 3) {
       print(i)
       i = i + 1
     }
 - Declare variables with let or const before use.
-- No Python-style colon blocks. Always { ... }.
 
 Modules:
 - Any function another file will call must be exported: export def name(...).
 - A local import names the .agency file: import { greet } from "./greeting.agency".
-  We always reject a bare path without the extension.
+  Include the extension.
 
 Going over a list, in order of preference:
 1. A list comprehension when each item becomes one expression:
@@ -107,10 +104,9 @@ Globals:
 
 Functions given to an LLM as tools:
 - The docstring is the triple-quoted string that opens the function body.
-  Agency sends it to the LLM as the tool description, so write it for the
-  LLM: one or two short sentences saying when to call the tool and what to
-  pass, then an @param line per parameter. A comment above the def is not
-  a docstring.
+  Agency sends it as the tool description. Say when to call the tool and
+  what to pass in one or two sentences, then add @param lines. Comments
+  above the def do not become tool descriptions.
 - Settings are named parameters with defaults, not an options object, so a
   caller can pass one by name and can lock it with partial application:
     const preview = deleteFiles.partial(dryRun: true)
@@ -172,7 +168,7 @@ Concurrency:
 - guard(time: 500ms) { ... } or guard(cost: $1.00) { ... } caps one piece of
   work and returns a Result; a per-call guard lets one slow item fail alone.
 
-Here are complete, correct Agency programs. Copy their structure: the imports, the `node main`, and the explicit `return` at the end.
+Program examples with imports, `node main`, and explicit returns:
 
 EXAMPLE 1, compute and return a value:
 node main(): number {
@@ -205,11 +201,9 @@ relevant page with the docs tool before writing code. When a diagnostic code
 (AG####) comes back, look it up in the diagnostics reference rather than
 guessing at the fix.
 
-Typecheck your draft before returning it, and fix what it reports. An
-attempt you already know does not typecheck wastes a whole round.
-You cannot save files or run tests from here: the caller saves the code
-you return and runs any tests after that. Do not look for the file or try
-to run its tests; when the draft typechecks, return it.
+Typecheck the draft and fix reported problems before returning it.
+The caller saves your returned source and runs its tests. You cannot save
+files or run tests here. Return the source once it typechecks.
 Return only the complete program in the code field."""
 
 // No hosted web search here, unlike codingAgent. This agent writes one
@@ -322,7 +316,7 @@ def checkSource(source: string, requireMain: boolean, dir: string, strict: boole
   if (requireMain && !hasMainNode(source)) {
     return {
       accepted: false,
-      feedback: "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program."
+      feedback: "The program compiles but has no `node main`. Add it as the entry point and return the complete program."
     }
   }
   return {

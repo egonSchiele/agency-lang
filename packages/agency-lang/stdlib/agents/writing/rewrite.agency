@@ -27,12 +27,13 @@ node main() {
 ```
 */
 
-static const rewritePrompt = """You rewrite prose to apply a reviewer's findings. You get the text, the task it was written for, and the findings. Return the rewritten text and nothing else: no preamble, no notes, no list of what you changed.
+static const rewritePrompt = """Apply the reviewer's findings to the supplied prose. Use a suggested
+rewrite unless it conflicts with another finding. Delete passages marked
+for removal. When a finding gives no rewrite, fix it in plain language.
 
-Apply every finding. When a finding says a passage should be cut, cut it. When a finding gives a rewrite, use that rewrite unless it conflicts with another finding. When a finding names a problem without a rewrite, fix the problem in the plainest way.
-
-Keep every fact, number, and identifier (names of files, functions, flags, and symbols) exactly as the text has them. Add nothing the text and the task do not say. Keep the text's format: a Markdown document stays Markdown, a code comment stays a comment, a reply stays a reply.
-"""
+Preserve facts, numbers, and identifiers exactly. Add nothing beyond the
+text and task. Keep the format: Markdown, code comment, or reply.
+Return only the rewritten text."""
 
 def applyFindings(
   text: string,

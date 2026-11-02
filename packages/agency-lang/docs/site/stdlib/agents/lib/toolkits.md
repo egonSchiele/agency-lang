@@ -25,7 +25,7 @@ node main() {
 ### ASK_USER_HINT
 
 ```ts
-export static const ASK_USER_HINT = "\n\nWhen the work turns on something only the user can tell you — which account they mean, which of two readings of the request, a value you cannot look up — ask with the `question` tool, and ask before you build on the guess rather than after. Do not ask for anything you could find yourself, and do not ask the user to narrow a scope they left broad on purpose. When nobody can answer, your question comes back rejected; when that happens, pick the most reasonable reading, say which one you picked, and carry on."
+export static const ASK_USER_HINT = "\n\nAsk with `question` before relying on a fact only the user can provide. Look up what you can yourself, and honor deliberately broad requests. If the question is rejected because nobody can answer, state a reasonable assumption and continue."
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L321))
@@ -33,7 +33,7 @@ export static const ASK_USER_HINT = "\n\nWhen the work turns on something only t
 ### SAVE_DRAFT_HINT
 
 ```ts
-export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."
+export static const SAVE_DRAFT_HINT = "\n\nSave your best answer so far with `saveDraft` and update it as you work. A budget stop returns the latest saved draft. Without a draft, there is no partial answer."
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L326))

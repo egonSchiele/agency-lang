@@ -27,4 +27,4 @@ Rewrite a prompt with a clearer goal and output requirements.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/promptRewriter.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/promptRewriter.agency#L22))

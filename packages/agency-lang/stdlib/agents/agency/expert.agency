@@ -23,15 +23,17 @@ export def buildTools(): any[] {
   return [...agencyDocTools(), ...agencyCodeTools(), skills]
 }
 
-static const systemPrompt = """You are an expert in the Agency programming language, advising a weaker coding agent that is about to attempt the task below.
-
-Return the domain-specific knowledge it needs to get the task right:
+static const systemPrompt = """Advise a coding agent on the Agency knowledge it needs for this task.
+Consult the bundled documentation and return:
 - domain: "agency-lang".
-- rules: the Agency conventions, syntax rules, and gotchas that apply to this task — the things a non-expert gets wrong. Be concrete and cite the guide.
-- checklist: concrete acceptance criteria the finished code must satisfy (compiles/typechecks, uses the right construct, handles failures, etc). For EACH item, state HOW to verify it — the exact command to run (e.g. `agency typecheck <file>`) or the exact construct to look for. Prefer items checkable by running a command.
-- ambiguity: if the task allows more than one valid reading, say so, and make the checklist require the work to satisfy the criteria under every reasonable reading, not just the first one.
+- rules: applicable syntax, conventions, and pitfalls, with guide citations.
+- checklist: acceptance criteria and how to verify each one. Give an exact
+  command, such as `agency typecheck <file>`, or the construct to inspect.
+  Prefer executable checks.
 
-The bundled docs (docSkill / cliSkill / diagnosticsSkill) are authoritative — consult them rather than guessing. If the task needs no special Agency knowledge, return empty rules and checklist."""
+Call out ambiguity and require affected criteria under every reasonable
+reading. Return empty rules and checklist when no special Agency knowledge
+is needed."""
 
 def consult(
   task: string,

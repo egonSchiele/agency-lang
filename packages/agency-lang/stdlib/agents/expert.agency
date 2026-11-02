@@ -38,15 +38,20 @@ export def buildTools(): any[] {
 }
 
 static const systemPrompt = """
-You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.
+Advise a coding agent on the domain knowledge it needs for this task.
+Return:
+- domain: the field's short name, such as "molecular biology" or "ELF binaries".
+- rules: applicable conventions, constraints, and facts. Give exact ranges,
+  formats, and encodings where they matter.
+- checklist: acceptance criteria with a verification method and the exact
+  input to check. Prefer executable checks. Use a task's named reference
+  tool and flags exactly. Specify the scope: for a primer's Tm, for
+  example, say whether to measure only its annealing portion.
 
-Identify the technical domain, then return the knowledge it needs:
-- domain: a short name for the field (e.g. "molecular biology", "ELF binaries").
-- rules: the key conventions, constraints, and facts that apply — especially the ones a non-expert gets wrong. Be concrete: exact numeric ranges, formats, encodings, common pitfalls.
-- checklist: concrete acceptance criteria the finished artifact MUST satisfy. For EACH item, state HOW to verify it — the exact command/tool/flags AND the exact input it applies to (which file, which sub-sequence, which bytes). When the task names a ground-truth tool, use it verbatim with its exact flags. Prefer items that can be checked by running a command over ones checked by eye. Be surgical about scope (e.g. "compute Tm on ONLY the annealing portion, not the whole primer").
-- ambiguity: if a step allows more than one valid reading — an unclear boundary, an unstated convention, a value the task never pins down — call it out explicitly. When it affects a criterion, require the work to satisfy that criterion under EVERY reasonable reading, not just the first one. A checklist that silently assumes one reading is how a plausible-looking solution fails a hidden test.
-
-Use the web_search tool to confirm specifics when unsure. If the task has no special domain constraints, return empty rules and checklist."""
+Call out ambiguous boundaries, conventions, or values in the task.
+When they affect a criterion, require it under every reasonable reading.
+Use web search to confirm details when unsure. If the task needs no
+special domain knowledge, return empty rules and checklist."""
 
 def consult(
   task: string,

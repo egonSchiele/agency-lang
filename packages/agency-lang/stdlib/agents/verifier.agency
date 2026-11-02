@@ -44,17 +44,23 @@ export def buildTools(): any[] {
   ]
 }
 
-static const systemPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
+static const systemPrompt = """Verify completed work by running checks. Do not fix it.
 
-The grading tests are hidden and NOT in this environment, so you must reconstruct and ACTUALLY RUN every check the task states — never eyeball the artifact.
+1. Derive every explicit success criterion from the task, including the
+   exact output contract and quantitative limits. Check paths, formats,
+   fields, types, units, and any stated whitespace or newline requirements.
+2. Compute actual values with `exec` and compare them to the requirements.
+   If the task names a reference tool or command, install it if needed and
+   use its exact flags and inputs. Do not substitute an estimate.
+   For Agency source, use `typecheck` and run `.test.json` harnesses with
+   `testFile`. The Agency CLI is unavailable here.
+3. Report pass or fail per criterion with the measured values. Treat an
+   unverified criterion as a gap and a value outside a numeric limit as
+   an error, even when it is close.
 
-Method:
-1. Enumerate EVERY explicit success criterion in the task. Two kinds: the output contract (exact file path and name, format, JSON keys, field types, units, signed-vs-unsigned, the stated whitespace / trailing-newline requirement) AND every quantitative rule (lengths, ranges, counts, thresholds, temperatures, GC content, percentages, etc.).
-2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
-   For Agency code there is no `agency` command line here: run a `.test.json` harness with `testFile(dir, filename)` and check a source file with `typecheck`. Do not search for an `agency` executable.
-3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
-
-Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers.${ASK_USER_HINT}${SAVE_DRAFT_HINT}"""
+Hidden grading tests are unavailable. Reconstruct the checks from the
+task and run them. Claims that an artifact "appears" or "should" pass do
+not establish a result.${ASK_USER_HINT}${SAVE_DRAFT_HINT}"""
 
 // The judgment call, split out so its declared `Feedback[]` return type
 // flows into `llm` and a model saveDraft propagates as typed partial

@@ -18,17 +18,6 @@ Highlight code and compare versions of text. Use `diff` for terminal
 
 ## Types
 
-### HighlightMode
-
-Accepted values for the currently unused `highlight` mode parameter.
-
-```ts
-/** Accepted values for the currently unused `highlight` mode parameter. */
-export type HighlightMode = "shell" | "web"
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L24))
-
 ### Style
 
 A text style modifier applied to a token's color.
@@ -38,7 +27,7 @@ A text style modifier applied to a token's color.
 export type Style = "bold" | "italic" | "underline" | "dim"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L32))
 
 ### TokenStyle
 
@@ -58,7 +47,7 @@ export type TokenStyle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L39))
 
 ### ColorScheme
 
@@ -120,7 +109,7 @@ export type ColorScheme = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L50))
 
 ### ThemeName
 
@@ -141,7 +130,7 @@ export type ThemeName =
   | "a11y-light"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L103))
 
 ## Constants
 
@@ -153,7 +142,7 @@ export static const colorSchemes: string[] = _builtinThemeNames
 
 **Type:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L96))
 
 ## Functions
 
@@ -174,7 +163,7 @@ Guess a code snippet's language, or return "plaintext" when unknown.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L23))
 
 ### highlight
 
@@ -182,7 +171,6 @@ Guess a code snippet's language, or return "plaintext" when unknown.
 highlight(
   code: string,
   language: string = "plaintext",
-  mode: HighlightMode = "shell",
   theme: ThemeName = "vscode-dark",
 ): string
 ```
@@ -190,9 +178,8 @@ highlight(
 Add ANSI syntax highlighting to code for terminal display.
 
   @param language - A highlight.js language name, or "auto" to guess.
-  @param mode - Currently ignored; output uses terminal styling.
 
-Returns ANSI terminal styling. The `mode` parameter currently has no effect.
+Returns ANSI terminal styling.
   When `language` is "markdown", fenced code blocks use the default palette
   regardless of `theme`.
 
@@ -202,12 +189,11 @@ Returns ANSI terminal styling. The `mode` parameter currently has no effect.
 |---|---|---|
 | code | `string` |  |
 | language | `string` | "plaintext" |
-| mode | [HighlightMode](#highlightmode) | "shell" |
 | theme | [ThemeName](#themename) | "vscode-dark" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L118))
 
 ### diff
 
@@ -265,7 +251,7 @@ padding is limited to the terminal width. Use `patch` for output to apply with G
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L137))
 
 ### patch
 
@@ -303,4 +289,4 @@ a deletion patch. This function returns patch text without changing files.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L184))

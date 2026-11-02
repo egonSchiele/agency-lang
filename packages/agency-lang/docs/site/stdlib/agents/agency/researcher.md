@@ -43,7 +43,6 @@ agencyResearcherAgent(
   maxTime: number = 10m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
   keepDraft: boolean = true,
 ): Result<string>
@@ -58,7 +57,6 @@ Answer a question about the Agency language from the bundled documentation,
   @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Reserved and currently unused, since this agent uses the active thread.
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param keepDraft - False returns a budget failure even when a draft was saved.
 
@@ -72,7 +70,6 @@ Answer a question about the Agency language from the bundled documentation,
 | maxTime | `number` | 10m |
 | model | `string` | "" |
 | provider | `string` | "" |
-| session | `string` | "" |
 | extraTools | `any[]` | [] |
 | keepDraft | `boolean` | true |
 

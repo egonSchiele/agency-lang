@@ -33,7 +33,6 @@ Return the verifier's file inspection, command execution, and Agency check tools
 verifierAgent(
   task: string,
   criteria: string[] = [],
-  context: string = "",
   maxCost: number = $20.00,
   maxTime: number = 15m,
   model: string = "",
@@ -47,7 +46,6 @@ Check work on disk against task criteria with tools and return findings.
   A failed verification returns no findings.
 
   @param criteria - Known criteria to check alongside those derived from the task.
-  @param context - Reserved and currently unused.
   @param maxCost - Cost budget in USD.
   @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model.
@@ -61,7 +59,6 @@ Check work on disk against task criteria with tools and return findings.
 |---|---|---|
 | task | `string` |  |
 | criteria | `string[]` | [] |
-| context | `string` | "" |
 | maxCost | `number` | $20.00 |
 | maxTime | `number` | 15m |
 | model | `string` | "" |

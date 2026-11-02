@@ -32,7 +32,6 @@ Return the Agency verifier's file inspection and command execution tools.
 agencyVerifierAgent(
   source: string,
   task: string,
-  context: string = "",
   maxCost: number = $20.00,
   maxTime: number = 15m,
   model: string = "",
@@ -45,7 +44,6 @@ agencyVerifierAgent(
 Run an Agency program and judge its result against a task.
   Run failures become error findings, and a failed judgment returns no findings.
 
-  @param context - Reserved and currently unused.
   @param maxCost - Cost budget in USD.
   @param maxTime - Time budget in milliseconds.
   @param model - Model override for the judgment, or "" for the ambient model.
@@ -59,7 +57,6 @@ Run an Agency program and judge its result against a task.
 |---|---|---|
 | source | `string` |  |
 | task | `string` |  |
-| context | `string` | "" |
 | maxCost | `number` | $20.00 |
 | maxTime | `number` | 15m |
 | model | `string` | "" |

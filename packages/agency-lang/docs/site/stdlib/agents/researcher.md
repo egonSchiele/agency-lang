@@ -32,7 +32,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L185))
 
 ## Functions
 
@@ -59,7 +59,6 @@ researcherAgent(
   maxTime: number = 30m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
   history: ThreadMessage[] = [],
   keepDraft: boolean = true,
@@ -76,7 +75,6 @@ Answer a research question from web and Wikipedia sources and return a
   @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Reserved and currently unused, since this agent uses the active thread.
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param keepDraft - False returns a budget failure even when a draft was saved.
 
@@ -90,7 +88,6 @@ Answer a research question from web and Wikipedia sources and return a
 | maxTime | `number` | 30m |
 | model | `string` | "" |
 | provider | `string` | "" |
-| session | `string` | "" |
 | extraTools | `any[]` | [] |
 | history | `ThreadMessage[]` | [] |
 | keepDraft | `boolean` | true |

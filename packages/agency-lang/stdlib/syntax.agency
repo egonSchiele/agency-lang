@@ -20,9 +20,6 @@ import {
   ```
 */
 
-/** Accepted values for the currently unused `highlight` mode parameter. */
-export type HighlightMode = "shell" | "web"
-
 export def detectLanguage(code: string): string {
   """
   Guess a code snippet's language, or return "plaintext" when unknown.
@@ -114,21 +111,19 @@ export type ThemeName =
   | "a11y-light"
 
 /**
-  Returns ANSI terminal styling. The `mode` parameter currently has no effect.
+  Returns ANSI terminal styling.
   When `language` is "markdown", fenced code blocks use the default palette
   regardless of `theme`.
 */
 export def highlight(
   code: string,
   language: string = "plaintext",
-  mode: HighlightMode = "shell",
   theme: ThemeName = "vscode-dark",
 ): string {
   """
   Add ANSI syntax highlighting to code for terminal display.
 
   @param language - A highlight.js language name, or "auto" to guess.
-  @param mode - Currently ignored; output uses terminal styling.
   """
   return _syntaxHighlight(code, language, theme)
 }

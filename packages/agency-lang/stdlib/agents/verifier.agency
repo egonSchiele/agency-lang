@@ -79,7 +79,6 @@ def judgeCriteria(
 export def verifierAgent(
   task: string,
   criteria: string[] = [],
-  context: string = "",
   maxCost: number = $20.00,
   maxTime: number = 15m,
   model: string = "",
@@ -92,7 +91,6 @@ export def verifierAgent(
   A failed verification returns no findings.
 
   @param criteria - Known criteria to check alongside those derived from the task.
-  @param context - Reserved and currently unused.
   @param maxCost - Cost budget in USD.
   @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model.

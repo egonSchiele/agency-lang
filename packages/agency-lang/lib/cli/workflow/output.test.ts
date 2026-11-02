@@ -107,8 +107,9 @@ describe("formatChecked", () => {
         "workflows/updateMealPlanFromNote.json: no problems",
         "",
         "Effects this workflow can raise:",
-        "  std::read          step text (readNote)",
-        "  test::lists::add   step add (addListItems)",
+        "  Effect             Step   Tool",
+        "  std::read          text   readNote",
+        "  test::lists::add   add    addListItems",
       ].join("\n"),
     );
   });
@@ -131,7 +132,9 @@ describe("formatChecked", () => {
         "  step a doesn't have a proper return type so cannot be statically verified.",
         "",
         "Effects this workflow can raise:",
-        "  std::read   step a (readNote), step b (readNote)",
+        "  Effect      Step   Tool",
+        "  std::read   a      readNote",
+        "  std::read   b      readNote",
       ].join("\n"),
     );
   });
@@ -149,7 +152,8 @@ describe("formatChecked", () => {
     expect(lines[0]).toBe(`w: ${color.green("no problems")}`);
     expect(lines[2]).toBe(color.yellow.bold("Warnings:"));
     expect(lines[5]).toBe(color.bold("Effects this workflow can raise:"));
-    expect(lines[6]).toBe(`  ${color.cyan("std::read")}   step a (readNote)`);
+    expect(lines[6]).toBe(color.dim("  Effect      Step   Tool"));
+    expect(lines[7]).toBe(`  ${color.cyan("std::read")}   a      readNote`);
   });
 });
 
@@ -181,14 +185,15 @@ describe("formatUncovered", () => {
   it("prints the spec's table", () => {
     expect(
       formatUncovered([
-        { effect: "test::lists::add", steps: ["add (addListItems)"] },
-        { effect: "std::read", steps: ["text (readNote)"] },
+        { effect: "test::lists::add", steps: [{ step: "add", tool: "addListItems" }] },
+        { effect: "std::read", steps: [{ step: "text", tool: "readNote" }] },
       ]),
     ).toBe(
       [
         "Your policy does not cover these interrupts:",
-        "  test::lists::add   step add (addListItems)",
-        "  std::read          step text (readNote)",
+        "  Effect             Step   Tool",
+        "  test::lists::add   add    addListItems",
+        "  std::read          text   readNote",
       ].join("\n"),
     );
   });

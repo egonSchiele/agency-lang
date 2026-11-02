@@ -71,8 +71,11 @@ export function formatProblems(
   ].join("\n");
 }
 
-/** One effect and the steps that raise it, written `<id> (<tool>)`. */
-export type EffectSteps = { effect: string; steps: string[] };
+/** One step that raises an effect: the step's id and the tool it calls. */
+export type RaisingStep = { step: string; tool: string };
+
+/** One effect and the steps that raise it. */
+export type EffectSteps = { effect: string; steps: RaisingStep[] };
 
 /** Each effect the steps raise, in the order it is first raised, with the
  *  steps that raise it. */
@@ -80,26 +83,43 @@ export function effectSteps(steps: StepEffects[]): EffectSteps[] {
   const byEffect: EffectSteps[] = [];
   for (const { step, tool, effects } of steps) {
     for (const effect of effects) {
-      const named = `${step} (${tool})`;
       const entry = byEffect.find((existing) => existing.effect === effect);
       if (entry === undefined) {
-        byEffect.push({ effect, steps: [named] });
-      } else if (!entry.steps.includes(named)) {
-        entry.steps.push(named);
+        byEffect.push({ effect, steps: [{ step, tool }] });
+      } else if (!entry.steps.some((raising) => raising.step === step)) {
+        entry.steps.push({ step, tool });
       }
     }
   }
   return byEffect;
 }
 
-/** Each effect, padded to one column, then its steps. The padding is
- *  worked out on the plain text, before the effect is colored. */
+const EFFECT_COLUMNS = ["Effect", "Step", "Tool"];
+
+/** A table with a heading row, then one row for each step that raises each
+ *  effect:
+ *
+ *    Effect         Step      Tool
+ *    std::weather   weather   weather
+ *
+ *  The widths are worked out on the plain text, before anything is colored. */
 export function effectTable(list: EffectSteps[], paint: ColorFunction = ttyColor): string[] {
-  const width = Math.max(...list.map((entry) => clean(entry.effect).length));
-  return list.map(
-    ({ effect, steps }) =>
-      `  ${paint.cyan(clean(effect).padEnd(width))}   ${steps.map((step) => `step ${clean(step)}`).join(", ")}`,
+  const rows = list.flatMap(({ effect, steps }) =>
+    steps.map(({ step, tool }) => [clean(effect), clean(step), clean(tool)]),
   );
+  const widths = EFFECT_COLUMNS.map((heading, column) =>
+    Math.max(heading.length, ...rows.map((row) => row[column].length)),
+  );
+  const last = EFFECT_COLUMNS.length - 1;
+  const padded = (cells: string[]) =>
+    cells.map((cell, column) => (column === last ? cell : cell.padEnd(widths[column])));
+  return [
+    paint.dim(`  ${padded(EFFECT_COLUMNS).join("   ")}`),
+    ...rows.map((row) => {
+      const [effect, ...rest] = padded(row);
+      return `  ${paint.cyan(effect)}   ${rest.join("   ")}`;
+    }),
+  ];
 }
 
 /** `<label>: no problems`, then the warnings and what the workflow can

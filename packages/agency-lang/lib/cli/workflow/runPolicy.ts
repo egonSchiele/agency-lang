@@ -28,7 +28,7 @@ export const CATCH_ALL_MESSAGE =
 export type Uncovered = EffectSteps;
 
 /** The effects in `steps` that `policy` has no rule for. With a "*" key,
- *  nothing is uncovered. Each step is written `<id> (<tool>)`. */
+ *  nothing is uncovered. */
 export function uncoveredEffects(steps: StepEffects[], policy: Policy): Uncovered[] {
   if (Object.hasOwn(policy, WILDCARD)) {
     return [];

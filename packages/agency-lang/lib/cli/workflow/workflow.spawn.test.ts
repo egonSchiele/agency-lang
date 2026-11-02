@@ -157,7 +157,7 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     expect(r.stderr).toBe("");
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("workflows/addOne.json: no problems");
-    expect(r.stdout).toMatch(/test::lists::add\s+step add \(addListItems\)/);
+    expect(r.stdout).toMatch(/test::lists::add\s+add\s+addListItems/);
     noDriverLeft();
   });
 
@@ -247,7 +247,7 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     it("runs nothing without a terminal when the policy does not cover an effect", async () => {
       const r = await runAddOne();
       expect(r.code).toBe(1);
-      expect(r.stderr).toMatch(/test::lists::add\s+step add \(addListItems\)/);
+      expect(r.stderr).toMatch(/test::lists::add\s+add\s+addListItems/);
       expect(r.stderr).toContain("Run this in a terminal to approve them");
       expect(r.stdout).toBe("");
       noDriverLeft();

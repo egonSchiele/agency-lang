@@ -42,15 +42,16 @@ $ agency workflow tools ./src/agent/lists.agency
 
 ## `check`
 
-Prints the workflow's problems, or its warnings and the effects it can raise:
+Prints the workflow's problems, or its warnings and the effects it can raise. The effects table has one row for each step that raises each effect: the effect, the step's id, and the tool the step calls.
 
 ```text
 $ agency workflow check updateMealPlanFromNote
 workflows/updateMealPlanFromNote.json: no problems
 
 Effects this workflow can raise:
-  std::read          step text (readNote)
-  test::lists::add   step add (addListItems)
+  Effect             Step   Tool
+  std::read          text   readNote
+  test::lists::add   add    addListItems
 ```
 
 A warning means part of the workflow can only be checked when it runs. Here, `weather` is declared to return a plain `Result`, so `check` cannot tell whether `steps.weather.temperature` exists:
@@ -63,7 +64,8 @@ Warnings:
   step weather doesn't have a proper return type so cannot be statically verified.
 
 Effects this workflow can raise:
-  std::weather   step weather (weather)
+  Effect         Step      Tool
+  std::weather   weather   weather
 ```
 
 The warning appears only when a later step or the `result` uses the step's value.
@@ -128,8 +130,9 @@ Before anything runs, the command works out which effects the workflow's steps c
 
 ```text
 Your policy does not cover these interrupts:
-  test::lists::add   step add (addListItems)
-  std::read          step text (readNote)
+  Effect             Step   Tool
+  test::lists::add   add    addListItems
+  std::read          text   readNote
 Approve these effects for the whole run? This is the same as --approve test::lists::add,std::read [y/N]
 ```
 

@@ -25,14 +25,17 @@ describe("uncoveredEffects", () => {
   it("leaves out an effect the policy has any rule for, even a rule with a match", () => {
     const policy: Policy = { "std::read": [{ match: { dir: "/elsewhere" }, action: "approve" }] };
     expect(uncoveredEffects(steps, policy)).toEqual([
-      { effect: "test::lists::add", steps: ["add (addListItems)"] },
+      { effect: "test::lists::add", steps: [{ step: "add", tool: "addListItems" }] },
     ]);
   });
 
   it("names every step that raises an effect", () => {
     expect(uncoveredEffects(steps, {})[0]).toEqual({
       effect: "std::read",
-      steps: ["text (readNote)", "again (readNote)"],
+      steps: [
+        { step: "text", tool: "readNote" },
+        { step: "again", tool: "readNote" },
+      ],
     });
   });
 

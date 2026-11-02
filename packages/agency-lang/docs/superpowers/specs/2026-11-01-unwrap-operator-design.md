@@ -121,6 +121,10 @@ parser consumes the whitespace after `foo()`, so `foo() ?` does parse as an
 unwrap and means the same as `foo()?`. The ternary refusal below covers
 both spellings.
 
+After `try`, the `?` applies to the try's Result: `try f()?` is `(try f())?`,
+with the `try` covering the chain up to the first `?`. The other reading,
+`try (f()?)`, puts the `?` in a refused position, so nothing is lost.
+
 ### What follows the `?`
 
 - `?` followed by `?` is still nullish coalescing: `a ?? b` is unchanged.

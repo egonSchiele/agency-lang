@@ -105,3 +105,48 @@ describe("parsing the ? operator", () => {
     expect(JSON.stringify(parsed)).toContain("Agency has no ternary");
   });
 });
+
+describe("? after a try operand applies to the try", () => {
+  it("try foo()? is an unwrap of the try expression", () => {
+    const parsed = parseValue("try foo()?") as any;
+    expect(parsed.value).toEqualWithoutLoc({
+      type: "valueAccess",
+      base: { type: "tryExpression", call: call("foo") },
+      chain: [unwrap],
+    });
+  });
+
+  it("try covers the chain up to the first ?, and the rest follows the unwrap", () => {
+    const parsed = parseValue("try a().b()?.name") as any;
+    expect(parsed.value.base.type).toBe("tryExpression");
+    expect(parsed.value.base.call).toEqualWithoutLoc({
+      type: "valueAccess",
+      base: call("a"),
+      chain: [methodCall("b")],
+    });
+    expect(parsed.value.chain).toEqualWithoutLoc([unwrap, property("name")]);
+  });
+
+  it("an await or async prefix stays on the try operand, never on the unwrap", () => {
+    const parsed = parseValue("try await foo()?") as any;
+    expect(parsed.value.async).toBeUndefined();
+    expect(parsed.value.base.type).toBe("tryExpression");
+    expect(parsed.value.base.call).toEqualWithoutLoc({ ...call("foo"), async: false });
+    expect(parsed.value.chain).toEqualWithoutLoc([unwrap]);
+
+    const chained = parseValue("try async a().b()?.name") as any;
+    expect(chained.value.async).toBeUndefined();
+    expect(chained.value.base.call).toEqualWithoutLoc({
+      type: "valueAccess",
+      base: call("a"),
+      chain: [methodCall("b")],
+      async: true,
+    });
+    expect(chained.value.chain).toEqualWithoutLoc([unwrap, property("name")]);
+  });
+
+  it("try foo() with no ? is still a plain try expression", () => {
+    const parsed = parseValue("try foo()") as any;
+    expect(parsed.value).toEqualWithoutLoc({ type: "tryExpression", call: call("foo") });
+  });
+});

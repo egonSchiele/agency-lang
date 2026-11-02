@@ -209,6 +209,15 @@ Agency has a `try` keyword. It is unrelated to `catch`. Even though Agency doesn
 const result = try foo()
 ```
 
+`try` gives you a `Result`, so `?` works after it. The `?` applies to the whole `try`: if the call throws, the failure is returned from your function right there.
+
+```ts
+def parseConfig(text: string): Result<Config> {
+  const parsed = try JSON.parse(text)?
+  return success(parsed)
+}
+```
+
 Agency also adds an automatic try-catch around every function definition, and if an error is thrown, it returns a `Failure` type.
 
 ## Failure propagation

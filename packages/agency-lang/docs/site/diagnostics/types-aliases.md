@@ -203,3 +203,53 @@ A checked cast to a type with `@validate` tags runs validator functions, and a v
 A checked cast to a type with `@validate` tags runs validator functions, and a validator can raise an interrupt that pauses the program. A handler body compiles to plain JavaScript with no steps, so it cannot pause, and the hoist pass never rewrites one. Moving the cast to its own line inside the handler does not help. Handlers are how a user rejects an action, so a cast that would pause there is refused rather than compiled. A checked cast to a type with no `@validate` tags is allowed here.
 
 **How to fix:** do the cast before the `handle` block and use the value inside the handler.
+
+<a id="ag1021"></a>
+
+## AG1021 — `&#123;expr&#125;?` cannot be lowered in this position. Move it to its own line: `const value = &#123;expr&#125;?`.
+
+*Default severity: error.*
+
+The `?` operator becomes an early return, so the compiler moves the expression before it onto its own line as a step. It cannot do that from the right side of `&&`, `||` or `??`, from either side of `catch`, from a pipe stage, or from a `try` operand, because code there may not run at all.
+
+**How to fix:** write the unwrap on its own line and use the variable.
+
+<a id="ag1022"></a>
+
+## AG1022 — `&#123;expr&#125;?` returns from a function, and a module-level initializer or a parameter default is not inside one. Use it inside a node or a def.
+
+*Default severity: error.*
+
+The `?` operator returns from the enclosing function. A module-level initializer and a parameter default run outside any function body, so there is nothing to return from.
+
+**How to fix:** move the unwrap into a node or a def.
+
+<a id="ag1023"></a>
+
+## AG1023 — `&#123;expr&#125;?` cannot be used inside a handler body. Unwrap the Result before the `handle` block, or match on it here.
+
+*Default severity: error.*
+
+A handler body (`with (intr) { ... }`) compiles to plain code with no steps, and the `?` operator needs a step to return from.
+
+**How to fix:** unwrap the Result before the `handle` block, or `match` on it inside the handler.
+
+<a id="ag1024"></a>
+
+## AG1024 — `&#123;expr&#125;?` would return from a `parallel` arm, and an arm cannot return early. Do the unwrap inside a def the arm calls.
+
+*Default severity: error.*
+
+Each arm of a `parallel` block hands its bindings back when it finishes, and the compiler reads them after the block. An arm cannot return early, so a `?` at its top level has nowhere to return to. Inside a block argument within the arm, `?` is fine, because it returns from that block.
+
+**How to fix:** move the work into a def and call it from the arm, or keep the Result in the arm and match on it after the block.
+
+<a id="ag1025"></a>
+
+## AG1025 — `&#123;expr&#125;?` cannot be a write target. Unwrap into a variable first, then assign to its field.
+
+*Default severity: error.*
+
+The `?` operator unwraps a value you read. A write target such as `obj?.field = 1` would have to unwrap and then write back into a Result, which has no meaning.
+
+**How to fix:** unwrap into a variable first, then assign to the variable's field.

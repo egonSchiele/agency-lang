@@ -157,12 +157,9 @@ handoff def learnTools(
   choose another namespace if a name is already available.
   """
   const offeredNames = [tool.name for tool in turnTools(turnStart)]
-  const learned = learnSessionTools(source, names, namespace, offeredNames)
-  if (learned is failure) {
-    return learned
-  }
+  const learned = learnSessionTools(source, names, namespace, offeredNames)?
   const answer = llm(
-    "The tools ${learned.value.join(", ")} are now available for this conversation. Continue the user's request using them as needed.",
+    "The tools ${learned.join(", ")} are now available for this conversation. Continue the user's request using them as needed.",
     mainOptions(turnStart),
   )
   endTurn()

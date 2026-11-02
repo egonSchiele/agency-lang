@@ -41,6 +41,20 @@
       "expectedOutput": "\"bob\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "? inside a return value hoists the operand"
+    },
+    {
+      "nodeName": "tryUnwrapSuccess",
+      "input": "",
+      "expectedOutput": "\"7\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "try f()? unwraps the try's Result when the call does not throw"
+    },
+    {
+      "nodeName": "tryUnwrapFailure",
+      "input": "",
+      "expectedOutput": "\"failed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "try f()? returns the failure a thrown error became"
     }
   ]
 }

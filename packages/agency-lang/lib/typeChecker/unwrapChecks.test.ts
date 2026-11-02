@@ -68,7 +68,6 @@ describe("AG1021: positions the hoist pass cannot lower", () => {
     'parseName("x")? catch ""',
     'parseName("x") catch parseName("y")?',
     'success(1) |> use(parseName("x")?)',
-    'try parseName("x")?',
   ])("refuses %s", (expr) => {
     expect(count(inMain(`  const r = ${expr}`), "AG1021")).toBe(1);
   });
@@ -83,6 +82,10 @@ describe("AG1021: positions the hoist pass cannot lower", () => {
 
   it("under with approve is fine", () => {
     expect(count(inMain(`  const r = ask(1)? with approve`), "AG1021")).toBe(0);
+  });
+
+  it("after try is fine, because the ? applies to the try and not inside it", () => {
+    expect(count(inMain(`  const r = try parseName("x")?`), "AG1021")).toBe(0);
   });
 
   it("the message names the expression", () => {

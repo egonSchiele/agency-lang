@@ -352,16 +352,13 @@ export def skillsDir(
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
   """
-  const real = try _realDir(dir)
-  if (real is failure) {
-    return real
-  }
+  const real = try _realDir(dir)?
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: real.value,
+    dir: real,
     layout: layout
   })
 
-  return buildSkillsTool(real.value, layout, name)
+  return buildSkillsTool(real, layout, name)
 }
 
 /** One subdirectory's scan result: the directory that was scanned (the
@@ -409,12 +406,9 @@ export def scanSkillsSubdirs(
   }
   // The real spelling, so the interrupt payload and any always-scope
   // rule saved from it name one directory however the caller spelled it.
-  const absRoot = try _realDir(root)
-  if (absRoot is failure) {
-    return absRoot
-  }
+  const absRoot = try _realDir(root)?
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: absRoot.value,
+    dir: absRoot,
     layout: "flat"
   })
 
@@ -423,8 +417,8 @@ export def scanSkillsSubdirs(
   const out: Record<string, SkillGroup> = Object.create(null)
   for (sub in subdirs) {
     out[sub] = {
-      dir: "${absRoot.value}/${sub}",
-      entries: scanEntries(absRoot.value, sub, "flat", false, MAX_SKILL_FILES)
+      dir: "${absRoot}/${sub}",
+      entries: scanEntries(absRoot, sub, "flat", false, MAX_SKILL_FILES)
     }
   }
   return success(out)
@@ -543,24 +537,18 @@ export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::
 
   @param dir - The skills folder, such as ~/.claude/skills
   """
-  const real = try _realDir(dir)
-  if (real is failure) {
-    return real
-  }
+  const real = try _realDir(dir)?
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: real.value,
+    dir: real,
     layout: "standard"
   })
 
-  const pathsResult = try _glob(real.value, ".", "*/SKILL.md", MAX_SKILL_FILES)
-  if (pathsResult is failure) {
-    return pathsResult
-  }
+  const pathsResult = try _glob(real, ".", "*/SKILL.md", MAX_SKILL_FILES)?
   let names: string[] = []
   let entries: SkillEntry[] = []
   let commands: SkillCommand[] = []
-  for (path in pathsResult.value) {
-    const raw = try _read(real.value, path, 0, 0) catch ""
+  for (path in pathsResult) {
+    const raw = try _read(real, path, 0, 0) catch ""
     const parsed = _parseSkillFile(raw)
     const data = parsed.data
     const text = parsed.body
@@ -581,13 +569,13 @@ export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::
       entries.push({ ...standardEntry(path, data), name: name, description: description })
     }
     if (userInvocable(data)) {
-      const skillFolder = "${real.value}/${folder}"
+      const skillFolder = "${real}/${folder}"
       const body = "Base directory for this skill: ${skillFolder}\n\n" + text.replaceAll(CLAUDE_SKILL_DIR_TOKEN, skillFolder)
       commands.push(commandRecord(name, description, data, body))
     }
   }
   return success({
-    dir: real.value,
+    dir: real,
     names: names,
     entries: entries,
     commands: commands
@@ -629,10 +617,7 @@ def checkSkillInputs(dir: string, name: string, description: string): Result<str
   if (name.length > MAX_TOOL_NAME_LEN) {
     return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
   }
-  const rendered = renderFrontmatter(name, description)
-  if (rendered is failure) {
-    return rendered
-  }
+  const rendered = renderFrontmatter(name, description)?
   if (dir.trim() == "") {
     return failure("dir must not be empty")
   }
@@ -671,33 +656,21 @@ export def writeSkill(
   @param description - One line telling the reading agent when to use the skill
   @param body - The skill's markdown body
   """
-  const checked = checkSkillInputs(dir, name, description)
-  if (checked is failure) {
-    return checked
-  }
-  const absDir = checked.value
+  const checked = checkSkillInputs(dir, name, description)?
+  const absDir = checked
   const filename = "${name}.md"
-  const fm = renderFrontmatter(name, description)
-  if (fm is failure) {
-    return fm
-  }
-  const content = "${fm.value}\n${body}\n"
+  const fm = renderFrontmatter(name, description)?
+  const content = "${fm}\n${body}\n"
   return interrupt std::skills::save(
     "Do you want to save this skill?",
     { dir: absDir, name: name, content: content },
   )
 
-  const made = mkdir(absDir)
-  if (made is failure) {
-    return made
-  }
+  const made = mkdir(absDir)?
   // create-only, because the pre-interrupt duplicate check is stale by
   // now: approval can take arbitrarily long, and the name may have
   // appeared. Never overwrite.
-  const wrote = write(filename, content, absDir, "create-only")
-  if (wrote is failure) {
-    return wrote
-  }
+  const wrote = write(filename, content, absDir, "create-only")?
   return success({ name: name, description: description, location: filename })
 }
 
@@ -843,20 +816,14 @@ export def designSkill(
   @param model - Model override for the redraft, or ""
   @param provider - Provider for the model override
   """
-  const checked = checkSkillInputs(dir, name, description)
-  if (checked is failure) {
-    return checked
-  }
-  const absDir = checked.value
+  const checked = checkSkillInputs(dir, name, description)?
+  const absDir = checked
   let draft: SkillDraft = { description: description, body: body }
   let feedback = ""
   for (round in range(maxRounds)) {
     if (feedback != "") {
-      const next = redraft(name, draft, feedback, model, provider)
-      if (next is failure) {
-        return next
-      }
-      draft = next.value
+      const next = redraft(name, draft, feedback, model, provider)?
+      draft = next
     }
     const outcome = oneSkillRound(absDir, name, draft)
     if (outcome.done != null) {

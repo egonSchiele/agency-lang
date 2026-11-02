@@ -74,15 +74,12 @@ export def screenshot(
   @param height - Height of the capture region; -1 for the full screen
   @param allowedPaths - Only allow saving under these path prefixes
   """
-  const real = try _realTarget(filepath)
-  if (real is failure) {
-    return real
-  }
+  const real = try _realTarget(filepath)?
   return interrupt std::screenshot("Are you sure you want to take a screenshot? This will capture the screen contents, which may include sensitive information.", {
-    filepath: real.value
+    filepath: real
   })
 
-  _screenshot(real.value, x, y, width, height, allowedPaths)
+  _screenshot(real, x, y, width, height, allowedPaths)
 }
 
 export def exit(code: number = 0) {

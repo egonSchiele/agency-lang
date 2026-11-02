@@ -29,6 +29,11 @@ def halfOfBoxed(n: number): Result<number> {
   return success(half(box(n)?.n)?)
 }
 
+def parseJson(text: string): Result<any> {
+  const parsed = try JSON.parse(text)?
+  return success(parsed)
+}
+
 node successValue() {
   const name = parseName("bob")?
   return name
@@ -73,4 +78,20 @@ node returnPosition() {
     return value
   }
   return "failed"
+}
+
+node tryUnwrapSuccess() {
+  const result = parseJson("[7]")
+  if (result is success(value)) {
+    return "${value[0]}"
+  }
+  return "failed"
+}
+
+node tryUnwrapFailure() {
+  const result = parseJson("not json")
+  if (result is failure) {
+    return "failed"
+  }
+  return "parsed"
 }

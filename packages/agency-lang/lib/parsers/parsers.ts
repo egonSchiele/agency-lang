@@ -166,7 +166,7 @@ import { Comprehension, COMPREHENSION_PREFIXES, SEQ_PREFIX } from "../types/comp
 import { WhileLoop } from "../types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
 import { IfElse } from "../types/ifElse.js";
-import { ValueAccess } from "../types/access.js";
+import { ValueAccess, isUnwrapElement } from "../types/access.js";
 import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { TryExpression } from "../types/tryExpression.js";
@@ -3800,7 +3800,7 @@ const unaryVoidParser = unaryKeywordParser("void");
 
 // --- try keyword ---
 // Parses: try functionCall(args) or try obj.method(args)
-const tryExpressionParser: Parser<TryExpression> = seqC(
+const tryOperandParser: Parser<TryExpression> = seqC(
   set("type", "tryExpression"),
   str("try"),
   spaces,
@@ -3812,6 +3812,37 @@ const tryExpressionParser: Parser<TryExpression> = seqC(
     "call",
   ),
 );
+
+/** `try f()?` reads as `(try f())?`: the `try` covers the chain up to the
+ *  first `?`, and the `?` and anything after it apply to the try's Result.
+ *  The other reading puts the `?` inside the try operand, a position it is
+ *  refused in (AG1021). An `async` or `await` prefix stays on the operand. */
+const tryExpressionParser: Parser<TryExpression | ValueAccess> = (input: string) => {
+  const result = tryOperandParser(input);
+  if (!result.success) return result;
+  const tried = result.result;
+  if (tried.call.type !== "valueAccess") return result;
+  const split = tried.call.chain.findIndex(isUnwrapElement);
+  if (split === -1) return result;
+  const before = tried.call.chain.slice(0, split);
+  const { async: prefix, ...call } = tried.call;
+  const operand =
+    before.length > 0
+      ? { ...call, chain: before, ...(prefix !== undefined && { async: prefix }) }
+      : prefix !== undefined
+        ? { ...call.base, async: prefix }
+        : call.base;
+  if (operand.type !== "functionCall" && operand.type !== "valueAccess") {
+    return failure("expected a call after try", input);
+  }
+  const access: ValueAccess = {
+    type: "valueAccess",
+    base: { ...tried, call: operand as TryExpression["call"] },
+    chain: tried.call.chain.slice(split),
+    ...(call.loc !== undefined && { loc: call.loc }),
+  };
+  return success(access, result.rest);
+};
 
 // Parses: new ClassName(args)
 export const newExpressionParser: Parser<NewExpression> = (input: string) => {

@@ -117,6 +117,11 @@ export class AssignmentEmitter {
           result = ts.await(callExpr);
           break;
         }
+        case "unwrap":
+          // AG1025 refuses a `?` in a write target before codegen.
+          throw new Error(
+            "An unwrap (?) reached codegen in an assignment target; the type checker should have refused it. This is a toolchain bug.",
+          );
       }
     }
     return result;

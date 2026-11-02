@@ -496,12 +496,15 @@ describe("valueAccessParser", () => {
   });
 
   describe("no optional chaining", () => {
-    it('"foo?.bar" stops before the "?" and leaves it unparsed', () => {
+    it('"foo?.bar" is the ? operator followed by a property, not optional chaining', () => {
       const result = valueAccessParser("foo?.bar");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result).toEqualWithoutLoc({ type: "variableName", value: "foo" });
-        expect(result.rest).toBe("?.bar");
+        expect(result.result).toEqualWithoutLoc({
+          type: "valueAccess",
+          base: { type: "variableName", value: "foo" },
+          chain: [{ kind: "unwrap" }, { kind: "property", name: "bar" }],
+        });
       }
     });
   });

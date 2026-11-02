@@ -3533,9 +3533,19 @@ const callChainParser: Parser<AccessChainElement> = (input: string) => {
   );
 };
 
+// The `?` operator, as a chain element. Probed on the raw input like the
+// other elements, so it must sit directly against what it unwraps. A `?`
+// followed by another `?` is nullish coalescing and is left for the binary
+// operator table.
+const unwrapChainParser: Parser<AccessChainElement> = (input: string) => {
+  const result = seqC(char("?"), not(char("?")))(input);
+  if (!result.success) return failure("expected ?", input);
+  return success({ kind: "unwrap" as const }, result.rest);
+};
+
 const chainElementParser: Parser<AccessChainElement> = memo(
   "chainElementParser",
-  or(dotMethodCallParser, callChainParser, sliceChainParser, indexChainParser),
+  or(dotMethodCallParser, callChainParser, sliceChainParser, indexChainParser, unwrapChainParser),
 );
 
 /**
@@ -4496,20 +4506,36 @@ const _exprParserBase: Parser<Expression> = label(
  *  Built once: this runs on every successful expression parse. */
 const ternaryMarker = seqC(char("?"), not(oneOf(".?")));
 
-const ternaryRefusal = (rest: string): ParserFailure | null => {
+/** The ` a : b` part of a ternary, after its `?`. */
+const ternaryTail = seqC(
+  optionalSpacesOrNewline,
+  lazy(() => exprParser),
+  optionalSpacesOrNewline,
+  char(":"),
+);
+
+/** True when `expression` ends in the `?` operator, so the `?` of a ternary
+ *  written without a space (`cond? a : b`) has already been consumed. */
+const endsInUnwrap = (expression: Expression): boolean =>
+  expression.type === "valueAccess" &&
+  expression.chain.length > 0 &&
+  expression.chain[expression.chain.length - 1].kind === "unwrap";
+
+const ternaryRefusal = (expression: Expression, rest: string): ParserFailure | null => {
   // Newlines are crossed on purpose. Prettier wraps any ternary past the line
   // limit onto three lines, so `cond\n  ? a\n  : b` is the shape a model has
   // seen most, and skipping only spaces would miss it. A statement cannot begin
   // with `?`, so a `?` on the next line is unambiguously a continuation.
   const afterExpr = optionalSpacesOrNewline(rest);
   const marker = ternaryMarker(afterExpr.success ? afterExpr.rest : rest);
-  if (!marker.success) return null;
-  const tail = seqC(
-    optionalSpacesOrNewline,
-    lazy(() => exprParser),
-    optionalSpacesOrNewline,
-    char(":"),
-  )(marker.rest);
+  let afterMarker: string | null = null;
+  if (marker.success) {
+    afterMarker = marker.rest;
+  } else if (endsInUnwrap(expression)) {
+    afterMarker = rest;
+  }
+  if (afterMarker === null) return null;
+  const tail = ternaryTail(afterMarker);
   if (!tail.success) return null;
   return committedFailure(TERNARY_MESSAGE, tail.rest);
 };
@@ -4529,7 +4555,7 @@ export const exprParser: Parser<Expression> = (input: string) => {
   }
   const result = _exprParserBase(input);
   if (!result.success) return result;
-  const refused = ternaryRefusal(result.rest);
+  const refused = ternaryRefusal(result.result, result.rest);
   if (!refused) return result;
   // The enclosing node body is wrapped in a `parseError` that would otherwise
   // win the reporting contest, so record the commit in the parse state too.

@@ -513,20 +513,6 @@ describe("exprParser", () => {
       }
     });
 
-    it("commits on an optional-chain head too", () => {
-      const result = exprParser('schema(number)?.parseJSON("[1]")');
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toMatchObject({
-          type: "valueAccess",
-          base: { type: "schemaExpression" },
-          chain: [
-            { kind: "methodCall", optional: true, functionCall: { functionName: "parseJSON" } },
-          ],
-        });
-      }
-    });
-
     it("a malformed chain after the dot is a targeted parse error", () => {
       const parsed = parseAgency(
         "node main() {\n  const r = schema(number).123\n  return r\n}",

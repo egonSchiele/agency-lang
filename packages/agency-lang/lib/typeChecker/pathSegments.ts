@@ -56,7 +56,8 @@ export function isPrefixOf(prefix: Reference, path: Reference): boolean {
 
 /**
  * One access-chain hop → a path segment, or null if the hop is UNSTABLE (a
- * computed/non-literal-integer index, a slice, or a method call). Stable hops:
+ * computed/non-literal-integer index, a slice, a method call, or an unwrap).
+ * Stable hops:
  * a property, or a literal non-negative-integer index. THE single source of the
  * stability rule — `chainToSegments` and `stablePrefix` both build on it.
  */
@@ -67,7 +68,7 @@ export function toSegment(el: AccessChainElement): PathSegment | null {
     if (!Number.isInteger(n) || n < 0) return null;
     return { kind: "index", index: n };
   }
-  return null; // computed index, slice, methodCall
+  return null; // computed index, slice, methodCall, unwrap
 }
 
 /** Whole chain → segments, or null if ANY hop is unstable. */

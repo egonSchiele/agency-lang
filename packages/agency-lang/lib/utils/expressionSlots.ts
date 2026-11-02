@@ -246,6 +246,8 @@ function chainSlots(chain: any[], key: string): ExpressionSlot[] {
         ),
       ];
     }
+    // An unwrap (`?`) has no expression of its own; the hoist pass splits
+    // the chain at it. A property element has none either.
     return [];
   });
 }

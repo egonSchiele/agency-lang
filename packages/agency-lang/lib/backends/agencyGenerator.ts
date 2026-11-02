@@ -2227,6 +2227,8 @@ export class AgencyGenerator {
         return `.${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       case "call":
         return this.renderArgList(node.arguments, node.block, node.argumentTrivia);
+      case "unwrap":
+        return "?";
       default:
         throw new Error(`Unknown access chain element kind: ${(node as any).kind}`);
     }

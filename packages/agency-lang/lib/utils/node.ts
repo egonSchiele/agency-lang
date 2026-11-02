@@ -154,6 +154,9 @@ export function expressionToString(expr: Expression): string {
             code += `.${fc.functionName}(${args})`;
             break;
           }
+          case "unwrap":
+            code += "?";
+            break;
         }
       }
       return code;

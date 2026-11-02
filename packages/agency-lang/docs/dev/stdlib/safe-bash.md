@@ -799,8 +799,11 @@ These stay broad, each for a reason:
   would save `{ npx, -y }`, which covers every package. `agency` is
   here because a lone `agency` line runs in process, and `recommended`
   approves `std::exec` for agency's safe subcommands, which were chosen
-  for the exec tool. These keep the message "no rule for `xargs`",
-  because that's still true and the rejection fixtures pin it.
+  for the exec tool. `which` and `whereis` are here because a lone
+  `which agency` is refused by `tryAgencyPlan`, and a chain must not turn
+  the same lookup into a question a saved rule answers. These keep the
+  message "no rule for `xargs`", because that's still true and the
+  rejection fixtures pin it.
 - **A program fed by a pipe or `<`** (`pipedProgram`). The payload's
   `stdin` is empty, so it can't describe what the program reads.
 - From earlier checks: a leading assignment, and a command word that
@@ -810,7 +813,10 @@ What a saved rule covers: `@always(command, subcommand)` saves the
 program with its first argument, so a rule for `pnpm test` covers `pnpm
 test` in any folder and with any later arguments, the same as for the
 exec tool. `node -e '...'` is as broad as `sh -c`, so a rule for an
-interpreter should be keyed on `subcommand`. `rg --pre=<program>` runs
+interpreter should be keyed on `subcommand`. The same goes for every
+program that takes its program as text: `python3`, `perl`, `ruby`,
+`awk`, `sed`, and `jq`. A rule keyed on `awk` and `'{print}'` still
+covers every file named after them. `rg --pre=<program>` runs
 another program for each file, so a saved rule for `rg` covers that
 too.
 

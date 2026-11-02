@@ -363,8 +363,10 @@ See `docs/dev/stdlib/safe-bash.md`, "grep".
 A `std::exec` rule for a program also covers that program's bash
 spelling through safeBash, because safeBash raises `std::exec` for a
 program it has no other rule for. From safeBash, `args` may carry an
-unexpanded glob or `~`. A rule for an interpreter (`node`, `python3`)
-should be keyed on `subcommand`, because `node -e '...'` runs anything.
+unexpanded glob or `~`. A rule for an interpreter (`node`, `python3`,
+`perl`, `ruby`, `awk`, `sed`, `jq`) should be keyed on `subcommand`,
+because `node -e '...'` runs anything, and even then the files named
+after the program text are not pinned.
 "Approve always here" pins only `command` and `subcommand`, so approving
 `pnpm test` in one folder alone needs a hand-written rule with a `cwd`
 glob. From safeBash, `cwd` is always the resolved absolute folder, while

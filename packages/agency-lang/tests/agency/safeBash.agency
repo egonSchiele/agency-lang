@@ -1541,6 +1541,7 @@ node programsAskStdExec() {
     grepNames("npx -y foo"),
     grepNames("pnpm test | grep -v warn"),
     grepNames("cat one.txt | pnpm test"),
+    grepNames("echo a; which agency"),
   ]
 }
 

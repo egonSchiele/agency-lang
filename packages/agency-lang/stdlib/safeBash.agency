@@ -473,7 +473,11 @@ static const NO_EXEC_PROGRAMS: string[] = [
   // A lone `agency` line runs in process through std::agency, and
   // recommended approves std::exec for agency's safe subcommands, which
   // were chosen for the exec tool. A bash spelling must not pick that up.
-  "agency"
+  "agency",
+  // A lone `which agency` is refused by tryAgencyPlan, so that the model
+  // does not go looking for the binary. A chain must not turn the same
+  // lookup into a question a saved rule answers.
+  "which", "whereis"
 ]
 
 def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {

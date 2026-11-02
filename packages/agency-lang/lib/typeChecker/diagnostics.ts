@@ -895,6 +895,12 @@ export const DIAGNOSTICS = {
     message:
       "The body of '{target}' saves a draft of type '{actual}', but decorator '{name}' takes a block returning '{expected}'.",
   },
+  unwrapNonResult: {
+    code: "AG2023",
+    severity: "error",
+    message:
+      "`{expr}?` needs a `Result`, and `{expr}` is a `{type}`. Only a `Result` can be unwrapped with `?`.",
+  },
   parameterAliasCollision: {
     code: "AG2022",
     severity: "error",

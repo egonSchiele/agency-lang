@@ -853,6 +853,10 @@ The body of a decorated function runs as the decorator's block, so a draft saved
 
 **How to fix:** save a value of the type the decorator's block returns.`,
 
+  unwrapNonResult: `The \`?\` operator reads a \`Result\`: it gives the success value, and if the Result is a failure it returns that failure from the enclosing function. The expression before this \`?\` is not a \`Result\`, so there is nothing to unwrap. The usual causes are a function that returns a plain value, or JavaScript-style optional chaining (\`obj?.name\`), which Agency does not have.
+
+**How to fix:** remove the \`?\` if the value is already plain. If you meant to tolerate a null, check for it with \`if\` or \`??\` instead.`,
+
   parameterAliasCollision: `A \`def\` parameter has an alias that is already taken by another parameter, as its name or as one of its aliases, or that repeats the parameter's own name.
 
 An alias is a key a caller from outside the program may use for the parameter, written \`def fetch(baseUrl | url: string)\`. Every name and alias in one signature has to be distinct, otherwise a key would name two parameters.

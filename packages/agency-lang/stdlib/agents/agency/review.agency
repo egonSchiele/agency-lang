@@ -72,8 +72,8 @@ single elements, duplicates, and zero. Do not report this analysis itself.
 
 Set error=true for a demonstrated task failure or a violation of the
 rules below. Do not turn assumptions about a caller's needs into errors.
-Other findings are advisory. Verify syntax and API claims with the Agency
-documentation tools before reporting them as errors.
+Other findings are advisory. Verify every claimed syntax or API mistake
+with the Agency documentation tools before reporting it, including advisory findings.
 
 The following are errors regardless of what the task says:
 - An action that changes the outside world and cannot be undone (sending

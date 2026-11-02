@@ -323,4 +323,4 @@ export static const ASK_USER_HINT = "\n\nAsk with `question` before relying on a
 // A model-facing instruction, spliced into an agent's prompt when the agent
 // offers the `saveDraft` tool. Tells the model to checkpoint its best answer
 // so a run cut short by a budget guard still returns something useful.
-export static const SAVE_DRAFT_HINT = "\n\nSave your best answer so far with `saveDraft` and update it as you work. A budget stop returns the latest saved draft. Without a draft, there is no partial answer."
+export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, save your best answer so far with `saveDraft` and update it as you work. A budget stop returns the latest saved draft. Without a draft, there is no partial answer."

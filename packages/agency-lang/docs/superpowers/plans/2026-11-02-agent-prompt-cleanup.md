@@ -8,8 +8,6 @@
 
 **Tech stack:** Agency source, Markdown prompts, TypeScript compiler and runtime inspection.
 
-**Spec:** The user's November 2 request and the preceding research recommendations in this chat authorize this work and PR creation.
-
 ## Constraints
 
 - Do not change `stdlib/agents/prompts/agency-tutorial.md` or remove its inclusion.
@@ -31,17 +29,21 @@
 
 ## Tasks
 
-- [x] Trace return types from code generation through tool definitions and provider adapters. Capture a small deterministic reproduction. Write `docs/dev/agents/tool-return-schema-gap.md` with evidence, code pointers, impact, and acceptance criteria.
+- [x] Trace return types from code generation through tool definitions and provider adapters. Capture a small deterministic reproduction. Record the confirmed gap and acceptance criteria in [issue #1362](https://github.com/egonSchiele/agency-lang/issues/1362).
 - [x] Simplify the active coordinator and interactive coding prompts, preserving product decisions and correcting the explorer context claim. Inspect one-shot prompts and tool descriptions before removing duplicates.
-- [x] Review the stdlib agents and simplify their standing prompts where useful. Preserve the tutorial byte-for-byte and existing prompt interpolations and behavior. Leave already concise prompts alone when no useful cut exists.
+- [x] Review the stdlib agents and simplify their standing prompts where useful. Preserve the tutorial byte-for-byte, existing prompt interpolations, and runtime implementation. Leave already concise prompts alone when no useful cut exists.
 - [x] Build, run focused existing tests, check formatting, and verify the tutorial is unchanged. Review the complete diff and address findings.
-- [ ] Commit the changes, push the task branch, and create a PR with the evidence, validation, and remaining evaluation limits.
+- [x] Commit the changes, push the task branch, and create a PR with the evidence, validation, and remaining evaluation limits.
 
-## Verification
+## Review follow-up
 
-- `make`, TypeScript formatting and its check, structural lint, and `git diff --check` passed.
-- The focused tests passed: 105 cases across 15 files, using the mocked LLM provider. The first run's zero-cost guard rejected simulated costs; the 12 affected files passed after removing that guard.
-- The compiled return-schema reproduction confirms that ordinary tool metadata omits the declared return type.
-- The tutorial is byte-identical to the base revision. The stdlib changes preserve code outside string literals and all ordered prompt interpolations.
-- Independent review found no actionable issues. Deterministic tests verify compilation and wiring; they do not establish model quality.
-- Six approved live calls compared the old and revised main coordinator prompt on identity, missing email details, and a focused repository read. Both versions made all three expected routing choices. Estimated total cost was $0.042306. The revised read call included an undeclared `useAgentCwd` argument mentioned in the copied docstring. The reduced harness used eleven inert tools and representative schemas; it did not execute tools or test the production agent loop. This observation needs production verification before attributing it to a prompt or runtime defect.
+- [x] Restore saved-tool discovery, concrete review routing, one-shot action and execution rules, research-round guidance, and conditional draft saving.
+- [x] Organize the code prompt by when guidance applies, with actionable bullets and checked Agency examples. Restore editing and spill-reading rules. Remove memory guidance.
+- [x] Restore the writing review and rewrite prompts to their existing baseline until their dedicated suites support a change.
+- [x] Move the return-schema report to a GitHub issue with commit-pinned links and preserve a local copy outside the PR.
+- [x] Rebuild and run focused deterministic checks for the corrections: `make`, formatting/check, 42 tests across seven files, and strict compilation of both Agency examples passed.
+- [ ] Compare old and revised prompts with the existing suites on their default models. Record per-suite scores and review regressions before merging.
+
+The six-call smoke check and deterministic tests do not establish behavior
+across these agents. Full before/after evaluation at three trials covers
+113 tests and 678 agent runs, followed by separate grading.

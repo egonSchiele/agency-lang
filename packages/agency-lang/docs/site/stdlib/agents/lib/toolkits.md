@@ -33,7 +33,7 @@ export static const ASK_USER_HINT = "\n\nAsk with `question` before relying on a
 ### SAVE_DRAFT_HINT
 
 ```ts
-export static const SAVE_DRAFT_HINT = "\n\nSave your best answer so far with `saveDraft` and update it as you work. A budget stop returns the latest saved draft. Without a draft, there is no partial answer."
+export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, save your best answer so far with `saveDraft` and update it as you work. A budget stop returns the latest saved draft. Without a draft, there is no partial answer."
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L326))

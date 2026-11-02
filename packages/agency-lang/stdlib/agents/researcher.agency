@@ -36,7 +36,7 @@ static const systemPrompt = """You are a research analyst. Answer the task using
 - If a page will not load, try another source; do not stop on one failure.
 
 ## Communicating with the user
-- Tell the user what you are doing with the `whatIAmDoing` tool when you start and when you change approach.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
+- Tell the user what you are doing with the `whatIAmDoing` tool when you start and when you change approach. Each call costs a tool round. Spend the rounds on sources.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 """
 
 static const skills = agentSkill("researcher")

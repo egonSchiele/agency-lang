@@ -68,7 +68,8 @@ runs in-process through `std::agency`.
 `bash`: everything else. Narrow when every command was recognized
 (`git status`, `git log`, `git diff`, `git diff --staged`, a grep of one
 named file, a read of named files, a listing of named folders, a find, a
-redirect contributing `std::write` or `std::read`), broad otherwise.
+program safeBash has no rule for (`std::exec`), a redirect contributing
+`std::write` or `std::read`), broad otherwise.
 
 `outcomeOf(plan)` names which of these a plan is (`refuse`, `shellFree`,
 `agency`, `narrow`, `broad`) with an exhaustive match over the
@@ -90,6 +91,12 @@ bash will do, and `std::bash` otherwise.
 | `grep -c hello one.txt` | real grep, through bash | `std::grep` for the one file |
 | `wc -l one.txt` | real wc, through bash | `std::read` for the one file |
 | `ls src` | real ls, through bash | `std::ls` for `src`, as the ls tool does |
+| `pnpm test` | real pnpm, through bash | `std::exec`, as the exec tool does |
+
+The `pnpm test` row is a deliberate exception. A lone program line with
+no glob, `~`, redirect, or pipe would translate exactly to `exec`, but
+the two paths differ only in the environment scrub, so it runs through
+bash.
 
 The rule has three reasons:
 
@@ -262,8 +269,10 @@ Two pieces carry this, each with one job:
   `{ kind: "search", call }` for a path, or `{ kind: "stdin" }` when it
   names none. The verb rule never sees the pipe flag.
 
-`stdinStage(verb, readsStdin, redirects)` joins them, and it is the only
-place that reads the flag. A stdin reader fed by a pipe contributes only
+`stdinStage(verb, readsStdin, redirects)` joins them for a verb whose
+rule can read stdin, and `pipedProgram` is its counterpart for a program
+`std::exec` describes (see "Programs with no rule"). They are the only
+two places that read the flag. A stdin reader fed by a pipe contributes only
 its redirects; anywhere else it is unrecognized, with the message `grep
 with no path reads stdin`. Its callers are grep, the read verbs (see "The
 read family"), and `tr`. A new verb that can read its stdin writes its
@@ -688,6 +697,78 @@ and `node_modules` that the tools leave out, and no file's contents.
 The names are not what decided grep, where a directory search through
 bash asks `std::bash` because real grep reads the contents the tool
 skips.
+
+## Programs with no rule
+
+A program that no arm of `effectsFor` and no table owns raises
+`std::exec`, the question the `exec` tool asks for the same program and
+arguments. `pnpm test`, `make`, `pytest tests`, and `tsc --noEmit` all
+take this path. The step sits at the end of `otherVerbEffects`, where
+the line used to fail with "no rule for", and `execEffects` builds it.
+
+The payload has the exec tool's fields: `command` is the program,
+`args` its arguments, `subcommand` the first argument (or `""`), `cwd`
+safeBash's resolved folder, `timeout` 0, and `stdin` empty. The full
+line goes in an extra field, `line`, because `std::exec` already uses
+`command` for the program and `@always` pins it. The line then runs
+through bash, as every narrow plan does.
+
+It differs from the exec tool's payload in three ways:
+
+1. A glob argument (`pytest tests/*.py`) is carried unexpanded, and
+   bash expands it. The exec tool passes its arguments through as they
+   are.
+2. An unquoted `~` in an argument (`node ~/x.js`) is carried as written,
+   and bash expands it.
+3. bash runs with the environment scrubbed (see "Which shell runs the
+   text"), while the exec tool spawns with the process's environment. So
+   a program approved through safeBash runs with slightly less, which is
+   the safe direction.
+
+Ownership needs no list of its own. A verb with an arm or a row fails
+inside it when the spelling isn't one it describes, so `git push`,
+`find . -delete`, and `tail -f` never reach this step. They keep asking
+`std::bash`. Otherwise a saved rule for an innocent git subcommand, or
+for `find .`, would start covering them.
+
+These stay broad, each for a reason:
+
+- **Bash builtins** (`BUILTIN_VERBS`, the `compgen -b` list). The exec
+  tool can't run a builtin, so no payload of its shape describes one.
+  Some builtins also change what later commands do: `cd .. && cat
+  one.txt` reads the parent folder's file while the `std::read` names
+  the current one, `hash -p /tmp/x git` makes `git` run `/tmp/x`,
+  `enable -f` loads a shared object as a builtin, and `export
+  NODE_OPTIONS=...; pnpm test` is the leading-assignment case spread
+  over two commands. The message is "`cd` is a bash builtin, not a
+  program".
+- **Programs that run other programs** (`NO_EXEC_PROGRAMS`). The
+  wrappers (`sh`, `xargs`, `env`, `sudo`, ...) would put the wrapper in
+  the payload while what runs is in its arguments. The package runners
+  (`npx`, `bunx`, `uvx`, `pipx`) take a flag first, so `npx -y foo`
+  would save `{ npx, -y }`, which covers every package. `agency` is
+  here because a lone `agency` line runs in process, and `recommended`
+  approves `std::exec` for agency's safe subcommands, which were chosen
+  for the exec tool. `which` and `whereis` are here because a lone
+  `which agency` is refused by `tryAgencyPlan`, and a chain must not turn
+  the same lookup into a question a saved rule answers. These keep the
+  message "no rule for `xargs`", because that's still true and the
+  rejection fixtures pin it.
+- **A program fed by a pipe or `<`** (`pipedProgram`). The payload's
+  `stdin` is empty, so it can't describe what the program reads.
+- From earlier checks: a leading assignment, and a command word that
+  isn't literal (`./gradlew`).
+
+What a saved rule covers: `@always(command, subcommand)` saves the
+program with its first argument, so a rule for `pnpm test` covers `pnpm
+test` in any folder and with any later arguments, the same as for the
+exec tool. `node -e '...'` is as broad as `sh -c`, so a rule for an
+interpreter should be keyed on `subcommand`. The same goes for every
+program that takes its program as text: `python3`, `perl`, `ruby`,
+`awk`, `sed`, and `jq`. A rule keyed on `awk` and `'{print}'` still
+covers every file named after them. `rg --pre=<program>` runs
+another program for each file, so a saved rule for `rg` covers that
+too.
 
 ## Chains in process
 

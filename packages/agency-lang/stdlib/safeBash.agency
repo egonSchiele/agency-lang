@@ -23,6 +23,8 @@ import {
   readEffect,
   lsEffect,
   globEffect,
+  execEffect,
+  ExecPayload,
   ReadPayload,
   ReadView,
   readExecution,
@@ -422,7 +424,7 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
   The effects of a verb with no arm of its own in `effectsFor`: a listing
   asks std::ls for each folder it names, a read verb asks std::read for
   each file it names, and reading its stdin from a pipe adds nothing. Any
-  other verb is unrecognized.
+  other verb is a program, which asks std::exec (see `execEffects`).
   """
   const listing = LIST_VERBS[verb]
   if (listing != null) {
@@ -430,11 +432,117 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
   }
   const spec = READ_VERBS[verb]
   if (spec == null) {
-    return failure("no rule for `${verb}`")
+    return execEffects(verb, command, cwd, readsStdin, redirects)
   }
   return match(readFileVerb(verb, command, cwd, spec)) {
     success(found) => fileReadEffects(verb, found, readsStdin, redirects)
     failure(why) => failure(why)
+  }
+}
+
+/** Bash builtins. The exec tool cannot run one, so no std::exec payload
+ * can describe it, and some change what later commands run (`cd`,
+ * `hash -p`, `enable -f`, `export`). `bash -c 'compgen -b'` on bash 3.2,
+ * plus mapfile, readarray, and compopt from bash 5. kill, printf, pwd,
+ * and test are also programs, but bash runs the builtin of that name, so
+ * the builtin rule is the one that describes them. */
+static const BUILTIN_VERBS: string[] = [
+  ".", ":", "[", "alias", "bg", "bind", "break", "builtin", "caller", "cd",
+  "command", "compgen", "complete", "compopt", "continue", "declare",
+  "dirs", "disown", "echo", "enable", "eval", "exec", "exit", "export",
+  "false", "fc", "fg", "getopts", "hash", "help", "history", "jobs", "kill",
+  "let", "local", "logout", "mapfile", "popd", "printf", "pushd", "pwd",
+  "read", "readarray", "readonly", "return", "set", "shift", "shopt",
+  "source", "suspend", "test", "times", "trap", "true", "type", "typeset",
+  "ulimit", "umask", "unalias", "unset", "wait"
+]
+
+/** Programs that never become std::exec. They ask std::bash. */
+static const NO_EXEC_PROGRAMS: string[] = [
+  // Programs that exist to run another program. A payload for one would
+  // name the wrapper, while what runs is in its arguments, so a rule
+  // `{ command: "sh" }` would approve anything.
+  "sh", "bash", "zsh", "dash", "fish", "xargs", "env", "sudo", "doas",
+  "nohup", "time", "timeout", "watch", "nice", "script",
+  // Package runners. `npx -y foo` has subcommand `-y`, so a saved
+  // `{ npx, -y }` would cover every package. (`pnpm dlx` and `npm exec`
+  // are keyed on a subcommand that names the behaviour, so they stay.)
+  "npx", "bunx", "uvx", "pipx",
+  // A lone `agency` line runs in process through std::agency, and
+  // recommended approves std::exec for agency's safe subcommands, which
+  // were chosen for the exec tool. A bash spelling must not pick that up.
+  "agency",
+  // A lone `which agency` is refused by tryAgencyPlan, so that the model
+  // does not go looking for the binary. A chain must not turn the same
+  // lookup into a question a saved rule answers.
+  "which", "whereis"
+]
+
+def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  """
+  A program no arm or table owns asks std::exec, the question the exec
+  tool asks for the same program and arguments. Bash builtins, programs
+  that run other programs, and a program whose stdin the payload cannot
+  describe ask std::bash.
+  """
+  if (BUILTIN_VERBS.includes(verb)) {
+    return failure("`${verb}` is a bash builtin, not a program")
+  }
+  // The same text as before this rule existed: safeBash has no rule for
+  // a wrapper, and the rejection fixtures pin the sentence.
+  if (NO_EXEC_PROGRAMS.includes(verb)) {
+    return failure("no rule for `${verb}`")
+  }
+  const piped = pipedProgram(verb, readsStdin, command)
+  if (isFailure(piped)) {
+    return piped
+  }
+  const args = execArgs(verb, command.args)
+  if (isFailure(args)) {
+    return args
+  }
+  const payload: ExecPayload = {
+    command: verb,
+    args: args.value,
+    subcommand: subcommandOf(args.value),
+    cwd: cwd,
+    timeout: 0,
+    stdin: ""
+  }
+  return success([execEffect(payload), ...redirects])
+}
+
+/** The first argument, which the exec tool and its `@always` call the
+ * subcommand, or "" for a bare program. */
+def subcommandOf(args: string[]): string {
+  if (args.length == 0) {
+    return ""
+  }
+  return args[0]
+}
+
+def execArgs(verb: string, words: Word[]): Result<string[]> {
+  """
+  A program's arguments as the payload carries them: a flag as typed, a
+  glob unexpanded (bash expands it), and any other fully literal word as
+  its text. A variable or an interpolation makes the program unrecognized.
+  """
+  let out: string[] = []
+  for (word in words) {
+    const text = execArgText(word)
+    if (isFailure(text)) {
+      return failure("the ${verb} arguments are not literal")
+    }
+    out.push(text.value)
+  }
+  return success(out)
+}
+
+def execArgText(word: Word): Result<string> {
+  return match(word) {
+    { tag: "flag" } => success(renderFlag(word))
+    { tag: "glob", text } => success(text)
+    _ => literalWordText(word)
   }
 }
 
@@ -847,6 +955,24 @@ def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<E
     return success(redirects)
   }
   return failure("${verb} with no path reads stdin")
+}
+
+def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Result {
+  """
+  The counterpart of `stdinStage` for a program std::exec describes. The
+  payload's `stdin` is empty, so a program fed by a pipe or by `<` would
+  be misdescribed, and it stays unrecognized. The `<` is read from the
+  command's own redirects, not the effects: by now it has become a
+  std::read effect, which does not say which command it came from.
+  """
+  if (readsStdin) {
+    return failure("`${verb}` reads a pipe, and std::exec cannot say what it reads")
+  }
+  const inputs = [redirect for redirect in command.redirects if redirect.op == "<"]
+  if (inputs.length > 0) {
+    return failure("`${verb}` reads an input redirect, and std::exec cannot say what it reads")
+  }
+  return success(null)
 }
 
 @capabilities(fileRead)
@@ -2399,7 +2525,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -2657,6 +2783,20 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
         dir: effect.payload.dir,
         maxResults: effect.payload.maxResults,
         command: fullCommand
+      })
+      return success(null)
+    }
+    "std::exec" => {
+      // The full line goes in `line`: std::exec already uses `command` for
+      // the program, and `@always` pins that field.
+      raise std::exec("Are you sure you want to run this command?", {
+        command: effect.payload.command,
+        args: effect.payload.args,
+        subcommand: effect.payload.subcommand,
+        cwd: effect.payload.cwd,
+        timeout: effect.payload.timeout,
+        stdin: effect.payload.stdin,
+        line: fullCommand
       })
       return success(null)
     }

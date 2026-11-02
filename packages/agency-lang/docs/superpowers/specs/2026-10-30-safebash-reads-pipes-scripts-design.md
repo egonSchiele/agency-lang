@@ -677,6 +677,19 @@ broad question, as they do today.
 `std::git::status` alone and runs under the audit rule, and nothing
 about `echo` becomes a `std::exec`.
 
+**Departures (ADI-243).** The built slice differs from the text above:
+
+- `agency` never becomes `std::exec` through bash.
+- A bash builtin never becomes `std::exec`, and is refused with its own
+  message ("`cd` is a bash builtin, not a program").
+- The package runners `npx`, `bunx`, `uvx`, and `pipx` join the wrapper
+  verbs.
+- A command that reads a pipe or an input redirect stays broad, because
+  the payload's `stdin` cannot describe it.
+- The wrapper verbs keep the "no rule for" message.
+
+See `docs/dev/stdlib/safe-bash.md`, "Programs with no rule".
+
 ### The rejection message names the reason
 
 Today a `std::bash` rejection reaches the model as the policy's

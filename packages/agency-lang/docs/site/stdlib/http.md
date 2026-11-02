@@ -111,28 +111,22 @@ fetch(
 
 Fetch a URL as text.
 
-  @param path - Optional path appended to baseUrl.
-  @param allowedDomains - Allowed destination domains, or empty for no restriction.
-  @param body - Text sent as-is, or an object sent as JSON.
-  @param timeout - Whole-request time limit in milliseconds, or zero for no limit.
-  @param refresh - Refetch a repeated GET that would otherwise reuse the conversation's cached response.
-
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| baseUrl (also `url`) | `string` |  |
-| path | `string` | "" |
-| headers | `Record<string, any>` | {} |
-| allowedDomains | `string[]` | [] |
-| method | [HttpMethod](#httpmethod) | "GET" |
-| body | `Record<string, any> \| string \| null` | null |
-| timeout | `number` | 30000 |
-| refresh | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| baseUrl (also `url`) | `string` |  |  |
+| path | `string` | "" | Optional path appended to baseUrl. |
+| headers | `Record<string, any>` | {} |  |
+| allowedDomains | `string[]` | [] | Allowed destination domains, or empty for no restriction. |
+| method | [HttpMethod](#httpmethod) | "GET" |  |
+| body | `Record<string, any> \| string \| null` | null | Text sent as-is, or an object sent as JSON. |
+| timeout | `number` | 30000 | Whole-request time limit in milliseconds, or zero for no limit. |
+| refresh | `boolean` | false | Refetch a repeated GET that would otherwise reuse the conversation's cached response. |
 
 **Returns:** `Result`
 
@@ -159,28 +153,22 @@ fetchJSON(
 
 Fetch a URL and parse the response as JSON.
 
-  @param path - Optional path appended to baseUrl.
-  @param allowedDomains - Allowed destination domains, or empty for no restriction.
-  @param body - Text sent as-is, or an object sent as JSON.
-  @param timeout - Whole-request time limit in milliseconds, or zero for no limit.
-  @param refresh - Refetch a repeated GET that would otherwise reuse the conversation's cached response.
-
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| baseUrl (also `url`) | `string` |  |
-| path | `string` | "" |
-| headers | `Record<string, any>` | {} |
-| allowedDomains | `string[]` | [] |
-| method | [HttpMethod](#httpmethod) | "GET" |
-| body | `Record<string, any> \| string \| null` | null |
-| timeout | `number` | 30000 |
-| refresh | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| baseUrl (also `url`) | `string` |  |  |
+| path | `string` | "" | Optional path appended to baseUrl. |
+| headers | `Record<string, any>` | {} |  |
+| allowedDomains | `string[]` | [] | Allowed destination domains, or empty for no restriction. |
+| method | [HttpMethod](#httpmethod) | "GET" |  |
+| body | `Record<string, any> \| string \| null` | null | Text sent as-is, or an object sent as JSON. |
+| timeout | `number` | 30000 | Whole-request time limit in milliseconds, or zero for no limit. |
+| refresh | `boolean` | false | Refetch a repeated GET that would otherwise reuse the conversation's cached response. |
 
 **Returns:** `Result`
 
@@ -207,28 +195,22 @@ fetchMarkdown(
 
 Fetch a web page as readable Markdown for an LLM, or plain text for non-HTML responses.
 
-  @param path - Optional path appended to baseUrl.
-  @param allowedDomains - Allowed destination domains, or empty for no restriction.
-  @param body - Text sent as-is, or an object sent as JSON.
-  @param timeout - Whole-request time limit in milliseconds, or zero for no limit.
-  @param refresh - Refetch a repeated GET that would otherwise reuse the conversation's cached response.
-
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| baseUrl (also `url`) | `string` |  |
-| path | `string` | "" |
-| headers | `Record<string, any>` | {} |
-| allowedDomains | `string[]` | [] |
-| method | [HttpMethod](#httpmethod) | "GET" |
-| body | `Record<string, any> \| string \| null` | null |
-| timeout | `number` | 30000 |
-| refresh | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| baseUrl (also `url`) | `string` |  |  |
+| path | `string` | "" | Optional path appended to baseUrl. |
+| headers | `Record<string, any>` | {} |  |
+| allowedDomains | `string[]` | [] | Allowed destination domains, or empty for no restriction. |
+| method | [HttpMethod](#httpmethod) | "GET" |  |
+| body | `Record<string, any> \| string \| null` | null | Text sent as-is, or an object sent as JSON. |
+| timeout | `number` | 30000 | Whole-request time limit in milliseconds, or zero for no limit. |
+| refresh | `boolean` | false | Refetch a repeated GET that would otherwise reuse the conversation's cached response. |
 
 **Returns:** `Result`
 

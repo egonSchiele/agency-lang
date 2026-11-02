@@ -123,22 +123,16 @@ usaspendingAwards(
 
 Search U.S. federal awards, ordered by award amount from largest to smallest.
 
-  @param recipient - Match a recipient or company name, or leave empty for any recipient.
-  @param agency - Match an awarding agency name, or leave empty for any agency.
-  @param awardType - Use contracts, grants, loans, direct_payments, or other.
-  @param startDate - A YYYY-MM-DD award-period bound, applied only when endDate is also set.
-  @param endDate - A YYYY-MM-DD award-period bound, applied only when startDate is also set.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| recipient | `string` | "" |
-| agency | `string` | "" |
-| awardType | `string` | "contracts" |
-| startDate | `string` | "" |
-| endDate | `string` | "" |
-| limit | `number` | 20 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| recipient | `string` | "" | Match a recipient or company name, or leave empty for any recipient. |
+| agency | `string` | "" | Match an awarding agency name, or leave empty for any agency. |
+| awardType | `string` | "contracts" | Use contracts, grants, loans, direct_payments, or other. |
+| startDate | `string` | "" | A YYYY-MM-DD award-period bound, applied only when endDate is also set. |
+| endDate | `string` | "" | A YYYY-MM-DD award-period bound, applied only when startDate is also set. |
+| limit | `number` | 20 |  |
 
 **Returns:** `Result<Award[]>`
 
@@ -158,13 +152,11 @@ usaspendingAward(
 
 Read one federal award's details, including subawards and executive compensation.
 
-  @param awardId - A search result's generatedId, or its numeric internalId converted to a string.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| awardId | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| awardId | `string` |  | A search result's generatedId, or its numeric internalId converted to a string. |
 
 **Returns:** `Result<AwardDetail>`
 

@@ -136,7 +136,10 @@ export type ThemeName =
 
 ### colorSchemes
 
+The names of all built-in color schemes (valid string values for `theme`).
+
 ```ts
+/** The names of all built-in color schemes (valid string values for `theme`). */
 export static const colorSchemes: string[] = _builtinThemeNames
 ```
 
@@ -177,19 +180,17 @@ highlight(
 
 Add ANSI syntax highlighting to code for terminal display.
 
-  @param language - A highlight.js language name, or "auto" to guess.
-
 Returns ANSI terminal styling.
   When `language` is "markdown", fenced code blocks use the default palette
   regardless of `theme`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| code | `string` |  |
-| language | `string` | "plaintext" |
-| theme | [ThemeName](#themename) | "vscode-dark" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| code | `string` |  |  |
+| language | `string` | "plaintext" | A highlight.js language name, or "auto" to guess. |
+| theme | [ThemeName](#themename) | "vscode-dark" |  |
 
 **Returns:** `string`
 
@@ -216,36 +217,26 @@ diff(
 
 Compare two texts for terminal display, highlighting changed words.
 
-  @param context - Unchanged lines around each change, or -1 for the full text.
-  @param color - "auto" colors terminal output; true always colors; false disables color.
-  @param oldLabel - Optional label for the original text header.
-  @param newLabel - Optional label for the updated text header.
-  @param ignoreWhitespace - Treat whitespace-only changes as equal.
-  @param hunkHeaders - Include location headers between change regions.
-  @param summary - Include insertion and deletion counts.
-  @param language - Highlight changed lines using this language, or "auto" to guess.
-  @param theme - Color scheme for syntax-highlighted changes.
-
 Use for displaying changes to a person. With `language` and color enabled,
 changed lines use syntax highlighting on red or green backgrounds. Background
 padding is limited to the terminal width. Use `patch` for output to apply with Git.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| oldText | `string` |  |
-| newText | `string` |  |
-| context | `number` | -1 |
-| lineNumbers | `boolean` | false |
-| color | `"auto" \| boolean` | "auto" |
-| oldLabel | `string` | "" |
-| newLabel | `string` | "" |
-| ignoreWhitespace | `boolean` | false |
-| hunkHeaders | `boolean` | false |
-| summary | `boolean` | false |
-| language | `string` | "" |
-| theme | [ThemeName](#themename) | "vscode-dark" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| oldText | `string` |  |  |
+| newText | `string` |  |  |
+| context | `number` | -1 | Unchanged lines around each change, or -1 for the full text. |
+| lineNumbers | `boolean` | false |  |
+| color | `"auto" \| boolean` | "auto" | "auto" colors terminal output; true always colors; false disables color. |
+| oldLabel | `string` | "" | Optional label for the original text header. |
+| newLabel | `string` | "" | Optional label for the updated text header. |
+| ignoreWhitespace | `boolean` | false | Treat whitespace-only changes as equal. |
+| hunkHeaders | `boolean` | false | Include location headers between change regions. |
+| summary | `boolean` | false | Include insertion and deletion counts. |
+| language | `string` | "" | Highlight changed lines using this language, or "auto" to guess. |
+| theme | [ThemeName](#themename) | "vscode-dark" | Color scheme for syntax-highlighted changes. |
 
 **Returns:** `string`
 
@@ -268,24 +259,19 @@ patch(
 
 Produce a unified diff suitable for git apply.
 
-  @param filename - Path to use in the patch headers.
-  @param context - Unchanged lines around each change.
-  @param ignoreWhitespace - Treat whitespace-only changes as equal.
-  @param newFilename - Optional new path for a rename.
-
 An empty `oldText` creates a file-creation patch. An empty `newText` creates
 a deletion patch. This function returns patch text without changing files.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| oldText | `string` |  |
-| newText | `string` |  |
-| filename | `string` |  |
-| context | `number` | 3 |
-| ignoreWhitespace | `boolean` | false |
-| newFilename | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| oldText | `string` |  |  |
+| newText | `string` |  |  |
+| filename | `string` |  | Path to use in the patch headers. |
+| context | `number` | 3 | Unchanged lines around each change. |
+| ignoreWhitespace | `boolean` | false | Treat whitespace-only changes as equal. |
+| newFilename | `string` | "" | Optional new path for a rename. |
 
 **Returns:** `string`
 

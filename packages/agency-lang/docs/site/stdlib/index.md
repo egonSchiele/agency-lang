@@ -159,8 +159,6 @@ setAgentCwd(dir: string)
 
 Set the base for relative paths in tools called with useAgentCwd: true.
 
-  @param dir - The absolute directory to use as the agent working directory
-
 Set the agent working directory. Path-taking tools (read, write, edit,
   ls, glob, grep, exec, bash, ...) can resolve relative paths against
   the agent working directory if you pass in `useAgentCwd: true` to them.
@@ -170,9 +168,9 @@ Set the agent working directory. Path-taking tools (read, write, edit,
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` |  | The absolute directory to use as the agent working directory |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L120))
 
@@ -217,14 +215,12 @@ printJSON(obj: any, highlight: boolean = false)
 
 Print an object as formatted JSON to the console.
 
-  @param highlight - Whether to syntax-highlight the output
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| obj | `any` |  |
-| highlight | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| obj | `any` |  |  |
+| highlight | `boolean` | false | Whether to syntax-highlight the output |
 
 **Needs:** `terminal`
 
@@ -281,8 +277,6 @@ saveDraft(value: any)
 Save the current scope's best answer so far for recovery if a guard stops it.
   Call again as the answer improves.
 
-  @param value - A partial result matching the enclosing scope's return type
-
 Use this to retain a partial answer when a guard stops unfinished work.
 The last saved value wins and must match the enclosing scope's return type.
 Drafts belong to their function, node, or guard block; a caller can pass a
@@ -292,9 +286,9 @@ not affect the normal return value.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `any` |  | A partial result matching the enclosing scope's return type |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L193))
 
@@ -312,21 +306,15 @@ read(
 
 Read the contents of a file and return it as a string.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
-  @param dir - Base directory for filename
-  @param offset - 1-indexed line to start at (0 means start of file)
-  @param limit - Maximum number of lines to return (0 means read to end of file)
-  @param useAgentCwd - Resolve a relative dir against the agent working directory
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| dir | `string` | "." |
-| offset | `number` | 0 |
-| limit | `number` | 0 |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir. |
+| dir | `string` | "." | Base directory for filename |
+| offset | `number` | 0 | 1-indexed line to start at (0 means start of file) |
+| limit | `number` | 0 | Maximum number of lines to return (0 means read to end of file) |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory |
 
 **Returns:** `Result`
 
@@ -350,20 +338,15 @@ write(
 
 Write content to a file.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
-  @param dir - Base directory for filename
-  @param mode - How to handle an existing file
-  @param useAgentCwd - Resolve a relative dir against the agent working directory
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| content | `string` |  |
-| dir | `string` | "." |
-| mode | [WriteMode](#writemode) | "overwrite" |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir. |
+| content | `string` |  |  |
+| dir | `string` | "." | Base directory for filename |
+| mode | [WriteMode](#writemode) | "overwrite" | How to handle an existing file |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory |
 
 **Returns:** `Result`
 
@@ -387,20 +370,15 @@ writeBinary(
 
 Decode base64 data and write the bytes to a file.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
-  @param dir - Base directory for filename
-  @param mode - How to handle an existing file
-  @param useAgentCwd - Resolve a relative dir against the agent working directory
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| base64 | `string` |  |
-| dir | `string` | "." |
-| mode | [WriteMode](#writemode) | "overwrite" |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir. |
+| base64 | `string` |  |  |
+| dir | `string` | "." | Base directory for filename |
+| mode | [WriteMode](#writemode) | "overwrite" | How to handle an existing file |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory |
 
 **Returns:** `Result`
 
@@ -422,17 +400,13 @@ readBinary(
 
 Read a binary file as a base64-encoded string.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
-  @param dir - Base directory for filename
-  @param useAgentCwd - Resolve a relative dir against the agent working directory
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| dir | `string` | "." |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir. |
+| dir | `string` | "." | Base directory for filename |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory |
 
 **Returns:** `Result`
 
@@ -451,15 +425,12 @@ range(start: number, end: number = -1): number[]
 Generate an array of numbers. With one argument, counts from 0 to start-1;
   with two, from start to end-1.
 
-  @param start - The count with one argument, or the starting number with two
-  @param end - The exclusive end number (omit to count up from 0)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| start | `number` |  |
-| end | `number` | -1 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| start | `number` |  | The count with one argument, or the starting number with two |
+| end | `number` | -1 | The exclusive end number (omit to count up from 0) |
 
 **Returns:** `number[]`
 
@@ -473,14 +444,12 @@ map(arr: any[], func: (any) -> any): any[]
 
 Map a function over an array, returning a new array of results.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `any[]`
 
@@ -495,14 +464,12 @@ mapWithIndex(arr: any[], func: (any, any) -> any): any[]
 Apply a function to each item of an array along with its index, and
   return a new array of the results.
 
-  @param func - Called with the item and its zero-based index
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any, any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any, any) => any` |  | Called with the item and its zero-based index |
 
 **Returns:** `any[]`
 
@@ -516,14 +483,12 @@ filter(arr: any[], func: (any) -> any): any[]
 
 Return a new array containing only the elements for which the function returns true.
 
-  @param func - Called with each element; return true to keep it
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element; return true to keep it |
 
 **Returns:** `any[]`
 
@@ -537,14 +502,12 @@ exclude(arr: any[], func: (any) -> any): any[]
 
 Return a new array excluding elements for which the function returns true.
 
-  @param func - Called with each element; return true to exclude it
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element; return true to exclude it |
 
 **Returns:** `any[]`
 
@@ -558,14 +521,12 @@ find(arr: any[], func: (any) -> any): any
 
 Return the first element for which the function returns true, or null if none match.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `any`
 
@@ -579,14 +540,12 @@ findIndex(arr: any[], func: (any) -> any): number
 
 Return the index of the first element for which the function returns true, or -1 if none match.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `number`
 
@@ -600,16 +559,13 @@ reduce(arr: any[], initial: any, func: (any, any) -> any): any
 
 Reduce an array to a single value by applying a function to an accumulator and each element.
 
-  @param initial - The initial accumulator value
-  @param func - The reducer function receiving (accumulator, element)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| initial | `any` |  |
-| func | `(any, any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| initial | `any` |  | The initial accumulator value |
+| func | `(any, any) => any` |  | The reducer function receiving (accumulator, element) |
 
 **Returns:** `any`
 
@@ -623,14 +579,12 @@ flatMap(arr: any[], func: (any) -> any): any[]
 
 Map a function over an array and flatten the results by one level.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `any[]`
 
@@ -662,14 +616,12 @@ every(arr: any[], func: (any) -> any): boolean
 
 Return true if the function returns true for every element in the array.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `boolean`
 
@@ -683,14 +635,12 @@ some(arr: any[], func: (any) -> any): boolean
 
 Return true if the function returns true for at least one element in the array.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `boolean`
 
@@ -704,14 +654,12 @@ count(arr: any[], func: (any) -> any): number
 
 Count the number of elements in the array for which the function returns true.
 
-  @param func - Called with each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Called with each element |
 
 **Returns:** `number`
 
@@ -725,14 +673,12 @@ sortBy(arr: any[], func: (any) -> any): any[]
 
 Return a new array sorted by the values returned by the function, in ascending order.
 
-  @param func - Returns the sort key for each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Returns the sort key for each element |
 
 **Returns:** `any[]`
 
@@ -746,14 +692,12 @@ unique(arr: any[], func: (any) -> any): any[]
 
 Return a new array with duplicate elements removed, using the function to determine the identity of each element.
 
-  @param func - Returns the identity key for each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Returns the identity key for each element |
 
 **Returns:** `any[]`
 
@@ -767,14 +711,12 @@ groupBy(arr: any[], func: (any) -> any): any
 
 Group elements of an array by the value returned by the function. Returns an object where keys are group names and values are arrays of elements.
 
-  @param func - Returns the group key for each element
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| arr | `any[]` |  |
-| func | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| arr | `any[]` |  |  |
+| func | `(any) => any` |  | Returns the group key for each element |
 
 **Returns:** `any`
 
@@ -790,14 +732,11 @@ Register a callback for a lifecycle event. A callback registered inside a
   function or node is removed when that returns. One registered at the top
   level stays active for the whole run.
 
-  @param name - The callback hook name, e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd"
-  @param fn - A function that receives the event data
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| fn | `any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The callback hook name, e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd" |
+| fn | `any` |  | A function that receives the event data |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L596))

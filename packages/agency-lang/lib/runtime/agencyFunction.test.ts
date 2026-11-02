@@ -617,6 +617,38 @@ describe("partial()", () => {
     const bound = fn.partial({ dir: "/foo" });
     expect(bound.toolDefinition!.description).toBe("Read a file.\n@param filename - The file");
   });
+
+  it("keeps a parameter's fenced example when binding another parameter", () => {
+    const pathEntry = [
+      "@param path - The file. For example:",
+      "```text",
+      "first",
+      "",
+      "@param other - inside the example",
+      "```",
+    ].join("\n");
+    const description = `Read a file.\n\n${pathEntry}\n@param other - Actual option.`;
+    const fn = AgencyFunction.create(
+      {
+        name: "readFile",
+        module: "test",
+        fn: () => {},
+        params: [
+          { name: "path", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "other", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: { name: "readFile", description, schema: {} },
+      },
+      {},
+    );
+    expect(fn.partial({ other: "value" }).toolDefinition!.description).toBe(
+      `Read a file.\n\n${pathEntry}`,
+    );
+    expect(fn.partial({ path: "file.txt" }).toolDefinition!.description).toBe(
+      "Read a file.\n\n@param other - Actual option.",
+    );
+    expect(fn.toolDefinition!.description).toBe(description);
+  });
 });
 
 describe("describe()", () => {

@@ -207,11 +207,6 @@ detectObjects(
 
 Locate named objects in an image using a local detector.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image.
-  @param labels - One to 50 object names to look for, such as "person" or "chair".
-  @param model - A running local detector, such as "owlv2-base" or "florence-2".
-  @param threshold - Minimum score from 0 to 1, or null for the model default.
-
 Use labels for object categories such as "person" or "chair". OWLv2 handles
 the labels in one pass. Florence-2 makes a separate pass for each label.
 Florence-2 assigns every detection a score of 1. OWLv2 uses a default
@@ -219,12 +214,12 @@ threshold of 0.1 when none is supplied.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| labels | `string[]` |  |
-| model | `string` |  |
-| threshold | `number \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, WebP, or GIF image. |
+| labels | `string[]` |  | One to 50 object names to look for, such as "person" or "chair". |
+| model | `string` |  | A running local detector, such as "owlv2-base" or "florence-2". |
+| threshold | `number \| null` | null | Minimum score from 0 to 1, or null for the model default. |
 
 **Returns:** `Result<Detection[]>`
 
@@ -247,22 +242,17 @@ tagImage(
 
 Describe an image with booru tags using a local model.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image.
-  @param model - A running local tagger, such as "wd14-tagger" or "florence-2".
-  @param threshold - Minimum tag score from 0 to 1.
-  @param limit - Maximum tags to return, from 1 to 500.
-
 Use the returned booru tags in illustration-model prompts or caption files.
 Tags arrive in descending score order.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| model | `string` |  |
-| threshold | `number` | 0.35 |
-| limit | `number` | 30 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, WebP, or GIF image. |
+| model | `string` |  | A running local tagger, such as "wd14-tagger" or "florence-2". |
+| threshold | `number` | 0.35 | Minimum tag score from 0 to 1. |
+| limit | `number` | 30 | Maximum tags to return, from 1 to 500. |
 
 **Returns:** `Result<Tag[]>`
 
@@ -285,17 +275,13 @@ captionImage(
 Write a sentence about an image with a local model. Runs on this
   machine; nothing is uploaded.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param model - A local vision model that captions, such as "florence-2"
-  @param detail - "short" for one sentence, "long" for a paragraph
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| model | `string` |  |
-| detail | `string` | "short" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, WebP, or GIF image |
+| model | `string` |  | A local vision model that captions, such as "florence-2" |
+| detail | `string` | "short" | "short" for one sentence, "long" for a paragraph |
 
 **Returns:** `Result<string>`
 
@@ -318,10 +304,6 @@ embedImage(
 Embed a whole image or selected regions for visual similarity comparisons.
   Compare vectors from the same model and with similar crop framing.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image.
-  @param model - A running local embedding model, such as "dinov2-base".
-  @param boxes - Up to 100 normalized regions, or null for the whole image.
-
 Compare vectors with `cosineSimilarity` from `std::embedding`. Use crops
 from the same model and with similar framing. Compare against labeled
 examples of both the objects you want and other objects; the module example
@@ -329,11 +311,11 @@ shows how to choose the closer group.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| model | `string` |  |
-| boxes | `BoundingBox[] \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, WebP, or GIF image. |
+| model | `string` |  | A running local embedding model, such as "dinov2-base". |
+| boxes | `BoundingBox[] \| null` | null | Up to 100 normalized regions, or null for the whole image. |
 
 **Returns:** `Result<number[][]>`
 
@@ -356,23 +338,18 @@ findRegions(
 
 Find candidate object regions in an image using a local model, without labels.
 
-  @param path - Path to a PNG, JPEG, WebP, or GIF image.
-  @param model - A running local region model, such as "owlv2-base" or "florence-2".
-  @param limit - Maximum regions to return, from 1 to 100.
-  @param threshold - Minimum score from 0 to 1, or null for the model default.
-
 Use this before `embedImage` when you want candidate objects without choosing
 category names. Regions arrive in descending score order. Florence-2 gives
 every region a score of 1; OWLv2 defaults to a threshold of 0.1.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| model | `string` |  |
-| limit | `number` | 50 |
-| threshold | `number \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, WebP, or GIF image. |
+| model | `string` |  | A running local region model, such as "owlv2-base" or "florence-2". |
+| limit | `number` | 50 | Maximum regions to return, from 1 to 100. |
+| threshold | `number \| null` | null | Minimum score from 0 to 1, or null for the model default. |
 
 **Returns:** `Result<Region[]>`
 

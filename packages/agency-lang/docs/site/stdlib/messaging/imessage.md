@@ -45,21 +45,16 @@ sendIMessage(
 
 Send an iMessage through the macOS Messages app.
 
-  @param to - The recipient's phone number or iMessage email address.
-  @param message - Non-empty message text.
-  @param allowList - Limit recipients to these addresses or numbers, or leave empty for no allow restriction.
-  @param blockList - Reject these addresses or numbers even if they are allowed.
-
 Only works on macOS with Messages.app signed in to iMessage. No API key required.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| to | `string` |  |
-| message | `string` |  |
-| allowList | `string[]` | [] |
-| blockList | `string[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| to | `string` |  | The recipient's phone number or iMessage email address. |
+| message | `string` |  | Non-empty message text. |
+| allowList | `string[]` | [] | Limit recipients to these addresses or numbers, or leave empty for no allow restriction. |
+| blockList | `string[]` | [] | Reject these addresses or numbers even if they are allowed. |
 
 **Returns:** `Result`
 

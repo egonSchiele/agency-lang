@@ -5,7 +5,7 @@
  * function value sends a model for each parameter.
  */
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
-import { withoutParamDocs } from "../../runtime/paramDocs.js";
+import { withoutParamDocs } from "../../utils/paramDocs.js";
 import type { ExportParam } from "../agency.js";
 import { signatureKey } from "./resolve.js";
 import type { Signature, ToolRef } from "./types.js";

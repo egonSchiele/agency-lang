@@ -124,17 +124,15 @@ setMemoryId(id: string)
 Choose the user, conversation, or workspace scope for memory reads and writes.
   Enable memory before setting the scope.
 
-  @param id - Nonempty scope using letters, digits, dots, underscores, or hyphens, excluding `.` and `..`.
-
 A branch inherits its memory scope when it forks. Changing the scope
 inside a branch leaves the parent's scope unchanged. Switching storage
 directories keeps the scope, so set it again when you want a different one.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `string` |  | Nonempty scope using letters, digits, dots, underscores, or hyphens, excluding `.` and `..`. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L84))
 
@@ -159,8 +157,6 @@ enableMemory(config: MemoryConfig)
 Enable persistent memory for the current execution branch.
   Enabling the active directory again leaves its configuration unchanged.
 
-  @param config - Supply a nonempty `dir` for the memory store.
-
 Runs on the same host that use the same absolute directory share a store.
 Enabling the active directory again leaves its configuration unchanged.
 A different directory becomes the active configuration until it is popped
@@ -169,9 +165,9 @@ The storage directory is created when the store first writes data.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| config | [MemoryConfig](#memoryconfig) |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| config | [MemoryConfig](#memoryconfig) |  | Supply a nonempty `dir` for the memory store. |
 
 **Throws:** `std::memory::enableMemory`
 
@@ -203,9 +199,6 @@ memory(config: MemoryConfig, block: () -> any = null): Result
 
 Run a block with a temporary memory configuration, then restore the previous one.
 
-  @param config - Supply a nonempty `dir` for the memory store.
-  @param block - Required block whose return value becomes the successful result.
-
 ```ts
 const result = memory({ dir: "./temporary-memory" }) as {
   remember("Alice's favorite color is blue") with approve
@@ -218,10 +211,10 @@ approval, so the caller decides when to expose it.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| config | [MemoryConfig](#memoryconfig) |  |
-| block | `() => any` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| config | [MemoryConfig](#memoryconfig) |  | Supply a nonempty `dir` for the memory store. |
+| block | `() => any` | null | Required block whose return value becomes the successful result. |
 
 **Returns:** `Result`
 

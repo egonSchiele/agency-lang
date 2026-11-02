@@ -3,8 +3,9 @@
  * An entry starts at a line that begins with `@param <name>`, takes the
  * non-blank lines after it, and ends at the next `@param` line or at a
  * blank line, which goes with the entry. The dash after the name is
- * optional. Every reader of these entries goes through `docSections`, so
- * they all agree on where an entry ends.
+ * optional. Fenced Markdown examples stay in their containing entry or
+ * prose; their blank lines and `@param` lines do not start or end entries.
+ * Every reader uses `docSections` to find the same entry boundaries.
  */
 
 const PARAM_LINE = /^\s*@param\s+(\w+)/;
@@ -18,7 +19,24 @@ type DocSection = { param: string | null; lines: string[] };
 function docSections(description: string): DocSection[] {
   const sections: DocSection[] = [];
   let entry: DocSection | null = null;
+  let fence = "";
   for (const line of description.split("\n")) {
+    const trimmed = line.trim();
+    const marker = trimmed.match(/^(`{3,}|~{3,})/)?.[0] ?? "";
+    const opensFence = marker && (marker[0] !== "`" || !trimmed.slice(marker.length).includes("`"));
+    if (fence || opensFence) {
+      if (entry !== null) {
+        entry.lines.push(line);
+      } else {
+        sections.push({ param: null, lines: [line] });
+      }
+      if (!fence) {
+        fence = marker;
+      } else if (trimmed === marker && marker[0] === fence[0] && marker.length >= fence.length) {
+        fence = "";
+      }
+      continue;
+    }
     const match = line.match(PARAM_LINE);
     if (match) {
       entry = { param: match[1], lines: [line] };

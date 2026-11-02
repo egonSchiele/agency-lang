@@ -159,30 +159,22 @@ generateImage(
 
 Generate or edit an image with a hosted provider. Local input images are uploaded.
 
-  @param prompt - What to generate or how to edit the inputs.
-  @param model - Image model, or empty for the provider default.
-  @param provider - Override the provider derived from the model name.
-  @param size - Provider-supported size such as "1024x1024".
-  @param images - Input images as local PNG/JPEG/GIF/WebP paths, HTTP(S) URLs, or data URIs.
-  @param apiKey - Override the API key.
-  @param baseUrl - Custom endpoint for openai-compat or litellm.
-
 Use a hosted image model for generation or editing. Each local input file
 requires upload approval. URL and data-URI inputs do not read a local file.
 Save the returned base64 with `writeBinary` when you need a file.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| prompt | `string` |  |
-| model | `string` | "" |
-| provider | `string` | "" |
-| size | `string` | "" |
-| quality | [ImageQuality](#imagequality) | "auto" |
-| images | `string[]` | [] |
-| apiKey | `string` | "" |
-| baseUrl | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| prompt | `string` |  | What to generate or how to edit the inputs. |
+| model | `string` | "" | Image model, or empty for the provider default. |
+| provider | `string` | "" | Override the provider derived from the model name. |
+| size | `string` | "" | Provider-supported size such as "1024x1024". |
+| quality | [ImageQuality](#imagequality) | "auto" |  |
+| images | `string[]` | [] | Input images as local PNG/JPEG/GIF/WebP paths, HTTP(S) URLs, or data URIs. |
+| apiKey | `string` | "" | Override the API key. |
+| baseUrl | `string` | "" | Custom endpoint for openai-compat or litellm. |
 
 **Returns:** `Result<GeneratedImage>`
 
@@ -220,24 +212,6 @@ generateImageLocal(
 Generate or edit an image with a running local model. Returns image data
   for saving with writeBinary.
 
-  @param model - Catalog name, diffusers: URI, or model directory.
-  @param size - WxH with each side a multiple of 16 from 256 to 2048 and at most 4 million pixels; empty uses the input aspect ratio or 1024x1024.
-  @param steps - Refinement passes, or null for the model default.
-  @param guidance - Prompt adherence; leave null for the model default since some models reject overrides.
-  @param seed - Random seed, or null to choose one and return it with the image.
-  @param negativePrompt - Unwanted content; leave empty unless the model supports it.
-  @param format - Output format: png, jpeg, or webp.
-  @param lora - SDXL adapter name in client.adaptersDir, without .safetensors.
-  @param loraScale - Adapter strength from 0 to 2, or null for 1.
-  @param controlnet - SDXL ControlNet folder in client.controlnetsDir, paired with controlImage.
-  @param controlImage - Local conditioning drawing, paired with controlnet.
-  @param controlScale - ControlNet strength from 0 to 2, or null for 1.
-  @param invertControlImage - Invert dark lines on white for a scribble ControlNet.
-  @param images - Up to four local references for FLUX.2 [klein] or Qwen-Image-Edit; Qwen-Image-Edit requires at least one.
-  @param startImage - Local picture to redraw; unsupported by FLUX.2 [klein] and Qwen-Image-Edit.
-  @param strength - Fraction of startImage to redraw, greater than 0 and at most 1, or null for the model default.
-  @param mask - Local mask matching startImage dimensions, with white to redraw and black to keep.
-
 Start the model with `agency local serve --image <model>`. Save the returned
 base64 with `writeBinary`.
 
@@ -265,26 +239,26 @@ Z-Image Turbo uses 1.0 with one and 0.6 without one.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| prompt | `string` |  |
-| model | `string` |  |
-| size | `string` | "" |
-| steps | `number \| null` | null |
-| guidance | `number \| null` | null |
-| seed | `number \| null` | null |
-| negativePrompt | `string` | "" |
-| format | `string` | "png" |
-| lora | `string` | "" |
-| loraScale | `number \| null` | null |
-| controlnet | `string` | "" |
-| controlImage | `string` | "" |
-| controlScale | `number \| null` | null |
-| invertControlImage | `boolean` | false |
-| images | `string[]` | [] |
-| startImage | `string` | "" |
-| strength | `number \| null` | null |
-| mask | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| prompt | `string` |  |  |
+| model | `string` |  | Catalog name, diffusers: URI, or model directory. |
+| size | `string` | "" | WxH with each side a multiple of 16 from 256 to 2048 and at most 4 million pixels; empty uses the input aspect ratio or 1024x1024. |
+| steps | `number \| null` | null | Refinement passes, or null for the model default. |
+| guidance | `number \| null` | null | Prompt adherence; leave null for the model default since some models reject overrides. |
+| seed | `number \| null` | null | Random seed, or null to choose one and return it with the image. |
+| negativePrompt | `string` | "" | Unwanted content; leave empty unless the model supports it. |
+| format | `string` | "png" | Output format: png, jpeg, or webp. |
+| lora | `string` | "" | SDXL adapter name in client.adaptersDir, without .safetensors. |
+| loraScale | `number \| null` | null | Adapter strength from 0 to 2, or null for 1. |
+| controlnet | `string` | "" | SDXL ControlNet folder in client.controlnetsDir, paired with controlImage. |
+| controlImage | `string` | "" | Local conditioning drawing, paired with controlnet. |
+| controlScale | `number \| null` | null | ControlNet strength from 0 to 2, or null for 1. |
+| invertControlImage | `boolean` | false | Invert dark lines on white for a scribble ControlNet. |
+| images | `string[]` | [] | Up to four local references for FLUX.2 [klein] or Qwen-Image-Edit; Qwen-Image-Edit requires at least one. |
+| startImage | `string` | "" | Local picture to redraw; unsupported by FLUX.2 [klein] and Qwen-Image-Edit. |
+| strength | `number \| null` | null | Fraction of startImage to redraw, greater than 0 and at most 1, or null for the model default. |
+| mask | `string` | "" | Local mask matching startImage dimensions, with white to redraw and black to keep. |
 
 **Returns:** `Result<LocalImage>`
 
@@ -308,21 +282,15 @@ cropImage(
 
 Crop an image into a new file without overwriting an existing output.
 
-  @param path - Input PNG, JPEG, or WebP file.
-  @param box - Region normalized to 0..1 from the top left.
-  @param outPath - Output path whose extension selects the format.
-  @param pad - Expand each side by this fraction of the box size.
-  @param square - Pad to a square using the edge color.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| box | [ImageBox](#imagebox) |  |
-| outPath | `string` |  |
-| pad | `number` | 0 |
-| square | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Input PNG, JPEG, or WebP file. |
+| box | [ImageBox](#imagebox) |  | Region normalized to 0..1 from the top left. |
+| outPath | `string` |  | Output path whose extension selects the format. |
+| pad | `number` | 0 | Expand each side by this fraction of the box size. |
+| square | `boolean` | false | Pad to a square using the edge color. |
 
 **Returns:** `Result<string>`
 
@@ -340,13 +308,11 @@ imageSize(path: string): Result<ImageSize> raises <std::readImage>
 
 The width and height of an image in pixels.
 
-  @param path - The image: PNG, JPEG, WebP, or GIF
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | The image: PNG, JPEG, WebP, or GIF |
 
 **Returns:** `Result<ImageSize>`
 
@@ -368,20 +334,16 @@ pasteImages(
 
 Arrange images in rows and write a new file without overwriting existing output.
 
-  @param paths - Input images in reading order.
-  @param outPath - Output path whose extension selects the format.
-  @param columns - Number of images per row.
-
 Use two columns for a before-and-after comparison, or more columns for a
 contact sheet. Images keep their original sizes on a white canvas.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| paths | `string[]` |  |
-| outPath | `string` |  |
-| columns | `number` | 2 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| paths | `string[]` |  | Input images in reading order. |
+| outPath | `string` |  | Output path whose extension selects the format. |
+| columns | `number` | 2 | Number of images per row. |
 
 **Returns:** `Result<string>`
 

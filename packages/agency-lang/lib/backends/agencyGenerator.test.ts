@@ -4,6 +4,7 @@ import { parseAgency } from "../parser.js";
 import { formatSource } from "../formatter.js";
 import { deepFreeze } from "../runtime/utils.js";
 import { AgencyNode, FunctionDefinition } from "../types.js";
+import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
 
 class ProcessCountingGenerator extends AgencyGenerator {
   functionCallsProcessed = 0;
@@ -431,6 +432,48 @@ describe("AgencyGenerator - object property tags", () => {
     const twice = formatAgency(once);
     expect(once).toContain("@validate(isPositive)");
     expect(twice).toBe(once);
+  });
+});
+
+describe("AgencyGenerator - constant doc comments", () => {
+  it.each([false, true])("preserves attached docs and tags when static is %s", (isStatic) => {
+    const output = generateAgency({
+      type: "agencyProgram",
+      nodes: [
+        {
+          type: "assignment",
+          variableName: "limit",
+          value: { type: "number", value: "5" },
+          declKind: "const",
+          static: isStatic,
+          exported: true,
+          docComment: {
+            type: "multiLineComment",
+            content: " Limit docs. ",
+            isDoc: true,
+            isModuleDoc: false,
+          },
+          tags: [{ type: "tag", name: "hidden", arguments: [] }],
+        },
+      ],
+    });
+
+    const declaration = isStatic ? "static const" : "const";
+    expect(output.trim()).toBe(`/** Limit docs. */\n@hidden\nexport ${declaration} limit = 5`);
+    expect(formatSource(output)).toBe(output);
+
+    const parsed = parseAgency(output, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) {
+      throw new Error(parsed.message);
+    }
+    const preprocessor = new TypescriptPreprocessor(parsed.result);
+    preprocessor.attachDocComments();
+    preprocessor.attachTags();
+    expect(parsed.result.nodes.find((node) => node.type === "assignment")).toMatchObject({
+      docComment: { content: " Limit docs. ", isDoc: true },
+      tags: [{ name: "hidden" }],
+    });
   });
 });
 

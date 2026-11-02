@@ -74,8 +74,12 @@ the rendered page is present with its recorded content hash.
 
 The doc cache's compiler stamp covers what `dist/lib/cli/doc.js`
 imports, the same way the build manifest's stamp covers what the compile
-pipeline imports (see `docs/dev/compiler/incremental-builds.md`). An edit
-to code the doc generator does not import leaves every page fresh.
+pipeline imports (see `docs/dev/compiler/incremental-builds.md`). Both
+stamps exclude runtime modules while still following their imports. The
+shared parameter-description parser lives in `lib/utils/paramDocs.ts`, so
+changes to it invalidate the docs without making other runtime edits
+re-render every page. An edit to code the doc generator does not import
+leaves every page fresh.
 
 A few of those deserve a note. `dependencyFingerprint` decides
 `cacheable`. It sets the flag to false for a parse failure, a filesystem

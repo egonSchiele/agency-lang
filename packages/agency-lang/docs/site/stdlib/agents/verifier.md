@@ -45,26 +45,18 @@ verifierAgent(
 Check work on disk against task criteria with tools and return findings.
   A failed verification returns no findings.
 
-  @param criteria - Known criteria to check alongside those derived from the task.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
-  @param extraTools - Tools available to criteria generation and verification.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| task | `string` |  |
-| criteria | `string[]` | [] |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| task | `string` |  |  |
+| criteria | `string[]` | [] | Known criteria to check alongside those derived from the task. |
+| maxCost | `number` | $20.00 | Cost budget in USD. |
+| maxTime | `number` | 15m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Name a conversation to reuse across calls, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Tools available to criteria generation and verification. |
 
 **Returns:** `Result<Feedback[]>`
 

@@ -258,16 +258,13 @@ createNote(
 
 Create a note in the macOS Notes app.
 
-  @param body - The note's content as Markdown.
-  @param folder - The folder to use, creating it if missing.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
-| body | `string` |  |
-| folder | `string` | "Agency Notes" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  |  |
+| body | `string` |  | The note's content as Markdown. |
+| folder | `string` | "Agency Notes" | The folder to use, creating it if missing. |
 
 **Returns:** `Result<Note>`
 
@@ -289,17 +286,13 @@ appendToNote(
 
 Append Markdown to an existing note.
 
-  @param id - A note ID from a listing, search, or create result.
-  @param body - Markdown content to add to the existing body.
-  @param folder - If supplied, fail unless the note belongs to this folder.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `string` |  |
-| body | `string` |  |
-| folder | `string \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `string` |  | A note ID from a listing, search, or create result. |
+| body | `string` |  | Markdown content to add to the existing body. |
+| folder | `string \| null` | null | If supplied, fail unless the note belongs to this folder. |
 
 **Returns:** `Result<Note>`
 
@@ -320,15 +313,12 @@ readNote(
 
 Read a note's contents as plain text.
 
-  @param id - A note ID from a listing, search, or create result.
-  @param folder - If supplied, fail unless the note belongs to this folder.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `string` |  |
-| folder | `string \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `string` |  | A note ID from a listing, search, or create result. |
+| folder | `string \| null` | null | If supplied, fail unless the note belongs to this folder. |
 
 **Returns:** `Result<NoteContent>`
 
@@ -350,15 +340,12 @@ searchNotes(
 Search notes by their text and return matching notes' metadata, without their
   contents.
 
-  @param query - The text to search for
-  @param folder - If given, only search this folder
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| folder | `string \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  | The text to search for |
+| folder | `string \| null` | null | If given, only search this folder |
 
 **Returns:** `Result<Note[]>`
 
@@ -378,13 +365,11 @@ listNotes(
 
 List notes' metadata, without their contents.
 
-  @param folder - If given, only list this folder
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| folder | `string \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| folder | `string \| null` | null | If given, only list this folder |
 
 **Returns:** `Result<Note[]>`
 
@@ -421,15 +406,12 @@ deleteNote(
 
 Move a note to Recently Deleted, where it remains for about 30 days.
 
-  @param id - A note ID from a listing, search, or create result.
-  @param folder - If supplied, fail unless the note belongs to this folder.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `string` |  |
-| folder | `string \| null` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `string` |  | A note ID from a listing, search, or create result. |
+| folder | `string \| null` | null | If supplied, fail unless the note belongs to this folder. |
 
 **Returns:** `Result<null>`
 

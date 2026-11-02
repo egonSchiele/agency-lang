@@ -101,17 +101,13 @@ readTextBlocks(
 Read text from an image with confidence scores and bounding boxes.
   Uses macOS Vision locally; requires macOS and does not upload the image.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image.
-  @param language - Recognition language such as "en-US", or empty for automatic selection.
-  @param fast - Use fast recognition instead of accurate recognition.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| language | `string` | "" |
-| fast | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, GIF, or WebP image. |
+| language | `string` | "" | Recognition language such as "en-US", or empty for automatic selection. |
+| fast | `boolean` | false | Use fast recognition instead of accurate recognition. |
 
 **Returns:** `Result<TextBlock[]>`
 
@@ -134,17 +130,13 @@ readText(
 Read text from an image as a string with one recognized line per line.
   Uses macOS Vision locally; requires macOS and does not upload the image.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image.
-  @param language - Recognition language such as "en-US", or empty for automatic selection.
-  @param fast - Use fast recognition instead of accurate recognition.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| language | `string` | "" |
-| fast | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, GIF, or WebP image. |
+| language | `string` | "" | Recognition language such as "en-US", or empty for automatic selection. |
+| fast | `boolean` | false | Use fast recognition instead of accurate recognition. |
 
 **Returns:** `Result<string>`
 
@@ -168,23 +160,18 @@ readTextWithModel(
 Send an image to a vision model to transcribe its text. The result may contain
   invented or misread text; use readText for local OCR on macOS.
 
-  @param path - Path to a PNG, JPEG, GIF, or WebP image.
-  @param model - Model to use, or empty for the run's default.
-  @param provider - Override the provider derived from the model name.
-  @param prompt - Additional transcription instructions, such as names or jargon.
-
 Runs in a separate conversation thread, so the image and transcription
 instructions do not remain in the caller's conversation. Check the result
 against the image when exact transcription matters.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
-| model | `string` | "" |
-| provider | `string` | "" |
-| prompt | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to a PNG, JPEG, GIF, or WebP image. |
+| model | `string` | "" | Model to use, or empty for the run's default. |
+| provider | `string` | "" | Override the provider derived from the model name. |
+| prompt | `string` | "" | Additional transcription instructions, such as names or jargon. |
 
 **Returns:** `Result<string>`
 

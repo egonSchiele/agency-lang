@@ -18,14 +18,12 @@ round(num: number, precision: number = 0): number
 
 Round a number to the requested decimal places.
 
-  @param precision - Number of digits after the decimal point.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| num | `number` |  |
-| precision | `number` | 0 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| num | `number` |  |  |
+| precision | `number` | 0 | Number of digits after the decimal point. |
 
 **Returns:** `number`
 

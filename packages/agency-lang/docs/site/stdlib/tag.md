@@ -94,14 +94,12 @@ redact(value: any, label: string = ""): any
 
 Mark a value for replacement in state logs and return its current tags.
 
-  @param label - Replacement text, or "" for "[REDACTED]".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| value | `any` |  |
-| label | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| value | `any` |  |  |
+| label | `string` | "" | Replacement text, or "" for "[REDACTED]". |
 
 **Returns:** `any`
 

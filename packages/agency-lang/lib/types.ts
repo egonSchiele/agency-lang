@@ -266,6 +266,7 @@ export type Assignment = BaseNode & {
   declKind?: "let" | "const";
   value: Expression | MessageThread;
   tags?: Tag[];
+  docComment?: AgencyMultiLineComment;
   exported?: boolean;
   /** Set by pattern lowering on the synthetic scrutinee binding of a lowered
    *  `match` with pattern arms. A deep-cloned, body-free snapshot of the arms,

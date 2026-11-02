@@ -55,15 +55,12 @@ hostedSearchTools(model: string = "", provider: string = ""): string[]
 
 Select provider-hosted search for an LLM call's model and provider route.
 
-  @param model - Use the same model as the call, or "" for the ambient model.
-  @param provider - Use the same provider as the call, or "" for automatic resolution.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| model | `string` | "" |
-| provider | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| model | `string` | "" | Use the same model as the call, or "" for the ambient model. |
+| provider | `string` | "" | Use the same provider as the call, or "" for automatic resolution. |
 
 **Returns:** `string[]`
 

@@ -22,7 +22,7 @@ import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js"
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
 import { walkNodesArray } from "../utils/node.js";
 import { docCommentText, docStringText } from "../utils/docStringText.js";
-import { paramDocs } from "../runtime/paramDocs.js";
+import { paramDocs } from "../utils/paramDocs.js";
 import { isHidden } from "../utils/hiddenTag.js";
 import type { Tag } from "../types/tag.js";
 import { moduleDescription } from "../utils/moduleDoc.js";

@@ -187,17 +187,15 @@ evalExtract(statelogPath: string): EvalRecord
 
 Read a structured evaluation record from a statelog trace.
 
-  @param statelogPath - A statelog JSONL file containing exactly one trace.
-
 Read one trace as a normalized record for analysis. The record is
   computed from the statelog rather than stored as a separate file.
   Use `evalOutputs` to inspect what will be graded.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| statelogPath | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| statelogPath | `string` |  | A statelog JSONL file containing exactly one trace. |
 
 **Returns:** [EvalRecord](#evalrecord)
 
@@ -217,10 +215,6 @@ evalJudge(
 
 Compare two saved agent responses against a grading goal.
 
-  @param goal - The criteria the judge should use to compare the responses.
-  @param recordPathA - A statelog JSONL file containing the first run's single trace.
-  @param recordPathB - A statelog JSONL file containing the second run's single trace.
-
 Runs the bundled pairwise judge, making an LLM call for each comparison.
   The verdict names A, B, or tie, with confidence from zero to 100. For
   comparisons sensitive to response order, judge both orders and reconcile
@@ -228,11 +222,11 @@ Runs the bundled pairwise judge, making an LLM call for each comparison.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| goal | `string` |  |
-| recordPathA | `string` |  |
-| recordPathB | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| goal | `string` |  | The criteria the judge should use to compare the responses. |
+| recordPathA | `string` |  | A statelog JSONL file containing the first run's single trace. |
+| recordPathB | `string` |  | A statelog JSONL file containing the second run's single trace. |
 
 **Returns:** [PairwiseVerdict](#pairwiseverdict)
 
@@ -255,13 +249,6 @@ evalJudgeSuite(
 
 Compare two evaluation run directories and aggregate their per-test verdicts.
 
-  @param runA - The first run directory containing statelog traces and run annotations.
-  @param runB - The second run directory containing statelog traces and run annotations.
-  @param samples - The number of judge calls for each comparable test.
-  @param confidenceThreshold - Treat per-test confidence below this zero-to-100 threshold as a suite tie.
-  @param marginThreshold - Require the suite's win-count difference to exceed this number.
-  @param positionBias - Use swap to alternate response order across samples, or none to keep A first.
-
 Compares matching test IDs across two run directories. Goals and test
   IDs come from the run annotations saved with each trace. Missing or
   failed runs and missing goals get deterministic verdicts without an LLM
@@ -273,14 +260,14 @@ Compares matching test IDs across two run directories. Goals and test
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| runA | `string` |  |
-| runB | `string` |  |
-| samples | `number` | 3 |
-| confidenceThreshold | `number` | 50 |
-| marginThreshold | `number` | 0 |
-| positionBias | `"swap" \| "none"` | "swap" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| runA | `string` |  | The first run directory containing statelog traces and run annotations. |
+| runB | `string` |  | The second run directory containing statelog traces and run annotations. |
+| samples | `number` | 3 | The number of judge calls for each comparable test. |
+| confidenceThreshold | `number` | 50 | Treat per-test confidence below this zero-to-100 threshold as a suite tie. |
+| marginThreshold | `number` | 0 | Require the suite's win-count difference to exceed this number. |
+| positionBias | `"swap" \| "none"` | "swap" | Use swap to alternate response order across samples, or none to keep A first. |
 
 **Returns:** [SuiteVerdict](#suiteverdict)
 

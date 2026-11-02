@@ -71,14 +71,12 @@ basename(p: string, ext: string = ""): string
 
 Return the last portion of a path.
 
-  @param ext - Exact suffix to remove from the filename, including any leading dot
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| p | `string` |  |
-| ext | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| p | `string` |  |  |
+| ext | `string` | "" | Exact suffix to remove from the filename, including any leading dot |
 
 **Returns:** `string`
 

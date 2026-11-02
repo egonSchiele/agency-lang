@@ -122,3 +122,55 @@ See also: writeFile`;
 See also: writeFile`);
   });
 });
+
+describe("parameter entries in Markdown examples", () => {
+  it.each(["```", "~~~", "````"])("preserves entries inside %s fences", (fence) => {
+    const example = `${fence}text\n@param input - Example only.\n${fence}`;
+    const description = `Read text.\n\n${example}\n\n@param input - Actual input.\n`;
+    expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
+    expect(stripBoundParams(description, ["input"])).toBe(`Read text.\n\n${example}\n`);
+    expect(withoutParamDocs(description)).toBe(`Read text.\n\n${example}\n`);
+  });
+
+  it("does not end a fence at a shorter fence inside the example", () => {
+    const description =
+      "````text\n```\n@param input - Still an example.\n````\n\n@param input - Actual input.";
+    expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
+  });
+
+  it.each(["```", "~~~", "````"])("keeps a %s example inside its parameter entry", (fence) => {
+    const pathEntry = [
+      "@param path - The file. For example:",
+      `${fence}text`,
+      "first",
+      "",
+      "@param other - inside the example",
+      fence,
+      "The example belongs to path.",
+    ].join("\n");
+    const description = `Read a file.\n\n${pathEntry}\n@param other - Actual option.\n\nMore details.`;
+    expect(paramDocs(description)).toEqual([
+      {
+        name: "path",
+        text: `The file. For example: ${fence}text first  @param other - inside the example ${fence} The example belongs to path.`,
+      },
+      { name: "other", text: "Actual option." },
+    ]);
+    expect(stripBoundParams(description, ["other"])).toBe(
+      `Read a file.\n\n${pathEntry}\nMore details.`,
+    );
+    expect(stripBoundParams(description, ["path"])).toBe(
+      "Read a file.\n\n@param other - Actual option.\n\nMore details.",
+    );
+    expect(withoutParamDocs(description)).toBe("Read a file.\n\nMore details.");
+  });
+});
+
+describe("inline code before parameter documentation", () => {
+  it("does not treat backticks inside the opening line as a fenced example", () => {
+    const prose = "```literal``` is inline code.";
+    const description = prose + "\n@param input - Actual input.";
+    expect(paramDocs(description)).toEqual([{ name: "input", text: "Actual input." }]);
+    expect(stripBoundParams(description, ["input"])).toBe(prose);
+  });
+});

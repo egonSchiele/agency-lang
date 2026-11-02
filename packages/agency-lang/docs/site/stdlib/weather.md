@@ -43,17 +43,14 @@ weather(location: string, units: "imperial" | "metric" = "imperial"): Result
 
 Get current weather for a city or zip code.
 
-  @param location - A city name, optionally with a region or country, or a zip code.
-  @param units - Use imperial for Fahrenheit and mph, or metric for Celsius and km/h.
-
 Include a region or country in a city name when the location is ambiguous.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| location | `string` |  |
-| units | `"imperial" \| "metric"` | "imperial" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| location | `string` |  | A city name, optionally with a region or country, or a zip code. |
+| units | `"imperial" \| "metric"` | "imperial" | Use imperial for Fahrenheit and mph, or metric for Celsius and km/h. |
 
 **Returns:** `Result`
 

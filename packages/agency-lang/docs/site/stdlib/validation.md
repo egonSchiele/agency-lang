@@ -251,7 +251,10 @@ export type JsonObject = object
 
 ### emailFormat
 
+JSON Schema email format annotation for a string.
+
 ```ts
+/** JSON Schema email format annotation for a string. */
 export static const emailFormat = {
   format: "email"
 }
@@ -261,7 +264,10 @@ export static const emailFormat = {
 
 ### urlFormat
 
+`{ format: "uri" }` — RFC 3986 URI.
+
 ```ts
+/** `{ format: "uri" }` — RFC 3986 URI. */
 export static const urlFormat = {
   format: "uri"
 }
@@ -271,7 +277,10 @@ export static const urlFormat = {
 
 ### uuidFormat
 
+`{ format: "uuid" }` — canonical 8-4-4-4-12 UUID.
+
 ```ts
+/** `{ format: "uuid" }` — canonical 8-4-4-4-12 UUID. */
 export static const uuidFormat = {
   format: "uuid"
 }
@@ -281,7 +290,10 @@ export static const uuidFormat = {
 
 ### dateTimeFormat
 
+`{ format: "date-time" }` — ISO 8601 date-time.
+
 ```ts
+/** `{ format: "date-time" }` — ISO 8601 date-time. */
 export static const dateTimeFormat = {
   format: "date-time"
 }
@@ -291,7 +303,10 @@ export static const dateTimeFormat = {
 
 ### dateFormat
 
+`{ format: "date" }` — ISO 8601 date (no time).
+
 ```ts
+/** `{ format: "date" }` — ISO 8601 date (no time). */
 export static const dateFormat = {
   format: "date"
 }
@@ -301,7 +316,10 @@ export static const dateFormat = {
 
 ### ipv4Format
 
+`{ format: "ipv4" }` — dotted-quad IPv4 address.
+
 ```ts
+/** `{ format: "ipv4" }` — dotted-quad IPv4 address. */
 export static const ipv4Format = {
   format: "ipv4"
 }
@@ -311,7 +329,10 @@ export static const ipv4Format = {
 
 ### ipv6Format
 
+`{ format: "ipv6" }` — IPv6 address.
+
 ```ts
+/** `{ format: "ipv6" }` — IPv6 address. */
 export static const ipv6Format = {
   format: "ipv6"
 }
@@ -444,16 +465,14 @@ min(n: number, value: number): Result
 
 Returns success if `value >= n`, failure otherwise.
 
-  @param n - The inclusive minimum allowed value.
-
 Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(min.partial(n: 0))`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| n | `number` |  |
-| value | `number` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| n | `number` |  | The inclusive minimum allowed value. |
+| value | `number` |  |  |
 
 **Returns:** `Result`
 
@@ -467,16 +486,14 @@ max(n: number, value: number): Result
 
 Returns success if `value <= n`, failure otherwise.
 
-  @param n - The inclusive maximum allowed value.
-
 Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(max.partial(n: 150))`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| n | `number` |  |
-| value | `number` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| n | `number` |  | The inclusive maximum allowed value. |
+| value | `number` |  |  |
 
 **Returns:** `Result`
 
@@ -490,16 +507,14 @@ minLength(n: number, value: string): Result
 
 Returns success if `value.length >= n`, failure otherwise.
 
-  @param n - The inclusive minimum allowed length.
-
 Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(minLength.partial(n: 3))`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| n | `number` |  |
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| n | `number` |  | The inclusive minimum allowed length. |
+| value | `string` |  |  |
 
 **Returns:** `Result`
 
@@ -513,16 +528,14 @@ maxLength(n: number, value: string): Result
 
 Returns success if `value.length <= n`, failure otherwise.
 
-  @param n - The inclusive maximum allowed length.
-
 Bind `n` with partial application before use in `@validate(...)`, e.g. `@validate(maxLength.partial(n: 80))`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| n | `number` |  |
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| n | `number` |  | The inclusive maximum allowed length. |
+| value | `string` |  |  |
 
 **Returns:** `Result`
 
@@ -536,16 +549,14 @@ matches(pattern: string, value: string): Result
 
 Returns success if `value` matches the regular expression `pattern`, failure otherwise.
 
-  @param pattern - The regular expression source to match against.
-
 Bind `pattern` with partial application before use in `@validate(...)`, e.g. `@validate(matches.partial(pattern: "^[A-Z]"))`.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| pattern | `string` |  |
-| value | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| pattern | `string` |  | The regular expression source to match against. |
+| value | `string` |  |  |
 
 **Returns:** `Result`
 

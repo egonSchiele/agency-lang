@@ -101,13 +101,11 @@ ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 
 List YC companies in a funding batch.
 
-  @param batch - A batch label or slug, such as "Winter 2025" or "winter-2025".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| batch | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| batch | `string` |  | A batch label or slug, such as "Winter 2025" or "winter-2025". |
 
 **Returns:** `Result<Company[]>`
 
@@ -127,13 +125,11 @@ ycIndustry(
 
 List YC companies in an industry.
 
-  @param industry - An industry label or slug from the directory metadata, such as "fintech".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| industry | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| industry | `string` |  | An industry label or slug from the directory metadata, such as "fintech". |
 
 **Returns:** `Result<Company[]>`
 
@@ -151,13 +147,11 @@ ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fetchJSON>
 
 List YC companies carrying a directory tag.
 
-  @param tag - A tag label or slug from the directory metadata, such as "SaaS".
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| tag | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| tag | `string` |  | A tag label or slug from the directory metadata, such as "SaaS". |
 
 **Returns:** `Result<Company[]>`
 
@@ -178,16 +172,14 @@ ycList(
 Read a curated YC company list. "all" is large (about 6 MB); prefer a
   batch, industry, or tag lookup when you only need part of the directory.
 
-  @param list - Use "top", "all", "hiring", "nonprofit", "women-founded", "black-founded", or "hispanic-latino-founded".
-
 The `all` list can be large. Prefer a batch, industry, or tag when you
   only need part of the directory.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| list | `string` | "top" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| list | `string` | "top" | Use "top", "all", "hiring", "nonprofit", "women-founded", "black-founded", or "hispanic-latino-founded". |
 
 **Returns:** `Result<Company[]>`
 

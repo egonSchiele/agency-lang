@@ -21,6 +21,7 @@ import type { InterruptEffect } from "@/symbolTable.js";
 import type { Capability } from "@/host/host.js";
 import { heading, codeFence, bold, markdownTable, section } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
+import { paramDocs, stripBoundParams, type ParamDoc } from "@/utils/paramDocs.js";
 import { HIDDEN_TAG, isHidden } from "@/utils/hiddenTag.js";
 import {
   OwnedPathError,
@@ -547,14 +548,48 @@ function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string 
 // environment (the render key deliberately excludes the environment).
 const generator = new AgencyGenerator({ debug: false });
 
-function generateParamTable(params: FunctionParameter[], ctx: DocContext): string | null {
+function generateParamTable(
+  params: FunctionParameter[],
+  ctx: DocContext,
+  docs: ParamDoc[],
+): string | null {
   if (params.length === 0) return null;
-  const rows = params.map((p) => [
-    paramNameCell(p),
-    p.typeHint ? formatTypeLinked(p.typeHint, ctx) : "",
-    generator.paramDefaultOf(p) ?? "",
-  ]);
-  return `${bold("Parameters:")}\n\n${markdownTable(["Name", "Type", "Default"], rows)}`;
+  const descriptions = params.map((p) => docs.find((doc) => doc.name === p.name)?.text ?? "");
+  const hasDescriptions = descriptions.some(Boolean);
+  const headers = ["Name", "Type", "Default"];
+  if (hasDescriptions) {
+    headers.push("Description");
+  }
+  const rows = params.map((p, index) => {
+    const row = [
+      paramNameCell(p),
+      p.typeHint ? formatTypeLinked(p.typeHint, ctx) : "",
+      generator.paramDefaultOf(p) ?? "",
+    ];
+    if (hasDescriptions) {
+      row.push(descriptions[index]);
+    }
+    return row;
+  });
+  return `${bold("Parameters:")}\n\n${markdownTable(headers, rows)}`;
+}
+
+function formatCallableDocumentation(
+  callable: FunctionDefinition | GraphNodeDefinition,
+  ctx: DocContext,
+): string {
+  const description = callable.docString ? docStringText(callable.docString) : "";
+  // Only remove entries represented in the table; keep misspelled or
+  // otherwise unmatched parameter names visible to the author.
+  const prose = stripBoundParams(
+    description,
+    callable.parameters.map((p) => p.name),
+  );
+  return section(
+    prose.trim(),
+    callable.docComment ? formatDocComment(callable.docComment) : null,
+    generateParamTable(callable.parameters, ctx, paramDocs(description)),
+  );
 }
 
 /** The Name cell: the parameter's name, then the aliases a caller from
@@ -687,6 +722,7 @@ function formatConstant(c: Assignment, ctx: DocContext): string {
   );
   return section(
     heading(3, c.variableName),
+    c.docComment ? formatDocComment(c.docComment) : null,
     codeFence(code),
     c.typeHint ? `${bold("Type:")} ${formatTypeLinked(c.typeHint, ctx)}` : null,
     formatValidatorsAndSchema(c.tags),
@@ -730,9 +766,7 @@ function generateFunctionSection(
     return section(
       heading(3, declaredName(fn.functionName)),
       codeFence([...generator.decoratorLines(fn), sig].join("\n")),
-      fn.docString ? docStringText(fn.docString) : null,
-      fn.docComment ? formatDocComment(fn.docComment) : null,
-      generateParamTable(fn.parameters, ctx),
+      formatCallableDocumentation(fn, ctx),
       fn.returnType ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}` : null,
       formatThrows(interruptEffectsByFunction[declaredName(fn.functionName)]),
       formatNeeds(capabilitiesByFunction[declaredName(fn.functionName)]),
@@ -757,9 +791,7 @@ function generateNodeSection(
     return section(
       heading(3, declaredName(node.nodeName)),
       codeFence(sig),
-      node.docString ? docStringText(node.docString) : null,
-      node.docComment ? formatDocComment(node.docComment) : null,
-      generateParamTable(node.parameters, ctx),
+      formatCallableDocumentation(node, ctx),
       node.returnType ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}` : null,
       formatThrows(interruptEffectsByFunction[declaredName(node.nodeName)]),
       formatNeeds(capabilitiesByFunction[declaredName(node.nodeName)]),

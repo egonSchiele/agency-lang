@@ -68,29 +68,19 @@ researcherAgent(
 Answer a research question from web and Wikipedia sources and return a
   cited answer.
 
-  @param task - The research question
-  @param context - Extra material folded into the prompt, or ""
-  @param history - Prior messages, oldest first, used only when the active thread is empty.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param keepDraft - False returns a budget failure even when a draft was saved.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| task | `string` |  |
-| context | `string` | "" |
-| maxCost | `number` | $50.00 |
-| maxTime | `number` | 30m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| extraTools | `any[]` | [] |
-| history | `ThreadMessage[]` | [] |
-| keepDraft | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| task | `string` |  | The research question |
+| context | `string` | "" | Extra material folded into the prompt, or "" |
+| maxCost | `number` | $50.00 | Cost budget in USD. |
+| maxTime | `number` | 30m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
+| history | `ThreadMessage[]` | [] | Prior messages, oldest first, used only when the active thread is empty. |
+| keepDraft | `boolean` | true | False returns a budget failure even when a draft was saved. |
 
 **Returns:** `Result<string>`
 

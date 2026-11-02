@@ -1355,3 +1355,158 @@ describe("link recording", () => {
     ).not.toThrow();
   });
 });
+
+describe("declaration documentation", () => {
+  function render(source: string): string {
+    const input = path.join(tmpDir, "documented.agency");
+    const output = path.join(tmpDir, "output");
+    fs.writeFileSync(input, source);
+    generateDoc({}, input, output);
+    return fs.readFileSync(path.join(output, "documented.md"), "utf8");
+  }
+
+  it.each(["", "static "])("renders prose for an exported %sconstant", (modifier) => {
+    const output = render(`/**
+ * The available modes.
+ *
+ * - Fast
+ * - Careful
+ */
+export ${modifier}const modes = ["fast", "careful"]
+`);
+    expect(output).toContain("### modes\n\nThe available modes.\n\n- Fast\n- Careful\n\n");
+    expect(output).toContain(`export ${modifier}const modes = ["fast", "careful"]`);
+  });
+
+  it("keeps documented constant annotations and hides excluded comments", () => {
+    const output = render(`/** Default greeting. */
+@jsonSchema({ description: "Greeting value" })
+export const greeting: string = "hello"
+
+/** Hidden documentation. */
+@hidden
+export const hidden = 1
+
+/** Private documentation. */
+const internal = 2
+
+/** Internal documentation. */
+export const _internal = 3
+`);
+    expect(output).toContain("### greeting\n\nDefault greeting.");
+    expect(output).toContain("**JSON Schema metadata:**");
+    expect(output).toContain('description: "Greeting value"');
+    expect(output).not.toContain("Hidden documentation.");
+    expect(output).not.toContain("Private documentation.");
+    expect(output).not.toContain("Internal documentation.");
+    expect(output).not.toContain("### hidden");
+  });
+
+  it.each(["def", "node"])("puts %s parameter descriptions in the table", (kind) => {
+    const output =
+      render(`export ${kind} greet(name: string, count: number = 1, suffix: string = "!"): string {
+"""
+Greet a person.
+
+@param name - Display name with **emphasis** and a | separator,
+  continued on the next line.
+@param count Number of greetings.
+
+Keep this extra paragraph.
+"""
+return name
+}
+`);
+    expect(output).toContain("| Name | Type | Default | Description |");
+    expect(output).toContain(
+      "| name | `string` |  | Display name with **emphasis** and a \\| separator, continued on the next line. |",
+    );
+    expect(output).toContain("| count | `number` | 1 | Number of greetings. |");
+    expect(output).toContain('| suffix | `string` | "!" |  |');
+    expect(output).not.toContain("@param name");
+    expect(output).not.toContain("@param count");
+    expect(output).toContain("Greet a person.\n\nKeep this extra paragraph.");
+  });
+
+  it("preserves Markdown outside parameter entries", () => {
+    const prose = [
+      "A sentence wrapped",
+      "onto the next line.",
+      "",
+      "- First item",
+      "- Second item",
+      "",
+      "| Name | Meaning |",
+      "| --- | --- |",
+      "| input | A value |",
+      "",
+      "```text",
+      "first line",
+      "@param input - An example, not the parameter description.",
+      "second line",
+      "```",
+      "",
+    ].join("\n");
+    const output = render(`export def echo(input: string): string {
+"""
+${prose}
+@param input - The input.
+"""
+return input
+}
+`);
+    expect(output).toContain(prose);
+    expect(output).toContain("| input | `string` |  | The input. |");
+  });
+
+  it("keeps unmatched parameter entries visible", () => {
+    const output = render(`export def echo(input: string): string {
+"""
+Echo text.
+
+@param input - The input.
+@param misspelled - Preserve this documentation.
+"""
+return input
+}
+`);
+    expect(output).toContain("| input | `string` |  | The input. |");
+    expect(output).toContain("@param misspelled - Preserve this documentation.");
+    expect(output).not.toContain("@param input");
+  });
+
+  it("does not use parameter names inside an entry's example as descriptions", () => {
+    const description = [
+      "Read a file.",
+      "",
+      "@param path - The file. For example:",
+      "```text",
+      "first",
+      "",
+      "@param other - inside the example",
+      "```",
+      "@param other - Actual option.",
+    ].join("\n");
+    const output = render(`export def read(path: string, other: string): string {
+"""
+${description}
+"""
+return path
+}
+`);
+    expect(output).toContain(
+      "| path | `string` |  | The file. For example: ```text first  @param other - inside the example ``` |",
+    );
+    expect(output).toContain("| other | `string` |  | Actual option. |");
+  });
+
+  it("keeps the compact table when no parameters have descriptions", () => {
+    const output = render(`export def echo(input: string): string {
+"""Echo text."""
+return input
+}
+`);
+    expect(output).toContain("| Name | Type | Default |");
+    expect(output).not.toContain("| Description |");
+  });
+});

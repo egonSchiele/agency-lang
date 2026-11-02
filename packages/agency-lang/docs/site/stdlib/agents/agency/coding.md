@@ -49,15 +49,12 @@ buildTools(strict: boolean = false, projectTools: boolean = true): any[]
 
 Return documentation, source checks, project lookups, and fetch tools for an Agency writer.
 
-  @param strict - Offer the typecheck restrictions used by sandboxed compilation.
-  @param projectTools - False omits the file and Git lookup tools.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| strict | `boolean` | false |
-| projectTools | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| strict | `boolean` | false | Offer the typecheck restrictions used by sandboxed compilation. |
+| projectTools | `boolean` | true | False omits the file and Git lookup tools. |
 
 **Returns:** `any[]`
 
@@ -86,35 +83,23 @@ agencyCodingAgent(
 Generate checked Agency source for a task, returning source text for the caller to save.
   Failures include the last attempted source and its problems.
 
-  @param maxAttempts - Maximum generation attempts before returning a failure.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
-  @param extraTools - Additional tools, ignoring any whose names duplicate built-in tools.
-  @param requireMain - False allows library modules without a `node main` entry point.
-  @param dir - Base directory for the source's relative imports.
-  @param strict - True checks drafts with the restrictions used by sandboxed compilation.
-  @param projectTools - False omits project file and Git lookup tools.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| task | `string` |  |
-| context | `string` | "" |
-| maxAttempts | `number` | 3 |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
-| requireMain | `boolean` | true |
-| dir | `string` | "" |
-| strict | `boolean` | false |
-| projectTools | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| task | `string` |  |  |
+| context | `string` | "" |  |
+| maxAttempts | `number` | 3 | Maximum generation attempts before returning a failure. |
+| maxCost | `number` | $20.00 | Cost budget in USD. |
+| maxTime | `number` | 15m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Name a conversation to reuse across calls, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Additional tools, ignoring any whose names duplicate built-in tools. |
+| requireMain | `boolean` | true | False allows library modules without a `node main` entry point. |
+| dir | `string` | "" | Base directory for the source's relative imports. |
+| strict | `boolean` | false | True checks drafts with the restrictions used by sandboxed compilation. |
+| projectTools | `boolean` | true | False omits project file and Git lookup tools. |
 
 **Returns:** `Result<string, WriteFailure>`
 

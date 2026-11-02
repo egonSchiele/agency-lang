@@ -137,14 +137,12 @@ loadMcpToolsWithStatus(
 
 Load MCP tools and report which servers connected.
 
-  @param merged - Server configurations, such as the output of mergeMcpServers.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| merged | `Record<string, any>` |  |
-| onOAuthRequired |  | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| merged | `Record<string, any>` |  | Server configurations, such as the output of mergeMcpServers. |
+| onOAuthRequired |  | null |  |
 
 **Returns:** [McpLoadResult](#mcploadresult)
 

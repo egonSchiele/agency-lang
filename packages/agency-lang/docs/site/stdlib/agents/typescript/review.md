@@ -68,29 +68,20 @@ typescriptReviewAgent(
 Review TypeScript readability, architecture, and project conventions.
   A failed review returns no findings.
 
-  @param work - A diff, a file, or several files supplied as text.
-  @param guidelines - Project standards that override conflicting built-in review rules.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
-  @param extraTools - Tools added to the repository and source lookup tools.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| work | `string` |  |
-| task | `string` | "" |
-| guidelines | `string` | "" |
-| context | `string` | "" |
-| maxCost | `number` | $10.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| work | `string` |  | A diff, a file, or several files supplied as text. |
+| task | `string` | "" |  |
+| guidelines | `string` | "" | Project standards that override conflicting built-in review rules. |
+| context | `string` | "" |  |
+| maxCost | `number` | $10.00 | Cost budget in USD. |
+| maxTime | `number` | 10m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Name a conversation to reuse across calls, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Tools added to the repository and source lookup tools. |
 
 **Returns:** `Result<Feedback[]>`
 

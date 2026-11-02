@@ -74,7 +74,18 @@ effect lora::info {
 
 ### STYLE_TAGS
 
+The booru tags that describe a drawing's style rather than its subject.
+A caption that names the style teaches the model that the style belongs
+to those words and not to the trigger word, so a caption loop drops them
+before writing a sidecar. A caller training a character rather than a
+style keeps them.
+
 ```ts
+/** The booru tags that describe a drawing's style rather than its subject.
+A caption that names the style teaches the model that the style belongs
+to those words and not to the trigger word, so a caption loop drops them
+before writing a sidecar. A caller training a character rather than a
+style keeps them. */
 export static const STYLE_TAGS = [
   "monochrome",
   "greyscale",
@@ -120,35 +131,22 @@ Train a LoRA adapter for an SDXL image model from a folder of images,
   Everything runs on this machine, with the Python agency local serve
   uses. Returns the adapter's path and the sample grids.
 
-  @param imagesDir - The folder of training images, PNG or JPEG, with optional .txt captions beside them
-  @param trigger - The word the adapter answers to. A real phrase learns faster and keeps the base model's idea of it; a nonsense word owns the token
-  @param base - The SDXL model to train on: a catalog name, a diffusers: URI, or a model directory, already downloaded
-  @param outPath - The .safetensors file to write. It must not exist yet
-  @param steps - How long to train. Too few and the style is faint; too many and every output is a training image. Judge by the sample grids
-  @param rank - How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. Doubling the rank doubles the file
-  @param learningRate - Halve it if the grids get worse after getting better
-  @param resolution - The training size. 768 trains twice as fast for a first look; 1024 for the real run
-  @param flip - Also train on mirrored copies, which doubles a small set. Off for an asymmetric character
-  @param seed - Fixes the randomness, so a run is repeatable
-  @param samplePrompts - Prompts to render before and after at each checkpoint, to judge the run. Use the trigger word in them
-  @param sampleEvery - Steps between sample grids. 0 for none
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| imagesDir | `string` |  |
-| trigger | `string` |  |
-| base | `string` |  |
-| outPath | `string` |  |
-| steps | `number` | 1000 |
-| rank | `number` | 16 |
-| learningRate | `number` | 0.0001 |
-| resolution | `number` | 1024 |
-| flip | `boolean` | false |
-| seed | `number` | 1 |
-| samplePrompts | `string[]` | [] |
-| sampleEvery | `number` | 250 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| imagesDir | `string` |  | The folder of training images, PNG or JPEG, with optional .txt captions beside them |
+| trigger | `string` |  | The word the adapter answers to. A real phrase learns faster and keeps the base model's idea of it; a nonsense word owns the token |
+| base | `string` |  | The SDXL model to train on: a catalog name, a diffusers: URI, or a model directory, already downloaded |
+| outPath | `string` |  | The .safetensors file to write. It must not exist yet |
+| steps | `number` | 1000 | How long to train. Too few and the style is faint; too many and every output is a training image. Judge by the sample grids |
+| rank | `number` | 16 | How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. Doubling the rank doubles the file |
+| learningRate | `number` | 0.0001 | Halve it if the grids get worse after getting better |
+| resolution | `number` | 1024 | The training size. 768 trains twice as fast for a first look; 1024 for the real run |
+| flip | `boolean` | false | Also train on mirrored copies, which doubles a small set. Off for an asymmetric character |
+| seed | `number` | 1 | Fixes the randomness, so a run is repeatable |
+| samplePrompts | `string[]` | [] | Prompts to render before and after at each checkpoint, to judge the run. Use the trigger word in them |
+| sampleEvery | `number` | 250 | Steps between sample grids. 0 for none |
 
 **Returns:** `Result<TrainedLora>`
 
@@ -166,13 +164,11 @@ What an adapter file says about itself: the base model it was trained
   for, its trigger word, its rank, the steps it trained, and its size.
   Reads the file's header only.
 
-  @param path - A .safetensors adapter written by trainLora
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | A .safetensors adapter written by trainLora |
 
 **Returns:** `Result<LoraInfo>`
 

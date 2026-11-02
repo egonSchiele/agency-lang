@@ -46,28 +46,21 @@ Survey a codebase or documentation and return an organized answer with sources.
   reads stays in your history, so say how much ground to cover and scope the
   question tightly.
 
-  @param question - The question and the scope to cover.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param extraTools - Tools to add to the built-in lookup tools.
-
 Called from code, this runs on the caller's thread like any function:
   the system prompt, the reads, and the answer stay there. Wrap the call
   in `thread { ... }` for an isolated survey.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| question | `string` |  |
-| context | `string` | "" |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| question | `string` |  | The question and the scope to cover. |
+| context | `string` | "" |  |
+| maxCost | `number` | $20.00 | Cost budget in USD. |
+| maxTime | `number` | 15m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| extraTools | `any[]` | [] | Tools to add to the built-in lookup tools. |
 
 **Returns:** `Result<string>`
 

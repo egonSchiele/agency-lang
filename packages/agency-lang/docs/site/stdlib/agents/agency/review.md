@@ -66,31 +66,21 @@ agencyReviewAgent(
 Check Agency source for parse and type errors, and review it against a task when given.
   A failed LLM review contributes no findings.
 
-  @param task - What the code should do, or "" for static checks only.
-  @param maxCost - Cost budget in USD for the task review.
-  @param maxTime - Time budget in milliseconds for the task review.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
-  @param extraTools - Tools added to the LLM review.
-  @param dir - Base directory for the source's relative imports.
-  @param strict - True uses the name checks applied during sandboxed compilation.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| task | `string` | "" |
-| context | `string` | "" |
-| maxCost | `number` | $10.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
-| dir | `string` | "" |
-| strict | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| task | `string` | "" | What the code should do, or "" for static checks only. |
+| context | `string` | "" |  |
+| maxCost | `number` | $10.00 | Cost budget in USD for the task review. |
+| maxTime | `number` | 10m | Time budget in milliseconds for the task review. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Name a conversation to reuse across calls, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Tools added to the LLM review. |
+| dir | `string` | "" | Base directory for the source's relative imports. |
+| strict | `boolean` | false | True uses the name checks applied during sandboxed compilation. |
 
 **Returns:** `Result<Feedback[]>`
 

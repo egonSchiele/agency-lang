@@ -263,9 +263,12 @@ export class TypescriptPreprocessor {
         continue;
       }
 
-      if (pendingDocComment && DECLARATION_TYPES.includes(node.type)) {
+      const isDeclaration =
+        DECLARATION_TYPES.includes(node.type) ||
+        (node.type === "assignment" && node.declKind !== undefined);
+      if (pendingDocComment && isDeclaration) {
         const decl = node as
-          FunctionDefinition | GraphNodeDefinition | TypeAlias | EffectDeclaration;
+          FunctionDefinition | GraphNodeDefinition | TypeAlias | EffectDeclaration | Assignment;
         decl.docComment = pendingDocComment;
         pendingDocComment = null;
       } else if (pendingDocComment) {

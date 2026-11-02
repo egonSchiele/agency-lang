@@ -134,29 +134,19 @@ exec(
 Run an executable with separate arguments and no shell expansion.
   Use this for commands whose arguments are already available as values.
 
-  @param command - The executable to run
-  @param args - Arguments to pass
-  @param cwd - Working directory for the command
-  @param timeout - Time limit in milliseconds (e.g. 30s)
-  @param stdin - Input to feed to the command
-  @param allowedExecutables - Only allow running these executables (allow-list)
-  @param blockedCommands - Block running these executables
-  @param allowedPaths - Only allow cwd values under these path prefixes
-  @param useAgentCwd - When true, a relative or empty cwd is resolved against the agent working directory if one is set; an absolute cwd is left unchanged
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| command | `string` |  |
-| args | `string[]` | [] |
-| cwd | `string` | "" |
-| timeout | `number` | 0 |
-| stdin | `string` | "" |
-| allowedExecutables | `string[]` | [] |
-| blockedCommands | `string[]` | [] |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| command | `string` |  | The executable to run |
+| args | `string[]` | [] | Arguments to pass |
+| cwd | `string` | "" | Working directory for the command |
+| timeout | `number` | 0 | Time limit in milliseconds (e.g. 30s) |
+| stdin | `string` | "" | Input to feed to the command |
+| allowedExecutables | `string[]` | [] | Only allow running these executables (allow-list) |
+| blockedCommands | `string[]` | [] | Block running these executables |
+| allowedPaths | `string[]` | [] | Only allow cwd values under these path prefixes |
+| useAgentCwd | `boolean` | false | When true, a relative or empty cwd is resolved against the agent working directory if one is set; an absolute cwd is left unchanged |
 
 **Returns:** [ExecResult](#execresult)
 
@@ -183,29 +173,21 @@ bash(
 Run a bash command with pipes, redirects, and globbing.
   Use exec with separate arguments when values should remain literal.
 
-  @param command - The shell command to run
-  @param cwd - Working directory for the command
-  @param timeout - Time limit in milliseconds (e.g. 30s)
-  @param stdin - Input to feed to the command
-  @param blockedCommands - Block commands that start with these strings
-  @param allowedPaths - Only allow cwd values under these path prefixes
-  @param useAgentCwd - When true, a relative or empty cwd is resolved against the agent working directory if one is set; an absolute cwd is left unchanged
-
 `allowedPaths` restricts `cwd`, but bash cannot meaningfully restrict the
   shell command string itself, so prefer running an executable directly with
   structured arguments when capability narrowing matters.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| command | `string` |  |
-| cwd | `string` | "" |
-| timeout | `number` | 0 |
-| stdin | `string` | "" |
-| blockedCommands | `string[]` | [] |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| command | `string` |  | The shell command to run |
+| cwd | `string` | "" | Working directory for the command |
+| timeout | `number` | 0 | Time limit in milliseconds (e.g. 30s) |
+| stdin | `string` | "" | Input to feed to the command |
+| blockedCommands | `string[]` | [] | Block commands that start with these strings |
+| allowedPaths | `string[]` | [] | Only allow cwd values under these path prefixes |
+| useAgentCwd | `boolean` | false | When true, a relative or empty cwd is resolved against the agent working directory if one is set; an absolute cwd is left unchanged |
 
 **Returns:** [ExecResult](#execresult)
 
@@ -231,21 +213,18 @@ List directory entries, optionally including subdirectories. A recursive
   listing skips node_modules, .git, dist, build, .next, and .cache.
   Narrow dir or raise maxResults when the listing reaches its limit.
 
-  @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
-
 Recursive listings skip node_modules, .git, dist, build, .next, and .cache.
 Non-recursive listings include those directories. Symlinked entries are omitted.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` | "." |
-| recursive | `boolean` | false |
-| maxResults | `number` | 1000 |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` | "." |  |
+| recursive | `boolean` | false |  |
+| maxResults | `number` | 1000 |  |
+| allowedPaths | `string[]` | [] | Restrict searches to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory when set. |
 
 **Returns:** `Result`
 
@@ -277,15 +256,6 @@ Search a file or directory recursively with a JavaScript regular expression.
   A directory search skips node_modules, .git, dist, build, .next, and .cache.
   Narrow path or refine the pattern when results reach maxResults.
 
-  @param path - Directory or single file to search.
-  @param flags - Regex flags i, m, s, or u; use the named options for whole-word and inverted searches.
-  @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve a relative path against the agent working directory when set.
-  @param wholeWord - Match only whole words.
-  @param filesOnly - Return matching file paths instead of lines.
-  @param invert - Return nonmatching lines.
-  @param respectGitignore - Honor .gitignore during directory searches; false includes ignored files.
-
 Directory searches skip common build and dependency directories, plus paths
 ignored by .gitignore when `respectGitignore` is true. A directly named file
 is always searched. Symlinked entries are omitted.
@@ -295,19 +265,19 @@ they contain the filename. Use `filesOnly` when you only need matching paths.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| pattern | `string` |  |
-| path (also `dir`) | `string` | "." |
-| flags | `string` | "" |
-| maxResults | `number` | 200 |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
-| ignoreCase | `boolean` | false |
-| wholeWord | `boolean` | false |
-| filesOnly | `boolean` | false |
-| invert | `boolean` | false |
-| respectGitignore | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| pattern | `string` |  |  |
+| path (also `dir`) | `string` | "." | Directory or single file to search. |
+| flags | `string` | "" | Regex flags i, m, s, or u; use the named options for whole-word and inverted searches. |
+| maxResults | `number` | 200 |  |
+| allowedPaths | `string[]` | [] | Restrict searches to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve a relative path against the agent working directory when set. |
+| ignoreCase | `boolean` | false |  |
+| wholeWord | `boolean` | false | Match only whole words. |
+| filesOnly | `boolean` | false | Return matching file paths instead of lines. |
+| invert | `boolean` | false | Return nonmatching lines. |
+| respectGitignore | `boolean` | true | Honor .gitignore during directory searches; false includes ignored files. |
 
 **Returns:** `Result`
 
@@ -331,18 +301,15 @@ glob(
 
 Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
 
-  @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
-  @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| pattern | `string` |  |
-| dir | `string` | "." |
-| maxResults | `number` | 500 |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| pattern | `string` |  |  |
+| dir | `string` | "." |  |
+| maxResults | `number` | 500 |  |
+| allowedPaths | `string[]` | [] | Restrict searches to these directories, or leave empty for no restriction. |
+| useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory when set. |
 
 **Returns:** `Result`
 
@@ -365,19 +332,14 @@ stat(
 
 Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "other", or "missing" if absent), size in bytes, and mtime in ms. A symlink below dir is reported as missing. With no dir, the path itself is resolved the way you spelled it.
 
-  @param filename - The path to stat
-  @param dir - Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted
-  @param allowedPaths - Only allow paths under these prefixes
-  @param useAgentCwd - When true, resolve a relative filename against the agent working directory if one is set; absolute filenames are unaffected
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| dir | `string` | "" |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | The path to stat |
+| dir | `string` | "" | Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted |
+| allowedPaths | `string[]` | [] | Only allow paths under these prefixes |
+| useAgentCwd | `boolean` | false | When true, resolve a relative filename against the agent working directory if one is set; absolute filenames are unaffected |
 
 **Returns:** `StatInfo`
 
@@ -398,19 +360,14 @@ exists(
 
 Return true if a file or directory exists at the given path. A symlink below dir is reported as missing. Probing a path outside allowedPaths raises an error rather than silently returning false.
 
-  @param filename - The path to check
-  @param dir - Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted
-  @param allowedPaths - Only allow paths under these prefixes
-  @param useAgentCwd - When true, resolve a relative filename against the agent working directory if one is set; absolute filenames are unaffected
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| dir | `string` | "" |
-| allowedPaths | `string[]` | [] |
-| useAgentCwd | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| filename | `string` |  | The path to check |
+| dir | `string` | "" | Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted |
+| allowedPaths | `string[]` | [] | Only allow paths under these prefixes |
+| useAgentCwd | `boolean` | false | When true, resolve a relative filename against the agent working directory if one is set; absolute filenames are unaffected |
 
 **Returns:** `boolean`
 

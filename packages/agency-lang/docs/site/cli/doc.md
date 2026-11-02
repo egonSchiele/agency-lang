@@ -32,7 +32,7 @@ Agency documents the exported nodes, functions, types, and constants defined at 
 If you want to leave out something you *did* export, see [hiding a declaration](#hiding-a-declaration) below.
 
 ## Doc comments
-Agency uses the docstring as the description for nodes and functions. You can additionally give more documentation by providing a doc comment above types, functions, or nodes:
+Agency uses the docstring as the description for nodes and functions. You can additionally give more documentation by providing a doc comment above types, functions, nodes, constants, or effects:
 
 ```ts
 /** This is a doc comment for the Person type */
@@ -45,7 +45,38 @@ type Person = {
 def greet(name: string): string {
   return `Hello, ${name}!`
 }
+
+/** The default number of attempts. */
+export const DEFAULT_ATTEMPTS = 3
 ```
+
+## Parameter descriptions
+
+```ts
+export def greet(name: string, greeting: string = "Hello"): string {
+  """
+  Greet someone by name.
+
+  @param name - The name to include in the greeting.
+  @param greeting - The greeting to use before the name.
+    Defaults to Hello.
+  """
+  return "${greeting}, ${name}!"
+}
+```
+
+The generated parameter table includes each `@param` entry in a Description
+column beside the parameter's name, type, and default. Continuation lines belong
+to the same description until the next `@param` entry or a blank line.
+Inside a fenced code example, blank lines and `@param` lines belong to the example.
+
+The rest of the docstring keeps its Markdown formatting. An entry whose name
+does not match a parameter stays in the prose so its text is not lost. A table
+with no parameter descriptions omits the Description column.
+
+The source docstring remains the tool description sent to an LLM. See
+[docstrings and partial application](/guide/partial-application#docstrings-and-json-schemas)
+for how bound parameters affect that description.
 
 ## Module-level doc comments
 

@@ -47,29 +47,20 @@ reviewAgent(
 
 Review a work product against a task and return satisfied points and problems.
 
-  @param work - The work product as text.
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Name a conversation to reuse across calls, or "" for an isolated thread.
-  @param extraTools - Tools added to the built-in lookup tools.
-  @param failOpen - False makes failed or partial reviews return failures instead of empty or partial findings.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| work | `string` |  |
-| task | `string` | "" |
-| context | `string` | "" |
-| maxCost | `number` | $10.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
-| failOpen | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| work | `string` |  | The work product as text. |
+| task | `string` | "" |  |
+| context | `string` | "" |  |
+| maxCost | `number` | $10.00 | Cost budget in USD. |
+| maxTime | `number` | 10m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| session | `string` | "" | Name a conversation to reuse across calls, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Tools added to the built-in lookup tools. |
+| failOpen | `boolean` | true | False makes failed or partial reviews return failures instead of empty or partial findings. |
 
 **Returns:** `Result<Feedback[]>`
 

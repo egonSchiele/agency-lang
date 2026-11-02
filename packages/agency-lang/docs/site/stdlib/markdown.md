@@ -521,9 +521,6 @@ walk(blocks: any[], block: (any) -> any): any[]
 Transform Markdown block and inline nodes from parent to child. Return
   replacement nodes instead of mutating callback arguments.
 
-  @param blocks - Use the `blocks` from `parse` or the result of a previous `walk`.
-  @param block - Return the replacement node whose children should be visited next.
-
 ```ts
   import { parse, walk } from "std::markdown"
 
@@ -546,10 +543,10 @@ Transform Markdown block and inline nodes from parent to child. Return
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| blocks | `any[]` |  |
-| block | `(any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| blocks | `any[]` |  | Use the `blocks` from `parse` or the result of a previous `walk`. |
+| block | `(any) => any` |  | Return the replacement node whose children should be visited next. |
 
 **Returns:** `any[]`
 
@@ -563,17 +560,15 @@ renderForCli(blocks: any[]): string
 
 Render Markdown nodes as an ANSI-styled string for a terminal.
 
-  @param blocks - Use the `blocks` from `parse` or the result of `walk`.
-
 Use `walk` to add ANSI syntax highlighting to code-block bodies before
     rendering. The renderer preserves those escape sequences.
     Links use OSC 8 escapes for clickable hyperlinks in terminals that support them.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| blocks | `any[]` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| blocks | `any[]` |  | Use the `blocks` from `parse` or the result of `walk`. |
 
 **Returns:** `string`
 
@@ -587,8 +582,6 @@ renderForHtml(blocks: any[]): string
 
 Render Markdown nodes as HTML with escaped text and filtered URLs.
   Raw HTML in the source is omitted.
-
-  @param blocks - Use the `blocks` from `parse` or the result of `walk`.
 
 ```ts
   import { parse, renderForHtml } from "std::markdown"
@@ -608,9 +601,9 @@ Render Markdown nodes as HTML with escaped text and filtered URLs.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| blocks | `any[]` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| blocks | `any[]` |  | Use the `blocks` from `parse` or the result of `walk`. |
 
 **Returns:** `string`
 

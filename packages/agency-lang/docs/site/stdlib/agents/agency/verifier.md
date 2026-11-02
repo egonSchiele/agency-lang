@@ -44,25 +44,18 @@ agencyVerifierAgent(
 Run an Agency program and judge its result against a task.
   Run failures become error findings, and a failed judgment returns no findings.
 
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override for the judgment, or "" for the ambient model.
-  @param provider - Provider for the judgment model, ignored when model is empty.
-  @param session - Name a judgment conversation to reuse, or "" for an isolated thread.
-  @param extraTools - Additional tools for judging the program's result.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| task | `string` |  |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| session | `string` | "" |
-| extraTools | `any[]` | [] |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| task | `string` |  |  |
+| maxCost | `number` | $20.00 | Cost budget in USD. |
+| maxTime | `number` | 15m | Time budget in milliseconds. |
+| model | `string` | "" | Model override for the judgment, or "" for the ambient model. |
+| provider | `string` | "" | Provider for the judgment model, ignored when model is empty. |
+| session | `string` | "" | Name a judgment conversation to reuse, or "" for an isolated thread. |
+| extraTools | `any[]` | [] | Additional tools for judging the program's result. |
 
 **Returns:** `Result<Feedback[]>`
 

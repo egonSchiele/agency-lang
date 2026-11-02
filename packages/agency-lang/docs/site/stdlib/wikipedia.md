@@ -85,13 +85,11 @@ summary(title: string): WikiSummary
 
 Read the introductory summary of a Wikipedia article.
 
-  @param title - An article title returned by Wikipedia search.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  | An article title returned by Wikipedia search. |
 
 **Returns:** `WikiSummary`
 
@@ -109,13 +107,11 @@ article(title: string): WikiArticle
 
 Read the full plain text of a Wikipedia article.
 
-  @param title - An article title returned by Wikipedia search.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  | An article title returned by Wikipedia search. |
 
 **Returns:** `WikiArticle`
 

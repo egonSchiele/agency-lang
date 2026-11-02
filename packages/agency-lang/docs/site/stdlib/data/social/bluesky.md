@@ -129,17 +129,14 @@ bskySearch(
 
 Search public Bluesky posts by keyword.
 
-  @param since - Include posts at or after this epoch-millisecond timestamp, or zero for no time filter.
-  @param limit - The maximum results, clamped to the range zero through 100.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| sort | [BskySort](#bskysort) | "latest" |
-| since | `number` | 0 |
-| limit | `number` | 25 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  |  |
+| sort | [BskySort](#bskysort) | "latest" |  |
+| since | `number` | 0 | Include posts at or after this epoch-millisecond timestamp, or zero for no time filter. |
+| limit | `number` | 25 | The maximum results, clamped to the range zero through 100. |
 
 **Returns:** `Result<Post[]>`
 
@@ -160,15 +157,12 @@ bskyAuthorFeed(
 
 Read a Bluesky account's recent posts, newest first.
 
-  @param handle - An account handle such as "user.bsky.social", or a DID.
-  @param limit - The maximum posts, clamped to the range zero through 100.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| handle | `string` |  |
-| limit | `number` | 30 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| handle | `string` |  | An account handle such as "user.bsky.social", or a DID. |
+| limit | `number` | 30 | The maximum posts, clamped to the range zero through 100. |
 
 **Returns:** `Result<Post[]>`
 
@@ -188,13 +182,11 @@ bskyProfile(
 
 Read a Bluesky account's public profile and follower counts.
 
-  @param handle - An account handle such as "user.bsky.social", or a DID.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| handle | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| handle | `string` |  | An account handle such as "user.bsky.social", or a DID. |
 
 **Returns:** `Result<Profile>`
 

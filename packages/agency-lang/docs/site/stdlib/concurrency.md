@@ -39,9 +39,6 @@ withLock(
 
 Run a block while holding a named lock shared by branches of one run.
 
-  @param timeoutMs - Maximum wait to acquire the lock, or null to wait indefinitely.
-  @param warnAfterMs - Wait before a diagnostic warning, or null for the 30-second default.
-
 Use a stable, namespaced name such as "std::tty" for a shared resource.
 Parent and child code launched with `std::agency.run()` share the lock.
 The lock releases when the block returns, throws, or unwinds for an interrupt.
@@ -53,12 +50,12 @@ several locks could form a cycle.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| timeoutMs | `number \| null` | null |
-| warnAfterMs | `number \| null` | null |
-| block | `() => any` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  |  |
+| timeoutMs | `number \| null` | null | Maximum wait to acquire the lock, or null to wait indefinitely. |
+| warnAfterMs | `number \| null` | null | Wait before a diagnostic warning, or null for the 30-second default. |
+| block | `() => any` | null |  |
 
 **Returns:** `any`
 
@@ -72,18 +69,16 @@ concurrencyPool(size: number, items: any[], block: (item: any) -> any): any[]
 
 Process items concurrently with at most `size` workers.
 
-  @param size - Positive whole number of workers.
-
 Results follow the input order. Items are assigned to workers round-robin,
 so a worker processes its own items in sequence.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| size | `number` |  |
-| items | `any[]` |  |
-| block | `(item: any) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| size | `number` |  | Positive whole number of workers. |
+| items | `any[]` |  |  |
+| block | `(item: any) => any` |  |  |
 
 **Returns:** `any[]`
 

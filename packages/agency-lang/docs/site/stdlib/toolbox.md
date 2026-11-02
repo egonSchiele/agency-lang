@@ -240,17 +240,15 @@ listTools(dir: string = "~/.agency-agent/tools"): Result<ToolEntry[]>
 
 List saved tools and their metadata, marking unreadable or invalid entries as broken.
 
-  @param dir - Nonempty toolbox directory to scan.
-
 Use the catalog to select a tool before calling `runTool`. Each entry
 includes its signature, tool description, effects, and saved metadata.
 A `broken` entry explains why the tool cannot be used.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` | "~/.agency-agent/tools" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| dir | `string` | "~/.agency-agent/tools" | Nonempty toolbox directory to scan. |
 
 **Returns:** `Result<ToolEntry[]>`
 
@@ -279,17 +277,6 @@ designTool(
 
 Draft a reusable tool, revise it with the user, and save it after acceptance.
 
-  @param name - Unused camelCase name of at most 64 letters or digits, starting with a lowercase letter and excluding "staging".
-  @param purpose - What the tool should do, in plain language.
-  @param request - Input type as Agency text, such as `{ amount: number; rate: number }`.
-  @param dir - Nonempty toolbox directory to write into.
-  @param maxRounds - Maximum draft and revision rounds before returning a failure.
-  @param maxTime - Saved tool's time limit in milliseconds, at most 59m30s.
-  @param maxCost - Saved tool's cost limit in dollars.
-  @param model - Model override for drafting and review, or "" for the configured model.
-  @param provider - Provider for the model override.
-  @param review - Have a review agent inspect drafts before their checks when true.
-
 Use this when a tool still needs to be written or refined. The coding agent
 writes against your fixed request type. Each draft gets sandbox compilation
 and typechecking; pure, predictable tools also get generated tests.
@@ -305,18 +292,18 @@ future calls of the tool, rather than the drafting process.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| purpose | `string` |  |
-| request | `string` |  |
-| dir | `string` | "~/.agency-agent/tools" |
-| maxRounds | `number` | 3 |
-| maxTime | `number` | 3m |
-| maxCost | `number` | $1.00 |
-| model | `string` | "" |
-| provider | `string` | "" |
-| review | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | Unused camelCase name of at most 64 letters or digits, starting with a lowercase letter and excluding "staging". |
+| purpose | `string` |  | What the tool should do, in plain language. |
+| request | `string` |  | Input type as Agency text, such as `{ amount: number; rate: number }`. |
+| dir | `string` | "~/.agency-agent/tools" | Nonempty toolbox directory to write into. |
+| maxRounds | `number` | 3 | Maximum draft and revision rounds before returning a failure. |
+| maxTime | `number` | 3m | Saved tool's time limit in milliseconds, at most 59m30s. |
+| maxCost | `number` | $1.00 | Saved tool's cost limit in dollars. |
+| model | `string` | "" | Model override for drafting and review, or "" for the configured model. |
+| provider | `string` | "" | Provider for the model override. |
+| review | `boolean` | false | Have a review agent inspect drafts before their checks when true. |
 
 **Returns:** `Result<ToolEntry>`
 
@@ -342,13 +329,6 @@ writeTool(
 
 Save an already-written tool after checking its source and obtaining approval.
 
-  @param name - Unused camelCase name of at most 64 letters or digits, starting with a lowercase letter and excluding "staging".
-  @param request - Input type as Agency text, matching the source's Request type.
-  @param source - Agency-only module exporting `Request` and `run(request: Request): Json`.
-  @param dir - Nonempty toolbox directory to write into.
-  @param maxTime - Saved tool's time limit in milliseconds, at most 59m30s.
-  @param maxCost - Saved tool's cost limit in dollars.
-
 Use this for source you have already written and tested. It compiles and
 typechecks the source with a generated wrapper, shows the source and effects
 for save approval, and publishes the tool. It makes no model calls and
@@ -360,15 +340,15 @@ The wrapper enforces `maxTime` and `maxCost` on later tool calls.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| purpose | `string` |  |
-| request | `string` |  |
-| source | `string` |  |
-| dir | `string` | "~/.agency-agent/tools" |
-| maxTime | `number` | 3m |
-| maxCost | `number` | $1.00 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | Unused camelCase name of at most 64 letters or digits, starting with a lowercase letter and excluding "staging". |
+| purpose | `string` |  |  |
+| request | `string` |  | Input type as Agency text, matching the source's Request type. |
+| source | `string` |  | Agency-only module exporting `Request` and `run(request: Request): Json`. |
+| dir | `string` | "~/.agency-agent/tools" | Nonempty toolbox directory to write into. |
+| maxTime | `number` | 3m | Saved tool's time limit in milliseconds, at most 59m30s. |
+| maxCost | `number` | $1.00 | Saved tool's cost limit in dollars. |
 
 **Returns:** `Result<ToolEntry>`
 
@@ -390,10 +370,6 @@ runTool(
 
 Run a saved tool with its input and return its result.
 
-  @param name - The saved tool's name under dir.
-  @param request - A value matching the tool's Request type.
-  @param dir - Nonempty toolbox directory holding the tool.
-
 Runs the saved `main` node in a subprocess under the tool's stored time
 limit. Metadata must be readable before the tool starts. After the run,
 recording its use count is best-effort: a rejected or failed metadata write
@@ -401,11 +377,11 @@ does not change the tool's result. The result itself is not recorded there.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| request | [Json](validation.md#json) |  |
-| dir | `string` | "~/.agency-agent/tools" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The saved tool's name under dir. |
+| request | [Json](validation.md#json) |  | A value matching the tool's Request type. |
+| dir | `string` | "~/.agency-agent/tools" | Nonempty toolbox directory holding the tool. |
 
 **Returns:** `Result<Json>`
 

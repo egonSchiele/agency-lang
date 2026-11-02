@@ -51,27 +51,18 @@ agencyResearcherAgent(
 Answer a question about the Agency language from the bundled documentation,
   naming the page each claim came from.
 
-  @param question - The question about Agency
-  @param context - Extra material folded into the prompt, or ""
-  @param maxCost - Cost budget in USD.
-  @param maxTime - Time budget in milliseconds.
-  @param model - Model override, or "" for the ambient model
-  @param provider - Provider for the model override, ignored when model is empty.
-  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param keepDraft - False returns a budget failure even when a draft was saved.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| question | `string` |  |
-| context | `string` | "" |
-| maxCost | `number` | $10.00 |
-| maxTime | `number` | 10m |
-| model | `string` | "" |
-| provider | `string` | "" |
-| extraTools | `any[]` | [] |
-| keepDraft | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| question | `string` |  | The question about Agency |
+| context | `string` | "" | Extra material folded into the prompt, or "" |
+| maxCost | `number` | $10.00 | Cost budget in USD. |
+| maxTime | `number` | 10m | Time budget in milliseconds. |
+| model | `string` | "" | Model override, or "" for the ambient model |
+| provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
+| keepDraft | `boolean` | true | False returns a budget failure even when a draft was saved. |
 
 **Returns:** `Result<string>`
 

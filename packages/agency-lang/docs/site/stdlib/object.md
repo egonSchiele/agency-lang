@@ -86,14 +86,12 @@ mapValues(obj: any, func: (any, string) -> any): any
 
 Return a new object with the same keys, but with each value transformed by the function.
 
-  @param func - The function receiving (value, key)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| obj | `any` |  |
-| func | `(any, string) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| obj | `any` |  |  |
+| func | `(any, string) => any` |  | The function receiving (value, key) |
 
 **Returns:** `any`
 
@@ -107,14 +105,12 @@ mapEntries(obj: any, func: (any, string) -> any): any
 
 Return a new object by applying the function to each entry.
 
-  @param func - The function receiving (value, key) returning {key, value}
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| obj | `any` |  |
-| func | `(any, string) => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| obj | `any` |  |  |
+| func | `(any, string) => any` |  | The function receiving (value, key) returning {key, value} |
 
 **Returns:** `any`
 
@@ -128,14 +124,12 @@ filterEntries(obj: any, func: (any, string) -> boolean): any
 
 Return a new object containing only the entries for which the function returns true.
 
-  @param func - The predicate receiving (value, key)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| obj | `any` |  |
-| func | `(any, string) => boolean` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| obj | `any` |  |  |
+| func | `(any, string) => boolean` |  | The predicate receiving (value, key) |
 
 **Returns:** `any`
 
@@ -149,14 +143,12 @@ everyEntry(obj: any, func: (any, string) -> boolean): boolean
 
 Return true if the function returns true for every entry in the object.
 
-  @param func - The predicate receiving (value, key)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| obj | `any` |  |
-| func | `(any, string) => boolean` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| obj | `any` |  |  |
+| func | `(any, string) => boolean` |  | The predicate receiving (value, key) |
 
 **Returns:** `boolean`
 
@@ -170,14 +162,12 @@ someEntry(obj: any, func: (any, string) -> boolean): boolean
 
 Return true if the function returns true for at least one entry in the object.
 
-  @param func - The predicate receiving (value, key)
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| obj | `any` |  |
-| func | `(any, string) => boolean` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| obj | `any` |  |  |
+| func | `(any, string) => boolean` |  | The predicate receiving (value, key) |
 
 **Returns:** `boolean`
 

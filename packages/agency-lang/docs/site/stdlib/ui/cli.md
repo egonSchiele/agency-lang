@@ -61,13 +61,6 @@ repl(
 
 Run a terminal conversation loop, calling onSubmit for each submitted line.
 
-  @param status - Callback returning {left, right, context} strings for the footer, or null
-  @param onSubmit - Return false to exit, a string to print, or interrupts that stopped the turn
-  @param historyFile - JSON history path; empty disables persistence
-  @param historyMax - Maximum number of recent history entries to retain
-  @param paletteCommands - Object mapping /commands to descriptions; null uses setSlashPalette
-  @param herdrName - Name shown in a Herdr pane; empty disables state reporting
-
 Each non-empty submitted line calls `onSubmit`. Returning false exits; a
 non-empty string is printed, and a list of interrupts is shown as a turn
 without a reply. Other return values are ignored.
@@ -79,15 +72,15 @@ Ctrl+D submits, and Ctrl+C or Escape cancels the paste.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| status | `any` |  |
-| onSubmit | `any` |  |
-| prompt | `string` | "> " |
-| historyFile | `string` | "" |
-| historyMax | `number` | 1000 |
-| paletteCommands | `any` | null |
-| herdrName | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| status | `any` |  | Callback returning {left, right, context} strings for the footer, or null |
+| onSubmit | `any` |  | Return false to exit, a string to print, or interrupts that stopped the turn |
+| prompt | `string` | "> " |  |
+| historyFile | `string` | "" | JSON history path; empty disables persistence |
+| historyMax | `number` | 1000 | Maximum number of recent history entries to retain |
+| paletteCommands | `any` | null | Object mapping /commands to descriptions; null uses setSlashPalette |
+| herdrName | `string` | "" | Name shown in a Herdr pane; empty disables state reporting |
 
 **Needs:** `terminal`
 
@@ -190,21 +183,18 @@ select(
 Ask the user to choose with arrow keys in a terminal. Returns the selected
   key, free text when enabled, or a failure if cancelled.
 
-  @param allowFreeText - Add a choice that opens a text-entry prompt
-  @param hint - Dim hint shown after the question
-
 Requires stdout to be a terminal. Ctrl+C exits the process. There is no
 non-TTY fallback, so a scripted caller must route around it
 (`chooseOption` does).
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| message | `string` |  |
-| items | `ChoiceItem[]` |  |
-| allowFreeText | `boolean` | false |
-| hint | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| message | `string` |  |  |
+| items | `ChoiceItem[]` |  |  |
+| allowFreeText | `boolean` | false | Add a choice that opens a text-entry prompt |
+| hint | `string` | "" | Dim hint shown after the question |
 
 **Returns:** `Result<string>`
 
@@ -228,21 +218,17 @@ Ask the user to choose in a terminal, filtering keys by case-insensitive
   substring. Returns the selected key, free text when enabled, or a failure
   if cancelled.
 
-  @param allowFreeText - Offer the typed text when no key matches
-  @param hint - Dim hint shown after the question
-  @param cancelOnEscape - Cancel the current request instead of returning a cancellation failure
-
 Requires stdout to be a terminal. Ctrl+C exits the process.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| message | `string` |  |
-| items | `ChoiceItem[]` |  |
-| allowFreeText | `boolean` | false |
-| hint | `string` | "" |
-| cancelOnEscape | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| message | `string` |  |  |
+| items | `ChoiceItem[]` |  |  |
+| allowFreeText | `boolean` | false | Offer the typed text when no key matches |
+| hint | `string` | "" | Dim hint shown after the question |
+| cancelOnEscape | `boolean` | false | Cancel the current request instead of returning a cancellation failure |
 
 **Returns:** `Result<string>`
 
@@ -263,10 +249,6 @@ prompt(
 
 Ask the user for a line of text in a terminal, or return a cancellation failure.
 
-  @param initial - Prefilled answer
-  @param hint - Dim hint shown after the question
-  @param validate - Callback returning true to accept, or an error message to ask again
-
 Requires stdout to be a terminal. Ctrl+C exits the process.
 
 An empty string is a valid answer; check the Result tag rather than truthiness.
@@ -275,12 +257,12 @@ a tool so the LLM cannot override the constraint.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| message | `string` |  |
-| initial | `string` | "" |
-| hint | `string` | "" |
-| validate | `any` | null |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| message | `string` |  |  |
+| initial | `string` | "" | Prefilled answer |
+| hint | `string` | "" | Dim hint shown after the question |
+| validate | `any` | null | Callback returning true to accept, or an error message to ask again |
 
 **Returns:** `Result<string>`
 
@@ -327,10 +309,6 @@ chooseOption(
 Ask the user to select a key, using a terminal picker or a plain input prompt.
   Invalid answers are requested again.
 
-  @param body - Additional context shown above the choices; empty omits it
-  @param allowFreeText - Accept a non-empty answer that matches no item key
-  @param allowCancel - In a terminal, let Escape cancel the request instead of asking again
-
 In a terminal this is an arrow-key picker. Otherwise it prints the
 title and body and reads a key with `input()`, which is what scripted
 and headless runs see. Both branches re-ask after a cancelled choice unless `allowCancel` is true.
@@ -339,13 +317,13 @@ std::policy uses it for its approve/reject menus.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
-| body | `string` |  |
-| items | `ChoiceItem[]` |  |
-| allowFreeText | `boolean` | false |
-| allowCancel | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  |  |
+| body | `string` |  | Additional context shown above the choices; empty omits it |
+| items | `ChoiceItem[]` |  |  |
+| allowFreeText | `boolean` | false | Accept a non-empty answer that matches no item key |
+| allowCancel | `boolean` | false | In a terminal, let Escape cancel the request instead of asking again |
 
 **Returns:** `string`
 
@@ -383,26 +361,20 @@ interruptChoice(
 Ask for an approval choice or a free-text answer, using the active terminal
   conversation when available.
 
-  @param body - Additional context shown below the heading
-  @param items - Choices with key and label fields
-  @param allowFreeText - Accept an answer outside the listed choices
-  @param allowCancel - Let Escape cancel the current request in a terminal
-  @param expectsValue - Treat free text as an answer value instead of a rejection reason
-
 During a line-mode `repl`, the prompt stays at the bottom of the terminal
 while tool output appears above it. Outside that session, this delegates
 to `chooseOption`, including its plain-input fallback.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| title | `string` |  |
-| body | `string` |  |
-| items | `any[]` |  |
-| allowFreeText | `boolean` | false |
-| allowCancel | `boolean` | false |
-| expectsValue | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  |  |
+| body | `string` |  | Additional context shown below the heading |
+| items | `any[]` |  | Choices with key and label fields |
+| allowFreeText | `boolean` | false | Accept an answer outside the listed choices |
+| allowCancel | `boolean` | false | Let Escape cancel the current request in a terminal |
+| expectsValue | `boolean` | false | Treat free text as an answer value instead of a rejection reason |
 
 **Returns:** `string`
 

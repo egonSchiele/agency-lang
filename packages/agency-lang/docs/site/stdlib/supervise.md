@@ -63,22 +63,18 @@ supervise(
 Run a block and periodically check whether to continue, redirect, or stop.
   Do not call supervise concurrently in sibling fork branches.
 
-  @param every - Working-time interval in milliseconds between checks.
-  @param maxTime - Total working-time budget in milliseconds, at least `every`.
-  @param check - Callback receiving elapsed time and the latest saved draft.
-
 The check receives elapsed working time and the latest saved draft, or null.
 Use the draft to assess progress. A stopped block can return a saved partial
 result under the usual guard salvage rules.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| every | `number` |  |
-| maxTime | `number` |  |
-| check | `(elapsed: number, draft: any) => SuperviseDecision` |  |
-| block | `() => any` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| every | `number` |  | Working-time interval in milliseconds between checks. |
+| maxTime | `number` |  | Total working-time budget in milliseconds, at least `every`. |
+| check | `(elapsed: number, draft: any) => SuperviseDecision` |  | Callback receiving elapsed time and the latest saved draft. |
+| block | `() => any` |  |  |
 
 **Returns:** `Result`
 

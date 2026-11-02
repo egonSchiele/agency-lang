@@ -66,23 +66,17 @@ search(
 
 Search the web with Brave.
 
-  @param apiKey - Leave empty to use BRAVE_API_KEY.
-  @param country - A two-letter country code to localize results, such as "US".
-  @param searchLang - A result language code, such as "en".
-  @param safesearch - Use "off", "moderate", or "strict", or empty for the provider default.
-  @param freshness - Use "pd", "pw", "pm", or "py" for the past day, week, month, or year.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| count | `number` | 5 |
-| apiKey | `string` | "" |
-| country | `string` | "" |
-| searchLang | `string` | "" |
-| safesearch | `string` | "" |
-| freshness | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  |  |
+| count | `number` | 5 |  |
+| apiKey | `string` | "" | Leave empty to use BRAVE_API_KEY. |
+| country | `string` | "" | A two-letter country code to localize results, such as "US". |
+| searchLang | `string` | "" | A result language code, such as "en". |
+| safesearch | `string` | "" | Use "off", "moderate", or "strict", or empty for the provider default. |
+| freshness | `string` | "" | Use "pd", "pw", "pm", or "py" for the past day, week, month, or year. |
 
 **Returns:** `SearchResult[]`
 
@@ -106,21 +100,17 @@ tavilySearch(
 
 Search the web with Tavily and return source links with extracted snippets.
 
-  @param apiKey - Leave empty to use TAVILY_API_KEY.
-  @param searchDepth - Use "basic" for faster retrieval or "advanced" for deeper retrieval.
-  @param topic - Search "general" web content or "news".
-
 Configure a Tavily API key at https://tavily.com before using this provider.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| query | `string` |  |
-| count | `number` | 5 |
-| apiKey | `string` | "" |
-| searchDepth | `string` | "" |
-| topic | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| query | `string` |  |  |
+| count | `number` | 5 |  |
+| apiKey | `string` | "" | Leave empty to use TAVILY_API_KEY. |
+| searchDepth | `string` | "" | Use "basic" for faster retrieval or "advanced" for deeper retrieval. |
+| topic | `string` | "" | Search "general" web content or "news". |
 
 **Returns:** `SearchResult[]`
 

@@ -449,7 +449,38 @@ export type FlatCommand = {
 
 ### GREP_FLAGS
 
+The grep flags safeBash can describe exactly. An allowlist: it has to
+ hold for GNU grep (Linux), BSD grep (macOS), and a grep a user put on
+ their PATH such as ugrep, because the bash path runs whichever grep the
+ shell finds. Left out on purpose, so a grep using
+ one asks std::bash:
+ - `-R`: GNU grep follows every symlink below the path.
+ - `-f`, `--exclude-from`, `--include-from` read another file.
+ - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
+   carry them out, and the bash path is narrow only for one named file,
+   where they change nothing.
+ - `-m` counts per file, and the payload's maxResults is a total.
+ - `-P` is missing from BSD grep.
+ - `-z`, `-d`, `-D` mean different things in different greps.
+ - ugrep's `--filter` runs a program and `--save-config` writes a file.
+ - The long spellings of short flags (`--recursive`, `--ignore-case`).
+
 ```ts
+/** The grep flags safeBash can describe exactly. An allowlist: it has to
+ hold for GNU grep (Linux), BSD grep (macOS), and a grep a user put on
+ their PATH such as ugrep, because the bash path runs whichever grep the
+ shell finds. Left out on purpose, so a grep using
+ one asks std::bash:
+ - `-R`: GNU grep follows every symlink below the path.
+ - `-f`, `--exclude-from`, `--include-from` read another file.
+ - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
+   carry them out, and the bash path is narrow only for one named file,
+   where they change nothing.
+ - `-m` counts per file, and the payload's maxResults is a total.
+ - `-P` is missing from BSD grep.
+ - `-z`, `-d`, `-D` mean different things in different greps.
+ - ugrep's `--filter` runs a program and `--save-config` writes a file.
+ - The long spellings of short flags (`--recursive`, `--ignore-case`). */
 export static const GREP_FLAGS: FlagSpec = {
   plain: [
     "n",
@@ -478,7 +509,28 @@ export static const GREP_FLAGS: FlagSpec = {
 
 ### READ_VERBS
 
+The verbs that read the files they name, or their stdin when they
+ name none. Every letter means the same thing in GNU, BSD, and busybox
+ coreutils. Left out: cat -A -e -t -v (GNU and BSD spell the escapes
+ differently); tail -f (never returns); tail -r (BSD only); wc -L (GNU
+ only); diff -r (reads a whole tree under a question that names one
+ folder) and -y (column width depends on the terminal); sort -o
+ (writes a file), -m, -c; uniq's second positional. tac is not on
+ macOS; the line is recognized and the shell reports it missing. sort
+ may spill a large input to files under $TMPDIR, which no payload
+ names.
+
 ```ts
+/** The verbs that read the files they name, or their stdin when they
+ name none. Every letter means the same thing in GNU, BSD, and busybox
+ coreutils. Left out: cat -A -e -t -v (GNU and BSD spell the escapes
+ differently); tail -f (never returns); tail -r (BSD only); wc -L (GNU
+ only); diff -r (reads a whole tree under a question that names one
+ folder) and -y (column width depends on the terminal); sort -o
+ (writes a file), -m, -c; uniq's second positional. tac is not on
+ macOS; the line is recognized and the shell reports it missing. sort
+ may spill a large input to files under $TMPDIR, which no payload
+ names. */
 export static const READ_VERBS: Record<string, ReadVerb> = {
   cat: {
     flags: {
@@ -599,7 +651,28 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
 
 ### LIST_VERBS
 
+The verbs that list the folders they name, or `.` when they name
+ none. Every letter means the same thing in GNU and BSD. Left out: `-L`
+ on every verb (follows symlinks out of the folder) and `ls -G` (color
+ on macOS, no group column on GNU). tree is not on macOS by default;
+ the line is recognized and the shell reports it missing. A recursive
+ listing through bash shows the entries under `.git` and `node_modules`
+ that the ls tool's walk leaves out, and no file's contents. Given a
+ file, ls prints that one entry and du that one file's size, so both
+ ask for the folder that holds it, with no walk even though du always
+ walks a folder. tree prints the name and an error, so it refuses.
+
 ```ts
+/** The verbs that list the folders they name, or `.` when they name
+ none. Every letter means the same thing in GNU and BSD. Left out: `-L`
+ on every verb (follows symlinks out of the folder) and `ls -G` (color
+ on macOS, no group column on GNU). tree is not on macOS by default;
+ the line is recognized and the shell reports it missing. A recursive
+ listing through bash shows the entries under `.git` and `node_modules`
+ that the ls tool's walk leaves out, and no file's contents. Given a
+ file, ls prints that one entry and du that one file's size, so both
+ ask for the folder that holds it, with no walk even though du always
+ walks a folder. tree prints the name and an error, so it refuses. */
 export static const LIST_VERBS: Record<string, ListVerb> = {
   ls: {
     flags: {
@@ -667,16 +740,13 @@ effectsFor(
 Classify the approvals needed by one simple command.
   Return a failure when it needs the broader Bash approval.
 
-  @param cwd - The resolved working directory used in approval payloads.
-  @param readsStdin - Whether a pipe supplies this command's input.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| command | [SimpleCommand](#simplecommand) |  |
-| cwd | `string` |  |
-| readsStdin | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| command | [SimpleCommand](#simplecommand) |  |  |
+| cwd | `string` |  | The resolved working directory used in approval payloads. |
+| readsStdin | `boolean` | false | Whether a pipe supplies this command's input. |
 
 **Returns:** `Result<Effect[]>`
 
@@ -710,14 +780,12 @@ planFor(source: string, cwd: string): Plan
 
 Plan approvals and execution for Bash source without running the command.
 
-  @param cwd - The working directory used to resolve paths during classification.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| cwd | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  |  |
+| cwd | `string` |  | The working directory used to resolve paths during classification. |
 
 **Returns:** [Plan](safeBash/actions.md#plan)
 
@@ -794,15 +862,12 @@ Run Bash commands after approval of the actions they perform.
   command to learn how it exited. Read saved long output with readSpill or
   grepSpill, not with bash.
 
-  @param command - One or more bash commands.
-  @param cwd - Working directory, defaulting to the agent directory or the process directory.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| command | `string` |  |
-| cwd | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| command | `string` |  | One or more bash commands. |
+| cwd | `string` | "" | Working directory, defaulting to the agent directory or the process directory. |
 
 **Returns:** `Result<string>`
 

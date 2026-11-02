@@ -350,17 +350,13 @@ Add a system message to the current thread's message history.
   The message becomes part of the conversation context for subsequent
   llm() calls.
 
-  @param msg - The system message content
-  @param label - Optional debug label shown in statelog. Never sent to the model.
-  @param expires - "never" (the default) keeps the message on the thread; "llmCall" removes it when the next llm() call on this thread returns.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| msg | `string` |  |
-| label | `string` | "" |
-| expires | `"never" \| "llmCall"` | "never" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| msg | `string` |  | The system message content |
+| label | `string` | "" | Optional debug label shown in statelog. Never sent to the model. |
+| expires | `"never" \| "llmCall"` | "never" | "never" (the default) keeps the message on the thread; "llmCall" removes it when the next llm() call on this thread returns. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L98))
 
@@ -378,17 +374,13 @@ Add a user message to the current thread's message history. Use this
   to seed the conversation with prior user context that wasn't actually
   typed by the user this turn.
 
-  @param msg - The user message content: a string, or an array mixing text strings and attachments.
-  @param label - Optional debug label shown in statelog. Never sent to the model.
-  @param expires - "never" (the default) keeps the message on the thread; "llmCall" removes it when the next llm() call on this thread returns.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| msg | `string \| (string \| MessageAttachment)[]` |  |
-| label | `string` | "" |
-| expires | `"never" \| "llmCall"` | "never" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| msg | `string \| (string \| MessageAttachment)[]` |  | The user message content: a string, or an array mixing text strings and attachments. |
+| label | `string` | "" | Optional debug label shown in statelog. Never sent to the model. |
+| expires | `"never" \| "llmCall"` | "never" | "never" (the default) keeps the message on the thread; "llmCall" removes it when the next llm() call on this thread returns. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L111))
 
@@ -401,20 +393,17 @@ toolMessage(name: string, args: any, result: string, label: string = "")
 Add a synthetic tool call and result to the active conversation without executing it.
   Call only when no tool exchange is waiting for its result.
 
-  @param args - Call arguments to serialize as JSON.
-  @param label - Debug tag in statelog that is not sent to the model.
-
 Use this to record work done outside the model's tool loop. The model
 sees the synthetic call and result on its next request.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| args | `any` |  |
-| result | `string` |  |
-| label | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  |  |
+| args | `any` |  | Call arguments to serialize as JSON. |
+| result | `string` |  |  |
+| label | `string` | "" | Debug tag in statelog that is not sent to the model. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L130))
 
@@ -431,17 +420,13 @@ image(
 Build an image attachment for a multimodal llm() call. The source is
   read, fetched, and MIME-inferred when the message is sent.
 
-  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
-  @param mimeType - Overrides inference and is required for raw base64.
-  @param base64 - When true, treat `source` as raw base64 data.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| mimeType | `string` | "" |
-| base64 | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  | A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true. |
+| mimeType | `string` | "" | Overrides inference and is required for raw base64. |
+| base64 | `boolean` | false | When true, treat `source` as raw base64 data. |
 
 **Returns:** [Attachment](#attachment)
 
@@ -460,19 +445,14 @@ file(
 
 Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
-  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
-  @param filename - Name shown to the model, defaulting to the source basename.
-  @param mimeType - Overrides inference and is required for raw base64.
-  @param base64 - When true, treat `source` as raw base64 data.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| filename | `string` | "" |
-| mimeType | `string` | "" |
-| base64 | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  | A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true. |
+| filename | `string` | "" | Name shown to the model, defaulting to the source basename. |
+| mimeType | `string` | "" | Overrides inference and is required for raw base64. |
+| base64 | `boolean` | false | When true, treat `source` as raw base64 data. |
 
 **Returns:** [Attachment](#attachment)
 
@@ -493,19 +473,14 @@ Build an audio attachment for a multimodal llm() call. Only usable in
   `llm` and `userMessage` calls with a model that accepts audio input.
   It cannot be queued with `attachToReply`.
 
-  @param source - A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true.
-  @param filename - Name shown to the model, defaulting to the source basename.
-  @param mimeType - Overrides inference and is required for raw base64.
-  @param base64 - When true, treat `source` as raw base64 data.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-| filename | `string` | "" |
-| mimeType | `string` | "" |
-| base64 | `boolean` | false |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| source | `string` |  | A local path, an http(s) URL, a base64-encoded data: URI, or raw base64 with base64: true. |
+| filename | `string` | "" | Name shown to the model, defaulting to the source basename. |
+| mimeType | `string` | "" | Overrides inference and is required for raw base64. |
+| base64 | `boolean` | false | When true, treat `source` as raw base64 data. |
 
 **Returns:** [MessageAttachment](#messageattachment)
 
@@ -544,8 +519,6 @@ Use the current tool's return value as the LLM answer without a follow-up call.
   Call only inside an LLM tool invocation with a successful result matching
   the caller's requested output type and no queued reply attachments.
 
-  @param scope - Use "turn" only when the answer covers the whole request and should end enclosing LLM calls too.
-
 The tool's result must match the caller's output contract. Failed tools,
 ordinary tools sharing a round, incompatible return values, and queued
 attachments cause the LLM call to continue. A handoff can end the call after
@@ -553,9 +526,9 @@ other tools in its round, since it runs last. Code after `endTurn` still runs.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| scope | `"llm" \| "turn"` | "llm" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| scope | `"llm" \| "turn"` | "llm" | Use "turn" only when the answer covers the whole request and should end enclosing LLM calls too. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L214))
 
@@ -591,13 +564,11 @@ Show an image or PDF file to yourself. The file is attached to the
   tool inside an llm() call. Accepts .png, .jpg, .jpeg, .gif, .webp,
   and .pdf.
 
-  @param path - Path to the image or PDF file
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| path | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| path | `string` |  | Path to the image or PDF file |
 
 **Returns:** `Result<string>`
 
@@ -617,15 +588,12 @@ Add an assistant message to the current thread's message history.
   Use this to inject prior assistant turns when reconstructing a
   conversation programmatically.
 
-  @param msg - The assistant message content
-  @param label - Optional debug label shown in statelog. Never sent to the model.
-
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| msg | `string` |  |
-| label | `string` | "" |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| msg | `string` |  | The assistant message content |
+| label | `string` | "" | Optional debug label shown in statelog. Never sent to the model. |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L283))
 
@@ -666,17 +634,15 @@ ensureSystemMessage(msg: string)
 
 Push `msg` as a system message unless the active thread already holds it.
 
-  @param msg - The system message
-
 For an agent's persona. An agent called twice from code on one thread
   keeps one persona; a handoff, whose system messages are removed when it
   hands back, pushes the persona fresh on every dispatch.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| msg | `string` |  |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| msg | `string` |  | The system message |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L316))
 
@@ -739,8 +705,6 @@ listThreads(lazySummarize: boolean = true): Result
 
 List active and closed conversations in the current run.
 
-  @param lazySummarize - False avoids LLM calls and uses cached summaries or labels for missing summaries.
-
 Success holds a `ThreadInfo[]` list. Failure means thread inspection could not run.
 Closed threads may already have summaries from `thread(summarize: true)`.
 With lazy summarization enabled, missing summaries are generated and cached.
@@ -749,9 +713,9 @@ cached summary, the label, or an empty string without another LLM call.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| lazySummarize | `boolean` | true |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| lazySummarize | `boolean` | true | False avoids LLM calls and uses cached summaries or labels for missing summaries. |
 
 **Returns:** `Result`
 
@@ -799,19 +763,16 @@ getThread(id: string, offset: number = 0, limit: number = 50): Result
 
 Read a slice of a conversation's messages, returning an empty list for an unknown id.
 
-  @param id - Thread id from `listThreads` or `currentThreadId`.
-  @param offset - Zero-based index of the first message to return.
-
 Success holds a `ThreadMessage[]` slice. Tool calls and structured content
 are rendered as text, and attachment payloads become placeholders.
 
 **Parameters:**
 
-| Name | Type | Default |
-|---|---|---|
-| id | `string` |  |
-| offset | `number` | 0 |
-| limit | `number` | 50 |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| id | `string` |  | Thread id from `listThreads` or `currentThreadId`. |
+| offset | `number` | 0 | Zero-based index of the first message to return. |
+| limit | `number` | 50 |  |
 
 **Returns:** `Result`
 

@@ -35,11 +35,11 @@ does parse as an unwrap; it means the same as `foo()?`.
 
 After `try`, the `?` applies to the try: `try f()?` reads as `(try f())?`,
 and `try a().b()?.name` as `(try a().b())?.name`. The `try` covers the chain
-up to the first `?`. By precedence the `?` would sit inside the try operand,
-but that is a refused position (AG1021), so this is the only reading that
-can compile. `tryExpressionParser` does the split, and `processValueAccess`
-in the generator prints such an access without the parentheses it would
-give any other compound base, so the two spellings round-trip to one.
+up to the first `?`. The other reading, with the `?` inside the try operand,
+is a refused position (AG1021), so nothing is lost. `tryExpressionParser`
+does the split, and the generator prints such an access without the
+parentheses it gives any other compound base, so `(try f())?` formats to
+`try f()?`.
 
 Agency has no ternary. The refusal in `exprParser` looks for `? expr :` after
 an expression. When the expression already ends in an unwrap, the `?` of a

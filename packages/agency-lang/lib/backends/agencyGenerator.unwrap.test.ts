@@ -43,6 +43,14 @@ describe("formatting the ? operator", () => {
     );
   });
 
+  it("keeps the parentheses when the access itself carries an async or await prefix", () => {
+    const tried = { type: "tryExpression", call: call("foo") };
+    expect(print({ ...access(tried, [unwrap]), async: false })).toBe(
+      "const p = await (try foo())?",
+    );
+    expect(print({ ...access(tried, [unwrap]), async: true })).toBe("const p = async (try foo())?");
+  });
+
   it("still parenthesizes a try base when the chain does not start with ?", () => {
     const tried = { type: "tryExpression", call: call("foo") };
     expect(print(access(tried, [{ kind: "property", name: "name" }]))).toBe(

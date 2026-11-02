@@ -1570,9 +1570,13 @@ export class AgencyGenerator {
       "hole",
     ];
     // `try f()?` is the one compound base that prints bare: the parser
-    // reads a `?` after a try operand as applying to the try, so the
-    // parentheses would only come back as `(try f())?`.
-    const tryThenUnwrap = node.base.type === "tryExpression" && node.chain[0]?.kind === "unwrap";
+    // reads a `?` after a try operand as applying to the try. With an
+    // `async` or `await` prefix on the access the parentheses stay, because
+    // `await try f()?` would put the prefix on the operand instead.
+    const tryThenUnwrap =
+      node.base.type === "tryExpression" &&
+      node.chain[0]?.kind === "unwrap" &&
+      node.async === undefined;
     if (!SAFE_BARE_BASES.includes(node.base.type) && !tryThenUnwrap) {
       code = `(${code})`;
     }

@@ -3815,9 +3815,8 @@ const tryOperandParser: Parser<TryExpression> = seqC(
 
 /** `try f()?` reads as `(try f())?`: the `try` covers the chain up to the
  *  first `?`, and the `?` and anything after it apply to the try's Result.
- *  By precedence the `?` would sit inside the try operand, but that is a
- *  position the `?` operator is refused in (AG1021), so the only reading
- *  that can compile is this one. */
+ *  The other reading puts the `?` inside the try operand, a position it is
+ *  refused in (AG1021). An `async` or `await` prefix stays on the operand. */
 const tryExpressionParser: Parser<TryExpression | ValueAccess> = (input: string) => {
   const result = tryOperandParser(input);
   if (!result.success) return result;
@@ -3826,14 +3825,21 @@ const tryExpressionParser: Parser<TryExpression | ValueAccess> = (input: string)
   const split = tried.call.chain.findIndex(isUnwrapElement);
   if (split === -1) return result;
   const before = tried.call.chain.slice(0, split);
-  const operand = before.length === 0 ? tried.call.base : { ...tried.call, chain: before };
+  const { async: prefix, ...call } = tried.call;
+  const operand =
+    before.length > 0
+      ? { ...call, chain: before, ...(prefix !== undefined && { async: prefix }) }
+      : prefix !== undefined
+        ? { ...call.base, async: prefix }
+        : call.base;
   if (operand.type !== "functionCall" && operand.type !== "valueAccess") {
     return failure("expected a call after try", input);
   }
   const access: ValueAccess = {
-    ...tried.call,
+    type: "valueAccess",
     base: { ...tried, call: operand as TryExpression["call"] },
     chain: tried.call.chain.slice(split),
+    ...(call.loc !== undefined && { loc: call.loc }),
   };
   return success(access, result.rest);
 };

@@ -49,6 +49,10 @@ describe("typing the ? operator", () => {
     expect(allCodes(wrap(`  const n: string = parseNamed("x")?`))).toEqual([]);
   });
 
+  it("? on an async call is AG2023: the handle is not a Result", () => {
+    expect(count(`  const n = async parseName("x")?`, "AG2023")).toBe(1);
+  });
+
   it("names the expression and its type in the message", () => {
     const [error] = errorsWithCode(wrap(`  const n = plainName()?`), "AG2023");
     expect(error.message).toContain("`plainName()?` needs a `Result`");

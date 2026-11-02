@@ -136,6 +136,14 @@ access-chain statement that holds one extracts from its own expressions, and
 a `with` statement that holds one keeps its positions liftable. The agreement
 test in `hoistPositions.test.ts` runs the real pass over both programs.
 
+AG1021 to AG1025 are fatal in every mode, like the platform diagnostic
+(`isUnwrapRefusal`, read by `buildSession.ts`). Type errors are warnings
+unless `typechecker.strict` is set, and a warning here would let compilation
+run on into the throw below.
+
+`async f()?` is AG2023: the value is a pending handle, and the lowering would
+drop the `async`.
+
 After the pass no `unwrap` element remains. `processValueAccess` in the
 TypeScript builder and `accessChain` in `assignmentEmitter.ts` throw
 `UNWRAP_REACHED_CODEGEN` (`lib/types/access.ts`) on one. A user cannot reach

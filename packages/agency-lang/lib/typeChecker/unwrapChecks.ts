@@ -7,7 +7,23 @@ import { isAssignable } from "./assignability.js";
 import { diagnostic } from "./diagnostics.js";
 import { positionRefusals } from "./positionRefusals.js";
 import { ANY_T } from "./primitives.js";
-import type { ScopeInfo, TypeCheckerContext } from "./types.js";
+import type { ScopeInfo, TypeCheckError, TypeCheckerContext } from "./types.js";
+
+/** The refusals that stand between a `?` and the codegen tripwire. The
+ *  compile path treats them as fatal whether or not the type checker is in
+ *  strict mode, the way it treats the platform diagnostic, because a
+ *  warning here would let compilation run on into the throw. */
+const CODEGEN_GUARD_REFUSALS: string[] = [
+  "unwrapInOpaquePosition",
+  "unwrapOutsideBody",
+  "unwrapInHandlerBody",
+  "unwrapInParallelArm",
+  "unwrapInAssignmentTarget",
+];
+
+export function isUnwrapRefusal(error: TypeCheckError): boolean {
+  return CODEGEN_GUARD_REFUSALS.includes(error.name);
+}
 
 const isUnwrapAccess = (node: AgencyNode): node is ValueAccess =>
   node.type === "valueAccess" && hasUnwrap(node);

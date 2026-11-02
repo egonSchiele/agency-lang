@@ -1271,11 +1271,23 @@ function unwrapOperandType(
   typeAliases: Record<string, TypeAliasEntry>,
   ctx: TypeCheckerContext,
 ): VariableType {
+  const operand = expressionToString({ ...expr, chain: expr.chain.slice(0, index) });
+  if (expr.async && index === 0) {
+    // `async f()?`: the value is a pending handle, not the Result it will
+    // become, and the lowering would drop the `async`.
+    ctx.errors.push(
+      diagnostic(
+        "unwrapNonResult",
+        { expr: operand, type: "pending async call" },
+        expr.loc ?? null,
+      ),
+    );
+    return ANY_T;
+  }
   if (isAnyType(currentType)) return ANY_T;
   const resolved = safeResolveType(currentType, typeAliases);
   if (isAnyType(resolved)) return ANY_T;
   if (resolved.type === "resultType") return resolved.successType;
-  const operand = expressionToString({ ...expr, chain: expr.chain.slice(0, index) });
   ctx.errors.push(
     diagnostic(
       "unwrapNonResult",

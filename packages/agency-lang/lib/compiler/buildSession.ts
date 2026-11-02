@@ -28,6 +28,8 @@ import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { isPlatformDiagnostic } from "@/typeChecker/platformCheck.js";
+import { isUnwrapRefusal } from "@/typeChecker/unwrapChecks.js";
+import type { TypeCheckError } from "@/typeChecker/types.js";
 import {
   agencyImportTargets,
   buildCompiledClosure,
@@ -670,7 +672,10 @@ function runTypecheck(
   if (!checkerAsked && !platformAsked) return;
   const tcStartTime = performance.now();
   const found = typeCheck(liftedProgram, config, info).errors;
-  const errors = checkerAsked ? found : found.filter(isPlatformDiagnostic);
+  // Two kinds of diagnostic are reported and fatal in every mode: the
+  // platform one, and the `?` refusals that keep an unwrap out of codegen.
+  const alwaysFatal = (e: TypeCheckError) => isPlatformDiagnostic(e) || isUnwrapRefusal(e);
+  const errors = checkerAsked ? found : found.filter(alwaysFatal);
   const tcEndTime = performance.now();
   logTime({
     label: `Type checked ${absoluteInputFile}`,
@@ -681,7 +686,7 @@ function runTypecheck(
   if (errors.length === 0) return;
   const hint = formatDiagnosticsHint(errors);
   const fatal = errors.some(
-    (e) => e.severity === "error" && (tc?.strict === true || isPlatformDiagnostic(e)),
+    (e) => e.severity === "error" && (tc?.strict === true || alwaysFatal(e)),
   );
   if (fatal) {
     console.error(formatErrors(errors));

@@ -17,6 +17,7 @@ const PROGRAMS: [string, string][] = [
   ["the left of catch", "const r = use(target()) catch 0"],
   ["a pipe stage", "const r = a |> use(target())"],
   ["a statement under with", "use(target()) with approve"],
+  ["a bare unwrap statement", "use(target())?"],
   ["an if statement body", "if (a) {\n    const r = use(target())\n  }"],
   ["a block body the pass reaches", "const r = map(a) as x {\n    return use(target())\n  }"],
   ["a block body under &&", "const r = a && map(b) as x {\n    return use(target())\n  }"],

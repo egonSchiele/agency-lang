@@ -528,3 +528,306 @@ describe("checked casts", () => {
     expect(out.indexOf("__hoist_0 = x as Asked!")).toBeGreaterThan(handleStart);
   });
 });
+
+describe("hoistCallsInScope: the ? operator", () => {
+  const lowered = (src: string) => stmts(hoistCallsInScope(bodyOf(src))) as any[];
+  const ref = (value: string) => ({ type: "variableName", value });
+  const valueOf = (temp: string) => ({
+    type: "valueAccess",
+    base: ref(temp),
+    chain: [{ kind: "property", name: "value" }],
+  });
+
+  it("lowers const x = foo()? to a temp, a guard, and a value read", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo()?
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[0]).toMatchObject({ variableName: "__hoist_0", value: { functionName: "foo" } });
+    expect(body[1]).toMatchObject({
+      variableName: "__hoist_1",
+      value: { type: "functionCall", functionName: "isFailure", arguments: [ref("__hoist_0")] },
+    });
+    expect(body[2].condition).toMatchObject(ref("__hoist_1"));
+    expect(body[2].thenBody).toHaveLength(1);
+    expect(body[2].thenBody[0]).toMatchObject({ type: "returnStatement", value: ref("__hoist_0") });
+    expect(body[2].elseBody).toBeUndefined();
+    expect(body[3]).toMatchObject({ variableName: "x", value: valueOf("__hoist_0") });
+  });
+
+  it("splits a()?.b()? into two temps and two guards in order", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = a()?.b()?
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[0]).toMatchObject({ variableName: "__hoist_0", value: { functionName: "a" } });
+    expect(body[3]).toMatchObject({
+      variableName: "__hoist_2",
+      value: {
+        type: "valueAccess",
+        base: ref("__hoist_0"),
+        chain: [
+          { kind: "property", name: "value" },
+          { kind: "methodCall", functionCall: { functionName: "b" } },
+        ],
+      },
+    });
+    expect(body[4]).toMatchObject({
+      variableName: "__hoist_3",
+      value: { functionName: "isFailure", arguments: [ref("__hoist_2")] },
+    });
+    expect(body[5].thenBody[0]).toMatchObject({ type: "returnStatement", value: ref("__hoist_2") });
+    expect(body[6]).toMatchObject({ variableName: "x", value: valueOf("__hoist_2") });
+  });
+
+  it("keeps a trailing property access inline: foo()?.name", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo()?.name
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[3].value).toMatchObject({
+      type: "valueAccess",
+      base: ref("__hoist_0"),
+      chain: [
+        { kind: "property", name: "value" },
+        { kind: "property", name: "name" },
+      ],
+    });
+  });
+
+  it("a trailing method call at the statement tail stays inline: const x = foo()?.name.trim()", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo()?.name.trim()
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[3]).toMatchObject({
+      variableName: "x",
+      value: {
+        type: "valueAccess",
+        base: ref("__hoist_0"),
+        chain: [
+          { kind: "property", name: "value" },
+          { kind: "property", name: "name" },
+          { kind: "methodCall", functionCall: { functionName: "trim" } },
+        ],
+      },
+    });
+  });
+
+  it("a trailing method call in argument position hoists as a unit: g(foo()?.name.trim())", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = g(foo()?.name.trim())
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[3]).toMatchObject({
+      variableName: "__hoist_2",
+      value: { type: "valueAccess", base: ref("__hoist_0") },
+    });
+    expect(body[4]).toMatchObject({
+      variableName: "x",
+      value: { functionName: "g", arguments: [ref("__hoist_2")] },
+    });
+  });
+
+  it("lowers a bare statement foo(bar())?", () => {
+    const body = lowered(`
+def f(): Result {
+  foo(bar())?
+  return success(1)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "assignment",
+      "ifElse",
+      "valueAccess",
+      "returnStatement",
+    ]);
+    expect(body[0]).toMatchObject({ variableName: "__hoist_0", value: { functionName: "bar" } });
+    expect(body[1]).toMatchObject({
+      variableName: "__hoist_1",
+      value: { functionName: "foo", arguments: [ref("__hoist_0")] },
+    });
+    expect(body[3].thenBody[0]).toMatchObject({ type: "returnStatement", value: ref("__hoist_1") });
+    expect(body[4]).toMatchObject(valueOf("__hoist_1"));
+  });
+
+  it("lowers let and reassignment the same way", () => {
+    const body = lowered(`
+def f(): Result {
+  let x = foo()?
+  x = bar()?
+  return success(x)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[3]).toMatchObject({
+      declKind: "let",
+      variableName: "x",
+      value: valueOf("__hoist_0"),
+    });
+    expect(body[7]).toMatchObject({ variableName: "x", value: valueOf("__hoist_2") });
+    expect(body[7].declKind).toBeUndefined();
+  });
+
+  it("leaves a compound assignment alone: it is a bare expression statement the pass never extracts from", () => {
+    // `n += count()?` parses as a binOpExpression statement. The pass does
+    // not extract from those, so the type checker refuses the `?` there
+    // (AG1021, tested in unwrapChecks.test.ts) and nothing reaches here.
+    const body = lowered(`
+def f(): Result {
+  let n = 0
+  n += count()?
+  return success(n)
+}`);
+    expect(body.map((n) => n.type)).toEqual(["assignment", "binOpExpression", "returnStatement"]);
+  });
+
+  it("lowers a destructuring declaration: const { a, b } = pair()?", () => {
+    // Destructuring lowers at parse time to a `__tmp_N` plus one assignment
+    // per field; the `?` sits on the `__tmp_N` statement's value.
+    const body = lowered(`
+def f(): Result {
+  const { a, b } = pair()?
+  return success(a)
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "assignment",
+      "assignment",
+      "assignment",
+      "returnStatement",
+    ]);
+    expect(body[3].value).toMatchObject(valueOf("__hoist_0"));
+    expect(body[4]).toMatchObject({ variableName: "a" });
+    expect(body[5]).toMatchObject({ variableName: "b" });
+  });
+
+  it("hoists the operand of return foo()?", () => {
+    const body = lowered(`
+def f(): Result {
+  return foo()?
+}`);
+    expect(body.map((n) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "returnStatement",
+    ]);
+    expect(body[3].value).toMatchObject(valueOf("__hoist_0"));
+  });
+
+  it("hoists arguments before the operand: foo(bar())?", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo(bar())?
+  return success(x)
+}`);
+    expect(body[0]).toMatchObject({ variableName: "__hoist_0", value: { functionName: "bar" } });
+    expect(body[1]).toMatchObject({
+      variableName: "__hoist_1",
+      value: { functionName: "foo", arguments: [ref("__hoist_0")] },
+    });
+    expect(body[2]).toMatchObject({
+      variableName: "__hoist_2",
+      value: { functionName: "isFailure", arguments: [ref("__hoist_1")] },
+    });
+  });
+
+  it("copies the operand loc onto every emitted statement", () => {
+    const body = lowered(`
+def f(): Result {
+  const x = foo()?
+  return success(x)
+}`);
+    const loc = body[0].loc;
+    expect(loc).toBeDefined();
+    expect(body[1].loc).toEqual(loc);
+    expect(body[2].loc).toEqual(loc);
+    expect(body[2].thenBody[0].loc).toEqual(loc);
+  });
+
+  it("uses a fresh counter inside a block argument", () => {
+    const body = lowered(`
+def f(): Result {
+  const ys = map(xs) as x {
+    return g(x)?
+  }
+  return success(ys)
+}`);
+    const block = body[0].value.block.body.filter((n: any) => n.type !== "newLine");
+    expect(block[0]).toMatchObject({ variableName: "__hoist_0", value: { functionName: "g" } });
+    expect(block.map((n: any) => n.type)).toEqual([
+      "assignment",
+      "assignment",
+      "ifElse",
+      "returnStatement",
+    ]);
+  });
+
+  it("does not mutate its input", () => {
+    const original = bodyOf(`
+def f(): Result {
+  const x = a()?.b()?
+  return success(x)
+}`);
+    const snapshot = JSON.stringify(original);
+    hoistCallsInScope(original);
+    expect(JSON.stringify(original)).toBe(snapshot);
+  });
+});

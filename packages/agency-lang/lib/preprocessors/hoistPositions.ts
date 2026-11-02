@@ -3,6 +3,7 @@ import { bodySlots, type BodySlot } from "../utils/bodySlots.js";
 import { expressionSlots } from "../utils/expressionSlots.js";
 import { EXTRACTING_STATEMENT_KINDS } from "./hoistCalls.js";
 import { containsUnwrap } from "../utils/node.js";
+import { hasUnwrap } from "../types/access.js";
 
 /** - "liftable": the pass lifts a call or checked cast out of here.
  *  - "stuck": inside a body the pass rewrites, in a position it leaves
@@ -66,7 +67,11 @@ function parameterDefaults(node: AgencyNode): HoistPosition[] {
 /** A node in statement position. Its own expressions are liftable only when
  *  the pass extracts from this kind of statement. */
 function statementPositions(statement: AgencyNode, status: HoistStatus): HoistPosition[] {
-  const extracts = EXTRACTING_STATEMENT_KINDS.includes(statement.type);
+  // A bare access-chain statement is left alone, unless it holds the `?`
+  // operator, which the pass splits like any other.
+  const extracts =
+    EXTRACTING_STATEMENT_KINDS.includes(statement.type) ||
+    (statement.type === "valueAccess" && hasUnwrap(statement));
   const ownStatus = status === "liftable" && !extracts ? "stuck" : status;
   return [
     { node: statement, status },

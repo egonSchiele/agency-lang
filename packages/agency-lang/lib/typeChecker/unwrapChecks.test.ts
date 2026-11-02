@@ -71,6 +71,10 @@ describe("AG1021: positions the hoist pass cannot lower", () => {
     expect(count(inMain(`  const r = ${expr}`), "AG1021")).toBe(1);
   });
 
+  it("refuses a compound assignment, which is a bare expression statement", () => {
+    expect(count(inMain(`  let n = 0\n  n += parseName("x")?.length`), "AG1021")).toBe(1);
+  });
+
   it("its own line is fine", () => {
     expect(count(inMain(`  const r = parseName("x")?`), "AG1021")).toBe(0);
   });

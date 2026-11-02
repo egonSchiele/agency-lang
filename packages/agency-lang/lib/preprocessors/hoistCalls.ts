@@ -57,6 +57,8 @@
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import { bodySlots } from "../utils/bodySlots.js";
 import { createKeyword } from "../types/keyword.js";
+import { chainPieces, hasUnwrap } from "../types/access.js";
+import { resultCheckCall } from "../lowering/patternLowering.js";
 import {
   expressionSlots,
   isRegisteredExpressionKind,
@@ -249,7 +251,14 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
         },
       ];
     }
-    case "valueAccess":
+    case "valueAccess": {
+      // A bare statement holding the `?` operator must be split like any
+      // other, because the guard needs the value in a local. The chain is
+      // the statement tail, so it is not hoisted as a unit itself.
+      if (hasUnwrap(stmt)) {
+        const walked = walk(stmt, counter, false);
+        return [...walked.temps, walked.expr];
+      }
       // A bare method-call statement (`result.push(transform(item))`).
       // The pre-slots pass never extracted from these — a recorded
       // coverage hole kept for behavior identity, tripwire-covered like
@@ -257,6 +266,7 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
       // dedicated tail rule for the chain itself; revisit deliberately,
       // with fixtures, not as a refactor side effect.
       return [recurseSlots(stmt, counter)];
+    }
     case "withModifier":
     case "staticStatement":
       // Fully opaque, including the statement body bodySlots exposes:
@@ -379,22 +389,10 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
   }
 
   if (node.type === "valueAccess") {
-    // The base and every argument/index/bound hoist; chain METHOD
-    // calls stay attached (their slot expr is the whole functionCall,
-    // walked args-only), and a chain that still contains one hoists as
-    // a UNIT — splitting a chain mid-way would mean rebuilding it
-    // across statements. A pause inside a later segment re-running an
-    // earlier method call is the documented residual (tripwire).
-    const methodCalls = (node.chain ?? [])
-      .filter((en: any) => en?.kind === "methodCall" && en.functionCall)
-      .map((en: any) => en.functionCall);
-    const { temps, expr: out } = walkSlots(
-      node,
-      counter,
-      (slot) => !methodCalls.includes(slot.expr),
-    );
-    if (!hoistSelf || methodCalls.length === 0) return { temps, expr: out };
-    return { temps, expr: makeTemp(out, temps, counter) };
+    if (hasUnwrap(node)) {
+      return lowerUnwraps(node, counter, hoistSelf);
+    }
+    return walkChain(node, counter, hoistSelf);
   }
 
   if (node.type === "castExpression" && node.checked) {
@@ -450,6 +448,79 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
     if (inner.expr !== slot.expr) expr = slot.write(expr, inner.expr);
   }
   return { temps, expr };
+}
+
+/** The chain rule: the base and every argument/index/bound hoist; chain
+ *  METHOD calls stay attached (their slot expr is the whole functionCall,
+ *  walked args-only), and a chain that still contains one hoists as a
+ *  UNIT — splitting a chain mid-way would mean rebuilding it across
+ *  statements. A pause inside a later segment re-running an earlier
+ *  method call is the documented residual (tripwire). */
+function walkChain(node: any, counter: Counter, hoistSelf: boolean): Extraction {
+  const methodCalls = (node.chain ?? [])
+    .filter((en: any) => en?.kind === "methodCall" && en.functionCall)
+    .map((en: any) => en.functionCall);
+  const { temps, expr: out } = walkSlots(node, counter, (slot) => !methodCalls.includes(slot.expr));
+  if (!hoistSelf || methodCalls.length === 0) return { temps, expr: out };
+  return { temps, expr: makeTemp(out, temps, counter) };
+}
+
+/** The `?` operator. Each piece of the chain before a `?` becomes its own
+ *  temp, followed by a guard that returns the temp when it is a failure, and
+ *  the chain continues from the temp's `.value`:
+ *
+ *    const x = a()?.b()?
+ *
+ *    const __hoist_0 = a()
+ *    const __hoist_1 = isFailure(__hoist_0)
+ *    if (__hoist_1) { return __hoist_0 }
+ *    const __hoist_2 = __hoist_0.value.b()
+ *    const __hoist_3 = isFailure(__hoist_2)
+ *    if (__hoist_3) { return __hoist_2 }
+ *    const x = __hoist_2.value
+ *
+ *  That is what a hand-written `if (r is failure) { return r }` lowers to,
+ *  so a resume meets a shape it already knows. The split happens whether or
+ *  not the chain is a statement tail; only the trailing piece after the last
+ *  `?` follows the ordinary chain rule. See docs/dev/language/unwrap-operator.md. */
+function lowerUnwraps(node: any, counter: Counter, hoistSelf: boolean): Extraction {
+  const loc = node.loc;
+  const temps: AgencyNode[] = [];
+  const base = walk(node.base, counter, false);
+  temps.push(...base.temps);
+  const { pieces, trailing } = chainPieces(node.chain);
+  // The chain so far: a base and the elements after it. After an unwrap the
+  // base is the temp and the elements start with `.value`, so the next piece
+  // prints as one flat chain, `__hoist_0.value.b()`, not a nested access.
+  let currentBase: any = base.expr;
+  let prefix: any[] = [];
+  const chainSoFar = (elements: any[]): any =>
+    elements.length === 0
+      ? currentBase
+      : { type: "valueAccess", base: currentBase, chain: elements, loc };
+  for (const piece of pieces) {
+    let unit: any = chainSoFar([...prefix, ...piece]);
+    if (unit.type === "valueAccess") {
+      const walked = walkChain(unit, counter, false);
+      temps.push(...walked.temps);
+      unit = walked.expr;
+    }
+    // The base of a chain carries no loc of its own; the chain's loc keeps
+    // the debugger and source map on the line that wrote the `?`.
+    const ref = makeTemp({ ...unit, loc: unit.loc ?? loc }, temps, counter);
+    const flag = makeTemp(resultCheckCall("failure", ref, loc), temps, counter);
+    temps.push({
+      type: "ifElse",
+      condition: flag,
+      thenBody: [{ type: "returnStatement", value: ref, loc }],
+      loc,
+    } as unknown as AgencyNode);
+    currentBase = ref;
+    prefix = [{ kind: "property", name: "value" }];
+  }
+  const tail = walkChain(chainSoFar([...prefix, ...trailing]), counter, hoistSelf);
+  temps.push(...tail.temps);
+  return { temps, expr: tail.expr };
 }
 
 /** Emit `const __hoist_N = <call>` into temps and return the reference

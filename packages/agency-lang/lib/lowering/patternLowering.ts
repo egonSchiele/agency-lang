@@ -1379,7 +1379,10 @@ function collectObjectPropertyChecks(
   }
 }
 
-function resultCheckCall(
+/** `isSuccess(source)` or `isFailure(source)`, the call an `is success` or
+ *  `is failure` pattern lowers to. The hoist pass emits the same call for
+ *  the `?` operator. */
+export function resultCheckCall(
   kind: "success" | "failure",
   source: Expression,
   loc: SourceLocation | undefined,

@@ -123,14 +123,15 @@ describe("formatChecked", () => {
     const warning = {
       step: "a",
       field: "tool",
-      message: "step a doesn't have a proper return type so cannot be statically verified.",
+      message:
+        "readNote returns Result, so a reference into its value is checked only when the workflow runs",
     };
     expect(formatChecked("w", [warning], steps)).toBe(
       [
         "w: no problems",
         "",
         "Warnings:",
-        "  step a doesn't have a proper return type so cannot be statically verified.",
+        "  step a: readNote returns Result, so a reference into its value is checked only when the workflow runs",
         "",
         "Effects this workflow can raise:",
         "  Effect      Step   Tool",

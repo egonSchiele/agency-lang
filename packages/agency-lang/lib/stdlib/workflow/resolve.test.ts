@@ -212,7 +212,8 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message: "step note doesn't have a proper return type so cannot be statically verified.",
+        message:
+          "searchNotes declares no return type, so a reference into its value is checked only when the workflow runs",
       },
     ]);
   });
@@ -233,7 +234,8 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message: "step note doesn't have a proper return type so cannot be statically verified.",
+        message:
+          "searchNotes returns Json, so a reference into its value is checked only when the workflow runs",
       },
     ]);
   });
@@ -254,7 +256,8 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message: "step note doesn't have a proper return type so cannot be statically verified.",
+        message:
+          "searchNotes returns Result<Json, string>, so a reference into its value is checked only when the workflow runs",
       },
     ]);
   });
@@ -274,7 +277,8 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message: "step note doesn't have a proper return type so cannot be statically verified.",
+        message:
+          "searchNotes returns Result, so a reference into its value is checked only when the workflow runs",
       },
     ]);
   });
@@ -312,7 +316,8 @@ describe("resolveWorkflow", () => {
       {
         step: "note",
         field: "tool",
-        message: "step note doesn't have a proper return type so cannot be statically verified.",
+        message:
+          "searchNotes returns Result, so a reference into its value is checked only when the workflow runs",
       },
     ]);
   });

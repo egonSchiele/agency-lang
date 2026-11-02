@@ -70,6 +70,10 @@ function valueType(returnType: string | null): string | null {
   return inner === null ? returnType : inner[1];
 }
 
+function untypedReason(returnType: string | null): string {
+  return returnType === null ? "declares no return type" : `returns ${returnType}`;
+}
+
 /** Every name a step declares. The prefix is what makes any identifier safe
  *  as a step id: a step named `failure` declares `step_failure`. */
 export function names(id: string) {
@@ -316,7 +320,7 @@ function untypedWarnings({ workflow, signatures }: Context): Problem[] {
     if (!UNTYPED.includes(valueType(returnType)) || !referenced.includes(step.id)) {
       return [];
     }
-    const message = `step ${step.id} doesn't have a proper return type so cannot be statically verified.`;
+    const message = `${step.tool} ${untypedReason(returnType)}, so a reference into its value is checked only when the workflow runs`;
     return [{ step: step.id, field: "tool", message }];
   });
 }

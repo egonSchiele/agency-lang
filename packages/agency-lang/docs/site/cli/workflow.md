@@ -61,7 +61,7 @@ $ agency workflow check temperatureForZip
 workflows/temperatureForZip.json: no problems
 
 Warnings:
-  step weather doesn't have a proper return type so cannot be statically verified.
+  step weather: weather returns Result, so a reference into its value is checked only when the workflow runs
 
 Effects this workflow can raise:
   Effect         Step      Tool

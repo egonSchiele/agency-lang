@@ -124,9 +124,10 @@ export function effectTable(list: EffectSteps[], paint: ColorFunction = ttyColor
 }
 
 /** `<label>: no problems`, then the warnings and what the workflow can
- *  raise, each under its own heading with a blank line before it. A
- *  warning's message is a whole sentence that names its step, so it is
- *  printed as it is. */
+ *  raise, each under its own heading with a blank line before it. A warning
+ *  is printed like a problem, with its step in front but not its field: the
+ *  field of an untyped-return warning is always `tool`, which the message
+ *  already names. */
 export function formatChecked(
   label: string,
   warnings: Problem[],
@@ -140,7 +141,7 @@ export function formatChecked(
       : [
           "",
           paint.yellow.bold("Warnings:"),
-          ...warnings.map((warning) => `  ${clean(warning.message)}`),
+          ...warnings.map((warning) => `  ${clean(describeProblem({ ...warning, field: null }))}`),
         ];
   const effectLines =
     raised.length === 0

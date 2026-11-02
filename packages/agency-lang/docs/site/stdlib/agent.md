@@ -100,7 +100,7 @@ Return the current todo list.
 ### question
 
 ```ts
-question(prompt: string): string
+question(prompt: string): string raises <std::question>
 ```
 
 Ask the user for information needed to continue and wait for their reply.

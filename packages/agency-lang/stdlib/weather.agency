@@ -38,7 +38,7 @@ type WeatherResult = {
 
 /** Include a region or country in a city name when the location is ambiguous. */
 @capabilities(network)
-export def weather(location: string, units: "imperial" | "metric" = "imperial"): Result {
+export def weather(location: string, units: "imperial" | "metric" = "imperial"): Result raises <std::weather> {
   """
   Get current weather for a city or zip code.
 

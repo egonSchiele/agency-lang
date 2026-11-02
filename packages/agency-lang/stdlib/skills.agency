@@ -319,7 +319,7 @@ export def skillsDir(
   dir: string,
   layout: "flat" | "standard" = "standard",
   name: string = "",
-) {
+) raises <std::skills::skillsDir> {
   """
   Build a tool that lets an LLM list and read skills from a directory.
 
@@ -893,7 +893,7 @@ as `allowed-tools` and `model` do not grant permissions or configure execution.
 Use `scanClaudeSkills` for the invocation switches in Claude Code SKILL.md files.
 */
 @capabilities(fileRead)
-export def commandsDir(dir: string): SkillCommand[] {
+export def commandsDir(dir: string): SkillCommand[] raises <std::skills::commandsDir> {
   """
   Load slash-command templates from Markdown files directly under a directory.
   Returns an empty list when the directory is missing or has no command files.

@@ -91,7 +91,7 @@ effect std::notify {
 ### notify
 
 ```ts
-notify(title: string, message: string): boolean
+notify(title: string, message: string): boolean raises <std::notify>
 ```
 
 Show a native OS notification. Returns true if it was sent.
@@ -121,7 +121,7 @@ screenshot(
   width: number = -1,
   height: number = -1,
   allowedPaths: string[] = [],
-)
+) raises <std::screenshot>
 ```
 
 Take a screenshot and save it to a file. Pass x, y, width, and height to capture a specific region.
@@ -156,7 +156,7 @@ screencapture.
 ### exit
 
 ```ts
-exit(code: number = 0)
+exit(code: number = 0) raises <std::exit>
 ```
 
 Terminate the process with an exit code.
@@ -225,7 +225,7 @@ Read an environment variable, or return null if unset or access is denied.
 ### setEnv
 
 ```ts
-setEnv(name: string, value: string): Result
+setEnv(name: string, value: string): Result raises <std::setEnv>
 ```
 
 Set an environment variable on the host.
@@ -284,7 +284,7 @@ Read piped or redirected standard input as text, waiting until the stream closes
 ### openUrl
 
 ```ts
-openUrl(url: string): Result
+openUrl(url: string): Result raises <std::openUrl>
 ```
 
 Open a URL in the user's default browser.

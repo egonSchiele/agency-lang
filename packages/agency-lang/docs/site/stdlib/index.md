@@ -307,7 +307,7 @@ read(
   offset: number = 0,
   limit: number = 0,
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::read>
 ```
 
 Read the contents of a file and return it as a string.
@@ -345,7 +345,7 @@ write(
   dir: string = ".",
   mode: WriteMode = "overwrite",
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::write>
 ```
 
 Write content to a file.
@@ -382,7 +382,7 @@ writeBinary(
   dir: string = ".",
   mode: WriteMode = "overwrite",
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::writeBinary>
 ```
 
 Decode base64 data and write the bytes to a file.
@@ -417,7 +417,7 @@ readBinary(
   filename: string,
   dir: string = ".",
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::readBinary>
 ```
 
 Read a binary file as a base64-encoded string.

@@ -128,7 +128,7 @@ exec(
   blockedCommands: string[] = [],
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): ExecResult
+): ExecResult raises <std::exec>
 ```
 
 Run an executable with separate arguments and no shell expansion.
@@ -177,7 +177,7 @@ bash(
   blockedCommands: string[] = [],
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): ExecResult
+): ExecResult raises <std::bash>
 ```
 
 Run a bash command with pipes, redirects, and globbing.
@@ -224,7 +224,7 @@ ls(
   maxResults: number = 1000,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::ls>
 ```
 
 List directory entries, optionally including subdirectories. A recursive
@@ -270,7 +270,7 @@ grep(
   filesOnly: boolean = false,
   invert: boolean = false,
   respectGitignore: boolean = true,
-): Result
+): Result raises <std::grep>
 ```
 
 Search a file or directory recursively with a JavaScript regular expression.
@@ -326,7 +326,7 @@ glob(
   maxResults: number = 500,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-): Result
+): Result raises <std::glob>
 ```
 
 Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.

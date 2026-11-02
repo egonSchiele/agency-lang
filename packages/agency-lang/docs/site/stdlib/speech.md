@@ -90,7 +90,7 @@ say(
   rate: number = 0,
   outputFile: string = "",
   allowedPaths: string[] = [],
-)
+) raises <std::say>
 ```
 
 Speak text aloud using macOS text-to-speech.
@@ -126,7 +126,7 @@ record(
   outputFile: string = "",
   silenceTimeout: number = 2000,
   allowedPaths: string[] = [],
-): string
+): string raises <std::record>
 ```
 
 Record audio from the microphone. Recording stops when the user presses Enter, or after the silence timeout elapses.
@@ -172,7 +172,7 @@ transcribe(
   prompt: string = "",
   timestampGranularity: string = "",
   apiKey: string = "",
-): string
+): string raises <std::transcribe>
 ```
 
 Transcribe an audio file to text using a cloud speech provider (OpenAI
@@ -224,7 +224,7 @@ speak(
   allowedPaths: string[] = [],
   apiKey: string = "",
   instructions: string = "",
-): string
+): string raises <std::synthesizeSpeech>
 ```
 
 Synthesize speech from text using a cloud text-to-speech provider (OpenAI

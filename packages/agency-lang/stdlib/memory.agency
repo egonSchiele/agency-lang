@@ -104,7 +104,7 @@ A different directory becomes the active configuration until it is popped
 by `disableMemory`. Prefer the `memory` block form for temporary changes.
 The storage directory is created when the store first writes data. */
 @capabilities(fileRead, fileWrite)
-export def enableMemory(config: MemoryConfig) {
+export def enableMemory(config: MemoryConfig) raises <std::memory::enableMemory> {
   """
   Enable persistent memory for the current execution branch.
   Enabling the active directory again leaves its configuration unchanged.
@@ -120,7 +120,7 @@ export def enableMemory(config: MemoryConfig) {
 
 /** This also removes a configuration loaded from `agency.json`.
 Use the `memory` block form when the previous configuration must be restored. */
-export def disableMemory() {
+export def disableMemory() raises <std::memory::disableMemory> {
   """
   Remove the current branch's most recently enabled memory configuration.
   An earlier configuration becomes active again if one remains.
@@ -156,7 +156,7 @@ export def memory(config: MemoryConfig, block: () -> any = null): Result {
 }
 
 @capabilities(fileRead, fileWrite, llm)
-export def remember(content: string) {
+export def remember(content: string) raises <std::memory::remember> {
   """
   Extract facts from text and persist them to memory.
   Does nothing while memory is disabled.
@@ -185,7 +185,7 @@ export def remember(content: string) {
 }
 
 @capabilities(fileRead, llm)
-export def recall(query: string): string {
+export def recall(query: string): string raises <std::memory::recall> {
   """
   Retrieve relevant stored facts as text for a question or topic.
   Return an empty string when memory is disabled or no facts match.
@@ -200,7 +200,7 @@ export def recall(query: string): string {
 /** Forgetting expires matching observations and relations. The stored history
 remains available for auditing. */
 @capabilities(fileRead, fileWrite, llm)
-export def forget(query: string) {
+export def forget(query: string) raises <std::memory::forget> {
   """
   Stop recalling facts that match a natural-language description.
   This preserves stored history and does nothing while memory is disabled.

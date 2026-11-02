@@ -964,7 +964,7 @@ type FilterImportsResult = {
   refused by `runFile`.
 */
 @capabilities(fileRead)
-export idempotent def typecheckFile(dir: string, filename: string): Result {
+export idempotent def typecheckFile(dir: string, filename: string): Result raises <std::read> {
   """
   Type-check an Agency file on disk.
 
@@ -1010,7 +1010,7 @@ export def writeAST(
   dir: string,
   filename: string,
   overwrite: boolean = true,
-): Result {
+): Result raises <std::write> {
   """
   Format an Agency AST as source and write it to a file.
 
@@ -1056,7 +1056,7 @@ export type HoleInfo = {
 }
 
 @capabilities(fileRead)
-export def loadTemplate(dir: string, filename: string): Result<Code> {
+export def loadTemplate(dir: string, filename: string): Result<Code> raises <std::read> {
   """
   Read an Agency file containing template holes.
 
@@ -1140,7 +1140,7 @@ export idempotent def parseStatements(source: string): Result<Code> {
 /** Read and write happen inside the same interrupt, so approving it approves both.
   If the file is already formatted, no write occurs and its mtime is preserved. */
 @capabilities(fileRead, fileWrite)
-export idempotent def formatFile(dir: string, filename: string): Result {
+export idempotent def formatFile(dir: string, filename: string): Result raises <std::write> {
   """
   Format an Agency file in place.
 

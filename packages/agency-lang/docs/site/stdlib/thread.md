@@ -583,7 +583,7 @@ custom message unused. Calls from ordinary tools have no effect.
 ### viewFile
 
 ```ts
-viewFile(path: string): Result<string>
+viewFile(path: string): Result<string> raises <std::viewFile>
 ```
 
 Show an image or PDF file to yourself. The file is attached to the

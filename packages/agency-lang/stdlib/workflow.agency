@@ -613,7 +613,7 @@ The saved workflow's name must match its filename. Loading reads the file
 and checks its shape; it does not check the steps against available tools.
 */
 @capabilities(fileRead)
-export def loadWorkflow(name: string, dir: string): Result<WorkflowEntry> {
+export def loadWorkflow(name: string, dir: string): Result<WorkflowEntry> raises <std::workflow::scan> {
   """
   Read a saved workflow by name.
 
@@ -652,7 +652,7 @@ A project without a workflows folder returns an empty list. An unreadable
 or invalid saved file fails the listing with a message naming it.
 */
 @capabilities(fileRead)
-export def listWorkflows(dir: string): Result<WorkflowEntry[]> {
+export def listWorkflows(dir: string): Result<WorkflowEntry[]> raises <std::workflow::scan> {
   """
   List saved workflows in name order.
 

@@ -106,7 +106,7 @@ fetch(
   body: Record<string, any> | string | null = null,
   timeout: number = 30000,
   refresh: boolean = false,
-): Result
+): Result raises <std::http::fetch>
 ```
 
 Fetch a URL as text.
@@ -154,7 +154,7 @@ fetchJSON(
   body: Record<string, any> | string | null = null,
   timeout: number = 30000,
   refresh: boolean = false,
-): Result
+): Result raises <std::http::fetchJSON>
 ```
 
 Fetch a URL and parse the response as JSON.
@@ -202,7 +202,7 @@ fetchMarkdown(
   body: Record<string, any> | string | null = null,
   timeout: number = 30000,
   refresh: boolean = false,
-): Result
+): Result raises <std::http::fetchMarkdown>
 ```
 
 Fetch a web page as readable Markdown for an LLM, or plain text for non-HTML responses.

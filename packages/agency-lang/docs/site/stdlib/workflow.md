@@ -514,7 +514,10 @@ Saving an existing name replaces its file.
 ### loadWorkflow
 
 ```ts
-loadWorkflow(name: string, dir: string): Result<WorkflowEntry>
+loadWorkflow(
+  name: string,
+  dir: string,
+): Result<WorkflowEntry> raises <std::workflow::scan>
 ```
 
 Read a saved workflow by name.
@@ -543,7 +546,7 @@ and checks its shape; it does not check the steps against available tools.
 ### listWorkflows
 
 ```ts
-listWorkflows(dir: string): Result<WorkflowEntry[]>
+listWorkflows(dir: string): Result<WorkflowEntry[]> raises <std::workflow::scan>
 ```
 
 List saved workflows in name order.

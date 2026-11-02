@@ -940,7 +940,7 @@ Use export metadata when generating code from a module, for example
 ### typecheckFile
 
 ```ts
-typecheckFile(dir: string, filename: string): Result
+typecheckFile(dir: string, filename: string): Result raises <std::read>
 ```
 
 Type-check an Agency file on disk.
@@ -992,7 +992,7 @@ writeAST(
   dir: string,
   filename: string,
   overwrite: boolean = true,
-): Result
+): Result raises <std::write>
 ```
 
 Format an Agency AST as source and write it to a file.
@@ -1042,7 +1042,7 @@ Format Agency source with the standard Agency formatter.
 ### loadTemplate
 
 ```ts
-loadTemplate(dir: string, filename: string): Result<Code>
+loadTemplate(dir: string, filename: string): Result<Code> raises <std::read>
 ```
 
 Read an Agency file containing template holes.
@@ -1192,7 +1192,7 @@ Parse Agency statements into a Code fragment for a statements hole.
 ### formatFile
 
 ```ts
-formatFile(dir: string, filename: string): Result
+formatFile(dir: string, filename: string): Result raises <std::write>
 ```
 
 Format an Agency file in place.

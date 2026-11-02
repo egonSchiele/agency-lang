@@ -108,7 +108,10 @@ effect std::deleteEvent {
 ### authorizeCalendar
 
 ```ts
-authorizeCalendar(clientId: string, clientSecret: string): Result
+authorizeCalendar(
+  clientId: string,
+  clientSecret: string,
+): Result raises <std::authorizeCalendar>
 ```
 
 Open the browser to authorize Google Calendar access.
@@ -158,7 +161,7 @@ listEvents(
   timeMax: string = "",
   query: string = "",
   calendarId: string = "primary",
-): Result
+): Result raises <std::listEvents>
 ```
 
 List Google Calendar events in start-time order.
@@ -196,7 +199,7 @@ createEvent(
   description: string = "",
   location: string = "",
   calendarId: string = "primary",
-): Result
+): Result raises <std::createEvent>
 ```
 
 Create a Google Calendar event.
@@ -238,7 +241,7 @@ updateEvent(
   description: string = "",
   location: string = "",
   calendarId: string = "primary",
-): Result
+): Result raises <std::updateEvent>
 ```
 
 Update the supplied fields of a Google Calendar event, leaving empty fields unchanged.
@@ -271,7 +274,10 @@ Update the supplied fields of a Google Calendar event, leaving empty fields unch
 ### deleteEvent
 
 ```ts
-deleteEvent(eventId: string, calendarId: string = "primary"): Result
+deleteEvent(
+  eventId: string,
+  calendarId: string = "primary",
+): Result raises <std::deleteEvent>
 ```
 
 Delete a Google Calendar event.

@@ -39,7 +39,7 @@ effect std::clipboardPaste {}
 ### copy
 
 ```ts
-copy(text: string)
+copy(text: string) raises <std::clipboardCopy>
 ```
 
 Copy text to the system clipboard.
@@ -59,7 +59,7 @@ Copy text to the system clipboard.
 ### paste
 
 ```ts
-paste(): string
+paste(): string raises <std::clipboardPaste>
 ```
 
 Read text from the system clipboard.

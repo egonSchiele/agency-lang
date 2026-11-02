@@ -68,7 +68,11 @@ effect std::deleteSecret {
 ### setSecret
 
 ```ts
-setSecret(key: string, value: string, service: string = "agency-lang"): Result
+setSecret(
+  key: string,
+  value: string,
+  service: string = "agency-lang",
+): Result raises <std::setSecret>
 ```
 
 Store a secret in the system keyring, replacing any existing value.
@@ -96,7 +100,10 @@ Store a secret in the system keyring, replacing any existing value.
 ### getSecret
 
 ```ts
-getSecret(key: string, service: string = "agency-lang"): Result
+getSecret(
+  key: string,
+  service: string = "agency-lang",
+): Result raises <std::getSecret>
 ```
 
 Retrieve a secret from the system keyring, or null when it is missing.
@@ -122,7 +129,10 @@ Retrieve a secret from the system keyring, or null when it is missing.
 ### deleteSecret
 
 ```ts
-deleteSecret(key: string, service: string = "agency-lang"): Result
+deleteSecret(
+  key: string,
+  service: string = "agency-lang",
+): Result raises <std::deleteSecret>
 ```
 
 Delete a secret from the system keyring, returning whether it existed.

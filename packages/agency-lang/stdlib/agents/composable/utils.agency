@@ -5,7 +5,7 @@
 effect and a string reply, use `question` from `std::agent`.
 */
 
-export def ask(question: string) {
+export def ask(question: string) raises <unknown> {
   """
   Ask the user a question and return their response.
   """

@@ -61,7 +61,7 @@ search(
   searchLang: string = "",
   safesearch: string = "",
   freshness: string = "",
-): SearchResult[]
+): SearchResult[] raises <std::search>
 ```
 
 Search the web with Brave.
@@ -101,7 +101,7 @@ tavilySearch(
   apiKey: string = "",
   searchDepth: string = "",
   topic: string = "",
-): SearchResult[]
+): SearchResult[] raises <std::tavilySearch>
 ```
 
 Search the web with Tavily and return source links with extracted snippets.

@@ -39,7 +39,7 @@ effect std::openUrl { url: string, host: string }
 effect std::notify { title: string, body: string }
 
 @capabilities(subprocess)
-export def notify(title: string, message: string): boolean {
+export def notify(title: string, message: string): boolean raises <std::notify> {
   """
   Show a native OS notification. Returns true if it was sent.
   """
@@ -60,7 +60,7 @@ export def screenshot(
   width: number = -1,
   height: number = -1,
   allowedPaths: string[] = [],
-) {
+) raises <std::screenshot> {
   """
   Take a screenshot and save it to a file. Pass x, y, width, and height to capture a specific region.
 
@@ -83,7 +83,7 @@ export def screenshot(
 Flushes pending Statelog deliveries before terminating. Other pending work
 and cleanup may not finish.
 */
-export def exit(code: number = 0) {
+export def exit(code: number = 0) raises <std::exit> {
   """
   Terminate the process with an exit code.
 
@@ -137,7 +137,7 @@ On the Node host, the change affects this process and child processes
 started afterward. It does not change the launching shell's environment.
 */
 @capabilities(env)
-export def setEnv(name: string, value: string): Result {
+export def setEnv(name: string, value: string): Result raises <std::setEnv> {
   """
   Set an environment variable on the host.
 
@@ -179,7 +179,7 @@ def urlHost(url: string): string {
 /** macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 `open` subprocess. */
 @capabilities(subprocess)
-export def openUrl(url: string): Result {
+export def openUrl(url: string): Result raises <std::openUrl> {
   """
   Open a URL in the user's default browser.
   """

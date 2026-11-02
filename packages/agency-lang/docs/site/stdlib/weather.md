@@ -38,7 +38,10 @@ effect std::weather {
 ### weather
 
 ```ts
-weather(location: string, units: "imperial" | "metric" = "imperial"): Result
+weather(
+  location: string,
+  units: "imperial" | "metric" = "imperial",
+): Result raises <std::weather>
 ```
 
 Get current weather for a city or zip code.

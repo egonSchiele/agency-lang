@@ -35,7 +35,7 @@ effect std::browserUse { task: string, model: string }
   browser agent. The client does not check its navigation against the list.
 */
 @capabilities(network)
-export def browserUse(task: string, model: string = "", maxCostUsd: number = 0, proxyCountryCode: string = "", timeout: number = 0, apiKey: string = "", allowedDomains: string[] = []): Result {
+export def browserUse(task: string, model: string = "", maxCostUsd: number = 0, proxyCountryCode: string = "", timeout: number = 0, apiKey: string = "", allowedDomains: string[] = []): Result raises <std::browserUse> {
   """
   Run a browser automation task described in plain language through Browser Use.
 

@@ -13,7 +13,7 @@ effect and a string reply, use `question` from `std::agent`.
 ### ask
 
 ```ts
-ask(question: string)
+ask(question: string) raises <unknown>
 ```
 
 Ask the user a question and return their response.

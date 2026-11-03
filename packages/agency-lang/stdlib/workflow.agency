@@ -264,6 +264,43 @@ export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: strin
   return success(checked.warnings)
 }
 
+/** What `checkWorkflowWithSchemas` reports for a workflow that passed. */
+export type CheckedWorkflow = {
+  /** What the check could not settle until the workflow runs. */
+  warnings: WorkflowProblem[];
+  /** The JSON Schema of the workflow's `inputs` type, in the input form: an input with a default is optional. */
+  inputsSchema: Json;
+  /** The JSON Schema of each LLM step's `output` type, by step id. Tool steps are not here. */
+  outputSchemas: Record<string, Json>
+}
+
+/**
+Use this where the check's warnings and the schemas are needed together,
+such as a host that saves workflows itself and shows a later step what an
+LLM step produces. It compiles once and runs the program's `workflowSchemas`
+node in one subprocess, which raises `std::run`. A workflow with problems
+fails with them, as `checkWorkflow` does, and starts no process.
+*/
+@capabilities(fileRead, fileWrite, subprocess)
+export def checkWorkflowWithSchemas(workflow: Workflow, tools: any[], dir: string = ""): Result<CheckedWorkflow, WorkflowFailure> {
+  """
+  Check a workflow and return its warnings with the JSON Schemas of its inputs and of each LLM step's output.
+
+  @param tools - Original exported Agency functions available to the workflow's steps.
+  @param dir - Directory containing any local tool modules and resolving their paths.
+  """
+  const checked = _checked(workflow, tools, dir)?
+  const schemas = _workflowSchemas(checked.program)
+  if (schemas is failure(err)) {
+    return _workflowFailure(err)
+  }
+  return success({
+    warnings: checked.warnings,
+    inputsSchema: schemas.value.inputs,
+    outputSchemas: schemas.value.outputs
+  })
+}
+
 /** One parameter a workflow step can pass to a tool. */
 export type CatalogParam = {
   name: string;
@@ -289,7 +326,9 @@ export type CatalogEntry = {
   /** The declared return type as Agency text. Null when none is declared. */
   returns: string | null;
   /** What the tool can raise, as `describe` reports it. A tool that uses `guard` lists `std::guard`. `checkWorkflow`'s `raises` check leaves it out, since a guard trip is a question about budget, not a permission. */
-  effects: string[]
+  effects: string[];
+  /** True for a `handoff def`, so a picker can tell an agent from a function. A step calls it like any tool. */
+  handoff: boolean
 }
 
 /**
@@ -433,7 +472,7 @@ export def workflowTools(dir: string, tools: any[]): Result<any[]> {
 const WORKFLOWS_DIR = "workflows"
 const FILE_SUFFIX = ".json"
 const MAX_WORKFLOWS = 500
-const INPUTS_SCHEMA_NODE = "inputsSchema"
+const SCHEMAS_NODE = "workflowSchemas"
 
 /** What a saved workflow's file records beside the workflow. */
 export type WorkflowMeta = {
@@ -509,15 +548,30 @@ def savedFile(name: string): string {
   return "${WORKFLOWS_DIR}/${name}${FILE_SUFFIX}"
 }
 
-/** The JSON Schema of the program's `Inputs` type, from its `inputsSchema` node. */
+/** What the program's `workflowSchemas` node returns. */
+type WorkflowSchemas = {
+  inputs: Json;
+  outputs: Record<string, Json>
+}
+
+/** The JSON Schemas of the program's `Inputs` type and of each LLM step's
+  output type, from one run of its `workflowSchemas` node. */
+@hidden
+@capabilities(fileWrite, subprocess)
+export def _workflowSchemas(program: CompiledProgram): Result<WorkflowSchemas> {
+  const ran = run(compiled: program, node: SCHEMAS_NODE)
+  if (ran is failure(runErr)) {
+    return failure("could not derive the workflow's schemas: ${runErr}")
+  }
+  return success(ran.value.data)
+}
+
+/** The JSON Schema of the program's `Inputs` type. */
 @hidden
 @capabilities(fileWrite, subprocess)
 export def _inputsSchema(program: CompiledProgram): Result<Json> {
-  const ran = run(compiled: program, node: INPUTS_SCHEMA_NODE)
-  if (ran is failure(runErr)) {
-    return failure("could not derive the inputs schema: ${runErr}")
-  }
-  return success(ran.value.data)
+  const schemas = _workflowSchemas(program)?
+  return success(schemas.inputs)
 }
 
 /**

@@ -27,6 +27,7 @@ const entries: CatalogEntry[] = [
     params: [param("query", "string")],
     returns: "Result<ListSummary[]>",
     effects: [],
+    handoff: false,
   },
   {
     module: "./src/agent/lists.agency",
@@ -35,6 +36,7 @@ const entries: CatalogEntry[] = [
     params: [param("listId", "string"), param("items", "string[]"), param("section", "string")],
     returns: "Result<string>",
     effects: ["test::lists::add"],
+    handoff: false,
   },
 ];
 
@@ -61,6 +63,7 @@ describe("formatCatalog", () => {
       params: [param("num", "number"), param("precision", null, "0")],
       returns: null,
       effects: [],
+      handoff: false,
     };
     expect(formatCatalog([entry])).toBe(
       [

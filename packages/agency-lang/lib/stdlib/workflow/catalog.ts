@@ -25,6 +25,8 @@ export type CatalogEntry = {
    *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard
    *  trip is a question about budget, not a permission. */
   effects: string[];
+  /** True for a `handoff def`, so a picker can tell an agent from a function. */
+  handoff: boolean;
 };
 
 /** The JSON Schema of each parameter in the tool's definition, by name.
@@ -55,6 +57,7 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
     params,
     returns: signature.returnType,
     effects: signature.effects,
+    handoff: signature.handoff,
   };
 }
 

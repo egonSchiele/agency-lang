@@ -1,0 +1,37 @@
+{
+  "tests": [
+    {
+      "nodeName": "schemasOfEachPart",
+      "description": "the warnings, the inputs schema in its input form, and each LLM step's output schema by step id, from one std::run",
+      "input": "",
+      "expectedOutput": "[[],[\"a\",\"b\"],[\"a\",\"b\",\"note\"],[\"explain\"],[\"title\",\"summary\"],[\"title\",\"summary\"],[\"std::run\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stringOutputIsAStringSchema",
+      "description": "an LLM step whose output is `string` has a string schema",
+      "input": "",
+      "expectedOutput": "\"string\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refusedWorkflowStartsNothing",
+      "description": "a workflow with problems fails with them and raises no std::run",
+      "input": "",
+      "expectedOutput": "[[\"diff\"],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -39,6 +39,7 @@ const searchSignature: Signature = {
     { name: "each", type: "(string) -> any", default: null, description: "Called once per note" },
   ],
   effects: ["std::read", "std::guard"],
+  handoff: false,
 };
 
 const ref = { module: "./notes.agency", name: "searchNotes" };
@@ -62,8 +63,16 @@ describe("catalogEntries", () => {
         ],
         returns: "Result<Note[]>",
         effects: ["std::read", "std::guard"],
+        handoff: false,
       },
     ]);
+  });
+
+  it("carries handoff through from the signature", () => {
+    const [entry] = catalogEntries([searchNotes], [ref], {
+      [signatureKey(ref.module, ref.name)]: { ...searchSignature, handoff: true },
+    });
+    expect(entry.handoff).toBe(true);
   });
 
   it("gives a tool with no docstring an empty description", () => {

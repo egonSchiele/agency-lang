@@ -42,6 +42,7 @@ const PROGRAM_NAMES = [
   "Json",
   "main",
   "inputsSchema",
+  "workflowSchemas",
   "success",
   "failure",
   "llm",

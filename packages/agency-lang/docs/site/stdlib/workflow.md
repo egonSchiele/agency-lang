@@ -125,6 +125,24 @@ export type WorkflowFailure = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L109))
 
+### CheckedWorkflow
+
+What `checkWorkflowWithSchemas` reports for a workflow that passed.
+
+```ts
+/** What `checkWorkflowWithSchemas` reports for a workflow that passed. */
+export type CheckedWorkflow = {
+  /** What the check could not settle until the workflow runs. */
+  warnings: WorkflowProblem[];
+  /** The JSON Schema of the workflow's `inputs` type, in the input form: an input with a default is optional. */
+  inputsSchema: Json;
+  /** The JSON Schema of each LLM step's `output` type, by step id. Tool steps are not here. */
+  outputSchemas: Record<string, Json>
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L268))
+
 ### CatalogParam
 
 One parameter a workflow step can pass to a tool.
@@ -144,7 +162,7 @@ export type CatalogParam = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L268))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L305))
 
 ### CatalogEntry
 
@@ -163,11 +181,13 @@ export type CatalogEntry = {
   /** The declared return type as Agency text. Null when none is declared. */
   returns?: string;
   /** What the tool can raise, as `describe` reports it. A tool that uses `guard` lists `std::guard`. `checkWorkflow`'s `raises` check leaves it out, since a guard trip is a question about budget, not a permission. */
-  effects: string[]
+  effects: string[];
+  /** True for a `handoff def`, so a picker can tell an agent from a function. A step calls it like any tool. */
+  handoff: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L281))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L318))
 
 ### WorkflowMeta
 
@@ -187,7 +207,7 @@ export type WorkflowMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L439))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L478))
 
 ### WorkflowEntry
 
@@ -205,7 +225,7 @@ export type WorkflowEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L452))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L491))
 
 ## Effects
 
@@ -237,7 +257,7 @@ effect std::workflow::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L481))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L520))
 
 ### std::workflow::save
 
@@ -260,7 +280,7 @@ effect std::workflow::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L491))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L530))
 
 ## Functions
 
@@ -329,6 +349,40 @@ until runtime, such as references into a tool result with no declared type.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L256))
 
+### checkWorkflowWithSchemas
+
+```ts
+checkWorkflowWithSchemas(
+  workflow: Workflow,
+  tools: any[],
+  dir: string = "",
+): Result<CheckedWorkflow, WorkflowFailure>
+```
+
+Check a workflow and return its warnings with the JSON Schemas of its inputs and of each LLM step's output.
+
+Use this where the check's warnings and the schemas are needed together,
+such as a host that saves workflows itself and shows a later step what an
+LLM step produces. It compiles once and runs the program's `workflowSchemas`
+node in one subprocess, which raises `std::run`. A workflow with problems
+fails with them, as `checkWorkflow` does, and starts no process.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| workflow | [Workflow](#workflow) |  |  |
+| tools | `any[]` |  | Original exported Agency functions available to the workflow's steps. |
+| dir | `string` | "" | Directory containing any local tool modules and resolving their paths. |
+
+**Returns:** `Result<CheckedWorkflow, WorkflowFailure>`
+
+**Throws:** `std::run`, `std::guard`, `std::read`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L285))
+
 ### catalog
 
 ```ts
@@ -355,7 +409,7 @@ failure instead.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L302))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L341))
 
 ### runWorkflow
 
@@ -397,7 +451,7 @@ It does not pin the inputs or the workflow's contents.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L332))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L371))
 
 ### workflowTool
 
@@ -426,7 +480,7 @@ A name shared with a supplied tool is refused.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L379))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L418))
 
 ### workflowTools
 
@@ -453,7 +507,7 @@ A missing schema requires saving the workflow again with `writeWorkflow`.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L414))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L453))
 
 ### writeWorkflow
 
@@ -487,7 +541,7 @@ Saving an existing name replaces its file.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L530))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L584))
 
 ### loadWorkflow
 
@@ -516,7 +570,7 @@ and checks its shape; it does not check the steps against available tools.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L624))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L678))
 
 ### listWorkflows
 
@@ -541,4 +595,4 @@ or invalid saved file fails the listing with a message naming it.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L663))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L717))

@@ -18,38 +18,59 @@ function returnSchemaLine(out: string, name: string): string | null {
 }
 
 // A workflow editor reads a tool's return schema from the catalog to offer a
-// later step the fields of its result. The compiler emits it beside the
-// parameter schema, from the declared return type.
+// later step the fields of its result. The compiler emits a thunk for it
+// beside the parameter schema, from the declared return type.
 describe("returnSchema on a registered function", () => {
-  it("is the declared return type's schema", () => {
+  it("is a thunk for the declared return type's schema", () => {
     const out = gen(
-      'def f(): { title: string; count: number } {\n  return { title: "t", count: 1 }\n}\n',
+      'export def f(): { title: string; count: number } {\n  return { title: "t", count: 1 }\n}\n',
     );
-    expect(returnSchemaLine(out, "f")).toMatch(/^z\.object\(\{/);
+    expect(returnSchemaLine(out, "f")).toMatch(/^\(\) => z\.object\(\{/);
     expect(returnSchemaLine(out, "f")).toContain('"title": z.string()');
   });
 
-  it("is the success type's schema for a Result", () => {
-    const out = gen("def f(): Result<number> {\n  return success(1)\n}\n");
-    expect(returnSchemaLine(out, "f")).toBe("z.number()");
+  it("is the success type's schema for a Result, written directly or through an alias", () => {
+    const direct = gen("export def f(): Result<number> {\n  return success(1)\n}\n");
+    expect(returnSchemaLine(direct, "f")).toBe("() => z.number()");
+    const aliased = gen(
+      'type Note = { id: string }\ntype NoteResult = Result<Note>\nexport def f(): NoteResult {\n  return success({ id: "n" })\n}\n',
+    );
+    expect(returnSchemaLine(aliased, "f")).toBe("() => Note");
   });
 
-  it("names an alias declared before the def and defers one declared after it", () => {
+  it("names an alias wherever it is declared, since the thunk runs after every const exists", () => {
     const before = gen(
-      "type Note = { id: string }\ndef f(): Result<Note[]> {\n  return success([])\n}\n",
+      "type Note = { id: string }\nexport def f(): Result<Note[]> {\n  return success([])\n}\n",
     );
-    expect(returnSchemaLine(before, "f")).toBe("z.array(Note)");
+    expect(returnSchemaLine(before, "f")).toBe("() => z.array(Note)");
     const after = gen(
-      "def f(): Result<Note[]> {\n  return success([])\n}\ntype Note = { id: string }\n",
+      "export def f(): Result<Note[]> {\n  return success([])\n}\ntype Note = { id: string }\n",
     );
-    expect(returnSchemaLine(after, "f")).toContain("z.lazy(() => Note)");
+    expect(returnSchemaLine(after, "f")).toBe("() => z.array(Note)");
   });
 
-  it("is left out for no return type and for a function-typed return", () => {
-    expect(returnSchemaLine(gen("def f() {\n  return 1\n}\n"), "f")).toBeNull();
+  it("inlines a value-parameterized alias", () => {
+    const out = gen(
+      "type Percent(low: number, high: number) = number\nexport def f(): Percent(0, 100) {\n  return 50\n}\n",
+    );
+    expect(returnSchemaLine(out, "f")).toMatch(/^\(\) => z\.number\(\)/);
+  });
+
+  it("is left out for a def that is not exported, no return type, a function-typed return, or a regex", () => {
+    expect(returnSchemaLine(gen("def f(): number {\n  return 1\n}\n"), "f")).toBeNull();
+    expect(returnSchemaLine(gen("export def f() {\n  return 1\n}\n"), "f")).toBeNull();
     const functionReturn = gen(
-      "def same(x: number): number {\n  return x\n}\ndef f(): (number) => number {\n  return same\n}\n",
+      "def same(x: number): number {\n  return x\n}\ntype Mapper = (number) => number\nexport def f(): Mapper {\n  return same\n}\n",
     );
     expect(returnSchemaLine(functionReturn, "f")).toBeNull();
+    const regexReturn = gen("export def f(): { name: string; match: regex }[] {\n  return []\n}\n");
+    expect(returnSchemaLine(regexReturn, "f")).toBeNull();
+  });
+
+  it("defers an alias declared after a parameter whose type holds it inside a Result", () => {
+    const out = gen(
+      "export def f(x: { r: Result<Note> }): number {\n  return 1\n}\ntype Note = { id: string }\n",
+    );
+    expect(out).toContain("z.lazy(() => Note)");
   });
 });

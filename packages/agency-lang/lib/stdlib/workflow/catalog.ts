@@ -46,12 +46,13 @@ function parameterSchemas(tool: unknown): Record<string, unknown> {
 }
 
 /** The JSON Schema of what the tool returns, from the zod schema the
- *  compiler emitted for its return type. */
+ *  compiler emitted for its return type. The compiler leaves out a type
+ *  JSON Schema cannot express, so the conversion here does not throw. */
 function returnSchemaOf(tool: unknown): unknown | null {
-  if (!AgencyFunction.isAgencyFunction(tool)) {
+  if (!AgencyFunction.isAgencyFunction(tool) || tool.returnSchema === null) {
     return null;
   }
-  const schema = tool.returnSchema as { toJSONSchema?: () => unknown } | null;
+  const schema = tool.returnSchema() as { toJSONSchema?: () => unknown } | null;
   if (typeof schema?.toJSONSchema !== "function") {
     return null;
   }

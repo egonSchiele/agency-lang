@@ -323,8 +323,7 @@ export const greet = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), })
   },
-  exported: false,
-  returnSchema: z.string()
+  exported: false
 }, __toolRegistry);
 async function __double_impl(__run: __Run, x: number) {
   const __setupData = setupFunction(__run);
@@ -467,8 +466,7 @@ export const double = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false,
-  returnSchema: z.number()
+  exported: false
 }, __toolRegistry);
 async function __applyToAll_impl(__run: __Run, items: number[], transform: (number) => number) {
   const __setupData = setupFunction(__run);
@@ -635,8 +633,7 @@ export const applyToAll = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"items": z.array(z.number()), })
   },
-  exported: false,
-  returnSchema: z.array(z.number())
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

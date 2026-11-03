@@ -101,6 +101,7 @@ import {
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
 import {
+  containsRegex,
   isAnyType,
   isFunctionTyped,
   paramAcceptsFailure,
@@ -2114,54 +2115,76 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * The zod schema of the value a call to `node` returns, or null when the
-   * function declares no return type or returns a function. A `Result<T>`
-   * gives `T`'s schema: a caller reads the value, and a workflow step's
-   * reference goes through `.value`. Aliases declared after the def are
-   * pending at module load, the same as in a parameter schema.
+   * A thunk for the zod schema of the value a call to `node` returns, or
+   * null when there is none to give: the def is not exported (only an
+   * exported def can be a workflow tool), declares no return type, or
+   * returns a function or a `regex`, which JSON Schema cannot express,
+   * directly or through an alias. A `Result<T>`, written directly or through
+   * an alias, gives `T`'s schema: a caller reads the value, and a workflow
+   * step's reference goes through `.value`, as `describe`'s `returnsResult`
+   * says. A thunk, so no schema is built when the module loads, only when
+   * `catalog` asks; by then every alias const exists, so none is pending.
    */
   private returnSchemaFor(node: FunctionDefinition): TsNode | null {
     const declared = node.returnType ?? null;
-    if (declared === null) {
+    if (declared === null || !node.exported) {
       return null;
     }
-    const value = declared.type === "resultType" ? declared.successType : declared;
-    if (typeContainsFunction(value) || this.unboundAliasIn(value) !== null) {
+    const aliases = this.scopes.visibleTypeAliasesFull();
+    const resolved = safeResolveType(declared, aliases);
+    const value = resolved.type === "resultType" ? resolved.successType : declared;
+    const closure = this.aliasClosure(value);
+    const unrepresentable = closure.types.some(
+      (type) => typeContainsFunction(type) || containsRegex(type),
+    );
+    if (unrepresentable || closure.unbound !== null) {
       return null;
     }
-    return ts.raw(this.zodSchemaFor(value, this.pendingAliasesFor(node.loc?.start)));
+    return ts.raw(`() => ${this.zodSchemaFor(value)}`);
   }
 
   /**
-   * An alias the generated code cannot name, or null when every alias
-   * `type` reaches is declared in this module or imported by name. An alias
-   * that reached the type table through an imported signature or through
+   * `type` and the body of every alias it names, at any depth, and the
+   * first alias the generated code cannot name, or null. An alias that
+   * reached the type table through an imported signature or through
    * another alias's body (`pullTransitiveAliases`) has no const here and no
    * JavaScript import, so a schema that names it fails at module load. A
-   * parameter schema has the same gap; this guard keeps a return schema from
-   * widening it.
+   * parameter schema has the same gap; this keeps a return schema from
+   * widening it. A generic or value-parameterized alias has no const
+   * either, but the schema inlines its body, so it needs no binding.
    */
-  private unboundAliasIn(type: VariableType): string | null {
+  private aliasClosure(type: VariableType): { types: VariableType[]; unbound: string | null } {
     const aliases = this.scopes.visibleTypeAliasesFull();
     const declaredHere = new Set(this.aliasEmissionOrder.map((alias) => alias.name));
+    const types: VariableType[] = [resolveTypeDeep(type, aliases)];
     const queue: string[] = [];
-    collectAliasNames(resolveTypeDeep(type, aliases), queue);
+    collectAliasNames(type, queue);
     const seen = new Set<string>();
+    let unbound: string | null = null;
     while (queue.length > 0) {
       const name = queue.shift()!;
       if (seen.has(name)) {
         continue;
       }
       seen.add(name);
-      if (!declaredHere.has(name) && !this.names.isAgencyImport(name)) {
-        return name;
-      }
       const entry = aliases[name];
+      const inlined =
+        entry !== undefined &&
+        ((entry.typeParams?.length ?? 0) > 0 || (entry.valueParams?.length ?? 0) > 0);
+      if (
+        unbound === null &&
+        !inlined &&
+        !declaredHere.has(name) &&
+        !this.names.isAgencyImport(name)
+      ) {
+        unbound = name;
+      }
       if (entry !== undefined) {
+        types.push(entry.body);
         collectAliasNames(entry.body, queue);
       }
     }
-    return null;
+    return { types, unbound };
   }
 
   /**
@@ -2728,8 +2751,8 @@ export class TypeScriptBuilder {
       exported: ts.bool(!!node.exported),
     };
     // What a call returns, for a tool picker that shows a result's fields.
-    // Emitted only when there is a type to show, so the generated code of a
-    // def with no return type is unchanged.
+    // Emitted only for an exported def with a type to show, so the
+    // generated code of every other def is unchanged.
     const returnSchema = this.returnSchemaFor(node);
     if (returnSchema !== null) {
       createProps.returnSchema = returnSchema;

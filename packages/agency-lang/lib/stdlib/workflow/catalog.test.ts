@@ -27,7 +27,7 @@ const searchNotes = AgencyFunction.create(
       description: "Find notes.",
       schema: z.object({ query: z.string() }),
     },
-    returnSchema: noteList,
+    returnSchema: () => noteList,
   },
   {},
 );

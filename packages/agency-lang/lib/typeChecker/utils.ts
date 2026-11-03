@@ -144,7 +144,7 @@ function rejectRegexInLlmType(
   }
 }
 
-function containsRegex(t: VariableType): boolean {
+export function containsRegex(t: VariableType): boolean {
   return visitTypes(t, (n) => n.type === "primitiveType" && n.value === "regex");
 }
 

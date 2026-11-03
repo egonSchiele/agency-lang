@@ -356,8 +356,7 @@ export const isPalindrome = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"n": z.number(), })
   },
-  exported: false,
-  returnSchema: z.boolean()
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

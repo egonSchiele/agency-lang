@@ -341,8 +341,7 @@ export const parseValue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"input": z.string(), "s": z.string(), })
   },
-  exported: false,
-  returnSchema: z.any()
+  exported: false
 }, __toolRegistry);
 async function __wrapper_impl(__run: __Run) {
   const __setupData = setupFunction(__run);
@@ -481,8 +480,7 @@ export const wrapper = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({})
   },
-  exported: false,
-  returnSchema: z.array(z.number())
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

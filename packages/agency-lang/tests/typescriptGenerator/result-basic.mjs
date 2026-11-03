@@ -337,8 +337,7 @@ export const checkAge = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"age": z.number(), })
   },
-  exported: false,
-  returnSchema: z.any()
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"result-basic.agency:checkAge":{"1":{"line":1,"col":2},"2":{"line":4,"col":2},"1.0":{"line":2,"col":4}}};

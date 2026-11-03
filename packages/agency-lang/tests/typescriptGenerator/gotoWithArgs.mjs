@@ -323,8 +323,7 @@ export const decorate = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), })
   },
-  exported: false,
-  returnSchema: z.string()
+  exported: false
 }, __toolRegistry);
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({

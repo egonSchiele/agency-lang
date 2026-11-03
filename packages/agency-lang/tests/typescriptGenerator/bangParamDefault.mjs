@@ -323,8 +323,7 @@ export const isStamp = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"value": z.string(), })
   },
-  exported: false,
-  returnSchema: z.string()
+  exported: false
 }, __toolRegistry);
 const Stamp = z.string();
 type Stamp = z.infer<typeof Stamp>;
@@ -501,8 +500,7 @@ export const schedule = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"label": z.string(), "when": Stamp.nullable().describe("Default: 2026-10-16T09:00:00"), })
   },
-  exported: false,
-  returnSchema: z.string()
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

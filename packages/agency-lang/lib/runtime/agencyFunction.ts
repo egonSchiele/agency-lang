@@ -117,16 +117,20 @@ export type ToolMarkers = {
  */
 export type AgencyFunctionBody = (run: Run, ...args: any[]) => any;
 
+/** Builds the zod schema of what a call returns. */
+export type ReturnSchema = () => unknown;
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
   fn: AgencyFunctionBody;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
-  /** The zod schema of the value a call returns: the declared return type,
-   *  or the success type inside a `Result`. Absent when the function
-   *  declares no return type or returns a function. */
-  returnSchema?: unknown;
+  /** Makes the zod schema of the value a call returns: the declared return
+   *  type, or the success type inside a `Result`. A thunk, so nothing is
+   *  built at module load. Absent for a def that is not exported, declares
+   *  no return type, or returns a function or a regex. */
+  returnSchema?: ReturnSchema | null;
   exported?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
@@ -187,7 +191,7 @@ export class AgencyFunction {
   declare readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
-  readonly returnSchema: unknown;
+  readonly returnSchema: ReturnSchema | null;
   private readonly _fn: AgencyFunctionBody;
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];

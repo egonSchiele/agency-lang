@@ -11,11 +11,15 @@ import type { RootCarriers } from "../childEnv.js";
 import { runAgencyNode } from "../util.js";
 import { driverSource } from "./driver.js";
 import type { ToolImport } from "./toolImports.js";
+import type { TrustedModules } from "../../compiler/trustedModules.js";
 
 export type DriverCall = {
   /** The project directory. The temp folder goes in its `.agency-tmp`. */
   dir: string;
   imports: ToolImport[];
+  /** The project's resolved list: a tool module under a trusted source
+   *  directory is imported from its compiled file. */
+  trustedModules: TrustedModules[];
   node: string;
   args: unknown[];
   config: AgencyConfig;
@@ -56,7 +60,7 @@ export async function runDriver(
   process.once("exit", cleanup);
   try {
     const driverFile = path.join(folder, "driver.agency");
-    fs.writeFileSync(driverFile, driverSource(call.imports, call.dir, folder));
+    fs.writeFileSync(driverFile, driverSource(call.imports, call.dir, folder, call.trustedModules));
     const result = await run({
       // The driver is never precompiled, so a project's distDir must not
       // send runAgencyNode looking for it.

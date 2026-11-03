@@ -22,7 +22,7 @@ function parsed(source: string) {
 
 describe("driverSource", () => {
   it("writes the imports relative to the driver's folder and lists the tools", () => {
-    const source = driverSource(MEAL_IMPORTS, PROJECT, DRIVER_DIR);
+    const source = driverSource(MEAL_IMPORTS, PROJECT, DRIVER_DIR, []);
     expect(source.split("\n").slice(0, 4)).toEqual([
       'import { catalog as wfCatalog, loadWorkflow as wfLoad, checkWorkflow as wfCheck, compileWorkflow as wfCompile, listWorkflows as wfList, runWorkflow as wfRun } from "std::workflow"',
       'import { searchNotes, readNote } from "../../notes.agency"',
@@ -33,12 +33,23 @@ describe("driverSource", () => {
   });
 
   it("parses, with imports and with none", () => {
-    parsed(driverSource(MEAL_IMPORTS, PROJECT, DRIVER_DIR));
-    parsed(driverSource([], PROJECT, DRIVER_DIR));
+    parsed(driverSource(MEAL_IMPORTS, PROJECT, DRIVER_DIR, []));
+    parsed(driverSource([], PROJECT, DRIVER_DIR, []));
+  });
+
+  it("imports a module under a trusted source directory from its compiled file", () => {
+    const trusted = [{ source: "/p/proj/src/agent", compiled: "/p/proj/dist/agent" }];
+    const imports = [
+      { module: "./src/agent/lists.agency", names: ["findLists"] },
+      { module: "./notes.agency", names: ["searchNotes"] },
+    ];
+    const source = driverSource(imports, PROJECT, DRIVER_DIR, trusted);
+    expect(source).toContain('import { findLists } from "../../dist/agent/lists.js"');
+    expect(source).toContain('import { searchNotes } from "../../notes.agency"');
   });
 
   it("binds only names in DRIVER_NAMES, and has every node in DRIVER_NODES", () => {
-    const program = parsed(driverSource([], PROJECT, DRIVER_DIR));
+    const program = parsed(driverSource([], PROJECT, DRIVER_DIR, []));
     const bound: string[] = [];
     for (const { node } of walkNodes(program.nodes)) {
       if (node.type === "importStatement") {

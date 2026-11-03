@@ -11,6 +11,7 @@ import path from "#path";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import { moduleIdToOrigin } from "../../runtime/origin.js";
 import type { Problem, ToolRef } from "./types.js";
+import { sourcePathFor, type TrustedModules } from "../../compiler/trustedModules.js";
 
 export type ToolRefsResult =
   { refs: ToolRef[]; problems: [] } | { refs: null; problems: Problem[] };
@@ -57,20 +58,35 @@ function refused(refusal: string): Importable {
 /** The module text for an import line, or the refusal. */
 type ModuleOutcome = { text: string; refusal: null } | { text: null; refusal: string };
 
-function localModule(tool: AgencyFunction, dir: string, cwd: string): ModuleOutcome {
+function localModule(
+  tool: AgencyFunction,
+  dir: string,
+  cwd: string,
+  trustedModules: TrustedModules[],
+): ModuleOutcome {
   if (tool.sourceFile === null) {
     const refusal = `tool "${tool.name}" does not record the file it was defined in, so a workflow cannot import it`;
     return { text: null, refusal };
   }
-  const fromDir = path.relative(path.resolve(cwd, dir), tool.sourceFile);
+  // A tool loaded from a host's compiled directory records its source
+  // beside the compiled file (dist/agent/lists.agency), which is where a
+  // build that copies its output leaves no source. Name it by the trusted
+  // source directory instead (src/agent/lists.agency).
+  const sourceFile = sourcePathFor(tool.sourceFile, trustedModules);
+  const fromDir = path.relative(path.resolve(cwd, dir), sourceFile);
   if (fromDir === ".." || fromDir.startsWith("../") || path.isAbsolute(fromDir)) {
-    const refusal = `tool "${tool.name}" is defined in "${tool.sourceFile}", outside the workflow directory`;
+    const refusal = `tool "${tool.name}" is defined in "${sourceFile}", outside the workflow directory`;
     return { text: null, refusal };
   }
   return { text: `./${fromDir}`, refusal: null };
 }
 
-function moduleText(tool: AgencyFunction, dir: string, cwd: string): ModuleOutcome {
+function moduleText(
+  tool: AgencyFunction,
+  dir: string,
+  cwd: string,
+  trustedModules: TrustedModules[],
+): ModuleOutcome {
   const origin = moduleIdToOrigin(tool.module);
   if (origin.startsWith("pkg::")) {
     // `describe` cannot read a package's source from a re-export line, so
@@ -79,7 +95,9 @@ function moduleText(tool: AgencyFunction, dir: string, cwd: string): ModuleOutco
     return { text: null, refusal };
   }
   const isStdlib = origin.startsWith("std::") && STDLIB_ID.test(tool.module);
-  const outcome = isStdlib ? { text: origin, refusal: null } : localModule(tool, dir, cwd);
+  const outcome = isStdlib
+    ? { text: origin, refusal: null }
+    : localModule(tool, dir, cwd, trustedModules);
   if (outcome.text !== null && !MODULE_PATH.test(outcome.text)) {
     const refusal = `tool "${tool.name}" comes from a module path that cannot be written in an import`;
     return { text: null, refusal };
@@ -92,12 +110,18 @@ type ToolOutcome = { ref: ToolRef; problem: null } | { ref: null; problem: Probl
 
 const wholeWorkflow = (message: string): Problem => ({ step: null, field: null, message });
 
-function toolOutcome(tool: unknown, index: number, dir: string, cwd: string): ToolOutcome {
+function toolOutcome(
+  tool: unknown,
+  index: number,
+  dir: string,
+  cwd: string,
+  trustedModules: TrustedModules[],
+): ToolOutcome {
   const checked = importable(tool, index);
   if (checked.fn === null) {
     return { ref: null, problem: wholeWorkflow(checked.refusal) };
   }
-  const module = moduleText(checked.fn, dir, cwd);
+  const module = moduleText(checked.fn, dir, cwd, trustedModules);
   if (module.text === null) {
     return { ref: null, problem: wholeWorkflow(module.refusal) };
   }
@@ -129,8 +153,13 @@ function duplicateNames(refs: ToolRef[]): Problem[] {
  *  (recompile the module), one from a program `run` compiled for a
  *  subprocess, a block, and the stub a checkpoint revives for a function
  *  whose module this process never loaded. */
-export function toolRefs(tools: unknown[], dir: string, cwd: string): ToolRefsResult {
-  const outcomes = tools.map((tool, index) => toolOutcome(tool, index, dir, cwd));
+export function toolRefs(
+  tools: unknown[],
+  dir: string,
+  cwd: string,
+  trustedModules: TrustedModules[] = [],
+): ToolRefsResult {
+  const outcomes = tools.map((tool, index) => toolOutcome(tool, index, dir, cwd, trustedModules));
   const problems = outcomes.flatMap(({ problem }) => (problem === null ? [] : [problem]));
   if (problems.length > 0) {
     return { refs: null, problems };

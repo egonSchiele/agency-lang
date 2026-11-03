@@ -1,0 +1,6 @@
+import { shout } from "./helper.js"
+
+/** The same tool in a directory the config does not trust. */
+export def shoutUntrusted(text: string): string {
+  return shout(text)
+}

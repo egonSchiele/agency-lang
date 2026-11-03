@@ -3,7 +3,8 @@
  * `stdlib/workflow.agency` imports. The Agency side does the one thing that
  * needs an approval, reading a tool's module, and calls these for the rest.
  */
-import { currentHost } from "../../runtime/currentHost.js";
+import { currentRun } from "../../runtime/asyncContext.js";
+import { effectiveTrustedModules } from "../../compiler/trustedModules.js";
 import { failure, success, type ResultFailure, type ResultSuccess } from "../../runtime/result.js";
 import { wallClockFor } from "./limits.js";
 import { lowerWorkflow } from "./lower.js";
@@ -69,7 +70,9 @@ export function _problemsFailure(problems: Problem[]): ResultFailure {
 /** The tools as import references, or a failure naming every tool that
  *  cannot be imported. */
 export function _toolRefs(tools: unknown[], dir: string): ResultSuccess | ResultFailure {
-  const result = toolRefs(tools, dir, currentHost().system.cwd());
+  const run = currentRun();
+  const trusted = effectiveTrustedModules(run.ctx);
+  const result = toolRefs(tools, dir, run.ctx.host.system.cwd(), trusted);
   return result.refs === null ? _problemsFailure(result.problems) : success(result.refs);
 }
 

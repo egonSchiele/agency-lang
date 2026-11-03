@@ -1,0 +1,101 @@
+import { runWorkflow, catalog, Workflow } from "std::workflow"
+import { compile, describe } from "std::agency"
+import { read } from "std::index"
+import { Json } from "std::validation"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+import { shoutViaJs } from "./tools/tools.agency"
+import { shoutTwiceRemoved, shoutOutsideTheList } from "./tools/nested.agency"
+import { shoutUntrusted } from "./other/tools.agency"
+import { shoutUnbuilt } from "./unbuilt/tools.agency"
+
+// agency.json trusts tools/ (compiled into dist/tools by test.js) and
+// unbuilt/ (whose dist/unbuilt stays empty). other/ is not trusted.
+
+/** A one-step workflow that calls `tool` from `module` on the input text. */
+def oneStep(module: string, tool: string): Workflow {
+  return {
+    format: 1,
+    name: "shout",
+    description: "Shout the text.",
+    inputs: "{ text: string }",
+    steps: [{ id: "loud", kind: "tool", module: module, tool: tool, args: { text: { "$ref": "inputs.text" } } }],
+    result: { "$ref": "steps.loud" }
+  }
+}
+
+/** Runs `workflow` on "hi", approving every interrupt and recording each
+  one's effect in "effects" and its data under the effect's name. */
+def runApproving(workflow: Workflow, tools: any[]): Result<Json> {
+  setMutable("effects", [])
+  handle {
+    return runWorkflow(workflow, { text: "hi" }, tools)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    setMutable(intr.effect, intr.data)
+    return approve()
+  }
+}
+
+def outcome(result: Result<Json>): Json {
+  if (result is failure) {
+    return { ok: false, error: result.error }
+  }
+  return { ok: true, value: result.value }
+}
+
+/** A workflow over a trusted tool runs the host's compiled file, and the
+  run interrupt names that file. */
+export node runsWithTrust(): Json {
+  const result = runApproving(oneStep("./tools/tools.agency", "shoutViaJs"), [shoutViaJs])
+  return {
+    result: outcome(result),
+    trustedModules: getMutable("std::run", null).trustedModules
+  }
+}
+
+/** The same tool in a directory the config does not trust is refused. */
+export node refusedWithoutTrust(): Json {
+  const result = runApproving(oneStep("./other/tools.agency", "shoutUntrusted"), [shoutUntrusted])
+  return outcome(result)
+}
+
+/** A trusted tool with no compiled file fails before the run is asked for. */
+export node missingCompiled(): Json {
+  const result = runApproving(oneStep("./unbuilt/tools.agency", "shoutUnbuilt"), [shoutUnbuilt])
+  return { result: outcome(result), effects: getMutable("effects", []) }
+}
+
+/** Only std::workflow compiles against the list: the public compile and
+  describe refuse a trusted module, and a direct import of its helper. */
+export node scopeIsWorkflowsOnly(): Json {
+  const viaTool = compile("""import { shoutViaJs } from "./tools/tools.agency"
+export node main(): string { return shoutViaJs("hi") }
+""", ".")
+  const direct = compile("""import { shout } from "./tools/helper.js"
+export node main(): string { return shout("hi") }
+""", ".")
+  const text = read("tools/tools.agency", ".") with approve
+  if (text is failure) {
+    return { readFailed: text.error }
+  }
+  const described = describe(text.value, ".", "tools/tools.agency")
+  return { compile: outcome(viaTool), direct: outcome(direct), describe: isFailure(described) }
+}
+
+/** catalog describes a trusted tool, so it lists its parameter and type. */
+export node catalogTrusted(): Json {
+  const entries = catalog([shoutViaJs], ".") with approve
+  if (entries is failure) {
+    return { ok: false, error: entries.error }
+  }
+  return { ok: true, value: entries.value }
+}
+
+/** A trusted tool that runs a workflow from inside the child: the list
+  reached the child, so a trusted tool works there, and a tool outside the
+  list is still refused. */
+export node nested(): Json {
+  const inside = runApproving(oneStep("./tools/nested.agency", "shoutTwiceRemoved"), [shoutTwiceRemoved])
+  const outside = runApproving(oneStep("./tools/nested.agency", "shoutOutsideTheList"), [shoutOutsideTheList])
+  return { inside: outcome(inside), outside: outcome(outside) }
+}

@@ -44,6 +44,19 @@ describe("toolRefs", () => {
     ]);
   });
 
+  it("names a tool loaded from a trusted compiled directory by its source", () => {
+    // A build that copies its output records dist/agent/lists.agency as the
+    // source of dist/agent/lists.js; no such file exists.
+    const trusted = [{ source: "/work/agent/src", compiled: "/work/agent/dist" }];
+    const loaded = fn("findLists", "agent/dist/lists.agency");
+    expect(toolRefs([loaded], DIR, CWD, trusted).refs).toEqual([
+      { module: "./src/lists.agency", name: "findLists" },
+    ]);
+    expect(toolRefs([loaded], DIR, CWD).refs).toEqual([
+      { module: "./dist/lists.agency", name: "findLists" },
+    ]);
+  });
+
   it("keeps a nested local path and accepts a relative dir", () => {
     expect(toolRefs([fn("a", "agent/tools/a.agency")], "agent", CWD).refs).toEqual([
       { module: "./tools/a.agency", name: "a" },

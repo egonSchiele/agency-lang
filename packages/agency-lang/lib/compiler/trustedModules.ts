@@ -108,6 +108,15 @@ export function effectiveTrustedModules(ctx: RuntimeContext<any>): TrustedModule
   return resolved.value;
 }
 
+/** The inverse of compiledPathFor, for a path a compiled module records
+ *  for its own source: under an entry's `compiled` directory, the same
+ *  relative path under its `source` directory. Any other path is returned
+ *  as it is. */
+export function sourcePathFor(file: string, entries: TrustedModules[]): string {
+  const entry = entries.find((candidate) => isStrictDescendant(candidate.compiled, file));
+  return entry === undefined ? file : path.join(entry.source, path.relative(entry.compiled, file));
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

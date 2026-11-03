@@ -1,0 +1,6 @@
+import { shout } from "./helper.js"
+
+/** A trusted tool whose compiled file the test never builds. */
+export def shoutUnbuilt(text: string): string {
+  return shout(text)
+}

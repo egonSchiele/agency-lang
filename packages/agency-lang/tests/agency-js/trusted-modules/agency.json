@@ -1,0 +1,8 @@
+{
+  "sandbox": {
+    "trustedModules": [
+      { "source": "tools", "compiled": "dist/tools" },
+      { "source": "unbuilt", "compiled": "dist/unbuilt" }
+    ]
+  }
+}

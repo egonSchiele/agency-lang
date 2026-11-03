@@ -1,7 +1,12 @@
 import { describe, test, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { compiledPathFor, resolveTrustedModules, trustedEntryFor } from "./trustedModules.js";
+import {
+  compiledPathFor,
+  resolveTrustedModules,
+  sourcePathFor,
+  trustedEntryFor,
+} from "./trustedModules.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 function makeDir(prefix: string): string {
@@ -78,5 +83,19 @@ describe("compiledPathFor", () => {
     expect(compiledPathFor("/p/src/agent/scheduled/run.agency", entry)).toBe(
       "/p/dist/agent/scheduled/run.js",
     );
+  });
+});
+
+describe("sourcePathFor", () => {
+  const entry = { source: "/p/src/agent", compiled: "/p/dist/agent" };
+
+  it("maps a path under the compiled directory back to the source directory", () => {
+    expect(sourcePathFor("/p/dist/agent/scheduled/run.agency", [entry])).toBe(
+      "/p/src/agent/scheduled/run.agency",
+    );
+  });
+
+  it("leaves any other path as it is", () => {
+    expect(sourcePathFor("/p/src/other.agency", [entry])).toBe("/p/src/other.agency");
   });
 });

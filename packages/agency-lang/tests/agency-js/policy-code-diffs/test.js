@@ -6,8 +6,8 @@ import { tmpdir } from "os";
 const dir = mkdtempSync(join(tmpdir(), "policy-code-diffs-"));
 const policyFile = join(dir, "policy.json");
 
-// "a" approves each of the nine interrupts at the menu.
-const answers = ["a", "a", "a", "a", "a", "a", "a", "a", "a"];
+// "a" approves each of the ten interrupts at the menu.
+const answers = ["a", "a", "a", "a", "a", "a", "a", "a", "a", "a"];
 let asked = 0;
 const inputOverride = async () => {
   asked += 1;
@@ -120,4 +120,6 @@ writeFileSync("__result.json", JSON.stringify({
   workflowSecondRoundShown: (plain.match(/second-round-marker/g) || []).length === 1,
   workflowWarningShownOnce:
     (plain.match(/step sum, result: untyped-warning-marker/g) || []).length === 1,
+  // A diff that ignored whitespace would show neither line.
+  workflowSpaceChangeShown: plain.includes('"spaced  marker"') && plain.includes('"spaced marker"'),
 }, null, 2));

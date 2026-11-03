@@ -766,8 +766,10 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> raises <std::work
 // ---- designing a workflow ----
 
 // The first part of the designer's brief. It is a `"""` string, so `${`
-// starts an interpolation: write `\${` for a literal one, as the `greet`
-// example does. It shows the workflow object as the model is asked to
+// starts an interpolation: write `\${` for a literal one, as the `welcome`
+// example does. The example is named so no test or stdlib function shares
+// it: the language server finds stdlib functions by matching `export def`
+// in the source text, strings included (lib/lsp/codeAction.ts). It shows the workflow object as the model is asked to
 // write it, without the saved file's outer `workflow` field, and leaves
 // out limits, which a host adds at its own save.
 static const DESIGN_TUTORIAL = """
@@ -875,7 +877,7 @@ The `result` field chooses what the workflow returns. If you leave it out, the w
 Suppose a project has this function in `tools.agency`:
 
 ```ts
-export def greet(name: string): string {
+export def welcome(name: string): string {
   return "Hello, \${name}!"
 }
 ```
@@ -887,7 +889,7 @@ A step calls it by the module path:
   "id": "greeting",
   "kind": "tool",
   "module": "./tools.agency",
-  "tool": "greet",
+  "tool": "welcome",
   "args": { "name": { "$ref": "inputs.name" } }
 }
 ```
@@ -1011,10 +1013,13 @@ def draftFailure(draft: string, problems: string): Result<CheckedDraft, DraftPro
   return failure("the draft has problems:\n${problems}", { draft: draft, problems: problems })
 }
 
-/** The problem line for a name a saved workflow already has, or "". */
+/** The problem line for a name a saved workflow already has, or "". Case is
+  ignored: on a case-insensitive disk, as macOS uses by default, saving
+  `DoubleSum` writes into `doubleSum.json`, and that file then fails to load
+  because its name no longer matches the workflow inside it. */
 def takenNameProblem(name: string, savedNames: string[]): string {
-  if (savedNames.includes(name)) {
-    return "- A workflow named ${name} is already saved. Choose another name."
+  if (map(savedNames, \saved -> saved.toLowerCase()).includes(name.toLowerCase())) {
+    return "- A workflow named ${name} is already saved (names are compared ignoring case). Choose another name."
   }
   return ""
 }
@@ -1082,7 +1087,9 @@ def draftFrom(
       return success({ workflow: drafted.workflow, warnings: drafted.warnings, attempts: attempt + 1 })
     }
     problem = attempted.data
-    print("draftWorkflow: attempt ${attempt + 1} failed the check:\n${lastProblems(problem)}")
+    // The problems quote what the model wrote, which can hold terminal
+    // escapes, so only the count is printed. The model sees them in full.
+    print("draftWorkflow: attempt ${attempt + 1} of ${DESIGN_ATTEMPTS} failed the check; drafting again")
   }
   return failure("no draft passed the check in ${DESIGN_ATTEMPTS} attempts; the last problems were:\n${lastProblems(problem)}")
 }
@@ -1204,11 +1211,11 @@ export def designWorkflow(
     return failure("${root} does not exist; dir must name an existing project directory")
   }
   const described = describeTools(tools, root)?
-  const savedNames = savedWorkflowNames(root)?
   const options = llmOptions(model, provider, validationRetries: 1)
   let revise: DraftProblem | null = null
   let previous: Workflow | null = null
   for (round in range(maxRounds)) {
+    const savedNames = savedWorkflowNames(root)?
     const drafted = draftFrom(request, described, root, savedNames, revise, options)?
     print("designWorkflow: round ${round + 1} draft '${drafted.workflow.name}' passed the check after ${drafted.attempts} attempt(s)")
     const answer = interrupt std::workflow::review("Review this workflow before it is saved: answer accept, give feedback for the next draft, or send back an edited workflow", {
@@ -1221,14 +1228,22 @@ export def designWorkflow(
       maxRounds: maxRounds
     })
     const decided = reviewAnswer(answer)?
+    // A review can wait for hours, across a restart from a checkpoint, so
+    // the names are read again: a workflow saved under this name meanwhile
+    // sends the draft back to the model instead of being replaced.
+    const savedNow = savedWorkflowNames(root)?
     if (decided.kind == "accept") {
-      return writeWorkflow(drafted.workflow, tools, root)
+      const taken = takenNameProblem(drafted.workflow.name, savedNow)
+      if (taken == "") {
+        return writeWorkflow(drafted.workflow, tools, root)
+      }
+      revise = { draft: JSON.stringify(drafted.workflow, null, 2), problems: taken }
     }
     if (decided.kind == "feedback") {
       revise = { draft: JSON.stringify(drafted.workflow, null, 2), problems: decided.text }
     }
     if (decided.kind == "edited") {
-      const edit = attemptDraft(JSON.stringify(decided.workflow, null, 2), described, root, savedNames)
+      const edit = attemptDraft(JSON.stringify(decided.workflow, null, 2), described, root, savedNow)
       if (edit is success(checked)) {
         return writeWorkflow(checked.workflow, tools, root)
       }

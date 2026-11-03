@@ -663,12 +663,15 @@ def stripControlChars(text: string): string {
 
 // A change to code, as a header line and a syntax-highlighted unified
 // diff. `before` is "" for something being created, which reads as a
-// diff of all insertions.
+// diff of all insertions. Pass `ignoreWhitespace: false` for data, where
+// a space inside a string is a real change: `"annual  report.txt"` and
+// `"annual report.txt"` name different files.
 def renderSourceDiff(
   header: string,
   before: string,
   after: string,
   language: string,
+  ignoreWhitespace: boolean = true,
 ): string {
   let lines = []
   lines.push(color.yellow("⏺ ${stripControlChars(header)}"))
@@ -680,7 +683,7 @@ def renderSourceDiff(
     color: true,
     lineNumbers: true,
     context: 3,
-    ignoreWhitespace: true,
+    ignoreWhitespace: ignoreWhitespace,
   ),
   )
   return lines.join("\n")
@@ -709,7 +712,7 @@ def renderWorkflowDraft(data: any): string {
   if (data.previous == null) {
     shown = [color.yellow("⏺ ${stripControlChars(header)}"), highlight(stripControlChars(current), language: "json")].join("\n")
   } else {
-    shown = renderSourceDiff(header, JSON.stringify(data.previous, null, 2), current, "json")
+    shown = renderSourceDiff(header, JSON.stringify(data.previous, null, 2), current, "json", false)
   }
   if (data.warnings.length == 0) {
     return shown

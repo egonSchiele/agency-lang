@@ -89,6 +89,17 @@ node main(args: { policyFile: string }): string {
       round: 2,
       maxRounds: 3
     })
+    // Only a space inside a string changed. In data that is a real change,
+    // so the diff must show it.
+    let thirdRound = interrupt std::workflow::review("Review this workflow before it is saved", {
+      name: "avgOfThree",
+      workflow: { format: 1, name: "avgOfThree", description: "spaced marker", inputs: "{ a: number }", steps: [] },
+      previous: { format: 1, name: "avgOfThree", description: "spaced  marker", inputs: "{ a: number }", steps: [] },
+      warnings: [],
+      attempts: 1,
+      round: 3,
+      maxRounds: 3
+    })
   } with (data) {
     return handler(data)
   }

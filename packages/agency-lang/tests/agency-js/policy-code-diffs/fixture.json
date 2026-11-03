@@ -16,7 +16,7 @@
   "sourceShownOnce": true,
   "autoApprovedHeader": true,
   "autoApprovedShowsSource": true,
-  "promptsDrawn": 9,
+  "promptsDrawn": 10,
   "controlCharsStripped": true,
   "carriageReturnStripped": true,
   "bidiOverrideStripped": true,
@@ -36,5 +36,6 @@
   "workflowHeader": true,
   "workflowFirstRoundShown": true,
   "workflowSecondRoundShown": true,
-  "workflowWarningShownOnce": true
+  "workflowWarningShownOnce": true,
+  "workflowSpaceChangeShown": true
 }

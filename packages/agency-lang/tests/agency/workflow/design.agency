@@ -9,6 +9,7 @@ import { add, multiply } from "std::math"
 import { mkdir, remove } from "std::fs"
 import { exists } from "std::shell"
 import { Json } from "std::validation"
+import { saveElsewhere } from "./fixtures/saveElsewhere.js"
 
 const TOOLS = [add, multiply]
 const REQUEST = "Add two numbers and double the sum."
@@ -28,7 +29,9 @@ type DesignRun = {
 }
 
 // Answers each review with the next scripted answer: null rejects, "bare"
-// is a valueless approve(), anything else is passed to approve(). A false
+// is a valueless approve(), "saveThenAccept" saves a doubleSum file the way
+// another process would and then accepts, anything else is passed to
+// approve(). A false
 // `approveSave` rejects the save. Every other interrupt is approved.
 def runDesign(dir: string, answers: any[], maxRounds: number = 3, approveSave: boolean = true): DesignRun {
   const reviews: Json[] = []
@@ -46,6 +49,10 @@ def runDesign(dir: string, answers: any[], maxRounds: number = 3, approveSave: b
         }
         if (answer == "bare") {
           return approve()
+        }
+        if (answer == "saveThenAccept") {
+          saveElsewhere(dir, "doubleSum", "saved during the review")
+          return approve("accept")
         }
         return approve(answer)
       }
@@ -159,6 +166,24 @@ node takenNameWithOtherProblems(): Json {
   writeWorkflow(doubleSum("doubleSum"), TOOLS, dir) with approve
   const message = savedName(runDesign(dir, ["accept"]))
   return [message.includes("is already saved"), message.includes("is not among the tools")]
+}
+
+// A saved `DoubleSum` takes `doubleSum` too: on a case-insensitive disk the
+// two are one file.
+node takenNameIgnoresCase(): Json {
+  const dir = outDir("takenCase")
+  writeWorkflow(doubleSum("DoubleSum"), TOOLS, dir) with approve
+  const ran = runDesign(dir, ["accept"])
+  return [savedName(ran), ran.reviews.length, ran.reviews[0].attempts]
+}
+
+// A doubleSum saved while the first draft waits for review is not replaced:
+// accepting sends the draft back, and the second round's draft is saved.
+node savedDuringReviewIsKept(): Json {
+  const dir = outDir("savedDuringReview")
+  const ran = runDesign(dir, ["saveThenAccept", "accept"])
+  const kept = read("workflows/doubleSum.json", dir) with approve
+  return [savedName(ran), ran.reviews.length, ran.reviews[1].round, kept catch ""]
 }
 
 node rejectAtReviewWritesNothing(): Json {

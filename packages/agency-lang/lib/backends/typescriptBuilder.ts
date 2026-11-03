@@ -3824,6 +3824,13 @@ export class TypeScriptBuilder {
     };
 
     const zodSchema = this.zodSchemaFor(_variableType);
+    // A plain `string` reply needs no response format. Decide that on the
+    // type behind any aliases, so `type Reply = string` and
+    // `const reply: Reply = llm(...)` get the raw text, as `string` does,
+    // and not the JSON text `{"response": "..."}`.
+    const needsResponseFormat =
+      this.zodSchemaFor(safeResolveType(_variableType, this.scopes.visibleTypeAliasesFull())) !==
+      DEFAULT_SCHEMA;
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];
@@ -3875,7 +3882,7 @@ export class TypeScriptBuilder {
       prompt: promptNode,
       messages: $(threadExpr).done(),
     };
-    if (zodSchema !== DEFAULT_SCHEMA) {
+    if (needsResponseFormat) {
       runPromptEntries.responseFormat = $.z()
         .prop("object")
         .namedArgs({ response: ts.raw(zodSchema) })

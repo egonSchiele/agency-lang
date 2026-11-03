@@ -34,53 +34,54 @@ A workflow cannot call a host's tools without trusting them, so this growth
 comes with the feature. The host opts in by naming directories, and the docs
 say that a trusted module is outside the sandbox by declaration.
 
-## Three decisions that keep the growth small
+## The invariant, and the decisions that hold it
 
-The first draft of the design granted more than the feature needs. Each
-decision below removed one way it did.
+Sandboxed code reaches host JavaScript only through function values the
+host itself handed to `std::workflow`, and those values cannot be forged or
+relabelled. Five decisions hold that up. Each closes one way the feature
+could have granted more than a workflow needs.
 
 ### 1. No `trustedModules` parameter on `run`
 
-The first draft let `run`, `runFile`, and `runCode` take a list. At the root
-the list would add to the config's; in a child it could only narrow.
-
-Every Agency function is a tool, and `runCode` is one a model is told to
-prefer. Consider a model at the root with write access. It writes these two
-files:
+A list that `run`, `runFile`, or `runCode` took as an argument would let a
+model trust its own files. Every Agency function is a tool, and `runCode`
+is one a model is told to prefer. With such a parameter, a model at the
+root with write access writes these two files:
 
 ```
 d/evil.agency    imports ./evil.js
 d/evil.js        any JavaScript
 ```
 
-Then it calls `runCode(src, dir: d, trustedModules: [{ source: d, compiled: d }])`.
-The sandbox would have treated `d/evil.js` as host code and loaded it outside
-the sandbox. The `std::run` prompt did not show the list, so a person
+Then it calls `runCode(src, dir: d, trustedModules: [{ source: d, compiled: d }])`,
+and the sandbox treats `d/evil.js` as host code and loads it outside the
+sandbox. The `std::run` prompt would not show the list, so a person
 approving "Running agent-generated code in subprocess" could not see it.
 
-The parameter also did not do what it claimed. `run` takes a program that was
-already compiled, so the list it took never reached the compile.
+The parameter would also not do what it claims. `run` takes a program that
+was already compiled, so a list it took would never reach the compile.
 
-The decision: no function takes a list from Agency code. The root's list is
-its config, and a child gets its parent's list unchanged.
+The rule: no function takes a list from Agency code. The root's list is its
+config, and a child's comes from its parent under decision 5.
 
 ### 2. Only `std::workflow` compiles against the list
 
-The next draft fed the config list to every sandbox entry point. Then any
-program a host process compiled through `compile` or `runCode` could import
-any export of any module in a trusted directory. That includes modules the
-host never offered as tools, and exports that are only safe when called in
-the host's own order. A host that splits a destructive write into a check and
-a write is an example. If the write half is an exported Agency function,
+If every sandbox entry point compiled with the config list, any program a
+host process compiled through `compile` or `runCode` could import any export
+of any module in a trusted directory. That includes modules the host never
+offered as tools, and exports that are only safe when called in the host's
+own order. A host that splits a destructive write into a check and a write
+is an example. If the write half is an exported Agency function,
 agent-written code could call it without the check.
 
 Workflows do not have this problem. A generated workflow program calls only
-the tools the host passed in `tools` (decision 6 of the workflows spec).
+the tools the host passed in `tools` (decision 6 of the workflows spec), and
+`checkWorkflow` refuses a step naming any other tool.
 
-The decision: only `std::workflow`'s TypeScript helpers compile, typecheck,
-and describe with the list. The public functions in `std::agency` pass an
-empty list. The end-to-end test pins this: a `compile` of a program that
-imports a trusted module is refused under a config that trusts it.
+The rule: only `std::workflow`'s TypeScript helpers compile, typecheck, and
+describe with the list. The public functions in `std::agency` pass an empty
+list. The end-to-end test pins this: a `compile` of a program that imports
+a trusted module is refused under a config that trusts it.
 
 ### 3. A compiled program says which trusted files it loads
 
@@ -94,6 +95,102 @@ things:
   that loads no host code, and loosen only the runs that do.
 - A checkpoint resumed where the files are missing fails before the fork,
   with the path in the message.
+
+### 4. A function value cannot be forged or relabelled
+
+`toolRefs` turns each tool the host passed into text, a file and a name,
+and the generated program imports the tool by that text. So the text has to
+come from the runtime, never from anything Agency code can write. Two things
+made that false at first; a review of the pull request found the first.
+
+**A fake.** `isAgencyFunction` checked a marker key, `__agencyFunction: true`,
+that an object literal can carry. Agent code could build a record naming an
+export the host never offered, in a file the host trusts, and pass it to
+`runWorkflow`:
+
+```
+const fake = { __agencyFunction: true, name: "deleteListNow",
+               registeredName: "deleteListNow", boundArgs: null,
+               params: [], paramSchemas: {},
+               module: "src/agent/lists.agency",
+               sourceFile: "/home/bmo/src/agent/lists.agency" }
+runWorkflow(steps, inputs, [fake])
+```
+
+The file is trusted, so the child loaded the host's compiled module and the
+unchecked export ran.
+
+**A relabelled real function.** The label fields, `name`, `module`,
+`registeredName`, and `sourceFile`, were `readonly` in TypeScript only,
+which the compiler erases. Agent code could take one of its own functions,
+assign new values through an `any` cast, and `toolRefs` read the new ones.
+
+Aliasing is not a problem. `const other = safeDeleteList` is the same object
+with the same label, and `.rename` is refused because the copy's `name`
+differs from its `registeredName`.
+
+The rule: the brand and the label are private class fields of
+`AgencyFunction` (`#brand`, `#name`, `#module`, `#registeredName`,
+`#sourceFile`) with getters and no setters. A private field cannot be set
+from an object literal, through `any`, or from JSON, so `#brand in value` is
+the check. Compiled modules are ES modules, so they run in strict mode, and
+an assignment to a getter with no setter throws. `toolRefs` reads the same
+properties as before, which the runtime now guarantees. Checkpoints are
+unaffected: a function serializes as its name and module, and revives to
+the object the registry holds, which the runtime built.
+
+This is the object-capability rule: authority travels only as references,
+and a reference cannot be made from data. Hardened JavaScript's compartments,
+the WebAssembly component model's host-linked imports, and a Lua host that
+puts functions into the sandbox's environment table enforce the same thing.
+Three alternatives were set aside. A safelist of export names in the config
+is the Java Security Manager's road, and the fake defeats it anyway, since
+the fake names a listed export. Freezing every function value changes
+behaviour for every function to fix one lookup. A side table keyed by
+object identity does the same job as the private fields with more code.
+
+The one assumption: a private field is per copy of the class, as
+`instanceof` is. A trusted module and the child that imports it must load
+one copy of the Agency runtime, which "Why the child loads the host's
+build" below already requires.
+
+### 5. A child gets the list only when its program loads a trusted module
+
+A child used to inherit its parent's list whatever it ran. A program a
+model wrote and ran with `runCode` therefore had the list, and a fake built
+inside it pointed at a trusted file. Decision 4 refuses the fake, but the
+rule still matters: the `std::run` prompt for such a program said it loaded
+no trusted files, which was true of the program and false of what it could
+reach.
+
+A sandboxed program also has no real tool to pass. A function compiled in
+the sandbox records no source file, so `toolRefs` refuses it, and the only
+function values with one are the standard library's. The fake was the one
+way around that.
+
+The rule: `_runFor` hands the list down only when the child's program is
+marked as loading a trusted module (decision 3). A program compiled without
+the list, as the public `compile` and `runCode` compile, has an empty mark,
+so its child and every program below it compile with no list. A workflow
+the host runs is marked, so a trusted tool inside it can still run a nested
+workflow. A prompt that shows no trusted files now means no host code is
+reachable, however deep the children go.
+
+### Where the threat model's edge is
+
+Writing a TypeScript file into a trusted directory and rebuilding needs
+write access to the host's filesystem and build. An agent with that can
+edit the host's own code or `agency.json`, and the sandbox never defended
+against it. Decisions 4 and 5 are about code that needs nothing but memory:
+a program the sandbox already agreed to run, which is what the sandbox
+exists for.
+
+The other form of the fix, set aside: tool calls as effects. The child would
+never load host code. A tool step would raise an effect naming the tool and
+its arguments, and the host would run the tool in its own process. That
+keeps the sandbox Agency-only, at the cost of an IPC round trip per step,
+limits accounting across the hop, and a redesign. The brand is proportionate
+to the hole. The effect form is the long-term shape of brokering, below.
 
 ## The conflict with containment
 
@@ -109,7 +206,7 @@ full floor. Today a child inherits the parent's whole environment anyway, so
 nothing is lost yet. But this is the first feature the containment work will
 have to make room for.
 
-The mark in decision 3 limits that room to the runs that need it.
+The mark in decision 3 limits that room to the runs that need it, and decision 5 keeps the list out of every other child.
 
 The long-term form is brokering of tool calls. The child would ask the parent
 to call a host tool with given arguments, and the parent would run it.

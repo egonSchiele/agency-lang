@@ -292,12 +292,12 @@ of the module.
   the trusted module's init is registered under the host's path, not the
   mirror's, so the entry's `awaitModules` leaves it out on purpose. The
   closure-wide bootstrap still runs it before `main`.
-- The `agency workflow` driver compiles tool modules from source, so for
-  a host like BMO `agency workflow run` does not work until the driver
-  imports trusted modules from their compiled path (ADI-287). `tools`,
-  `check`, and `compile` only describe, and work.
-- Whether the compiled path in the emitted import is an absolute path or
-  a `file:` URL; both resolve in Node ESM.
+- The `agency workflow` driver imports a tool module under a trusted
+  `source` directory from its compiled file (ADI-287, built in the same
+  pull request). Every command runs the driver, so none of them worked
+  from source for a host like BMO.
+- The emitted import is a `file:` URL of the compiled path. A raw path
+  with a `#` in it, or a Windows drive path, is not a valid ESM specifier.
 - The exact message for a missing compiled file.
 - Confirming that a trusted module's `agency-lang/runtime` import and the
   child's resolve to one package instance. The temp directory sits under

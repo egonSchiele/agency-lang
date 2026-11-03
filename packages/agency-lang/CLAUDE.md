@@ -272,7 +272,7 @@ Other process docs:
 - `docs/dev/runtime/threads.md` — How LLM conversation history accumulates and flows through thread and subthread blocks.
 - `docs/dev/runtime/expiring-messages.md` — Messages the runtime adds and later removes: the `metadata.expires` record on the message, the three owners (an `llm()` call, a request, a handoff) and where each expires, the claim rule for unkeyed messages, why clones keep them, and the four edits of history that are not expiries.
 - `docs/dev/runtime/trace.md` — Execution traces: a checkpoint per step, written to a file the debugger can replay.
-- `docs/dev/runtime/trusted-modules.md` — Trusted modules: the `sandbox.trustedModules` config, why only `std::workflow` compiles against it, the validator's trust branch and the mirror of every reachable `.agency` file, the absolute import rewrite and the dropped init awaits, the `trustedModules` mark a compiled program carries and the `std::run` data that shows it, how a child inherits the list unchanged, and how a tool loaded from a compiled directory is named by its source.
+- `docs/dev/runtime/trusted-modules.md` — Trusted modules: the `sandbox.trustedModules` config, why only `std::workflow` compiles against it, the validator's trust branch and the mirror of every reachable `.agency` file, the `file:` URL import rewrite and the dropped init awaits, the `trustedModules` mark a compiled program carries and the `std::run` data that shows it, what makes a tool value trustworthy (the brand and the private label on `AgencyFunction`), how a child gets the list only when its program loads a trusted module, how a tool loaded from a compiled directory is named by its source, and how the `agency workflow` driver imports one.
 
 ### Compiler and type checker
 
@@ -324,7 +324,7 @@ Other process docs:
 - `docs/dev/security/goal.md` — The goal: the language decides what runs (fine-grained interrupt policy) and a cheap capability-restricted process contains what slips past. The two motivations (agent code on my machine vs hosting strangers), and what the compiler-as-boundary demands.
 - `docs/dev/security/roadmap.md` — Every gap between today's code and that goal, grouped by which part of the argument it breaks, with the GitHub issue for each.
 - `docs/dev/security/hardening/README.md` — The done list: what hardening has shipped, grouped by whether it reinforces the policy (front door) or containment (back door), each linking its depth doc.
-- `docs/dev/security/trusted-modules.md` — How trusted modules change what the sandbox protects: what does not change, what grows by necessity, the three decisions that keep it small (no `run` parameter, only `std::workflow` compiles against the list, the mark on a compiled program), the conflict with the containment floor and brokering as the long-term form, and why the child loads the host's build.
+- `docs/dev/security/trusted-modules.md` — How trusted modules change what the sandbox protects: what does not change, what grows by necessity, the invariant and the five decisions that hold it (no `run` parameter, only `std::workflow` compiles against the list, the mark on a compiled program, a function value that cannot be forged or relabelled, the list only for a child whose program loads a trusted module), where the threat model's edge is, the conflict with the containment floor and brokering as the long-term form, and why the child loads the host's build.
 
 ### Standard library
 

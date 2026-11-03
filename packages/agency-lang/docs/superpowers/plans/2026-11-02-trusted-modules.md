@@ -193,3 +193,14 @@ Not part of the PR; the check that the feature does what the ticket is for. The 
 - [ ] `agency workflow tools ./src/agent/lists.agency` lists the tools with their parameters and return types. This only describes, so it works before ADI-287.
 - [ ] A harness node under `~/bmo/tests/agency/` calls `runWorkflow` on a hand-written `updateMealPlanFromGroceriesNote` workflow with a `session` input and a `beginSession` first step (BMO spec, `docs/superpowers/specs/2026-11-02-workflows-design.md`), with BMO's tools, against the real `dist/agent` and the real database, under a policy that approves the writes. This is BMO's ADI-281.
 - [ ] Confirm the trusted module's `agency-lang/runtime` and the child's resolve to one package instance: a tool from `dist/agent` is found by name by the generated program. If it is not, the temp directory under the package root is the place to look; the spec's "Left to the builder" names it.
+
+## As built
+
+Where the implementation departs from the tasks above, and why:
+
+- `effectiveTrustedModules` lives in `lib/compiler/trustedModules.ts`, not `lib/stdlib/agency.ts`. `lib/runtime/ipc.ts` calls it, and the runtime should not import the stdlib.
+- Trusted modules are dropped from the init awaits in `compileSource` (`withoutTrustedAwaits`), after `initPlanForModule`, instead of inside `buildCompiledClosure`. The effect is the same and `compileClosure.ts` is unchanged.
+- The validator walks a file that a trusted module imports and validated code also imports with the rules, and compiles it. Without this, the order of the walk decided whether such a file was checked.
+- `SubprocessRunInfo.trustedModules` is optional and read as `?? []`, so the existing callers that seed run info need no change.
+- The end-to-end tests are one agency-js test, `tests/agency-js/trusted-modules/`. The runner bakes `agency.json` when it compiles `agent.agency`, before `test.js` runs, so a config written by `test.js` would never be read. The folder's `agency.json` names `dist/tools` as `compiled`, and `test.js` copies the compiled tools there before it calls the agent. The rows from Task 7 Steps 3 and 4, and the catalog row, are nodes of that one agent.
+- `toolRefs` maps a tool's recorded source file from a trusted `compiled` directory back to its `source` directory (`sourcePathFor`). A compiled module records its source beside itself, so a tool loaded from a build that copies its output (BMO's `tsc` into `dist/`) named a source file that does not exist, and a workflow over it could not be described. The nested test found this. BMO's own `runWorkflow` call needs it.

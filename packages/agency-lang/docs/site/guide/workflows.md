@@ -209,6 +209,21 @@ must stay inside the project directory. They may import other `.agency` files
 and `std::` modules. JavaScript, TypeScript, `pkg::` imports, symlinks, and
 compile-time splices are refused.
 
+If your functions call TypeScript, name their directories as trusted modules in
+`agency.json`. A workflow may then call them, and it runs your compiled files:
+
+```json
+{
+  "sandbox": {
+    "trustedModules": [{ "source": "src/agent", "compiled": "dist/agent" }]
+  }
+}
+```
+
+Build your project before you check or run the workflow. A trusted module is
+your own code, so the sandbox does not check it. See
+[trusted modules](/guide/agency-config-file#trusted-modules).
+
 ## Approvals and effects
 
 ```bash

@@ -19,6 +19,8 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/runtime/pause.md` — Pausing a node run from outside with `pauseSignal`: the runner check, the thrown signal, which steps defer a pause, cancel precedence, and `resumeFromCheckpoint`.
 - `docs/dev/runtime/resume-command.md` — The `agency resume` child carrier, shared restore setup, overrides, integrity check, and lifecycle.
 - `docs/dev/runtime/trace.md` — Execution traces: a checkpoint per step, written to a file the debugger can replay.
+- `docs/dev/runtime/trusted-modules.md` — Trusted modules: the `sandbox.trustedModules` config, why only `std::workflow` compiles against it, the validator's trust branch and the mirror of every reachable `.agency` file, the absolute import rewrite and the dropped init awaits, the `trustedModules` mark a compiled program carries and the `std::run` data that shows it, how a child inherits the list unchanged, and how a tool loaded from a compiled directory is named by its source.
+- `docs/dev/security/trusted-modules.md` — How trusted modules change what the sandbox protects, the three decisions that keep the change small, and the conflict with the containment floor.
 - `docs/dev/runtime/threads.md` — How LLM conversation history accumulates and flows through thread and subthread blocks.
 - `docs/dev/runtime/expiring-messages.md` — Messages the runtime adds and later removes: the `metadata.expires` record on the message, the three owners (an `llm()` call, a request, a handoff) and where each expires, the claim rule for unkeyed messages, why clones keep them, and the four edits of history that are not expiries.
 - `docs/dev/runtime/globalstore.md` — Module-namespaced storage for top-level variables at runtime.

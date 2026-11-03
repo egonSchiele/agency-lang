@@ -120,10 +120,7 @@ their `.js` imports every build.
 The list rides in the `run` and `resume` instructions the parent sends,
 beside `maxDepth`, and the bootstrap seeds it into `SubprocessRunInfo`
 before the compiled module is imported, as it seeds `maxDepth` today. A
-child's `run` call resolves its effective list the way `resolveDepthCap`
-resolves depth: its own list intersected with the inherited one, where an
-entry survives only if both its `source` and its `compiled` directory
-are the same as, or inside, an inherited entry's. The root process reads
+child uses the inherited list as it is. The root process reads
 its list from its config; a subprocess has no config of its own, because
 it is compiled in the sandbox, and `configOverrides` does not carry the
 list, so there is no second path by which a child could receive one.
@@ -153,8 +150,9 @@ because every function is a tool, so a model at the root could name a
 directory it had just written to and have its own JavaScript imported as
 trusted, and the `std::run` prompt would not show it. The list the sandbox
 compiles against and the list a child receives are the same value, read
-from the config at the root. The `std::run` interrupt carries it in its
-data, so a policy or a person can see what a child may import.
+from the config at the root. The `std::run` interrupt carries the
+program's own mark, the trusted files it loads, so a policy or a person
+can see what host code a run would load.
 
 Trusted code itself is not constrained by any of this, and cannot be: it
 is the host's own code, running in the child with everything the host

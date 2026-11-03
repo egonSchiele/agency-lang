@@ -1,10 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
-import {
-  _compile,
-  _subprocessDepth,
-  compileWithTrustedModules,
-  effectiveTrustedModules,
-} from "./agency.js";
+import { _compile, _subprocessDepth, compileWithTrustedModules } from "./agency.js";
+import { effectiveTrustedModules } from "../compiler/trustedModules.js";
 import { readdirSync, existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "fs";
 import { join, relative } from "path";
 import { setSubprocessRunInfo } from "../runtime/subprocessRunInfo.js";

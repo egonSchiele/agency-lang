@@ -4,14 +4,17 @@
  * checking at a trusted module and the child imports the host's compiled
  * file. See docs/dev/runtime/trusted-modules.md.
  *
- * This file holds the pure parts: the type, resolving a config entry to
- * real paths, finding the entry a file belongs to, and mapping a source
- * file to its compiled file. It lives in lib/compiler, outside the browser
- * lint scope, because resolving a path reads the filesystem.
+ * This file holds the type, resolving a config entry to real paths,
+ * finding the entry a file belongs to, mapping a source file to its
+ * compiled file, and the one function that says which list this process
+ * may use. It lives in lib/compiler, outside the browser lint scope,
+ * because resolving a path reads the filesystem.
  */
 import * as fs from "fs";
 import * as path from "path";
 import { isStrictDescendant } from "@/utils.js";
+import { getSubprocessRunInfo } from "@/runtime/subprocessRunInfo.js";
+import type { RuntimeContext } from "@/runtime/state/context.js";
 
 /** A directory of `.agency` modules the host vouches for, and the directory
  *  their compiled JavaScript is in. As written in config they may be
@@ -84,6 +87,25 @@ export function trustedEntryFor(file: string, entries: TrustedModules[]): Truste
 export function compiledPathFor(file: string, entry: TrustedModules): string {
   const relative = path.relative(entry.source, file);
   return path.join(entry.compiled, relative.replace(/\.agency$/, ".js"));
+}
+
+/** The list this process may hand to the sandbox: in a subprocess, what
+ *  the bootstrap seeded from the parent; at the root, the context's config
+ *  list resolved against the working directory. A config entry that does
+ *  not resolve throws, naming the entry. See docs/dev/runtime/trusted-modules.md.
+ *  Nothing reads `sandbox.trustedModules` any other way. */
+export function effectiveTrustedModules(ctx: RuntimeContext<any>): TrustedModules[] {
+  if ((ctx.subprocessDepth ?? 0) > 0) {
+    return getSubprocessRunInfo().trustedModules ?? [];
+  }
+  if (ctx.trustedModules.length === 0) {
+    return [];
+  }
+  const resolved = resolveTrustedModules(ctx.trustedModules, ctx.host.system.cwd());
+  if (!resolved.ok) {
+    throw new Error(resolved.error);
+  }
+  return resolved.value;
 }
 
 function messageOf(error: unknown): string {

@@ -228,7 +228,7 @@ export class RuntimeContext<T> {
   /** The `sandbox.trustedModules` entries from `agency.json`, baked in at
    *  compile time as written (paths may be relative). Only the root reads
    *  them; a subprocess takes its list from `SubprocessRunInfo`. See
-   *  `effectiveTrustedModules` in `lib/stdlib/agency.ts`. Defaults to `[]`. */
+   *  `effectiveTrustedModules` in `lib/compiler/trustedModules.ts`. Defaults to `[]`. */
   trustedModules: TrustedModules[];
   private _llmClient: LLMClient;
   private _interruptResponses: Record<string, { response: InterruptResponse }> = {};

@@ -56,9 +56,7 @@ import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-import { getSubprocessRunInfo } from "../runtime/subprocessRunInfo.js";
-import type { RuntimeContext } from "../runtime/state/context.js";
-import { resolveTrustedModules, type TrustedModules } from "../compiler/trustedModules.js";
+import type { TrustedModules } from "../compiler/trustedModules.js";
 
 type CompiledProgramValue = {
   moduleId: string;
@@ -155,22 +153,12 @@ export function _compileFile(dir: string, filename: string): CompiledProgramValu
   return compileToProgram({ file: filename }, dir, false, []);
 }
 
-/** The list this process may hand to the sandbox: in a subprocess, what
- *  the bootstrap seeded from the parent; at the root, the context's config
- *  list resolved against the working directory. A config entry that does
- *  not resolve throws, naming the entry. See docs/dev/runtime/trusted-modules.md. */
-export function effectiveTrustedModules(ctx: RuntimeContext<any>): TrustedModules[] {
-  if ((ctx.subprocessDepth ?? 0) > 0) {
-    return getSubprocessRunInfo().trustedModules ?? [];
-  }
-  if (ctx.trustedModules.length === 0) {
-    return [];
-  }
-  const resolved = resolveTrustedModules(ctx.trustedModules, ctx.host.system.cwd());
-  if (!resolved.ok) {
-    throw new Error(resolved.error);
-  }
-  return resolved.value;
+/** The trusted compiled files a program loads, for the `std::run`
+ *  interrupt. A program compiled before trusted modules existed, or a
+ *  hand-built value, has none. */
+export function _programTrustedModules(compiled: { trustedModules?: unknown }): string[] {
+  const files = compiled?.trustedModules;
+  return Array.isArray(files) ? files.filter((file) => typeof file === "string") : [];
 }
 
 /** The current process's subprocess nesting depth (0 = root). Backs the

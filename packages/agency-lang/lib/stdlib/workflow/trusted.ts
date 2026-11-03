@@ -11,10 +11,10 @@
  * widen it.
  */
 import { currentRun } from "../../runtime/asyncContext.js";
+import { effectiveTrustedModules } from "../../compiler/trustedModules.js";
 import {
   compileWithTrustedModules,
   describeWithTrustedModules,
-  effectiveTrustedModules,
   typecheckWithTrustedModules,
 } from "../agency.js";
 

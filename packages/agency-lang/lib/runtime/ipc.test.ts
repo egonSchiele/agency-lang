@@ -21,6 +21,8 @@ import {
   resolveNodeCallArgs,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
+  buildRunInstruction,
+  buildResumeInstruction,
 } from "./ipc.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { InvocationUsageMeter } from "./invocationUsage.js";
@@ -117,6 +119,27 @@ describe("resolveDepthCap", () => {
   it("a looser param cap cannot loosen the ancestor cap", () => {
     setSubprocessRunInfo({ depth: 1, maxDepth: 3 });
     expect(resolveDepthCap(10)).toBe(3);
+  });
+});
+
+describe("trusted modules on the startup instructions", () => {
+  const limits = clampLimits({ wallClock: 1000, memory: 1000, ipcPayload: 1000, stdout: 1000 });
+  const identity = {
+    depth: 1,
+    trustedModules: [{ source: "/p/src/agent", compiled: "/p/dist/agent" }],
+  };
+
+  it("a run and a resume instruction carry the same list", () => {
+    const run = buildRunInstruction({ scriptPath: "/s.js", node: "main", limits, identity });
+    const resume = buildResumeInstruction({
+      scriptPath: "/s.js",
+      saved: { node: "main", childCheckpoint: {}, interrupts: [] } as any,
+      responses: [],
+      limits,
+      identity,
+    });
+    expect(run.trustedModules).toEqual(identity.trustedModules);
+    expect(resume.trustedModules).toEqual(identity.trustedModules);
   });
 });
 
@@ -1044,6 +1067,16 @@ describe("materializeCompiledScript", () => {
     expect(() =>
       materializeCompiledScript({ moduleId: "agency_x", code: "x", modules: { "../m.js": "x" } }),
     ).toThrow(/escapes/);
+  });
+
+  it("refuses a program whose trusted module file is missing, naming the path", () => {
+    expect(() =>
+      materializeCompiledScript({
+        moduleId: "agency_x",
+        code: "export {};",
+        trustedModules: ["/no/such/build/tools.js"],
+      }),
+    ).toThrow(/trusted module '\/no\/such\/build\/tools\.js', which is not a file here/);
   });
 
   it("keeps a nested entry in its layout beside its modules", () => {

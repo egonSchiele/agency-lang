@@ -89,13 +89,13 @@ describe("compiledPathFor", () => {
 describe("sourcePathFor", () => {
   const entry = { source: "/p/src/agent", compiled: "/p/dist/agent" };
 
-  it("maps a path under the compiled directory back to the source directory", () => {
+  test("maps a path under the compiled directory back to the source directory", () => {
     expect(sourcePathFor("/p/dist/agent/scheduled/run.agency", [entry])).toBe(
       "/p/src/agent/scheduled/run.agency",
     );
   });
 
-  it("leaves any other path as it is", () => {
+  test("leaves any other path as it is", () => {
     expect(sourcePathFor("/p/src/other.agency", [entry])).toBe("/p/src/other.agency");
   });
 });

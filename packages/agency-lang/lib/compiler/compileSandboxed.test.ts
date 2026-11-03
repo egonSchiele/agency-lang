@@ -447,6 +447,29 @@ describe("compileSandboxed with trusted modules", () => {
     }
   });
 
+  test("a node import from a trusted module is emitted as the compiled file too", () => {
+    const dir = makeDir(".cs-trust-node-");
+    try {
+      const { trustedModules, compiled } = layout(dir);
+      fs.appendFileSync(
+        path.join(dir, "tools", "tools.agency"),
+        "export node shoutNode(text: string): Loud { return shout(text) }\n",
+      );
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import node { shoutNode } from "./tools/tools.agency"\nexport node main(): string { return shoutNode("hi") }\n',
+      );
+      const result = compileSandboxed({ entry: { file: "main.agency" }, dir, trustedModules });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.code).toContain(JSON.stringify(pathToFileURL(compiled).href));
+      expect(result.code).not.toContain('"./tools/tools.js"');
+      expect(result.trustedModules).toEqual([compiled]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("a program with no trusted import has an empty mark", () => {
     const dir = makeDir(".cs-trust-none-");
     try {

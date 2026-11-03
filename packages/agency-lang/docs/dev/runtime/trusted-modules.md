@@ -95,8 +95,9 @@ are compiled.
 Step 6 of `compileSource` rewrites each specifier in `trustedImports` to a
 `file:` URL of the absolute compiled path, which Node imports whatever
 characters the path holds. For example, `import { shoutViaJs } from "./tools/tools.agency"`
-becomes an import of `file:///home/me/project/dist/tools/tools.js`. The
-program's `trustedModules` mark keeps the filesystem paths.
+becomes an import of `file:///home/me/project/dist/tools/tools.js`. An
+`import node { ... } from` statement whose file is trusted is rewritten the
+same way. The program's `trustedModules` mark keeps the filesystem paths.
 
 `buildCompiledClosure` keys a trusted module by its mirror path. The host's
 compiled file registers its init under the host's own source path, so an await

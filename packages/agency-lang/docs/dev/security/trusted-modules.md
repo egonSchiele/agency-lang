@@ -159,12 +159,17 @@ the fake names a listed export. Freezing every function value changes
 behaviour for every function to fix one lookup. A side table keyed by
 object identity does the same job as the private fields with more code.
 
-Two limits. A private field is per copy of the class, as `instanceof` is,
+Three limits. A private field is per copy of the class, as `instanceof` is,
 so a trusted module and the child that imports it must load one copy of the
 Agency runtime, which "Why the child loads the host's build" below already
-requires. And the rule holds against anything made from data, not against
-code that calls `Object.defineProperty`, `Reflect`, or `Function` on a real
-instance. A sandboxed program can reach those today, because the sandbox
+requires. The checkpoint revivers turn a plain record tagged as a function
+reference into the registered function by name (issue #1365), so a record a
+model wrote becomes the genuine object after a clone, a fork, or a resume,
+and the brand then passes; this predates trusted modules, and a workflow's
+generated program never hands such a value to `toolRefs`, but host code that
+passes model data as a tool list would. And the rule holds against anything
+made from data, not against code that calls `Object.defineProperty`,
+`Reflect`, or `Function` on a real instance. A sandboxed program can reach those today, because the sandbox
 does not remove Node's globals from the child (issue #974). That is a hole
 in the sandbox, not in workflows: a workflow program is generated from JSON
 and runs no model-written code. Until the containment floor closes it, the

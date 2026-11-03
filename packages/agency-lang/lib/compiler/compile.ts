@@ -215,14 +215,22 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
     // characters the path holds; the sandbox compiles nothing trusted.
     const strategy = new CompileStrategy({ targetExt: ".js" });
     const trustedImports = config.trustedImports ?? {};
+    const compiledUrl = (specifier: string): string | undefined => {
+      const trustedPath = trustedImports[specifier];
+      return trustedPath === undefined ? undefined : pathToFileURL(trustedPath).href;
+    };
     liftedProgram.nodes.forEach((node) => {
+      if (node.type === "importNodeStatement") {
+        // The generator writes a node import's path as it is, with
+        // `.agency` swapped for `.js`; a trusted one must point at the
+        // host's file instead.
+        node.agencyFile = compiledUrl(node.agencyFile) ?? node.agencyFile;
+        return;
+      }
       if (node.type !== "importStatement") return;
       if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
-      const trustedPath = trustedImports[node.modulePath];
       node.modulePath =
-        trustedPath === undefined
-          ? strategy.rewriteImport(node.modulePath, syntheticPath)
-          : pathToFileURL(trustedPath).href;
+        compiledUrl(node.modulePath) ?? strategy.rewriteImport(node.modulePath, syntheticPath);
     });
 
     // 6b. Build the closure analysis to detect cycles + populate the

@@ -33,6 +33,10 @@
       "returns": "string"
     }
   ],
+  "forgedToolFromRunCode": {
+    "ok": false,
+    "error": "the workflow has problems:\ntool 1 is not an Agency function"
+  },
   "nested": {
     "inside": {
       "ok": true,

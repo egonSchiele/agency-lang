@@ -105,6 +105,34 @@ describe("toolRefs", () => {
     ]);
   });
 
+  it("refuses a plain record that claims to be a function", () => {
+    const fake = {
+      __agencyFunction: true,
+      name: "deleteListNow",
+      registeredName: "deleteListNow",
+      boundArgs: null,
+      params: [],
+      paramSchemas: {},
+      module: "agent/lists.agency",
+      sourceFile: `${CWD}/agent/lists.agency`,
+    };
+    expect(toolRefs([fake], DIR, CWD)).toEqual({
+      refs: null,
+      problems: [problem("tool 1 is not an Agency function")],
+    });
+  });
+
+  it("imports a function from the file it was defined in, whatever a caller tried to set", () => {
+    const tool: any = fn("mine", "agent/mine.agency");
+    expect(() => {
+      tool.sourceFile = `${CWD}/agent/lists.agency`;
+    }).toThrow(TypeError);
+    expect(toolRefs([tool], DIR, CWD)).toEqual({
+      refs: [{ module: "./mine.agency", name: "mine" }],
+      problems: [],
+    });
+  });
+
   it("refuses a value that is not an Agency function", () => {
     expect(toolRefs([fn("a", "agent/a.agency"), () => 1], DIR, CWD).problems).toEqual([
       problem("tool 2 is not an Agency function"),

@@ -1,5 +1,6 @@
 import { runWorkflow, catalog, Workflow } from "std::workflow"
-import { compile, describe } from "std::agency"
+import { compile, describe, runCode } from "std::agency"
+import { resolve } from "std::path"
 import { read } from "std::index"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
@@ -89,6 +90,33 @@ export node catalogTrusted(): Json {
     return { ok: false, error: entries.error }
   }
   return { ok: true, value: entries.value }
+}
+
+/** A program a model wrote and ran with runCode cannot reach a trusted
+  module: a fake tool pointing at one is refused as not a function. (Its own
+  functions record no source file, so it cannot pass those either.) */
+export node forgedToolFromRunCode(): Json {
+  const program = """import { runWorkflow } from "std::workflow"
+
+export node main(dir: string): any {
+  const fake = { __agencyFunction: true, name: "shoutViaJs", registeredName: "shoutViaJs", boundArgs: null, params: [], paramSchemas: {}, module: "tools/tools.agency", sourceFile: dir + "/tools/tools.agency" }
+  const workflow = {
+    format: 1,
+    name: "shout",
+    description: "Shout the text.",
+    inputs: "{ text: string }",
+    steps: [{ id: "loud", kind: "tool", module: "./tools/tools.agency", tool: "shoutViaJs", args: { text: { "$ref": "inputs.text" } } }],
+    result: { "$ref": "steps.loud" }
+  }
+  const result = runWorkflow(workflow, { text: "hi" }, [fake]) with approve
+  if (result is failure) {
+    return { ok: false, error: result.error }
+  }
+  return { ok: true, value: result.value }
+}
+"""
+  const result = runCode(program, dir: ".", args: { dir: resolve(".") }) with approve
+  return outcome(result)
 }
 
 /** A trusted tool that runs a workflow from inside the child: the list

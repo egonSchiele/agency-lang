@@ -28,6 +28,7 @@ const {
   missingCompiled,
   scopeIsWorkflowsOnly,
   catalogTrusted,
+  forgedToolFromRunCode,
   nested,
 } = await import("./agent.js");
 
@@ -45,6 +46,7 @@ try {
   const missing = (await missingCompiled()).data;
   const scope = (await scopeIsWorkflowsOnly()).data;
   const listed = (await catalogTrusted()).data;
+  const forged = (await forgedToolFromRunCode()).data;
   const deep = (await nested()).data;
 
   writeFileSync(
@@ -72,6 +74,7 @@ try {
               returns: entry.returns,
             }))
           : listed.error,
+        forgedToolFromRunCode: forged.ok ? forged.value : forged.error,
         nested: {
           inside: deep.inside,
           outsideRefused:

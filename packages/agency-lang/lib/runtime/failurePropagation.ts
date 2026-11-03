@@ -8,7 +8,7 @@ import {
   type ResultFailure,
 } from "./result.js";
 import { truncate } from "./truncate.js";
-import type { FuncParam } from "./agencyFunction.js";
+import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
 
 /** Runtime mode for the failure-propagation feature. "on": skip/throw.
  *  "warn": warnings only, legacy behavior otherwise. "off": no checks. */
@@ -230,7 +230,7 @@ export function checkResultMethodCall(run: Run, obj: unknown, prop: string | num
   }
   if (Object.hasOwn(obj as object, prop)) {
     const own = (obj as any)[prop];
-    if (typeof own === "function" || (own as any)?.__agencyFunction === true) {
+    if (typeof own === "function" || AgencyFunction.isAgencyFunction(own)) {
       return;
     }
   }

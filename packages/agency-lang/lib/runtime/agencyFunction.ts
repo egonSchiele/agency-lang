@@ -144,9 +144,15 @@ export type AgencyFunctionOpts = {
 };
 
 export class AgencyFunction {
-  readonly __agencyFunction = true;
-  readonly name: string;
-  readonly module: string;
+  /** The brand `isAgencyFunction` checks. A private field cannot be set
+   *  from an object literal, through an `any` cast, or from JSON, so a
+   *  value that only looks like a function is never taken for one. */
+  #brand = true;
+  /** The label: the name, module, registered name, and source file that
+   *  `toolRefs` turns into an import line. Private with getters, so code
+   *  that holds a function cannot point it at another file or name. */
+  readonly #name: string;
+  readonly #module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
   private readonly _fn: AgencyFunctionBody;
@@ -168,19 +174,19 @@ export class AgencyFunction {
    *  directly, `.describe()` via `withToolDefinition()` — so a serialized
    *  ref to any derived copy can find its registry entry again. Equal to
    *  `name` for functions never renamed. */
-  readonly registeredName: string;
+  readonly #registeredName: string;
   readonly created?: CreatedTool;
   readonly paramSchemas: Record<string, unknown>;
-  readonly sourceFile: string | null;
+  readonly #sourceFile: string | null;
 
   constructor(opts: AgencyFunctionOpts) {
-    this.name = opts.name;
-    this.module = opts.module;
-    this.registeredName = opts.registeredName ?? opts.name;
+    this.#name = opts.name;
+    this.#module = opts.module;
+    this.#registeredName = opts.registeredName ?? opts.name;
     this._fn = opts.fn;
     this.created = opts.created;
     this.paramSchemas = opts.paramSchemas ?? {};
-    this.sourceFile = opts.sourceFile ?? null;
+    this.#sourceFile = opts.sourceFile ?? null;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
@@ -195,6 +201,22 @@ export class AgencyFunction {
     this._hasAliases = this._unboundParams.some((p) => (p.aliases ?? []).length > 0);
     this._isBound = opts.params.some((p) => p.isBound);
     this._checksFailures = opts.params.some((p) => p.acceptsResult === false);
+  }
+
+  get name(): string {
+    return this.#name;
+  }
+
+  get module(): string {
+    return this.#module;
+  }
+
+  get registeredName(): string {
+    return this.#registeredName;
+  }
+
+  get sourceFile(): string | null {
+    return this.#sourceFile;
   }
 
   get isPreapproved(): boolean {
@@ -713,7 +735,7 @@ export class AgencyFunction {
   // Serialization handled by FunctionRefReviver — toJSON() would conflict with the replacer pattern.
 
   static isAgencyFunction(value: unknown): value is AgencyFunction {
-    return typeof value === "object" && value !== null && (value as any).__agencyFunction === true;
+    return typeof value === "object" && value !== null && #brand in value;
   }
 
   static create(

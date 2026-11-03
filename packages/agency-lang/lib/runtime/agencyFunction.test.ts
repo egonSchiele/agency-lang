@@ -349,8 +349,31 @@ describe("AgencyFunction", () => {
       expect(AgencyFunction.isAgencyFunction("hello")).toBe(false);
     });
 
-    it("returns false for objects with __agencyFunction but wrong value", () => {
-      expect(AgencyFunction.isAgencyFunction({ __agencyFunction: "yes" })).toBe(false);
+    it("returns false for a plain object that claims to be one", () => {
+      expect(AgencyFunction.isAgencyFunction({ __agencyFunction: true })).toBe(false);
+    });
+
+    it("returns false for a copy of a function's public fields", () => {
+      const fn = makeFunction([]);
+      const copy = { ...fn, name: fn.name, module: fn.module, sourceFile: fn.sourceFile };
+      expect(AgencyFunction.isAgencyFunction(copy)).toBe(false);
+    });
+  });
+
+  describe("the label", () => {
+    it("cannot be reassigned, even through any", () => {
+      const fn: any = makeFunction([]);
+      expect(() => {
+        fn.sourceFile = "/elsewhere/other.agency";
+      }).toThrow(TypeError);
+      expect(() => {
+        fn.name = "other";
+      }).toThrow(TypeError);
+      expect(() => {
+        fn.registeredName = "other";
+      }).toThrow(TypeError);
+      expect(fn.name).not.toBe("other");
+      expect(fn.sourceFile).not.toBe("/elsewhere/other.agency");
     });
   });
 

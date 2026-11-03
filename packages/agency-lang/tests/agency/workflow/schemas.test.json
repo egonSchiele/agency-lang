@@ -32,6 +32,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "unrepresentableInputsFail",
+      "description": "an inputs type JSON Schema cannot express fails the call with the node's failure, after one std::run",
+      "input": "",
+      "expectedOutput": "[true,[\"std::run\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

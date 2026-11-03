@@ -54,6 +54,13 @@ describe("formatCatalog", () => {
     );
   });
 
+  it("marks a handoff after its signature", () => {
+    const [findLists] = entries;
+    expect(formatCatalog([{ ...findLists, handoff: true }])).toContain(
+      "  findLists(query: string): Result<ListSummary[]> (handoff)",
+    );
+  });
+
   it("writes defaults, untyped parameters, a missing return type, and joins a wrapped line", () => {
     const entry: CatalogEntry = {
       module: "std::math",

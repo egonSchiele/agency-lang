@@ -80,3 +80,26 @@ node refusedWorkflowStartsNothing(): Json {
   }
   return [map(checked.data.problems, \problem -> problem.step), getMutable("effects", [])]
 }
+
+/** Inputs JSON Schema cannot express: `regex` has no JSON form. */
+def regexInputs(): Workflow {
+  return {
+    format: 1,
+    name: "regexInputs",
+    description: "Add two literals.",
+    inputs: "{ pattern: regex }",
+    steps: [{ id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: 1, b: 2 } }],
+    result: { "$ref": "steps.sum" }
+  }
+}
+
+// The schemas node fails inside the subprocess, and the failure comes back
+// as the call's failure, not as a success with no schemas.
+node unrepresentableInputsFail(): Json {
+  const checked = runCheck(regexInputs())
+  if (checked is failure(err)) {
+    const message = "${err}"
+    return [message.includes("could not derive the workflow's schemas"), getMutable("effects", [])]
+  }
+  return "checked"
+}

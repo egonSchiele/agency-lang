@@ -72,6 +72,9 @@ Use `writeWorkflow` to save under `<dir>/workflows`, then `loadWorkflow` or
 `listWorkflows` to read saved workflows. `workflowTool` and `workflowTools`
 expose workflows as tools for an LLM. `catalog` describes available tool
 parameters, return types, and effects for workflow authors.
+`checkWorkflowWithSchemas` gives a host that stores workflows itself the
+check's warnings with the JSON Schemas of the inputs and of each LLM step's
+output, from one compile.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
@@ -562,6 +565,11 @@ export def _workflowSchemas(program: CompiledProgram): Result<WorkflowSchemas> {
   const ran = run(compiled: program, node: SCHEMAS_NODE)
   if (ran is failure(runErr)) {
     return failure("could not derive the workflow's schemas: ${runErr}")
+  }
+  // The envelope's `data` is what the node returned. A type that JSON
+  // Schema cannot express, such as `regex`, makes the node fail there.
+  if (ran.value.data is failure(nodeErr)) {
+    return failure("could not derive the workflow's schemas: ${nodeErr}")
   }
   return success(ran.value.data)
 }

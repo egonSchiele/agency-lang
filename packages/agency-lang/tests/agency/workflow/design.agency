@@ -103,6 +103,13 @@ node bareApprovalAccepts(): Json {
   return [savedName(ran), ran.saves]
 }
 
+// Typed at a prompt: capitals and spaces still accept, with no second draft.
+node acceptIgnoresCaseAndSpaces(): Json {
+  const dir = outDir("acceptCase")
+  const ran = runDesign(dir, [" Accept "])
+  return [savedName(ran), ran.reviews.length]
+}
+
 node reviewPayload(): Json {
   const dir = outDir("payload")
   const ran = runDesign(dir, ["accept"])
@@ -142,6 +149,16 @@ node takenNameIsRedrafted(): Json {
   const ran = runDesign(dir, ["accept"])
   const original = read("workflows/doubleSum.json", dir) with approve
   return [savedName(ran), ran.reviews.length, ran.reviews[0].attempts, (original catch "").includes("The one already saved.")]
+}
+
+// Every draft takes the saved name and calls `subtract`, which is not in
+// the tool list. The failure after six attempts names both problems, so
+// each attempt heard about both at once.
+node takenNameWithOtherProblems(): Json {
+  const dir = outDir("takenAndBad")
+  writeWorkflow(doubleSum("doubleSum"), TOOLS, dir) with approve
+  const message = savedName(runDesign(dir, ["accept"]))
+  return [message.includes("is already saved"), message.includes("is not among the tools")]
 }
 
 node rejectAtReviewWritesNothing(): Json {

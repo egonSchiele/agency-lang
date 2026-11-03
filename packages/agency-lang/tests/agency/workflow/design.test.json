@@ -39,6 +39,25 @@
       ]
     },
     {
+      "nodeName": "acceptIgnoresCaseAndSpaces",
+      "description": "an accept typed with capitals and spaces accepts, with no second draft",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
       "nodeName": "reviewPayload",
       "description": "the review shows the draft, no previous draft, the warnings, the attempts, and the round",
       "input": "",
@@ -144,6 +163,50 @@
         {
           "return": {
             "workflowJson": "{\"format\":1,\"name\":\"freshSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "takenNameWithOtherProblems",
+      "description": "a draft with a taken name and an unknown tool hears about both in one attempt",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
           }
         }
       ]

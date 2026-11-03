@@ -334,7 +334,7 @@ designWorkflow(request, tools, dir)
   │  ┌─ round (up to maxRounds, 3 by default) ─────────────────┐
   │  │  draftFrom: up to 6 attempts, no person involved          │
   │  │    llm(brief) → JSON.parse → Workflow! → drop nulls       │
-  │  │    → _checkedWith → name not already saved                │
+  │  │    → _checkedWith + name check, one problem list          │
   │  │    a failure becomes the next attempt's DraftProblem      │
   │  │                                                           │
   │  │  std::workflow::review                                    │
@@ -355,11 +355,11 @@ designWorkflow(request, tools, dir)
 
 **Reading the tools once.** `_checked` describes the tools again on every call, and describing a local module reads it with `std::read`. With 3 rounds of 6 attempts that would be up to 18 rounds of read prompts in an interactive run, and as many `describe` calls. So `describeTools` computes the import references, the signatures, and the catalog entries once, and the attempts call `_checkedWith(workflow, refs, signatures, dir)`. `_checked` and `_checkedWith` share `checkCompiled`, the typecheck and compile. `catalog` is `describeTools` returning its entries. The typecheck still reads the local files, without prompts, as it always has. `writeWorkflow` runs the full `_checked` once more before its save prompt.
 
-**Taken names.** The model picks the name, and saving a name that exists replaces that workflow. A designed workflow is always a new one, so `designWorkflow` lists the names already saved (`savedWorkflowNames`) and a draft with one of them goes back to the model. The listing reads file names only, and no saved file, so it raises no `std::workflow::scan`, in the same way `loadWorkflow` calls `exists` before its prompt. `listWorkflows` uses the same function after its prompt.
+**Taken names.** The model picks the name, and saving a name that exists replaces that workflow. A designed workflow is always a new one, so `designWorkflow` lists the names already saved (`savedWorkflowNames`) and a draft with one of them goes back to the model. The name is compared before the check runs, and a taken name is reported in the same problem list as the check's problems, so a draft that is wrong in both ways is fixed in one attempt. The listing reads file names only, and no saved file, so it raises no `std::workflow::scan`, in the same way `loadWorkflow` calls `exists` before its prompt. `listWorkflows` uses the same function after its prompt.
 
 **The review.** `std::workflow::review` carries the draft, the previous round's draft (null on the first round), the check's warnings, the attempt count, and `round` and `maxRounds`. Feedback given in the last round is never drafted, so a host can say so. The raise is assigned to a variable, so it expects a value, and `cliPolicyHandler` never lets a policy rule approve such a raise (`policy.agency`, the `expectsValue` check). Only a handler or a person accepts a draft, which is why the save is the interrupt a policy pins. The answer is read by `reviewAnswer`:
 
-- null (a bare `approve()`) or `"accept"`: save.
+- null (a bare `approve()`) or `"accept"`: save. The word is matched after trimming and lowercasing, so `" Accept"` typed at the prompt saves too, and does not spend a round as feedback.
 - a string: feedback. The next round's `DraftProblem` is this draft as JSON and the feedback. Blank feedback fails the call.
 - an object: an edited workflow, checked with `Workflow!` and then `attemptDraft`. If it passes, it is saved with no model call. If it fails, its problems start the next round, and the person sees the model's version, not their own edit.
 
@@ -369,4 +369,4 @@ The interactive prompt renders the review in `renderWorkflowDraft` (`policy.agen
 
 **`draftWorkflow`, for hosts that save elsewhere.** A host with its own storage, such as BMO, calls `draftWorkflow(request, tools, dir, revise)`. It is `describeTools` and `draftFrom` with no review and no save, and it raises nothing of its own beyond the reads. It checks no saved names, because it cannot know the host's. The host runs its own review and passes the person's feedback back as `revise`.
 
-**`ExportParam` in the import line.** `std::workflow` imports `ExportParam` from `std::agency` without naming it. `DescribedTools` and `_checkedWith`'s parameter hold `Record<string, ExportInfo>`, and the schema the compiler builds for them inlines `ExportInfo`, which refers to `ExportParam` by name. The compiler does not import that name on its own, so without the import the module fails to load with `ExportParam is not defined`.
+**`ExportParam` in the import line.** `std::workflow` imports `ExportParam` from `std::agency` without naming it. `DescribedTools` and `_checkedWith`'s parameter hold `Record<string, ExportInfo>`, and the schema the compiler builds for them inlines `ExportInfo`'s definition, which refers to `ExportParam` by name. The compiler keeps that name but does not import it, so without the import the module fails to load with `ExportParam is not defined`. This is a compiler bug, not anything about `std::workflow`: any alias that holds an imported type naming another imported alias hits it. Remove the import, and this paragraph, when it is fixed.

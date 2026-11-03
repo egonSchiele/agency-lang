@@ -1011,9 +1011,19 @@ def draftFailure(draft: string, problems: string): Result<CheckedDraft, DraftPro
   return failure("the draft has problems:\n${problems}", { draft: draft, problems: problems })
 }
 
-// One draft through every stage: JSON, the workflow's shape, the check, and
-// the name. A failure at any stage is a DraftProblem holding the text as
-// written, so the next attempt sees what it wrote and what was wrong.
+/** The problem line for a name a saved workflow already has, or "". */
+def takenNameProblem(name: string, savedNames: string[]): string {
+  if (savedNames.includes(name)) {
+    return "- A workflow named ${name} is already saved. Choose another name."
+  }
+  return ""
+}
+
+// One draft through every stage: JSON, the workflow's shape, then the check
+// and the name together, so a draft with a taken name and another problem
+// hears about both in one attempt. A failure at any stage is a DraftProblem
+// holding the text as written, so the next attempt sees what it wrote and
+// what was wrong.
 @capabilities(fileRead)
 def attemptDraft(text: string, tools: DescribedTools, root: string, savedNames: string[]): Result<CheckedDraft, DraftProblem> {
   const parsed = try JSON.parse(text)
@@ -1025,12 +1035,16 @@ def attemptDraft(text: string, tools: DescribedTools, root: string, savedNames: 
     return draftFailure(text, "- The workflow has the wrong shape: ${shapeErr}")
   }
   const workflow = withoutNullOptionals(shaped.value)
+  const taken = takenNameProblem(workflow.name, savedNames)
   const checked = _checkedWith(workflow, tools.refs, tools.signatures, root)
   if (checked is failure) {
-    return draftFailure(text, problemsText(checked))
+    if (taken == "") {
+      return draftFailure(text, problemsText(checked))
+    }
+    return draftFailure(text, "${taken}\n${problemsText(checked)}")
   }
-  if (savedNames.includes(workflow.name)) {
-    return draftFailure(text, "- A workflow named ${workflow.name} is already saved. Choose another name.")
+  if (taken != "") {
+    return draftFailure(text, taken)
   }
   return success({ workflow: workflow, warnings: checked.value.warnings })
 }
@@ -1138,10 +1152,14 @@ type ReviewAnswer = {
 }
 
 def reviewAnswer(answer: any): Result<ReviewAnswer> {
-  if (answer == null || answer == ACCEPT_DESIGN) {
+  if (answer == null) {
     return success({ kind: "accept" })
   }
   if (typeof answer == "string") {
+    // Typed at a prompt, so " Accept" accepts too.
+    if (answer.trim().toLowerCase() == ACCEPT_DESIGN) {
+      return success({ kind: "accept" })
+    }
     if (answer.trim() == "") {
       return failure("feedback for the next draft cannot be blank")
     }

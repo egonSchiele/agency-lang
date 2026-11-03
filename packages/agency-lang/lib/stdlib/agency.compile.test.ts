@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { _compile, _subprocessDepth } from "./agency.js";
-import { readdirSync, existsSync } from "fs";
-import { join } from "path";
+import { describe, it, expect, afterEach } from "vitest";
+import { _compile, _subprocessDepth, effectiveTrustedModules } from "./agency.js";
+import { readdirSync, existsSync, mkdirSync, mkdtempSync, realpathSync } from "fs";
+import { join, relative } from "path";
+import { setSubprocessRunInfo } from "../runtime/subprocessRunInfo.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -24,6 +26,57 @@ describe("_subprocessDepth", () => {
       _subprocessDepth(),
     );
     expect(depth).toBe(3);
+  });
+});
+
+function makeContext(trustedModules: { source: string; compiled: string }[] = []) {
+  return new RuntimeContext({
+    statelogConfig: {
+      host: "",
+      apiKey: "",
+      projectId: "",
+      debugMode: false,
+      observability: false,
+    },
+    smoltalkDefaults: {},
+    dirname: process.cwd(),
+    trustedModules,
+  });
+}
+
+describe("effectiveTrustedModules", () => {
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+
+  it("at the root, resolves the config list against the working directory", () => {
+    const base = realpathSync(mkdtempSync(join(process.cwd(), ".etm-")));
+    try {
+      mkdirSync(join(base, "src"));
+      mkdirSync(join(base, "dist"));
+      const ctx = makeContext([
+        {
+          source: relative(process.cwd(), join(base, "src")),
+          compiled: relative(process.cwd(), join(base, "dist")),
+        },
+      ]);
+      expect(effectiveTrustedModules(ctx)).toEqual([
+        { source: join(base, "src"), compiled: join(base, "dist") },
+      ]);
+    } finally {
+      safeDeleteDirectoryWithin(process.cwd(), base);
+    }
+  });
+
+  it("at the root, throws naming an entry that does not resolve", () => {
+    const ctx = makeContext([{ source: "no-such-dir-src", compiled: "no-such-dir-dist" }]);
+    expect(() => effectiveTrustedModules(ctx)).toThrow(/no-such-dir-src/);
+  });
+
+  it("in a subprocess, returns the seeded list and ignores the config", () => {
+    const seeded = [{ source: "/seeded/src", compiled: "/seeded/dist" }];
+    setSubprocessRunInfo({ depth: 1, trustedModules: seeded });
+    const ctx = makeContext([{ source: "no-such-dir-src", compiled: "no-such-dir-dist" }]);
+    ctx.subprocessDepth = 1;
+    expect(effectiveTrustedModules(ctx)).toEqual(seeded);
   });
 });
 

@@ -33,3 +33,18 @@ describe("providerModules codegen", () => {
     expect(out).not.toContain("providerModules");
   });
 });
+
+describe("sandbox.trustedModules codegen", () => {
+  it("bakes the trusted modules into the RuntimeContext args as written", () => {
+    const out = generate(PROGRAM, {
+      sandbox: { trustedModules: [{ source: "src/agent", compiled: "dist/agent" }] },
+    });
+    expect(out).toContain("trustedModules");
+    expect(out).toContain('"src/agent"');
+    expect(out).toContain('"dist/agent"');
+  });
+
+  it("omits trustedModules when not configured", () => {
+    expect(generate(PROGRAM)).not.toContain("trustedModules");
+  });
+});

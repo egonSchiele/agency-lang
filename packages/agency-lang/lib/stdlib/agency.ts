@@ -56,6 +56,9 @@ import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { getSubprocessRunInfo } from "../runtime/subprocessRunInfo.js";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import { resolveTrustedModules, type TrustedModules } from "../compiler/trustedModules.js";
 
 type CompiledProgramValue = {
   moduleId: string;
@@ -130,6 +133,24 @@ export function _compileFile(dir: string, filename: string): CompiledProgramValu
   // No interrupt precedes this, so the caller's spelling resolves.
   resolveInSandbox(dir, filename, root);
   return compileToProgram({ file: filename }, dir);
+}
+
+/** The list this process may hand to the sandbox: in a subprocess, what
+ *  the bootstrap seeded from the parent; at the root, the context's config
+ *  list resolved against the working directory. A config entry that does
+ *  not resolve throws, naming the entry. See docs/dev/runtime/trusted-modules.md. */
+export function effectiveTrustedModules(ctx: RuntimeContext<any>): TrustedModules[] {
+  if ((ctx.subprocessDepth ?? 0) > 0) {
+    return getSubprocessRunInfo().trustedModules ?? [];
+  }
+  if (ctx.trustedModules.length === 0) {
+    return [];
+  }
+  const resolved = resolveTrustedModules(ctx.trustedModules, ctx.host.system.cwd());
+  if (!resolved.ok) {
+    throw new Error(resolved.error);
+  }
+  return resolved.value;
 }
 
 /** The current process's subprocess nesting depth (0 = root). Backs the

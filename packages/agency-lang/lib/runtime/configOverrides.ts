@@ -8,6 +8,10 @@ import type { MemoryConfig } from "./memory/types.js";
 import type { TraceConfig } from "./trace/types.js";
 import { inheritClientDefaults } from "./llmConfig.js";
 
+// `trustedModules` (from `sandbox.trustedModules`) is deliberately absent
+// here: a runtime override must never widen what the sandbox may import. A
+// child receives its list on SubprocessRunInfo, seeded by the bootstrap from
+// the parent; see docs/dev/runtime/trusted-modules.md.
 export type RuntimeContextConstructorArgs = {
   statelogConfig: StatelogConfig;
   smoltalkDefaults: Partial<SmolConfig>;

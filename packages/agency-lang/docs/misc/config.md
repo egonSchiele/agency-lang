@@ -56,6 +56,30 @@ The Agency compiler can be configured using an `agency.json` file in your projec
 }
 ```
 
+### Sandbox
+
+- **`sandbox`** (object): What sandboxed code may reach beyond the standard library.
+
+  - **`trustedModules`** (array of `{ source, compiled }`): Directories of `.agency`
+    modules your project vouches for, each with the directory its compiled
+    JavaScript is in. A workflow (`std::workflow`) may call tools from these
+    modules even when they import TypeScript, and the workflow's subprocess
+    runs your compiled files instead of compiling the source in the sandbox.
+    Nothing else reads this list: `compile`, `run`, `runCode`, and `describe`
+    from `std::agency` still refuse a trusted module. Paths are relative to the
+    working directory, as `client.providerModules` are. If your compiled files
+    sit beside the sources, name the same directory twice. See
+    `docs/dev/runtime/trusted-modules.md`.
+
+**Example:**
+```json
+{
+  "sandbox": {
+    "trustedModules": [{ "source": "src/agent", "compiled": "dist/agent" }]
+  }
+}
+```
+
 ## Example Configuration
 
 ```json

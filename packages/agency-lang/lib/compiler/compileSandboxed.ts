@@ -9,6 +9,7 @@ import * as path from "path";
 import { CompileResult } from "./compile.js";
 import { ClosureEntry, ClosureValidationError, validateClosure } from "./closureValidator.js";
 import { compileValidatedClosure } from "./compileValidatedClosure.js";
+import type { TrustedModules } from "./trustedModules.js";
 
 export { compileValidatedClosure } from "./compileValidatedClosure.js";
 
@@ -21,11 +22,18 @@ export type CompileSandboxedArgs = {
    *  fork path leaves it off. See compileValidatedClosure. */
   enforceJsGlobals?: boolean;
   fingerprintModuleIds?: boolean;
+  /** Resolved trusted modules. Only std::workflow passes a non-empty list;
+   *  see docs/dev/runtime/trusted-modules.md. */
+  trustedModules?: TrustedModules[];
 };
 
 export function compileSandboxed(args: CompileSandboxedArgs): CompileResult {
   try {
-    const closure = validateClosure({ entry: args.entry, dir: args.dir });
+    const closure = validateClosure({
+      entry: args.entry,
+      dir: args.dir,
+      trustedModules: args.trustedModules,
+    });
     return compileValidatedClosure(closure, {
       enforceJsGlobals: args.enforceJsGlobals,
       fingerprintModuleIds: args.fingerprintModuleIds,

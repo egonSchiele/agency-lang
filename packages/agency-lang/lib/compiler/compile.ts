@@ -30,6 +30,10 @@ type CompileSuccess = {
    *  layout ("sub/main.js"), so its relative imports resolve. Absent means
    *  the entry is materialized alone at the root. */
   entryPath?: string;
+  /** Multi-file compiles only: the absolute compiled paths of the trusted
+   *  modules this program loads (docs/dev/runtime/trusted-modules.md),
+   *  sorted. Empty or absent when it loads none. */
+  trustedModules?: string[];
 };
 
 type CompileFailure = {
@@ -71,6 +75,23 @@ function useStableModuleIds(
 // `imports`. We keep `imports` out of the global AgencyConfig because it's
 // only meaningful at this entry point — used when compiling
 // agent-supplied source destined for subprocess execution.
+/** Leave trusted modules out of a module's init awaits. buildCompiledClosure
+ *  reads the mirror, so it keys a trusted module by its mirror path, but the
+ *  host's compiled file registers its init under the host's own source path,
+ *  so an await on the mirror path would find nothing. The closure-wide
+ *  bootstrap in runNode runs every registered init anyway. The cost: an
+ *  entry's `static` initialiser may not read a trusted module's global. */
+function withoutTrustedAwaits(plan: InitPlanForModule, trustedPaths: string[]): InitPlanForModule {
+  if (trustedPaths.length === 0) return plan;
+  const keep = (modules: InitPlanForModule["staticAwaitModules"]) =>
+    modules.filter((module) => !trustedPaths.includes(module.sourceModuleId));
+  return {
+    ...plan,
+    staticAwaitModules: keep(plan.staticAwaitModules),
+    globalAwaitModules: keep(plan.globalAwaitModules),
+  };
+}
+
 export type CompileSourceOptions = AgencyConfig & {
   /**
    * Declarative import policy. Disallowed imports cause compilation to
@@ -94,6 +115,11 @@ export type CompileSourceOptions = AgencyConfig & {
   /** Stable module identity for checkpoint fingerprints. Omit for ephemeral
    * subprocess programs whose generated module id is intentionally random. */
   fingerprintModuleId?: string;
+  /** Import specifiers in this source that name a trusted module, mapped to
+   *  that module's absolute compiled path. Set by compileValidatedClosure
+   *  from the validator's record; each such import is emitted as the
+   *  compiled path instead of a mirrored sibling. */
+  trustedImports?: Record<string, string>;
 };
 
 // Walk every import in the program and reject anything that fails the
@@ -183,12 +209,15 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       }
     }
 
-    // 6. Rewrite import paths
+    // 6. Rewrite import paths. A trusted import becomes the absolute path
+    // of the host's compiled file; the sandbox compiles nothing trusted.
     const strategy = new CompileStrategy({ targetExt: ".js" });
+    const trustedImports = config.trustedImports ?? {};
     liftedProgram.nodes.forEach((node) => {
       if (node.type !== "importStatement") return;
       if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
-      node.modulePath = strategy.rewriteImport(node.modulePath, syntheticPath);
+      const trustedPath = trustedImports[node.modulePath];
+      node.modulePath = trustedPath ?? strategy.rewriteImport(node.modulePath, syntheticPath);
     });
 
     // 6b. Build the closure analysis to detect cycles + populate the
@@ -207,7 +236,12 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
 
     // 7. Generate TypeScript. No output file: this code is loaded from
     // wherever the subprocess writes it, so it records no source file.
-    const mirrorInitPlan = initPlanForModule(closure, syntheticPath);
+    const mirrorInitPlan = withoutTrustedAwaits(
+      initPlanForModule(closure, syntheticPath),
+      Object.keys(trustedImports).map((specifier) =>
+        path.resolve(path.dirname(syntheticPath), specifier),
+      ),
+    );
     const initPlan =
       config.fingerprintModuleId === undefined
         ? mirrorInitPlan

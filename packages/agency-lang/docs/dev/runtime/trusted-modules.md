@@ -130,7 +130,7 @@ own non-writable, non-configurable properties, so an assignment throws and
 (`lib/runtime/agencyFunction.ts`). The runtime's own `isAgencyFunction`
 keeps reading the `__agencyFunction` marker, because a raw JSON copy of a
 function must still read as one for the registry to rebuild it. The
-reasoning, and the limit set by issue #1364, is decision 4 in
+reasoning, and the limit set by issue #974, is decision 4 in
 `docs/dev/security/trusted-modules.md`.
 
 ## How the list reaches a child

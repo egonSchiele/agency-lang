@@ -165,7 +165,7 @@ Agency runtime, which "Why the child loads the host's build" below already
 requires. And the rule holds against anything made from data, not against
 code that calls `Object.defineProperty`, `Reflect`, or `Function` on a real
 instance. A sandboxed program can reach those today, because the sandbox
-does not remove Node's globals from the child (issue #1364). That is a hole
+does not remove Node's globals from the child (issue #974). That is a hole
 in the sandbox, not in workflows: a workflow program is generated from JSON
 and runs no model-written code. Until the containment floor closes it, the
 sandbox's guarantee is Agency-only source at compile time, not no

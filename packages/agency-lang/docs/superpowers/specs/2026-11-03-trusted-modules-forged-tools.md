@@ -21,7 +21,7 @@ The reasoning is decisions 4 and 5 of `docs/dev/security/trusted-modules.md`.
 - A sandboxed program can reach `process`, `globalThis`, and `Function`, so
   the rule holds against data, not against code that calls
   `Object.defineProperty` on a real instance. That is a sandbox hole, filed
-  as issue #1364, and out of scope here.
+  as issue #974, and out of scope here.
 - Fix 1 is as proposed: `trustedModulesForChild` in `lib/runtime/ipc.ts`
   hands the list down only to a program marked as loading a trusted module.
 - Tool calls as effects, which would keep the child from loading host code

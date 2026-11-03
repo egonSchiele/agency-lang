@@ -23,6 +23,7 @@ import {
   SUBPROCESS_DEPTH_CEILING,
   buildRunInstruction,
   buildResumeInstruction,
+  trustedModulesForChild,
 } from "./ipc.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { InvocationUsageMeter } from "./invocationUsage.js";
@@ -140,6 +141,21 @@ describe("trusted modules on the startup instructions", () => {
     });
     expect(run.trustedModules).toEqual(identity.trustedModules);
     expect(resume.trustedModules).toEqual(identity.trustedModules);
+  });
+});
+
+describe("trustedModulesForChild", () => {
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+  const list = [{ source: "/p/src/agent", compiled: "/p/dist/agent" }];
+  const child = { subprocessDepth: 1 } as any;
+
+  it("hands the list down only to a program marked as loading a trusted module", () => {
+    setSubprocessRunInfo({ depth: 1, trustedModules: list });
+    expect(trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js"] })).toEqual(
+      list,
+    );
+    expect(trustedModulesForChild(child, { trustedModules: [] })).toEqual([]);
+    expect(trustedModulesForChild(child, {})).toEqual([]);
   });
 });
 

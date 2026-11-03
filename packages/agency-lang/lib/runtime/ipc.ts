@@ -313,9 +313,10 @@ type SubprocessIdentity = {
   spanContext?: string;
   depth?: number;
   maxDepth?: number;
-  /** This process's own list, unchanged: a child never widens or narrows
-   *  it. Rebuilt from the parent on every segment, run and resume alike,
-   *  never read from a checkpoint. See docs/dev/runtime/trusted-modules.md. */
+  /** This process's own list when the child's program loads a trusted
+   *  module, and empty otherwise (`trustedModulesForChild`); a child never
+   *  widens it. Rebuilt from the parent on every segment, run and resume
+   *  alike, never read from a checkpoint. See docs/dev/runtime/trusted-modules.md. */
   trustedModules?: TrustedModules[];
 };
 
@@ -1323,9 +1324,23 @@ export async function _run(
 
 /** `_run` for a run the caller already holds. Generated code wraps this one
  *  as an AgencyFunction, whose body is handed the run first. */
+/** The list a child may compile against: this process's own when the
+ *  child's program loads a trusted module, which its mark says, and none
+ *  otherwise. A program compiled without the list, such as one a model
+ *  wrote and ran with `runCode`, carries an empty mark, so neither it nor
+ *  any program it runs can reach a trusted directory. Throws when a config
+ *  entry does not resolve. */
+export function trustedModulesForChild(
+  ctx: RuntimeContext<any>,
+  compiled: { trustedModules?: string[] },
+): TrustedModules[] {
+  const loadsHostCode = (compiled.trustedModules ?? []).length > 0;
+  return loadsHostCode ? effectiveTrustedModules(ctx) : [];
+}
+
 export async function _runFor(
   store: Run,
-  compiled: { moduleId: string; code: string },
+  compiled: { moduleId: string; code: string; trustedModules?: string[] },
   node: string,
   args: Record<string, any>,
   wallClock: number,
@@ -1350,11 +1365,10 @@ export async function _runFor(
 
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
-  // The child gets this process's trusted modules unchanged. A config entry
-  // that does not resolve is the run's failure, not a throw.
+  // A config entry that does not resolve is the run's failure, not a throw.
   let trustedModules: TrustedModules[];
   try {
-    trustedModules = effectiveTrustedModules(ctx);
+    trustedModules = trustedModulesForChild(ctx, compiled);
   } catch (error) {
     return failure(error instanceof Error ? error.message : String(error));
   }

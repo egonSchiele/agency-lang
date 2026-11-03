@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import {
   compileAgencyOnly,
   compileSandboxed,
@@ -438,7 +439,7 @@ describe("compileSandboxed with trusted modules", () => {
       const result = compileSandboxed({ entry: { file: "main.agency" }, dir, trustedModules });
       expect(result.success).toBe(true);
       if (!result.success) return;
-      expect(result.code).toContain(JSON.stringify(compiled));
+      expect(result.code).toContain(JSON.stringify(pathToFileURL(compiled).href));
       expect(Object.keys(result.modules ?? {})).toEqual([]);
       expect(result.trustedModules).toEqual([compiled]);
     } finally {

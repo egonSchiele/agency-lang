@@ -13,6 +13,7 @@ import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { pathToFileURL } from "url";
 import { ImportPolicy, isImportAllowed, isStdlibImport, isPkgImport } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
 import { getAllImports } from "@/analysis/imports.js";
@@ -209,15 +210,19 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       }
     }
 
-    // 6. Rewrite import paths. A trusted import becomes the absolute path
-    // of the host's compiled file; the sandbox compiles nothing trusted.
+    // 6. Rewrite import paths. A trusted import becomes a `file:` URL of
+    // the host's compiled file, which Node imports from anywhere whatever
+    // characters the path holds; the sandbox compiles nothing trusted.
     const strategy = new CompileStrategy({ targetExt: ".js" });
     const trustedImports = config.trustedImports ?? {};
     liftedProgram.nodes.forEach((node) => {
       if (node.type !== "importStatement") return;
       if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
       const trustedPath = trustedImports[node.modulePath];
-      node.modulePath = trustedPath ?? strategy.rewriteImport(node.modulePath, syntheticPath);
+      node.modulePath =
+        trustedPath === undefined
+          ? strategy.rewriteImport(node.modulePath, syntheticPath)
+          : pathToFileURL(trustedPath).href;
     });
 
     // 6b. Build the closure analysis to detect cycles + populate the

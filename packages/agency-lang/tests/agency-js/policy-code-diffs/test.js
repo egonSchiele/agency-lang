@@ -6,8 +6,8 @@ import { tmpdir } from "os";
 const dir = mkdtempSync(join(tmpdir(), "policy-code-diffs-"));
 const policyFile = join(dir, "policy.json");
 
-// "a" approves each of the seven interrupts at the menu.
-const answers = ["a", "a", "a", "a", "a", "a", "a"];
+// "a" approves each of the nine interrupts at the menu.
+const answers = ["a", "a", "a", "a", "a", "a", "a", "a", "a"];
 let asked = 0;
 const inputOverride = async () => {
   asked += 1;
@@ -110,4 +110,14 @@ writeFileSync("__result.json", JSON.stringify({
   // The body is shown as written. Rendered as markdown, a link would show
   // only its text and hide the URL the user is approving.
   skillBodyAsWritten: plain.includes("[the docs](https://example.com/x)"),
+  // A workflow draft prints above the prompt with its round. The first
+  // round shows the JSON once, the second a diff against the first, so the
+  // first draft's text appears twice in all and the second's once. The
+  // warning prints once, under the first round, and not in the table.
+  workflowHeader: plain.includes("⏺ Workflow: avgOfThree (round 1 of 3)") &&
+    plain.includes("⏺ Workflow: avgOfThree (round 2 of 3)"),
+  workflowFirstRoundShown: (plain.match(/first-round-marker/g) || []).length === 2,
+  workflowSecondRoundShown: (plain.match(/second-round-marker/g) || []).length === 1,
+  workflowWarningShownOnce:
+    (plain.match(/step sum, result: untyped-warning-marker/g) || []).length === 1,
 }, null, 2));

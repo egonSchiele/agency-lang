@@ -1,0 +1,228 @@
+{
+  "tests": [
+    {
+      "nodeName": "acceptSaves",
+      "description": "accept saves the draft through writeWorkflow, with no null optionals in the file",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",1,1,true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "bareApprovalAccepts",
+      "description": "a bare approval accepts",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "reviewPayload",
+      "description": "the review shows the draft, no previous draft, the warnings, the attempts, and the round",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",2,null,[],1,1,3]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "feedbackRedrafts",
+      "description": "feedback draws a second draft, which shows the first as previous",
+      "input": "",
+      "expectedOutput": "[\"sumTwice\",2,\"doubleSum\",2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"sumTwice\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "editedWorkflowSaves",
+      "description": "an edited workflow that passes the check is saved with no model call",
+      "input": "",
+      "expectedOutput": "[\"editedSum\",1,1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "failedEditIsRedrafted",
+      "description": "an edited workflow that fails the check draws another draft",
+      "input": "",
+      "expectedOutput": "[\"fixedSum\",2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"fixedSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "takenNameIsRedrafted",
+      "description": "a draft named like a saved workflow is redrafted before the review, and the saved one is untouched",
+      "input": "",
+      "expectedOutput": "[\"freshSum\",1,2,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"freshSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectAtReviewWritesNothing",
+      "description": "a rejected review fails the call and writes nothing",
+      "input": "",
+      "expectedOutput": "[true,0,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectAtSaveWritesNothing",
+      "description": "a rejected save fails the call and writes nothing",
+      "input": "",
+      "expectedOutput": "[true,1,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "lastRoundFeedbackFails",
+      "description": "feedback in the last round fails the call with that feedback",
+      "input": "",
+      "expectedOutput": "[true,true,1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "blankFeedbackIsRefused",
+      "description": "blank feedback fails the call",
+      "input": "",
+      "expectedOutput": "[true,0]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    }
+  ]
+}

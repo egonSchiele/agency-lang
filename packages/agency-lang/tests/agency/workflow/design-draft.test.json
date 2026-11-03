@@ -1,0 +1,163 @@
+{
+  "tests": [
+    {
+      "nodeName": "firstDraftPasses",
+      "description": "a draft that passes the check on the first call, with no null optionals and no interrupts for std:: tools",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",1,false,false,[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownToolIsRedrafted",
+      "description": "a draft naming a tool outside the list goes back to the model, and the second passes",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "notJsonIsRedrafted",
+      "description": "a reply that is not JSON goes back to the model, and the second passes",
+      "input": "",
+      "expectedOutput": "[\"doubleSum\",2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{ not json"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "sixFailuresGiveUp",
+      "description": "six failed drafts fail the call with the last problem",
+      "input": "",
+      "expectedOutput": "[true,true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{ not json"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"name\":\"noSteps\"}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"unknown\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"badRef\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.nope\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"badType\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":\"two\",\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"repeated\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "wrongReplyShapeEndsTheCall",
+      "description": "a reply without workflowJson, retried once by the client, ends the call with a shape error",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "answer": 1
+          }
+        },
+        {
+          "return": {
+            "answer": 2
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "localModuleReadOnce",
+      "description": "a local tool module raises one std::read for the whole call, not one per attempt",
+      "input": "",
+      "expectedOutput": "[2,[\"std::read\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"readNotes\",\"description\":\"Find notes by title.\",\"inputs\":\"{ query: string }\",\"steps\":[{\"id\":\"notes\",\"kind\":\"tool\",\"module\":\"./notes.agency\",\"tool\":\"searchAll\",\"args\":{\"query\":{\"$ref\":\"inputs.query\"}}}]}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"findNotes\",\"description\":\"Find notes by title.\",\"inputs\":\"{ query: string }\",\"steps\":[{\"id\":\"notes\",\"kind\":\"tool\",\"module\":\"./notes.agency\",\"tool\":\"searchNotes\",\"args\":{\"query\":{\"$ref\":\"inputs.query\"}}}]}"
+          }
+        }
+      ]
+    }
+  ]
+}

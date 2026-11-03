@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "firstDraftBrief",
+      "description": "the brief lists each tool with its module and parameters, the LLM step section, and the request, with no revision section",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "briefLeavesOutWhatTheRulesForbid",
+      "description": "the brief shows no saved-file wrapper, no file name, and no limits",
+      "input": "",
+      "expectedOutput": "[false,false,false,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "revisionComesLast",
+      "description": "a problem adds the previous draft and what was wrong with it after the request",
+      "input": "",
+      "expectedOutput": "[true,true,true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

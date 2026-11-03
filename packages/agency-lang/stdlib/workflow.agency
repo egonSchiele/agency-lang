@@ -1,4 +1,8 @@
-import { describe, run, CompiledProgram, ExportInfo, ModuleInfo } from "std::agency"
+// ExportParam is never named here. A schema built from ExportInfo refers to
+// it by name, and the compiler does not import it on its own, so the
+// module fails to load without this import.
+import { describe, run, CompiledProgram, ExportInfo, ExportParam, ModuleInfo } from "std::agency"
+import { llmOptions } from "std::agents/lib/shared"
 import { now, format } from "std::date"
 import { read } from "std::index"
 import { filterEntries } from "std::object"
@@ -23,6 +27,7 @@ import {
   _compileTrusted,
   _describeTrusted,
   _typecheckTrusted,
+  describeProblem,
 } from "agency-lang/stdlib-lib/workflow/index.js"
 
 /** @module
@@ -72,6 +77,10 @@ Use `writeWorkflow` to save under `<dir>/workflows`, then `loadWorkflow` or
 `listWorkflows` to read saved workflows. `workflowTool` and `workflowTools`
 expose workflows as tools for an LLM. `catalog` describes available tool
 parameters, return types, and effects for workflow authors.
+
+`designWorkflow` has a model draft a workflow from a request, shows each
+draft for review, and saves the accepted one. `draftWorkflow` makes one
+checked draft for a host that reviews and saves workflows itself.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
@@ -223,6 +232,25 @@ export idempotent def compileWorkflow(workflow: Workflow, tools: any[], dir: str
 @capabilities(fileRead)
 export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Checked, WorkflowFailure> {
   const compiled = _compileWithRanges(workflow, tools, dir)?
+  return checkCompiled(compiled, dir)
+}
+
+/** `_checked` with the tools already described, so checking draft after
+  draft does not read the tool modules again. */
+@hidden
+@capabilities(fileRead)
+export def _checkedWith(
+  workflow: Workflow,
+  refs: ToolRef[],
+  signatures: Record<string, ExportInfo>,
+  dir: string,
+): Result<Checked, WorkflowFailure> {
+  const compiled = _compileWorkflowSource(workflow, refs, signatures)?
+  return checkCompiled(compiled, dir)
+}
+
+@capabilities(fileRead)
+def checkCompiled(compiled: Compiled, dir: string): Result<Checked, WorkflowFailure> {
   const source = compiled.source
   // The typecheck runs first: its errors carry a line and a payload, so each
   // one is mapped to its step and field. A strict compile reports the same
@@ -306,13 +334,32 @@ export idempotent def catalog(tools: any[], dir: string = ""): Result<CatalogEnt
   @param tools - Original exported Agency functions to describe.
   @param dir - Directory containing any local tool modules and resolving their paths.
   """
+  const described = describeTools(tools, dir)?
+  return success(described.entries)
+}
+
+/** The tools as import references, what `describe` says about each, and
+  their catalog entries: everything the designer needs from the tool
+  modules, read once. */
+type DescribedTools = {
+  refs: ToolRef[];
+  signatures: Record<string, ExportInfo>;
+  entries: CatalogEntry[]
+}
+
+@capabilities(fileRead)
+def describeTools(tools: any[], dir: string): Result<DescribedTools> {
   const refs = _toolRefs(tools, dir)?
   const signatures = _signatures(refs, dir)
   if (signatures is failure) {
     // Returned as it came, so a rejected read keeps its `rejected` flag.
     return signatures
   }
-  return success(_catalogEntries(tools, refs, signatures.value))
+  return success({
+    refs: refs,
+    signatures: signatures.value,
+    entries: _catalogEntries(tools, refs, signatures.value)
+  })
 }
 
 /**
@@ -520,6 +567,20 @@ export def _inputsSchema(program: CompiledProgram): Result<Json> {
   return success(ran.value.data)
 }
 
+// The optional fields of a workflow. A shape check (`Workflow!`) fills each
+// one with null when it is absent, and null means the same as absent.
+static const OPTIONAL_FIELDS = ["result", "limits", "raises"]
+
+def isWritten(value: Json, key: string): boolean {
+  return value != null || !OPTIONAL_FIELDS.includes(key)
+}
+
+// Drops the nulls a shape check filled in, so a saved file carries only
+// the fields someone wrote, not `"limits": null`.
+def withoutNullOptionals(workflow: Workflow): Workflow {
+  return filterEntries(workflow, isWritten)
+}
+
 /**
 Checks the workflow before requesting save approval. It then derives the
 input schema in a subprocess and saves it alongside the workflow.
@@ -539,13 +600,14 @@ export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<
   if (!exists(root)) {
     return failure("${root} does not exist; dir must name an existing project directory")
   }
+  const saving = withoutNullOptionals(workflow)
   // The check also proves `name` is an identifier, so it is safe in a file name.
-  const checked = _checked(workflow, tools, root)?
+  const checked = _checked(saving, tools, root)?
   const folder = "${root}/${WORKFLOWS_DIR}"
-  return interrupt std::workflow::save("Save the workflow ${workflow.name}?", {
+  return interrupt std::workflow::save("Save the workflow ${saving.name}?", {
     dir: folder,
-    name: workflow.name,
-    workflow: workflow
+    name: saving.name,
+    workflow: saving
   })
   // After the save prompt, so a rejected save starts no process, and
   // before the write, so a rejected `std::run` leaves nothing on disk.
@@ -555,16 +617,16 @@ export def writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<
     savedBy: "writeWorkflow",
     inputsSchema: inputsSchema
   }
-  const file = savedFile(workflow.name)
+  const file = savedFile(saving.name)
   destructive {
     const made = try _mkdir(folder)?
-    const content = JSON.stringify({ workflow: workflow, meta: meta }, null, 2)
+    const content = JSON.stringify({ workflow: saving, meta: meta }, null, 2)
     const wrote = try _write(root, file, content, "overwrite")?
   }
   return success({
-    name: workflow.name,
+    name: saving.name,
     path: "${root}/${file}",
-    workflow: workflow,
+    workflow: saving,
     meta: meta
   })
 }
@@ -655,6 +717,24 @@ def isVisible(fileName: string): boolean {
   return !fileName.startsWith(".")
 }
 
+// The names saved under `<root>/workflows`, from the file names alone. It
+// reads no saved file, so it asks nothing, as `exists` asks nothing before
+// `loadWorkflow`'s prompt. The designer uses it to refuse a draft that
+// would replace a saved workflow.
+@capabilities(fileRead)
+def savedWorkflowNames(root: string): Result<string[]> {
+  const folder = "${root}/${WORKFLOWS_DIR}"
+  if (!exists(folder)) {
+    return success([])
+  }
+  // One more than the cap, so a folder that full is refused, not cut short.
+  const fileNames = try _glob(root, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)?
+  if (fileNames.length > MAX_WORKFLOWS) {
+    return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
+  }
+  return success(map(filter(fileNames, isVisible), workflowName))
+}
+
 /**
 A project without a workflows folder returns an empty list. An unreadable
 or invalid saved file fails the listing with a message naming it.
@@ -674,17 +754,469 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> raises <std::work
   return interrupt std::workflow::scan("Read the workflows saved in this project?", {
     dir: folder
   })
-  // One more than the cap, so a folder that full is refused, not cut short.
-  const fileNames = try _glob(root, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)?
-  if (fileNames.length > MAX_WORKFLOWS) {
-    return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
-  }
-  const unsorted = map(filter(fileNames, isVisible), workflowName)
-  const names = sortBy(unsorted, \name -> name)
+  const names = sortBy(savedWorkflowNames(root)?, \name -> name)
   const entries = map(names, \name -> entryFor(root, name))
   const broken = find(entries, \entry -> isFailure(entry))
   if (broken != null) {
     return broken
   }
   return success(map(entries, \entry -> entry.value))
+}
+
+// ---- designing a workflow ----
+
+// The first part of the designer's brief. It is a `"""` string, so `${`
+// starts an interpolation: write `\${` for a literal one, as the `greet`
+// example does. It shows the workflow object as the model is asked to
+// write it, without the saved file's outer `workflow` field, and leaves
+// out limits, which a host adds at its own save.
+static const DESIGN_TUTORIAL = """
+A workflow is a fixed list of steps written as JSON. Each step is either a tool call or an LLM call. The steps are compiled to an Agency program and run in order.
+
+## Your first workflow
+
+This workflow adds two numbers and doubles the sum, using the `add` and `multiply` tools from the `std::math` module in Agency's standard library.
+
+```json
+{
+  "format": 1,
+  "name": "doubleSum",
+  "description": "Add two numbers and double the sum.",
+  "inputs": "{ a: number; b: number }",
+  "steps": [
+    {
+      "id": "sum",
+      "kind": "tool",
+      "module": "std::math",
+      "tool": "add",
+      "args": {
+        "a": { "$ref": "inputs.a" },
+        "b": { "$ref": "inputs.b" }
+      }
+    },
+    {
+      "id": "doubled",
+      "kind": "tool",
+      "module": "std::math",
+      "tool": "multiply",
+      "args": {
+        "a": { "$ref": "steps.sum" },
+        "b": 2
+      }
+    }
+  ],
+  "result": { "$ref": "steps.doubled" }
+}
+```
+
+Things to note:
+- `format` is always 1.
+- `inputs` declares an Agency object type as text. Here, callers must supply two numbers.
+- Each step has a unique `id`.
+- A `tool` step names the function's module, the function, and its arguments. In Agency, functions are tools.
+
+The workflow runs its steps in order. `sum` adds the two inputs, then `doubled` multiplies that result by `2`.
+
+## Passing values between steps
+
+```json
+{
+  "noteId": { "$ref": "steps.notes[0].id" },
+  "title": { "$ref": "inputs.title" },
+  "tags": ["shopping", { "$ref": "inputs.category" }]
+}
+```
+
+This argument object combines literal values and references. References work in a tool step's `args`, an LLM step's `context`, and the workflow's `result`. You can nest them in objects and arrays.
+
+## Adding an LLM step
+
+An LLM step asks a model. This step, added after `doubled` in the first example, explains the result:
+
+```json
+{
+  "id": "explain",
+  "kind": "llm",
+  "prompt": "Explain how adding the two inputs and doubling their sum gives the result. Use one short sentence.",
+  "context": [
+    { "$ref": "inputs.a" },
+    { "$ref": "inputs.b" },
+    { "$ref": "steps.doubled" }
+  ],
+  "output": "{ explanation: string }"
+}
+```
+
+Things to note:
+- The prompt text is literal. Put values that change in `context`, not in the prompt.
+- The model receives the prompt followed by the context values, each with a label. Strings keep their text, and other values become JSON. Write `"context": []` when there is no context.
+- `output` is an Agency type written as text, such as `"string"`, `"string[]"`, or `"{ title: string; items: string[] }"`. The model's reply has that type, and it is the step's value. A later reference reads a field of it, such as `{ "$ref": "steps.explain.explanation" }`.
+- An LLM step gets no tools.
+
+## Result types
+
+Agency uses Result types for error handling. Functions can return either a success or a failure.
+
+If a function that you use in a workflow returns a `Result`, Agency unwraps the `Result` for you. If the Result is a failure, the workflow stops and returns a failure naming that step.
+
+## Returning a value from the workflow
+
+The `result` field chooses what the workflow returns. If you leave it out, the workflow returns the last step's value. You can return a value assembled from several references:
+
+```json
+"result": {
+  "sum": { "$ref": "steps.sum" },
+  "doubled": { "$ref": "steps.doubled" }
+}
+```
+
+## Calling functions from local files
+
+Suppose a project has this function in `tools.agency`:
+
+```ts
+export def greet(name: string): string {
+  return "Hello, \${name}!"
+}
+```
+
+A step calls it by the module path:
+
+```json
+{
+  "id": "greeting",
+  "kind": "tool",
+  "module": "./tools.agency",
+  "tool": "greet",
+  "args": { "name": { "$ref": "inputs.name" } }
+}
+```
+
+Use each tool's module exactly as the tool list gives it.
+"""
+
+/** A draft as text, and what was wrong with it. The next draft is asked to
+  fix it. It holds a draft that failed the check, the draft a person gave
+  feedback on, or an edited workflow that failed the check. */
+export type DraftProblem = {
+  draft: string;
+  problems: string
+}
+
+def renderParam(param: CatalogParam): string {
+  const type = param.type ?? "any"
+  const dflt = if param.default == null then "" else " = ${param.default}"
+  const desc = if param.description == null then "" else " — ${param.description}"
+  return "  - ${param.name}: ${type}${dflt}${desc}"
+}
+
+def renderEntry(entry: CatalogEntry): string {
+  const params = if entry.params.length == 0 then "  (none)" else map(entry.params, renderParam).join("\n")
+  const returns = entry.returns ?? "any"
+  const effects = if entry.effects.length == 0 then "none" else entry.effects.join(", ")
+  return "### ${entry.name} (module \"${entry.module}\")\n${entry.description}\nParameters:\n${params}\nReturns: ${returns}\nEffects: ${effects}"
+}
+
+def revisionSection(problem: DraftProblem | null): string {
+  if (problem == null) {
+    return ""
+  }
+  return """
+# The previous draft
+${problem.draft}
+
+# What is wrong with it
+${problem.problems}
+
+Write a new draft that fixes every point above and keeps what was right.
+"""
+}
+
+/**
+The brief has three parts: a tutorial on the workflow format, the tools as
+`catalog` describes them, and the request with the rules for a draft. A
+`problem` adds the previous draft and what was wrong with it at the end.
+Read it to see what the designer's model is told, or to measure its length
+over a large tool list.
+*/
+export def workflowDesignBrief(request: string, entries: CatalogEntry[], problem: DraftProblem | null = null): string {
+  """
+  Build the prompt the workflow designer sends to its model.
+
+  @param request - What the workflow should do, and which values change between runs.
+  @param entries - The tools a step may call, as `catalog` returns them.
+  @param problem - A previous draft and what was wrong with it, or null for a first draft.
+  """
+  const catalogText = map(entries, renderEntry).join("\n\n")
+  return """
+Write a workflow in Agency's JSON format that does what the request asks.
+
+# How workflows are written
+${DESIGN_TUTORIAL}
+
+# The tools the workflow may call
+The examples above use tools that may not exist here. A step may call only the tools below, by the exact module and name given.
+
+${catalogText}
+
+# The request
+${request}
+
+Rules:
+- Values that change from run to run are inputs. Everything else is a literal in a step's args.
+- When the request leaves out something a step needs, such as which list or which folder, make it an input and say so in the description. Do not guess it.
+- Pick a short camelCase identifier for the name, and a one-sentence description.
+- Reply with the workflow object only, as JSON text. Do not wrap it in another object, and do not add limits.
+${revisionSection(problem)}
+"""
+}
+
+/** The model's reply. The workflow is JSON text, not a `Workflow`: its
+  `Json` fields become open schemas, which Anthropic and OpenAI refuse in
+  a structured reply. */
+type WorkflowDraftReply = {
+  workflowJson: string
+}
+
+/** A draft that passed the check, with the check's warnings. */
+type CheckedDraft = {
+  workflow: Workflow;
+  warnings: WorkflowProblem[]
+}
+
+/** A drafted workflow that passed the check. */
+export type WorkflowDraft = {
+  workflow: Workflow;
+  /** What the check could not settle until the workflow runs. */
+  warnings: WorkflowProblem[];
+  /** Model calls the draft took to pass the check. */
+  attempts: number
+}
+
+// Check failures go back to the model without the user, up to this many
+// times per draft, as `designTool`'s CHECK_ATTEMPTS. Feedback from the
+// user starts a new draft.
+static const DESIGN_ATTEMPTS = 6
+
+/** The check's problems, one line each, or its message when it named none. */
+def problemsText(failed: any): string {
+  const problems = failed.data.problems
+  if (problems == null) {
+    return "- ${failed.error}"
+  }
+  return map(problems, \problem -> "- ${describeProblem(problem)}").join("\n")
+}
+
+def draftFailure(draft: string, problems: string): Result<CheckedDraft, DraftProblem> {
+  return failure("the draft has problems:\n${problems}", { draft: draft, problems: problems })
+}
+
+// One draft through every stage: JSON, the workflow's shape, the check, and
+// the name. A failure at any stage is a DraftProblem holding the text as
+// written, so the next attempt sees what it wrote and what was wrong.
+@capabilities(fileRead)
+def attemptDraft(text: string, tools: DescribedTools, root: string, savedNames: string[]): Result<CheckedDraft, DraftProblem> {
+  const parsed = try JSON.parse(text)
+  if (parsed is failure(parseErr)) {
+    return draftFailure(text, "- The reply is not valid JSON: ${parseErr}")
+  }
+  const shaped: Workflow! = parsed.value
+  if (shaped is failure(shapeErr)) {
+    return draftFailure(text, "- The workflow has the wrong shape: ${shapeErr}")
+  }
+  const workflow = withoutNullOptionals(shaped.value)
+  const checked = _checkedWith(workflow, tools.refs, tools.signatures, root)
+  if (checked is failure) {
+    return draftFailure(text, problemsText(checked))
+  }
+  if (savedNames.includes(workflow.name)) {
+    return draftFailure(text, "- A workflow named ${workflow.name} is already saved. Choose another name.")
+  }
+  return success({ workflow: workflow, warnings: checked.value.warnings })
+}
+
+// The last problem's text, for the failure after a loop that never passed.
+def lastProblems(problem: DraftProblem | null): string {
+  if (problem == null) {
+    return "(none)"
+  }
+  return problem.problems
+}
+
+// One draft: up to DESIGN_ATTEMPTS model calls, each one seeing the problem
+// the previous one left. A reply that is still the wrong shape after the
+// client's own retry ends the call, since the provider and not the draft
+// is wrong.
+@capabilities(fileRead)
+def draftFrom(
+  request: string,
+  tools: DescribedTools,
+  root: string,
+  savedNames: string[],
+  revise: DraftProblem | null,
+  options: any,
+): Result<WorkflowDraft> {
+  let problem: DraftProblem | null = revise
+  for (attempt in range(DESIGN_ATTEMPTS)) {
+    const brief = workflowDesignBrief(request, tools.entries, problem)
+    const reply: WorkflowDraftReply! = llm(brief, options)
+    if (reply is failure(replyErr)) {
+      return failure("the model's reply had the wrong shape: ${replyErr}")
+    }
+    const attempted = attemptDraft(reply.value.workflowJson, tools, root, savedNames)
+    if (attempted is success(drafted)) {
+      return success({ workflow: drafted.workflow, warnings: drafted.warnings, attempts: attempt + 1 })
+    }
+    problem = attempted.data
+    print("draftWorkflow: attempt ${attempt + 1} failed the check:\n${lastProblems(problem)}")
+  }
+  return failure("no draft passed the check in ${DESIGN_ATTEMPTS} attempts; the last problems were:\n${lastProblems(problem)}")
+}
+
+/**
+Use this when the host reviews and saves workflows itself. It makes one
+draft and raises no interrupt of its own: reading the tools' local modules
+asks with `std::read`, once per module. Problems the check finds go back to
+the model, up to six times. To redraft after a person's feedback, pass
+`revise` with the draft they saw as JSON text and their words as
+`problems`.
+*/
+@capabilities(fileRead)
+export def draftWorkflow(
+  request: string,
+  tools: any[],
+  dir: string,
+  revise: DraftProblem | null = null,
+  model: string = "",
+  provider: string = "",
+): Result<WorkflowDraft> raises <std::read> {
+  """
+  Draft a workflow over these tools from a request, and check it.
+
+  @param request - What the workflow should do, and which values change between runs.
+  @param tools - Original exported Agency functions the steps may call.
+  @param dir - Existing project directory containing any local tool modules.
+  @param revise - A previous draft and what to change in it, or null for a first draft.
+  @param model - Model override, or "" for the configured model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  """
+  const root = expandRoot(dir)?
+  const described = describeTools(tools, root)?
+  const options = llmOptions(model, provider, validationRetries: 1)
+  return draftFrom(request, described, root, [], revise, options)
+}
+
+/** Raised with each draft that passed the check, before it is saved. The
+  answer is a bare approval or `accept` to save the draft, feedback text for
+  the next draft, or an edited workflow, which is checked and saved without
+  another draft. The raise expects a value, so a policy rule cannot answer
+  it: a handler or a person does. */
+effect std::workflow::review {
+  name: string;
+  workflow: Workflow;
+  /** The draft the previous round showed, or null on the first round. */
+  previous: Workflow | null;
+  warnings: WorkflowProblem[];
+  /** Model calls this draft took to pass the check. */
+  attempts: number;
+  /** This round, counting from 1. Feedback given in the last round is not drafted. */
+  round: number;
+  maxRounds: number
+}
+
+static const ACCEPT_DESIGN = "accept"
+
+/** What a review answer asks for. */
+type ReviewAnswer = {
+  kind: "accept"
+} | {
+  kind: "feedback";
+  text: string
+} | {
+  kind: "edited";
+  workflow: Workflow
+}
+
+def reviewAnswer(answer: any): Result<ReviewAnswer> {
+  if (answer == null || answer == ACCEPT_DESIGN) {
+    return success({ kind: "accept" })
+  }
+  if (typeof answer == "string") {
+    if (answer.trim() == "") {
+      return failure("feedback for the next draft cannot be blank")
+    }
+    return success({ kind: "feedback", text: answer })
+  }
+  const edited: Workflow! = answer
+  if (edited is failure(shapeErr)) {
+    return failure("unrecognized review answer: answer \"${ACCEPT_DESIGN}\", give feedback as text, or send back an edited workflow. The edited workflow has the wrong shape: ${shapeErr}")
+  }
+  return success({ kind: "edited", workflow: edited.value })
+}
+
+/**
+Shows each draft in a `std::workflow::review` interrupt and saves the
+accepted one with `writeWorkflow`, which asks with `std::workflow::save`.
+Problems the check finds go back to the model without asking anyone. A
+draft never takes the name of a workflow already saved in `dir`. Answer
+the review with `accept`, with feedback for the next draft, or with an
+edited workflow, which is checked and saved without another draft.
+*/
+@capabilities(fileRead, fileWrite, subprocess)
+export def designWorkflow(
+  request: string,
+  tools: any[],
+  dir: string,
+  maxRounds: number = 3,
+  model: string = "",
+  provider: string = "",
+): Result<WorkflowEntry> raises <std::workflow::review, std::workflow::save, std::read, std::run, std::guard> {
+  """
+  Draft a workflow over these tools from a request, show it for review, revise it on feedback, and save it once accepted.
+
+  @param request - What the workflow should do, and which values change between runs.
+  @param tools - Original exported Agency functions the steps may call.
+  @param dir - Existing project directory; the workflow is saved under its workflows folder.
+  @param maxRounds - How many drafts the user may see before the call fails.
+  @param model - Model override, or "" for the configured model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  """
+  const root = expandRoot(dir)?
+  if (!exists(root)) {
+    return failure("${root} does not exist; dir must name an existing project directory")
+  }
+  const described = describeTools(tools, root)?
+  const savedNames = savedWorkflowNames(root)?
+  const options = llmOptions(model, provider, validationRetries: 1)
+  let revise: DraftProblem | null = null
+  let previous: Workflow | null = null
+  for (round in range(maxRounds)) {
+    const drafted = draftFrom(request, described, root, savedNames, revise, options)?
+    print("designWorkflow: round ${round + 1} draft '${drafted.workflow.name}' passed the check after ${drafted.attempts} attempt(s)")
+    const answer = interrupt std::workflow::review("Review this workflow before it is saved: answer accept, give feedback for the next draft, or send back an edited workflow", {
+      name: drafted.workflow.name,
+      workflow: drafted.workflow,
+      previous: previous,
+      warnings: drafted.warnings,
+      attempts: drafted.attempts,
+      round: round + 1,
+      maxRounds: maxRounds
+    })
+    const decided = reviewAnswer(answer)?
+    if (decided.kind == "accept") {
+      return writeWorkflow(drafted.workflow, tools, root)
+    }
+    if (decided.kind == "feedback") {
+      revise = { draft: JSON.stringify(drafted.workflow, null, 2), problems: decided.text }
+    }
+    if (decided.kind == "edited") {
+      const edit = attemptDraft(JSON.stringify(decided.workflow, null, 2), described, root, savedNames)
+      if (edit is success(checked)) {
+        return writeWorkflow(checked.workflow, tools, root)
+      }
+      revise = edit.data
+    }
+    previous = drafted.workflow
+  }
+  return failure("no draft was accepted in ${maxRounds} rounds; the last problems were:\n${lastProblems(revise)}")
 }

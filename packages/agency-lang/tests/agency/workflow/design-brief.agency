@@ -1,0 +1,45 @@
+// The designer's brief: the tutorial, the tools as the catalog describes
+// them, and the request with its rules. No node here calls a model.
+import { catalog, workflowDesignBrief, DraftProblem } from "std::workflow"
+import { add, round } from "std::math"
+import { Json } from "std::validation"
+
+def brief(problem: DraftProblem | null): string {
+  const entries = catalog([add, round]) catch []
+  return workflowDesignBrief("Average three numbers.", entries, problem)
+}
+
+node firstDraftBrief(): Json {
+  const text = brief(null)
+  return [
+    text.includes("### add (module \"std::math\")"),
+    text.includes("### round (module \"std::math\")"),
+    text.includes("  - precision: number = 0 — Number of digits after the decimal point."),
+    text.includes("## Adding an LLM step"),
+    text.includes("Average three numbers."),
+    text.includes("# The previous draft")
+  ]
+}
+
+// The tutorial shows the object the model writes: no saved-file wrapper,
+// no file names, and no limits.
+node briefLeavesOutWhatTheRulesForbid(): Json {
+  const text = brief(null)
+  return [
+    text.includes("\"workflow\": {"),
+    text.includes("workflows/"),
+    text.includes("maxTime"),
+    text.includes("Setting limits")
+  ]
+}
+
+node revisionComesLast(): Json {
+  const text = brief({ draft: "{ \"name\": \"avg\" }", problems: "- step sum, tool: no tool named sum" })
+  const draftAt = text.indexOf("# The previous draft")
+  return [
+    draftAt > text.indexOf("# The request"),
+    text.includes("{ \"name\": \"avg\" }"),
+    text.includes("- step sum, tool: no tool named sum"),
+    text.trim().endsWith("keeps what was right.")
+  ]
+}

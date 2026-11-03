@@ -132,10 +132,11 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 `writeWorkflow` checks, asks, then writes:
 
-1. `_checked`, the generate, typecheck, and compile `runWorkflow` also runs. A workflow with problems fails here and raises nothing. The check also proves `name` is an identifier, so it is safe in a file name.
-2. `std::workflow::save`. A rejection writes nothing.
-3. `_inputsSchema`, which runs the program's `inputsSchema` node with `run` from `std::agency`. `run` raises `std::run`, and a rejection writes nothing.
-4. One `_write` of the file, inside a `destructive { }` region. `_write` raises no prompt of its own.
+1. `withoutNullOptionals`, which drops `result`, `limits`, and `raises` when they are null. A shape check (`Workflow!`) fills each absent optional field with null, and the generator reads null as absent. Without this step, a workflow that went through `loadWorkflow` or the designer would be saved with `"limits": null` that no one wrote.
+2. `_checked`, the generate, typecheck, and compile `runWorkflow` also runs. A workflow with problems fails here and raises nothing. The check also proves `name` is an identifier, so it is safe in a file name.
+3. `std::workflow::save`. A rejection writes nothing.
+4. `_inputsSchema`, which runs the program's `inputsSchema` node with `run` from `std::agency`. `run` raises `std::run`, and a rejection writes nothing.
+5. One `_write` of the file, inside a `destructive { }` region. `_write` raises no prompt of its own.
 
 So a save asks twice. `std::run` has no `@always` tag, so an "always" answer to `save` does not cover it, and its prompt names the program's module and the node `inputsSchema`, not the workflow. The `recommended` policy approves `std::run`; under `minimal` or `--interactive`, every save shows both prompts.
 
@@ -319,3 +320,53 @@ Both functions refuse a workflow named like one of `tools`, through one helper, 
 The tool's `dir` is `resolve(dir)`, the absolute path `runWorkflow` names in its `std::workflow::run` payload. An "always" answer given to a direct `runWorkflow` call therefore covers the tool's calls too.
 
 The tool keeps its schema across a checkpoint: `.withParamSchema` records the schema in the function value's `paramSchemas`, and the reviver applies it again (see [checkpointing.md](../runtime/checkpointing.md)).
+
+## Designing a workflow
+
+`designWorkflow(request, tools, dir)` turns a sentence into a saved workflow. A model drafts the workflow, the check's problems go back to the model until a draft passes, a person reviews the draft, and `writeWorkflow` saves it.
+
+```
+designWorkflow(request, tools, dir)
+  │
+  ├─ describeTools(tools, dir)    read each local tool module once
+  ├─ savedWorkflowNames(root)     the names already saved
+  │
+  │  ┌─ round (up to maxRounds, 3 by default) ─────────────────┐
+  │  │  draftFrom: up to 6 attempts, no person involved          │
+  │  │    llm(brief) → JSON.parse → Workflow! → drop nulls       │
+  │  │    → _checkedWith → name not already saved                │
+  │  │    a failure becomes the next attempt's DraftProblem      │
+  │  │                                                           │
+  │  │  std::workflow::review                                    │
+  │  │    accept or a bare approval → writeWorkflow              │
+  │  │    feedback text → next round                             │
+  │  │    an edited workflow → attemptDraft on it                │
+  │  │        passes → writeWorkflow, no model call              │
+  │  │        fails → next round, with its problems              │
+  │  └───────────────────────────────────────────────────────────┘
+  └─ Result<WorkflowEntry>
+```
+
+**The brief.** `workflowDesignBrief(request, entries, problem)` has three parts: `DESIGN_TUTORIAL`, the catalog entries rendered as text, and the request with the rules. The tutorial is the guide cut down to what a model writes. Its first example is the bare workflow object, not the saved file's `{ "workflow": ... }`, and it has no limits section, because the rules forbid both and small models copy examples. It says nothing about file names, because a designer never names a file. It is a `"""` string, so a literal `${` in it is written `\${`. A `DraftProblem` (the previous draft as text and what was wrong with it) adds a revision section at the end.
+
+**Why the reply is text.** The model replies with `{ workflowJson: string }`, and the designer parses the string. `Workflow` has `Json` fields, which become open schemas, and Anthropic and OpenAI refuse open schemas in a structured reply. The call passes `validationRetries: 1` through `llmOptions`, so the client asks once more when a reply is not `{ workflowJson }`. A reply still the wrong shape after that ends the call: the provider is at fault, not the draft.
+
+**One attempt.** `attemptDraft` is the one place that knows the stages: parse, `Workflow!`, `withoutNullOptionals`, `_checkedWith`, then the name. Every failure is a `DraftProblem` holding the text as the model wrote it, so the next attempt sees its own draft and what was wrong with it. Six attempts per round, the same as `designTool`'s `CHECK_ATTEMPTS`. A check problem is a fact the person cannot act on, so they only see a draft that passed.
+
+**Reading the tools once.** `_checked` describes the tools again on every call, and describing a local module reads it with `std::read`. With 3 rounds of 6 attempts that would be up to 18 rounds of read prompts in an interactive run, and as many `describe` calls. So `describeTools` computes the import references, the signatures, and the catalog entries once, and the attempts call `_checkedWith(workflow, refs, signatures, dir)`. `_checked` and `_checkedWith` share `checkCompiled`, the typecheck and compile. `catalog` is `describeTools` returning its entries. The typecheck still reads the local files, without prompts, as it always has. `writeWorkflow` runs the full `_checked` once more before its save prompt.
+
+**Taken names.** The model picks the name, and saving a name that exists replaces that workflow. A designed workflow is always a new one, so `designWorkflow` lists the names already saved (`savedWorkflowNames`) and a draft with one of them goes back to the model. The listing reads file names only, and no saved file, so it raises no `std::workflow::scan`, in the same way `loadWorkflow` calls `exists` before its prompt. `listWorkflows` uses the same function after its prompt.
+
+**The review.** `std::workflow::review` carries the draft, the previous round's draft (null on the first round), the check's warnings, the attempt count, and `round` and `maxRounds`. Feedback given in the last round is never drafted, so a host can say so. The raise is assigned to a variable, so it expects a value, and `cliPolicyHandler` never lets a policy rule approve such a raise (`policy.agency`, the `expectsValue` check). Only a handler or a person accepts a draft, which is why the save is the interrupt a policy pins. The answer is read by `reviewAnswer`:
+
+- null (a bare `approve()`) or `"accept"`: save.
+- a string: feedback. The next round's `DraftProblem` is this draft as JSON and the feedback. Blank feedback fails the call.
+- an object: an edited workflow, checked with `Workflow!` and then `attemptDraft`. If it passes, it is saved with no model call. If it fails, its problems start the next round, and the person sees the model's version, not their own edit.
+
+A rejected review fails the call and writes nothing. Accepting raises two interrupts, the review and then `writeWorkflow`'s save.
+
+The interactive prompt renders the review in `renderWorkflowDraft` (`policy.agency`): the draft as JSON on the first round, a diff against the previous draft after that, and the warnings under either. `PROMPT_HIDDEN_FIELDS` keeps the three from printing again in the prompt's table.
+
+**`draftWorkflow`, for hosts that save elsewhere.** A host with its own storage, such as BMO, calls `draftWorkflow(request, tools, dir, revise)`. It is `describeTools` and `draftFrom` with no review and no save, and it raises nothing of its own beyond the reads. It checks no saved names, because it cannot know the host's. The host runs its own review and passes the person's feedback back as `revise`.
+
+**`ExportParam` in the import line.** `std::workflow` imports `ExportParam` from `std::agency` without naming it. `DescribedTools` and `_checkedWith`'s parameter hold `Record<string, ExportInfo>`, and the schema the compiler builds for them inlines `ExportInfo`, which refers to `ExportParam` by name. The compiler does not import that name on its own, so without the import the module fails to load with `ExportParam is not defined`.

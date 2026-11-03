@@ -195,6 +195,8 @@ describe("builtinPolicy", () => {
         "std::skills::review",
         "std::toolbox::save",
         "std::toolbox::review",
+        "std::workflow::save",
+        "std::workflow::review",
         "std::llm::registerProvider",
       ]) {
         expect(p[effect]).toBeUndefined();

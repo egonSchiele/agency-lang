@@ -20,7 +20,8 @@ that function from a step.
 
 ## Your first workflow
 
-This example adds two numbers and doubles the sum. It makes no LLM calls.
+This example adds two numbers and doubles the sum.
+
 Start in a project where you have [installed Agency](/guide/getting-started).
 You can inspect the functions available in a module:
 
@@ -69,7 +70,7 @@ Create a `workflows` folder in your project. Save this as
 ```
 
 The outer `workflow` field is the saved-file format. The object inside it is
-the workflow itself. Its name must match the filename without `.json`.
+the workflow itself. The workflow name must match the filename without `.json`.
 
 `inputs` declares an Agency object type as text. Here, callers must supply two
 numbers. Each step has a unique `id`. A `tool` step names the function's module,
@@ -393,6 +394,51 @@ To expose one workflow already in memory, use
 `workflowTool(workflow, tools, dir)` instead. It checks the workflow and derives
 the inputs schema immediately. Workflow names must not clash with names in
 the supplied functions.
+
+## Letting an agent draft a workflow
+
+`designWorkflow` writes a workflow from a sentence. Save this as
+`design.agency` beside `host.agency`:
+
+```ts
+import { designWorkflow } from "std::workflow"
+import { add, multiply, divide, round } from "std::math"
+
+node main(): Result {
+  const request = "Average three numbers, rounded to two decimal places."
+  return designWorkflow(request, [add, multiply, divide, round], __dirname)
+}
+```
+
+```bash
+agency run --interactive design.agency
+```
+
+A model drafts the workflow from the request and the functions you list.
+Agency checks each draft and sends any problems back to the model, so you only
+see a draft that passed the check. Then you review it, with three possible
+answers:
+
+- `accept` saves it with `writeWorkflow`, which asks with
+  `std::workflow::save` as usual.
+- Any other text is feedback, such as "make the precision an input". The
+  model writes a new draft that follows it.
+- From your own code, you can approve the review with an edited workflow
+  object. Agency checks it and saves it without asking the model again.
+
+After three drafts the call fails; set `maxRounds` to allow more. A draft never
+takes the name of a workflow already saved in the project. Values the request
+leaves open, such as which folder to read, become inputs.
+
+The review is the `std::workflow::review` interrupt. It expects an answer, so a
+policy rule cannot accept a draft: only a handler or a person can. If your
+program offers an editor, run `checkWorkflow` on the person's edit before you
+send it back. An edit that fails the check goes to the model, and the person
+sees the model's version instead of their own.
+
+If your program stores workflows itself, call `draftWorkflow` instead. It
+returns one checked draft and saves nothing. To revise it, pass the draft as
+JSON text and the person's words as `revise`.
 
 See [`std::workflow`](/stdlib/workflow) for the API reference and
 [`agency workflow`](/cli/workflow) for command options.

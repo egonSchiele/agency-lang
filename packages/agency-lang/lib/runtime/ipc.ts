@@ -1325,23 +1325,27 @@ export async function _run(
 
 /** `_run` for a run the caller already holds. Generated code wraps this one
  *  as an AgencyFunction, whose body is handed the run first. */
-/** The list a child may compile against: the entries of this process's own
- *  list whose compiled directory holds a file the child's program is marked
- *  as loading, and none otherwise. A program compiled without the list, such
- *  as one a model wrote and ran with `runCode`, carries an empty mark, so
+/** The list a child may compile against: this process's whole list when
+ *  every file the child's program is marked as loading sits under a trusted
+ *  compiled directory, and none otherwise. A program that loads host code is
+ *  a host program, and a trusted tool inside it may run a nested workflow
+ *  over tools from any entry. A program compiled without the list, such as
+ *  one a model wrote and ran with `runCode`, carries an empty mark, so
  *  neither it nor any program it runs can reach a trusted directory. The
- *  mark is a field on a record the calling program holds (issue #1366), so
- *  only the entries it names pass down: a mark naming some other file
- *  passes down nothing. Throws when a config entry does not resolve. */
+ *  mark is a field on a record the calling program holds (issue #1366); a
+ *  mark naming a file outside every entry passes down nothing, and one
+ *  naming a real host file hands down a list the child cannot use without a
+ *  branded tool value. Throws when a config entry does not resolve. */
 export function trustedModulesForChild(
   ctx: RuntimeContext<any>,
   compiled: { trustedModules?: string[] },
 ): TrustedModules[] {
   const marked = compiled.trustedModules ?? [];
   if (marked.length === 0) return [];
-  return effectiveTrustedModules(ctx).filter((entry) =>
-    marked.some((file) => isStrictDescendant(entry.compiled, file)),
-  );
+  const list = effectiveTrustedModules(ctx);
+  const underTrusted = (file: string): boolean =>
+    list.some((entry) => isStrictDescendant(entry.compiled, file));
+  return marked.every(underTrusted) ? list : [];
 }
 
 export async function _runFor(

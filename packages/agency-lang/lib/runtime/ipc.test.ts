@@ -150,10 +150,11 @@ describe("trustedModulesForChild", () => {
   const other = { source: "/p/src/other", compiled: "/p/dist/other" };
   const child = { subprocessDepth: 1 } as any;
 
-  it("hands down only the entries a marked file sits under", () => {
+  it("hands the whole list to a program marked with a host file, so a nested workflow may use any entry", () => {
     setSubprocessRunInfo({ depth: 1, trustedModules: [agent, other] });
     expect(trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js"] })).toEqual([
       agent,
+      other,
     ]);
     expect(trustedModulesForChild(child, { trustedModules: [] })).toEqual([]);
     expect(trustedModulesForChild(child, {})).toEqual([]);
@@ -162,6 +163,9 @@ describe("trustedModulesForChild", () => {
   it("hands down nothing for a mark that names a file outside every entry", () => {
     setSubprocessRunInfo({ depth: 1, trustedModules: [agent, other] });
     expect(trustedModulesForChild(child, { trustedModules: ["/etc/hosts"] })).toEqual([]);
+    expect(
+      trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js", "/etc/hosts"] }),
+    ).toEqual([]);
   });
 });
 

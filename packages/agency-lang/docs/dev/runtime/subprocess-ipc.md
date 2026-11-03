@@ -174,7 +174,7 @@ The model and provider follow `defaultRoute` in `lib/config/config.ts`, the rule
 
 The overrides are rebuilt for every `run` and `resume` instruction and never checkpointed, so a resumed child gets them again from the instruction.
 
-The trusted-modules list does not ride in `configOverrides`. It rides on the instruction's identity, beside `maxDepth`, and the bootstrap seeds it into `SubprocessRunInfo`. A child gets only the entries of its parent's list whose compiled directory holds a file its program is marked as loading, and an empty list otherwise. See `docs/dev/runtime/trusted-modules.md`.
+The trusted-modules list does not ride in `configOverrides`. It rides on the instruction's identity, beside `maxDepth`, and the bootstrap seeds it into `SubprocessRunInfo`. A child gets its parent's whole list when every file its program is marked as loading sits under a trusted compiled directory, and an empty list otherwise. See `docs/dev/runtime/trusted-modules.md`.
 
 ## Limits
 

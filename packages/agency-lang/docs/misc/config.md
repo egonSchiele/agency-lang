@@ -67,7 +67,9 @@ The Agency compiler can be configured using an `agency.json` file in your projec
     runs your compiled files instead of compiling the source in the sandbox.
     Nothing else reads this list: `compile`, `run`, `runCode`, and `describe`
     from `std::agency` still refuse a trusted module. Paths are relative to the
-    working directory, as `client.providerModules` are. If your compiled files
+    working directory, as `client.providerModules` are, so start the program
+    from the project directory: a relative path resolves against wherever the
+    process was started. If your compiled files
     sit beside the sources, name the same directory twice. See
     `docs/dev/runtime/trusted-modules.md`.
 

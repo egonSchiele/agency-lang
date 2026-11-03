@@ -42,6 +42,10 @@
       "ok": true,
       "value": "HI!"
     },
+    "across": {
+      "ok": true,
+      "value": "HI!"
+    },
     "outsideRefused": true
   }
 }

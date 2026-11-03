@@ -20,6 +20,7 @@ const copy = (folder, extensions) => {
   }
 };
 copy("tools", [".js"]);
+copy("more", [".js"]);
 copy("other", [".js", ".agency"]);
 
 const {
@@ -77,6 +78,7 @@ try {
         forgedToolFromRunCode: forged.ok ? forged.value : forged.error,
         nested: {
           inside: deep.inside,
+          across: deep.across,
           outsideRefused:
             deep.outside.ok &&
             deep.outside.value.startsWith("refused:") &&

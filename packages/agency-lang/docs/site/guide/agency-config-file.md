@@ -245,7 +245,7 @@ with the directory your build writes their compiled JavaScript to.
 
 | Option | Description |
 | --- | --- |
-| `sandbox.trustedModules` | Directories of `.agency` modules you vouch for, each with its compiled directory. Paths are relative to the working directory. If your compiled files sit beside the sources, name the same directory twice. |
+| `sandbox.trustedModules` | Directories of `.agency` modules you vouch for, each with its compiled directory. Paths are relative to the working directory, so start the program from the project directory: a relative path resolves against wherever the process was started. If your compiled files sit beside the sources, name the same directory twice. |
 
 The workflow's subprocess loads your compiled files instead of compiling the
 source, so build your project before you run a workflow. Only workflows read

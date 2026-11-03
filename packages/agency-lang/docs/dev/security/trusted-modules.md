@@ -190,18 +190,22 @@ the sandbox records no source file, so `toolRefs` refuses it, and the only
 function values with one are the standard library's. The fake was the one
 way around that.
 
-The rule: `_runFor` hands down only the entries whose compiled directory
-holds a file the child's program is marked as loading (decision 3). A
-program compiled without the list, as the public `compile` and `runCode`
-compile, has an empty mark, so its child and every program below it compile
-with no list. A workflow the host runs is marked, so a trusted tool inside
-it can still run a nested workflow.
+The rule: `_runFor` hands the whole list down when every file the child's
+program is marked as loading sits under a trusted compiled directory
+(decision 3), and nothing otherwise. A program that loads host code is a
+host program. A program compiled without the list, as the public `compile`
+and `runCode` compile, has an empty mark, so its child and every program
+below it compile with no list. A workflow the host runs is marked, so a
+trusted tool inside it can run a nested workflow over tools from any entry,
+which the end-to-end test pins across two entries.
 
 The limit: a compiled program is a plain record the calling program holds,
 so Agency code can set `trustedModules`, or `code` itself, before `run`
-(issue #1366). A forged mark passes down only the entries it names, and one
-naming an unrelated file passes down nothing, but the prompt shows the
-forged list, and a forged `code` loads whatever it likes. So the prompt's
+(issue #1366). A mark naming a file outside every entry passes down
+nothing. A mark naming a real host file hands down the list, but a child
+that did not come from `std::workflow` has no branded tool value to use it
+with (decision 4), and the prompt shows the forged list. A forged `code`
+loads whatever it likes. So the prompt's
 list is truthful for a program that came from `compile` unmodified, and
 "no trusted files" means no host code is reachable only for such programs.
 

@@ -5,11 +5,11 @@ import { read } from "std::index"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 import { shoutViaJs } from "./tools/tools.agency"
-import { shoutTwiceRemoved, shoutOutsideTheList } from "./tools/nested.agency"
+import { shoutTwiceRemoved, shoutOutsideTheList, shoutAcrossEntries } from "./tools/nested.agency"
 import { shoutUntrusted } from "./other/tools.agency"
 import { shoutUnbuilt } from "./unbuilt/tools.agency"
 
-// agency.json trusts tools/ (compiled into dist/tools by test.js) and
+// agency.json trusts tools/ and more/ (compiled into dist/ by test.js) and
 // unbuilt/ (whose dist/unbuilt stays empty). other/ is not trusted.
 
 /** A one-step workflow that calls `tool` from `module` on the input text. */
@@ -125,5 +125,6 @@ export node main(dir: string): any {
 export node nested(): Json {
   const inside = runApproving(oneStep("./tools/nested.agency", "shoutTwiceRemoved"), [shoutTwiceRemoved])
   const outside = runApproving(oneStep("./tools/nested.agency", "shoutOutsideTheList"), [shoutOutsideTheList])
-  return { inside: outcome(inside), outside: outcome(outside) }
+  const across = runApproving(oneStep("./tools/nested.agency", "shoutAcrossEntries"), [shoutAcrossEntries])
+  return { inside: outcome(inside), outside: outcome(outside), across: outcome(across) }
 }

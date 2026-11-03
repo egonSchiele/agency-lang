@@ -1,0 +1,6 @@
+import { shout } from "./helper.js"
+
+/** Shout the text, from a second trusted entry. */
+export def shoutMore(text: string): string {
+  return shout(text)
+}

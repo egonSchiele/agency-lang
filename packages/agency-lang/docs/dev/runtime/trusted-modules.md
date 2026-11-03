@@ -148,13 +148,14 @@ and the bootstrap seeds it into `SubprocessRunInfo` before it imports the
 child's script. The identity is rebuilt on every segment, so a root
 restarted with a changed config resumes its children with the new list.
 
-A child gets only the entries of its parent's list whose compiled directory
-holds a file its program is marked as loading; otherwise it gets an empty
-list. A program compiled without the list, as the public `compile` and
-`runCode` compile, has an empty mark, so a model-written program and
-everything it runs compile with no list. The mark is a field on a record
-the program holds (issue #1366), which is why only the entries it names pass
-down. A child never widens the list. `configOverrides` does not carry it:
+A child gets its parent's whole list when every file its program is marked
+as loading sits under a trusted compiled directory, so a trusted tool inside
+a workflow can run a nested workflow over tools from any entry; otherwise it
+gets an empty list. A program compiled without the list, as the public
+`compile` and `runCode` compile, has an empty mark, so a model-written
+program and everything it runs compile with no list. The mark is a field on
+a record the program holds (issue #1366), which is why a mark naming a file
+outside every entry passes down nothing. A child never widens the list. `configOverrides` does not carry it:
 `parentConfigOverrides` copies an allow-list of fields, and `sandbox` is not
 one of them.
 

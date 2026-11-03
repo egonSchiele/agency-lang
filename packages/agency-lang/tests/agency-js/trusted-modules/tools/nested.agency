@@ -1,6 +1,7 @@
 import { runWorkflow, Workflow } from "std::workflow"
 import { shoutViaJs } from "./tools.agency"
 import { shoutUntrusted } from "../other/tools.agency"
+import { shoutMore } from "../more/tools.agency"
 
 /** A one-step workflow that calls `tool` from `module` on the input text. */
 def oneStep(module: string, tool: string): Workflow {
@@ -17,6 +18,17 @@ def oneStep(module: string, tool: string): Workflow {
 /** Runs a workflow over a trusted tool from inside a workflow's child. */
 export def shoutTwiceRemoved(text: string): string {
   const result = runWorkflow(oneStep("./tools/tools.agency", "shoutViaJs"), { text: text }, [shoutViaJs])
+  if (result is failure) {
+    return "refused: ${result.error}"
+  }
+  return "${result.value}"
+}
+
+/** Runs a workflow over a tool from a second trusted entry, from inside a
+  workflow's child: the child got the whole list, not only the entry the
+  outer workflow's tools sit under. */
+export def shoutAcrossEntries(text: string): string {
+  const result = runWorkflow(oneStep("./more/tools.agency", "shoutMore"), { text: text }, [shoutMore])
   if (result is failure) {
     return "refused: ${result.error}"
   }

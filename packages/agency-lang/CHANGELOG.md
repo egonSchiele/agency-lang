@@ -1,3 +1,9 @@
+## Nov 3 2026 — v0.37.0
+
+### Workflows
+
+- **Workflows can call your own functions that import TypeScript.** Use the new `sandbox.trustedModules` field in `agency.json`.
+
 ## Nov 2 2026 — v0.36.0
 
 ### Breaking

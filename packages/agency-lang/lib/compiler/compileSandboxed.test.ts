@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import {
   compileAgencyOnly,
   compileSandboxed,
@@ -396,5 +397,125 @@ describe("bound names under --agency-only", () => {
     allowed(
       '@jsonSchema({ minimum: low, maximum: high })\ntype Bounded(low: number, high: number) = number\nnode main() { print("hi") }',
     );
+  });
+});
+
+describe("compileSandboxed with trusted modules", () => {
+  // tools/tools.agency imports a .js helper and a non-trusted .agency file
+  // that itself imports .js: the case where the closure builder and the
+  // typechecker need every reachable .agency file in the mirror.
+  function layout(dir: string) {
+    fs.mkdirSync(path.join(dir, "tools"));
+    fs.mkdirSync(path.join(dir, "shared"));
+    fs.mkdirSync(path.join(dir, "dist", "tools"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "tools", "tools.agency"),
+      'import { shout } from "./helper.js"\nimport { Loud } from "../shared/types.agency"\nexport def shoutViaJs(text: string): Loud { return shout(text) }\n',
+    );
+    fs.writeFileSync(path.join(dir, "tools", "helper.js"), "export const shout = (t) => t;\n");
+    fs.writeFileSync(
+      path.join(dir, "shared", "types.agency"),
+      'import { util } from "./util.js"\nexport type Loud = string\n',
+    );
+    fs.writeFileSync(path.join(dir, "shared", "util.js"), "export const util = 1;\n");
+    fs.writeFileSync(path.join(dir, "dist", "tools", "tools.js"), "export {};\n");
+    fs.writeFileSync(
+      path.join(dir, "main.agency"),
+      'import { shoutViaJs } from "./tools/tools.agency"\nexport node main(): string { return shoutViaJs("hi") }\n',
+    );
+    const real = fs.realpathSync(dir);
+    return {
+      trustedModules: [
+        { source: path.join(real, "tools"), compiled: path.join(real, "dist", "tools") },
+      ],
+      compiled: path.join(real, "dist", "tools", "tools.js"),
+    };
+  }
+
+  test("a trusted import is emitted as the compiled path, nothing trusted is compiled, and the program is marked", () => {
+    const dir = makeDir(".cs-trust-");
+    try {
+      const { trustedModules, compiled } = layout(dir);
+      const result = compileSandboxed({ entry: { file: "main.agency" }, dir, trustedModules });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.code).toContain(JSON.stringify(pathToFileURL(compiled).href));
+      expect(Object.keys(result.modules ?? {})).toEqual([]);
+      expect(result.trustedModules).toEqual([compiled]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a node import from a trusted module is emitted as the compiled file too", () => {
+    const dir = makeDir(".cs-trust-node-");
+    try {
+      const { trustedModules, compiled } = layout(dir);
+      fs.appendFileSync(
+        path.join(dir, "tools", "tools.agency"),
+        "export node shoutNode(text: string): Loud { return shout(text) }\n",
+      );
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import node { shoutNode } from "./tools/tools.agency"\nexport node main(): string { return shoutNode("hi") }\n',
+      );
+      const result = compileSandboxed({ entry: { file: "main.agency" }, dir, trustedModules });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.code).toContain(JSON.stringify(pathToFileURL(compiled).href));
+      expect(result.code).not.toContain('"./tools/tools.js"');
+      expect(result.trustedModules).toEqual([compiled]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a program with no trusted import has an empty mark", () => {
+    const dir = makeDir(".cs-trust-none-");
+    try {
+      const { trustedModules } = layout(dir);
+      fs.writeFileSync(path.join(dir, "plain.agency"), "export node main(): number { return 1 }\n");
+      const result = compileSandboxed({ entry: { file: "plain.agency" }, dir, trustedModules });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.trustedModules).toEqual([]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("the compiled path does not depend on the mirror's temp directory", () => {
+    const dir = makeDir(".cs-trust-stable-");
+    try {
+      const { trustedModules, compiled } = layout(dir);
+      const compile = () =>
+        compileSandboxed({
+          entry: { file: "main.agency" },
+          dir,
+          trustedModules,
+          fingerprintModuleIds: true,
+        });
+      const first = compile();
+      const second = compile();
+      expect(first.success && second.success).toBe(true);
+      if (!first.success || !second.success) return;
+      const importOf = (code: string) => code.split("\n").find((line) => line.includes(compiled));
+      expect(importOf(first.code)).toBeDefined();
+      expect(importOf(first.code)).toEqual(importOf(second.code));
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("--agency-only passes no list, so a trusted import is refused", () => {
+    const dir = makeDir(".aoc-trust-");
+    try {
+      layout(dir);
+      const result = compileAgencyOnly(path.join(dir, "main.agency"));
+      expect(result.ok).toBe(false);
+      if (!result.ok)
+        expect(result.errors.join("\n")).toMatch(/only .agency files may be imported/);
+    } finally {
+      cleanup(dir);
+    }
   });
 });

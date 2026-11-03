@@ -230,6 +230,34 @@ describe("the commands", () => {
     expect(out).toEqual(["./tools/lists.agency\n  findLists()\n    Find lists."]);
   });
 
+  it("tools describes a module that imports TypeScript when the config trusts its directory", async () => {
+    mkdirSync(path.join(project, "ts"));
+    writeFileSync(path.join(project, "ts", "helper.js"), "export const x = 1;\n");
+    writeFileSync(path.join(project, "ts", "usesTs.js"), "export {};\n");
+    writeFileSync(
+      path.join(project, "ts", "usesTs.agency"),
+      'import { x } from "./helper.js"\nexport def f(): number {\n  return 1\n}\n',
+    );
+    const trustedIo = {
+      ...io(),
+      config: { sandbox: { trustedModules: [{ source: "ts", compiled: "ts" }] } },
+    };
+    expect(await workflowTools(["ts/usesTs.agency"], {}, trustedIo)).toBe(0);
+    expect(calls[0]).toMatchObject({ imports: [{ module: "./ts/usesTs.agency", names: ["f"] }] });
+    expect(await workflowTools(["ts/usesTs.agency"], {}, io())).toBe(2);
+    expect(err.join("\n")).toMatch(/describe refused/);
+  });
+
+  it("tools exits 2 for a trusted modules entry that does not resolve", async () => {
+    const badIo = {
+      ...io(),
+      config: { sandbox: { trustedModules: [{ source: "nope", compiled: "nope" }] } },
+    };
+    expect(await workflowTools(["tools/lists.agency"], {}, badIo)).toBe(2);
+    expect(err.join("\n")).toMatch(/source directory '.*nope' does not exist/);
+    expect(calls).toEqual([]);
+  });
+
   it("tools exits 2 for a source it cannot describe", async () => {
     expect(await workflowTools(["tools/missing.agency"], {}, io())).toBe(2);
     expect(calls).toEqual([]);

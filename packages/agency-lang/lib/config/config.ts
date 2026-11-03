@@ -7,6 +7,7 @@ import { defaultHost } from "#default-host";
 import type { Platform } from "../host/host.js";
 import { mapConfigValues } from "./paths.js";
 import { MODEL_KINDS, type ModelKind } from "../stdlib/modelKind.js";
+import type { TrustedModules } from "../compiler/trustedModules.js";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
@@ -364,6 +365,9 @@ export interface AgencyConfig {
    * "off": no checks. */
   failurePropagation?: "off" | "warn" | "on";
 
+  /** What sandboxed code may reach beyond the standard library. */
+  sandbox?: SandboxConfig;
+
   /** Root spend/time budget for each run — the same ceiling as `agency run
    * --max-cost` / `--max-time`, but declarative and honored when the agent is
    * served remotely (a CLI flag, when given, wins). `maxCost` is dollars of LLM
@@ -534,6 +538,18 @@ export const ModelAliasSchema = z.union([
 
 /** A `client.modelAliases` value: a bare URI or the rich object form. */
 export type ModelAlias = z.infer<typeof ModelAliasSchema>;
+
+/** The `sandbox` block of `agency.json`. */
+export type SandboxConfig = {
+  /** Directories of `.agency` modules the host vouches for, each with the
+   *  directory its compiled JavaScript is in. A workflow may call tools
+   *  from these modules, and the child runs the host's compiled files
+   *  instead of compiling the source in the sandbox. Only `std::workflow`
+   *  compiles against this list. Relative paths resolve against the current
+   *  working directory, as `client.providerModules` do. See
+   *  docs/dev/runtime/trusted-modules.md. */
+  trustedModules?: TrustedModules[];
+};
 
 export const AgencyConfigSchema = z
   .object({
@@ -709,6 +725,11 @@ export const AgencyConfigSchema = z
     // throw — reject it at config-load rather than bricking the program.
     maxCallDepth: z.number().int().positive(),
     failurePropagation: z.enum(["off", "warn", "on"]),
+    sandbox: z
+      .object({
+        trustedModules: z.array(z.object({ source: z.string(), compiled: z.string() }).strict()),
+      })
+      .partial(),
     // maxCost is dollars: negatives (disable) and 0 (no paid spend) are both
     // meaningful, so it is a plain number, not positive-only — but it MUST be
     // finite. A non-finite cap (e.g. a JSON `1e309` parsing to Infinity) would

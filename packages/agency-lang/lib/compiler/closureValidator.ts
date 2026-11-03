@@ -12,6 +12,15 @@
  * lay every file out at its own relative path and compile it unchanged:
  * a file's relative imports resolve identically in the mirror.
  *
+ * Trusted modules (docs/dev/runtime/trusted-modules.md) are the one place
+ * the "Agency source only" rule stops. An import that resolves under a
+ * trusted `source` directory still has to be a `.agency` file inside `dir`,
+ * reached without a symlink, and its compiled file must exist. Past that,
+ * nothing it imports is checked: it and every `.agency` file reachable from
+ * it are read only so the mirror can hold them for the typechecker and the
+ * closure builder. They are marked `trusted` and never compiled; the child
+ * imports the host's compiled file instead.
+ *
  * The result is an opaque capability. Compiler-side source preparation and
  * compilation may inspect it; runtime code receives only compiled output.
  */
@@ -28,6 +37,7 @@ import { isStrictDescendant } from "@/utils.js";
 // has no run to take a host from.
 import { root, readText } from "@/host/node/nodeFiles.js";
 import type { AgencyProgram } from "@/types.js";
+import { compiledPathFor, trustedEntryFor, type TrustedModules } from "./trustedModules.js";
 
 declare const validatedClosureBrand: unique symbol;
 export type ValidatedClosure = {
@@ -38,6 +48,13 @@ type ValidatedModule = {
   source: string;
   /** POSIX path relative to root; where the mirror writes the file. */
   relPath: string;
+  /** True for a trusted module and every `.agency` file reachable from
+   *  one: mirrored for the typechecker, never compiled. */
+  trusted: boolean;
+  /** Each import specifier this module writes that resolved to a trusted
+   *  module, mapped to that module's absolute compiled path. The compiler
+   *  rewrites those imports to these paths. */
+  trustedImports: Record<string, string>;
 };
 
 type ValidatedClosureData = {
@@ -66,6 +83,9 @@ export type ClosureEntry = SourceClosureEntry | FileClosureEntry;
 export type ValidateClosureArgs = {
   entry: ClosureEntry;
   dir: string;
+  /** Resolved trusted modules (real paths). Absent or empty: every import
+   *  is checked, as before trusted modules existed. */
+  trustedModules?: TrustedModules[];
 };
 
 /** Compiler-internal accessor for validated source preparation and compilation.
@@ -98,7 +118,10 @@ export function withGeneratedEntry(closure: ValidatedClosure, source: string): V
   return Object.freeze({
     ...data,
     entryModuleId,
-    modules: { ...data.modules, [entryModuleId]: { source, relPath } },
+    modules: {
+      ...data.modules,
+      [entryModuleId]: { source, relPath, trusted: false, trustedImports: {} },
+    },
   }) as unknown as ValidatedClosure;
 }
 
@@ -106,11 +129,20 @@ export function withGeneratedEntry(closure: ValidatedClosure, source: string): V
 export function snapshotValidatedClosureForTest(closure: ValidatedClosure): {
   root: string | null;
   moduleRelativePaths: string[];
+  trustedRelativePaths: string[];
+  trustedImports: Record<string, Record<string, string>>;
 } {
   const data = openValidatedClosure(closure);
+  const modules = Object.values(data.modules);
   return {
     root: data.root,
-    moduleRelativePaths: Object.values(data.modules).map((m) => m.relPath),
+    moduleRelativePaths: modules.map((m) => m.relPath),
+    trustedRelativePaths: modules.filter((m) => m.trusted).map((m) => m.relPath),
+    trustedImports: Object.fromEntries(
+      modules
+        .filter((m) => Object.keys(m.trustedImports).length > 0)
+        .map((m) => [m.relPath, m.trustedImports]),
+    ),
   };
 }
 
@@ -120,16 +152,24 @@ export function snapshotValidatedClosureForTest(closure: ValidatedClosure): {
 class ClosureWalker {
   readonly violations: string[] = [];
   readonly modules: Record<string, ValidatedModule> = {};
-  private readonly visited: Record<string, true> = {};
+  /** Files walked with the rules applied. */
+  private readonly validated: Record<string, true> = {};
+  /** Files walked as mirror-only (trusted). A file reached here first and
+   *  later by a validated import is walked again with the rules, and is
+   *  then compiled like any other validated file. */
+  private readonly mirrored: Record<string, true> = {};
   /** Local imports written in the string entry resolve against the root,
    *  as if the entry sat at the root itself. */
   private readonly virtualEntryBase: string | null;
 
-  constructor(private readonly root: string | null) {
+  constructor(
+    private readonly root: string | null,
+    private readonly trusted: TrustedModules[],
+  ) {
     this.virtualEntryBase = root === null ? null : path.join(root, "__virtual_entry__.agency");
   }
 
-  walkParsed(filePath: string | null, program: AgencyProgram): void {
+  walkParsed(filePath: string | null, program: AgencyProgram, importer: ValidatedModule): void {
     const label = filePath ?? "<entry source>";
     if (splicesIn(program).length > 0) {
       this.violations.push(
@@ -151,11 +191,16 @@ class ClosureWalker {
         );
         continue;
       }
-      this.walkLocalImport(label, filePath, imp.path);
+      this.walkLocalImport(label, filePath, imp.path, importer);
     }
   }
 
-  private walkLocalImport(label: string, filePath: string | null, importPath: string): void {
+  private walkLocalImport(
+    label: string,
+    filePath: string | null,
+    importPath: string,
+    importer: ValidatedModule,
+  ): void {
     if (!importPath.endsWith(".agency")) {
       this.violations.push(
         `${label} imports '${importPath}', which is not Agency source (only .agency files may be imported in sandboxed code)`,
@@ -185,6 +230,11 @@ class ClosureWalker {
       this.violations.push(`${label}: import '${importPath}' cannot be read: ${messageOf(e)}`);
       return;
     }
+    const trustedEntry = trustedEntryFor(canonical, this.trusted);
+    if (trustedEntry !== null) {
+      this.walkTrustedImport(label, importPath, resolved, canonical, trustedEntry, importer);
+      return;
+    }
     if (!isStrictDescendant(this.root, canonical)) {
       this.violations.push(
         `${label}: import '${importPath}' resolves to '${canonical}', which is outside the sandbox dir '${this.root}'`,
@@ -206,29 +256,125 @@ class ClosureWalker {
     this.walkFile(canonical, label);
   }
 
+  /** The trust branch of walkLocalImport. The import keeps the rules that
+   *  let the mirror place it (inside `dir`, no symlink) and must have a
+   *  compiled file; then its specifier is recorded for the rewrite and the
+   *  module is mirrored without checking what it imports. */
+  private walkTrustedImport(
+    label: string,
+    importPath: string,
+    resolved: string,
+    canonical: string,
+    entry: TrustedModules,
+    importer: ValidatedModule,
+  ): void {
+    const root = this.root as string;
+    if (!isStrictDescendant(root, canonical)) {
+      this.violations.push(
+        `${label}: import '${importPath}' resolves to '${canonical}', which is outside the sandbox dir '${root}'`,
+      );
+      return;
+    }
+    if (canonical !== resolved) {
+      this.violations.push(
+        `${label}: import '${importPath}' goes through a symlink ('${resolved}' is really '${canonical}'); sandboxed imports must be regular files`,
+      );
+      return;
+    }
+    const compiled = this.compiledFileFor(label, importPath, canonical, entry);
+    if (compiled === null) return;
+    importer.trustedImports[importPath] = compiled;
+    this.walkMirroredFile(canonical, label);
+  }
+
+  /** The compiled file for a trusted module, or null after recording a
+   *  violation when it is missing. Checked here, before anything runs, so a
+   *  missing build fails the compile with the path it looked for. */
+  compiledFileFor(
+    label: string,
+    importPath: string,
+    canonical: string,
+    entry: TrustedModules,
+  ): string | null {
+    const compiled = compiledPathFor(canonical, entry);
+    if (!isRegularFile(compiled)) {
+      this.violations.push(
+        `${label} imports '${importPath}', a trusted module whose compiled file '${compiled}' does not exist; build it first`,
+      );
+      return null;
+    }
+    return compiled;
+  }
+
   walkFile(filePath: string, importedFrom: string): void {
-    if (this.visited[filePath]) return;
-    this.visited[filePath] = true;
+    if (this.validated[filePath]) return;
+    this.validated[filePath] = true;
+    const program = this.readModule(filePath, importedFrom, false);
+    if (program === null) return;
+    this.walkParsed(filePath, program, this.modules[filePath]);
+  }
+
+  /** Mirror a trusted module, or a file reachable from one: read, parse,
+   *  record as trusted, and follow its `.agency` imports the same way. No
+   *  rule applies. Imports that are not `.agency`, and `std::` and `pkg::`
+   *  imports, are ignored: not refused, not followed. A file outside `dir`
+   *  is a violation only because the mirror cannot place it. */
+  walkMirroredFile(filePath: string, importedFrom: string): void {
+    if (this.validated[filePath] || this.mirrored[filePath]) return;
+    this.mirrored[filePath] = true;
+    const root = this.root as string;
+    if (!isStrictDescendant(root, filePath)) {
+      this.violations.push(
+        `${importedFrom}: '${filePath}', imported by a trusted module, is outside the sandbox dir '${root}', so the sandbox cannot mirror it for the typechecker`,
+      );
+      return;
+    }
+    const program = this.readModule(filePath, importedFrom, true);
+    if (program === null) return;
+    for (const imp of getAllImports(program)) {
+      if (importKind(imp.path) !== "local" || !imp.path.endsWith(".agency")) continue;
+      if (path.isAbsolute(imp.path)) continue;
+      this.walkMirroredFile(path.resolve(path.dirname(filePath), imp.path), filePath);
+    }
+  }
+
+  /** Read and parse one file under the root and record it. Null after
+   *  recording a violation. */
+  private readModule(
+    filePath: string,
+    importedFrom: string,
+    trusted: boolean,
+  ): AgencyProgram | null {
     let source: string;
     try {
       const sandbox = root(this.root as string);
       source = readText(sandbox, path.relative(rootPath(sandbox), filePath));
     } catch (e) {
       this.violations.push(`${importedFrom}: '${filePath}' cannot be read: ${messageOf(e)}`);
-      return;
+      return null;
     }
     const parsed = parseAgency(source, {}, false);
     if (!parsed.success) {
       this.violations.push(
         `${filePath} failed to parse: ${parsed.message ?? "unknown parse error"}`,
       );
-      return;
+      return null;
     }
     this.modules[filePath] = {
       source,
       relPath: toPosixRelPath(this.root as string, filePath),
+      trusted,
+      trustedImports: {},
     };
-    this.walkParsed(filePath, parsed.result);
+    return parsed.result;
+  }
+}
+
+function isRegularFile(file: string): boolean {
+  try {
+    return fs.lstatSync(file).isFile();
+  } catch {
+    return false;
   }
 }
 
@@ -244,7 +390,7 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
     }
   }
 
-  const walker = new ClosureWalker(root);
+  const walker = new ClosureWalker(root, args.trustedModules ?? []);
 
   let entryModuleId: string;
   if ("file" in args.entry) {
@@ -278,7 +424,17 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
         `entry '${args.entry.file}' goes through a symlink ('${resolved}' is really '${entryModuleId}'); sandboxed files must be regular files`,
       ]);
     }
-    walker.walkFile(entryModuleId, `entry '${args.entry.file}'`);
+    // A trusted module as the entry is the `describe` case: it is read for
+    // its signatures and mirrored, never checked or compiled.
+    const label = `entry '${args.entry.file}'`;
+    const trustedEntry = trustedEntryFor(entryModuleId, args.trustedModules ?? []);
+    if (trustedEntry === null) {
+      walker.walkFile(entryModuleId, label);
+    } else if (
+      walker.compiledFileFor(label, args.entry.file, entryModuleId, trustedEntry) !== null
+    ) {
+      walker.walkMirroredFile(entryModuleId, label);
+    }
   } else {
     entryModuleId = `<entry:${nanoid()}>`;
     const parsed = parseAgency(args.entry.source, {}, false);
@@ -290,8 +446,10 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
     walker.modules[entryModuleId] = {
       source: args.entry.source,
       relPath: pickEntryRelPath(),
+      trusted: false,
+      trustedImports: {},
     };
-    walker.walkParsed(null, parsed.result);
+    walker.walkParsed(null, parsed.result, walker.modules[entryModuleId]);
   }
 
   if (walker.violations.length > 0) {

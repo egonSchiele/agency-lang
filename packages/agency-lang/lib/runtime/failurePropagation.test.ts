@@ -287,8 +287,14 @@ describe("checkResultMethodCall", () => {
         "value",
       ),
     ).not.toThrow();
-    const agencyLike = { __agencyFunction: true };
-    expect(() => checkResultMethodCall(testRun(), success(agencyLike), "value")).not.toThrow();
+    const agencyFn = new AgencyFunction({
+      name: "f",
+      module: "m.agency",
+      fn: async () => undefined,
+      params: [],
+      toolDefinition: null,
+    });
+    expect(() => checkResultMethodCall(testRun(), success(agencyFn), "value")).not.toThrow();
   });
 
   it("an own field that is NOT callable still throws (f.error() where error is a string)", () => {

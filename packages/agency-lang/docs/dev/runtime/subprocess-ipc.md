@@ -135,6 +135,8 @@ the nesting cap down the tree.
 
 `compile()` compiles through the closure validator (`lib/compiler/closureValidator.ts`), which enforces a pure-Agency closure. Imports may name `std::` modules and `.agency` files inside `dir`, the confinement boundary the caller passes. An empty `dir`, the default, means no local import can resolve. TypeScript and JavaScript files, Node builtins, `pkg::` packages, symlinks, and compile-time splices are all refused anywhere in the import closure. Splices are refused before anything could expand them, because a splice generator executes in the compiling process.
 
+The one exception is a trusted module, which `std::workflow` alone compiles against. Its import is emitted as a `file:` URL of the host's compiled file, and the compiled program lists those files' paths in `trustedModules`. See `docs/dev/runtime/trusted-modules.md`.
+
 ## What a child inherits
 
 A child's program is compiled in the sandbox with no `agency.json`, so its header bakes the built-in model and provider (`gpt-5-mini` through `openai-responses`). The parent fixes that by sending its own settings in the `configOverrides` of the `run` and `resume` instructions. `_runFor` in `lib/runtime/ipc.ts` builds them in three steps:
@@ -171,6 +173,8 @@ The message carries the API keys the parent read from its environment as well as
 The model and provider follow `defaultRoute` in `lib/config/config.ts`, the rule the code generator uses: a model named without a provider has no provider, so smoltalk picks one from the model name. A parent that names `gemini-3.8-flash` with no provider sends the model alone, and the child's merge clears its baked `openai-responses`. This is the compile-time rule. The rule for a single `llm(model:)` call is `modelProviderOverride` in `lib/runtime/llmConfig.ts`, and it is different.
 
 The overrides are rebuilt for every `run` and `resume` instruction and never checkpointed, so a resumed child gets them again from the instruction.
+
+The trusted-modules list does not ride in `configOverrides`. It rides on the instruction's identity, beside `maxDepth`, and the bootstrap seeds it into `SubprocessRunInfo`. A child gets its parent's whole list when every file its program is marked as loading sits under a trusted compiled directory, and an empty list otherwise. See `docs/dev/runtime/trusted-modules.md`.
 
 ## Limits
 

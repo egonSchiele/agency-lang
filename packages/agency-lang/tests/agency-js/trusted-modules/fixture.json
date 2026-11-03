@@ -1,0 +1,51 @@
+{
+  "runsWithTrust": {
+    "ok": true,
+    "value": "HI!"
+  },
+  "runShowsTheMark": [
+    "dist/tools/tools.js"
+  ],
+  "refusedWithoutTrust": "refused",
+  "missingCompiled": {
+    "names": true,
+    "askedToRun": false
+  },
+  "scopeIsWorkflowsOnly": {
+    "compile": "refused",
+    "direct": "refused",
+    "describeRefused": true
+  },
+  "catalogTrusted": [
+    {
+      "name": "shoutViaJs",
+      "params": [
+        {
+          "name": "text",
+          "type": "string",
+          "default": null,
+          "description": null,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "returns": "string"
+    }
+  ],
+  "forgedToolFromRunCode": {
+    "ok": false,
+    "error": "the workflow has problems:\ntool 1 is not an Agency function"
+  },
+  "nested": {
+    "inside": {
+      "ok": true,
+      "value": "HI!"
+    },
+    "across": {
+      "ok": true,
+      "value": "HI!"
+    },
+    "outsideRefused": true
+  }
+}

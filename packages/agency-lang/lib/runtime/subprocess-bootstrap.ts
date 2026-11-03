@@ -196,6 +196,7 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
     parentSpanId: msg.spanContext,
     depth: msg.depth ?? 0,
     ...(msg.maxDepth !== undefined ? { maxDepth: msg.maxDepth } : {}),
+    trustedModules: msg.trustedModules ?? [],
   });
 
   try {

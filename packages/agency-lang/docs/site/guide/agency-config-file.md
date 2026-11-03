@@ -229,6 +229,29 @@ Configuration for the `agency eval` and `agency eval optimize` commands.
 | `optimize.optimizer` | A built-in optimizer name or a path to your own module. |
 | `optimize.validation` | A validation inputs file and/or a `split` fraction held out for validation. |
 
+## Trusted modules
+
+A workflow runs in Agency's sandbox, which refuses TypeScript imports. If the
+functions you pass to a workflow call TypeScript, name their directories here,
+with the directory your build writes their compiled JavaScript to.
+
+```json
+{
+  "sandbox": {
+    "trustedModules": [{ "source": "src/agent", "compiled": "dist/agent" }]
+  }
+}
+```
+
+| Option | Description |
+| --- | --- |
+| `sandbox.trustedModules` | Directories of `.agency` modules you vouch for, each with its compiled directory. Paths are relative to the working directory, so start the program from the project directory: a relative path resolves against wherever the process was started. If your compiled files sit beside the sources, name the same directory twice. |
+
+The workflow's subprocess loads your compiled files instead of compiling the
+source, so build your project before you run a workflow. Only workflows read
+this list. `compile`, `run`, and `runCode` from `std::agency` still refuse a
+trusted module.
+
 ## Docs, packing, and the log viewer
 
 Odds and ends for other commands.

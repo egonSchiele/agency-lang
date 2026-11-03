@@ -13,6 +13,7 @@ import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { pathToFileURL } from "url";
 import { ImportPolicy, isImportAllowed, isStdlibImport, isPkgImport } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
 import { getAllImports } from "@/analysis/imports.js";
@@ -30,6 +31,10 @@ type CompileSuccess = {
    *  layout ("sub/main.js"), so its relative imports resolve. Absent means
    *  the entry is materialized alone at the root. */
   entryPath?: string;
+  /** Multi-file compiles only: the absolute compiled paths of the trusted
+   *  modules this program loads (docs/dev/runtime/trusted-modules.md),
+   *  sorted. Empty or absent when it loads none. */
+  trustedModules?: string[];
 };
 
 type CompileFailure = {
@@ -94,6 +99,11 @@ export type CompileSourceOptions = AgencyConfig & {
   /** Stable module identity for checkpoint fingerprints. Omit for ephemeral
    * subprocess programs whose generated module id is intentionally random. */
   fingerprintModuleId?: string;
+  /** Import specifiers in this source that name a trusted module, mapped to
+   *  that module's absolute compiled path. Set by compileValidatedClosure
+   *  from the validator's record; each such import is emitted as the
+   *  compiled path instead of a mirrored sibling. */
+  trustedImports?: Record<string, string>;
 };
 
 // Walk every import in the program and reject anything that fails the
@@ -183,12 +193,27 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       }
     }
 
-    // 6. Rewrite import paths
+    // 6. Rewrite import paths. A trusted import becomes a `file:` URL of
+    // the host's compiled file, which Node imports from anywhere whatever
+    // characters the path holds; the sandbox compiles nothing trusted.
     const strategy = new CompileStrategy({ targetExt: ".js" });
+    const trustedImports = config.trustedImports ?? {};
+    const compiledUrl = (specifier: string): string | undefined => {
+      const trustedPath = trustedImports[specifier];
+      return trustedPath === undefined ? undefined : pathToFileURL(trustedPath).href;
+    };
     liftedProgram.nodes.forEach((node) => {
+      if (node.type === "importNodeStatement") {
+        // The generator writes a node import's path as it is, with
+        // `.agency` swapped for `.js`; a trusted one must point at the
+        // host's file instead.
+        node.agencyFile = compiledUrl(node.agencyFile) ?? node.agencyFile;
+        return;
+      }
       if (node.type !== "importStatement") return;
       if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
-      node.modulePath = strategy.rewriteImport(node.modulePath, syntheticPath);
+      node.modulePath =
+        compiledUrl(node.modulePath) ?? strategy.rewriteImport(node.modulePath, syntheticPath);
     });
 
     // 6b. Build the closure analysis to detect cycles + populate the
@@ -207,6 +232,11 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
 
     // 7. Generate TypeScript. No output file: this code is loaded from
     // wherever the subprocess writes it, so it records no source file.
+    // A trusted module's init is registered under the host's own source
+    // path, and this plan names it by its mirror path, so the await finds
+    // nothing and returns at once; the closure-wide bootstrap in runNode
+    // runs every registered init anyway. The cost: an entry's `static`
+    // initialiser may not read a trusted module's global.
     const mirrorInitPlan = initPlanForModule(closure, syntheticPath);
     const initPlan =
       config.fingerprintModuleId === undefined

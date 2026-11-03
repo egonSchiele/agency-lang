@@ -13,6 +13,7 @@
 import { defaultHost } from "#default-host";
 import type { Host } from "../host/host.js";
 import type { RootLog } from "../statelogClient.js";
+import type { TrustedModules } from "../compiler/trustedModules.js";
 
 export type SubprocessRunInfo = {
   /** The parent's runId — the child adopts it instead of minting its own,
@@ -32,6 +33,11 @@ export type SubprocessRunInfo = {
   /** The tightest maxDepth cap along the ancestor chain — a child's own
    * run() calls can never exceed an ancestor's cap. */
   maxDepth?: number;
+  /** The trusted modules the parent allowed this child, which are the
+   * parent's own: a child never widens or narrows the list. Empty at the
+   * root, which reads its list from config. See
+   * docs/dev/runtime/trusted-modules.md. */
+  trustedModules?: TrustedModules[];
 };
 
 /** Whether this process is a forked Agency subprocess (AGENCY_IPC=1 is set

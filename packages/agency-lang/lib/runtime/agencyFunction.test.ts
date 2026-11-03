@@ -352,6 +352,51 @@ describe("AgencyFunction", () => {
     it("returns false for objects with __agencyFunction but wrong value", () => {
       expect(AgencyFunction.isAgencyFunction({ __agencyFunction: "yes" })).toBe(false);
     });
+
+    it("accepts a raw copy of a function, which carries the marker and the label", () => {
+      const fn = makeFunction([]);
+      const copy = JSON.parse(JSON.stringify(fn));
+      expect(AgencyFunction.isAgencyFunction(copy)).toBe(true);
+      expect(copy.name).toBe(fn.name);
+      expect(copy.module).toBe(fn.module);
+    });
+  });
+
+  describe("isBranded", () => {
+    it("accepts an instance and refuses anything made from data", () => {
+      const fn = makeFunction([]);
+      expect(AgencyFunction.isBranded(fn)).toBe(true);
+      expect(AgencyFunction.isBranded(fn.rename("other"))).toBe(true);
+      expect(AgencyFunction.isBranded({ __agencyFunction: true })).toBe(false);
+      expect(AgencyFunction.isBranded({ ...fn })).toBe(false);
+      expect(AgencyFunction.isBranded(JSON.parse(JSON.stringify(fn)))).toBe(false);
+    });
+  });
+
+  describe("the label", () => {
+    it("cannot be reassigned, even through any", () => {
+      const fn: any = makeFunction([]);
+      expect(() => {
+        fn.sourceFile = "/elsewhere/other.agency";
+      }).toThrow(TypeError);
+      expect(() => {
+        fn.name = "other";
+      }).toThrow(TypeError);
+      expect(() => {
+        fn.registeredName = "other";
+      }).toThrow(TypeError);
+      expect(() => {
+        Object.defineProperty(fn, "sourceFile", { value: "/elsewhere/other.agency" });
+      }).toThrow(TypeError);
+      expect(fn.name).not.toBe("other");
+      expect(fn.sourceFile).not.toBe("/elsewhere/other.agency");
+    });
+
+    it("derive is not reachable from outside the class", () => {
+      const fn: any = makeFunction([]);
+      expect(fn.derive).toBeUndefined();
+      expect(fn.options).toBeUndefined();
+    });
   });
 
   describe("create", () => {

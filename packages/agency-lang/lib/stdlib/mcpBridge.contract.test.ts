@@ -60,7 +60,7 @@ describe.skipIf(!BUILT)("mcpBridge <-> @agency-lang/mcp contract", () => {
       calls.push(`${s}/${t}`);
       return "ok";
     });
-    expect((fn as any).__agencyFunction).toBe(true);
+    expect(typeof (fn as any).invoke).toBe("function");
     expect((fn as any).name).toBe("srv__do");
   });
 });

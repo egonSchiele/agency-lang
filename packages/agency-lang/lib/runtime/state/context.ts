@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { LogLevel } from "../../logger.js";
+import type { TrustedModules } from "../../compiler/trustedModules.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig, type RootLog } from "../../statelogClient.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
@@ -224,6 +225,11 @@ export class RuntimeContext<T> {
    *  with `AGENCY_PROVIDER_MODULES` at runtime by `loadProviderModules`.
    *  Defaults to `[]`. */
   providerModules: string[];
+  /** The `sandbox.trustedModules` entries from `agency.json`, baked in at
+   *  compile time as written (paths may be relative). Only the root reads
+   *  them; a subprocess takes its list from `SubprocessRunInfo`. See
+   *  `effectiveTrustedModules` in `lib/compiler/trustedModules.ts`. Defaults to `[]`. */
+  trustedModules: TrustedModules[];
   private _llmClient: LLMClient;
   private _interruptResponses: Record<string, { response: InterruptResponse }> = {};
 
@@ -322,6 +328,7 @@ export class RuntimeContext<T> {
     maxToolResultChars?: number;
     maxToolSchemaChars?: number;
     providerModules?: string[];
+    trustedModules?: TrustedModules[];
     dirname: string;
     maxRestores?: number;
     maxCallDepth?: number;
@@ -414,6 +421,7 @@ export class RuntimeContext<T> {
     this.maxToolResultChars = args.maxToolResultChars;
     this.maxToolSchemaChars = args.maxToolSchemaChars;
     this.providerModules = args.providerModules ?? [];
+    this.trustedModules = args.trustedModules ?? [];
     this._llmClient = new SmoltalkClient();
     // The deterministic client when AGENCY_LLM_MOCKS is set. The test runner
     // (lib/cli/util.ts) sets the variable to a JSON string when
@@ -506,6 +514,7 @@ export class RuntimeContext<T> {
     execCtx.maxToolResultChars = this.maxToolResultChars;
     execCtx.maxToolSchemaChars = this.maxToolSchemaChars;
     execCtx.providerModules = this.providerModules;
+    execCtx.trustedModules = this.trustedModules;
     execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
     execCtx.statelogConfig = effective.statelogConfig;

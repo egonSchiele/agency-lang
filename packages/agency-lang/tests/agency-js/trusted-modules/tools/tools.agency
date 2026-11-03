@@ -1,0 +1,6 @@
+import { shout } from "./helper.js"
+
+/** Shout the text, through a TypeScript helper. */
+export def shoutViaJs(text: string): string {
+  return shout(text)
+}

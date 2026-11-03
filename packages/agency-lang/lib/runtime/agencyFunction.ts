@@ -143,10 +143,44 @@ export type AgencyFunctionOpts = {
   sourceFile?: string | null;
 };
 
+/** The marker and the label as own properties that survive a raw JSON copy
+ *  and cannot be reassigned (strict mode throws) or redefined. */
+function defineLabel(
+  target: AgencyFunction,
+  label: {
+    __agencyFunction: true;
+    name: string;
+    module: string;
+    registeredName: string;
+    sourceFile: string | null;
+  },
+): void {
+  for (const [key, value] of Object.entries(label)) {
+    Object.defineProperty(target, key, {
+      value,
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
+  }
+}
+
 export class AgencyFunction {
-  readonly __agencyFunction = true;
-  readonly name: string;
-  readonly module: string;
+  /** The brand `isBranded` checks. A private field cannot be set from an
+   *  object literal, through an `any` cast, or from JSON, and a copy of the
+   *  object's properties does not carry it. */
+  #brand = true;
+  /** The marker `isAgencyFunction` checks. An own enumerable property, so a
+   *  raw JSON copy of a function still reads as one and the registry can
+   *  rebuild it from `name` and `module` (`FunctionRefReviver`). Defined in
+   *  the constructor as non-writable and non-configurable, with the label. */
+  declare readonly __agencyFunction: true;
+  /** The label: the name, module, registered name, and source file that
+   *  `toolRefs` turns into an import line. Own data properties that cannot
+   *  be reassigned or redefined, so code that holds a function cannot point
+   *  it at another file or name. */
+  declare readonly name: string;
+  declare readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
   private readonly _fn: AgencyFunctionBody;
@@ -168,19 +202,22 @@ export class AgencyFunction {
    *  directly, `.describe()` via `withToolDefinition()` — so a serialized
    *  ref to any derived copy can find its registry entry again. Equal to
    *  `name` for functions never renamed. */
-  readonly registeredName: string;
+  declare readonly registeredName: string;
   readonly created?: CreatedTool;
   readonly paramSchemas: Record<string, unknown>;
-  readonly sourceFile: string | null;
+  declare readonly sourceFile: string | null;
 
   constructor(opts: AgencyFunctionOpts) {
-    this.name = opts.name;
-    this.module = opts.module;
-    this.registeredName = opts.registeredName ?? opts.name;
+    defineLabel(this, {
+      __agencyFunction: true,
+      name: opts.name,
+      module: opts.module,
+      registeredName: opts.registeredName ?? opts.name,
+      sourceFile: opts.sourceFile ?? null,
+    });
     this._fn = opts.fn;
     this.created = opts.created;
     this.paramSchemas = opts.paramSchemas ?? {};
-    this.sourceFile = opts.sourceFile ?? null;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
@@ -221,7 +258,7 @@ export class AgencyFunction {
   /** This function's options, as they would be passed to the constructor.
    *  `derive` spreads them under a change, so a derived copy carries every
    *  field by construction and a new field needs adding in one place. */
-  private options(): AgencyFunctionOpts {
+  #options(): AgencyFunctionOpts {
     return {
       name: this.name,
       module: this.module,
@@ -241,12 +278,12 @@ export class AgencyFunction {
 
   /** A copy with `overrides` applied. Every derivation (`partial`,
    *  `rename`, `describe`, `preapprove`) goes through here. */
-  private derive(overrides: Partial<AgencyFunctionOpts>): AgencyFunction {
-    return new AgencyFunction({ ...this.options(), ...overrides });
+  #derive(overrides: Partial<AgencyFunctionOpts>): AgencyFunction {
+    return new AgencyFunction({ ...this.#options(), ...overrides });
   }
 
   withToolDefinition(toolDefinition: ToolDefinition | null): AgencyFunction {
-    return this.derive({ toolDefinition });
+    return this.#derive({ toolDefinition });
   }
 
   getOriginalParams(): FuncParam[] {
@@ -412,7 +449,7 @@ export class AgencyFunction {
     const paramSchemas = Object.fromEntries(
       Object.entries(this.paramSchemas).filter(([name]) => !boundNames.includes(name)),
     );
-    return this.derive({ params: newParams, toolDefinition: newToolDef, paramSchemas });
+    return this.#derive({ params: newParams, toolDefinition: newToolDef, paramSchemas });
   }
 
   preapprove(): AgencyFunction {
@@ -443,7 +480,7 @@ export class AgencyFunction {
     // spends, so the hide-everything reading is also harmless).
     const wrapped: AgencyFunctionBody = (run, ...args) =>
       withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), []);
-    return this.derive({ fn: wrapped, isPreapproved: true });
+    return this.#derive({ fn: wrapped, isPreapproved: true });
   }
 
   describe(description: string): AgencyFunction {
@@ -482,7 +519,7 @@ export class AgencyFunction {
     const shape: Record<string, z.ZodType> = { ...(current?.shape ?? {}) };
     shape[name] = z.fromJSONSchema(jsonSchema as Parameters<typeof z.fromJSONSchema>[0]);
     const base = this.toolDefinition ?? { name: this.name, description: "", schema: null };
-    return this.derive({
+    return this.#derive({
       toolDefinition: { ...base, schema: z.object(shape) },
       paramSchemas: { ...this.paramSchemas, [name]: jsonSchema },
     });
@@ -493,7 +530,7 @@ export class AgencyFunction {
     // The registry never learns the new name, so serialization keeps the
     // registered name for revival (see FunctionRefReviver); `derive`
     // carries it over.
-    return this.derive({ name: newName, toolDefinition: newToolDef });
+    return this.#derive({ name: newName, toolDefinition: newToolDef });
   }
 
   private mergeWithBound(unboundArgs: unknown[]): unknown[] {
@@ -712,8 +749,18 @@ export class AgencyFunction {
 
   // Serialization handled by FunctionRefReviver — toJSON() would conflict with the replacer pattern.
 
+  /** Whether `value` reads as a function: an instance, or a raw copy of
+   *  one that the registry can rebuild. This is the runtime's own check. */
   static isAgencyFunction(value: unknown): value is AgencyFunction {
     return typeof value === "object" && value !== null && (value as any).__agencyFunction === true;
+  }
+
+  /** Whether `value` is an instance this runtime built. Nothing made from
+   *  data passes: not an object literal, a JSON value, or a copy of an
+   *  instance's properties. `toolRefs` uses this, since a tool's label is
+   *  written into an import. */
+  static isBranded(value: unknown): value is AgencyFunction {
+    return typeof value === "object" && value !== null && #brand in value;
   }
 
   static create(

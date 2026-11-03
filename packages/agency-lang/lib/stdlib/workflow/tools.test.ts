@@ -44,6 +44,19 @@ describe("toolRefs", () => {
     ]);
   });
 
+  it("names a tool loaded from a trusted compiled directory by its source", () => {
+    // A build that copies its output records dist/agent/lists.agency as the
+    // source of dist/agent/lists.js; no such file exists.
+    const trusted = [{ source: "/work/agent/src", compiled: "/work/agent/dist" }];
+    const loaded = fn("findLists", "agent/dist/lists.agency");
+    expect(toolRefs([loaded], DIR, CWD, trusted).refs).toEqual([
+      { module: "./src/lists.agency", name: "findLists" },
+    ]);
+    expect(toolRefs([loaded], DIR, CWD).refs).toEqual([
+      { module: "./dist/lists.agency", name: "findLists" },
+    ]);
+  });
+
   it("keeps a nested local path and accepts a relative dir", () => {
     expect(toolRefs([fn("a", "agent/tools/a.agency")], "agent", CWD).refs).toEqual([
       { module: "./tools/a.agency", name: "a" },
@@ -90,6 +103,34 @@ describe("toolRefs", () => {
         'tool "a" does not record the file it was defined in, so a workflow cannot import it',
       ),
     ]);
+  });
+
+  it("refuses a plain record that claims to be a function", () => {
+    const fake = {
+      __agencyFunction: true,
+      name: "deleteListNow",
+      registeredName: "deleteListNow",
+      boundArgs: null,
+      params: [],
+      paramSchemas: {},
+      module: "agent/lists.agency",
+      sourceFile: `${CWD}/agent/lists.agency`,
+    };
+    expect(toolRefs([fake], DIR, CWD)).toEqual({
+      refs: null,
+      problems: [problem("tool 1 is not an Agency function")],
+    });
+  });
+
+  it("imports a function from the file it was defined in, whatever a caller tried to set", () => {
+    const tool: any = fn("mine", "agent/mine.agency");
+    expect(() => {
+      tool.sourceFile = `${CWD}/agent/lists.agency`;
+    }).toThrow(TypeError);
+    expect(toolRefs([tool], DIR, CWD)).toEqual({
+      refs: [{ module: "./mine.agency", name: "mine" }],
+      problems: [],
+    });
   });
 
   it("refuses a value that is not an Agency function", () => {

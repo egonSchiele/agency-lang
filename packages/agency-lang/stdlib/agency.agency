@@ -16,6 +16,7 @@ import {
   _getNodesOfType,
   _filterImports,
   _subprocessDepth,
+  _programTrustedModules,
   _exactVerdictFeedback,
   _failureFeedback,
   _readTestFileSandbox,
@@ -74,7 +75,8 @@ effect std::run {
   logFile: string;
   depth: number;
   module: string;
-  function: string
+  function: string;
+  trustedModules: string[]
 }
 
 /** A compiled program returned by compile; retain the full returned value for execution. */
@@ -182,6 +184,10 @@ export idempotent def compile(source: string, dir: string = "", strict: boolean 
   Success carries the subprocess result envelope, including its `data`
   value and usage information. Use `runCode` for just the node's value.
 
+  The run interrupt's `trustedModules` lists the host's compiled files the
+  program loads (see `sandbox.trustedModules` in agency.json); it is empty
+  for a program that loads none.
+
   The run interrupt's module and function labels describe a prepared call;
   they do not verify compiled code stored in a checkpoint. Use
   module-specific approval rules only with trusted saved state. External
@@ -265,7 +271,8 @@ def _runProgram(
     logFile: settings.logFile,
     depth: _subprocessDepth() + 1,
     module: originModule,
-    function: originFunction
+    function: originFunction,
+    trustedModules: _programTrustedModules(compiled)
   })
 
   // guard() disables a dimension on a NEGATIVE value (null for BOTH

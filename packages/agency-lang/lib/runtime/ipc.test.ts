@@ -21,6 +21,9 @@ import {
   resolveNodeCallArgs,
   DEFAULT_MAX_SUBPROCESS_DEPTH,
   SUBPROCESS_DEPTH_CEILING,
+  buildRunInstruction,
+  buildResumeInstruction,
+  trustedModulesForChild,
 } from "./ipc.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { InvocationUsageMeter } from "./invocationUsage.js";
@@ -117,6 +120,52 @@ describe("resolveDepthCap", () => {
   it("a looser param cap cannot loosen the ancestor cap", () => {
     setSubprocessRunInfo({ depth: 1, maxDepth: 3 });
     expect(resolveDepthCap(10)).toBe(3);
+  });
+});
+
+describe("trusted modules on the startup instructions", () => {
+  const limits = clampLimits({ wallClock: 1000, memory: 1000, ipcPayload: 1000, stdout: 1000 });
+  const identity = {
+    depth: 1,
+    trustedModules: [{ source: "/p/src/agent", compiled: "/p/dist/agent" }],
+  };
+
+  it("a run and a resume instruction carry the same list", () => {
+    const run = buildRunInstruction({ scriptPath: "/s.js", node: "main", limits, identity });
+    const resume = buildResumeInstruction({
+      scriptPath: "/s.js",
+      saved: { node: "main", childCheckpoint: {}, interrupts: [] } as any,
+      responses: [],
+      limits,
+      identity,
+    });
+    expect(run.trustedModules).toEqual(identity.trustedModules);
+    expect(resume.trustedModules).toEqual(identity.trustedModules);
+  });
+});
+
+describe("trustedModulesForChild", () => {
+  afterEach(() => setSubprocessRunInfo({ depth: 0 }));
+  const agent = { source: "/p/src/agent", compiled: "/p/dist/agent" };
+  const other = { source: "/p/src/other", compiled: "/p/dist/other" };
+  const child = { subprocessDepth: 1 } as any;
+
+  it("hands the whole list to a program marked with a host file, so a nested workflow may use any entry", () => {
+    setSubprocessRunInfo({ depth: 1, trustedModules: [agent, other] });
+    expect(trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js"] })).toEqual([
+      agent,
+      other,
+    ]);
+    expect(trustedModulesForChild(child, { trustedModules: [] })).toEqual([]);
+    expect(trustedModulesForChild(child, {})).toEqual([]);
+  });
+
+  it("hands down nothing for a mark that names a file outside every entry", () => {
+    setSubprocessRunInfo({ depth: 1, trustedModules: [agent, other] });
+    expect(trustedModulesForChild(child, { trustedModules: ["/etc/hosts"] })).toEqual([]);
+    expect(
+      trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js", "/etc/hosts"] }),
+    ).toEqual([]);
   });
 });
 
@@ -1044,6 +1093,16 @@ describe("materializeCompiledScript", () => {
     expect(() =>
       materializeCompiledScript({ moduleId: "agency_x", code: "x", modules: { "../m.js": "x" } }),
     ).toThrow(/escapes/);
+  });
+
+  it("refuses a program whose trusted module file is missing, naming the path", () => {
+    expect(() =>
+      materializeCompiledScript({
+        moduleId: "agency_x",
+        code: "export {};",
+        trustedModules: ["/no/such/build/tools.js"],
+      }),
+    ).toThrow(/trusted module '\/no\/such\/build\/tools\.js', which is not a file here/);
   });
 
   it("keeps a nested entry in its layout beside its modules", () => {

@@ -7,6 +7,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "fs";
@@ -201,6 +202,75 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
 
   it("check leaves a compiled .js beside each tool, as agency run does", async () => {
     expect(existsSync(path.join(project, "tools", "lists.js"))).toBe(true);
+  });
+
+  it("imports a trusted tool module from its compiled directory, in tools, check, and run", async () => {
+    // A host's layout: sources in src/, the build in dist/, and the
+    // TypeScript the tool imports only in dist/. Compiled from source, the
+    // tool's `./helper.js` would point into src/, where nothing exists.
+    const split = makeAgencyTempDir("wf-split");
+    try {
+      for (const folder of ["src", "dist", "workflows"]) {
+        mkdirSync(path.join(split, folder));
+      }
+      writeFileSync(
+        path.join(split, "src", "shout.agency"),
+        'import { shout } from "./helper.js"\n\n/** Shout the text. */\nexport def shoutViaJs(text: string): string {\n  return shout(text)\n}\n',
+      );
+      writeFileSync(
+        path.join(split, "dist", "helper.js"),
+        "export const shout = (text) => `${text.toUpperCase()}!`;\n",
+      );
+      writeFileSync(
+        path.join(split, "agency.json"),
+        JSON.stringify({ sandbox: { trustedModules: [{ source: "src", compiled: "dist" }] } }),
+      );
+      writeFileSync(
+        path.join(split, "workflows", "shoutHi.json"),
+        JSON.stringify({
+          workflow: {
+            format: 1,
+            name: "shoutHi",
+            description: "Shout the text.",
+            inputs: "{ text: string }",
+            steps: [
+              {
+                id: "loud",
+                kind: "tool",
+                module: "./src/shout.agency",
+                tool: "shoutViaJs",
+                args: { text: { $ref: "inputs.text" } },
+              },
+            ],
+            result: { $ref: "steps.loud" },
+          },
+        }),
+      );
+      // Build as a host does: compile, then move the output into dist/.
+      await execFileAsync(process.execPath, [CLI, "compile", "src/shout.agency"], { cwd: split });
+      renameSync(path.join(split, "src", "shout.js"), path.join(split, "dist", "shout.js"));
+
+      const tools = await runCli(split, ["tools", "src/shout.agency"]);
+      expect(tools.stderr).toBe("");
+      expect(tools.code).toBe(0);
+      expect(tools.stdout).toContain("shoutViaJs(text: string)");
+
+      const check = await runCli(split, ["check", "shoutHi"]);
+      expect(check.stderr).toBe("");
+      expect(check.code).toBe(0);
+
+      const run = await runCli(split, [
+        "run",
+        "shoutHi",
+        "--inputs",
+        JSON.stringify({ text: "hi" }),
+      ]);
+      expect(run.stderr).toBe("");
+      expect(run.code).toBe(0);
+      expect(run.stdout.trim()).toBe("HI!");
+    } finally {
+      rmSync(split, { recursive: true, force: true });
+    }
   });
 
   it("check reports a broken reference on its step and exits 1", async () => {

@@ -12,9 +12,11 @@ import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import { requireCapabilities } from "../host/host.js";
 import type { ForkOptions } from "child_process";
-import { rmSync, writeFileSync, mkdirSync } from "fs";
+import { rmSync, writeFileSync, mkdirSync, lstatSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
+import { effectiveTrustedModules, type TrustedModules } from "../compiler/trustedModules.js";
+import { isStrictDescendant } from "../utils.js";
 import { mergeConfig } from "../config/merge.js";
 import type { RuntimeContext } from "./state/context.js";
 import { detachedRun, currentRun, withRun, type Run } from "./asyncContext.js";
@@ -304,14 +306,19 @@ function clearSubprocessPayload(frame: State): void {
 /** Identity the child adopts, carried on both startup instructions: the
  * parent's runId (one trace across processes and pause/resume cycles), a
  * stable per-logical-child session id, the parent's subprocessRun span id
- * for span nesting, the child's nesting depth, and the tightest ancestor
- * depth cap. */
+ * for span nesting, the child's nesting depth, the tightest ancestor
+ * depth cap, and the trusted modules the child may compile against. */
 type SubprocessIdentity = {
   runId?: string;
   subprocessSessionId?: string;
   spanContext?: string;
   depth?: number;
   maxDepth?: number;
+  /** This process's own list when the child's program loads a trusted
+   *  module, and empty otherwise (`trustedModulesForChild`); a child never
+   *  widens it. Rebuilt from the parent on every segment, run and resume
+   *  alike, never read from a checkpoint. See docs/dev/runtime/trusted-modules.md. */
+  trustedModules?: TrustedModules[];
 };
 
 export type RunInstruction = SubprocessIdentity & {
@@ -465,6 +472,7 @@ export function materializeCompiledScript(compiled: {
   code: string;
   modules?: Record<string, string>;
   entryPath?: string;
+  trustedModules?: string[];
 }): string {
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
@@ -480,6 +488,17 @@ export function materializeCompiledScript(compiled: {
   // path into it.
   if (!/^[A-Za-z0-9_-]+$/.test(compiled.moduleId)) {
     throw new Error(`CompiledProgram moduleId '${compiled.moduleId}' is not a plain identifier`);
+  }
+  // A program that loads a trusted module imports the host's compiled file
+  // by absolute path. A checkpoint resumed on a machine without that build,
+  // or after the build moved, fails here with the path, not with a Node
+  // resolution error from inside the child.
+  for (const file of compiled.trustedModules ?? []) {
+    if (!isRegularFile(file)) {
+      throw new Error(
+        `CompiledProgram loads the trusted module '${file}', which is not a file here; build the host project, or resume where it was built`,
+      );
+    }
   }
   const tempDir = path.join(agencyPackageRoot, ".agency-tmp", nanoid());
   // Every path below is re-checked for containment before writing: the
@@ -505,6 +524,14 @@ export function materializeCompiledScript(compiled: {
     writeFileSync(target, code, "utf-8");
   }
   return scriptPath;
+}
+
+function isRegularFile(file: string): boolean {
+  try {
+    return lstatSync(file).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1159,7 +1186,12 @@ async function invokeSubprocess(args: {
   parentStore: Run;
   branchRun: Run;
   parentFrame: State;
-  compiled: { moduleId: string; code: string; modules?: Record<string, string> };
+  compiled: {
+    moduleId: string;
+    code: string;
+    modules?: Record<string, string>;
+    trustedModules?: string[];
+  };
   node: string;
   nodeArgs: Record<string, any>;
   limits: RunLimits;
@@ -1169,6 +1201,7 @@ async function invokeSubprocess(args: {
   spanId?: string;
   childDepth?: number;
   cappedMaxDepth?: number;
+  trustedModules: TrustedModules[];
 }): Promise<any> {
   const scriptPath = materializeCompiledScript(args.compiled);
   const startedAt = performance.now();
@@ -1203,6 +1236,7 @@ async function invokeSubprocess(args: {
         ...(args.spanId ? { spanContext: args.spanId } : {}),
         ...(args.childDepth !== undefined ? { depth: args.childDepth } : {}),
         ...(args.cappedMaxDepth !== undefined ? { maxDepth: args.cappedMaxDepth } : {}),
+        trustedModules: args.trustedModules,
       },
     });
     const outcome = await runSubprocessSession({
@@ -1291,9 +1325,32 @@ export async function _run(
 
 /** `_run` for a run the caller already holds. Generated code wraps this one
  *  as an AgencyFunction, whose body is handed the run first. */
+/** The list a child may compile against: this process's whole list when
+ *  every file the child's program is marked as loading sits under a trusted
+ *  compiled directory, and none otherwise. A program that loads host code is
+ *  a host program, and a trusted tool inside it may run a nested workflow
+ *  over tools from any entry. A program compiled without the list, such as
+ *  one a model wrote and ran with `runCode`, carries an empty mark, so
+ *  neither it nor any program it runs can reach a trusted directory. The
+ *  mark is a field on a record the calling program holds (issue #1366); a
+ *  mark naming a file outside every entry passes down nothing, and one
+ *  naming a real host file hands down a list the child cannot use without a
+ *  branded tool value. Throws when a config entry does not resolve. */
+export function trustedModulesForChild(
+  ctx: RuntimeContext<any>,
+  compiled: { trustedModules?: string[] },
+): TrustedModules[] {
+  const marked = compiled.trustedModules ?? [];
+  if (marked.length === 0) return [];
+  const list = effectiveTrustedModules(ctx);
+  const underTrusted = (file: string): boolean =>
+    list.some((entry) => isStrictDescendant(entry.compiled, file));
+  return marked.every(underTrusted) ? list : [];
+}
+
 export async function _runFor(
   store: Run,
-  compiled: { moduleId: string; code: string },
+  compiled: { moduleId: string; code: string; trustedModules?: string[] },
   node: string,
   args: Record<string, any>,
   wallClock: number,
@@ -1317,6 +1374,14 @@ export async function _runFor(
   }
 
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
+
+  // A config entry that does not resolve is the run's failure, not a throw.
+  let trustedModules: TrustedModules[];
+  try {
+    trustedModules = trustedModulesForChild(ctx, compiled);
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : String(error));
+  }
 
   // The child runs a program compiled in the sandbox, which baked the
   // built-in model and provider and none of the parent's `agency.json`. So the
@@ -1371,6 +1436,7 @@ export async function _runFor(
               spanId,
               childDepth,
               cappedMaxDepth,
+              trustedModules,
             }),
         },
       ],

@@ -20,6 +20,11 @@
  * typed lands in its source.
  */
 import path from "path";
+import {
+  compiledPathFor,
+  trustedEntryFor,
+  type TrustedModules,
+} from "../../compiler/trustedModules.js";
 import { importLine } from "../../stdlib/workflow/lower.js";
 import type { ToolImport } from "./toolImports.js";
 
@@ -98,22 +103,40 @@ export const DRIVER_NAMES = [
 
 const TOKEN = /\{\{(imports|tools)\}\}/g;
 
-/** The import path from the driver's folder to a local module. */
-function importPath(module: string, projectDir: string, driverDir: string): string {
+/** The import path from the driver's folder to a local module. A module
+ *  under a trusted source directory is imported from its compiled file, as
+ *  the sandbox imports it: compiled from source, its TypeScript imports
+ *  would point into the source tree, where nothing is built. */
+function importPath(
+  module: string,
+  projectDir: string,
+  driverDir: string,
+  trustedModules: TrustedModules[],
+): string {
   if (module.startsWith("std::")) {
     return module;
   }
-  const relative = path.relative(driverDir, path.resolve(projectDir, module));
-  return relative.split(path.sep).join("/");
+  const file = path.resolve(projectDir, module);
+  const entry = trustedEntryFor(file, trustedModules);
+  const target = entry === null ? file : compiledPathFor(file, entry);
+  return path.relative(driverDir, target).split(path.sep).join("/");
 }
 
 /** The driver's text, with each local module's path made relative to the
  *  folder the driver is written to. */
-export function driverSource(imports: ToolImport[], projectDir: string, driverDir: string): string {
+export function driverSource(
+  imports: ToolImport[],
+  projectDir: string,
+  driverDir: string,
+  trustedModules: TrustedModules[],
+): string {
   const values: Record<string, string> = {
     imports: imports
       .map((entry) =>
-        importLine({ module: importPath(entry.module, projectDir, driverDir), names: entry.names }),
+        importLine({
+          module: importPath(entry.module, projectDir, driverDir, trustedModules),
+          names: entry.names,
+        }),
       )
       .join("\n"),
     tools: imports.flatMap((entry) => entry.names).join(", "),

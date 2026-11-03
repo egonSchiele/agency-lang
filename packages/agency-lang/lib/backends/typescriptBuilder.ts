@@ -4627,6 +4627,15 @@ export class TypeScriptBuilder {
     if (cfg.client?.providerModules && cfg.client.providerModules.length > 0) {
       runtimeCtxArgs.providerModules = ts.arr(cfg.client.providerModules.map((p) => ts.str(p)));
     }
+    // Baked as written: the root resolves the paths against its working
+    // directory when it hands them to the sandbox (effectiveTrustedModules).
+    if (cfg.sandbox?.trustedModules && cfg.sandbox.trustedModules.length > 0) {
+      runtimeCtxArgs.trustedModules = ts.arr(
+        cfg.sandbox.trustedModules.map((entry) =>
+          ts.obj({ source: ts.str(entry.source), compiled: ts.str(entry.compiled) }),
+        ),
+      );
+    }
 
     const traceConfigFields: Record<string, TsNode> = {
       program: ts.str(this.moduleId),

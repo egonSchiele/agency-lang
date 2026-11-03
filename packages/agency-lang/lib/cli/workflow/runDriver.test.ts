@@ -20,6 +20,7 @@ describe("runDriver", () => {
   const call = (config = {}) => ({
     dir,
     imports: [{ module: "./notes.agency", names: ["searchNotes"] }],
+    trustedModules: [],
     node: "wfCheckNode",
     args: ["addOne", dir],
     config,

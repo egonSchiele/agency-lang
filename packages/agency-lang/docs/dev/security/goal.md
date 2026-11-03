@@ -176,6 +176,11 @@ approved, and they are worth naming so nobody reads "sandboxed" as "safe":
 These are policy-and-review problems, permanently outside what any sandbox
 catches.
 
+A third kind of code is outside the sandbox by declaration: a trusted module,
+which a host names in `agency.json` so a workflow can call its tools. It is
+the host's code and runs with whatever the child has. See
+`docs/dev/security/trusted-modules.md`.
+
 ## Hosting strangers
 
 Motivation (2) is a different and larger project, and most of it is not in this

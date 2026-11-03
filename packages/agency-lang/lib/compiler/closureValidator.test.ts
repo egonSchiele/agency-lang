@@ -398,3 +398,204 @@ describe("validateClosure", () => {
     }
   });
 });
+
+describe("validateClosure with trusted modules", () => {
+  // dir/
+  //   main.agency           imports ./tools/tools.agency (trusted)
+  //   tools/tools.agency    imports ./helper.js and ../shared/types.agency
+  //   tools/helper.js
+  //   shared/types.agency   imports ./util.js (not trusted, mirrored only)
+  //   shared/util.js
+  //   dist/tools/tools.js   the compiled file
+  const TOOLS =
+    'import { shout } from "./helper.js"\nimport { Loud } from "../shared/types.agency"\nexport def shoutViaJs(text: string): string { return shout(text) }\n';
+  const TYPES = 'import { util } from "./util.js"\nexport type Loud = string\n';
+  const MAIN =
+    'import { shoutViaJs } from "./tools/tools.agency"\nexport node main(): string { return shoutViaJs("hi") }\n';
+
+  function layout(dir: string, options: { compiled?: boolean } = {}) {
+    fs.mkdirSync(path.join(dir, "tools"));
+    fs.mkdirSync(path.join(dir, "shared"));
+    fs.mkdirSync(path.join(dir, "dist", "tools"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "tools", "tools.agency"), TOOLS);
+    fs.writeFileSync(path.join(dir, "tools", "helper.js"), "export const shout = (t) => t;\n");
+    fs.writeFileSync(path.join(dir, "shared", "types.agency"), TYPES);
+    fs.writeFileSync(path.join(dir, "shared", "util.js"), "export const util = 1;\n");
+    if (options.compiled !== false) {
+      fs.writeFileSync(path.join(dir, "dist", "tools", "tools.js"), "export {};\n");
+    }
+    fs.writeFileSync(path.join(dir, "main.agency"), MAIN);
+    const real = fs.realpathSync(dir);
+    return {
+      trustedModules: [
+        { source: path.join(real, "tools"), compiled: path.join(real, "dist", "tools") },
+      ],
+      compiled: path.join(real, "dist", "tools", "tools.js"),
+    };
+  }
+
+  test("a trusted module is mirrored, its import is mapped to the compiled file, and its .js helper is not read", () => {
+    const dir = makeDir(".cv-trust-");
+    try {
+      const { trustedModules, compiled } = layout(dir);
+      const snap = snapshotValidatedClosureForTest(
+        validateClosure({ entry: { file: "main.agency" }, dir, trustedModules }),
+      );
+      expect(snap.moduleRelativePaths.sort()).toEqual([
+        "main.agency",
+        "shared/types.agency",
+        "tools/tools.agency",
+      ]);
+      expect(snap.trustedRelativePaths.sort()).toEqual([
+        "shared/types.agency",
+        "tools/tools.agency",
+      ]);
+      expect(snap.trustedImports).toEqual({
+        "main.agency": { "./tools/tools.agency": compiled },
+      });
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("with no trusted modules the same layout is refused, as before", () => {
+    const dir = makeDir(".cv-untrusted-");
+    try {
+      layout(dir);
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
+      expect(violations.join("\n")).toContain("only .agency files may be imported");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a trusted module as the entry (the describe case) is accepted and mirrored", () => {
+    const dir = makeDir(".cv-trust-entry-");
+    try {
+      const { trustedModules } = layout(dir);
+      const snap = snapshotValidatedClosureForTest(
+        validateClosure({ entry: { file: "tools/tools.agency" }, dir, trustedModules }),
+      );
+      expect(snap.trustedRelativePaths.sort()).toEqual([
+        "shared/types.agency",
+        "tools/tools.agency",
+      ]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a validated file importing the .js helper directly is still refused", () => {
+    const dir = makeDir(".cv-trust-js-");
+    try {
+      const { trustedModules } = layout(dir);
+      fs.writeFileSync(
+        path.join(dir, "direct.agency"),
+        'import { shout } from "./tools/helper.js"\nexport node main(): string { return shout("hi") }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "direct.agency" }, dir, trustedModules }),
+      );
+      expect(violations.join("\n")).toContain("only .agency files may be imported");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a file reached from a trusted module and also imported by validated code is validated", () => {
+    const dir = makeDir(".cv-trust-both-");
+    try {
+      const { trustedModules } = layout(dir);
+      fs.writeFileSync(
+        path.join(dir, "both.agency"),
+        'import { shoutViaJs } from "./tools/tools.agency"\nimport { Loud } from "./shared/types.agency"\nexport node main(): string { return shoutViaJs("hi") }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "both.agency" }, dir, trustedModules }),
+      );
+      expect(violations.join("\n")).toContain("'./util.js', which is not Agency source");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a trusted module whose compiled file is missing is refused, naming both paths", () => {
+    const dir = makeDir(".cv-trust-missing-");
+    try {
+      const { trustedModules, compiled } = layout(dir, { compiled: false });
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir, trustedModules }),
+      );
+      const text = violations.join("\n");
+      expect(text).toContain("'./tools/tools.agency'");
+      expect(text).toContain(`compiled file '${compiled}' does not exist; build it first`);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a trusted module in a subdirectory keeps its subdirectory in the compiled path", () => {
+    const dir = makeDir(".cv-trust-sub-");
+    try {
+      const { trustedModules } = layout(dir);
+      fs.mkdirSync(path.join(dir, "tools", "scheduled"));
+      fs.mkdirSync(path.join(dir, "dist", "tools", "scheduled"));
+      fs.writeFileSync(
+        path.join(dir, "tools", "scheduled", "run.agency"),
+        TOOLS.replace("./helper.js", "../helper.js").replace("../shared", "../../shared"),
+      );
+      fs.writeFileSync(path.join(dir, "dist", "tools", "scheduled", "run.js"), "export {};\n");
+      fs.writeFileSync(
+        path.join(dir, "sub.agency"),
+        'import { shoutViaJs } from "./tools/scheduled/run.agency"\nexport node main(): string { return shoutViaJs("hi") }\n',
+      );
+      const snap = snapshotValidatedClosureForTest(
+        validateClosure({ entry: { file: "sub.agency" }, dir, trustedModules }),
+      );
+      expect(snap.trustedImports["sub.agency"]["./tools/scheduled/run.agency"]).toBe(
+        path.join(fs.realpathSync(dir), "dist", "tools", "scheduled", "run.js"),
+      );
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a trusted directory reached through a symlink in the import path is refused", () => {
+    const dir = makeDir(".cv-trust-link-");
+    try {
+      const { trustedModules } = layout(dir);
+      fs.symlinkSync(path.join(dir, "tools"), path.join(dir, "linked"));
+      fs.writeFileSync(
+        path.join(dir, "viaLink.agency"),
+        'import { shoutViaJs } from "./linked/tools.agency"\nexport node main(): string { return shoutViaJs("hi") }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "viaLink.agency" }, dir, trustedModules }),
+      );
+      expect(violations.join("\n")).toContain("goes through a symlink");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a trusted module outside dir is refused by the containment rule", () => {
+    const parent = makeDir(".cv-trust-out-");
+    try {
+      const { trustedModules } = layout(parent);
+      const dir = path.join(parent, "inner");
+      fs.mkdirSync(dir);
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import { shoutViaJs } from "../tools/tools.agency"\nexport node main(): string { return shoutViaJs("hi") }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir, trustedModules }),
+      );
+      expect(violations.join("\n")).toContain("which is outside the sandbox dir");
+    } finally {
+      cleanup(parent);
+    }
+  });
+});

@@ -165,6 +165,20 @@ describe("AgencyConfig maxCallDepth key", () => {
   });
 });
 
+describe("AgencyConfig sandbox key", () => {
+  it("accepts a trusted modules entry", () => {
+    const config = {
+      sandbox: { trustedModules: [{ source: "src/agent", compiled: "dist/agent" }] },
+    };
+    expect(AgencyConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  it("rejects an entry missing compiled", () => {
+    const config = { sandbox: { trustedModules: [{ source: "src/agent" }] } };
+    expect(AgencyConfigSchema.safeParse(config).success).toBe(false);
+  });
+});
+
 describe("AgencyConfig maxToolCallRounds key", () => {
   it("accepts a positive integer", () => {
     expect(AgencyConfigSchema.safeParse({ maxToolCallRounds: 20 }).success).toBe(true);

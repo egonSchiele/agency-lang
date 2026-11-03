@@ -31,6 +31,7 @@ import {
 import { runPolicy, startRules, uncoveredEffects, type StartPrompts } from "./runPolicy.js";
 import type { DriverCall, DriverOutcome } from "./runDriver.js";
 import { importsForSources, importsForSteps, type ImportPlan } from "./toolImports.js";
+import { resolveTrustedModules, type TrustedModules } from "../../compiler/trustedModules.js";
 
 export type WorkflowIo = {
   cwd: string;
@@ -47,6 +48,8 @@ export type PreparedWorkflow = {
   /** The file's `workflow`, after `parseWorkflow`. */
   workflow: Workflow;
   plan: ImportPlan;
+  /** The project's resolved list, for the driver's imports. */
+  trustedModules: TrustedModules[];
   /** How the file is named in messages: its path from the working directory. */
   label: string;
 };
@@ -78,12 +81,17 @@ export function prepareWorkflow(
     io.err(formatProblems(label, parsed.problems));
     return { exitCode: 1 };
   }
-  const plan = importsForSteps(parsed.workflow, found.dir);
+  const trusted = resolveTrustedModules(io.config.sandbox?.trustedModules ?? [], io.cwd);
+  if (!trusted.ok) {
+    io.err(stripControlCharacters(trusted.error));
+    return { exitCode: 2 };
+  }
+  const plan = importsForSteps(parsed.workflow, found.dir, trusted.value);
   if (plan.problems.length > 0) {
     io.err(formatProblems(label, plan.problems));
     return { exitCode: 1 };
   }
-  return { found, workflow: parsed.workflow, plan, label };
+  return { found, workflow: parsed.workflow, plan, trustedModules: trusted.value, label };
 }
 
 export type DriverResult =
@@ -179,10 +187,11 @@ async function runPrepared(
   node: string,
   io: WorkflowIo,
 ): Promise<DriverResult> {
-  const { found, plan } = prepared;
+  const { found, plan, trustedModules } = prepared;
   const outcome = await io.runDriver({
     dir: found.dir,
     imports: plan.imports,
+    trustedModules,
     node,
     args: [found.name, found.dir],
     config: io.config,
@@ -232,7 +241,12 @@ export async function workflowTools(
   io: WorkflowIo,
 ): Promise<number> {
   const dir = path.resolve(io.cwd, options.dir ?? ".");
-  const plan = importsForSources(sources, dir, io.cwd);
+  const trusted = resolveTrustedModules(io.config.sandbox?.trustedModules ?? [], io.cwd);
+  if (!trusted.ok) {
+    io.err(stripControlCharacters(trusted.error));
+    return 2;
+  }
+  const plan = importsForSources(sources, dir, io.cwd, trusted.value);
   if ("error" in plan) {
     io.err(stripControlCharacters(plan.error));
     return 2;
@@ -244,6 +258,7 @@ export async function workflowTools(
   const outcome = await io.runDriver({
     dir,
     imports: plan.imports,
+    trustedModules: trusted.value,
     node: DRIVER_NODES.tools,
     args: [dir],
     config: io.config,
@@ -269,6 +284,7 @@ export async function workflowList(
   const outcome = await io.runDriver({
     dir,
     imports: [],
+    trustedModules: [],
     node: DRIVER_NODES.list,
     args: [dir],
     config: io.config,
@@ -371,6 +387,7 @@ export async function workflowRun(
   const outcome = await io.runDriver({
     dir: start.dir,
     imports: prepared.plan.imports,
+    trustedModules: prepared.trustedModules,
     node: DRIVER_NODES.run,
     args: [start.name, start.dir, inputs],
     config: settings.config,

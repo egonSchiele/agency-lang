@@ -49,8 +49,17 @@ export function compileValidatedClosure(
     let entrySource = "";
     let entryMirrorPath = "";
     let entryRelPath = "";
-    const mirrored: { moduleId: string; relPath: string; source: string; mirrorPath: string }[] =
-      [];
+    let entryTrustedImports: Record<string, string> = {};
+    const mirrored: {
+      moduleId: string;
+      relPath: string;
+      source: string;
+      mirrorPath: string;
+      trustedImports: Record<string, string>;
+    }[] = [];
+    // Every module goes into the mirror, so the typechecker and the closure
+    // builder see a complete tree. Only the untrusted ones are compiled: a
+    // trusted module is loaded from the host's compiled file.
     for (const [moduleId, mod] of Object.entries(data.modules)) {
       const target = path.join(mirrorRoot, ...mod.relPath.split(path.posix.sep));
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -59,10 +68,21 @@ export function compileValidatedClosure(
         entrySource = mod.source;
         entryMirrorPath = target;
         entryRelPath = mod.relPath;
-      } else {
-        mirrored.push({ moduleId, relPath: mod.relPath, source: mod.source, mirrorPath: target });
+        entryTrustedImports = mod.trustedImports;
+      } else if (!mod.trusted) {
+        mirrored.push({
+          moduleId,
+          relPath: mod.relPath,
+          source: mod.source,
+          mirrorPath: target,
+          trustedImports: mod.trustedImports,
+        });
       }
     }
+    const trustedModules = Object.values(data.modules)
+      .flatMap((mod) => Object.values(mod.trustedImports))
+      .filter((file, index, all) => all.indexOf(file) === index)
+      .sort();
     if (entryMirrorPath === "") {
       return { success: false, errors: ["internal: validated closure has no entry module"] };
     }
@@ -85,6 +105,7 @@ export function compileValidatedClosure(
       ...sandboxOptions,
       sourcePath: entryMirrorPath,
       fingerprintModuleId: options.fingerprintModuleIds ? data.entryModuleId : undefined,
+      trustedImports: entryTrustedImports,
     });
     if (!entryResult.success) return entryResult;
     // The entry's generated JS imports each local module by relative path
@@ -97,6 +118,7 @@ export function compileValidatedClosure(
         ...sandboxOptions,
         sourcePath: mod.mirrorPath,
         fingerprintModuleId: options.fingerprintModuleIds ? mod.moduleId : undefined,
+        trustedImports: mod.trustedImports,
       });
       if (!result.success) {
         return {
@@ -107,11 +129,16 @@ export function compileValidatedClosure(
       modules[mod.relPath.replace(/\.agency$/, ".js")] = result.code;
     }
     if (mirrored.length === 0) {
-      return entryResult;
+      return { ...entryResult, trustedModules };
     }
     // The entry keeps its place in the layout: a nested entry importing a
     // sibling emits "./helper.js", which only resolves from the same dir.
-    return { ...entryResult, modules, entryPath: entryRelPath.replace(/\.agency$/, ".js") };
+    return {
+      ...entryResult,
+      modules,
+      entryPath: entryRelPath.replace(/\.agency$/, ".js"),
+      trustedModules,
+    };
   } finally {
     safeDeleteDirectoryWithin(os.tmpdir(), mirrorRoot);
   }

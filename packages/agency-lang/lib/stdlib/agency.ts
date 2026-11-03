@@ -56,18 +56,24 @@ import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import type { TrustedModules } from "../compiler/trustedModules.js";
 
 type CompiledProgramValue = {
   moduleId: string;
   code: string;
   modules?: Record<string, string>;
   entryPath?: string;
+  /** The absolute compiled paths of the trusted modules this program
+   *  loads, sorted; empty when it loads none. Shown in the `std::run`
+   *  interrupt, and checked to exist before the fork. */
+  trustedModules: string[];
 };
 
 function compileToProgram(
   entry: ClosureEntry,
   dir: string,
-  strict: boolean = false,
+  strict: boolean,
+  trustedModules: TrustedModules[],
 ): CompiledProgramValue {
   // Sandboxed compile: the closure validator enforces the pure-Agency
   // invariant (std:: + dir-local .agency; no TS/JS, node builtins, pkg::,
@@ -75,7 +81,7 @@ function compileToProgram(
   // `strict` adds the name checks `--agency-only` compiles with. The
   // default leaves them off: a trusted caller's program may name a JS
   // global outside the sandbox allowlist.
-  const result = compileSandboxed({ entry, dir, enforceJsGlobals: strict });
+  const result = compileSandboxed({ entry, dir, enforceJsGlobals: strict, trustedModules });
 
   if (!result.success) {
     throw new Error(result.errors.join("\n"));
@@ -85,13 +91,28 @@ function compileToProgram(
   // checkpoint containing it is fully self-contained — the code is
   // generated at runtime and cannot be assumed present on disk at resume
   // time. `_run` materializes it to .agency-tmp/ at fork time; `modules`
-  // carries the rest of a multi-file closure, materialized beside it.
+  // carries the rest of a multi-file closure, materialized beside it. The
+  // one exception is a trusted module: the program imports the host's
+  // compiled file by its absolute path, and `trustedModules` names each one.
   return {
     moduleId: result.moduleId,
     code: result.code,
     ...(result.modules !== undefined ? { modules: result.modules } : {}),
     ...(result.entryPath !== undefined ? { entryPath: result.entryPath } : {}),
+    trustedModules: result.trustedModules ?? [],
   };
+}
+
+/** `compile` with a trusted-modules list. Only std::workflow passes a
+ *  non-empty one (`_compileTrusted` in lib/stdlib/workflow/index.ts); the
+ *  public `compile` passes `[]`. See docs/dev/runtime/trusted-modules.md. */
+export function compileWithTrustedModules(
+  source: string,
+  dir: string,
+  strict: boolean,
+  trustedModules: TrustedModules[],
+): CompiledProgramValue {
+  return compileToProgram({ source }, dir, strict, trustedModules);
 }
 
 export function _compile(
@@ -99,7 +120,7 @@ export function _compile(
   dir: string = "",
   strict: boolean = false,
 ): CompiledProgramValue {
-  return compileToProgram({ source }, dir, strict);
+  return compileToProgram({ source }, dir, strict, []);
 }
 
 // Resolve `filename` against `dir`, the sandbox. An absolute filename, a
@@ -129,7 +150,15 @@ export function _compileFile(dir: string, filename: string): CompiledProgramValu
   // sandboxed compile then reads the file itself as part of validation.
   // No interrupt precedes this, so the caller's spelling resolves.
   resolveInSandbox(dir, filename, root);
-  return compileToProgram({ file: filename }, dir);
+  return compileToProgram({ file: filename }, dir, false, []);
+}
+
+/** The trusted compiled files a program loads, for the `std::run`
+ *  interrupt. A program compiled before trusted modules existed, or a
+ *  hand-built value, has none. */
+export function _programTrustedModules(compiled: { trustedModules?: unknown }): string[] {
+  const files = compiled?.trustedModules;
+  return Array.isArray(files) ? files.filter((file) => typeof file === "string") : [];
 }
 
 /** The current process's subprocess nesting depth (0 = root). Backs the
@@ -145,8 +174,19 @@ export function _typecheck(
   dir: string = "",
   strict: boolean = false,
 ): TypeCheckReport {
+  return typecheckWithTrustedModules(source, dir, strict, []);
+}
+
+/** `typecheck` with a trusted-modules list, which only the strict import
+ *  check reads. Only std::workflow passes a non-empty one. */
+export function typecheckWithTrustedModules(
+  source: string,
+  dir: string,
+  strict: boolean,
+  trustedModules: TrustedModules[],
+): TypeCheckReport {
   if (strict) {
-    const refused = sandboxImportErrors(source, dir);
+    const refused = sandboxImportErrors(source, dir, trustedModules);
     if (refused.length > 0) {
       return { errors: refused, warnings: [] };
     }
@@ -174,12 +214,16 @@ export function _typecheck(
  * Source that does not parse is left to the type check, which reports it the
  * way it always has.
  */
-function sandboxImportErrors(source: string, dir: string): TypeCheckReport["errors"] {
+function sandboxImportErrors(
+  source: string,
+  dir: string,
+  trustedModules: TrustedModules[],
+): TypeCheckReport["errors"] {
   if (!parseAgency(source, {}, false).success) {
     return [];
   }
   try {
-    validateClosure({ entry: { source }, dir });
+    validateClosure({ entry: { source }, dir, trustedModules });
     return [];
   } catch (error) {
     if (!(error instanceof ClosureValidationError)) {
@@ -258,6 +302,18 @@ function isInternalExport(name: string): boolean {
  *  come back as thin "reexport" entries whose effects carry the
  *  "unknown" sentinel — never a silent omission. */
 export function _describe(source: string, dir: string = "", filename: string = ""): ModuleInfo {
+  return describeWithTrustedModules(source, dir, filename, []);
+}
+
+/** `describe` with a trusted-modules list, so a trusted module's imports of
+ *  TypeScript do not refuse it. Only std::workflow and the `agency workflow`
+ *  commands pass a non-empty one. */
+export function describeWithTrustedModules(
+  source: string,
+  dir: string,
+  filename: string,
+  trustedModules: TrustedModules[],
+): ModuleInfo {
   if ((dir === "") !== (filename === "")) {
     throw new Error(
       "describe needs both dir and filename to resolve a module's imports, or neither",
@@ -266,7 +322,7 @@ export function _describe(source: string, dir: string = "", filename: string = "
   if (dir === "") {
     return describeSource(source, []).info;
   }
-  return describeSource(source, [], describedFilePath(source, dir, filename)).info;
+  return describeSource(source, [], describedFilePath(source, dir, filename, trustedModules)).info;
 }
 
 /** The real path of the module `describe` was told `source` came from,
@@ -275,13 +331,18 @@ export function _describe(source: string, dir: string = "", filename: string = "
  *  anything runs: a TypeScript file, an escape from `dir`, a symlink, or a
  *  splice is refused. `source` must be the file's text, or the check would
  *  cover one set of imports while describe resolved another. */
-function describedFilePath(source: string, dir: string, filename: string): string {
+function describedFilePath(
+  source: string,
+  dir: string,
+  filename: string,
+  trustedModules: TrustedModules[],
+): string {
   const realPath = resolveInSandbox(dir, filename, root);
   if (readText(root(dir), filename) !== source) {
     throw new Error(`describe was given text that is not the contents of ${filename}`);
   }
   try {
-    validateClosure({ entry: { file: filename }, dir });
+    validateClosure({ entry: { file: filename }, dir, trustedModules });
   } catch (error) {
     if (error instanceof ClosureValidationError) {
       throw new Error(`describe refused ${filename}: ${error.violations.join("; ")}`);

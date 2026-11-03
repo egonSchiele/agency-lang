@@ -1,0 +1,46 @@
+import { runWorkflow, Workflow } from "std::workflow"
+import { shoutViaJs } from "./tools.agency"
+import { shoutUntrusted } from "../other/tools.agency"
+import { shoutMore } from "../more/tools.agency"
+
+/** A one-step workflow that calls `tool` from `module` on the input text. */
+def oneStep(module: string, tool: string): Workflow {
+  return {
+    format: 1,
+    name: "shoutInner",
+    description: "Shout the text.",
+    inputs: "{ text: string }",
+    steps: [{ id: "loud", kind: "tool", module: module, tool: tool, args: { text: { "$ref": "inputs.text" } } }],
+    result: { "$ref": "steps.loud" }
+  }
+}
+
+/** Runs a workflow over a trusted tool from inside a workflow's child. */
+export def shoutTwiceRemoved(text: string): string {
+  const result = runWorkflow(oneStep("./tools/tools.agency", "shoutViaJs"), { text: text }, [shoutViaJs])
+  if (result is failure) {
+    return "refused: ${result.error}"
+  }
+  return "${result.value}"
+}
+
+/** Runs a workflow over a tool from a second trusted entry, from inside a
+  workflow's child: the child got the whole list, not only the entry the
+  outer workflow's tools sit under. */
+export def shoutAcrossEntries(text: string): string {
+  const result = runWorkflow(oneStep("./more/tools.agency", "shoutMore"), { text: text }, [shoutMore])
+  if (result is failure) {
+    return "refused: ${result.error}"
+  }
+  return "${result.value}"
+}
+
+/** Runs a workflow over a tool outside the trusted list, from inside a
+  workflow's child. */
+export def shoutOutsideTheList(text: string): string {
+  const result = runWorkflow(oneStep("./other/tools.agency", "shoutUntrusted"), { text: text }, [shoutUntrusted])
+  if (result is failure) {
+    return "refused: ${result.error}"
+  }
+  return "${result.value}"
+}

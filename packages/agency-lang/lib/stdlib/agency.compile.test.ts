@@ -1,6 +1,11 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { _compile, _subprocessDepth, effectiveTrustedModules } from "./agency.js";
-import { readdirSync, existsSync, mkdirSync, mkdtempSync, realpathSync } from "fs";
+import {
+  _compile,
+  _subprocessDepth,
+  compileWithTrustedModules,
+  effectiveTrustedModules,
+} from "./agency.js";
+import { readdirSync, existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "fs";
 import { join, relative } from "path";
 import { setSubprocessRunInfo } from "../runtime/subprocessRunInfo.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
@@ -100,5 +105,28 @@ describe("_compile", () => {
       }
     });
     expect(mentionsModule).toEqual([]);
+  });
+});
+
+describe("compile and trusted modules", () => {
+  it("compileWithTrustedModules uses the list, and the public _compile never does", () => {
+    const dir = realpathSync(mkdtempSync(join(process.cwd(), ".ctm-")));
+    try {
+      mkdirSync(join(dir, "tools"));
+      writeFileSync(join(dir, "tools", "helper.js"), "export const shout = (t) => t;\n");
+      writeFileSync(
+        join(dir, "tools", "tools.agency"),
+        'import { shout } from "./helper.js"\nexport def shoutViaJs(text: string): string { return shout(text) }\n',
+      );
+      writeFileSync(join(dir, "tools", "tools.js"), "export {};\n");
+      const source =
+        'import { shoutViaJs } from "./tools/tools.agency"\nexport node main(): string { return shoutViaJs("hi") }\n';
+      const trusted = [{ source: join(dir, "tools"), compiled: join(dir, "tools") }];
+      const program = compileWithTrustedModules(source, dir, false, trusted);
+      expect(program.trustedModules).toEqual([join(dir, "tools", "tools.js")]);
+      expect(() => _compile(source, dir)).toThrow(/only .agency files may be imported/);
+    } finally {
+      safeDeleteDirectoryWithin(process.cwd(), dir);
+    }
   });
 });

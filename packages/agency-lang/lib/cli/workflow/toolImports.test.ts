@@ -14,7 +14,7 @@ const stepsOf = (...steps: [string, string, string][]) => ({
 
 describe("describeModule", () => {
   it("describes a local module's defs, with their effects", () => {
-    const lists = describeModule("./lists.agency", FIXTURES);
+    const lists = describeModule("./lists.agency", FIXTURES, []);
     expect("error" in lists).toBe(false);
     if ("error" in lists) return;
     expect(Object.keys(lists.signatures).sort()).toEqual(["addListItems", "findLists"]);
@@ -22,26 +22,26 @@ describe("describeModule", () => {
   });
 
   it("describes a standard module", () => {
-    const math = describeModule("std::math", FIXTURES);
+    const math = describeModule("std::math", FIXTURES, []);
     expect("signatures" in math && Object.hasOwn(math.signatures, "round")).toBe(true);
   });
 
   it("refuses a std:: name that is a path", () => {
-    expect(describeModule("std::../../x", FIXTURES)).toEqual({
+    expect(describeModule("std::../../x", FIXTURES, [])).toEqual({
       error: '"std::../../x" is not a standard module name',
       reachable: false,
     });
   });
 
   it("describes a module that imports another local file", () => {
-    const greet = describeModule("./withHelper.agency", FIXTURES);
+    const greet = describeModule("./withHelper.agency", FIXTURES, []);
     expect("signatures" in greet && Object.keys(greet.signatures)).toEqual(["greet"]);
   });
 });
 
 describe("importsForSteps", () => {
   it("imports the meal plan's tools, one import per module", () => {
-    const plan = importsForSteps(mealPlan, FIXTURES);
+    const plan = importsForSteps(mealPlan, FIXTURES, []);
     expect(plan.problems).toEqual([]);
     expect(plan.imports).toEqual([
       { module: "./notes.agency", names: ["searchNotes", "readNote"] },
@@ -54,6 +54,7 @@ describe("importsForSteps", () => {
     const plan = importsForSteps(
       stepsOf(["a", "./notes.agency", "nope"], ["b", "./missing.agency", "x"]),
       FIXTURES,
+      [],
     );
     expect(plan).toEqual({ imports: [], signatures: {}, problems: [] });
   });
@@ -62,19 +63,21 @@ describe("importsForSteps", () => {
     const plan = importsForSteps(
       stepsOf(["a", "./notes.agency", "searchNotes"], ["b", "std::math", "searchNotes"]),
       FIXTURES,
+      [],
     );
     // std::math has no searchNotes, so only a clash between two real defs counts.
     expect(plan.problems).toEqual([]);
     const clash = importsForSteps(
       stepsOf(["a", "./notes.agency", "searchNotes"], ["b", "./notes.agency", "searchNotes"]),
       FIXTURES,
+      [],
     );
     expect(clash.problems).toEqual([]);
     expect(clash.imports).toEqual([{ module: "./notes.agency", names: ["searchNotes"] }]);
   });
 
   it("imports a tool whose module imports another local file", () => {
-    const plan = importsForSteps(stepsOf(["g", "./withHelper.agency", "greet"]), FIXTURES);
+    const plan = importsForSteps(stepsOf(["g", "./withHelper.agency", "greet"]), FIXTURES, []);
     expect(plan.imports).toEqual([{ module: "./withHelper.agency", names: ["greet"] }]);
   });
 });
@@ -102,7 +105,7 @@ describe("modules in a temp folder", () => {
   });
 
   it("reports a module whose imports the sandbox refuses on the step's module field", () => {
-    const plan = importsForSteps(stepsOf(["s", "./usesTs.agency", "f"]), dir);
+    const plan = importsForSteps(stepsOf(["s", "./usesTs.agency", "f"]), dir, []);
     expect(plan.problems).toEqual([
       {
         step: "s",
@@ -118,6 +121,7 @@ describe("modules in a temp folder", () => {
     const plan = importsForSteps(
       stepsOf(["a", "./a.agency", "same"], ["b", "./b.agency", "same"]),
       dir,
+      [],
     );
     expect(plan.problems).toEqual([
       {
@@ -130,7 +134,7 @@ describe("modules in a temp folder", () => {
   });
 
   it("reports a tool named like one of the driver's names", () => {
-    const plan = importsForSteps(stepsOf(["d", "./driverName.agency", "wfTools"]), dir);
+    const plan = importsForSteps(stepsOf(["d", "./driverName.agency", "wfTools"]), dir, []);
     expect(plan.problems).toEqual([
       {
         step: "d",
@@ -141,21 +145,30 @@ describe("modules in a temp folder", () => {
   });
 
   it("names the source when a tools source cannot be described", () => {
-    expect(importsForSources(["./usesTs.agency"], dir, dir)).toEqual({
+    expect(importsForSources(["./usesTs.agency"], dir, dir, [])).toEqual({
       error: expect.stringMatching(
         /^\.\/usesTs\.agency: cannot read its exports: describe refused/,
       ),
     });
   });
 
+  it("describes a module that imports TypeScript when its directory is trusted", () => {
+    writeFileSync(path.join(dir, "usesTs.js"), "export {};\n");
+    const trusted = [{ source: dir, compiled: dir }];
+    const plan = importsForSources(["./usesTs.agency"], dir, dir, trusted);
+    expect("imports" in plan && plan.imports).toEqual([
+      { module: "./usesTs.agency", names: ["f"] },
+    ]);
+  });
+
   it("refuses a tools source outside the project directory", () => {
-    expect(importsForSources(["../elsewhere.agency"], dir, dir)).toEqual({
+    expect(importsForSources(["../elsewhere.agency"], dir, dir, [])).toEqual({
       error: `../elsewhere.agency: is not inside the project directory ${dir}`,
     });
   });
 
   it("imports every def of each tools source, written relative to the project", () => {
-    const plan = importsForSources(["a.agency", "std::math"], dir, dir);
+    const plan = importsForSources(["a.agency", "std::math"], dir, dir, []);
     expect("imports" in plan && plan.imports[0]).toEqual({ module: "./a.agency", names: ["same"] });
     expect("imports" in plan && plan.imports[1].names).toContain("round");
   });

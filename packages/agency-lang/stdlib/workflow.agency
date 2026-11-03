@@ -1,4 +1,4 @@
-import { compile, describe, run, typecheck, CompiledProgram, ExportInfo, ModuleInfo } from "std::agency"
+import { describe, run, CompiledProgram, ExportInfo, ModuleInfo } from "std::agency"
 import { now, format } from "std::date"
 import { read } from "std::index"
 import { filterEntries } from "std::object"
@@ -20,6 +20,9 @@ import {
   _workflowFailure,
   _workflowNameProblem,
   _catalogEntries,
+  _compileTrusted,
+  _describeTrusted,
+  _typecheckTrusted,
 } from "agency-lang/stdlib-lib/workflow/index.js"
 
 /** @module
@@ -155,7 +158,10 @@ type SignatureSource = {
 // A `std::` module is described from its re-export line. A local module is
 // read from `dir`, which asks for approval, and described with its path, so
 // its own imports of other local files resolve. Those files are read without
-// prompts of their own, as `_checked`'s type check already reads them.
+// prompts of their own, as `_checked`'s type check already reads them. A
+// local module may be a trusted module (`sandbox.trustedModules` in
+// agency.json): `_describeTrusted` describes it with the host's list, which
+// the public `describe` never sees.
 /**
 Describe a tool module with enough path context to resolve its local imports.
 */
@@ -165,7 +171,7 @@ def describeGroup(group: SignatureSource, dir: string): Result<ModuleInfo> {
     return describe(group.reExport)
   }
   const text = read(group.module, dir)?
-  return describe(text, dir: dir, filename: group.module)
+  return try _describeTrusted(text, dir, group.module)
 }
 
 /** What `describe` says about each tool, keyed by module and name. */
@@ -220,15 +226,17 @@ export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Check
   const source = compiled.source
   // The typecheck runs first: its errors carry a line and a payload, so each
   // one is mapped to its step and field. A strict compile reports the same
-  // errors as one message, so it runs second, for what is left.
-  const report = typecheck(source, dir: dir, strict: true)
+  // errors as one message, so it runs second, for what is left. Both use
+  // the host's trusted modules, so a step may call a tool whose module
+  // imports TypeScript; the public `typecheck` and `compile` never do.
+  const report = try _typecheckTrusted(source, dir, true)
   if (report is failure) {
     return _workflowFailure(report.error)
   }
   if (report.value.errors.length > 0) {
     return _problemsFailure(_problemsFromDiagnostics(report.value.errors, compiled.ranges, compiled.typeOwners))
   }
-  const program = compile(source, dir, strict: true)
+  const program = try _compileTrusted(source, dir, true)
   if (program is failure) {
     return _workflowFailure(program.error)
   }

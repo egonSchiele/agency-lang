@@ -8,7 +8,13 @@ import fs from "fs";
 import path from "path";
 import { root } from "../../host/node/nodeFiles.js";
 import { isStrictDescendant } from "../../utils.js";
-import { _describe, resolveInSandbox, type ExportInfo } from "../../stdlib/agency.js";
+import {
+  _describe,
+  describeWithTrustedModules,
+  resolveInSandbox,
+  type ExportInfo,
+} from "../../stdlib/agency.js";
+import type { TrustedModules } from "../../compiler/trustedModules.js";
 import { _pickSignatures } from "../../stdlib/workflow/index.js";
 import { MODULE_PATH } from "../../stdlib/workflow/tools.js";
 import {
@@ -36,7 +42,13 @@ export type DescribedModule = {
  *  still fails, such as one that does not parse, is reported here. */
 export type DescribeError = { error: string; reachable: boolean };
 
-export function describeModule(module: string, dir: string): DescribedModule | DescribeError {
+/** `trustedModules` is the project's resolved list, so a tool module whose
+ *  body calls TypeScript describes (docs/dev/runtime/trusted-modules.md). */
+export function describeModule(
+  module: string,
+  dir: string,
+  trustedModules: TrustedModules[],
+): DescribedModule | DescribeError {
   if (module.startsWith("std::")) {
     if (!STD_MODULE.test(module)) {
       return { error: `"${module}" is not a standard module name`, reachable: false };
@@ -57,7 +69,9 @@ export function describeModule(module: string, dir: string): DescribedModule | D
   }
   return described(
     module,
-    () => _describe(fs.readFileSync(file, "utf-8"), dir, module).exports,
+    () =>
+      describeWithTrustedModules(fs.readFileSync(file, "utf-8"), dir, module, trustedModules)
+        .exports,
     true,
   );
 }
@@ -156,7 +170,11 @@ function toolSteps(workflow: unknown): { id: string; module: string; tool: strin
 }
 
 /** `check`, `compile`, and `run`: the tools the steps name. */
-export function importsForSteps(workflow: unknown, dir: string): ImportPlan {
+export function importsForSteps(
+  workflow: unknown,
+  dir: string,
+  trustedModules: TrustedModules[],
+): ImportPlan {
   const modules: Record<string, DescribedModule> = {};
   const unreadable: Problem[] = [];
   const wanted: Wanted[] = [];
@@ -164,7 +182,7 @@ export function importsForSteps(workflow: unknown, dir: string): ImportPlan {
   for (const step of toolSteps(workflow)) {
     if (!tried.includes(step.module)) {
       tried.push(step.module);
-      const result = describeModule(step.module, dir);
+      const result = describeModule(step.module, dir, trustedModules);
       if (!isDescribeError(result)) {
         modules[step.module] = result;
       } else if (result.reachable) {
@@ -187,6 +205,7 @@ export function importsForSources(
   sources: string[],
   dir: string,
   cwd: string,
+  trustedModules: TrustedModules[],
 ): ImportPlan | { error: string } {
   const modules: Record<string, DescribedModule> = {};
   const wanted: Wanted[] = [];
@@ -195,7 +214,7 @@ export function importsForSources(
     if (module === null) {
       return { error: `${source}: is not inside the project directory ${dir}` };
     }
-    const result = describeModule(module, dir);
+    const result = describeModule(module, dir, trustedModules);
     if (isDescribeError(result)) {
       return { error: `${source}: cannot read its exports: ${result.error}` };
     }

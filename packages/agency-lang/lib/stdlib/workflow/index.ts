@@ -147,3 +147,5 @@ export function _problemsFromDiagnostics(
 ): Problem[] {
   return problemsFromDiagnostics(diagnostics, ranges, typeOwners);
 }
+
+export { _compileTrusted, _typecheckTrusted, _describeTrusted } from "./trusted.js";

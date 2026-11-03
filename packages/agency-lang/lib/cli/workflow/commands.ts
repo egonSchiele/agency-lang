@@ -31,6 +31,7 @@ import {
 import { runPolicy, startRules, uncoveredEffects, type StartPrompts } from "./runPolicy.js";
 import type { DriverCall, DriverOutcome } from "./runDriver.js";
 import { importsForSources, importsForSteps, type ImportPlan } from "./toolImports.js";
+import { resolveTrustedModules } from "../../compiler/trustedModules.js";
 
 export type WorkflowIo = {
   cwd: string;
@@ -78,7 +79,12 @@ export function prepareWorkflow(
     io.err(formatProblems(label, parsed.problems));
     return { exitCode: 1 };
   }
-  const plan = importsForSteps(parsed.workflow, found.dir);
+  const trusted = resolveTrustedModules(io.config.sandbox?.trustedModules ?? [], io.cwd);
+  if (!trusted.ok) {
+    io.err(stripControlCharacters(trusted.error));
+    return { exitCode: 2 };
+  }
+  const plan = importsForSteps(parsed.workflow, found.dir, trusted.value);
   if (plan.problems.length > 0) {
     io.err(formatProblems(label, plan.problems));
     return { exitCode: 1 };
@@ -232,7 +238,12 @@ export async function workflowTools(
   io: WorkflowIo,
 ): Promise<number> {
   const dir = path.resolve(io.cwd, options.dir ?? ".");
-  const plan = importsForSources(sources, dir, io.cwd);
+  const trusted = resolveTrustedModules(io.config.sandbox?.trustedModules ?? [], io.cwd);
+  if (!trusted.ok) {
+    io.err(stripControlCharacters(trusted.error));
+    return 2;
+  }
+  const plan = importsForSources(sources, dir, io.cwd, trusted.value);
   if ("error" in plan) {
     io.err(stripControlCharacters(plan.error));
     return 2;

@@ -9,14 +9,19 @@ Both fixes went into PR #1363, in a different form from the proposals below.
 The reasoning is decisions 4 and 5 of `docs/dev/security/trusted-modules.md`.
 
 - Fix 2 became a brand on the function itself, not a registry lookup.
-  `AgencyFunction` keeps `#brand` and the label fields (`#name`, `#module`,
-  `#registeredName`, `#sourceFile`) as private class fields with getters and
-  no setters. A private field cannot be forged from an object literal, an
-  `any` cast, or JSON, and an assignment to a getter with no setter throws in
-  strict mode. This covers the fake and the relabelled real function at
-  once, for every tool rather than only trusted paths, and `toolRefs` is
-  unchanged. The multi-copy concern about `instanceof` is the existing
-  assumption that a trusted module and its child load one runtime.
+  `toolRefs` accepts a tool only when `AgencyFunction.isBranded` finds the
+  private field `#brand`, which nothing made from data carries. The label
+  fields are own non-writable, non-configurable properties, so an assignment
+  or `Object.defineProperty` throws, and `derive` is a private method. The
+  runtime's own `isAgencyFunction` keeps reading the `__agencyFunction`
+  marker, because the runtime relies on raw JSON copies of a function still
+  reading as one (making the label private broke five tests in CI). The
+  multi-copy concern about `instanceof` is the existing assumption that a
+  trusted module and its child load one runtime.
+- A sandboxed program can reach `process`, `globalThis`, and `Function`, so
+  the rule holds against data, not against code that calls
+  `Object.defineProperty` on a real instance. That is a sandbox hole, filed
+  as issue #1364, and out of scope here.
 - Fix 1 is as proposed: `trustedModulesForChild` in `lib/runtime/ipc.ts`
   hands the list down only to a program marked as loading a trusted module.
 - Tool calls as effects, which would keep the child from loading host code

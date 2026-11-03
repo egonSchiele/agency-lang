@@ -31,7 +31,7 @@ const RUNTIME_MODULE = "__runtime";
 type Importable = { fn: AgencyFunction; refusal: null } | { fn: null; refusal: string };
 
 function importable(tool: unknown, index: number): Importable {
-  if (!AgencyFunction.isAgencyFunction(tool)) {
+  if (!AgencyFunction.isBranded(tool)) {
     return refused(`tool ${index + 1} is not an Agency function`);
   }
   if (tool.name !== tool.registeredName) {

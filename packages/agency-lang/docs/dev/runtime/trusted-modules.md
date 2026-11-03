@@ -122,13 +122,15 @@ in checkpoints like the rest of the value.
 
 `toolRefs` writes a workflow's imports from each tool's label: its `name`,
 `module`, `registeredName`, and `sourceFile`. So the label must come from
-the runtime, never from Agency code. `AgencyFunction` keeps a private brand
-and the label in private fields with getters and no setters
-(`lib/runtime/agencyFunction.ts`). `isAgencyFunction` checks the brand with
-`#brand in value`, which no object literal, `any` cast, or JSON can satisfy,
-and an assignment to a label field throws. A checkpoint serializes a
-function as its name and module and revives it from the registry, so the
-brand needs no saving. The reasoning is decision 4 in
+the runtime, never from Agency code. `toolRefs` accepts a tool only when
+`AgencyFunction.isBranded` says so, a private-field check that no object
+literal, `any` cast, JSON value, or property copy satisfies. The label is
+own non-writable, non-configurable properties, so an assignment throws and
+`Object.defineProperty` cannot redefine it, and `derive` is a private method
+(`lib/runtime/agencyFunction.ts`). The runtime's own `isAgencyFunction`
+keeps reading the `__agencyFunction` marker, because a raw JSON copy of a
+function must still read as one for the registry to rebuild it. The
+reasoning, and the limit set by issue #1364, is decision 4 in
 `docs/dev/security/trusted-modules.md`.
 
 ## How the list reaches a child

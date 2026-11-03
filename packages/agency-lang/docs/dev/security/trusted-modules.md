@@ -129,15 +129,25 @@ Aliasing is not a problem. `const other = safeDeleteList` is the same object
 with the same label, and `.rename` is refused because the copy's `name`
 differs from its `registeredName`.
 
-The rule: the brand and the label are private class fields of
-`AgencyFunction` (`#brand`, `#name`, `#module`, `#registeredName`,
-`#sourceFile`) with getters and no setters. A private field cannot be set
-from an object literal, through `any`, or from JSON, so `#brand in value` is
-the check. Compiled modules are ES modules, so they run in strict mode, and
-an assignment to a getter with no setter throws. `toolRefs` reads the same
-properties as before, which the runtime now guarantees. Checkpoints are
-unaffected: a function serializes as its name and module, and revives to
-the object the registry holds, which the runtime built.
+The rule has two parts. `toolRefs` accepts a tool only when
+`AgencyFunction.isBranded` says so, which checks a private field
+(`#brand`). A private field cannot be set from an object literal, through
+`any`, or from JSON, and a copy of an instance's properties does not carry
+it. And the label (`name`, `module`, `registeredName`, `sourceFile`) is own
+non-writable, non-configurable properties, defined in the constructor: an
+assignment throws, since compiled modules run in strict mode, and
+`Object.defineProperty` cannot redefine them. `derive`, the one way to build
+a copy with a changed label, is a private method. `toolRefs` reads the same
+properties as before, which the runtime now guarantees.
+
+The runtime's own check, `isAgencyFunction`, still reads the `__agencyFunction`
+marker, now an own non-writable property. The runtime relies on a raw JSON
+copy of a function (its own enumerable properties, no prototype) still
+reading as one, so that the next checkpoint rebuilds it from the registry by
+`name` and `module`. The marker and the label survive such a copy; the brand
+does not, which is why the two checks differ. Checkpoints are otherwise
+unaffected: a function serializes as its name and module, and revives to the
+object the registry holds, which the runtime built.
 
 This is the object-capability rule: authority travels only as references,
 and a reference cannot be made from data. Hardened JavaScript's compartments,
@@ -149,10 +159,17 @@ the fake names a listed export. Freezing every function value changes
 behaviour for every function to fix one lookup. A side table keyed by
 object identity does the same job as the private fields with more code.
 
-The one assumption: a private field is per copy of the class, as
-`instanceof` is. A trusted module and the child that imports it must load
-one copy of the Agency runtime, which "Why the child loads the host's
-build" below already requires.
+Two limits. A private field is per copy of the class, as `instanceof` is,
+so a trusted module and the child that imports it must load one copy of the
+Agency runtime, which "Why the child loads the host's build" below already
+requires. And the rule holds against anything made from data, not against
+code that calls `Object.defineProperty`, `Reflect`, or `Function` on a real
+instance. A sandboxed program can reach those today, because the sandbox
+does not remove Node's globals from the child (issue #1364). That is a hole
+in the sandbox, not in workflows: a workflow program is generated from JSON
+and runs no model-written code. Until the containment floor closes it, the
+sandbox's guarantee is Agency-only source at compile time, not no
+JavaScript at run time.
 
 ### 5. A child gets the list only when its program loads a trusted module
 

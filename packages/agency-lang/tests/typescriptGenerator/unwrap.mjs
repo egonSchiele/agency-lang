@@ -337,7 +337,8 @@ export const parseName = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"text": z.string(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.string()
 }, __toolRegistry);
 async function __greet_impl(__run: __Run, text: string) {
   const __setupData = setupFunction(__run);
@@ -571,7 +572,8 @@ export const greet = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"text": z.string(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.string()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

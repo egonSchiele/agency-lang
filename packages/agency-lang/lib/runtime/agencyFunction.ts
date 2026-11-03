@@ -123,6 +123,10 @@ export type AgencyFunctionOpts = {
   fn: AgencyFunctionBody;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
+  /** The zod schema of the value a call returns: the declared return type,
+   *  or the success type inside a `Result`. Absent when the function
+   *  declares no return type or returns a function. */
+  returnSchema?: unknown;
   exported?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
@@ -183,6 +187,7 @@ export class AgencyFunction {
   declare readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
+  readonly returnSchema: unknown;
   private readonly _fn: AgencyFunctionBody;
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];
@@ -220,6 +225,7 @@ export class AgencyFunction {
     this.paramSchemas = opts.paramSchemas ?? {};
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
+    this.returnSchema = opts.returnSchema ?? null;
     this.exported = opts.exported ?? false;
     this.markers = opts.markers ?? {};
     this.capabilities = opts.capabilities ?? [];
@@ -265,6 +271,7 @@ export class AgencyFunction {
       fn: this._fn,
       params: this.params,
       toolDefinition: this.toolDefinition,
+      returnSchema: this.returnSchema,
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,

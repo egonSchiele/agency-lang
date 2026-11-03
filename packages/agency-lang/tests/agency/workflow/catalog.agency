@@ -5,10 +5,20 @@ import { catalog, CatalogEntry, CatalogParam } from "std::workflow"
 import { add, round } from "std::math"
 import { searchNotes } from "./fixtures/tools/notes.agency"
 import { addListItems } from "./fixtures/tools/lists.agency"
+import { greet, nested } from "./fixtures/tools/withHelper.agency"
+import { keys } from "std::object"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 const DIR = __dirname + "/fixtures/tools"
+
+/** A JSON Schema's `type`, or null for no schema. */
+def schemaType(schema: Json): Json {
+  if (schema == null) {
+    return null
+  }
+  return schema.type
+}
 
 /** One parameter as a row: name, type, default, description. */
 def paramRow(param: CatalogParam): Json {
@@ -101,4 +111,28 @@ node effectsListed(): Json {
     return "failed: ${err}"
   }
   return map(listed.value, \entry -> entry.effects)
+}
+
+// The schema of what a reference into the step reads: the success type's
+// for a Result, the declared type's otherwise.
+node returnSchemas(): Json {
+  const listed = runCatalog([searchNotes, round])
+  if (listed is failure(err)) {
+    return "failed: ${err}"
+  }
+  const notes = listed.value[0].returnSchema
+  const rounded = listed.value[1].returnSchema
+  return [notes.type, notes.items.type, keys(notes.items.properties), notes.items.required, rounded.type]
+}
+
+// `nested` returns `Outer`, whose body names `Inner`, which withHelper.agency
+// never imports: the compiled module has no binding for it, so the compiler
+// emits no return schema rather than one that fails at load. `greet` returns
+// a string and has one.
+node unboundAliasHasNoReturnSchema(): Json {
+  const listed = runCatalog([nested, greet])
+  if (listed is failure(err)) {
+    return "failed: ${err}"
+  }
+  return map(listed.value, \entry -> [entry.name, entry.returns, schemaType(entry.returnSchema)])
 }

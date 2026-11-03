@@ -463,7 +463,8 @@ function resolveTypeFromFile(
   return undefined;
 }
 
-function collectAliasNames(t: VariableType, out: string[]): void {
+/** Every alias `t` names, at any depth, in order of appearance. */
+export function collectAliasNames(t: VariableType, out: string[]): void {
   visitTypes(t, (n) => {
     if (n.type === "typeAliasVariable") out.push(n.aliasName);
   });

@@ -87,6 +87,28 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "returnSchemas",
+      "description": "a Result<Note[]> tool's return schema is the array of notes; round's is a number",
+      "input": "",
+      "expectedOutput": "[\"array\",\"object\",[\"id\",\"title\",\"body\"],[\"id\",\"title\",\"body\"],\"number\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unboundAliasHasNoReturnSchema",
+      "description": "a return type that reaches an alias the module never imports has no return schema; a string return has one",
+      "input": "",
+      "expectedOutput": "[[\"nested\",\"Result<Outer>\",null],[\"greet\",\"string\",\"string\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

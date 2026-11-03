@@ -79,7 +79,7 @@ export function isFunctionTyped(param: FunctionParameter): boolean {
   return typeContainsFunction(hint);
 }
 
-function typeContainsFunction(t: VariableType): boolean {
+export function typeContainsFunction(t: VariableType): boolean {
   if (t.type === "blockType") return true;
   if (t.type === "unionType") return t.types.some(typeContainsFunction);
   return false;

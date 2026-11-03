@@ -21,6 +21,10 @@ export type CatalogEntry = {
   description: string;
   params: CatalogParam[];
   returns: string | null;
+  /** The JSON Schema of the value a reference into this tool's step reads:
+   *  the declared return type, or the success type inside a `Result`. Null
+   *  when the tool declares no return type or returns a function. */
+  returnSchema: unknown | null;
   /** What the tool can raise, as `describe` reports it. A tool that uses
    *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard
    *  trip is a question about budget, not a permission. */
@@ -41,6 +45,19 @@ function parameterSchemas(tool: unknown): Record<string, unknown> {
   return json.properties ?? {};
 }
 
+/** The JSON Schema of what the tool returns, from the zod schema the
+ *  compiler emitted for its return type. */
+function returnSchemaOf(tool: unknown): unknown | null {
+  if (!AgencyFunction.isAgencyFunction(tool)) {
+    return null;
+  }
+  const schema = tool.returnSchema as { toJSONSchema?: () => unknown } | null;
+  if (typeof schema?.toJSONSchema !== "function") {
+    return null;
+  }
+  return schema.toJSONSchema();
+}
+
 function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): CatalogEntry {
   const schemas = parameterSchemas(tool);
   const params = signature.params
@@ -54,6 +71,7 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
     description,
     params,
     returns: signature.returnType,
+    returnSchema: returnSchemaOf(tool),
     effects: signature.effects,
   };
 }

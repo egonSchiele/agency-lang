@@ -338,7 +338,8 @@ export const compute = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"val": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

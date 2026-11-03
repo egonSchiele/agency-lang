@@ -452,7 +452,8 @@ export const toDigit = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"c": z.string(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

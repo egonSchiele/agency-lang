@@ -314,6 +314,7 @@ export const f = __AgencyFunction.create({
     schema: z.object({})
   },
   exported: false,
+  returnSchema: z.number(),
   markers: {
     destructive: true
   }

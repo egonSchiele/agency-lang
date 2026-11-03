@@ -337,7 +337,8 @@ export const isPositive = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"value": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 const Positive = z.number();
 type Positive = z.infer<typeof Positive>;
@@ -474,7 +475,8 @@ export const neighbor = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({})
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function __both_impl(__run: __Run, first: any, second: number) {
   const __setupData = setupFunction(__run);
@@ -627,7 +629,8 @@ export const both = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"first": z.any(), "second": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

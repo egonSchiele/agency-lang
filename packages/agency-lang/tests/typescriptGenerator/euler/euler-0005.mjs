@@ -352,7 +352,8 @@ export const gcd = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function __lcm_impl(__run: __Run, a: number, b: number) {
   const __setupData = setupFunction(__run);
@@ -520,7 +521,8 @@ export const lcm = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

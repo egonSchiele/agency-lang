@@ -389,7 +389,8 @@ export const isPrime = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"n": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.boolean()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

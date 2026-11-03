@@ -354,7 +354,8 @@ export const add = __AgencyFunction.create({
     description: `Adds two numbers together`,
     schema: z.object({"x": z.number(), "y": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function __greet_impl(__run: __Run, name: string) {
   const __setupData = setupFunction(__run);

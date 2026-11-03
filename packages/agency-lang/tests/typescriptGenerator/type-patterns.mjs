@@ -447,7 +447,8 @@ export const describe = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"value": z.any(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.string()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

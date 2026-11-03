@@ -100,7 +100,12 @@ import {
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
-import { isAnyType, isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
+import {
+  isAnyType,
+  isFunctionTyped,
+  paramAcceptsFailure,
+  typeContainsFunction,
+} from "../typeChecker/utils.js";
 import { rejectValueParamCycle } from "./valueParamCycle.js";
 import { OBJECT_REST_FN } from "../constants.js";
 
@@ -133,7 +138,7 @@ function coarseKindFor(typeHint: VariableType): CoarseKind | null {
 }
 import { printTs } from "../ir/prettyPrint.js";
 import type { TsNode, TsObjectEntry, TsParam, TsTemplatePart } from "../ir/tsIR.js";
-import type { CompilationUnit } from "../compilationUnit.js";
+import { collectAliasNames, type CompilationUnit } from "../compilationUnit.js";
 import type { Splice } from "../types/splice.js";
 import { calleeName } from "../compiler/splice/calleeName.js";
 import { SourceMapBuilder } from "./sourceMap.js";
@@ -2109,6 +2114,57 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * The zod schema of the value a call to `node` returns, or null when the
+   * function declares no return type or returns a function. A `Result<T>`
+   * gives `T`'s schema: a caller reads the value, and a workflow step's
+   * reference goes through `.value`. Aliases declared after the def are
+   * pending at module load, the same as in a parameter schema.
+   */
+  private returnSchemaFor(node: FunctionDefinition): TsNode | null {
+    const declared = node.returnType ?? null;
+    if (declared === null) {
+      return null;
+    }
+    const value = declared.type === "resultType" ? declared.successType : declared;
+    if (typeContainsFunction(value) || this.unboundAliasIn(value) !== null) {
+      return null;
+    }
+    return ts.raw(this.zodSchemaFor(value, this.pendingAliasesFor(node.loc?.start)));
+  }
+
+  /**
+   * An alias the generated code cannot name, or null when every alias
+   * `type` reaches is declared in this module or imported by name. An alias
+   * that reached the type table through an imported signature or through
+   * another alias's body (`pullTransitiveAliases`) has no const here and no
+   * JavaScript import, so a schema that names it fails at module load. A
+   * parameter schema has the same gap; this guard keeps a return schema from
+   * widening it.
+   */
+  private unboundAliasIn(type: VariableType): string | null {
+    const aliases = this.scopes.visibleTypeAliasesFull();
+    const declaredHere = new Set(this.aliasEmissionOrder.map((alias) => alias.name));
+    const queue: string[] = [];
+    collectAliasNames(resolveTypeDeep(type, aliases), queue);
+    const seen = new Set<string>();
+    while (queue.length > 0) {
+      const name = queue.shift()!;
+      if (seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      if (!declaredHere.has(name) && !this.names.isAgencyImport(name)) {
+        return name;
+      }
+      const entry = aliases[name];
+      if (entry !== undefined) {
+        collectAliasNames(entry.body, queue);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Build a tool definition TsNode for an Agency function.
    * Returns ts.id("null") if the function has no parameters (no schema needed for tools).
    *
@@ -2671,6 +2727,13 @@ export class TypeScriptBuilder {
       toolDefinition: toolDef,
       exported: ts.bool(!!node.exported),
     };
+    // What a call returns, for a tool picker that shows a result's fields.
+    // Emitted only when there is a type to show, so the generated code of a
+    // def with no return type is unchanged.
+    const returnSchema = this.returnSchemaFor(node);
+    if (returnSchema !== null) {
+      createProps.returnSchema = returnSchema;
+    }
     // Carry the markers so the tool loop and MCP adapter can read them off
     // the registered AgencyFunction. Emitted only when at least one is set.
     const markerKeywords = markerKeywordsOf(toolMarkersOf(node));

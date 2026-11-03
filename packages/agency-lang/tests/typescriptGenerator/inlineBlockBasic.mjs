@@ -353,7 +353,8 @@ export const twice = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({})
   },
-  exported: false
+  exported: false,
+  returnSchema: z.array(z.string())
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

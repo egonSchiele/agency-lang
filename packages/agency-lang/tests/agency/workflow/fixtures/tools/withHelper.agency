@@ -1,4 +1,4 @@
-import { shout } from "./helper.agency"
+import { shout, Outer } from "./helper.agency"
 
 export def greet(name: string): string {
   """
@@ -7,4 +7,11 @@ export def greet(name: string): string {
   @param name - Who to greet
   """
   return shout("hello ${name}")
+}
+
+export def nested(): Result<Outer> {
+  """
+  Return a value whose type names an alias this module does not import.
+  """
+  return success({ inner: { count: 1 } })
 }

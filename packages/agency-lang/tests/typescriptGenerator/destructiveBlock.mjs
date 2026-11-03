@@ -323,7 +323,8 @@ export const prep = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function ___doWrite_impl(__run: __Run, p: number) {
   const __setupData = setupFunction(__run);
@@ -466,7 +467,8 @@ export const _doWrite = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"p": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function __writeThing_impl(__run: __Run, x: number) {
   const __setupData = setupFunction(__run);
@@ -631,6 +633,7 @@ export const writeThing = __AgencyFunction.create({
     schema: z.object({"x": z.number(), })
   },
   exported: false,
+  returnSchema: z.number(),
   markers: {
     destructive: true
   }

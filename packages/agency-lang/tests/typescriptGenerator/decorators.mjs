@@ -385,6 +385,7 @@ export const logged = __AgencyFunction.create({
     schema: z.object({"call": Call, })
   },
   exported: false,
+  returnSchema: z.any(),
   markers: {
     decorator: true
   }
@@ -586,6 +587,7 @@ export const retry = __AgencyFunction.create({
     schema: z.object({"times": z.number(), "call": Call, })
   },
   exported: false,
+  returnSchema: z.any(),
   markers: {
     decorator: true
   }
@@ -799,7 +801,8 @@ export const plainTwin = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function __undecoratedTwin_impl(__run: __Run, x: number) {
   const __setupData = setupFunction(__run);
@@ -942,7 +945,8 @@ export const undecoratedTwin = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.number()
 }, __toolRegistry);
 async function __researcher_impl(__run: __Run, task: string, maxCost: number | typeof __UNSET = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -1258,6 +1262,7 @@ export const researcher = __AgencyFunction.create({
     schema: z.object({"task": z.string(), "maxCost": z.number().nullable().describe("Default: 2.00"), })
   },
   exported: true,
+  returnSchema: z.string(),
   markers: {
     handoff: true
   }
@@ -1472,7 +1477,8 @@ export const positionalAndNamed = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.string(), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.string()
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

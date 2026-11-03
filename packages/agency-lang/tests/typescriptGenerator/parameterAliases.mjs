@@ -344,7 +344,8 @@ export const fetchLike = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"baseUrl": z.string(), "path": z.string().nullable().describe("Default: "), })
   },
-  exported: false
+  exported: false,
+  returnSchema: z.string()
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"parameterAliases.agency:fetchLike":{"1":{"line":4,"col":2}}};

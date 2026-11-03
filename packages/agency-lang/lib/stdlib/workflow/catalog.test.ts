@@ -12,6 +12,9 @@ const param = (name: string): FuncParam => ({
   variadic: false,
 });
 
+/** What searchNotes returns, as the compiler would emit it for `Result<Note[]>`. */
+const noteList = z.array(z.object({ id: z.string(), title: z.string() }));
+
 /** searchNotes(query, each), where `each` is a block, so the schema leaves it out. */
 const searchNotes = AgencyFunction.create(
   {
@@ -24,6 +27,7 @@ const searchNotes = AgencyFunction.create(
       description: "Find notes.",
       schema: z.object({ query: z.string() }),
     },
+    returnSchema: noteList,
   },
   {},
 );
@@ -61,9 +65,25 @@ describe("catalogEntries", () => {
           },
         ],
         returns: "Result<Note[]>",
+        returnSchema: z.toJSONSchema(noteList),
         effects: ["std::read", "std::guard"],
       },
     ]);
+  });
+
+  it("gives a tool with no return schema a null one", () => {
+    const untyped = AgencyFunction.create(
+      {
+        name: "searchNotes",
+        module: "agent/notes.agency",
+        fn: (_run, query: string) => [query],
+        params: [param("query")],
+        toolDefinition: searchNotes.toolDefinition,
+      },
+      {},
+    );
+    const [entry] = catalogEntries([untyped], [ref], signatures);
+    expect(entry.returnSchema).toBeNull();
   });
 
   it("gives a tool with no docstring an empty description", () => {

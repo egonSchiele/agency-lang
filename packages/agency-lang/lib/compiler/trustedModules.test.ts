@@ -35,17 +35,31 @@ describe("resolveTrustedModules", () => {
     }
   });
 
-  test("a missing directory fails with the entry and the resolved path", () => {
+  test("a missing source directory fails with the entry and the resolved path", () => {
     const base = makeDir(".tm-missing-");
     try {
-      fs.mkdirSync(path.join(base, "src"));
+      fs.mkdirSync(path.join(base, "dist"));
       const result = resolveTrustedModules([{ source: "src", compiled: "dist" }], base);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("compiled: 'dist'");
-        expect(result.error).toContain(path.join(base, "dist"));
+        expect(result.error).toContain("source: 'src'");
+        expect(result.error).toContain(path.join(base, "src"));
         expect(result.error).toContain("does not exist");
       }
+    } finally {
+      cleanup(base);
+    }
+  });
+
+  test("a missing compiled directory resolves, as a project not built yet", () => {
+    const base = makeDir(".tm-unbuilt-");
+    try {
+      fs.mkdirSync(path.join(base, "src"));
+      const result = resolveTrustedModules([{ source: "src", compiled: "dist" }], base);
+      expect(result).toEqual({
+        ok: true,
+        value: [{ source: path.join(base, "src"), compiled: path.join(base, "dist") }],
+      });
     } finally {
       cleanup(base);
     }

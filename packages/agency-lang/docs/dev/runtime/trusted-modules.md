@@ -21,11 +21,16 @@ reasoning is in `docs/dev/security/trusted-modules.md`.
 ```
 
 Both paths are relative to the working directory, as `client.providerModules`
-are. A project whose compiled files sit beside the sources names the same
-directory twice. `resolveTrustedModules` (`lib/compiler/trustedModules.ts`)
-turns each entry into real paths when the list is used. A directory that does
-not exist, or is reached through a symlink, is an error that names the entry
-and the path.
+are, so a host starts from its project directory; issue #1367 is about
+baking them against the config file's directory instead. A project whose
+compiled files sit beside the sources names the same directory twice.
+`resolveTrustedModules` (`lib/compiler/trustedModules.ts`) turns each entry
+into real paths when the list is used. A `source` directory that does not
+exist, or either directory reached through a symlink, is an error that names
+the entry and the path. A `compiled` directory that does not exist is a
+project not built yet: the list still resolves, and a tool under that entry
+fails at the validator with the compiled file it looked for, so a workflow
+over other tools keeps working.
 
 ## Who compiles against the list
 
@@ -100,11 +105,12 @@ becomes an import of `file:///home/me/project/dist/tools/tools.js`. An
 same way. The program's `trustedModules` mark keeps the filesystem paths.
 
 `buildCompiledClosure` keys a trusted module by its mirror path. The host's
-compiled file registers its init under the host's own source path, so an await
-on the mirror path would find nothing. `withoutTrustedAwaits` in `compile.ts`
-drops trusted modules from the entry's init awaits. The closure-wide bootstrap
-in `runNode` still runs every registered init. The cost is that an entry's
-`static` initialiser may not read a trusted module's global.
+compiled file registers its init under the host's own source path, so the
+entry's await on the mirror path finds nothing and returns at once. The
+closure-wide bootstrap in `runNode` still runs every registered init. The
+cost is that an entry's `static` initialiser may not read a trusted module's
+global; pointing the await at the host's source path, which the validator
+knows, would lift that.
 
 ## The mark on a compiled program
 
@@ -142,11 +148,13 @@ and the bootstrap seeds it into `SubprocessRunInfo` before it imports the
 child's script. The identity is rebuilt on every segment, so a root
 restarted with a changed config resumes its children with the new list.
 
-A child gets its parent's list only when its program is marked as loading a
-trusted module; otherwise it gets an empty list. A program compiled without
-the list, as the public `compile` and `runCode` compile, has an empty mark,
-so a model-written program and everything it runs compile with no list. A
-child never widens the list. `configOverrides` does not carry it:
+A child gets only the entries of its parent's list whose compiled directory
+holds a file its program is marked as loading; otherwise it gets an empty
+list. A program compiled without the list, as the public `compile` and
+`runCode` compile, has an empty mark, so a model-written program and
+everything it runs compile with no list. The mark is a field on a record
+the program holds (issue #1366), which is why only the entries it names pass
+down. A child never widens the list. `configOverrides` does not carry it:
 `parentConfigOverrides` copies an allow-list of fields, and `sandbox` is not
 one of them.
 

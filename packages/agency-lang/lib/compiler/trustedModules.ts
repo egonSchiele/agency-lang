@@ -63,6 +63,13 @@ function resolveDirectory(
   try {
     real = fs.realpathSync(absolute);
   } catch {
+    // A missing compiled directory is a project not built yet. It fails
+    // only when a tool sits under its source, where the validator names
+    // the compiled file it looked for. A missing source directory is a
+    // typo in the config.
+    if (field === "compiled") {
+      return { ok: true, value: absolute };
+    }
     return { ok: false, error: `${label}: ${field} directory '${absolute}' does not exist` };
   }
   if (real !== absolute) {

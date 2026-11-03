@@ -16,6 +16,7 @@ import { rmSync, writeFileSync, mkdirSync, lstatSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
 import { effectiveTrustedModules, type TrustedModules } from "../compiler/trustedModules.js";
+import { isStrictDescendant } from "../utils.js";
 import { mergeConfig } from "../config/merge.js";
 import type { RuntimeContext } from "./state/context.js";
 import { detachedRun, currentRun, withRun, type Run } from "./asyncContext.js";
@@ -1324,18 +1325,23 @@ export async function _run(
 
 /** `_run` for a run the caller already holds. Generated code wraps this one
  *  as an AgencyFunction, whose body is handed the run first. */
-/** The list a child may compile against: this process's own when the
- *  child's program loads a trusted module, which its mark says, and none
- *  otherwise. A program compiled without the list, such as one a model
- *  wrote and ran with `runCode`, carries an empty mark, so neither it nor
- *  any program it runs can reach a trusted directory. Throws when a config
- *  entry does not resolve. */
+/** The list a child may compile against: the entries of this process's own
+ *  list whose compiled directory holds a file the child's program is marked
+ *  as loading, and none otherwise. A program compiled without the list, such
+ *  as one a model wrote and ran with `runCode`, carries an empty mark, so
+ *  neither it nor any program it runs can reach a trusted directory. The
+ *  mark is a field on a record the calling program holds (issue #1366), so
+ *  only the entries it names pass down: a mark naming some other file
+ *  passes down nothing. Throws when a config entry does not resolve. */
 export function trustedModulesForChild(
   ctx: RuntimeContext<any>,
   compiled: { trustedModules?: string[] },
 ): TrustedModules[] {
-  const loadsHostCode = (compiled.trustedModules ?? []).length > 0;
-  return loadsHostCode ? effectiveTrustedModules(ctx) : [];
+  const marked = compiled.trustedModules ?? [];
+  if (marked.length === 0) return [];
+  return effectiveTrustedModules(ctx).filter((entry) =>
+    marked.some((file) => isStrictDescendant(entry.compiled, file)),
+  );
 }
 
 export async function _runFor(

@@ -76,23 +76,6 @@ function useStableModuleIds(
 // `imports`. We keep `imports` out of the global AgencyConfig because it's
 // only meaningful at this entry point — used when compiling
 // agent-supplied source destined for subprocess execution.
-/** Leave trusted modules out of a module's init awaits. buildCompiledClosure
- *  reads the mirror, so it keys a trusted module by its mirror path, but the
- *  host's compiled file registers its init under the host's own source path,
- *  so an await on the mirror path would find nothing. The closure-wide
- *  bootstrap in runNode runs every registered init anyway. The cost: an
- *  entry's `static` initialiser may not read a trusted module's global. */
-function withoutTrustedAwaits(plan: InitPlanForModule, trustedPaths: string[]): InitPlanForModule {
-  if (trustedPaths.length === 0) return plan;
-  const keep = (modules: InitPlanForModule["staticAwaitModules"]) =>
-    modules.filter((module) => !trustedPaths.includes(module.sourceModuleId));
-  return {
-    ...plan,
-    staticAwaitModules: keep(plan.staticAwaitModules),
-    globalAwaitModules: keep(plan.globalAwaitModules),
-  };
-}
-
 export type CompileSourceOptions = AgencyConfig & {
   /**
    * Declarative import policy. Disallowed imports cause compilation to
@@ -249,12 +232,12 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
 
     // 7. Generate TypeScript. No output file: this code is loaded from
     // wherever the subprocess writes it, so it records no source file.
-    const mirrorInitPlan = withoutTrustedAwaits(
-      initPlanForModule(closure, syntheticPath),
-      Object.keys(trustedImports).map((specifier) =>
-        path.resolve(path.dirname(syntheticPath), specifier),
-      ),
-    );
+    // A trusted module's init is registered under the host's own source
+    // path, and this plan names it by its mirror path, so the await finds
+    // nothing and returns at once; the closure-wide bootstrap in runNode
+    // runs every registered init anyway. The cost: an entry's `static`
+    // initialiser may not read a trusted module's global.
+    const mirrorInitPlan = initPlanForModule(closure, syntheticPath);
     const initPlan =
       config.fingerprintModuleId === undefined
         ? mirrorInitPlan

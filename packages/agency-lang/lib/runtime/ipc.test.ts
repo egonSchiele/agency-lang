@@ -146,16 +146,22 @@ describe("trusted modules on the startup instructions", () => {
 
 describe("trustedModulesForChild", () => {
   afterEach(() => setSubprocessRunInfo({ depth: 0 }));
-  const list = [{ source: "/p/src/agent", compiled: "/p/dist/agent" }];
+  const agent = { source: "/p/src/agent", compiled: "/p/dist/agent" };
+  const other = { source: "/p/src/other", compiled: "/p/dist/other" };
   const child = { subprocessDepth: 1 } as any;
 
-  it("hands the list down only to a program marked as loading a trusted module", () => {
-    setSubprocessRunInfo({ depth: 1, trustedModules: list });
-    expect(trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js"] })).toEqual(
-      list,
-    );
+  it("hands down only the entries a marked file sits under", () => {
+    setSubprocessRunInfo({ depth: 1, trustedModules: [agent, other] });
+    expect(trustedModulesForChild(child, { trustedModules: ["/p/dist/agent/lists.js"] })).toEqual([
+      agent,
+    ]);
     expect(trustedModulesForChild(child, { trustedModules: [] })).toEqual([]);
     expect(trustedModulesForChild(child, {})).toEqual([]);
+  });
+
+  it("hands down nothing for a mark that names a file outside every entry", () => {
+    setSubprocessRunInfo({ depth: 1, trustedModules: [agent, other] });
+    expect(trustedModulesForChild(child, { trustedModules: ["/etc/hosts"] })).toEqual([]);
   });
 });
 

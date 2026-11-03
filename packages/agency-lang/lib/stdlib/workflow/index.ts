@@ -71,7 +71,15 @@ export function _problemsFailure(problems: Problem[]): ResultFailure {
  *  cannot be imported. */
 export function _toolRefs(tools: unknown[], dir: string): ResultSuccess | ResultFailure {
   const run = currentRun();
-  const trusted = effectiveTrustedModules(run.ctx);
+  let trusted;
+  try {
+    trusted = effectiveTrustedModules(run.ctx);
+  } catch (error) {
+    // A config entry that does not resolve is this workflow's problem, not
+    // a throw out of runWorkflow.
+    const message = error instanceof Error ? error.message : String(error);
+    return _problemsFailure([{ step: null, field: null, message }]);
+  }
   const result = toolRefs(tools, dir, run.ctx.host.system.cwd(), trusted);
   return result.refs === null ? _problemsFailure(result.problems) : success(result.refs);
 }

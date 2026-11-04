@@ -82,8 +82,6 @@ type LowerContext = {
   counter: { n: number };
 };
 
-const COMMENT_TYPES = ["comment", "multiLineComment", "newLine"];
-
 /** Lower every `async` statement in the program's function and node
  *  bodies. Mutates each definition's `body` in place, like the other
  *  preprocessor passes, so the definition tables keep pointing at them. */
@@ -116,13 +114,10 @@ function lowerList(list: AgencyNode[], ctx: LowerContext): AgencyNode[] {
   const arm = asyncArm(list, index);
   const after = lowerList(list.slice(index + 1 + arm.length), ctx);
 
-  // Nothing between the call and its join, so nothing to overlap with:
-  // emit the call as a plain statement.
-  if (arm.every((stmt) => COMMENT_TYPES.includes(stmt.type))) {
-    const plain = asyncStmt.rebuild(lowerNestedCall(clearFlag(asyncStmt.call), ctx));
-    return [...before, plain, ...arm, ...after];
-  }
-
+  // The block is formed even when the arm is empty. The side call's model
+  // messages stay off the conversation thread (its arm runs on a
+  // subthread), and that must not depend on whether a statement happens
+  // to follow the `async` line.
   const snapshot = snapshotCall(lowerNestedCall(clearFlag(asyncStmt.call), ctx), ctx);
   const sideStatement = asyncStmt.rebuild(snapshot.call);
   // A `with` statement is not an allowed arm shape; a `seq` around it is.

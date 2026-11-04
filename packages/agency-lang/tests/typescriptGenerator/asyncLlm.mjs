@@ -273,6 +273,42 @@ await runner.ifElse(1, __run, [
     condition: async (__run) => __eq(__bstack.args.__arm_0, `arm_1`),
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
+__bstack.locals.__arms_1 = await runner.fork(0, __run, [`arm_0`, `arm_1`], async (__run, __forkItem, __forkIndex, __forkBranchStack) => {
+            
+// Capture the parent fork-block's args via closure BEFORE the inner
+// block scope opens; otherwise the inner `const __bstack = ...` would
+// put __bstack in TDZ for this entire arrow function's body.
+const __parentForkArgs = __bstack.args;
+{
+
+const __bstack = __forkBranchStack.getNewState();
+const __self = __bstack.locals;
+const __bframe___block_1 = __bstack;
+// Claim site: this branch just pulled its frame from the branch stack.
+// A mismatched claim on resume replay is a frame desync and throws.
+claimFrameForScope(__bstack, "__block_1", "asyncLlm.agency", __run.log);
+// `__stateStack` is read from ALS via the `__stateStack()` accessor.
+// The branch ALS frame seeded by `runBatch.runInBranchAlsFrame`
+// (lib/runtime/runBatch.ts) already carries `stack: __forkBranchStack`,
+// so accessor calls inside the branch body resolve to the branch
+// stack automatically — no local rebind needed. The earlier
+// `const __stateStack = __forkBranchStack` line was removed because
+// it shadowed the runtime import and made `__stateStack()` calls
+// (emitted by interrupt/checkpoint templates) crash with
+// "__stateStack2 is not a function".
+const __arm_1 = __forkItem;
+
+Object.assign(__bstack.args, __parentForkArgs);
+
+__bstack.args["__arm_1"] = __forkItem;
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "asyncLlm.agency", scopeName: "__block_1", stack: __run.stack, threads: __run.threads });
+try {
+await runner.ifElse(0, __run, [
+
+  {
+    condition: async (__run) => __eq(__bstack.args.__arm_1, `arm_0`),
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
 __activation.__removedTools = __activation.__removedTools || [];
 __bstack.locals.y = await runPrompt(__run, {
             prompt: `What is 3+3?`,
@@ -291,6 +327,76 @@ if (hasInterrupts(__bstack.locals.y)) {
           }
         });
 await runner.step(1, __run, async (runner, __run) => {
+runner.halt({
+            "y": __bstack.locals.y
+          })
+return;
+        });
+    },
+  },
+
+]);
+await runner.ifElse(1, __run, [
+
+  {
+    condition: async (__run) => __eq(__bstack.args.__arm_1, `arm_1`),
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+runner.halt(await __asyncDone({}))
+return;
+        });
+    },
+  },
+
+]);
+return runner.halted ? runner.haltResult : undefined;
+} finally {
+__forkBranchStack.pop();
+}
+
+}
+
+
+          }, "all", __run.stack, true, 1);
+if (hasInterrupts(__bstack.locals.__arms_1)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt(__bstack.locals.__arms_1)
+            return;
+          }
+if (isAborted(__bstack.locals.__arms_1)) {
+            runner.halt(__bstack.locals.__arms_1.carryThrough(__run.log, __bstack, "__block_0"))
+            return;
+          }
+        });
+await runner.step(1, __run, async (runner, __run) => {
+__bstack.locals.__hoist_0 = await __asyncFinished(__nn(__bstack.locals.__arms_1[1]));
+if (hasInterrupts(__bstack.locals.__hoist_0)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt(__bstack.locals.__hoist_0)
+            return;
+          }
+if (isAborted(__bstack.locals.__hoist_0)) {
+            runner.halt(__bstack.locals.__hoist_0.carryThrough(__run.log, __bstack, "__block_0"))
+            return;
+          }
+        });
+await runner.ifElse(2, __run, [
+
+  {
+    condition: async (__run) => !__bstack.locals.__hoist_0,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+runner.halt(__nn(__bstack.locals.__arms_1[1]))
+return;
+              });
+    },
+  },
+
+]);
+await runner.step(3, __run, async (runner, __run) => {
+__bstack.locals.y = __bstack.locals.__arms_1[0].y;
+        });
+await runner.step(4, __run, async (runner, __run) => {
 runner.halt(await __asyncDone({
             "y": __bstack.locals.y
           }))
@@ -456,4 +562,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"asyncLlm.agency:main":{"6":{"line":3,"col":2}},"asyncLlm.agency:__block_0":{"0.0":{"line":1,"col":2},"1.0":{"line":2,"col":2}}};
+export const __sourceMap = {"asyncLlm.agency:main":{"6":{"line":3,"col":2}},"asyncLlm.agency:__block_0":{"0.0":{"line":1,"col":2}},"asyncLlm.agency:__block_1":{"0.0":{"line":2,"col":2}}};

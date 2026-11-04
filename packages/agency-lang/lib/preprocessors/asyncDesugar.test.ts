@@ -323,24 +323,26 @@ describe("where the join is", () => {
 `);
   });
 
-  it("emits a plain call when nothing runs beside it", () => {
-    const { program, main } = lower(`node main() {
+  it("still forms the block when nothing runs beside the call, so the call stays off the conversation thread", () => {
+    expect(
+      lowered(`node main() {
   let n = 1
   let x = async f(n)
   print(x)
 }
-`);
-    expect(parallelBlocks(main.body)).toEqual([]);
-    expect(generateAgency({ ...program, nodes: [main] })).toBe(`node main() {
+`),
+    ).toBe(`node main() {
   let n = 1
-  let x = f(n)
+  const __async_arg_0 = n
+  parallel(shared: true) {
+    let x = f(__async_arg_0)
+    seq {
+
+    }
+  }
   print(x)
 }
 `);
-    const flagged = [...walkNodes(main.body)].filter(
-      ({ node }) => (node as { async?: boolean }).async === true,
-    );
-    expect(flagged).toEqual([]);
   });
 });
 

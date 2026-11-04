@@ -117,6 +117,15 @@ The pieces, in the order they appear:
 5. **The join check.** `if (!__asyncFinished(__arms_N[1])) { return
    __arms_N[1] }`, between the fork and the binding hoists.
 
+## The block is always formed
+
+A call with nothing beside it, `let x = async f()` followed at once by
+`print(x)`, still lowers to the block, with an empty main arm. The side
+call's model messages stay off the conversation because its arm runs on a
+subthread (item 3 above), and that has to hold whether or not a statement
+follows the `async` line. `tests/agency-js/handoff` pins it: a handoff
+dispatched inside `async llm()` lands on the side call's subthread.
+
 ## Why returns are decided at the join
 
 A fork arm's value is whatever the arm returned: the bindings object, or a

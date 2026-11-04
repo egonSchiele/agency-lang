@@ -10,6 +10,7 @@ import { mkdir, remove } from "std::fs"
 import { exists } from "std::shell"
 import { Json } from "std::validation"
 import { saveElsewhere } from "./fixtures/saveElsewhere.js"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 const TOOLS = [add, multiply]
 const REQUEST = "Add two numbers and double the sum."
@@ -184,6 +185,52 @@ node savedDuringReviewIsKept(): Json {
   const ran = runDesign(dir, ["saveThenAccept", "accept"])
   const kept = read("workflows/doubleSum.json", dir) with approve
   return [savedName(ran), ran.reviews.length, ran.reviews[1].round, kept catch ""]
+}
+
+// The edit has no `description`, so it fails `Workflow!`. That costs a
+// round, as any failed edit does, and the model's next draft is saved.
+node wrongShapeEditIsRedrafted(): Json {
+  const dir = outDir("wrongShapeEdit")
+  const noDescription = { format: 1, name: "editedSum", inputs: "{ a: number }", steps: [] }
+  const ran = runDesign(dir, [noDescription, "accept"])
+  return [savedName(ran), ran.reviews.length]
+}
+
+// Real pauses. The handler records each review's payload and passes every
+// interrupt on, so the review reaches the test runner, which answers it
+// from design.test.json's interruptHandlers after a checkpoint, the way a
+// person or a host would. Each node has as many model replies as drafts it
+// expects, so a resume that ran the model call again would fail with "no
+// mock provided".
+def designAcrossPauses(dir: string): Result<WorkflowEntry> {
+  setMutable("reviews", [])
+  handle {
+    return designWorkflow(REQUEST, TOOLS, dir)
+  } with (intr) {
+    if (intr.effect == "std::workflow::review") {
+      getMutable("reviews", []).push(intr.data)
+    }
+    return propagate()
+  }
+}
+
+node acceptAcrossResume(): Json {
+  const dir = outDir("resumeAccept")
+  const saved = designAcrossPauses(dir)
+  if (saved is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [saved.value.name, getMutable("reviews", []).length, exists("workflows/doubleSum.json", dir)]
+}
+
+node feedbackAcrossResume(): Json {
+  const dir = outDir("resumeFeedback")
+  const saved = designAcrossPauses(dir)
+  if (saved is failure(err)) {
+    return "failed: ${err}"
+  }
+  const reviews = getMutable("reviews", [])
+  return [saved.value.name, reviews.length, reviews[1].previous.name, reviews[1].round]
 }
 
 node rejectAtReviewWritesNothing(): Json {

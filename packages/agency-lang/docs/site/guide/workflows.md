@@ -403,26 +403,38 @@ the supplied functions.
 ```ts
 import { designWorkflow } from "std::workflow"
 import { add, multiply, divide, round } from "std::math"
+import { cliPolicyHandler } from "std::policy"
 
 node main(): Result {
   const request = "Average three numbers, rounded to two decimal places."
-  return designWorkflow(request, [add, multiply, divide, round], __dirname)
+  const handler = cliPolicyHandler(file: "${__dirname}/policy.json")
+  handle {
+    return designWorkflow(request, [add, multiply, divide, round], __dirname)
+  } with (intr) {
+    return handler(intr)
+  }
 }
 ```
 
 ```bash
-agency run --interactive design.agency
+agency run design.agency
 ```
+
+`cliPolicyHandler` asks you about each interrupt at the terminal, and it is
+what shows a draft as a review: the draft as JSON on the first round, and a
+diff against the previous draft after that. Without it, `agency run
+--interactive` asks too, but prints each draft as raw data, the previous one
+in full beside it.
 
 A model drafts the workflow from the request and the functions you list.
 Agency checks each draft and sends any problems back to the model, so you only
 see a draft that passed the check. Then you review it, with three possible
 answers:
 
-- `accept` saves it with `writeWorkflow`, which asks with
-  `std::workflow::save` as usual.
-- Any other text is feedback, such as "make the precision an input". The
-  model writes a new draft that follows it.
+- `a` (approve), or typing `accept`, saves it with `writeWorkflow`, which
+  asks with `std::workflow::save` as usual.
+- Any other text you type is feedback, such as "make the precision an
+  input". The model writes a new draft that follows it.
 - From your own code, you can approve the review with an edited workflow
   object. Agency checks it and saves it without asking the model again.
 

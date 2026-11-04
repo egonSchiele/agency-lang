@@ -1155,7 +1155,7 @@ type ReviewAnswer = {
   text: string
 } | {
   kind: "edited";
-  workflow: Workflow
+  text: string
 }
 
 def reviewAnswer(answer: any): Result<ReviewAnswer> {
@@ -1172,11 +1172,10 @@ def reviewAnswer(answer: any): Result<ReviewAnswer> {
     }
     return success({ kind: "feedback", text: answer })
   }
-  const edited: Workflow! = answer
-  if (edited is failure(shapeErr)) {
-    return failure("unrecognized review answer: answer \"${ACCEPT_DESIGN}\", give feedback as text, or send back an edited workflow. The edited workflow has the wrong shape: ${shapeErr}")
-  }
-  return success({ kind: "edited", workflow: edited.value })
+  // Anything else is an edit, kept as text. attemptDraft checks its shape
+  // like a model's draft, so an edit with the wrong shape goes to the model
+  // with its problems instead of ending the call.
+  return success({ kind: "edited", text: JSON.stringify(answer, null, 2) })
 }
 
 /**
@@ -1243,7 +1242,7 @@ export def designWorkflow(
       revise = { draft: JSON.stringify(drafted.workflow, null, 2), problems: decided.text }
     }
     if (decided.kind == "edited") {
-      const edit = attemptDraft(JSON.stringify(decided.workflow, null, 2), described, root, savedNow)
+      const edit = attemptDraft(decided.text, described, root, savedNow)
       if (edit is success(checked)) {
         return writeWorkflow(checked.workflow, tools, root)
       }

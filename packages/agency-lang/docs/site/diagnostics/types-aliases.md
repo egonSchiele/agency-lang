@@ -253,3 +253,108 @@ Each arm of a `parallel` block hands its bindings back when it finishes, and the
 The `?` operator unwraps a value you read. A write target such as `obj?.field = 1` would have to unwrap and then write back into a Result, which has no meaning.
 
 **How to fix:** unwrap into a variable first, then assign to the variable's field.
+
+<a id="ag1026"></a>
+
+## AG1026 — `async &#123;expr&#125;` must start a statement: write `async &#123;expr&#125;` on its own line, or `let x = async &#123;expr&#125;`. It cannot be part of a larger expression.
+
+*Default severity: error.*
+
+`async f()` runs `f` beside the statements that follow it in the same block, and the block waits for `f` at the first use of its value or at its end. That needs a statement to start from and statements to run beside, so `async` can only begin a statement or the right-hand side of a `let` or `const`. Inside a larger expression, such as an argument or a condition, there are no following statements for it to run beside.
+
+**How to fix:** give the call its own line.
+
+```agency
+def summarize(text: string): string {
+  return text
+}
+
+def turn(msg: string) {
+  let summary = async summarize(msg)
+  print("working")
+  print(summary)
+}
+```
+
+<a id="ag1027"></a>
+
+## AG1027 — `async &#123;expr&#125;` runs beside the rest of a function or node body, and a module-level initializer or a parameter default is not inside one. Use it inside a node or a def.
+
+*Default severity: error.*
+
+`async` lowers to a branch that runs beside the rest of a function or node body. A module-level initializer and a parameter default run outside any body, so there is nothing for the call to run beside.
+
+**How to fix:** move the call into a node or a def.
+
+<a id="ag1028"></a>
+
+## AG1028 — `async &#123;expr&#125;` cannot be used inside a handler body. Call it before the `handle` block, or in a def the handler calls.
+
+*Default severity: error.*
+
+A handler body (`with (intr) { ... }`) compiles to plain code that answers an interrupt. It has no steps and cannot start branches, so `async` has nothing to lower to there.
+
+**How to fix:** make the call before the `handle` block, or inside a def the handler calls without `async`.
+
+<a id="ag1029"></a>
+
+## AG1029 — `async &#123;expr&#125;` cannot be used inside a callback body. Callbacks run as side effects of a hook and cannot wait for a branch. Call it from the node or def instead.
+
+*Default severity: error.*
+
+A callback body runs as a side effect of a lifecycle hook. It cannot pause, and it cannot wait for a branch, which is what an `async` call needs at its join.
+
+**How to fix:** make the call from the node or def that registers the callback.
+
+<a id="ag1030"></a>
+
+## AG1030 — `async &#123;expr&#125;` cannot be an arm of a `parallel` block, because the arms already run beside each other. Remove the `async`.
+
+*Default severity: error.*
+
+The arms of a `parallel` block already run beside each other. An `async` call written directly as an arm would have no following statements in its own arm to run beside, so the keyword means nothing there.
+
+**How to fix:** remove `async`, and the call runs beside the other arms. Inside a `seq { }` arm, `async` works as it does anywhere else.
+
+<a id="ag1031"></a>
+
+## AG1031 — `async &#123;expr&#125;?` cannot unwrap the call. Unwrap the value after it is ready: `let r = async &#123;expr&#125;`, then `const x = r?`.
+
+*Default severity: error.*
+
+The `?` operator returns a failure from the enclosing function. On an `async` call, that return would happen inside the branch that runs the call, where it cannot return from the function, and the failure would be lost.
+
+**How to fix:** keep the Result and unwrap it after it is ready.
+
+```agency
+def fetchName(): Result {
+  return success("Ada")
+}
+
+def greet(): Result {
+  let named = async fetchName()
+  print("working")
+  const name = named?
+  return success(name)
+}
+```
+
+<a id="ag1032"></a>
+
+## AG1032 — `async` must be followed by a call, and `&#123;expr&#125;` is not a call.
+
+*Default severity: error.*
+
+`async` starts a call that runs beside the statements after it. A variable, a property, or a literal is not a call, so there is nothing to start.
+
+**How to fix:** remove `async`, or call the function: `async load()` rather than `async load`.
+
+<a id="ag1033"></a>
+
+## AG1033 — `&#123;keyword&#125;` runs beside `async &#123;expr&#125;`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `&#123;keyword&#125;`, or use its value before it.
+
+*Default severity: error.*
+
+The statements after an `async` call, up to the first use of its value or the end of the block, run as their own branch beside the call. A `goto`, `break`, or `continue` inside that stretch would have to leave the block from inside the branch, which a branch cannot do. When one of them is the last statement of the stretch, at the block's top level, the compiler ends the branch just before it, so that case works. This one is nested inside an `if` or another statement.
+
+**How to fix:** start the `async` call after the `goto`, `break`, or `continue`, or read the call's value before it so the branch ends there.

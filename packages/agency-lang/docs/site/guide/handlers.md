@@ -206,6 +206,23 @@ The rules of handlers are thus:
 
 Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. A handler that never returns a verdict has passed, whether or not it said `pass()` out loud. And if *every* handler passes, nobody in the chain made a decision, so the interrupt propagates up to the user — the same safe default you get when there is no handler at all.
 
+## Handlers and branches
+
+A handler applies only inside the branch that registered it. In a `fork`, a `parallel` block, or an `async` call, a handler inside one branch answers that branch's interrupts and none of its siblings'. A handler around the whole block answers every branch.
+
+```ts
+node main() {
+  parallel {
+    seq {
+      readNotes() with approve   // answers readNotes's interrupts only
+    }
+    writeReport()                // its interrupts go to the user
+  }
+}
+```
+
+The same goes for two tools the model calls in one round: a handler inside one tool does not answer the other. `.preapprove()` follows the same rule.
+
 ## Raising interrupts inside a handler function
 
 Lets start with some terminology:

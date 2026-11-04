@@ -38,6 +38,14 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1023](types-aliases.md#ag1023) | `&#123;expr&#125;?` cannot be used inside a handler body. Unwrap the Result before the `handle` block, or match on it here. |
 | [AG1024](types-aliases.md#ag1024) | `&#123;expr&#125;?` would return from a `parallel` arm, and an arm cannot return early. Do the unwrap inside a def the arm calls. |
 | [AG1025](types-aliases.md#ag1025) | `&#123;expr&#125;?` cannot be a write target. Unwrap into a variable first, then assign to its field. |
+| [AG1026](types-aliases.md#ag1026) | `async &#123;expr&#125;` must start a statement: write `async &#123;expr&#125;` on its own line, or `let x = async &#123;expr&#125;`. It cannot be part of a larger expression. |
+| [AG1027](types-aliases.md#ag1027) | `async &#123;expr&#125;` runs beside the rest of a function or node body, and a module-level initializer or a parameter default is not inside one. Use it inside a node or a def. |
+| [AG1028](types-aliases.md#ag1028) | `async &#123;expr&#125;` cannot be used inside a handler body. Call it before the `handle` block, or in a def the handler calls. |
+| [AG1029](types-aliases.md#ag1029) | `async &#123;expr&#125;` cannot be used inside a callback body. Callbacks run as side effects of a hook and cannot wait for a branch. Call it from the node or def instead. |
+| [AG1030](types-aliases.md#ag1030) | `async &#123;expr&#125;` cannot be an arm of a `parallel` block, because the arms already run beside each other. Remove the `async`. |
+| [AG1031](types-aliases.md#ag1031) | `async &#123;expr&#125;?` cannot unwrap the call. Unwrap the value after it is ready: `let r = async &#123;expr&#125;`, then `const x = r?`. |
+| [AG1032](types-aliases.md#ag1032) | `async` must be followed by a call, and `&#123;expr&#125;` is not a call. |
+| [AG1033](types-aliases.md#ag1033) | `&#123;keyword&#125;` runs beside `async &#123;expr&#125;`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `&#123;keyword&#125;`, or use its value before it. |
 
 ## Assignability and checking
 

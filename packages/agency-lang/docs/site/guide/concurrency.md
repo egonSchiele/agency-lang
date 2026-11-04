@@ -1,6 +1,6 @@
 ---
 name: Concurrency
-description: Covers Agency's concurrency primitives including `parallel`, `seq`, `fork`, and `race` for running multiple branches of work simultaneously.
+description: Covers Agency's concurrency primitives including `parallel`, `seq`, `async`, `fork`, and `race` for running multiple branches of work simultaneously.
 ---
 
 # Concurrency
@@ -68,6 +68,84 @@ In this example:
 - `functionB` runs before `functionC`.
 
 You can write normal Agency code in `seq`. Unlike the `parallel` block, it doesn't have any restrictions. 
+
+## `async`
+
+`async f()` runs `f` beside the statements that follow it in the same block. The block waits for `f` at the first use of its value, or at the end of the block.
+
+```ts
+node turn(msg: string) {
+  let title = async nameConversation(msg)
+  const reply = llm(msg)
+  print(reply)
+  saveTitle(title)
+}
+```
+
+Here `nameConversation` runs while the model writes the reply. `saveTitle(title)` is the first statement that uses `title`, so the function waits for `nameConversation` just before it. If `nameConversation` finishes first, nothing waits.
+
+There is no `await`. The value is ready when you read it.
+
+### The two forms
+
+```ts
+let title = async nameConversation(msg)   // run beside, and keep the value
+async extractMemories(msg)                // run beside, and drop the value
+```
+
+`async` goes on a call, at the start of a statement or on the right-hand side of a `let` or `const`. It cannot go inside a larger expression, such as an argument or a condition. A `with` suffix works as it does on any call:
+
+```ts
+let title = async nameConversation(msg) with approve
+```
+
+### Where the function waits
+
+For `let x = async f()`, the function waits just before the first statement after it that mentions `x`. A mention anywhere in the statement counts, including inside an `if`, a loop, a `match`, or a block argument, and including an assignment to `x`. If nothing mentions `x`, the function waits at the end of the block.
+
+For `async f()` with no variable, the function waits at the end of the block.
+
+"The block" is the body the `async` statement sits in: a function or node body, an `if` branch, a loop body, a `handle` body, or a `seq` arm. In a loop body, each iteration waits at the end of its body, so the calls of two iterations never overlap.
+
+A `goto`, `break`, or `continue` cannot run beside the call. When one of them is the next statement at the top level of the block, the function waits just before it:
+
+```ts
+for (item in items) {
+  async log(item)
+  if (done(item)) {
+    print("stopping")
+  }
+  continue    // the function waits for log() just before this line
+}
+```
+
+One nested deeper, inside an `if` before the wait, is a compile error. Start the `async` call after it, or use the value before it.
+
+Two `async` calls in one block all run together. The second call and the statements after it run beside the first call:
+
+```ts
+let title = async nameConversation(msg)
+let facts = async extractMemories(msg)
+const reply = llm(msg)
+saveTitle(title)
+saveFacts(facts)
+```
+
+`nameConversation`, `extractMemories`, and the reply all run at the same time.
+
+### What happens
+
+1. The function waits for the call. A slow call delays the rest of the function by the difference. The call never outlives the function.
+2. An early `return` waits for the call too. If a turn can stop early, start its `async` calls after the early exits.
+3. The arguments are read when the `async` line runs, the same as for a plain call. In `async f(llm(prompt))`, that `llm()` call happens first, before anything runs beside it.
+4. An interrupt in either the call or the rest of the block works as it does in a `fork`. The first interrupt is shown only once the other side has stopped running or is waiting on its own interrupt. Interrupts from both sides are answered together, and the program resumes where each one paused.
+5. A handler inside the call answers only the call's interrupts. A handler around the whole block answers both sides.
+6. The rest of the block keeps the conversation thread: an `llm()` call there adds its messages to the conversation. The call's own `llm()` calls start from a copy of the conversation so far, and their messages stay off it. Use `thread { }` inside the call for a blank conversation.
+7. Global variables are shared between the call and the rest of the block, as they are between a plain call and the code after it.
+8. A pause requested from outside while the call is running takes effect after the function stops waiting. The debugger's `set` command is refused until then.
+9. If the call is a TypeScript function that throws, the function returns a failure with the error, and an interrupt waiting on the other side is dropped.
+10. A `restore()` to a checkpoint taken inside the block, or before the `async` line, runs the call again.
+11. Under a decision-model provider, the two sides' model calls are batched into shared requests.
 
 ## State isolation across branches
 

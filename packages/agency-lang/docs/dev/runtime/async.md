@@ -1,196 +1,245 @@
-# Async Function Calls
+# `async` calls
 
-This document explains how async function calls work in Agency, the problems we encountered, and how they are solved.
+`async f()` runs `f` beside the statements that follow it in the same block.
+The compiler rewrites the block into a `parallel` block, which the existing
+parallel desugar turns into a `fork`. `async` adds two things to fork and
+nothing else: one arm keeps the parent's conversation thread, and the join
+returns an early `return` from the arm. Everything else is fork's
+behaviour, so interrupts are batched and resumable and the checkpoint is
+always complete.
 
-For the case-by-case behavioral checklist that the implementation was built against, see [`async-behavior-checklist.md`](./async-behavior-checklist.md).
+The user guide is the `async` section of `docs/site/guide/concurrency.md`.
+The design discussion, the alternatives set aside, and the spike results are
+in `docs/dev/language/fire-and-forget-notes.md`.
 
-## Background
+## The lowering
 
-Agency supports the `async` keyword on function calls to run them concurrently:
-
-```agency
-node main() {
-  x = async openai(msg)
-  y = async google(msg)
-  // x and y run in parallel, awaited before first usage
-  print(x, y)
-}
-```
-
-The compiler generates the calls without `await`, stores the Promises in variables, and later inserts `Promise.all` before the variables are used. This is handled by the preprocessor, which analyzes first-usage locations and generates the appropriate await code.
-
-## Problem 1: Unassigned async calls
-
-When you call an async function without assigning the result to a variable:
+`lib/preprocessors/asyncDesugar.ts` runs in `TypescriptPreprocessor.preprocess`
+just before `desugarParallelBlocks`. It rewrites
 
 ```agency
-node main() {
-  async append(1, "hello")
-  async append(0.5, "world")
-  return arr
-}
+let name = async nameConversation(msg)
+const reply = llm(msg)
+print(reply)
+print(name)
 ```
 
-The generated TypeScript calls `append(...)` without `await`, but nobody ever collects or awaits the resulting Promise. The preprocessor only tracks async calls that are assigned to variables (it uses the variable name for `Promise.all` insertion). So the Promises just float away.
-
-This was fixed by tracking all pending promises and awaiting them at certain boundaries, such as before returning to TypeScript.
-
-## Problem 2: Async vars + interrupts
-
-Even for assigned async calls, there's a bug when interrupts are involved:
+into
 
 ```agency
-node main() {
-  x = async slowFunc()
-  y = getApproval()  // triggers an interrupt
-  print(x)
+const __async_arg_0 = msg
+parallel(shared: true) {          // origin: "async"
+  let name = nameConversation(__async_arg_0)
+  seq {
+    const reply = llm(msg)
+    print(reply)
+  }
 }
+print(name)
 ```
 
-The interrupt at `getApproval()` serializes the execution state and returns to the TypeScript caller. But `x` still holds an unresolved Promise — it hasn't been awaited yet.
-
-So interrupts are one of the boundaries where all in-flight promises are awaited to ensure they're resolved before the interrupt serializes all state.
-
-## Problem 3: Key collisions with variable-name tracking
-
-An earlier design proposed tracking promises in a shared store keyed by variable name (e.g., `"x"` maps to the promise for `x = async func()`). This has two collision problems:
-
-### Loops
+and `desugarOneParallel` (`lib/preprocessors/parallelDesugar.ts`) turns that
+into
 
 ```agency
-while (condition) {
-  x = async func()
+const __async_arg_0 = msg
+let __arms_0 = fork(["arm_0", "arm_1"], shared: true) as __arm_0 {   // mainThread: 1
+  if (__arm_0 == "arm_0") {
+    let name = nameConversation(__async_arg_0)
+    return { name: name }
+  }
+  if (__arm_0 == "arm_1") {
+    const reply = llm(msg)
+    print(reply)
+    return __asyncDone({ reply: reply })
+  }
 }
-print(x)
+if (!__asyncFinished(__arms_0[1])) {
+  return __arms_0[1]
+}
+let name = __arms_0[0].name
+let reply = __arms_0[1].reply
+print(name)
 ```
 
-Each iteration registers under key `"x"`, overwriting the previous entry. Only the last iteration's promise is tracked. Earlier promises are orphaned — still running, but untracked and never awaited.
+The pieces, in the order they appear:
 
-### Concurrent function calls
+1. **The snapshot temporaries.** Each argument of the call that names
+   anything, the receiver of a method call, and the callee when it is a
+   function value in a local are copied into `const __async_arg_N` before
+   the block. Without them, arm 0 would read them inside its first step,
+   after several awaits, and a write in arm 1's first statements could land
+   first. Literals are left in place. Objects stay aliased, as for any call.
+   A block argument stays on the call.
+2. **`shared: true`.** Globals stay shared, as they are between a plain call
+   and the code after it.
+3. **`mainThread: 1` on the fork.** A field on the synthesized `fork` call
+   node (`FunctionCall.mainThread`), set by `forkCall` when the block has
+   `origin: "async"`. There is no syntax for it: `fork(xs, mainThread: 1)`
+   is the ordinary unknown-named-argument error. The builder passes it as
+   the trailing argument of `runner.fork`, and `runForkAll` sets
+   `shareThreads` on that one child (`BatchChild.shareThreads` in
+   `runBatch.ts`). That child's run gets the parent's thread view, so the
+   reply an `llm()` call makes in arm 1 lands in the conversation. Arm 0
+   gets a subthread seeded from a copy of the active thread, as any fork
+   branch does, so the side call's model messages stay off the
+   conversation.
+4. **The marked completion.** Arm 1 ends with
+   `return __asyncDone({ ...bindings })` instead of the plain bindings
+   object.
+5. **The join check.** `if (!__asyncFinished(__arms_N[1])) { return
+   __arms_N[1] }`, between the fork and the binding hoists.
+
+## Why returns are decided at the join
+
+A fork arm's value is whatever the arm returned: the bindings object, or a
+value an earlier `return` carried (`forkBlockSetup.mustache` returns
+`runner.haltResult`, and `Runner.handle`, `ifElse`, loops, and `thread`
+blocks propagate a halt). So the join only has to ask whether arm 1 reached
+its end. If it did not, the value it returned is the enclosing function's
+return value.
+
+That covers a user `return` at any depth, a bare `return` (the value is
+`undefined`), and the failure of an interrupt rejected directly in the arm.
+It also covers the `return` statements the hoist pass writes for `?`. The
+hoist pass runs after this lowering, so a pass that rewrote `return`
+statements could not see those. A `return` inside a block argument still
+returns from the block, because the block is its own closure, and the
+check needs no list of closure boundaries.
+
+The check has to be written by `desugarOneParallel`, because only that
+function knows the `__arms_N` name, and because the hoists after it read
+properties off the marked object.
+
+`__asyncDone` and `__asyncFinished` live in `lib/runtime/asyncJoin.ts`. The
+marker is a string key starting with `__`, which no Agency program can
+write. It is not a Symbol, because a branch that finished while its sibling
+waits on an interrupt has its result saved in the checkpoint as JSON.
+
+## Where the join is
+
+`asyncArm(list, index)` in `asyncDesugar.ts` decides it, and the type
+checker's refusals read the arm through the same function.
+
+- `let x = async f()`: just before the first later statement that mentions
+  `x`. "Mentions" is `namesMentioned` in `parallelDesugar.ts`: every
+  variable read, called function name, and assignment target that
+  `walkNodes` reaches. `walkNodes` is the descent template hygiene and scope
+  resolution already depend on, so a name inside a `with` statement, a
+  `match` arm, a cast, or an interrupt's arguments is found.
+- `async f()`: the end of the block.
+- Either way, never after a top-level `goto`, `break`, or `continue`: the
+  join moves to just before the first one, because a node transition or a
+  loop exit cannot run inside a fork arm (a `goto` in a branch crashes
+  checkpoint serialization).
+
+`identifierSlots` looks like the obvious table for "mentions", and it is the
+wrong one. It answers where a name is written in the user's file, so it
+drops every node without a source position, including the base of a
+`valueAccess` (`name` in `name.length`) and every node the compiler
+creates.
+
+## Why the calls lower first to last
 
 ```agency
-def helper() {
-  x = async func()
-  // awaitPending("x") inserted before usage
-  print(x)
-}
-
-node main() {
-  async helper()
-  async helper()
-}
+let name = async nameConversation(msg)
+let facts = async extractMemories(msg)
+const reply = llm(msg)
+saveTitle(name)
+saveFacts(facts)
 ```
 
-Both helper calls share the same `RuntimeContext` and thus the same promise store. JavaScript async functions interleave at `await` points, so:
+First to last: `name` joins at `saveTitle`, so its arm is
+`[async extractMemories, reply]`. Lowering that arm, `facts` is not used in
+it, so its join is the end of the arm. The result is
+`nameConversation ‖ (extractMemories ‖ reply)`. The bindings compose:
+`facts` is hoisted out of the inner block into the outer arm, and
+`collectBindings` carries it out of the outer block.
 
-1. helper1 runs: registers `("x", promise1, setter1)` → hits internal `await`, yields
-2. helper2 runs: registers `("x", promise2, setter2)` → **overwrites promise1!**
-3. promise1 resolves, helper1 resumes: `awaitPending("x")` awaits **promise2** (helper2's promise, not helper1's)
-4. helper1's `__self.x` is never properly resolved
+Last to first would form `facts`'s block first, with `saveTitle(name)`
+inside it. `name`'s first use would then be that block, its arm would be
+empty, and `nameConversation` would run alone before everything else.
 
+## The positions refused
 
-## Solution: Runtime promise tracking with unique keys
+`lib/typeChecker/asyncChecks.ts`, `asyncRefusals`. Tree-only, like
+`unwrapRefusals`, and called from both the checker and
+`checkUnwrapsOrExit` in `buildSession.ts`, so `agency tc`, the editor, and a
+compile with the checker off all report them. The lowering reports none of
+them.
 
-Instead of the preprocessor generating inline `Promise.all` code, all promise tracking lives in a `PendingPromiseStore` on `RuntimeContext` (`lib/runtime/state/pendingPromiseStore.ts`). Promises are tracked with unique counter-based keys, which avoids every collision above.
+| Code | Position |
+| --- | --- |
+| AG1026 | inside an expression |
+| AG1027 | module-level code or a parameter default (`hoistPositions` status `outsideBodies`) |
+| AG1028 | a handler body (`hoistPositions` status `handlerBody`) |
+| AG1029 | a callback body, which is a lifted `__cb_*` function by then |
+| AG1030 | a direct arm of a `parallel` block |
+| AG1031 | `?` on the async call |
+| AG1032 | not a call |
+| AG1033 | a `goto`, `break`, or `continue` nested inside the arm and not inside a loop that is itself in the arm |
 
-### How it works
+The parser accepts `async` on any value access, as it always has, so these
+errors carry a code and a location instead of a generic parse failure. The
+one parse-time refusal is `async (x) => ...` as a block argument, which used
+to be accepted and dropped.
 
-**Registration:** When the builder generates an async call, it registers the promise with the store. The `add` method returns a unique key (e.g., `"__pending_0"`, `"__pending_1"`):
+The builder throws if a flagged call reaches codegen. That is a tripwire for
+a toolchain bug; a user can never see it.
 
-```js
-// For: x = async func(...)
-__self.x = __call(func, /* … */);
-__self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(
-  __self.x,
-  (val) => { __self.x = val; },
-);
+## Handlers in the two arms
 
-// For: async func(...) (unassigned)
-getRuntimeContext().ctx.pendingPromises.add(__call(func, /* … */));
-```
+A handler registered in one branch never answers an interrupt raised in a
+sibling branch (`HandlerEntry.stack`, `inSiblingBranch` in
+`lib/runtime/interrupts.ts`, and `docs/dev/runtime/interrupts.md`). Without
+that rule, a side call that wraps itself in `with approve`, or is a
+`preapprove()`d function, would approve the reply's interrupts for as long
+as it runs. A handler around the whole block is on the parent stack, which
+is an ancestor of both arms, so it answers both.
 
-`getRuntimeContext()` is the strict ALS accessor. Codegen uses it everywhere
-post-ALS-migration, so a missing frame fails with an actionable error instead of
-a cryptic property read on `undefined`.
+Each `handle` block removes its own entry when it ends
+(`RuntimeContext.removeHandler`, by identity). The two arms enter and leave
+their blocks in any order on the one shared list, so removing the newest
+entry would take a sibling's handler away while it was still in its block,
+and leave the caller's own handler applying after its block had ended.
+`tests/agency/fork/handlers/handler-removed-by-its-own-block` covers both.
 
-The key is stored in `__self.__pendingKey_x`, which is per-stack-frame. Concurrent calls to the same function each have their own `__self`, so each gets a unique key. Loop iterations also get unique keys from the counter.
+## Behaviour inherited from fork
 
-**Await before usage:** The preprocessor still determines *when* to await (before first usage), but instead of generating `Promise.all` raw code, it generates:
+- `runBatch` in `"all"` mode is `allSettled`. The first interrupt from one
+  arm surfaces once the other arm has finished or is waiting on its own
+  interrupt. After that the finished arm's result is cached, so later
+  interrupts surface at once and a resume does not re-run it.
+- A JavaScript error thrown by one arm is rethrown, and the other arm's
+  pending interrupts are dropped. The node then returns a failure carrying
+  the error, and the host sees no interrupt (`side-throws` pins this).
+  Agency functions turn a throw into a failure, so this happens only for a
+  TypeScript function called directly.
+- An external pause cannot land on a branch stack and waits for the join
+  (`docs/dev/runtime/pause.md`). The debugger stops inside branches, but its
+  `set` command is refused there (`docs/dev/cli/debugger.md`).
+- Under a decision-model provider, the collector is per block, so the two
+  arms' decision calls share rounds (`docs/dev/llm/decision-models.md`).
 
-```js
-await getRuntimeContext().ctx.pendingPromises.awaitPending([
-  __self.__pendingKey_x,
-  __self.__pendingKey_y,
-]);
-```
+## `restore()`
 
-The `awaitPending` method resolves the promises and calls their setters to write the resolved values back to the variables.
+`RestoreSignal` thrown inside an arm leaves `runBatch` through its rethrow
+path. The run loop restores the checkpoint and re-enters the fork step. A
+checkpoint taken inside arm 1 holds no cached result for arm 0, even when
+arm 0 had already finished, so the whole block starts again and the side
+call runs a second time. `tests/agency/async/restore-inside-arm` pins this:
+the side call and the main arm each run twice. A `restore()` to a checkpoint
+taken before the `async` line is an ordinary restore, and also runs both
+arms again (`restore-before-async`).
 
-**Await at runtime entry points:** The `awaitAll` call does NOT live in generated node code. It lives in the runtime functions that return control to TypeScript. Today those are `runNode` and `runExportedFunction` (`lib/runtime/node.ts`), `runResumeLoop` behind `respondToInterrupts` (`lib/runtime/interrupts.ts`), and `rewindFrom` (`lib/runtime/rewind.ts`). This is the right place because:
+## What the old runtime did
 
-- Pending promises live on `RuntimeContext`, which persists across node transitions within the same execution. There's no need to await them at every node boundary.
-- Node-to-node transitions (e.g., `return otherNode(...)`) should not wait for pending promises — that would add artificial slowness. The async work continues in the background and is only required to complete before we return to TypeScript or serialize state for an interrupt.
-- Centralizing `awaitAll` in the runtime (rather than in generated code) means fewer code paths to maintain and less generated code.
-
-**Await before interrupt:** Before any interrupt return, the builder emits `await getRuntimeContext().ctx.pendingPromises.awaitAll()` right before `runner.halt(...)`. Every pending promise settles and every assigned variable holds a resolved value before state is serialized, so the serialized state is complete and consistent. This is separate from the runtime `awaitAll` because interrupts return from inside generated node code, not from a runtime entry point.
-
-**Await on handler exit:** A handler body can launch its own async calls. When the handler returns, `runHandlerChain` (`lib/runtime/interrupts.ts`) awaits exactly the promises registered since it started, using `keysSince(watermark)` rather than `awaitAll`. It cannot use `awaitAll`, because the full pending set can contain the very async call whose raise is being dispatched, and that call cannot settle until the chain returns. This await passes `rejectInterrupts: true`: a handler cannot pause, so an async call that returns an interrupt here throws `ConcurrentInterruptError` instead of being silently consumed.
-
-### Why this solves each problem
-
-- **Unassigned async calls:** Registered with `add` and no key stored. Caught by `awaitAll` at whichever runtime entry point returns to TypeScript.
-- **Async vars + interrupts:** `awaitAll` resolves all pending promises (including assigned ones) before state serialization. The setter writes the resolved value back to the variable.
-- **Loop collisions:** Each iteration gets a unique key from the counter. All promises are tracked independently.
-- **Concurrent function collisions:** Each function call stores its key in its own `__self.__pendingKey_x`. The shared `PendingPromiseStore` holds all promises with distinct keys.
-
-## Branches
-Note that the same state stack is not shared across multiple concurrent calls; instead, they each get their own state stack that starts fresh from the moment that thread starts executing branches on the current state stack. This lets us restore state across multiple threads in a pretty nice way. We resume a single thread, and for any async calls that that thread makes, we essentially unwind all those state stacks. So all these state stacks keep unrolling in a tree structure as you go through multiple layers of concurrent threads.
-
-## LLM checkpoints don't work with async threads
-I am just now adding a feature called LLM checkpoints. This feature would checkpoint after every LLM call. The idea is that LLM calls can be wrong, and if multiple LLM calls are made in a row where the input depends on the output of the previous call, well then the errors can compound.
-
-This new feature lets you rewind to right after a specific LLM call. It also lets you override the value of that LLM call, as well as the values of any local variables in scope at this point. If an LLM chain goes wrong, you can trace exactly what happened, and then you can rewind to a previous checkpoint, change the data, and see if that helps.
-
-Unfortunately, this doesn't deal with parallel threads very well. If I were to await all pending promises after each query, that would sort of destroy the point of parallelism, and I'm not sure if that would even be possible. It seems like that would maybe end with a lot of different threads all waiting for each other to finish. 
-
-So, this LLM checkpoint feature not attempt to await any pending promises. That means if you resume using this feature, all pending promises are essentially useless. LLM checkpoints and async threads cannot be used together.
-
-## Future work
-
-### Interrupt queues (phase 2) — deferred
-
-**Scope note.** Concurrent interrupts DID land, but for `fork`/`parallel`
-branches, not for the pending-promise path described here. Multiple branches can
-interrupt at once, the runtime aggregates them into an `Interrupt[]`, and
-`respondToInterrupts(interrupts, responses)` matches responses by `interruptId`.
-See `docs/dev/runtime/concurrent-interrupts.md`. What remains unsupported is an
-`async` call tracked in `PendingPromiseStore` returning an interrupt: `awaitAll`
-throws `ConcurrentInterruptError` there. The rest of this section is the
-historical reasoning for that gap.
-
-The idea here was to allow multiple different threads to throw interrupts. So, again, remember that when an interrupt is thrown, we wait for all pending promises to finish before returning to TypeScript. Well, it's possible that one of those pending promises throws an interrupt.
-I wanted to add support for this and change from returning a single interrupt to returning an array of interrupts. Then TypeScript could handle each and respond to each interrupt.
-This ended up being pretty hard to do. Most of the groundwork is there now, so it should be doable, though I am not sure how this would play with handlers because handlers currently get registered on the context. There is no way to register different handlers for different threads.
-
-I actually don't think this would work anyway, as it would lead to deadlock. When an interrupt is thrown, the thread waits for all other threads to finish. What happens if two different threads throw interrupts?
-
-1. Thread A interrupts → awaitAll() → yields, waiting for B
-2. Thread B interrupts → awaitAll() → yields, waiting for A
-3. Neither can return, so neither promise resolves
-
-When an interrupt is thrown, each thread needs to remove itself from the store so that it isn't awaited, in order to break this deadlock.
-
-Concurrency is hard.
-
-#### Claude's notes on this
-The original plan was for phase 2 to replace `ConcurrentInterruptError` with an interrupt queue: when `awaitAll` discovers multiple interrupts from pending promises, queue them and surface one at a time.
-
-This is deferred because of significant complexity:
-
-**Routing responses to the right function.** When multiple async functions each return an interrupt, and the user responds to each one, the responses need to be routed back to the correct function on resume. Currently `interruptData` is a single object on `GraphState`. Supporting multiple interrupts requires keying responses (by variable name or call index), changing the `interruptData` structure (breaking API change), and modifying the builder to pass the right response to each async call.
-
-**StateStack interleaving.** The shared stateStack means we can't reliably capture per-function state snapshots while async calls are in flight. On resume, each async function would re-execute from scratch (step 0), replaying all side effects up to the interrupt point. This is the same replay behavior as current sync interrupts, but happening for multiple concurrent calls.
-
-**Re-execution complexity.** On resume, the node re-runs, the step counter skips to the async calls, and each async function re-executes fully. Each function needs to find its own interrupt response in the (now keyed) `interruptData` and continue past its interrupt point. This requires builder changes to generate response routing code.
-
-Given that the recommended pattern for parallel agents (calling from TypeScript) already works well, the interrupt queue feature is deferred until there's a concrete use case that can't be served by the TypeScript-level parallelism.
+Before this lowering, `async f()` compiled to a call with no `await`. The
+promise was stored in a `PendingPromiseStore`, the preprocessor inserted
+`awaitPending` before the first use, and every node return, interrupt
+return, `checkpoint()`, and handler exit drained the store. An interrupt
+raised inside the call threw `ConcurrentInterruptError`, because a
+checkpoint taken while the call was in flight could not hold it, and
+`async` was refused inside loops. The lowering clears the flag before
+codegen, so none of that code runs any more; removing it is a separate
+change. The notes file has the full comparison.

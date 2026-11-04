@@ -1,18 +1,10 @@
 import { systemMessage } from "std::thread"
 
 node main() {
-  let story = ""
-  let response = llm(
-    "Write the first line of a story about a talking cat."
+  let userMessage = input("> ")
+  let conversationName = llm(
+    "Generate a name for this conversation based on this user message: ${userMessage}",
   )
-  story += response
-  for (i in range(20)) {
-    print(i)
-    response = llm(
-      "Write the next line of the story about the talking cat."
-    )
-    story += response
-  }
-  print(story)
-  return story
+  const response = llm("Respond to this user message: ${userMessage}")
+  return response
 }

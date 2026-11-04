@@ -1,3 +1,26 @@
+## Nov 3 2026 — v0.38.0
+
+### Breaking
+
+- **A policy rule that matched `std::run` on `node: "inputsSchema"` no longer matches.** The node that a workflow check runs is now called `workflowSchemas`.
+
+### Workflows
+
+- **New `designWorkflow` lets a model draft a workflow from a plain-language request.**
+- **New `checkWorkflowWithSchemas` returns the JSON Schema of a workflow's inputs and of each LLM step's output,** along with the usual warnings.
+- **`catalog` entries include a `returnSchema` and a `handoff` flag,** and `agency workflow tools` prints `(handoff)` after a handoff function's signature.
+- **`checkWorkflow` refuses a `regex` type in `inputs` or in an LLM step's `output`, and names the field.** These workflows used to pass the check and then fail at run time.
+- **Saved workflows leave out optional fields that were not set,** instead of writing them as `null`.
+
+### Language
+
+- **An `llm()` call whose type is an alias of `string` returns the model's text.** It used to return JSON text such as `{"response":"hello"}`, which also broke workflow LLM steps with `output: "string"`.
+- **A parameter type such as `{ r: Result<Note> }` no longer crashes the compiler when `Note` is declared later in the file.**
+
+### CLI
+
+- **Under `agency run --interactive`, an approve rule no longer answers an interrupt that expects a value.** Questions and reviews, such as `std::workflow::review`, go to the prompt so you can type the answer. Runs without `--interactive` behave as before.
+
 ## Nov 3 2026 — v0.37.0
 
 ### Workflows

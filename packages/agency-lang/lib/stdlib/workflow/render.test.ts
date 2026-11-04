@@ -57,10 +57,34 @@ describe("renderWorkflow", () => {
         "  }",
         "}",
         "",
-        "export node inputsSchema(): Json {",
-        '  return schema(Inputs).toJSONSchema("input")',
+        "export node workflowSchemas(): Json {",
+        "  return {",
+        '    inputs: schema(Inputs).toJSONSchema("input"),',
+        "    outputs: {}",
+        "  }",
         "}",
         "",
+      ].join("\n"),
+    );
+  });
+
+  it("lists each llm step's output schema by step id", () => {
+    const types = [
+      ...lowered.types,
+      { name: "Step_m_output", text: "string[]", owner: { step: "m", field: "output" } },
+      { name: "Step_n_output", text: "{ title: string }", owner: { step: "n", field: "output" } },
+    ];
+    expect(renderWorkflow({ ...lowered, types }).source).toContain(
+      [
+        "export node workflowSchemas(): Json {",
+        "  return {",
+        '    inputs: schema(Inputs).toJSONSchema("input"),',
+        "    outputs: {",
+        '      "m": schema(Step_m_output).toJSONSchema(),',
+        '      "n": schema(Step_n_output).toJSONSchema()',
+        "    }",
+        "  }",
+        "}",
       ].join("\n"),
     );
   });

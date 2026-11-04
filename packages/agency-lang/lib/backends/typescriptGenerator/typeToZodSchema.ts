@@ -297,7 +297,12 @@ export function mapTypeToValidationSchema(
     variableType,
     typeAliases,
     (vt, ta) => {
-      const successSchema = mapTypeToValidationSchema((vt as any).successType, ta, typeAliasesFull);
+      const successSchema = mapTypeToValidationSchema(
+        (vt as any).successType,
+        ta,
+        typeAliasesFull,
+        pendingAliases,
+      );
       // The data slot checks only that it IS an object, not its shape. The
       // runtime turns absent data into `{}`, which no schema for a real `D`
       // matches, so checking the shape here would reject the bare

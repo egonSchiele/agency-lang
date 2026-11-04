@@ -1,4 +1,4 @@
-import { shout } from "./helper.agency"
+import { shout, Outer } from "./helper.agency"
 
 export def greet(name: string): string {
   """
@@ -7,4 +7,18 @@ export def greet(name: string): string {
   @param name - Who to greet
   """
   return shout("hello ${name}")
+}
+
+export def outer(): Result<Outer> {
+  """
+  Return a value of an imported type whose body names a type this module does not import. The schema prints only `Outer`, which the import binds.
+  """
+  return success({ inner: { count: 1 } })
+}
+
+export def nested(): Result<Record<string, Outer>> {
+  """
+  Return a value whose schema inlines `Outer` and so prints `Inner`, which this module does not import.
+  """
+  return success({ first: { inner: { count: 1 } } })
 }

@@ -1,0 +1,132 @@
+// checkWorkflowWithSchemas: one check and one subprocess give the warnings,
+// the inputs schema, and each LLM step's output schema by step id. No node
+// here calls a model: the schemas node computes schemas and nothing else.
+import { checkWorkflowWithSchemas, Workflow } from "std::workflow"
+import { add, multiply } from "std::math"
+import { keys } from "std::object"
+import { Json } from "std::validation"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+const TOOLS = [add, multiply]
+
+/** Adds two numbers, doubles the sum, and has a model explain it. `note`
+  is optional, so the inputs schema has a key that is not required. */
+def explained(output: string): Workflow {
+  return {
+    format: 1,
+    name: "explained",
+    description: "Add two numbers, double the sum, and explain it.",
+    inputs: "{ a: number; b: number; note?: string }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: { "$ref": "inputs.b" } } },
+      { id: "doubled", kind: "tool", module: "std::math", tool: "multiply", args: { a: { "$ref": "steps.sum" }, b: 2 } },
+      { id: "explain", kind: "llm", prompt: "Explain the result in one sentence.", context: [{ "$ref": "steps.doubled" }, { "$ref": "inputs.note" }], output: output }
+    ],
+    result: { "$ref": "steps.explain" }
+  }
+}
+
+/** A workflow the check refuses: `subtract` is not in TOOLS. */
+def bad(): Workflow {
+  return {
+    format: 1,
+    name: "bad",
+    description: "Subtract.",
+    inputs: "{ a: number }",
+    steps: [{ id: "diff", kind: "tool", module: "std::math", tool: "subtract", args: { a: { "$ref": "inputs.a" }, b: 1 } }]
+  }
+}
+
+/** Checks `workflow`, recording every effect raised in "effects". A true
+  `rejectRun` rejects `std::run`. */
+def runCheck(workflow: Workflow, rejectRun: boolean = false): Result<any> {
+  setMutable("effects", [])
+  handle {
+    return checkWorkflowWithSchemas(workflow, TOOLS, __dirname)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    if (rejectRun && intr.effect == "std::run") {
+      return reject("not now")
+    }
+    return approve()
+  }
+}
+
+node schemasOfEachPart(): Json {
+  const checked = runCheck(explained("{ title: string; summary: string }"))
+  if (checked is failure(err)) {
+    return "failed: ${err}"
+  }
+  const explain = checked.value.outputSchemas.explain
+  return [
+    checked.value.warnings,
+    checked.value.inputsSchema.required,
+    keys(checked.value.inputsSchema.properties),
+    keys(checked.value.outputSchemas),
+    keys(explain.properties),
+    explain.required,
+    getMutable("effects", [])
+  ]
+}
+
+node stringOutputIsAStringSchema(): Json {
+  const checked = runCheck(explained("string"))
+  if (checked is failure(err)) {
+    return "failed: ${err}"
+  }
+  return checked.value.outputSchemas.explain.type
+}
+
+node refusedWorkflowStartsNothing(): Json {
+  const checked = runCheck(bad())
+  if (checked is success) {
+    return "checked"
+  }
+  return [map(checked.data.problems, \problem -> problem.step), getMutable("effects", [])]
+}
+
+/** Inputs JSON Schema cannot express: `regex` has no JSON form. */
+def regexInputs(): Workflow {
+  return {
+    format: 1,
+    name: "regexInputs",
+    description: "Add two literals.",
+    inputs: "{ pattern: regex }",
+    steps: [{ id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: 1, b: 2 } }],
+    result: { "$ref": "steps.sum" }
+  }
+}
+
+/** The fields of every problem, as `step/field`. */
+def problemFields(failed: any): Json {
+  return map(failed.data.problems ?? [], \problem -> "${problem.step}/${problem.field}")
+}
+
+// The check refuses it, naming the field, before any std::run: the schemas
+// node would fail with zod's message, which names no step or field.
+node unrepresentableInputsAreRefused(): Json {
+  const checked = runCheck(regexInputs())
+  if (checked is failure) {
+    return [problemFields(checked), getMutable("effects", [])]
+  }
+  return "checked"
+}
+
+// A refused run is not a workflow problem: it keeps `rejected` and has no
+// `problems`, the way a refused read does in `catalog`.
+node rejectedRunKeepsTheRejection(): Json {
+  const checked = runCheck(explained("string"), true)
+  if (checked is failure) {
+    return [checked.rejected, checked.data.problems == null, getMutable("effects", [])]
+  }
+  return "checked"
+}
+
+// An LLM output type holding a regex is refused the same way, on the step.
+node unrepresentableOutputIsRefused(): Json {
+  const checked = runCheck(explained("{ pattern: regex }"))
+  if (checked is failure) {
+    return [problemFields(checked), getMutable("effects", [])]
+  }
+  return "checked"
+}

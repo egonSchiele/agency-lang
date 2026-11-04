@@ -35,11 +35,12 @@ function signatureLine(entry: CatalogEntry, paint: ColorFunction): string {
     return param.default === null ? typed : `${typed} = ${param.default}`;
   });
   const returns = entry.returns === null ? "" : `: ${entry.returns}`;
-  return `${paint.cyan(clean(entry.name))}${clean(`(${params.join(", ")})${returns}`)}`;
+  const handoff = entry.handoff ? " (handoff)" : "";
+  return `${paint.cyan(clean(entry.name))}${clean(`(${params.join(", ")})${returns}`)}${handoff}`;
 }
 
-/** A heading per module, then each tool's signature, its description's
- *  first paragraph, and what it raises. */
+/** A heading per module, then each tool's signature, `(handoff)` for an
+ *  agent, its description's first paragraph, and what it raises. */
 export function formatCatalog(entries: CatalogEntry[], paint: ColorFunction = ttyColor): string {
   const modules = entries
     .map((entry) => entry.module)

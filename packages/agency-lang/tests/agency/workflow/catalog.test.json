@@ -87,6 +87,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "returnSchemas",
+      "description": "a Result<Note[]> tool's return schema is the array of notes; round's is a number",
+      "input": "",
+      "expectedOutput": "[\"array\",\"object\",[\"id\",\"title\",\"body\"],[\"id\",\"title\",\"body\"],\"number\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unboundAliasHasNoReturnSchema",
+      "description": "an imported type prints by name and has a schema; a Record of it inlines its body, names an alias the module never imports, and has none; a string return has one",
+      "input": "",
+      "expectedOutput": "[[\"outer\",\"Result<Outer>\",\"object\"],[\"nested\",\"Result<Record<string, Outer>>\",null],[\"greet\",\"string\",\"string\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "handoffMarked",
+      "description": "a handoff def's entry says so; a plain function's does not",
+      "input": "",
+      "expectedOutput": "[[\"askPlanner\",true],[\"add\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

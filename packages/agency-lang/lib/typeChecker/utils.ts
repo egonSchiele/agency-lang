@@ -79,7 +79,7 @@ export function isFunctionTyped(param: FunctionParameter): boolean {
   return typeContainsFunction(hint);
 }
 
-function typeContainsFunction(t: VariableType): boolean {
+export function typeContainsFunction(t: VariableType): boolean {
   if (t.type === "blockType") return true;
   if (t.type === "unionType") return t.types.some(typeContainsFunction);
   return false;
@@ -144,7 +144,13 @@ function rejectRegexInLlmType(
   }
 }
 
-function containsRegex(t: VariableType): boolean {
+/** True when a function type appears anywhere in `t`, not only at its top
+ *  or in a union arm as `isFunctionTyped` asks. */
+export function containsFunction(t: VariableType): boolean {
+  return visitTypes(t, (n) => n.type === "blockType");
+}
+
+export function containsRegex(t: VariableType): boolean {
   return visitTypes(t, (n) => n.type === "primitiveType" && n.value === "regex");
 }
 

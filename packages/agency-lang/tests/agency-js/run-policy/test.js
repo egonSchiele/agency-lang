@@ -44,10 +44,24 @@ const inputRes = await inputIt();
 const inputSurfacedExpectsValue =
   Array.isArray(inputRes.data) && inputRes.data[0].expectsValue === true;
 
+// Scenario 4: the same raise under a policy that approves everything, in a
+// non-interactive run. The rule said approve and nobody is present to give
+// a value, so the raise is answered with no value: the node returns its
+// null answer (absent from the serialized result), and nothing surfaces.
+process.env.AGENCY_RUN_POLICY = s({ "*": [{ action: "approve" }] });
+const approveAllRes = await inputIt();
+const approveAllAnswersWithNull = approveAllRes.data == null;
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
-    { readApproved, writeRejected, unlistedSurfaced, inputSurfacedExpectsValue },
+    {
+      readApproved,
+      writeRejected,
+      unlistedSurfaced,
+      inputSurfacedExpectsValue,
+      approveAllAnswersWithNull,
+    },
     null,
     2,
   ),

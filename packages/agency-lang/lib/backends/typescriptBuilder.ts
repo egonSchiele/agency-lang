@@ -100,7 +100,13 @@ import {
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
-import { isAnyType, isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
+import {
+  containsFunction,
+  containsRegex,
+  isAnyType,
+  isFunctionTyped,
+  paramAcceptsFailure,
+} from "../typeChecker/utils.js";
 import { rejectValueParamCycle } from "./valueParamCycle.js";
 import { OBJECT_REST_FN } from "../constants.js";
 
@@ -133,7 +139,7 @@ function coarseKindFor(typeHint: VariableType): CoarseKind | null {
 }
 import { printTs } from "../ir/prettyPrint.js";
 import type { TsNode, TsObjectEntry, TsParam, TsTemplatePart } from "../ir/tsIR.js";
-import type { CompilationUnit } from "../compilationUnit.js";
+import { collectAliasNames, type CompilationUnit } from "../compilationUnit.js";
 import type { Splice } from "../types/splice.js";
 import { calleeName } from "../compiler/splice/calleeName.js";
 import { SourceMapBuilder } from "./sourceMap.js";
@@ -2109,6 +2115,98 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * A thunk for the zod schema of the value a call to `node` returns, or
+   * null when there is none to give: the def is not exported (only an
+   * exported def can be a workflow tool), declares no return type, or its
+   * type holds a function or a `regex` anywhere, which JSON Schema cannot
+   * express, directly or through an alias. A `Result<T>`, written directly
+   * or through an alias, gives `T`'s schema: a caller reads the value, and
+   * a workflow step's reference goes through `.value`, as `describe`'s
+   * `returnsResult` says. A thunk, so no schema is built when the module
+   * loads, only when `catalog` asks; by then every alias const exists.
+   */
+  private returnSchemaFor(node: FunctionDefinition): TsNode | null {
+    const declared = node.returnType ?? null;
+    if (declared === null || !node.exported) {
+      return null;
+    }
+    const aliases = this.scopes.visibleTypeAliasesFull();
+    const resolved = safeResolveType(declared, aliases);
+    const value = resolved.type === "resultType" ? resolved.successType : declared;
+    const unrepresentable = this.aliasClosure(value).some(
+      (type) => containsFunction(type) || containsRegex(type),
+    );
+    if (unrepresentable || this.unboundAliasIn(value) !== null) {
+      return null;
+    }
+    return ts.raw(`() => ${this.zodSchemaFor(value)}`);
+  }
+
+  /** `type` as written and as `resolveTypeDeep` inlines it (a generic
+   *  alias use such as `Box<number>` is not a name, so only the resolved
+   *  form shows its body), and the body of every alias either names, at
+   *  any depth. */
+  private aliasClosure(type: VariableType): VariableType[] {
+    const aliases = this.scopes.visibleTypeAliasesFull();
+    const types: VariableType[] = [type, resolveTypeDeep(type, aliases)];
+    const queue: string[] = [];
+    for (const start of types) {
+      collectAliasNames(start, queue);
+    }
+    const seen: string[] = [];
+    while (queue.length > 0) {
+      const name = queue.shift()!;
+      if (seen.includes(name)) {
+        continue;
+      }
+      seen.push(name);
+      const entry = aliases[name];
+      if (entry !== undefined) {
+        types.push(entry.body);
+        collectAliasNames(entry.body, queue);
+      }
+    }
+    return types;
+  }
+
+  /**
+   * An alias the schema for `type` would print by name without a binding,
+   * or null. The schema prints a plain alias by name and leaves its body to
+   * the module that declares it, so only the names it prints need a
+   * binding: those left after `resolveTypeDeep` inlines generic aliases,
+   * plus the body of a value-parameterized alias, which the schema inlines
+   * at the use site. An alias that reached the type table through an
+   * imported signature or another alias's body (`pullTransitiveAliases`)
+   * has no const here and no JavaScript import, so naming it would fail at
+   * module load (#1371). A parameter schema has the same gap; this keeps a
+   * return schema from widening it.
+   */
+  private unboundAliasIn(type: VariableType): string | null {
+    const aliases = this.scopes.visibleTypeAliasesFull();
+    const declaredHere = this.aliasEmissionOrder.map((alias) => alias.name);
+    const printed: string[] = [];
+    collectAliasNames(resolveTypeDeep(type, aliases), printed);
+    const seen: string[] = [];
+    while (printed.length > 0) {
+      const name = printed.shift()!;
+      if (seen.includes(name)) {
+        continue;
+      }
+      seen.push(name);
+      const entry = aliases[name];
+      const inlined = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
+      if (inlined) {
+        collectAliasNames(entry.body, printed);
+        continue;
+      }
+      if (!declaredHere.includes(name) && !this.names.isAgencyImport(name)) {
+        return name;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Build a tool definition TsNode for an Agency function.
    * Returns ts.id("null") if the function has no parameters (no schema needed for tools).
    *
@@ -2671,6 +2769,13 @@ export class TypeScriptBuilder {
       toolDefinition: toolDef,
       exported: ts.bool(!!node.exported),
     };
+    // What a call returns, for a tool picker that shows a result's fields.
+    // Emitted only for an exported def with a type to show, so the
+    // generated code of every other def is unchanged.
+    const returnSchema = this.returnSchemaFor(node);
+    if (returnSchema !== null) {
+      createProps.returnSchema = returnSchema;
+    }
     // Carry the markers so the tool loop and MCP adapter can read them off
     // the registered AgencyFunction. Emitted only when at least one is set.
     const markerKeywords = markerKeywordsOf(toolMarkersOf(node));
@@ -3824,6 +3929,13 @@ export class TypeScriptBuilder {
     };
 
     const zodSchema = this.zodSchemaFor(_variableType);
+    // A plain `string` reply needs no response format. Decide that on the
+    // type behind any aliases, so `type Reply = string` and
+    // `const reply: Reply = llm(...)` get the raw text, as `string` does,
+    // and not the JSON text `{"response": "..."}`.
+    const needsResponseFormat =
+      this.zodSchemaFor(safeResolveType(_variableType, this.scopes.visibleTypeAliasesFull())) !==
+      DEFAULT_SCHEMA;
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];
@@ -3875,7 +3987,7 @@ export class TypeScriptBuilder {
       prompt: promptNode,
       messages: $(threadExpr).done(),
     };
-    if (zodSchema !== DEFAULT_SCHEMA) {
+    if (needsResponseFormat) {
       runPromptEntries.responseFormat = $.z()
         .prop("object")
         .namedArgs({ response: ts.raw(zodSchema) })

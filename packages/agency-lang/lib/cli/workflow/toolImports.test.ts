@@ -35,7 +35,11 @@ describe("describeModule", () => {
 
   it("describes a module that imports another local file", () => {
     const greet = describeModule("./withHelper.agency", FIXTURES, []);
-    expect("signatures" in greet && Object.keys(greet.signatures)).toEqual(["greet"]);
+    expect("signatures" in greet && Object.keys(greet.signatures)).toEqual([
+      "greet",
+      "outer",
+      "nested",
+    ]);
   });
 });
 

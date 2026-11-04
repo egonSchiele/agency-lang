@@ -21,10 +21,18 @@ export type CatalogEntry = {
   description: string;
   params: CatalogParam[];
   returns: string | null;
+  /** The JSON Schema of the value a reference into this tool's step reads:
+   *  the declared return type, or the success type inside a `Result`. Null
+   *  when the tool declares no return type, or its return type holds a
+   *  function or a `regex` (which JSON Schema cannot express), or names a
+   *  type its module cannot reach at run time (#1371). */
+  returnSchema: unknown | null;
   /** What the tool can raise, as `describe` reports it. A tool that uses
    *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard
    *  trip is a question about budget, not a permission. */
   effects: string[];
+  /** True for a `handoff def`, so a picker can tell an agent from a function. */
+  handoff: boolean;
 };
 
 /** The JSON Schema of each parameter in the tool's definition, by name.
@@ -41,6 +49,25 @@ function parameterSchemas(tool: unknown): Record<string, unknown> {
   return json.properties ?? {};
 }
 
+/** The JSON Schema of what the tool returns, from the zod schema the
+ *  compiler emitted for its return type. The compiler leaves out a type
+ *  JSON Schema cannot express, but a schema that still cannot be converted
+ *  gives this one entry null rather than failing the whole catalog. */
+function returnSchemaOf(tool: unknown): unknown | null {
+  if (!AgencyFunction.isAgencyFunction(tool) || tool.returnSchema === null) {
+    return null;
+  }
+  const schema = tool.returnSchema() as { toJSONSchema?: () => unknown } | null;
+  if (typeof schema?.toJSONSchema !== "function") {
+    return null;
+  }
+  try {
+    return schema.toJSONSchema();
+  } catch {
+    return null;
+  }
+}
+
 function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): CatalogEntry {
   const schemas = parameterSchemas(tool);
   const params = signature.params
@@ -54,7 +81,9 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
     description,
     params,
     returns: signature.returnType,
+    returnSchema: returnSchemaOf(tool),
     effects: signature.effects,
+    handoff: signature.handoff,
   };
 }
 

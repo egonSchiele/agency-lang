@@ -61,14 +61,16 @@ export type BuildDeciderOptions = {
 
 /**
  * Build the per-interrupt decision function. Policy runs first for every
- * interrupt: an explicit approve/reject settles immediately. A policy approve
- * carries no value (a value-expecting interrupt settled this way resolves its
- * assignment to the default); a policy reject carries the matched rule's
- * `rejectMessage`, when one was set, as the rejection's reason. Only when the
- * policy leaves an
- * interrupt "unsettled" (`propagate` or no-match) does interactivity apply: a
- * value-expecting interrupt uses the value prompt, a statement interrupt the
- * ordinary prompt, and a non-interactive run rejects (fail-closed). "Always"
+ * interrupt: an explicit reject settles immediately, carrying the matched
+ * rule's `rejectMessage`, when one was set, as the rejection's reason. An
+ * explicit approve settles a statement interrupt, and settles a
+ * value-expecting one with no value (a null answer, which the effect gives
+ * a meaning) unless the run is interactive, where a person can supply the
+ * value at the value prompt instead. Only when the policy leaves an
+ * interrupt "unsettled" (`propagate` or no-match) does interactivity apply
+ * on its own: a value-expecting interrupt uses the value prompt, a
+ * statement interrupt the ordinary prompt, and a non-interactive run
+ * rejects (fail-closed). "Always"
  * answers are remembered per effect for the run. The result
  * is always an approve/reject response — never `propagate`, so it can never be
  * sent over a resume boundary.
@@ -83,9 +85,6 @@ export function buildDecider(options: BuildDeciderOptions): DecideFn {
   return async (interrupt) => {
     const decision =
       options.policy && dirs ? checkPolicyExplicit(options.policy, interrupt, dirs) : null;
-    if (decision?.type === "approve") {
-      return approve();
-    }
     if (decision?.type === "reject") {
       return reject(decision.message);
     }
@@ -93,7 +92,10 @@ export function buildDecider(options: BuildDeciderOptions): DecideFn {
       if (options.interactive) {
         return valuePrompt(interrupt);
       }
-      return reject();
+      return decision?.type === "approve" ? approve() : reject();
+    }
+    if (decision?.type === "approve") {
+      return approve();
     }
 
     let action = remembered[interrupt.effect];

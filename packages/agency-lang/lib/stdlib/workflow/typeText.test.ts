@@ -71,3 +71,15 @@ describe("inputNames", () => {
     expect(inputNames("{ a: ")).toEqual([]);
   });
 });
+
+describe("parseTypeText and regex", () => {
+  it("refuses a regex anywhere in inputs or an output, naming the field", () => {
+    expect(messageOf(inputs("{ pattern: regex }"))).toBe(
+      "a type in inputs may not hold a regex: JSON Schema cannot express it",
+    );
+    expect(messageOf(output("{ rules: { match: regex }[] }"))).toBe(
+      "a type in output may not hold a regex: JSON Schema cannot express it",
+    );
+    expect(output("{ rules: string[] }")).toHaveProperty("alias");
+  });
+});

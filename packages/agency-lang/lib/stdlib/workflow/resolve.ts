@@ -41,7 +41,10 @@ const PROGRAM_NAMES = [
   "Inputs",
   "Json",
   "main",
+  // No generated node is named `inputsSchema` since `workflowSchemas`
+  // replaced it. It stays so that no tool list refused before passes now.
   "inputsSchema",
+  "workflowSchemas",
   "success",
   "failure",
   "llm",

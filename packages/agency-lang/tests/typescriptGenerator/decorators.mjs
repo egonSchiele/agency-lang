@@ -1258,6 +1258,7 @@ export const researcher = __AgencyFunction.create({
     schema: z.object({"task": z.string(), "maxCost": z.number().nullable().describe("Default: 2.00"), })
   },
   exported: true,
+  returnSchema: () => z.string(),
   markers: {
     handoff: true
   }

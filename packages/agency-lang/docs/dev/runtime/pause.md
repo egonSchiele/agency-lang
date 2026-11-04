@@ -47,15 +47,6 @@ Handlers are not consulted. A pause is not an interrupt.
 `withExternalSignals` detaches both listeners when the body returns or
 throws. A controller that outlives the run holds no reference to it.
 
-## Why pending async calls are awaited first
-
-An assignment like `const x = async fetchThing()` stores a `Promise` in the
-frame locals. The resolved value reaches the frame only when
-`pendingPromises.awaitAll()` runs the resolver. A promise does not survive
-serialization, so a checkpoint stamped before `awaitAll` would resume without
-the result. The user-facing `checkpoint()` function awaits pending calls for
-the same reason (`lib/runtime/checkpoint.ts`).
-
 ## Why a thrown signal
 
 Interrupts halt by returning an `Interrupt[]` that every generated call site

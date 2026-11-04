@@ -261,7 +261,6 @@ __bsetup.stateStack.pop();
             }, params: [{ name: "n", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
           });
 if (hasInterrupts(__stack.locals.doubled)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.doubled
@@ -319,7 +318,6 @@ __bsetup.stateStack.pop();
             }, params: [{ name: "n", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
           });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0
@@ -377,7 +375,6 @@ __bsetup.stateStack.pop();
             }, params: [{ name: "n", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
           });
 if (hasInterrupts(__stack.locals.evens)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.evens
@@ -394,7 +391,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.doubled]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -411,7 +407,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.evens]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

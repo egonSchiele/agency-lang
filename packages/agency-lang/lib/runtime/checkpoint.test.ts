@@ -14,23 +14,6 @@ function wrap<T>(ctx: any, fn: () => T): T {
 }
 
 describe("checkpoint()", () => {
-  it("should await pending promises before creating checkpoint", async () => {
-    const ctx = makeMockCtx();
-    let resolved = false;
-    const promise = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        resolved = true;
-        resolve();
-      }, 10);
-    });
-    ctx.pendingPromises.add(promise);
-
-    const id = await wrap(ctx, () => checkpoint());
-
-    expect(resolved).toBe(true);
-    expect(typeof id).toBe("number");
-  });
-
   it("should return an id (number)", async () => {
     const ctx = makeMockCtx();
     const id = await wrap(ctx, () => checkpoint());
@@ -182,24 +165,6 @@ describe("restore()", () => {
 
     expect(() => wrap(ctx, () => restore(999, {}))).toThrow(CheckpointError);
     expect(() => wrap(ctx, () => restore(999, {}))).toThrow(/does not exist/);
-  });
-
-  it("should clear pending promises", async () => {
-    const ctx = makeMockCtx();
-    const id = await wrap(ctx, () => checkpoint());
-
-    // Add a pending promise after checkpoint
-    ctx.pendingPromises.add(new Promise(() => {})); // never resolves
-
-    try {
-      wrap(ctx, () => restore(id, {}));
-    } catch {
-      // expected
-    }
-
-    // After restore, pending promises should be cleared
-    // We verify by calling awaitAll which should resolve immediately if cleared
-    await ctx.pendingPromises.awaitAll();
   });
 
   it("should invalidate later checkpoints", async () => {

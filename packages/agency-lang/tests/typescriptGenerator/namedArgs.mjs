@@ -260,7 +260,6 @@ const __funcResult = await __call(__run, print, {
           args: [__stack.args.greeting, __stack.args.name]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }

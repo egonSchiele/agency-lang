@@ -46,7 +46,6 @@ import type {
   TsRunnerExitMatch,
   TsRunnerLoop,
   TsRunnerWhileLoop,
-  TsRunnerBranchStep,
   TsRunnerPipe,
   TsEmpty,
   TsBreak,
@@ -485,10 +484,6 @@ export const ts = {
     return { kind: "runnerWhileLoop", ...opts };
   },
 
-  runnerBranchStep(opts: { id: number; branchKey: string; body: TsNode[] }): TsRunnerBranchStep {
-    return { kind: "runnerBranchStep", ...opts };
-  },
-
   runnerDebugger(opts: { id: number; label: string }): TsRunnerDebugger {
     return { kind: "runnerDebugger", ...opts };
   },
@@ -867,9 +862,6 @@ export const ts = {
     },
     createSubthread(): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "createSubthread"));
-    },
-    createAndReturnSubthread(): TsCall {
-      return ts.call(ts.prop(ts.runtime.threads, "createAndReturnSubthread"));
     },
     get(id: TsNode): TsCall {
       return ts.call(ts.prop(ts.runtime.threads, "get"), [id]);

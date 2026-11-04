@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { functionCallParser } from "./parsers.js";
-import { valueAccessParser, asyncValueAccessParser, syncValueAccessParser } from "./parsers.js";
+import { valueAccessParser, asyncValueAccessParser } from "./parsers.js";
 
 describe("functionCallParser", () => {
   const testCases = [
@@ -406,30 +406,9 @@ describe("async/sync function calls via valueAccessParser", () => {
     }
   });
 
-  it("should parse 'sync bar()' with async: false", () => {
-    const result = valueAccessParser("sync bar()");
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.result).toEqualWithoutLoc({
-        type: "functionCall",
-        functionName: "bar",
-        arguments: [],
-        async: false,
-      });
-    }
-  });
-
-  it("should parse 'await bar()' with async: false", () => {
+  it("does not read await as a prefix", () => {
     const result = valueAccessParser("await bar()");
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.result).toEqualWithoutLoc({
-        type: "functionCall",
-        functionName: "bar",
-        arguments: [],
-        async: false,
-      });
-    }
+    expect(result.success && result.result.type === "functionCall").toBe(false);
   });
 
   it("should parse without keyword and not set async field", () => {
@@ -440,22 +419,6 @@ describe("async/sync function calls via valueAccessParser", () => {
         type: "functionCall",
         functionName: "bar",
         arguments: [],
-      });
-    }
-  });
-
-  it("should parse 'await' with arguments", () => {
-    const result = valueAccessParser("await sayHi(name, age)");
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.result).toEqualWithoutLoc({
-        type: "functionCall",
-        functionName: "sayHi",
-        arguments: [
-          { type: "variableName", value: "name" },
-          { type: "variableName", value: "age" },
-        ],
-        async: false,
       });
     }
   });

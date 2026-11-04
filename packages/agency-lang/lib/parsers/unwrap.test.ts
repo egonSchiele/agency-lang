@@ -127,13 +127,7 @@ describe("? after a try operand applies to the try", () => {
     expect(parsed.value.chain).toEqualWithoutLoc([unwrap, property("name")]);
   });
 
-  it("an await or async prefix stays on the try operand, never on the unwrap", () => {
-    const parsed = parseValue("try await foo()?") as any;
-    expect(parsed.value.async).toBeUndefined();
-    expect(parsed.value.base.type).toBe("tryExpression");
-    expect(parsed.value.base.call).toEqualWithoutLoc({ ...call("foo"), async: false });
-    expect(parsed.value.chain).toEqualWithoutLoc([unwrap]);
-
+  it("an async prefix stays on the try operand, never on the unwrap", () => {
     const chained = parseValue("try async a().b()?.name") as any;
     expect(chained.value.async).toBeUndefined();
     expect(chained.value.base.call).toEqualWithoutLoc({

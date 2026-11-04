@@ -255,7 +255,6 @@ __stack.locals.result = await runPrompt(__run, {
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -423,7 +422,6 @@ __stack.locals.message = await runPrompt(__run, {
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.message)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.message)
           return;
         }
@@ -587,7 +585,6 @@ __stack.locals.output = await runPrompt(__run, {
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.output)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.output)
           return;
         }
@@ -755,7 +752,6 @@ __stack.locals.result = await runPrompt(__run, {
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -916,7 +912,6 @@ __stack.locals.result = await runPrompt(__run, {
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -1045,7 +1040,6 @@ const __funcResult = await __call(__run, print, {
             args: [`This is a node with a return type`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -1147,7 +1141,6 @@ __stack.locals.sum = await __call(__run, add, {
             args: [5, 10]
           });
 if (hasInterrupts(__stack.locals.sum)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.sum
@@ -1164,7 +1157,6 @@ __stack.locals.greeting = await __call(__run, greet, {
             args: [`Alice`]
           });
 if (hasInterrupts(__stack.locals.greeting)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.greeting
@@ -1181,7 +1173,6 @@ __stack.locals.labeled = await __call(__run, mixed, {
             args: [42, `Answer`]
           });
 if (hasInterrupts(__stack.locals.labeled)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.labeled
@@ -1198,7 +1189,6 @@ __stack.locals.processed = await __call(__run, processArray, {
             args: [[1, 2, 3, 4, 5]]
           });
 if (hasInterrupts(__stack.locals.processed)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.processed
@@ -1215,7 +1205,6 @@ __stack.locals.flexResult = await __call(__run, flexible, {
             args: [`test`]
           });
 if (hasInterrupts(__stack.locals.flexResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.flexResult

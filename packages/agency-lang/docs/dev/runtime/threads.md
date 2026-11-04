@@ -131,16 +131,7 @@ Design history: `docs/superpowers/specs/2026-07-22-orphaned-tool-use-on-guard-ab
 
 ## How are threads passed into prompts?
 
-`lib/backends/typescriptBuilder.ts` picks the thread expression when it builds the `runPrompt` config:
-
-```typescript
-let threadExpr: TsNode = ts.threads.getOrCreateActive();
-if (node.async) {
-  threadExpr = ts.threads.createAndReturnSubthread();
-}
-```
-
-An async prompt forks a subthread. It therefore sees the conversation so far, but its own messages never land on the shared active thread.
+`lib/backends/typescriptBuilder.ts` builds the `runPrompt` config with the thread expression `ts.threads.getOrCreateActive()`, the active thread.
 
 The expression becomes the `messages` field of the `runPrompt` config. `ctx` and `stateStack` are not passed at the call site; `runPrompt` reads them from the active ALS frame through `getRuntimeContext()`.
 
@@ -189,19 +180,9 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 
 ---
 
-## How do we handle synchronous versus asynchronous calls differently?
+## Prompts always use the active thread
 
-### Synchronous (default) prompts
-- Thread expression: `__threads.getOrCreateActive()` — uses the current active thread
-- Generated as `await _varName(...)` — blocks until complete
-- Messages accumulate sequentially on the active thread
-- After the call, checks for interrupts and returns early if needed
-
-### Async prompts (`node.async === true`)
-- Thread expression: `__threads.createAndReturnSubthread()` — a fork of the active thread, so the call sees prior context but writes back to its own thread
-- Generated without an `await`, so it returns a Promise immediately
-- No interrupt check (can't interrupt mid-flight)
-- The promise is stored and must be awaited later
+The thread expression is `__threads.getOrCreateActive()`. The call is awaited, its messages accumulate on the active thread, and the generated code checks the result for interrupts. An `async llm()` call compiles the same way: the lowering puts it in a fork arm (`async.md`), and that arm's run gets its own subthread, so its messages stay off the conversation.
 
 ### Key files
 | File | Role |

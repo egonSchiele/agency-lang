@@ -247,7 +247,6 @@ __stack.locals.res1 = await runPrompt(__run, {
           });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res1)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__stack.locals.res1)
             return;
           }
@@ -269,7 +268,6 @@ __stack.locals.res2 = await runPrompt(__run, {
             });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res2)) {
-              await __run.ctx.pendingPromises.awaitAll()
               runner.halt(__stack.locals.res2)
               return;
             }
@@ -291,7 +289,6 @@ __stack.locals.res3 = await runPrompt(__run, {
               });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res3)) {
-                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt(__stack.locals.res3)
                 return;
               }
@@ -314,7 +311,6 @@ __stack.locals.res5 = await runPrompt(__run, {
               });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res5)) {
-                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt(__stack.locals.res5)
                 return;
               }
@@ -338,7 +334,6 @@ __stack.locals.res4 = await runPrompt(__run, {
             });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res4)) {
-              await __run.ctx.pendingPromises.awaitAll()
               runner.halt(__stack.locals.res4)
               return;
             }
@@ -351,7 +346,6 @@ const __funcResult = await __call(__run, print, {
           args: [`res1`, __stack.locals.res1]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -366,7 +360,6 @@ const __funcResult = await __call(__run, print, {
           args: [`res2`, __stack.locals.res2]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -381,7 +374,6 @@ const __funcResult = await __call(__run, print, {
           args: [`res3`, __stack.locals.res3]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -396,7 +388,6 @@ const __funcResult = await __call(__run, print, {
           args: [`res4`, __stack.locals.res4]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -411,7 +402,6 @@ const __funcResult = await __call(__run, print, {
           args: [`res5`, __stack.locals.res5]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -543,7 +533,6 @@ __stack.locals.res1 = await runPrompt(__run, {
             });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res1)) {
-              await __run.ctx.pendingPromises.awaitAll()
               runner.halt({
                 messages: __run.threads,
                 data: __stack.locals.res1
@@ -568,7 +557,6 @@ __stack.locals.res2 = await runPrompt(__run, {
               });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res2)) {
-                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   messages: __run.threads,
                   data: __stack.locals.res2
@@ -593,7 +581,6 @@ __stack.locals.res3 = await runPrompt(__run, {
                 });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res3)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     messages: __run.threads,
                     data: __stack.locals.res3
@@ -619,7 +606,6 @@ __stack.locals.res5 = await runPrompt(__run, {
                 });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res5)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     messages: __run.threads,
                     data: __stack.locals.res5
@@ -646,7 +632,6 @@ __stack.locals.res4 = await runPrompt(__run, {
               });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.res4)) {
-                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   messages: __run.threads,
                   data: __stack.locals.res4
@@ -662,7 +647,6 @@ const __funcResult = await __call(__run, print, {
             args: [`res1`, __stack.locals.res1]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -679,7 +663,6 @@ const __funcResult = await __call(__run, print, {
             args: [`res2`, __stack.locals.res2]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -696,7 +679,6 @@ const __funcResult = await __call(__run, print, {
             args: [`res3`, __stack.locals.res3]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -713,7 +695,6 @@ const __funcResult = await __call(__run, print, {
             args: [`res4`, __stack.locals.res4]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -730,7 +711,6 @@ const __funcResult = await __call(__run, print, {
             args: [`res5`, __stack.locals.res5]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

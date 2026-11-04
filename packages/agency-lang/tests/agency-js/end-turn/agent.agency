@@ -148,7 +148,7 @@ def parallelEnder(question: string): string {
 // scope must still reach this handoff's own stack.
 handoff def asyncTurnHandoff(question: string): string {
   const inner = async llm("outer brief: ${question}", { tools: [turnEnder] })
-  return "async: ${await inner}"
+  return "async: ${inner}"
 }
 
 handoff def outerTurnHandoff(question: string): string {

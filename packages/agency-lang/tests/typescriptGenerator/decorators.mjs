@@ -251,7 +251,6 @@ const __funcResult = await __call(__run, print, {
           args: [`entering ${__stack.args.call.name}`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -266,7 +265,6 @@ __stack.locals.result = await __call(__run, __stack.args.block, {
           args: [__stack.args.call.args]
         });
 if (hasInterrupts(__stack.locals.result)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -281,7 +279,6 @@ const __funcResult = await __call(__run, print, {
           args: [`leaving ${__stack.args.call.name}`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -458,7 +455,6 @@ __stack.locals.__hoist_0 = await __call(__run, range, {
           args: [0, __stack.args.times]
         });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_0)
           return;
         }
@@ -474,7 +470,6 @@ __stack.locals.last = await __call(__run, __stack.args.block, {
             args: [__stack.args.call.args]
           });
 if (hasInterrupts(__stack.locals.last)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__stack.locals.last)
             return;
           }
@@ -1107,7 +1102,6 @@ __bstack.locals.__promptVar = await runPrompt(__run, {
     });
 // halt if this is an interrupt
 if (hasInterrupts(__bstack.locals.__promptVar)) {
-      await __run.ctx.pendingPromises.awaitAll()
       runner.halt(__bstack.locals.__promptVar)
       return;
     }

@@ -433,7 +433,6 @@ __stack.locals.__hoist_0 = await __call(__run, isPrime, {
               args: [__stack.locals.n]
             });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-              await __run.ctx.pendingPromises.awaitAll()
               runner.halt({
                 ...__state,
                 data: __stack.locals.__hoist_0

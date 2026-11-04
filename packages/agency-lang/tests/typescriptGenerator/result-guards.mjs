@@ -239,7 +239,6 @@ await callHook(__run, {
       await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await isSuccess(__stack.args.r);
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_0)
           return;
         }

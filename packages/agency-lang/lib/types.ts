@@ -23,7 +23,6 @@ import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
 import { MarkDestructiveRan } from "./types/markDestructiveRan.js";
 import { RebindParameters } from "./types/rebindParameters.js";
 import { DecoratorCallField } from "./types/decoratorCallField.js";
-import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { FinalizeBlock } from "./types/finalizeBlock.js";
 import { GuardBlock } from "./types/guardBlock.js";
@@ -56,7 +55,6 @@ import {
 export * from "./types/pattern.js";
 export * from "./types/hole.js";
 export * from "./types/access.js";
-export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
 export * from "./types/function.js";
 export * from "./types/graphNode.js";
@@ -366,7 +364,6 @@ export type AgencyNode =
   | BinOpExpression
   | Keyword
   | ForLoop
-  | AwaitPending
   | HandleBlock
   | FinalizeBlock
   | GuardBlock

@@ -87,13 +87,6 @@ export class PauseSignal extends RunControlSignal {
   }
 }
 
-export class ConcurrentInterruptError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ConcurrentInterruptError";
-  }
-}
-
 /**
  * Structured reason carried by every abort — on `AbortController.abort(cause)`
  * (so it surfaces as `signal.reason`) and on the `agencyCause` field of a

@@ -677,7 +677,6 @@ await callHook(__run, {
         await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await success(5);
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0
@@ -698,7 +697,6 @@ __stack.locals.__pipe_0 = __stack.locals.__hoist_0;
         await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.__hoist_1 = await success(5);
 if (hasInterrupts(__stack.locals.__hoist_1)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_1
@@ -725,7 +723,6 @@ __stack.locals.__pipe_1 = __stack.locals.__hoist_1;
         await runner.step(7, __run, async (runner, __run) => {
 __stack.locals.__hoist_2 = await success(10);
 if (hasInterrupts(__stack.locals.__hoist_2)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_2
@@ -756,7 +753,6 @@ __stack.locals.__pipe_2 = __stack.locals.__hoist_2;
         await runner.step(11, __run, async (runner, __run) => {
 __stack.locals.__hoist_3 = await failure(`nope`);
 if (hasInterrupts(__stack.locals.__hoist_3)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_3
@@ -777,7 +773,6 @@ __stack.locals.__pipe_3 = __stack.locals.__hoist_3;
         await runner.step(14, __run, async (runner, __run) => {
 __stack.locals.__hoist_4 = await success(10);
 if (hasInterrupts(__stack.locals.__hoist_4)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_4

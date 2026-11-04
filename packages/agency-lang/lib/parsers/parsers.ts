@@ -283,7 +283,6 @@ export const RESERVED_WORDS: readonly string[] = [
   "const",
   "let",
   "async",
-  "sync",
   "await",
   "fork",
   "race",
@@ -3697,24 +3696,10 @@ export const asyncValueAccessParser = (
   return success({ ...withNameLoc(result.result.access), async: true }, result.rest);
 };
 
-export const syncValueAccessParser = (
-  input: string,
-): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(
-    oneOfStr(["sync", "await"]),
-    spaces,
-    capture(locatedValueAccessParser, "access"),
-  );
-  const result = parser(input);
-  if (!result.success) return failure("expected sync/await keyword", input);
-
-  return success({ ...withNameLoc(result.result.access), async: false }, result.rest);
-};
-
 export function valueAccessParser(
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
-  const parser = withLoc(or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser));
+  const parser = withLoc(or(asyncValueAccessParser, _valueAccessParser));
   return parser(input);
 }
 

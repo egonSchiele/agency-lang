@@ -229,7 +229,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Starting...`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -252,7 +251,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Stopping...`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -275,7 +273,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Restarting...`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -296,7 +293,6 @@ const __funcResult = await __call(__run, print, {
                 args: [`Unknown action`]
               });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -325,7 +321,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`OK`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -348,7 +343,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Not Found`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -371,7 +365,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Internal Server Error`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -392,7 +385,6 @@ const __funcResult = await __call(__run, print, {
                 args: [`Unknown status`]
               });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -473,7 +465,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Debug mode enabled`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -496,7 +487,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Info level logging`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -519,7 +509,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Warning level`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult
@@ -542,7 +531,6 @@ const __funcResult = await __call(__run, print, {
                   args: [`Error level`]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult

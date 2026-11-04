@@ -524,7 +524,6 @@ __stack.locals.nums = await __call(__run, parseValue, {
             }
           });
 if (hasInterrupts(__stack.locals.nums)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.nums
@@ -541,7 +540,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.nums]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -563,7 +561,6 @@ __stack.locals.anything = await __call(__run, parseValue, {
             }
           });
 if (hasInterrupts(__stack.locals.anything)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.anything
@@ -580,7 +577,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.anything]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -604,7 +600,6 @@ __stack.locals.validated = await __call(__run, parseValue, {
             }
           });
 if (hasInterrupts(__stack.locals.validated)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.validated
@@ -622,7 +617,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.validated]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -640,7 +634,6 @@ __stack.locals.explicit = await __call(__run, parseValue, {
             args: [`[1,2,3]`, new Schema(z.any())]
           });
 if (hasInterrupts(__stack.locals.explicit)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.explicit
@@ -657,7 +650,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.explicit]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -678,7 +670,6 @@ const __funcResult = await __call(__run, parseValue, {
             args: [`[1,2,3]`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

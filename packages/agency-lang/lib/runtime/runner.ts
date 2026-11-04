@@ -661,7 +661,6 @@ export class Runner {
     this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
 
     if (hasInterrupts(result)) {
-      await this.ctx.pendingPromises.awaitAll();
       if (this.nodeContext) {
         this.halt({ ...this.state, data: result });
       } else {
@@ -1183,37 +1182,6 @@ export class Runner {
 
     this._break = false;
     this._continue = false;
-    this.clearDebugFlag(id);
-    this.setCounter(id + 1);
-  }
-
-  // ── Specialized: branchStep (async calls) ──
-
-  async branchStep(
-    id: number,
-    run: Run,
-    branchKey: string,
-    callback: (runner: Runner, run: Run) => Promise<void>,
-  ): Promise<void> {
-    if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id, run);
-
-    // Enter if: counter hasn't passed this OR branch data exists (resuming async)
-    const hasExistingBranch = this.frame.getBranch(branchKey) !== undefined;
-    if (this.getCounter() > id && !hasExistingBranch) return;
-
-    if (await this.maybeDebugHook(id, run)) return;
-
-    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
-
-    this.path.push(id);
-    try {
-      await this.runInScope(run, (stepRun) => callback(this, stepRun));
-    } finally {
-      this.path.pop();
-    }
-
-    if (this.halted) return;
     this.clearDebugFlag(id);
     this.setCounter(id + 1);
   }

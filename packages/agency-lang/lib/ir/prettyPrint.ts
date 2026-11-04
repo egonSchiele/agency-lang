@@ -470,11 +470,6 @@ export function printTs(node: TsNode, indent = 0): string {
       return `await runner.whileLoop(${node.id}, __run, async (__run) => ${cond}, async (runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
-    case "runnerBranchStep": {
-      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.branchStep(${node.id}, __run, "${node.branchKey}", async (runner, __run) => {\n${body}\n${ind(indent)}});`;
-    }
-
     case "empty":
       return "";
 

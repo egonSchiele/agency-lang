@@ -399,7 +399,6 @@ __stack.locals.__hoist_0 = await __call(__run, parseName, {
           args: [__stack.args.text]
         });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_0)
           return;
         }
@@ -411,7 +410,6 @@ if (isAborted(__stack.locals.__hoist_0)) {
       await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.__hoist_1 = await isFailure(__stack.locals.__hoist_0);
 if (hasInterrupts(__stack.locals.__hoist_1)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_1)
           return;
         }
@@ -443,7 +441,6 @@ __stack.locals.__hoist_2 = await __call(__run, parseName, {
           args: [__stack.locals.name]
         });
 if (hasInterrupts(__stack.locals.__hoist_2)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_2)
           return;
         }
@@ -455,7 +452,6 @@ if (isAborted(__stack.locals.__hoist_2)) {
       await runner.step(6, __run, async (runner, __run) => {
 __stack.locals.__hoist_3 = await isFailure(__stack.locals.__hoist_2);
 if (hasInterrupts(__stack.locals.__hoist_3)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_3)
           return;
         }

@@ -1130,6 +1130,18 @@ def lastProblems(problem: DraftProblem | null): string {
   return problem.problems
 }
 
+// One model call on a thread of its own: the brief carries everything the
+// attempt needs, and a host calling from a conversation keeps its history
+// as it was. A function call is a new frame, so each attempt's `thread`
+// opens a new thread; a `thread` written in the loop body would reopen
+// the first attempt's thread on every iteration.
+def draftReply(brief: string, options: any): Result<WorkflowDraftReply> {
+  thread {
+    const reply: WorkflowDraftReply! = llm(brief, options)
+  }
+  return reply
+}
+
 // One draft: up to DESIGN_ATTEMPTS model calls, each one seeing the problem
 // the previous one left. A reply that is still the wrong shape after the
 // client's own retry ends the call, since the provider and not the draft
@@ -1146,11 +1158,7 @@ def draftFrom(
   let problem: DraftProblem | null = revise
   for (attempt in range(DESIGN_ATTEMPTS)) {
     const brief = workflowDesignBrief(request, tools.entries, problem)
-    // On its own thread: the brief carries everything the attempt needs,
-    // and a host calling from a conversation keeps its history clean.
-    thread {
-      const reply: WorkflowDraftReply! = llm(brief, options)
-    }
+    const reply = draftReply(brief, options)
     if (reply is failure(replyErr)) {
       return failure("the model's reply had the wrong shape: ${replyErr}")
     }

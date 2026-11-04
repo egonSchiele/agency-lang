@@ -38,6 +38,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1023](types-aliases.md#ag1023) | `&#123;expr&#125;?` cannot be used inside a handler body. Unwrap the Result before the `handle` block, or match on it here. |
 | [AG1024](types-aliases.md#ag1024) | `&#123;expr&#125;?` would return from a `parallel` arm, and an arm cannot return early. Do the unwrap inside a def the arm calls. |
 | [AG1025](types-aliases.md#ag1025) | `&#123;expr&#125;?` cannot be a write target. Unwrap into a variable first, then assign to its field. |
+| [AG1026](types-aliases.md#ag1026) | Type alias '&#123;alias&#125;' is declared in '&#123;module&#125;' but not imported here (referenced in '&#123;context&#125;'). Import it by name, or write the type out. |
 
 ## Assignability and checking
 

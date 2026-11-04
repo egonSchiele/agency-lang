@@ -47,6 +47,10 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** declare the alias, import it from the module that defines it, or fix a typo in the name.`,
 
+  typeAliasNotImported: `A type name was used that the checker knows only through an import's signature: a function you imported takes or returns it, so the checker read its shape to type that call. The name itself was never imported, so the generated code has no binding for it, and a validation or schema built from the type fails at run time with \`<Name> is not defined\`.
+
+**How to fix:** add the alias to the import line of the module named in the message, or write the type's shape out where it is used.`,
+
   bareArmBinderShadowsType: `An un-guarded match arm whose left side is a bare name matches ANY value and binds it to that name — it never tests the type, even when the name is a type in scope. Writing \`Person => ...\` therefore does something very different from testing "is this a Person".
 
 **How to fix:** to test the type and bind, write \`p: Person => ...\`; to test only, write \`is Person => ...\`; to genuinely bind whatever arrives, pick a name that is not a type.`,

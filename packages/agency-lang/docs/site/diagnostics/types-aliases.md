@@ -253,3 +253,13 @@ Each arm of a `parallel` block hands its bindings back when it finishes, and the
 The `?` operator unwraps a value you read. A write target such as `obj?.field = 1` would have to unwrap and then write back into a Result, which has no meaning.
 
 **How to fix:** unwrap into a variable first, then assign to the variable's field.
+
+<a id="ag1026"></a>
+
+## AG1026 — Type alias '&#123;alias&#125;' is declared in '&#123;module&#125;' but not imported here (referenced in '&#123;context&#125;'). Import it by name, or write the type out.
+
+*Default severity: error.*
+
+A type name was used that the checker knows only through an import's signature: a function you imported takes or returns it, so the checker read its shape to type that call. The name itself was never imported, so the generated code has no binding for it, and a validation or schema built from the type fails at run time with `<Name> is not defined`.
+
+**How to fix:** add the alias to the import line of the module named in the message, or write the type's shape out where it is used.

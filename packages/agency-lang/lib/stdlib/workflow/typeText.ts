@@ -33,25 +33,6 @@ function carriesTags(type: unknown): boolean {
   });
 }
 
-/** The one alias the generated program imports, from `std::validation`. */
-const REACHABLE_NAMES = ["Json"];
-
-/** The first type name the text uses that the generated program has no
- *  binding for, or null. The program imports its tools and `Json`, never a
- *  tool module's types, so `Note` or `Delivery` would pass the typecheck
- *  and fail inside the schemas node with "is not defined". */
-function unreachableName(type: unknown): string | null {
-  for (const node of nodesOf(type)) {
-    const candidate = node as { type?: unknown; aliasName?: unknown };
-    if (candidate.type === "typeAliasVariable" && typeof candidate.aliasName === "string") {
-      if (!REACHABLE_NAMES.includes(candidate.aliasName)) {
-        return candidate.aliasName;
-      }
-    }
-  }
-  return null;
-}
-
 /**
  * The type alias `type <name> = <text>` declares, or the problem with the
  * text. `field` names the workflow field in messages. An `inputs` type must
@@ -83,12 +64,6 @@ export function parseTypeText(name: string, text: string, field: string): TypeTe
   // instead of the node failing with zod's message.
   if (containsRegex(alias.aliasedType)) {
     return { message: `a type in ${field} may not hold a regex: JSON Schema cannot express it` };
-  }
-  const unreachable = unreachableName(alias.aliasedType);
-  if (unreachable !== null) {
-    return {
-      message: `a type in ${field} may not name ${unreachable}: a workflow's program imports only its tools, so write the type out`,
-    };
   }
   return { alias };
 }

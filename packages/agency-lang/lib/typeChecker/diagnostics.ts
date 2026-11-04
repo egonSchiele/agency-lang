@@ -142,6 +142,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Type alias '{alias}' is not defined (referenced in '{context}').",
   },
+  typeAliasNotImported: {
+    code: "AG1026",
+    severity: "error",
+    message:
+      "Type alias '{alias}' is declared in '{module}' but not imported here (referenced in '{context}'). Import it by name, or write the type out.",
+  },
   castUnrelatedTypes: {
     code: "AG1014",
     severity: "error",

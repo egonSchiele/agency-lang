@@ -5,7 +5,7 @@ import { draftWorkflow, WorkflowDraft } from "std::workflow"
 import { add, multiply } from "std::math"
 import { searchNotes } from "./fixtures/tools/notes.agency"
 import { send } from "./fixtures/tools/send.agency"
-import { currentThreadId, getThread, userMessage } from "std::thread"
+import { currentThreadId, getThread, listThreads, userMessage } from "std::thread"
 import { keys } from "std::object"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
@@ -28,6 +28,15 @@ def runDraftTaken(takenNames: string[]): Result<WorkflowDraft> {
   handle {
     return draftWorkflow("Add two numbers and double the sum.", TOOLS, __dirname, null, "", "", takenNames)
   } with approve
+}
+
+/** How many threads the run has opened so far. */
+def threadCount(): number {
+  const threads = listThreads(false)
+  if (threads is failure) {
+    return -1
+  }
+  return threads.value.length
 }
 
 /** How many messages the current thread holds. */
@@ -128,14 +137,16 @@ node unreachableTypeIsRedrafted(): Json {
   return [drafted.value.workflow.inputs, drafted.value.attempts]
 }
 
-// The model calls run on their own thread, so a host that drafts from
-// inside a conversation keeps its history as it was.
+// The model calls run on threads of their own, one per attempt, so a host
+// that drafts from inside a conversation keeps its history as it was, and
+// a later attempt does not see the earlier briefs.
 node draftStaysOffTheCallersThread(): Json {
   userMessage("Add milk to the grocery list.")
-  const before = threadLength()
+  const messagesBefore = threadLength()
+  const threadsBefore = threadCount()
   const drafted = runDraft(TOOLS, __dirname)
   if (drafted is failure(err)) {
     return "failed: ${err}"
   }
-  return [before, threadLength(), drafted.value.attempts]
+  return [messagesBefore, threadLength(), threadCount() - threadsBefore, drafted.value.attempts]
 }

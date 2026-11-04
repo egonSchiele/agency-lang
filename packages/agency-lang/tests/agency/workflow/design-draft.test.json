@@ -209,9 +209,9 @@
     },
     {
       "nodeName": "draftStaysOffTheCallersThread",
-      "description": "the caller's thread holds the same messages before and after a draft",
+      "description": "the caller's thread holds the same messages before and after a two-attempt draft, and each attempt opened a thread of its own",
       "input": "",
-      "expectedOutput": "[1,1,1]",
+      "expectedOutput": "[1,1,2,2]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -219,6 +219,11 @@
       ],
       "useTestLLMProvider": true,
       "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"subtract\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
         {
           "return": {
             "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"

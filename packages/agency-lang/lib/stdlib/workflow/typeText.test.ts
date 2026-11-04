@@ -83,19 +83,3 @@ describe("parseTypeText and regex", () => {
     expect(output("{ rules: string[] }")).toHaveProperty("alias");
   });
 });
-
-describe("parseTypeText and named types", () => {
-  it("refuses a type name the generated program cannot reach, naming the field", () => {
-    expect(messageOf(inputs("{ delivery: Delivery }"))).toBe(
-      "a type in inputs may not name Delivery: a workflow's program imports only its tools, so write the type out",
-    );
-    expect(messageOf(output("{ notes: Note[] }"))).toBe(
-      "a type in output may not name Note: a workflow's program imports only its tools, so write the type out",
-    );
-    expect(messageOf(output("Record<string, Delivery>"))).toContain("may not name Delivery");
-  });
-
-  it("accepts Json, which the program imports", () => {
-    expect("alias" in inputs("{ payload: Json; items: Json[] }")).toBe(true);
-  });
-});

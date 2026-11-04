@@ -7060,6 +7060,100 @@ describe("TypeChecker", () => {
       expect(errors.filter((e) => /does not exist/.test(e.message))).toEqual([]);
     });
 
+    it("refuses a reference by name to a pulled alias, naming the module to import it from", () => {
+      // main imports `send`, whose parameter type `Delivery` lives in
+      // delivery.agency. The checker reads `Delivery` to type the call, but
+      // a local type that names it has no binding in the generated code.
+      const delivery: VariableType = {
+        type: "unionType",
+        types: [
+          { type: "stringLiteralType", value: "screen" },
+          { type: "stringLiteralType", value: "text" },
+        ],
+      };
+      const symbolTable = new SymbolTable({
+        "/project/delivery.agency": {
+          Delivery: { kind: "type", name: "Delivery", aliasedType: delivery, exported: true },
+        },
+        "/project/send.agency": {
+          send: {
+            kind: "function",
+            name: "send",
+            exported: true,
+            parameters: [
+              { type: "functionParameter", name: "text", typeHint: str },
+              {
+                type: "functionParameter",
+                name: "delivery",
+                typeHint: { type: "typeAliasVariable", aliasName: "Delivery" },
+              },
+            ],
+            returnType: str,
+          },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./send.agency",
+            isAgencyImport: true,
+            importedNames: [{ type: "namedImport", importedNames: ["send"], aliases: {} }],
+          },
+          {
+            type: "typeAlias",
+            aliasName: "Inputs",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "delivery", value: { type: "typeAliasVariable", aliasName: "Delivery" } },
+              ],
+            },
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      // The table has no file on disk, so the import itself is also reported;
+      // only the alias diagnostic is under test.
+      const errors = typeCheck(program, {}, info).errors.filter((e) => e.code === "AG1026");
+      expect(errors.map((e) => e.message)).toEqual([
+        "Type alias 'Delivery' is declared in '/project/delivery.agency' but not imported here (referenced in 'Inputs'). Import it by name, or write the type out.",
+      ]);
+    });
+
+    it("accepts the same reference once the alias is imported by name", () => {
+      const delivery: VariableType = { type: "stringLiteralType", value: "screen" };
+      const symbolTable = new SymbolTable({
+        "/project/delivery.agency": {
+          Delivery: { kind: "type", name: "Delivery", aliasedType: delivery, exported: true },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./delivery.agency",
+            isAgencyImport: true,
+            importedNames: [{ type: "namedImport", importedNames: ["Delivery"], aliases: {} }],
+          },
+          {
+            type: "typeAlias",
+            aliasName: "Inputs",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "delivery", value: { type: "typeAliasVariable", aliasName: "Delivery" } },
+              ],
+            },
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      expect(typeCheck(program, {}, info).errors.filter((e) => e.code === "AG1026")).toEqual([]);
+    });
+
     it("a builtin call is rejected when given a block argument", () => {
       // success(1) as x { return 2 }  ← `success` is a primitive, not a block-taker.
       const program: AgencyProgram = {

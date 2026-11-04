@@ -34,10 +34,32 @@
       ]
     },
     {
-      "nodeName": "unrepresentableInputsFail",
-      "description": "an inputs type JSON Schema cannot express fails the call with the node's failure, after one std::run",
+      "nodeName": "unrepresentableInputsAreRefused",
+      "description": "a regex in the inputs type is refused by the check, on the inputs field, before any std::run",
       "input": "",
-      "expectedOutput": "[true,[\"std::run\"]]",
+      "expectedOutput": "[[\"null/inputs\"],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedRunKeepsTheRejection",
+      "description": "a rejected std::run fails the call, keeps rejected, and has no data.problems",
+      "input": "",
+      "expectedOutput": "[true,true,[\"std::run\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unrepresentableOutputIsRefused",
+      "description": "an LLM output type holding regex is refused by the check, naming the step, before any std::run",
+      "input": "",
+      "expectedOutput": "[[\"explain/output\"],[]]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -111,7 +111,8 @@ export type Signature = {
   params: ExportParam[];
   /** What `describe` reports the tool can raise. */
   effects: string[];
-  /** True for a `handoff def`: a step that calls it hands the run to that agent. */
+  /** True for a `handoff def`. A step calls it like any other function;
+   *  the handoff behaviour applies only when a model calls it as a tool. */
   handoff: boolean;
 };
 

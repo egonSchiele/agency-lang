@@ -293,14 +293,13 @@ export def checkWorkflowWithSchemas(workflow: Workflow, tools: any[], dir: strin
   @param dir - Directory containing any local tool modules and resolving their paths.
   """
   const checked = _checked(workflow, tools, dir)?
-  const schemas = _workflowSchemas(checked.program)
-  if (schemas is failure(err)) {
-    return _workflowFailure(err)
-  }
+  // A failure comes back as it came: a refused or failed run has
+  // `rejected` and no `problems`, a failed node has its problem.
+  const schemas = _workflowSchemas(checked.program)?
   return success({
     warnings: checked.warnings,
-    inputsSchema: schemas.value.inputs,
-    outputSchemas: schemas.value.outputs
+    inputsSchema: schemas.inputs,
+    outputSchemas: schemas.outputs
   })
 }
 
@@ -484,7 +483,7 @@ export type WorkflowMeta = {
   /** What saved it, such as `writeWorkflow`. */
   savedBy: string;
   /** The JSON Schema of the workflow's `inputs` type, from the program's
-    own `inputsSchema` node at save time; null for a workflow saved before
+    own `workflowSchemas` node's `inputs` at save time; null for a workflow saved before
     schemas were recorded. */
   inputsSchema: Json | null
 }
@@ -563,13 +562,17 @@ type WorkflowSchemas = {
 @capabilities(fileWrite, subprocess)
 export def _workflowSchemas(program: CompiledProgram): Result<WorkflowSchemas> {
   const ran = run(compiled: program, node: SCHEMAS_NODE)
-  if (ran is failure(runErr)) {
-    return failure("could not derive the workflow's schemas: ${runErr}")
+  if (ran is failure) {
+    // A rejected std::run, a spawn error, a timeout: not the workflow's
+    // fault, so returned as it came, with its `rejected` flag and no
+    // `problems`.
+    return ran
   }
-  // The envelope's `data` is what the node returned. A type that JSON
-  // Schema cannot express, such as `regex`, makes the node fail there.
+  // The envelope's `data` is what the node returned. The check refuses
+  // the one type JSON Schema cannot express, a regex, so the node does
+  // not fail in practice; if it does, that is the workflow's fault.
   if (ran.value.data is failure(nodeErr)) {
-    return failure("could not derive the workflow's schemas: ${nodeErr}")
+    return _workflowFailure("could not derive the workflow's schemas: ${nodeErr}")
   }
   return success(ran.value.data)
 }

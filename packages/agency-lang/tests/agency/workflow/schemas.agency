@@ -37,13 +37,17 @@ def bad(): Workflow {
   }
 }
 
-/** Checks `workflow`, recording every effect raised in "effects". */
-def runCheck(workflow: Workflow): Result<any> {
+/** Checks `workflow`, recording every effect raised in "effects". A true
+  `rejectRun` rejects `std::run`. */
+def runCheck(workflow: Workflow, rejectRun: boolean = false): Result<any> {
   setMutable("effects", [])
   handle {
     return checkWorkflowWithSchemas(workflow, TOOLS, __dirname)
   } with (intr) {
     getMutable("effects", []).push(intr.effect)
+    if (rejectRun && intr.effect == "std::run") {
+      return reject("not now")
+    }
     return approve()
   }
 }
@@ -93,13 +97,36 @@ def regexInputs(): Workflow {
   }
 }
 
-// The schemas node fails inside the subprocess, and the failure comes back
-// as the call's failure, not as a success with no schemas.
-node unrepresentableInputsFail(): Json {
+/** The fields of every problem, as `step/field`. */
+def problemFields(failed: any): Json {
+  return map(failed.data.problems ?? [], \problem -> "${problem.step}/${problem.field}")
+}
+
+// The check refuses it, naming the field, before any std::run: the schemas
+// node would fail with zod's message, which names no step or field.
+node unrepresentableInputsAreRefused(): Json {
   const checked = runCheck(regexInputs())
-  if (checked is failure(err)) {
-    const message = "${err}"
-    return [message.includes("could not derive the workflow's schemas"), getMutable("effects", [])]
+  if (checked is failure) {
+    return [problemFields(checked), getMutable("effects", [])]
+  }
+  return "checked"
+}
+
+// A refused run is not a workflow problem: it keeps `rejected` and has no
+// `problems`, the way a refused read does in `catalog`.
+node rejectedRunKeepsTheRejection(): Json {
+  const checked = runCheck(explained("string"), true)
+  if (checked is failure) {
+    return [checked.rejected, checked.data.problems == null, getMutable("effects", [])]
+  }
+  return "checked"
+}
+
+// An LLM output type holding a regex is refused the same way, on the step.
+node unrepresentableOutputIsRefused(): Json {
+  const checked = runCheck(explained("{ pattern: regex }"))
+  if (checked is failure) {
+    return [problemFields(checked), getMutable("effects", [])]
   }
   return "checked"
 }

@@ -7,6 +7,7 @@
 import { AgencyGenerator } from "../../backends/agencyGenerator.js";
 import type { AgencyNode, TypeAlias } from "../../types.js";
 import { _parseAST } from "../agency.js";
+import { containsRegex } from "../../typeChecker/utils.js";
 
 export type TypeTextResult = { alias: TypeAlias } | { message: string };
 
@@ -57,6 +58,12 @@ export function parseTypeText(name: string, text: string, field: string): TypeTe
   }
   if (carriesTags(alias.aliasedType) || (alias.tags ?? []).length > 0) {
     return { message: `a type in ${field} may not carry @validate or @jsonSchema tags` };
+  }
+  // The schemas node turns both types into JSON Schema, which cannot
+  // express a regex, so the check refuses it here, naming the field,
+  // instead of the node failing with zod's message.
+  if (containsRegex(alias.aliasedType)) {
+    return { message: `a type in ${field} may not hold a regex: JSON Schema cannot express it` };
   }
   return { alias };
 }

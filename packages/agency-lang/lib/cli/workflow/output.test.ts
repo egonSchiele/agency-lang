@@ -27,6 +27,7 @@ const entries: CatalogEntry[] = [
     params: [param("query", "string")],
     returns: "Result<ListSummary[]>",
     effects: [],
+    handoff: false,
   },
   {
     module: "./src/agent/lists.agency",
@@ -35,6 +36,7 @@ const entries: CatalogEntry[] = [
     params: [param("listId", "string"), param("items", "string[]"), param("section", "string")],
     returns: "Result<string>",
     effects: ["test::lists::add"],
+    handoff: false,
   },
 ];
 
@@ -52,6 +54,13 @@ describe("formatCatalog", () => {
     );
   });
 
+  it("marks a handoff after its signature", () => {
+    const [findLists] = entries;
+    expect(formatCatalog([{ ...findLists, handoff: true }])).toContain(
+      "  findLists(query: string): Result<ListSummary[]> (handoff)",
+    );
+  });
+
   it("writes defaults, untyped parameters, a missing return type, and joins a wrapped line", () => {
     const entry: CatalogEntry = {
       module: "std::math",
@@ -61,6 +70,7 @@ describe("formatCatalog", () => {
       params: [param("num", "number"), param("precision", null, "0")],
       returns: null,
       effects: [],
+      handoff: false,
     };
     expect(formatCatalog([entry])).toBe(
       [

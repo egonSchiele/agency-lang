@@ -13,9 +13,12 @@ export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record
 
 /** The shape of every generated program. Fixed text, not a template: filling
  *  a hole inside `node main(inputs: Inputs)` with statements that mention
- *  `inputs` would rename the parameter (template hygiene). `inputsSchema`
- *  asks for the input form: a key with a default is optional there, so an
- *  optional input is optional in the tool a workflow becomes.
+ *  `inputs` would rename the parameter (template hygiene). `workflowSchemas`
+ *  gives the JSON Schema of `Inputs` and of each LLM step's output type, by
+ *  step id. The inputs schema is the input form: a key with a default is
+ *  optional there, so an optional input is optional in the tool a workflow
+ *  becomes. An output schema is the output form, the value a later step
+ *  reads.
  *
  *  The handler around the body is what makes every limit hard. A guard trip
  *  raises `std::guard`, and an approval would give the guard more budget.
@@ -45,8 +48,11 @@ export node main(inputs: Inputs!): Result {
   }
 }
 
-export node inputsSchema(): Json {
-  return schema(Inputs).toJSONSchema("input")
+export node workflowSchemas(): Json {
+  return {
+    inputs: schema(Inputs).toJSONSchema("input"),
+    outputs: {{outputSchemas}}
+  }
 }
 `;
 
@@ -69,13 +75,16 @@ export node main(inputs: Inputs!): Result {
   }
 }
 
-export node inputsSchema(): Json {
-  return schema(Inputs).toJSONSchema("input")
+export node workflowSchemas(): Json {
+  return {
+    inputs: schema(Inputs).toJSONSchema("input"),
+    outputs: {{outputSchemas}}
+  }
 }
 `;
 
 const INDENT = "  ";
-const TOKEN = /\{\{(imports|types|guardArgs|guardLabel|guardLabels|body)\}\}/g;
+const TOKEN = /\{\{(imports|types|guardArgs|guardLabel|guardLabels|body|outputSchemas)\}\}/g;
 const BODY_TOKEN = "{{body}}";
 const TYPES_TOKEN = "{{types}}";
 
@@ -124,6 +133,16 @@ function typeLine(decl: TypeDecl): string {
   return printType(parsed.alias);
 }
 
+/** The `outputs` object of `workflowSchemas`: each LLM step's output type
+ *  as a JSON Schema, keyed by step id. Step ids are identifiers, so JSON
+ *  writes them as plain Agency string keys. */
+function outputSchemasText(types: TypeDecl[]): string {
+  const entries = types
+    .filter((decl) => decl.owner.step !== null && decl.owner.field === "output")
+    .map((decl) => `      ${JSON.stringify(decl.owner.step)}: schema(${decl.name}).toJSONSchema()`);
+  return entries.length === 0 ? "{}" : `{\n${entries.join(",\n")}\n    }`;
+}
+
 export function renderWorkflow(lowered: Lowered): RenderResult {
   const typeLines = lowered.types.map(typeLine);
   const limits = lowered.guard;
@@ -144,6 +163,7 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
     guardLabel: JSON.stringify(lowered.guardLabel),
     guardLabels: JSON.stringify(lowered.guardLabels),
     body: indent([...prints.flat(), ...resultLines], depth).join("\n"),
+    outputSchemas: outputSchemasText(lowered.types),
   };
   const typeBlocks = lowered.types.map((decl, index) => ({
     lines: typeLines[index].split("\n").length,

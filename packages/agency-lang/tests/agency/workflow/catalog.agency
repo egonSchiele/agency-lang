@@ -5,6 +5,7 @@ import { catalog, CatalogEntry, CatalogParam } from "std::workflow"
 import { add, round } from "std::math"
 import { searchNotes } from "./fixtures/tools/notes.agency"
 import { addListItems } from "./fixtures/tools/lists.agency"
+import { askPlanner } from "./fixtures/tools/agents.agency"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
@@ -101,4 +102,12 @@ node effectsListed(): Json {
     return "failed: ${err}"
   }
   return map(listed.value, \entry -> entry.effects)
+}
+
+node handoffMarked(): Json {
+  const listed = runCatalog([askPlanner, add])
+  if (listed is failure(err)) {
+    return "failed: ${err}"
+  }
+  return map(listed.value, \entry -> [entry.name, entry.handoff])
 }

@@ -26,6 +26,7 @@ const entries: CatalogEntry[] = [
     description: "Find lists whose title matches the query.",
     params: [param("query", "string")],
     returns: "Result<ListSummary[]>",
+    returnSchema: null,
     effects: [],
     handoff: false,
   },
@@ -35,6 +36,7 @@ const entries: CatalogEntry[] = [
     description: "Add items to a section of a list.\n\nMore detail that is not printed.",
     params: [param("listId", "string"), param("items", "string[]"), param("section", "string")],
     returns: "Result<string>",
+    returnSchema: null,
     effects: ["test::lists::add"],
     handoff: false,
   },
@@ -69,6 +71,7 @@ describe("formatCatalog", () => {
         "Round a number to a given number of decimal places. With no precision it\n  rounds to a whole number.",
       params: [param("num", "number"), param("precision", null, "0")],
       returns: null,
+      returnSchema: null,
       effects: [],
       handoff: false,
     };

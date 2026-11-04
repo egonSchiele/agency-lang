@@ -117,12 +117,22 @@ export type ToolMarkers = {
  */
 export type AgencyFunctionBody = (run: Run, ...args: any[]) => any;
 
+/** Builds the zod schema of what a call returns. */
+export type ReturnSchema = () => unknown;
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
   fn: AgencyFunctionBody;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
+  /** Makes the zod schema of the value a call returns: the declared return
+   *  type, or the success type inside a `Result`. A thunk, so nothing is
+   *  built at module load. Absent for a def that is not exported or declares
+   *  no return type, or whose return type holds a function or a `regex`
+   *  (which JSON Schema cannot express) or names a type its module cannot
+   *  reach at run time (#1371). */
+  returnSchema?: ReturnSchema | null;
   exported?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
@@ -183,6 +193,7 @@ export class AgencyFunction {
   declare readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
+  readonly returnSchema: ReturnSchema | null;
   private readonly _fn: AgencyFunctionBody;
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];
@@ -220,6 +231,7 @@ export class AgencyFunction {
     this.paramSchemas = opts.paramSchemas ?? {};
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
+    this.returnSchema = opts.returnSchema ?? null;
     this.exported = opts.exported ?? false;
     this.markers = opts.markers ?? {};
     this.capabilities = opts.capabilities ?? [];
@@ -265,6 +277,7 @@ export class AgencyFunction {
       fn: this._fn,
       params: this.params,
       toolDefinition: this.toolDefinition,
+      returnSchema: this.returnSchema,
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,

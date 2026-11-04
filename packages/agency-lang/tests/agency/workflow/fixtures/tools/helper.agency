@@ -8,3 +8,13 @@ export def shout(text: string): string {
   """
   return "${text.toUpperCase()}!"
 }
+
+/** What `Outer` holds. A module that imports `Outer` never names this. */
+export type Inner = {
+  count: number
+}
+
+/** A type whose body names another alias of this module. */
+export type Outer = {
+  inner: Inner
+}

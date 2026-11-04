@@ -106,7 +106,7 @@ Notes:
 - The built-in names are `recommended`, `minimal`, `with-writes`, and `approve-all`.
 - `--approve` and `--reject` take comma-separated [effect](/guide/effects) names. You can also give either flag more than once. Reject takes precedence, so if you have an effect in both approve and reject, it gets rejected.
 - The [rules of handlers](/guide/handlers.md#the-rules-of-handlers) still apply. Think of this as just another handler.
-- An approve rule does not answer an interrupt that asks for a value, such as `question()` or a draft waiting for review. An approval from a rule carries no answer, so the program would read it as an empty one. That holds for `--approve std::question` and for `approve-all` alike. Such an interrupt goes to the prompt under `--interactive`, and is rejected without it. A reject rule still rejects it.
+- An interrupt that asks for a value, such as `question()` or a draft waiting for review, goes to the prompt under `--interactive` even when an approve rule matches it, so you give the answer its content. Without `--interactive`, an approve rule answers it with no value: the program reads a null answer, which for a draft review means accept and for `question()` means no answer. A reject rule rejects it either way.
 
 ### The `--interactive` flag
 

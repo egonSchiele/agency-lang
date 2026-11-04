@@ -71,14 +71,24 @@ describe("makeRunPolicyHandler", () => {
     expect((await h(intr("anything::at::all")))!.type).toBe("approve");
   });
 
-  // An approve carries no value, so it would read as an empty answer: for
-  // std::workflow::review, accepting a draft nobody looked at.
-  it("stays silent when an approve rule matches a raise that expects a value", async () => {
+  // The rule said approve, and nobody is present to give a value, so the
+  // raise gets the approval with no value: a null answer, which the effect
+  // gives a meaning.
+  it("approves a raise that expects a value with no value in a non-interactive run", async () => {
     const asking = { ...intr("std::workflow::review"), expectsValue: true };
     const named = makeRunPolicyHandler({ "std::workflow::review": [{ action: "approve" }] }, DIRS);
-    expect(await named(asking)).toBeUndefined();
+    expect(await named(asking)).toEqual({ type: "approve" });
     const wildcard = makeRunPolicyHandler({ "*": [{ action: "approve" }] }, DIRS);
-    expect(await wildcard(asking)).toBeUndefined();
+    expect(await wildcard(asking)).toEqual({ type: "approve" });
+  });
+
+  // A person is present, so the value prompt gives the answer its content.
+  it("stays silent on a raise that expects a value in an interactive run", async () => {
+    const asking = { ...intr("std::workflow::review"), expectsValue: true };
+    const h = makeRunPolicyHandler({ "*": [{ action: "approve" }] }, DIRS, true);
+    expect(await h(asking)).toBeUndefined();
+    // A statement raise under the same rule is still approved.
+    expect(await h(intr("std::read"))).toEqual({ type: "approve" });
   });
 
   it("still rejects a raise that expects a value when a reject rule matches", async () => {

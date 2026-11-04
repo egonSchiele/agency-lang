@@ -155,18 +155,22 @@ an interrupt by three routes:
   reject it: rejecting is the fail-closed direction and carries its
   message.
 
-The run-level policy follows the same rule, outside `_handler`. `agency
-run --policy`, `--approve`, and a serve host's `InvocationOptions.policy`
-install `makeRunPolicyHandler` (`lib/runtime/runPolicyHandler.ts`), which
-stays silent when an approve rule matches such a raise. The raise then
-goes on to whoever can answer it: a program handler, the prompt under
-`--interactive` (the value prompt in `buildDecider`), or the caller of a
-served run. `agency remote call` applies its policy in `buildDecider`
-(`lib/runtime/interruptResolution.ts`), which checks a reject rule first,
-then sends a value-expecting raise to the value prompt, or rejects it in
-a non-interactive run, before it looks at an approve rule. Until this,
-both approved such a raise with no value, so `agency run --approve
-std::toolbox::review` accepted a draft nobody looked at.
+The run-level policy, outside `_handler`, follows that rule only when a
+person is present. `agency run --policy`, `--approve`, and a serve host's
+`InvocationOptions.policy` install `makeRunPolicyHandler`
+(`lib/runtime/runPolicyHandler.ts`). Under `--interactive` it stays silent
+when an approve rule matches such a raise, so the raise goes on to the
+value prompt in `buildDecider` and the person gives the answer its
+content. In a non-interactive run nobody can, and the rule said approve,
+so the handler approves with no value: the raise reads a null answer,
+which the effect gives a meaning (a review accepts its draft, a question
+has no answer). Rejecting instead would turn an explicit "yes" into a
+"no"; fail-closed is for an interrupt no rule matched. `agency remote
+call` applies its policy in `buildDecider` (`lib/runtime/interruptResolution.ts`)
+the same way: a reject rule first, then the value prompt when
+interactive, then the approve rule. A rule cannot yet carry a value of
+its own; that is the piece that would let a policy answer a review or a
+question deliberately rather than with null.
 
 `checkPolicy` from `std::policy`, called in a program's own handler, does
 not follow the rule: it returns what the rule says. A program that hands

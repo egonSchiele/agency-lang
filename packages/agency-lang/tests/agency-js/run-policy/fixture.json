@@ -3,5 +3,5 @@
   "writeRejected": true,
   "unlistedSurfaced": true,
   "inputSurfacedExpectsValue": true,
-  "approveAllLeavesQuestion": true
+  "approveAllAnswersWithNull": true
 }

@@ -152,21 +152,24 @@ describe("buildDecider", () => {
     expect(await nonInteractive(makeInterruptFor("P"))).toEqual(reject());
   });
 
-  // An approve carries no value, so it would read as an empty answer: for
-  // std::workflow::review, accepting a draft nobody looked at.
-  it("value-expecting: a policy approve does not answer it; the value prompt does", async () => {
+  // A person is present, so the value prompt gives the answer its content.
+  it("value-expecting: in an interactive run the value prompt answers it, approve rule or not", async () => {
     const policy: Policy = { A: [{ action: "approve" }], "*": [{ action: "approve" }] };
     const decide = buildDecider({ policy, interactive: true, valuePrompt });
     expect(await decide(makeInterruptFor("A", true))).toEqual(approve("typed-value"));
     expect(await decide(makeInterruptFor("Other", true))).toEqual(approve("typed-value"));
   });
 
-  it("value-expecting: a policy approve in a non-interactive run rejects it", async () => {
+  // Nobody is present, and the rule said approve: the raise gets the
+  // approval with no value, a null answer. Without a rule it is rejected,
+  // as any unsettled interrupt is in a non-interactive run.
+  it("value-expecting: a policy approve in a non-interactive run approves it with no value", async () => {
     const policy: Policy = { "*": [{ action: "approve" }] };
     const decide = buildDecider({ policy, interactive: false, valuePrompt });
-    expect(await decide(makeInterruptFor("A", true))).toEqual(reject());
-    // A statement interrupt under the same rule is still approved.
+    expect(await decide(makeInterruptFor("A", true))).toEqual(approve());
     expect(await decide(makeInterruptFor("A"))).toEqual(approve());
+    const unmatched = buildDecider({ policy: {}, interactive: false, valuePrompt });
+    expect(await unmatched(makeInterruptFor("A", true))).toEqual(reject());
   });
 
   it("value-expecting: a policy reject still rejects, with its message", async () => {

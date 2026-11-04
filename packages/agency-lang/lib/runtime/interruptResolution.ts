@@ -63,14 +63,14 @@ export type BuildDeciderOptions = {
  * Build the per-interrupt decision function. Policy runs first for every
  * interrupt: an explicit reject settles immediately, carrying the matched
  * rule's `rejectMessage`, when one was set, as the rejection's reason. An
- * explicit approve settles a statement interrupt, but not one that expects
- * a value: a policy approve carries no value, so the raise would read it as
- * an empty answer (for a review, accepting a draft nobody looked at). A
- * value-expecting interrupt that no reject rule settles uses the value
- * prompt when interactive, and is rejected otherwise. Only when the policy
- * leaves a statement interrupt "unsettled" (`propagate` or no-match) does
- * interactivity apply to it: the ordinary prompt, or a rejection in a
- * non-interactive run (fail-closed). "Always"
+ * explicit approve settles a statement interrupt, and settles a
+ * value-expecting one with no value (a null answer, which the effect gives
+ * a meaning) unless the run is interactive, where a person can supply the
+ * value at the value prompt instead. Only when the policy leaves an
+ * interrupt "unsettled" (`propagate` or no-match) does interactivity apply
+ * on its own: a value-expecting interrupt uses the value prompt, a
+ * statement interrupt the ordinary prompt, and a non-interactive run
+ * rejects (fail-closed). "Always"
  * answers are remembered per effect for the run. The result
  * is always an approve/reject response — never `propagate`, so it can never be
  * sent over a resume boundary.
@@ -92,7 +92,7 @@ export function buildDecider(options: BuildDeciderOptions): DecideFn {
       if (options.interactive) {
         return valuePrompt(interrupt);
       }
-      return reject();
+      return decision?.type === "approve" ? approve() : reject();
     }
     if (decision?.type === "approve") {
       return approve();

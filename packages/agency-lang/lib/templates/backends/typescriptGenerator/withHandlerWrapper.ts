@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `__run.ctx.pushRunHandler({{{handler}}}, []);
+export const template = `__run.ctx.pushRunHandler({{{handler}}}, [], null);
 {{{indent}}}try {
 {{{body}}}
 {{{indent}}}} finally {

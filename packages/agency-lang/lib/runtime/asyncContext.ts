@@ -403,6 +403,7 @@ export async function withPushedHandler<T>(
   handler: HandlerFn,
   fn: () => Promise<T>,
   liveGuardIds: string[],
+  stack: StateStack,
 ): Promise<T> {
   // The caller names the guards that are live where the handler registers.
   // TS-side registration captures them AT CALL TIME, with no memo: TS
@@ -411,11 +412,17 @@ export async function withPushedHandler<T>(
   // Runner.handle). `agency.withHandler` passes the guards on its run's
   // stack. preapprove() passes [] because its handler registers
   // conceptually above any guard (and its body never spends).
-  ctx.pushHandler(handler, liveGuardIds);
+  //
+  // `stack` is where the handler is registered: the caller's run stack.
+  // Without it a preapproved tool running in one fork arm or one tool call
+  // would approve every raise in its siblings for as long as it ran
+  // (HandlerEntry.stack). Registered on the root stack, it still reaches
+  // every branch, because every branch is started from the root.
+  const entry = ctx.pushHandler(handler, liveGuardIds, stack);
   try {
     return await fn();
   } finally {
-    ctx.popHandler();
+    ctx.removeHandler(entry);
   }
 }
 

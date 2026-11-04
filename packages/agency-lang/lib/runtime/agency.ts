@@ -293,7 +293,7 @@ const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T =>
 const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> => {
   const run = currentRun();
   const liveGuardIds = run.stack.guards.map((guard) => guard.guardId);
-  return withPushedHandler(run.ctx, handler, fn, liveGuardIds);
+  return withPushedHandler(run.ctx, handler, fn, liveGuardIds, run.stack);
 };
 
 /** Install a `CostGuard(maxCost)` on the active branch's `StateStack.guards`

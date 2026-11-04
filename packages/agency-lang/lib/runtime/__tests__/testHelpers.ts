@@ -172,14 +172,25 @@ export function makeMockCtx(
     traceConfig: {},
     // As on the real context: a handler from TypeScript takes only the
     // interrupt, and is wrapped into the shape the chain calls.
-    pushHandler(fn: any, liveGuardIds: string[] = []) {
-      this.handlers.push({
+    pushHandler(fn: any, liveGuardIds: string[] = [], stack: any = null) {
+      const entry = {
         fn: (run: Run, interrupt: unknown) => callPlain(run, fn, [interrupt]),
         liveGuardIds,
-      });
+        stack,
+      };
+      this.handlers.push(entry);
+      return entry;
     },
-    pushRunHandler(fn: any, liveGuardIds: string[] = []) {
-      this.handlers.push({ fn, liveGuardIds });
+    pushRunHandler(fn: any, liveGuardIds: string[] = [], stack: any = null) {
+      const entry = { fn, liveGuardIds, stack };
+      this.handlers.push(entry);
+      return entry;
+    },
+    removeHandler(entry: any) {
+      const index = this.handlers.lastIndexOf(entry);
+      if (index !== -1) {
+        this.handlers.splice(index, 1);
+      }
     },
     popHandler() {
       this.handlers.pop();

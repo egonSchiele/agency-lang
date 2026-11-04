@@ -3,6 +3,7 @@ import { RuntimeContext, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
 import type { RunUsage } from "./invocationUsage.js";
 import type { Run } from "./asyncContext.js";
+import type { StateStack } from "./state/stateStack.js";
 
 export type GraphState = {
   messages?: ThreadStore;
@@ -72,6 +73,15 @@ export type HandlerEntry = {
    *  `RuntimeContext.pushHandler` wraps it into this shape. */
   fn: RunHandlerFn;
   liveGuardIds: string[];
+  /** The stack that registered the handler. A raise consults the handler
+   *  only when the raising stack is this one, a branch started from it,
+   *  or (by mistake) one of its ancestors; a handler registered in one
+   *  fork arm never answers a sibling arm. `null` means the handler has
+   *  no registering stack and applies everywhere: only the `--policy`
+   *  handler and the global-init wrapper. Required, so a new registration
+   *  path has to choose instead of widening its reach by omission. See
+   *  `runHandlerChain` and docs/dev/runtime/interrupts.md. */
+  stack: StateStack | null;
 };
 
 /** A handler function as the handler chain calls it: the run, then the

@@ -410,9 +410,7 @@ node main(): Result {
   const handler = cliPolicyHandler(file: "${__dirname}/policy.json")
   handle {
     return designWorkflow(request, [add, multiply, divide, round], __dirname)
-  } with (intr) {
-    return handler(intr)
-  }
+  } with handler
 }
 ```
 
@@ -442,8 +440,13 @@ After three drafts the call fails; set `maxRounds` to allow more. A draft never
 takes the name of a workflow already saved in the project. Values the request
 leaves open, such as which folder to read, become inputs.
 
-The review is the `std::workflow::review` interrupt. It expects an answer, so a
-policy rule cannot accept a draft: only a handler or a person can. If your
+The review is the `std::workflow::review` interrupt. It expects an answer.
+Under `cliPolicyHandler`, or `agency run --interactive`, a policy rule does not
+answer it, so the review always reaches you. In a run with nobody to ask, such
+as `agency run --approve std::workflow::review` without `--interactive`, or a
+server whose policy approves it, an approve rule accepts each draft unseen.
+An answer you type survives an outer handler that approves with no value, so
+`--approve` on the outside cannot turn your feedback into a save. If your
 program offers an editor, run `checkWorkflow` on the person's edit before you
 send it back. An edit that fails the check goes to the model, and the person
 sees the model's version instead of their own.

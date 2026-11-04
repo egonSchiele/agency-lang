@@ -118,6 +118,23 @@ node acceptIgnoresCaseAndSpaces(): Json {
   return [savedName(ran), ran.reviews.length]
 }
 
+// The scripted handler gives feedback; an outer handler approves every
+// interrupt with no value, as `agency run --approve std::workflow::review`
+// does. The feedback survives, so the second draft is the one saved.
+node outerApprovalKeepsFeedback(): Json {
+  const dir = outDir("outerApprove")
+  let name = "not run"
+  let reviews = 0
+  handle {
+    const ran = runDesign(dir, ["Call it sumTwice.", "accept"])
+    name = savedName(ran)
+    reviews = ran.reviews.length
+  } with (intr) {
+    return approve()
+  }
+  return [name, reviews]
+}
+
 node reviewPayload(): Json {
   const dir = outDir("payload")
   const ran = runDesign(dir, ["accept"])
@@ -216,6 +233,16 @@ def designAcrossPauses(dir: string): Result<WorkflowEntry> {
 
 node acceptAcrossResume(): Json {
   const dir = outDir("resumeAccept")
+  const saved = designAcrossPauses(dir)
+  if (saved is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [saved.value.name, getMutable("reviews", []).length, exists("workflows/doubleSum.json", dir)]
+}
+
+// A bare approval given after a pause reaches the call as true, not null.
+node bareApprovalAcrossResume(): Json {
+  const dir = outDir("resumeBare")
   const saved = designAcrossPauses(dir)
   if (saved is failure(err)) {
     return "failed: ${err}"

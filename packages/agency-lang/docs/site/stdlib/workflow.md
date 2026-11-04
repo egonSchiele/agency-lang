@@ -306,15 +306,19 @@ effect std::workflow::save {
 Raised with each draft that passed the check, before it is saved. The
   answer is a bare approval or `accept` to save the draft, feedback text for
   the next draft, or an edited workflow, which is checked and saved without
-  another draft. The raise expects a value, so a policy rule cannot answer
-  it: a handler or a person does.
+  another draft. The raise expects a value. Under `cliPolicyHandler` and
+  under `agency run --interactive`, a policy rule does not answer it: the
+  person does. In a run with nobody to ask, an approve rule accepts the
+  draft. An answer someone gave survives an outer approval with no value.
 
 ```ts
 /** Raised with each draft that passed the check, before it is saved. The
   answer is a bare approval or `accept` to save the draft, feedback text for
   the next draft, or an edited workflow, which is checked and saved without
-  another draft. The raise expects a value, so a policy rule cannot answer
-  it: a handler or a person does. */
+  another draft. The raise expects a value. Under `cliPolicyHandler` and
+  under `agency run --interactive`, a policy rule does not answer it: the
+  person does. In a run with nobody to ask, an approve rule accepts the
+  draft. An answer someone gave survives an outer approval with no value. */
 effect std::workflow::review {
   name: string;
   workflow: Workflow;
@@ -329,7 +333,7 @@ effect std::workflow::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1137))
 
 ## Functions
 
@@ -722,4 +726,4 @@ edited workflow, which is checked and saved without another draft.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1199))

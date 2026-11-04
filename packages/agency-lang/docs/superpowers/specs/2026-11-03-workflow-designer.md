@@ -147,11 +147,13 @@ than seeing the model's version of it.
 from `writeWorkflow`. *Why:* the same reasoning as the toolbox and skills.
 The review is where the user shapes the workflow; the save is the one
 effect a policy can pin, and it is raised for every workflow that lands
-whichever way it was made. The review expects a value, and a policy rule
-cannot approve a raise that expects one (`stdlib/policy.agency` refuses it,
-because a bare yes would accept a draft nobody looked at), so
-`--approve std::workflow::review` does not auto-accept drafts. Only a
-handler or a person answers the review.
+whichever way it was made. The review expects a value. With a person present, a
+policy rule does not answer it: `cliPolicyHandler` refuses (a bare yes would
+accept a draft nobody looked at), and `agency run --interactive` sends it to
+the value prompt (#1374). With nobody present, an approve rule accepts the
+draft: `--approve std::workflow::review` without `--interactive` asked for
+exactly that. A person's typed answer survives an outer approval that carries
+no value, through the review's entry in the approval merge table.
 
 **8. A missing fact becomes an input, not a guess.** The brief tells the
 model that when the request leaves out something a step needs, such as

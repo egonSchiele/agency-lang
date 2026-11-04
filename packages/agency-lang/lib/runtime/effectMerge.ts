@@ -85,8 +85,18 @@ const mergeGuardApprovals: ApprovalMerge = (a, b) => ({
   message: joinOrUndefined(a?.message, b?.message, "\n"),
 });
 
+/** A workflow draft's review: an answer someone gave survives an outer
+ *  approval that gives none. A person types "make the precision an input"
+ *  at the review, and an outer handler or a run policy approves with no
+ *  value. Under the default, that outer approve() replaces the feedback
+ *  with nothing, which `reviewAnswer` in std::workflow reads as accept, so
+ *  the draft the person asked to change is saved. An outer approval that
+ *  carries a value still wins, as everywhere else. */
+const keepGivenAnswer: ApprovalMerge = (inner, outer) => outer ?? inner;
+
 const MERGES: Record<string, ApprovalMerge> = {
   "std::guard": mergeGuardApprovals,
+  "std::workflow::review": keepGivenAnswer,
 };
 
 /** The merge for an effect's approvals within one process's chain. */

@@ -4,7 +4,11 @@ import { checkPolicyExplicit, validatePolicy } from "./policy.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { HandlerFn } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
-import { AGENCY_RUN_POLICY } from "@/constants.js";
+import {
+  AGENCY_RUN_POLICY,
+  AGENCY_RUN_POLICY_INTERACTIVE,
+  AGENCY_RUN_POLICY_INTERACTIVE_ON,
+} from "@/constants.js";
 import type { Intr } from "./interruptPrompts.js";
 
 // The terminal prompt mechanics now live in the cycle-free interruptPrompts
@@ -25,11 +29,26 @@ export type { PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts
 // the chain resolves by the program's own handlers; what nothing settles
 // surfaces to the user endpoint (resolveCliInterrupts) instead of being
 // decided here.
-export function makeRunPolicyHandler(policy: Policy, dirs: PolicyDirs): HandlerFn {
+//
+// A raise that expects a value, such as `std::question` or
+// `std::workflow::review`, is answered by an approve rule the way the rule
+// says, with no value: a null answer, which the effect gives a meaning (for
+// a review, accept; for a question, no answer). The one exception is an
+// interactive run, where a person is present to supply the value: there the
+// handler stays silent, so the raise goes on to the value prompt, as it does
+// under cliPolicyHandler (docs/dev/agents/approval-policies.md). A reject
+// rule rejects either way.
+export function makeRunPolicyHandler(
+  policy: Policy,
+  dirs: PolicyDirs,
+  interactive: boolean = false,
+): HandlerFn {
   return async (intr: Intr) => {
     const decision = checkPolicyExplicit(policy, intr, dirs);
     if (decision === null) return undefined;
-    if (decision.type === "approve") return approve();
+    if (decision.type === "approve") {
+      return intr.expectsValue && interactive ? undefined : approve();
+    }
     if (decision.type === "reject") return reject(decision.message);
     // An explicit `propagate` rule: force the interrupt to the user.
     return { type: "propagate" };
@@ -85,11 +104,13 @@ export function installRunPolicyHandler(
   if (isIpcMode()) return;
   const effective = policy ?? loadEnvPolicy(execCtx.host.settings);
   if (!effective) return;
+  const interactive =
+    execCtx.host.settings.read(AGENCY_RUN_POLICY_INTERACTIVE) === AGENCY_RUN_POLICY_INTERACTIVE_ON;
   // liveGuardIds: [] — explicit: the --policy handler registers at run
   // start, before any guard exists, and it is the outermost supervisory
   // layer; a policy answering an interrupt is never metered or gated by
   // user guards.
-  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs), []);
+  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs, interactive), []);
 }
 
 // The CLI-driven run's user endpoint (`resolveCliInterrupts`) lives in

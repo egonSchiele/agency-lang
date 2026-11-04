@@ -68,6 +68,38 @@ node main(args: { policyFile: string }): string {
       description: "Show tables in tv when the user asks\u001b[2J",
       body: "# tv\n\nRun tv agent new yourself. See [the docs](https://example.com/x)."
     })
+    // Raised the way designWorkflow raises it. The first round prints the
+    // draft as JSON; the second prints a diff against the first. The
+    // warnings print under each, and none of it again in the table.
+    let firstRound = interrupt std::workflow::review("Review this workflow before it is saved", {
+      name: "avgOfThree",
+      workflow: { format: 1, name: "avgOfThree", description: "first-round-marker", inputs: "{ a: number }", steps: [] },
+      previous: null,
+      warnings: [{ step: "sum", field: "result", message: "untyped-warning-marker" }],
+      attempts: 1,
+      round: 1,
+      maxRounds: 3
+    })
+    let secondRound = interrupt std::workflow::review("Review this workflow before it is saved", {
+      name: "avgOfThree",
+      workflow: { format: 1, name: "avgOfThree", description: "second-round-marker", inputs: "{ a: number }", steps: [] },
+      previous: { format: 1, name: "avgOfThree", description: "first-round-marker", inputs: "{ a: number }", steps: [] },
+      warnings: [],
+      attempts: 2,
+      round: 2,
+      maxRounds: 3
+    })
+    // Only a space inside a string changed. In data that is a real change,
+    // so the diff must show it.
+    let thirdRound = interrupt std::workflow::review("Review this workflow before it is saved", {
+      name: "avgOfThree",
+      workflow: { format: 1, name: "avgOfThree", description: "spaced marker", inputs: "{ a: number }", steps: [] },
+      previous: { format: 1, name: "avgOfThree", description: "spaced  marker", inputs: "{ a: number }", steps: [] },
+      warnings: [],
+      attempts: 1,
+      round: 3,
+      maxRounds: 3
+    })
   } with (data) {
     return handler(data)
   }

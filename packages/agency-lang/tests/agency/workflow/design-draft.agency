@@ -1,0 +1,90 @@
+// draftWorkflow: one structured model call per attempt, and the check's
+// problems go back to the model until a draft passes. Each node's model
+// replies are the llmMocks in design-draft.test.json.
+import { draftWorkflow, WorkflowDraft } from "std::workflow"
+import { add, multiply } from "std::math"
+import { searchNotes } from "./fixtures/tools/notes.agency"
+import { keys } from "std::object"
+import { Json } from "std::validation"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+const TOOLS = [add, multiply]
+
+/** Drafts with every interrupt approved and recorded in "effects". */
+def runDraft(tools: any[], dir: string): Result<WorkflowDraft> {
+  setMutable("effects", [])
+  handle {
+    return draftWorkflow("Add two numbers and double the sum.", tools, dir)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    return approve()
+  }
+}
+
+/** The failure's message, or "" for a success. */
+def errorOf(result: Result<any>): string {
+  if (result is failure(err)) {
+    return "${err}"
+  }
+  return ""
+}
+
+node firstDraftPasses(): Json {
+  const drafted = runDraft(TOOLS, __dirname)
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [
+    drafted.value.workflow.name,
+    drafted.value.attempts,
+    keys(drafted.value.workflow).includes("limits"),
+    keys(drafted.value.workflow).includes("raises"),
+    getMutable("effects", [])
+  ]
+}
+
+node unknownToolIsRedrafted(): Json {
+  const drafted = runDraft(TOOLS, __dirname)
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [drafted.value.workflow.name, drafted.value.attempts]
+}
+
+node notJsonIsRedrafted(): Json {
+  const drafted = runDraft(TOOLS, __dirname)
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [drafted.value.workflow.name, drafted.value.attempts]
+}
+
+// Six drafts, each failing in a different way. The failure names the
+// sixth problem (a repeated step id), not the first (not JSON).
+node sixFailuresGiveUp(): Json {
+  const message = errorOf(runDraft(TOOLS, __dirname))
+  return [
+    message.includes("in 6 attempts"),
+    message.includes("is used by an earlier step"),
+    message.includes("not valid JSON")
+  ]
+}
+
+// A reply that is not `{ workflowJson }` is retried once by the client
+// (validationRetries), so the test gives two such replies. The second ends
+// the call. The message names the shape, which tells this apart from a
+// third call running out of mocks.
+node wrongReplyShapeEndsTheCall(): Json {
+  const message = errorOf(runDraft(TOOLS, __dirname))
+  return [message.includes("wrong shape"), message.includes("no mock provided")]
+}
+
+// A local tool module is read once per call, with one std::read, however
+// many attempts the draft takes. Here the first draft fails the check.
+node localModuleReadOnce(): Json {
+  const drafted = runDraft([searchNotes], __dirname + "/fixtures/tools")
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [drafted.value.attempts, getMutable("effects", [])]
+}

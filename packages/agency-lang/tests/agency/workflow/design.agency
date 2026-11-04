@@ -1,0 +1,286 @@
+// designWorkflow: each draft that passes the check is shown in a
+// std::workflow::review interrupt; accept saves it through writeWorkflow,
+// feedback or a failed edit draws another draft, and a passing edit is
+// saved with no model call. Each node's model replies are the llmMocks in
+// design.test.json, so a model call a node does not expect fails it.
+// Output goes under test-output/design/, one directory per node.
+import { designWorkflow, writeWorkflow, Workflow, WorkflowEntry } from "std::workflow"
+import { add, multiply } from "std::math"
+import { mkdir, remove } from "std::fs"
+import { exists } from "std::shell"
+import { Json } from "std::validation"
+import { saveElsewhere } from "./fixtures/saveElsewhere.js"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+const TOOLS = [add, multiply]
+const REQUEST = "Add two numbers and double the sum."
+
+def outDir(node: string): string {
+  const dir = "${__dirname}/test-output/design/${node}"
+  remove(dir) with approve
+  mkdir(dir) with approve
+  return dir
+}
+
+/** What one designWorkflow call raised, with its outcome. */
+type DesignRun = {
+  outcome: Result<WorkflowEntry>;
+  reviews: Json[];
+  saves: number
+}
+
+// Answers each review with the next scripted answer: null rejects, "bare"
+// is a valueless approve(), "saveThenAccept" saves a doubleSum file the way
+// another process would and then accepts, anything else is passed to
+// approve(). A false
+// `approveSave` rejects the save. Every other interrupt is approved.
+def runDesign(dir: string, answers: any[], maxRounds: number = 3, approveSave: boolean = true): DesignRun {
+  const reviews: Json[] = []
+  let saves = 0
+  let outcome: Result<WorkflowEntry> = failure("not run")
+  handle {
+    outcome = designWorkflow(REQUEST, TOOLS, dir, maxRounds)
+  } with (intr) {
+    return match(intr.effect) {
+      "std::workflow::review" => {
+        const answer = answers[reviews.length]
+        reviews.push(intr.data)
+        if (answer == null) {
+          return reject("cancelled by the test")
+        }
+        if (answer == "bare") {
+          return approve()
+        }
+        if (answer == "saveThenAccept") {
+          saveElsewhere(dir, "doubleSum", "saved during the review")
+          return approve("accept")
+        }
+        return approve(answer)
+      }
+      "std::workflow::save" => {
+        saves = saves + 1
+        if (!approveSave) {
+          return reject("not saved")
+        }
+        return approve()
+      }
+      _ => approve()
+    }
+  }
+  return { outcome: outcome, reviews: reviews, saves: saves }
+}
+
+def savedName(ran: DesignRun): string {
+  if (ran.outcome is failure(err)) {
+    return "failed: ${err}"
+  }
+  return ran.outcome.value.name
+}
+
+/** Add two numbers and double the sum, under `name`. */
+def doubleSum(name: string, tool: string = "add"): Workflow {
+  return {
+    format: 1,
+    name: name,
+    description: "Add two numbers and double the sum.",
+    inputs: "{ a: number; b: number }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: tool, args: { a: { "$ref": "inputs.a" }, b: { "$ref": "inputs.b" } } },
+      { id: "doubled", kind: "tool", module: "std::math", tool: "multiply", args: { a: { "$ref": "steps.sum" }, b: 2 } }
+    ],
+    result: { "$ref": "steps.doubled" }
+  }
+}
+
+node acceptSaves(): Json {
+  const dir = outDir("accept")
+  const ran = runDesign(dir, ["accept"])
+  const saved = read("workflows/doubleSum.json", dir) with approve
+  return [
+    savedName(ran),
+    ran.reviews.length,
+    ran.saves,
+    exists("workflows/doubleSum.json", dir),
+    (saved catch "").includes("\"limits\"")
+  ]
+}
+
+node bareApprovalAccepts(): Json {
+  const dir = outDir("bare")
+  const ran = runDesign(dir, ["bare"])
+  return [savedName(ran), ran.saves]
+}
+
+// Typed at a prompt: capitals and spaces still accept, with no second draft.
+node acceptIgnoresCaseAndSpaces(): Json {
+  const dir = outDir("acceptCase")
+  const ran = runDesign(dir, [" Accept "])
+  return [savedName(ran), ran.reviews.length]
+}
+
+// The scripted handler gives feedback; an outer handler approves every
+// interrupt with no value, as `agency run --approve std::workflow::review`
+// does. The feedback survives, so the second draft is the one saved.
+node outerApprovalKeepsFeedback(): Json {
+  const dir = outDir("outerApprove")
+  let name = "not run"
+  let reviews = 0
+  handle {
+    const ran = runDesign(dir, ["Call it sumTwice.", "accept"])
+    name = savedName(ran)
+    reviews = ran.reviews.length
+  } with (intr) {
+    return approve()
+  }
+  return [name, reviews]
+}
+
+node reviewPayload(): Json {
+  const dir = outDir("payload")
+  const ran = runDesign(dir, ["accept"])
+  const shown = ran.reviews[0]
+  return [shown.name, shown.workflow.steps.length, shown.previous, shown.warnings, shown.attempts, shown.round, shown.maxRounds]
+}
+
+// The second draft is what lands, and its review shows the first as
+// `previous`.
+node feedbackRedrafts(): Json {
+  const dir = outDir("feedback")
+  const ran = runDesign(dir, ["Call it sumTwice.", "accept"])
+  return [savedName(ran), ran.reviews.length, ran.reviews[1].previous.name, ran.reviews[1].round]
+}
+
+// One mock: a second model call would fail the node.
+node editedWorkflowSaves(): Json {
+  const dir = outDir("edited")
+  const ran = runDesign(dir, [doubleSum("editedSum")])
+  return [savedName(ran), ran.reviews.length, ran.saves]
+}
+
+// The edit calls `subtract`, which is not in the tool list, so the model
+// drafts again and its draft is what lands.
+node failedEditIsRedrafted(): Json {
+  const dir = outDir("failedEdit")
+  const ran = runDesign(dir, [doubleSum("editedSum", "subtract"), "accept"])
+  return [savedName(ran), ran.reviews.length]
+}
+
+// The first draft takes the name of a saved workflow, so the model drafts
+// again without asking anyone, and the saved one is left as it was.
+node takenNameIsRedrafted(): Json {
+  const dir = outDir("taken")
+  const kept: Workflow = { ...doubleSum("doubleSum"), description: "The one already saved." }
+  writeWorkflow(kept, TOOLS, dir) with approve
+  const ran = runDesign(dir, ["accept"])
+  const original = read("workflows/doubleSum.json", dir) with approve
+  return [savedName(ran), ran.reviews.length, ran.reviews[0].attempts, (original catch "").includes("The one already saved.")]
+}
+
+// Every draft takes the saved name and calls `subtract`, which is not in
+// the tool list. The failure after six attempts names both problems, so
+// each attempt heard about both at once.
+node takenNameWithOtherProblems(): Json {
+  const dir = outDir("takenAndBad")
+  writeWorkflow(doubleSum("doubleSum"), TOOLS, dir) with approve
+  const message = savedName(runDesign(dir, ["accept"]))
+  return [message.includes("is already saved"), message.includes("is not among the tools")]
+}
+
+// A saved `DoubleSum` takes `doubleSum` too: on a case-insensitive disk the
+// two are one file.
+node takenNameIgnoresCase(): Json {
+  const dir = outDir("takenCase")
+  writeWorkflow(doubleSum("DoubleSum"), TOOLS, dir) with approve
+  const ran = runDesign(dir, ["accept"])
+  return [savedName(ran), ran.reviews.length, ran.reviews[0].attempts]
+}
+
+// A doubleSum saved while the first draft waits for review is not replaced:
+// accepting sends the draft back, and the second round's draft is saved.
+node savedDuringReviewIsKept(): Json {
+  const dir = outDir("savedDuringReview")
+  const ran = runDesign(dir, ["saveThenAccept", "accept"])
+  const kept = read("workflows/doubleSum.json", dir) with approve
+  return [savedName(ran), ran.reviews.length, ran.reviews[1].round, kept catch ""]
+}
+
+// The edit has no `description`, so it fails `Workflow!`. That costs a
+// round, as any failed edit does, and the model's next draft is saved.
+node wrongShapeEditIsRedrafted(): Json {
+  const dir = outDir("wrongShapeEdit")
+  const noDescription = { format: 1, name: "editedSum", inputs: "{ a: number }", steps: [] }
+  const ran = runDesign(dir, [noDescription, "accept"])
+  return [savedName(ran), ran.reviews.length]
+}
+
+// Real pauses. The handler records each review's payload and passes every
+// interrupt on, so the review reaches the test runner, which answers it
+// from design.test.json's interruptHandlers after a checkpoint, the way a
+// person or a host would. Each node has as many model replies as drafts it
+// expects, so a resume that ran the model call again would fail with "no
+// mock provided".
+def designAcrossPauses(dir: string): Result<WorkflowEntry> {
+  setMutable("reviews", [])
+  handle {
+    return designWorkflow(REQUEST, TOOLS, dir)
+  } with (intr) {
+    if (intr.effect == "std::workflow::review") {
+      getMutable("reviews", []).push(intr.data)
+    }
+    return propagate()
+  }
+}
+
+node acceptAcrossResume(): Json {
+  const dir = outDir("resumeAccept")
+  const saved = designAcrossPauses(dir)
+  if (saved is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [saved.value.name, getMutable("reviews", []).length, exists("workflows/doubleSum.json", dir)]
+}
+
+// A bare approval given after a pause reaches the call as true, not null.
+node bareApprovalAcrossResume(): Json {
+  const dir = outDir("resumeBare")
+  const saved = designAcrossPauses(dir)
+  if (saved is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [saved.value.name, getMutable("reviews", []).length, exists("workflows/doubleSum.json", dir)]
+}
+
+node feedbackAcrossResume(): Json {
+  const dir = outDir("resumeFeedback")
+  const saved = designAcrossPauses(dir)
+  if (saved is failure(err)) {
+    return "failed: ${err}"
+  }
+  const reviews = getMutable("reviews", [])
+  return [saved.value.name, reviews.length, reviews[1].previous.name, reviews[1].round]
+}
+
+node rejectAtReviewWritesNothing(): Json {
+  const dir = outDir("rejectReview")
+  const ran = runDesign(dir, [null])
+  return [isFailure(ran.outcome), ran.saves, exists("workflows/doubleSum.json", dir)]
+}
+
+node rejectAtSaveWritesNothing(): Json {
+  const dir = outDir("rejectSave")
+  const ran = runDesign(dir, ["accept"], 3, false)
+  return [isFailure(ran.outcome), ran.saves, exists("workflows/doubleSum.json", dir)]
+}
+
+node lastRoundFeedbackFails(): Json {
+  const dir = outDir("lastRound")
+  const ran = runDesign(dir, ["Make it shorter."], 1)
+  const message = savedName(ran)
+  return [message.includes("no draft was accepted in 1 rounds"), message.includes("Make it shorter."), ran.reviews.length]
+}
+
+node blankFeedbackIsRefused(): Json {
+  const dir = outDir("blank")
+  const ran = runDesign(dir, ["   "])
+  return [savedName(ran).includes("cannot be blank"), ran.saves]
+}

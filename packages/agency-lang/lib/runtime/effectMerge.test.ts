@@ -51,6 +51,22 @@ describe("mergeFor(std::guard) — approvals accumulate", () => {
   });
 });
 
+describe("mergeFor(std::workflow::review) — a given answer survives a valueless outer approval", () => {
+  const merge = mergeFor("std::workflow::review");
+
+  it("keeps the inner answer when the outer approval has no value", () => {
+    expect(merge("make the precision an input", undefined)).toBe("make the precision an input");
+  });
+
+  it("lets an outer approval with a value win", () => {
+    expect(merge("make the precision an input", "accept")).toBe("accept");
+  });
+
+  it("is the same function on the IPC path", () => {
+    expect(mergeForIpc("std::workflow::review")).toBe(merge);
+  });
+});
+
 describe("the chain merges approvals through the effect table", () => {
   const makeCtx = (handlers: any[]): RuntimeContext<any> => {
     const ctx = new RuntimeContext({

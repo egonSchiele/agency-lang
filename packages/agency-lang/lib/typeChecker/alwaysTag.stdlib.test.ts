@@ -179,6 +179,9 @@ const EXPECTED: Record<string, string[]> = {
   // that name, so "always" means this workflow in this directory.
   "std::workflow::scan": ["dir/**"],
   "std::workflow::save": ["name", "dir/**"],
+  // A review of a designed workflow, like the skills and toolbox reviews:
+  // nothing is pinned.
+  "std::workflow::review": [],
   "std::memory::enableMemory": [],
   "std::memory::disableMemory": [],
   "std::memory::remember": [],

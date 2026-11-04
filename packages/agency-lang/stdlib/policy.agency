@@ -27,6 +27,7 @@ import {
   _missingPolicyRules,
   _appendPolicyRules,
  } from "agency-lang/stdlib-lib/policy.js"
+import { describeProblem } from "agency-lang/stdlib-lib/workflow/index.js"
 
 
 /** @module
@@ -662,12 +663,15 @@ def stripControlChars(text: string): string {
 
 // A change to code, as a header line and a syntax-highlighted unified
 // diff. `before` is "" for something being created, which reads as a
-// diff of all insertions.
+// diff of all insertions. Pass `ignoreWhitespace: false` for data, where
+// a space inside a string is a real change: `"annual  report.txt"` and
+// `"annual report.txt"` name different files.
 def renderSourceDiff(
   header: string,
   before: string,
   after: string,
   language: string,
+  ignoreWhitespace: boolean = true,
 ): string {
   let lines = []
   lines.push(color.yellow("⏺ ${stripControlChars(header)}"))
@@ -679,7 +683,7 @@ def renderSourceDiff(
     color: true,
     lineNumbers: true,
     context: 3,
-    ignoreWhitespace: true,
+    ignoreWhitespace: ignoreWhitespace,
   ),
   )
   return lines.join("\n")
@@ -695,6 +699,26 @@ def renderSkillDraft(data: any): string {
   const description = stripControlChars(data.description)
   const body = stripControlChars(data.body)
   return [color.yellow("⏺ Skill: ${name}"), description, "", body].join("\n")
+}
+
+// A workflow draft: in full as JSON on the first round, then as a diff
+// against the draft the previous round showed. The check's warnings go
+// under it, one per line. The model wrote the draft, so it is stripped the
+// way a tool's source is.
+def renderWorkflowDraft(data: any): string {
+  const header = "Workflow: ${data.name} (round ${data.round} of ${data.maxRounds})"
+  const current = JSON.stringify(data.workflow, null, 2)
+  let shown = ""
+  if (data.previous == null) {
+    shown = [color.yellow("⏺ ${stripControlChars(header)}"), highlight(stripControlChars(current), language: "json")].join("\n")
+  } else {
+    shown = renderSourceDiff(header, JSON.stringify(data.previous, null, 2), current, "json", false)
+  }
+  if (data.warnings.length == 0) {
+    return shown
+  }
+  const warnings = map(data.warnings, \warning -> "  - ${stripControlChars(describeProblem(warning))}")
+  return [shown, "", "Warnings:", ...warnings].join("\n")
 }
 
 /** The fields of a `std::toolbox::review` payload that say what the
@@ -767,6 +791,9 @@ def renderInterruptDiff(intr: any): string {
   }
   if (intr.effect == "std::skills::review") {
     return renderSkillDraft(intr.data)
+  }
+  if (intr.effect == "std::workflow::review") {
+    return renderWorkflowDraft(intr.data)
   }
   if (intr.effect == "std::toolbox::review") {
     const changed = renderSourceDiff(
@@ -841,11 +868,14 @@ def prettyPrintInterruptData(data: any, effect: string = "", cols: number = 0): 
 // its content. An edit drops its source and `edits`, the raw op list the
 // diff already shows. A tool review drops its source and its findings,
 // printed under its diff. A skill review drops the draft it prints in full.
+// A workflow review drops the draft, the previous draft, and the warnings,
+// which it prints as JSON or a diff.
 static const PROMPT_HIDDEN_FIELDS: Record<string, string[]> = {
   "std::write": ["content"],
   "std::edit": ["before", "after", "edits"],
   "std::toolbox::review": ["source", "previous", "notes", "blocking", "unresolved", "resumed"],
-  "std::skills::review": ["description", "body"]
+  "std::skills::review": ["description", "body"],
+  "std::workflow::review": ["workflow", "previous", "warnings"]
 }
 
 // Checked with `keys` so an effect named like an Object.prototype

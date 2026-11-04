@@ -16,7 +16,7 @@
   "sourceShownOnce": true,
   "autoApprovedHeader": true,
   "autoApprovedShowsSource": true,
-  "promptsDrawn": 7,
+  "promptsDrawn": 10,
   "controlCharsStripped": true,
   "carriageReturnStripped": true,
   "bidiOverrideStripped": true,
@@ -32,5 +32,10 @@
   "skillHeader": true,
   "skillShowsDescription": true,
   "skillBodyShownOnce": true,
-  "skillBodyAsWritten": true
+  "skillBodyAsWritten": true,
+  "workflowHeader": true,
+  "workflowFirstRoundShown": true,
+  "workflowSecondRoundShown": true,
+  "workflowWarningShownOnce": true,
+  "workflowSpaceChangeShown": true
 }

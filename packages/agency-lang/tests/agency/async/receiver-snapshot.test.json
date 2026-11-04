@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A method call's receiver is read at the async line",
+      "input": "",
+      "expectedOutput": "\"first! second\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

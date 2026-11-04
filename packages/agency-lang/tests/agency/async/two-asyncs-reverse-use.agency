@@ -1,0 +1,27 @@
+// Two async calls, used in the reverse order. The second call lowers
+// inside the first call's arm, and joins at its own first use, so `quick`
+// is used as soon as it is ready while `slow` is still running. Then `slow`
+// joins at its use.
+import { reset, record, logText } from "./order-log.js"
+
+def slowCall(): string {
+  sleep(400)
+  record("slow end")
+  return "slow"
+}
+
+def quickCall(): string {
+  sleep(100)
+  record("quick end")
+  return "quick"
+}
+
+node main() {
+  reset()
+  let slow = async slowCall()
+  let quick = async quickCall()
+  record("main")
+  record("use ${quick}")
+  record("use ${slow}")
+  return logText()
+}

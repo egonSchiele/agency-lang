@@ -1106,3 +1106,89 @@ describe("runBatch and the decision scope", () => {
     expect(settled).toEqual(["k0", "k2", "k1"]);
   });
 });
+
+describe("runBatch — per-child shareThreads", () => {
+  // The main arm of an `async` block sets `shareThreads` on its child so
+  // its `llm()` calls write to the conversation. Its siblings keep the
+  // default: a subthread of their own.
+  it("gives a shareThreads child the parent's active stack and its siblings a new subthread", async () => {
+    const { ctx } = makeCtx();
+    ctx.statelogClient.threadCreated = () => {};
+    const { parentStack, parentFrame } = makeParent();
+    const parentThreads = ThreadStore.withDefaultActive();
+    const parentActiveId = parentThreads.activeId();
+    const seen: Record<string, { activeStack: string[]; activeId: string | undefined }> = {};
+    const result = await runInTestContext(ctx, parentStack, parentThreads, (run) =>
+      runBatch<number>({
+        run,
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        children: [
+          {
+            key: "side",
+            invoke: async (branchRun) => {
+              seen.side = {
+                activeStack: branchRun.threads.activeStack,
+                activeId: branchRun.threads.activeId(),
+              };
+              return 0;
+            },
+          },
+          {
+            key: "main",
+            shareThreads: true,
+            invoke: async (branchRun) => {
+              seen.main = {
+                activeStack: branchRun.threads.activeStack,
+                activeId: branchRun.threads.activeId(),
+              };
+              return 1;
+            },
+          },
+        ],
+      }),
+    );
+    expect(result).toEqual({ kind: "values", values: [0, 1] });
+    // The shared child sees the parent's own active stack, by reference,
+    // so a push or pop it makes is the parent's.
+    expect(seen.main.activeStack).toBe(parentThreads.activeStack);
+    expect(seen.main.activeId).toBe(parentActiveId);
+    // The sibling writes to a new subthread whose parent is the parent's
+    // active thread.
+    expect(seen.side.activeStack).not.toBe(parentThreads.activeStack);
+    expect(seen.side.activeId).not.toBe(parentActiveId);
+    expect(parentThreads.get(seen.side.activeId!).parentId).toBe(parentActiveId);
+  });
+
+  it("gives every child a subthread when none sets shareThreads", async () => {
+    const { ctx } = makeCtx();
+    ctx.statelogClient.threadCreated = () => {};
+    const { parentStack, parentFrame } = makeParent();
+    const parentThreads = ThreadStore.withDefaultActive();
+    const parentActiveId = parentThreads.activeId();
+    const ids: (string | undefined)[] = [];
+    await runInTestContext(ctx, parentStack, parentThreads, (run) =>
+      runBatch<number>({
+        run,
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        children: ["a", "b"].map((key) => ({
+          key,
+          invoke: async (branchRun) => {
+            ids.push(branchRun.threads.activeId());
+            return 0;
+          },
+        })),
+      }),
+    );
+    expect(ids).toHaveLength(2);
+    expect(ids).not.toContain(parentActiveId);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+});

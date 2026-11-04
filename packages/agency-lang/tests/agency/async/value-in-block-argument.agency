@@ -1,0 +1,21 @@
+// The first mention of `value` is inside a block argument passed to `map`.
+// The join is before that statement, so the block sees the value, after
+// "side end".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+node main() {
+  reset()
+  let value = async slowSide()
+  record("main")
+  const labels = map([1, 2]) as item {
+    return "${value} ${item}"
+  }
+  record("use: ${labels.join(" and ")}")
+  return logText()
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An unused value joins at the end of the body: it overlaps the rest and finishes before the function returns",
+      "input": "",
+      "expectedOutput": "\"main, side end, after work: done\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

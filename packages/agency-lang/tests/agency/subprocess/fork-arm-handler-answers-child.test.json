@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A handler inside a fork arm answers the forwarded interrupt of a subprocess started from that arm, and not a sibling arm's interrupt",
+      "input": "",
+      "expectedOutput": "[\"child: child approved\",\"plain: rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject", "expectedMessage": "plain asks" }]
+    }
+  ]
+}

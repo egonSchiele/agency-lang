@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An interrupt in the async call surfaces, is approved, and the function finishes with both values",
+      "input": "",
+      "expectedOutput": "\"main value + side value\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

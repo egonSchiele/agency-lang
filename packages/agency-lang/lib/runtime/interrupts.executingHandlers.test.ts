@@ -19,7 +19,9 @@ const makeCtx = (): RuntimeContext<any> =>
 describe("stack-carried handler execution mark", () => {
   it("throws when handlers are registered but no stack is passed", async () => {
     const ctx = makeCtx();
-    ctx.handlers = [{ fn: async () => ({ type: "approve" as const }), liveGuardIds: [] }];
+    ctx.handlers = [
+      { fn: async () => ({ type: "approve" as const }), liveGuardIds: [], stack: null },
+    ];
     // A run always carries a stack, so the missing stack is handed to the
     // chain walk directly.
     await expect(
@@ -45,6 +47,7 @@ describe("stack-carried handler execution mark", () => {
           return { type: "approve" as const };
         },
         liveGuardIds: [],
+        stack: null,
       },
     ];
     await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "std::x", "m", {}, "o"));
@@ -69,6 +72,7 @@ describe("stack-carried handler execution mark", () => {
         return { type: "approve" as const, value: verdict };
       },
       liveGuardIds: [],
+      stack: null,
     };
     const outer: HandlerEntry = {
       fn: async (_run: unknown, intr: any) => {
@@ -76,6 +80,7 @@ describe("stack-carried handler execution mark", () => {
         return { type: "approve" as const };
       },
       liveGuardIds: [],
+      stack: null,
     };
     ctx.handlers = [outer, inner]; // chain walks last-registered first, so `inner` runs first
     await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
@@ -96,6 +101,7 @@ describe("stack-carried handler execution mark", () => {
           return { type: "approve" as const };
         },
         liveGuardIds: [],
+        stack: null,
       },
     ];
     await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
@@ -119,6 +125,7 @@ describe("stack-carried handler execution mark", () => {
           return { type: "approve" as const }; // handler returns while the straggler still runs
         },
         liveGuardIds: [],
+        stack: null,
       },
     ];
     await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
@@ -138,7 +145,9 @@ describe("stack-carried handler execution mark", () => {
         }, 30),
       ),
     );
-    ctx.handlers = [{ fn: async () => ({ type: "approve" as const }), liveGuardIds: [] }];
+    ctx.handlers = [
+      { fn: async () => ({ type: "approve" as const }), liveGuardIds: [], stack: null },
+    ];
     await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
     expect(preSettled).toBe(false); // the deadlock-shaped promise was left alone
   });

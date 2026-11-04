@@ -1,0 +1,25 @@
+// The side call wraps itself in `with approve` and stays inside it (the
+// sleep) while the main arm raises its own interrupt with no handler around
+// it. The side call's approval must not answer it: the interrupt reaches
+// the host, which rejects it here, so the main arm sees a failure. Before
+// handlers were scoped to their branch, the side's approve answered it.
+def quiet(): string {
+  handle {
+    sleep(300)
+    return "side done"
+  } with approve
+}
+
+def risky(): string {
+  return interrupt("main asks")
+  return "main approved"
+}
+
+node main() {
+  let fromSide = async quiet()
+  const fromMain = risky()
+  if (isFailure(fromMain)) {
+    return "main rejected, side: ${fromSide}"
+  }
+  return "main: ${fromMain}, side: ${fromSide}"
+}

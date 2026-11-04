@@ -1,0 +1,5 @@
+{
+  "rejectPolicy": ["own: rejected", "bare: rejected"],
+  "approvePolicy": ["own: approved", "bare: approved"],
+  "noPolicy": { "interrupted": ["arm bare asks"] }
+}

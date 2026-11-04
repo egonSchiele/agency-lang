@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A JavaScript side call that throws while the main arm waits on an interrupt fails the node; the interrupt never reaches the host (pinned)",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"args\":null,\"checkpoint\":null,\"data\":{},\"destructiveRan\":false,\"error\":\"side helper blew up\",\"functionName\":\"main\",\"neverStarted\":false,\"rejected\":false,\"skippedFunctions\":[],\"success\":false}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

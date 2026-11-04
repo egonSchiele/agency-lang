@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A shadowing block parameter still counts as a mention, and each name keeps its own value",
+      "input": "",
+      "expectedOutput": "\"main, side end, mapped: 10 20, binding: side value\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

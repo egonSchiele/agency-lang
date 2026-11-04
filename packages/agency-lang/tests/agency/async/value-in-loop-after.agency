@@ -1,0 +1,19 @@
+// The first mention of `value` is inside a later `for` loop body. The join
+// is before the loop, so every iteration sees the value, after "side end".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+node main() {
+  reset()
+  let value = async slowSide()
+  record("main")
+  for (i in [1, 2]) {
+    record("${value} ${i}")
+  }
+  return logText()
+}

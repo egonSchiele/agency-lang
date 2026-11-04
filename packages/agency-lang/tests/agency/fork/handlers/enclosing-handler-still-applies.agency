@@ -1,0 +1,24 @@
+// A handler around the whole fork answers the interrupts raised in both
+// arms: branch scoping must not cut off a handler registered above the
+// branches. The handler approves, and the test file gives the host no
+// answers. So if the enclosing handler were skipped, the interrupts would
+// reach the host, the node's output would be the interrupt list, and the
+// exact match would fail.
+def risky(tag: string): string {
+  return interrupt("arm ${tag} asks")
+  return "approved"
+}
+
+node main() {
+  let results = []
+  handle {
+    results = fork(["a", "b"]) as tag {
+      const answer = risky(tag)
+      if (isFailure(answer)) {
+        return "${tag}: rejected"
+      }
+      return "${tag}: ${answer}"
+    }
+  } with approve
+  return results
+}

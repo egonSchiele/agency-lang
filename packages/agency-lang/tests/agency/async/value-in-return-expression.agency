@@ -1,0 +1,23 @@
+// The first use of `value` is the `return` expression, so the join is just
+// before it: "main" lands before "side end", and the returned text holds
+// the side call's value.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side value"
+}
+
+def work(): string {
+  let value = async slowSide()
+  record("main")
+  return "got ${value}"
+}
+
+node main() {
+  reset()
+  const result = work()
+  record(result)
+  return logText()
+}

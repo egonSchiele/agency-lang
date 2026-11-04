@@ -1,0 +1,29 @@
+// A function the model calls as a tool uses `async`. The mocked model calls
+// `lookup` once, then answers. Inside the tool, "tool main" overlaps the
+// side call, and the tool's result is built from the side call's value
+// after "side end". The model's answer comes last.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(topic: string): string {
+  sleep(200)
+  record("side end")
+  return "notes on ${topic}"
+}
+
+def lookup(topic: string): string {
+  """
+  Look up a topic.
+  """
+  let notes = async slowSide(topic)
+  record("tool main")
+  const out = "${notes} found"
+  record(out)
+  return out
+}
+
+node main() {
+  reset()
+  const answer = llm("find cats", { tools: [lookup] })
+  record("answer: ${answer}")
+  return logText()
+}

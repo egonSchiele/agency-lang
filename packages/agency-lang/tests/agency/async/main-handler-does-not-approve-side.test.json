@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A with-approve around the main arm does not approve the side call's interrupt; the host's rejection reaches it",
+      "input": "",
+      "expectedOutput": "\"side rejected, main: main done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject", "expectedMessage": "side asks" }]
+    }
+  ]
+}

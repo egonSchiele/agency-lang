@@ -1,0 +1,18 @@
+// A `break` nested inside an `if` in the arm of an `async` call, in a loop
+// body, cannot move the join, and a fork branch cannot leave the loop. The
+// compiler refuses it with AG1033.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+node main() {
+  for (i in [1, 2]) {
+    async slowSide()
+    if (i == 1) {
+      break
+    }
+    print(i)
+  }
+  return "end"
+}

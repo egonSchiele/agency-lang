@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A mention nested inside two ifs is the join",
+      "input": "",
+      "expectedOutput": "\"main, side end, use: side value\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1029: `async slowSide()` cannot be used inside a callback body",
+  "description": "agency compile refuses async inside a callback body"
+}

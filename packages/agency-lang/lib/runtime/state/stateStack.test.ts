@@ -915,3 +915,50 @@ describe("turn marks (endTurn / handBack)", () => {
     expect(restored.drainTurnMarks()).toEqual({ endTurn: true, scope: "turn", message: "m" });
   });
 });
+
+describe("StateStack.isWithin", () => {
+  // root -> a -> a1, and root -> b. Branch stacks link to the stack they
+  // branched from through `parent`, as runBatch sets it.
+  function tree() {
+    const root = new StateStack();
+    const a = new StateStack();
+    a.parent = { stack: root, key: "fork_0" };
+    const a1 = new StateStack();
+    a1.parent = { stack: a, key: "fork_0" };
+    const b = new StateStack();
+    b.parent = { stack: root, key: "fork_1" };
+    return { root, a, a1, b };
+  }
+
+  it("is true for the stack itself", () => {
+    const { root, a } = tree();
+    expect(root.isWithin(root)).toBe(true);
+    expect(a.isWithin(a)).toBe(true);
+  });
+
+  it("is true for a direct branch and a branch of a branch", () => {
+    const { root, a, a1 } = tree();
+    expect(a.isWithin(root)).toBe(true);
+    expect(a1.isWithin(a)).toBe(true);
+    expect(a1.isWithin(root)).toBe(true);
+  });
+
+  it("is false for an ancestor asked about its branch", () => {
+    const { root, a, a1 } = tree();
+    expect(root.isWithin(a)).toBe(false);
+    expect(a.isWithin(a1)).toBe(false);
+  });
+
+  it("is false for siblings and their branches", () => {
+    const { a, a1, b } = tree();
+    expect(a.isWithin(b)).toBe(false);
+    expect(b.isWithin(a)).toBe(false);
+    expect(a1.isWithin(b)).toBe(false);
+    expect(b.isWithin(a1)).toBe(false);
+  });
+
+  it("is false for an unrelated root", () => {
+    const { root } = tree();
+    expect(root.isWithin(new StateStack())).toBe(false);
+  });
+});

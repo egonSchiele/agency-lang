@@ -1,0 +1,16 @@
+// The side call raises an interrupt while the main arm runs. The user
+// approves, the side call finishes, and the main arm's work is not redone.
+def side(): string {
+  return interrupt("side asks")
+  return "side value"
+}
+
+def mainWork(): string {
+  return "main value"
+}
+
+node main() {
+  let fromSide = async side()
+  const fromMain = mainWork()
+  return "${fromMain} + ${fromSide}"
+}

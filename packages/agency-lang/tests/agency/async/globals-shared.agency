@@ -1,0 +1,25 @@
+// Both arms push onto one global list. The side call waits 100ms first,
+// so the order is fixed. After the join the list holds both entries, and
+// the main arm, which reads the list after its own push and a longer
+// wait, already sees the side call's entry. Under fork's usual copy of
+// the globals per branch, each arm would only see its own push.
+let log: string[] = []
+
+def side(): string {
+  sleep(100)
+  log.push("side")
+  return "side value"
+}
+
+def mainWork(): string[] {
+  log.push("main")
+  sleep(300)
+  return log.slice(0)
+}
+
+node main() {
+  let fromSide = async side()
+  const seenByMain = mainWork()
+  const joined = fromSide
+  return { seenByMain: seenByMain, afterJoin: log, side: joined }
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1032: `async` must be followed by a call, and `name` is not a call",
+  "description": "agency compile refuses async on something that is not a call"
+}

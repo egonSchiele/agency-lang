@@ -1,0 +1,15 @@
+// `?` on the async call itself is refused with AG1031: unwrap the value
+// after the join instead.
+def mayFail(): Result<string> {
+  return failure("no")
+}
+
+def work(): Result<string> {
+  let value = async mayFail()?
+  print("main")
+  return success(value)
+}
+
+node main() {
+  return work()
+}

@@ -1,0 +1,14 @@
+// `async` inside a callback body is refused with AG1029.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+callback("onNodeStart") as data {
+  async slowSide()
+  print("started")
+}
+
+node main() {
+  return "end"
+}

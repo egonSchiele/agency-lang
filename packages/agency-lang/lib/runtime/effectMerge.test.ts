@@ -82,7 +82,7 @@ describe("the chain merges approvals through the effect table", () => {
     });
     // The test's handlers take only the interrupt. `pushHandler` wraps each
     // into the shape the chain calls, as it does for a handler from TypeScript.
-    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, [], null));
     ctx.runId = "test-run";
     return ctx;
   };

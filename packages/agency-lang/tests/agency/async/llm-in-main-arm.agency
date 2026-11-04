@@ -1,0 +1,23 @@
+// The main arm calls llm() while the side call runs. The main arm keeps the
+// conversation thread, so after the join a second llm() in the same node
+// sends the main arm's reply along with its own prompt. The thread read at
+// the end holds both exchanges in order: the main arm's prompt and reply,
+// then the follow-up prompt and reply. If the main arm had written to a
+// copy of the thread, its prompt and reply would be missing.
+import { getThread, currentThreadId } from "std::thread"
+
+def side(): string {
+  return "side value"
+}
+
+node main() {
+  let fromSide = async side()
+  const reply: string = llm("reply to the user")
+  const joined = "${reply} / ${fromSide}"
+  const followUp: string = llm("follow up")
+  const history = getThread(currentThreadId())
+  if (isFailure(history)) {
+    return "no thread"
+  }
+  return { joined: joined, followUp: followUp, messages: history.value }
+}

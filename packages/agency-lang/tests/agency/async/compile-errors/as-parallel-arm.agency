@@ -1,0 +1,14 @@
+// `async` as a direct arm of a `parallel` block is refused with AG1030: the
+// arms already run beside each other.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+node main() {
+  parallel {
+    let value = async slowSide()
+    const other = slowSide()
+  }
+  return value
+}

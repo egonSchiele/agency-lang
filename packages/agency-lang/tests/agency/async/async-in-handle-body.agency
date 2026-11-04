@@ -1,0 +1,29 @@
+// An `async` call inside a `handle` body. The side call raises an
+// interrupt, and the handler around the block rejects it, so the value is
+// a failure. The test has no interrupt handlers, so if the handler did not
+// answer the side call's interrupt, the interrupt would reach the host and
+// the test would fail.
+import { reset, record, logText } from "./order-log.js"
+
+def side(): string {
+  return interrupt("side asks")
+  return "side approved"
+}
+
+node main() {
+  reset()
+  let outcome = "unset"
+  handle {
+    let value = async side()
+    record("main")
+    if (isFailure(value)) {
+      outcome = "side rejected"
+    } else {
+      outcome = "side: ${value}"
+    }
+  } with (intr) {
+    return reject()
+  }
+  record(outcome)
+  return logText()
+}

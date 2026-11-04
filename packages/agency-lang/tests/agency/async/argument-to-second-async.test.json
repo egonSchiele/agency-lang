@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An async value used as an argument to a second async call joins before that call",
+      "input": "",
+      "expectedOutput": "\"main 1, first end, main 2, second end, use: two after one\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

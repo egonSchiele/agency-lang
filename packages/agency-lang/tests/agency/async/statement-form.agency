@@ -1,0 +1,21 @@
+// `async slowSide()` with no binding joins at the end of the block. The
+// function has no return, so the block end is the function end: "main"
+// lands before "side end", and "side end" before "after work".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide() {
+  sleep(200)
+  record("side end")
+}
+
+def work() {
+  async slowSide()
+  record("main")
+}
+
+node main() {
+  reset()
+  work()
+  record("after work")
+  return logText()
+}

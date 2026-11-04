@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "The main arm interrupts after the side call finished; on resume the side call is not run again",
+      "input": "",
+      "expectedOutput": "{\"main\":\"main approved\",\"side\":\"side value\",\"sideRuns\":1}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "main asks" }]
+    }
+  ]
+}

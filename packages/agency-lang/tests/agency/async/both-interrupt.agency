@@ -1,0 +1,23 @@
+// Both arms raise an interrupt. The host gets both, and answers each one:
+// it approves the side call's and rejects the main arm's. The result shows
+// each answer reached the arm that asked: the side call is approved and
+// the main arm sees a failure. If the answers were swapped or one was
+// lost, the result would differ.
+def side(): string {
+  return interrupt("side asks")
+  return "side approved"
+}
+
+def risky(): string {
+  return interrupt("main asks")
+  return "main approved"
+}
+
+node main() {
+  let fromSide = async side()
+  const fromMain = risky()
+  if (isFailure(fromMain)) {
+    return "main rejected, side: ${fromSide}"
+  }
+  return "main: ${fromMain}, side: ${fromSide}"
+}

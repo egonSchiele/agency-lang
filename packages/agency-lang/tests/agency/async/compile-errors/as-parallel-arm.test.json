@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1030: `async slowSide()` cannot be an arm of a `parallel` block",
+  "description": "agency compile refuses async as a direct arm of a parallel block"
+}

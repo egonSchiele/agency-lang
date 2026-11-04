@@ -1,0 +1,23 @@
+// The side call makes its own llm() call. It works on a copy of the
+// conversation, so neither its prompt nor its reply appears on the
+// conversation thread after the join. The main arm's llm() call goes
+// first (the side call waits 100ms), so the mocks are used in a fixed
+// order: the first answers the main arm, the second the side call.
+import { getThread, currentThreadId } from "std::thread"
+
+def side(): string {
+  sleep(100)
+  const answer: string = llm("side prompt")
+  return answer
+}
+
+node main() {
+  let fromSide = async side()
+  const reply: string = llm("main prompt")
+  const joined = "${reply} / ${fromSide}"
+  const history = getThread(currentThreadId())
+  if (isFailure(history)) {
+    return "no thread"
+  }
+  return { joined: joined, messages: history.value }
+}

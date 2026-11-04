@@ -1,0 +1,27 @@
+// Two async calls, used in the order they started. The second call lowers
+// inside the first call's arm, and that arm ends at the first use of
+// `first`. `second` is not used inside that arm, so its join is the end of
+// the arm: both calls finish before `use first`. This pins that rule.
+import { reset, record, logText } from "./order-log.js"
+
+def firstCall(): string {
+  sleep(100)
+  record("first end")
+  return "first"
+}
+
+def secondCall(): string {
+  sleep(300)
+  record("second end")
+  return "second"
+}
+
+node main() {
+  reset()
+  let first = async firstCall()
+  let second = async secondCall()
+  record("main")
+  record("use ${first}")
+  record("use ${second}")
+  return logText()
+}

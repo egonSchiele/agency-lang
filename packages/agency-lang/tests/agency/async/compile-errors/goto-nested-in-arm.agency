@@ -1,0 +1,20 @@
+// A `goto` nested inside an `if` in the arm of an `async` call cannot move
+// the join (only a top-level `goto` can), and a fork branch cannot leave
+// the node. The compiler refuses it with AG1033.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+node finish() {
+  return "finish"
+}
+
+node main() {
+  const go = true
+  async slowSide()
+  if (go) {
+    goto finish()
+  }
+  return "end"
+}

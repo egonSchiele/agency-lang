@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A callee held in a local is read at the async line",
+      "input": "",
+      "expectedOutput": "\"from A x, then from B y\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

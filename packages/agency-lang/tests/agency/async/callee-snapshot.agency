@@ -1,0 +1,25 @@
+// `let value = async pick(label("x"))` where `pick` is a local holding a
+// function, then the main arm points `pick` at another function. The
+// callee is read at the `async` line, so `fromA` runs. Without the
+// snapshot, the side branch would call `label` in its first step, the main
+// branch would reassign `pick` while it waited, and `fromB` would run.
+def fromA(tag: string): string {
+  sleep(100)
+  return "from A ${tag}"
+}
+
+def fromB(tag: string): string {
+  sleep(100)
+  return "from B ${tag}"
+}
+
+def label(text: string): string {
+  return text
+}
+
+node main() {
+  let pick = fromA
+  let value = async pick(label("x"))
+  pick = fromB
+  return "${value}, then ${pick("y")}"
+}

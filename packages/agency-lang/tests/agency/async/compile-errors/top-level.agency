@@ -1,0 +1,12 @@
+// `async` in a module-level initializer is not inside a function or node
+// body. The compiler refuses it with AG1027.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+let value = async slowSide()
+
+node main() {
+  return value
+}

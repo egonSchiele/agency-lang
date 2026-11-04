@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "The second async call joins at the end of the first call's arm, before the first value's use",
+      "input": "",
+      "expectedOutput": "\"main, first end, second end, use first, use second\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -73,12 +73,6 @@ describe("arrow functions parse to the canonical block AST", () => {
       `node main() { const r = map(items, (item) =>\n  item * 2\n) }`,
       `node main() { const r = map(items, \\item -> item * 2) }`,
     ],
-    // `async` is accepted and discarded, like `await` and `sync`.
-    [
-      "an async arrow",
-      `node main() { const y = map(xs, async (n) => n * 2) }`,
-      `node main() { const y = map(xs, \\n -> n * 2) }`,
-    ],
   ])("%s", (_name, arrow, canonical) => {
     expect(program(arrow)).toEqualWithoutLoc(program(canonical));
   });
@@ -128,6 +122,22 @@ describe("a block assigned to a variable gets a message, not the catch-all", () 
     expect(parses(`node main() { const double = 2 }`)).toBe(true);
     expect(parses(`node main() { const f = someFn }`)).toBe(true);
     expect(parses(`node main() { const eq = a == b }`)).toBe(true);
+  });
+});
+
+describe("async on a block argument is refused", () => {
+  // `async` now starts a call that runs beside the statements after it, so
+  // on a block it would promise something that does not happen. It used to
+  // be accepted and dropped.
+  it("names the problem and the fix", () => {
+    const parsed = parseAgency(`node main() { const y = map(xs, async (n) => n * 2) }`, {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toContain("`async` cannot mark a block");
+  });
+
+  it("still parses a call named like the keyword's neighbours", () => {
+    expect(parses(`node main() { const y = map(xs, (n) => asyncLoad(n)) }`)).toBe(true);
   });
 });
 

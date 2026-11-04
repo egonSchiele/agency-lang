@@ -1,0 +1,22 @@
+// The side call finishes while the main arm is paused on an interrupt. When
+// the user approves and the run resumes, the side call's finished value is
+// used as it is: the call is not run again. A counter kept in JavaScript,
+// outside Agency's state, records each run of the side call, so a second
+// run would show up as sideRuns: 2.
+import { bump, countOf } from "./counters.js"
+
+def side(): string {
+  bump("side")
+  return "side value"
+}
+
+def risky(): string {
+  return interrupt("main asks")
+  return "main approved"
+}
+
+node main() {
+  let fromSide = async side()
+  const fromMain = risky()
+  return { main: fromMain, side: fromSide, sideRuns: countOf("side") }
+}

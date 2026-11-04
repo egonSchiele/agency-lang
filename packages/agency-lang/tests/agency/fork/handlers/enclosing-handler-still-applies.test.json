@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A handler around a fork answers the interrupts raised in every arm",
+      "input": "",
+      "expectedOutput": "[\"a: approved\",\"b: approved\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

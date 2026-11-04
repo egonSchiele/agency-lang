@@ -1,0 +1,34 @@
+// `let value = async slowSide()` and then `const checked = mayFail()?`
+// where `mayFail` fails. The `?` returns the failure from the function,
+// after the side call has finished: "side end" lands before the caller
+// sees the failure, and "not reached" is never recorded.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def mayFail(): Result<string> {
+  return failure("mayFail failed")
+}
+
+def work(): Result<string> {
+  let value = async slowSide()
+  record("main")
+  const checked = mayFail()?
+  record("not reached")
+  return success("${value} ${checked}")
+}
+
+node main() {
+  reset()
+  const result = work()
+  if (isFailure(result)) {
+    record("failure: ${result.error}")
+  } else {
+    record("success: ${result.value}")
+  }
+  return logText()
+}

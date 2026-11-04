@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { StateStack, State } from "./stateStack.js";
 import type { HandlerEntry } from "../types.js";
 
-const entry = (): HandlerEntry => ({ fn: async () => undefined, liveGuardIds: [] });
+const entry = (): HandlerEntry => ({ fn: async () => undefined, liveGuardIds: [], stack: null });
 
 describe("StateStack.executingHandlerEntries", () => {
   it("starts empty and is not serialized", () => {

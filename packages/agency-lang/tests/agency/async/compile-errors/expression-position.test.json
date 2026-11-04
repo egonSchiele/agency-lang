@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1026: `async slowSide()` must start a statement",
+  "description": "agency compile refuses async inside a larger expression"
+}

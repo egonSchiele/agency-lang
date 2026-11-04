@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "restore() from inside the main arm reruns the whole async block, including a side call that had already finished (pinned)",
+      "input": "",
+      "expectedOutput": "{\"side\":\"side value\",\"sideRuns\":2,\"mainRuns\":2}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

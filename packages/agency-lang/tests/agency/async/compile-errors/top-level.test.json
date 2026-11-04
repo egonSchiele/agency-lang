@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1027: `async slowSide()` runs beside the rest of a function or node body",
+  "description": "agency compile refuses async in a module-level initializer"
+}

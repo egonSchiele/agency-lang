@@ -1,0 +1,30 @@
+// The first mention of `value` is inside the handler function of a
+// `handle` block. The join is before the `handle` statement, so the
+// handler reads the value, after "side end". The handler approves the
+// interrupt that `ask` raises; the test has no interrupt handlers, so an
+// unanswered interrupt fails it.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side value"
+}
+
+def ask() {
+  return interrupt("may I?")
+  record("asked")
+}
+
+node main() {
+  reset()
+  let value = async slowSide()
+  record("main")
+  handle {
+    ask()
+  } with (intr) {
+    record("handler sees: ${value}")
+    return approve()
+  }
+  return logText()
+}

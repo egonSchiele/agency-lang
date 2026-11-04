@@ -1,0 +1,46 @@
+// The BMO shape: two async calls and a main-arm call, then uses of both
+// values. All three pieces of work must overlap. Each one records when it
+// starts and ends, and sleeps 200ms in between. The checks ask whether each
+// piece started before the others ended. If the second async call only
+// started after the first finished (or the reply after either), a check is
+// false.
+import { reset, record, before } from "./order-log.js"
+
+def nameConversation(msg: string): string {
+  record("name start")
+  sleep(200)
+  record("name end")
+  return "title for ${msg}"
+}
+
+def extractMemories(msg: string): string {
+  record("facts start")
+  sleep(200)
+  record("facts end")
+  return "facts from ${msg}"
+}
+
+def reply(msg: string): string {
+  record("reply start")
+  sleep(200)
+  record("reply end")
+  return "reply to ${msg}"
+}
+
+node main() {
+  reset()
+  const msg = "hello"
+  let name = async nameConversation(msg)
+  let facts = async extractMemories(msg)
+  const answer = reply(msg)
+  const saved = "${name} | ${facts} | ${answer}"
+  return {
+    saved: saved,
+    factsStartedBeforeNameEnded: before("facts start", "name end"),
+    replyStartedBeforeNameEnded: before("reply start", "name end"),
+    replyStartedBeforeFactsEnded: before("reply start", "facts end"),
+    nameStartedBeforeFactsEnded: before("name start", "facts end"),
+    nameStartedBeforeReplyEnded: before("name start", "reply end"),
+    factsStartedBeforeReplyEnded: before("facts start", "reply end")
+  }
+}

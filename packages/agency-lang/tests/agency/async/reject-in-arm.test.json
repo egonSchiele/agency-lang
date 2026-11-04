@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An interrupt raised in the main arm and rejected makes the function return the failure",
+      "input": "",
+      "expectedOutput": "\"main, side end, work failed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+// An `async` call inside an `if` branch joins at its use in that branch,
+// so "main" overlaps it, the use sees the value, and everything finishes
+// before the statement after the `if`.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+node main() {
+  reset()
+  const go = true
+  if (go) {
+    let value = async slowSide()
+    record("main")
+    record("use ${value}")
+  }
+  record("after if")
+  return logText()
+}

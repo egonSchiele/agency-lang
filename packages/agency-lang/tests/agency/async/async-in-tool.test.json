@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A tool that uses async runs its side call beside the rest of its body",
+      "input": "",
+      "expectedOutput": "\"tool main, side end, notes on cats found, answer: done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "lookup", "args": { "topic": "cats" } } },
+        { "return": "done" }
+      ]
+    }
+  ]
+}

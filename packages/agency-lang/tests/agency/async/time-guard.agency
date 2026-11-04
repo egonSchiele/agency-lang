@@ -1,0 +1,45 @@
+// A time guard around a block with an async call. Each arm sleeps 600ms
+// under a 1000ms limit. The arms overlap, so the block takes about 600ms
+// and the guard does not trip. If the guard charged the two arms one after
+// the other (1200ms), it would trip.
+//
+// The second node is the control: the side call sleeps 1500ms, longer than
+// the limit, so the guard trips even though the main arm is short. That
+// shows the guard does charge the longer arm.
+def sleepFor(ms: number): string {
+  sleep(ms)
+  return "slept ${ms}"
+}
+
+def overlapping(sideMs: number, mainMs: number): string {
+  let fromSide = async sleepFor(sideMs)
+  const fromMain = sleepFor(mainMs)
+  return "${fromMain}, ${fromSide}"
+}
+
+node underBudget() {
+  const result = guard(time: 1000ms) {
+    return overlapping(600, 600)
+  }
+  if (isFailure(result)) {
+    return "tripped: ${result.data.type}"
+  }
+  return result.value
+}
+
+node longerArmTrips() {
+  handle {
+    const result = guard(time: 1000ms) {
+      return overlapping(1500, 50)
+    }
+    if (isFailure(result)) {
+      return "tripped: ${result.data.type}"
+    }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::guard") {
+      return reject()
+    }
+    return pass()
+  }
+}

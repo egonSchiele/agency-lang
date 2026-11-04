@@ -158,6 +158,73 @@
           }
         }
       ]
+    },
+    {
+      "nodeName": "takenNameIsRedrafted",
+      "description": "a name in takenNames goes back to the model, ignoring case, and the renamed second draft passes",
+      "input": "",
+      "expectedOutput": "[\"doubleTheSum\",2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleTheSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "unreachableTypeIsRedrafted",
+      "description": "an inputs type naming a tool module's type is refused by the check, and the second draft leaves that parameter to its default",
+      "input": "",
+      "expectedOutput": "[\"{ text: string }\",2]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"sendIt\",\"description\":\"Send hi with the delivery given.\",\"inputs\":\"{ delivery: Delivery }\",\"steps\":[{\"id\":\"go\",\"kind\":\"tool\",\"module\":\"./send.agency\",\"tool\":\"send\",\"args\":{\"text\":\"hi\",\"delivery\":{\"$ref\":\"inputs.delivery\"}}}],\"result\":{\"$ref\":\"steps.go\"}}"
+          }
+        },
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"sendIt\",\"description\":\"Send the text given.\",\"inputs\":\"{ text: string }\",\"steps\":[{\"id\":\"go\",\"kind\":\"tool\",\"module\":\"./send.agency\",\"tool\":\"send\",\"args\":{\"text\":{\"$ref\":\"inputs.text\"}}}],\"result\":{\"$ref\":\"steps.go\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "draftStaysOffTheCallersThread",
+      "description": "the caller's thread holds the same messages before and after a draft",
+      "input": "",
+      "expectedOutput": "[1,1,1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "workflowJson": "{\"format\":1,\"name\":\"doubleSum\",\"description\":\"Add two numbers and double the sum.\",\"inputs\":\"{ a: number; b: number }\",\"steps\":[{\"id\":\"sum\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"add\",\"args\":{\"a\":{\"$ref\":\"inputs.a\"},\"b\":{\"$ref\":\"inputs.b\"}}},{\"id\":\"doubled\",\"kind\":\"tool\",\"module\":\"std::math\",\"tool\":\"multiply\",\"args\":{\"a\":{\"$ref\":\"steps.sum\"},\"b\":2}}],\"result\":{\"$ref\":\"steps.doubled\"}}"
+          }
+        }
+      ]
     }
   ]
 }

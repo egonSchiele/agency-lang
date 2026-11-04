@@ -65,6 +65,28 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "unreachableInputsTypeIsRefused",
+      "description": "an inputs type naming a type the program cannot reach is refused on the inputs field, before any std::run",
+      "input": "",
+      "expectedOutput": "[[\"null/inputs\"],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unreachableOutputTypeIsRefused",
+      "description": "an LLM output type naming a type the program cannot reach is refused on the step, before any std::run",
+      "input": "",
+      "expectedOutput": "[[\"explain/output\"],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

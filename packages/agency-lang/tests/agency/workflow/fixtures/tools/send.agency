@@ -1,0 +1,12 @@
+import { Delivery } from "./delivery.agency"
+
+/** A tool whose parameter type is declared in another module. A workflow
+  cannot name `Delivery`: its program imports `send` and nothing else. */
+export def send(text: string, delivery: Delivery = "screen"): string {
+  """
+  Send a message.
+  @param text - what to send
+  @param delivery - how
+  """
+  return text + " via " + delivery
+}

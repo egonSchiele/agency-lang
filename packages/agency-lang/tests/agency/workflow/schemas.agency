@@ -97,6 +97,18 @@ def regexInputs(): Workflow {
   }
 }
 
+/** Inputs naming a type the generated program never imports. */
+def namedInputs(): Workflow {
+  return {
+    format: 1,
+    name: "namedInputs",
+    description: "Add two literals.",
+    inputs: "{ delivery: Delivery }",
+    steps: [{ id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: 1, b: 2 } }],
+    result: { "$ref": "steps.sum" }
+  }
+}
+
 /** The fields of every problem, as `step/field`. */
 def problemFields(failed: any): Json {
   return map(failed.data.problems ?? [], \problem -> "${problem.step}/${problem.field}")
@@ -125,6 +137,25 @@ node rejectedRunKeepsTheRejection(): Json {
 // An LLM output type holding a regex is refused the same way, on the step.
 node unrepresentableOutputIsRefused(): Json {
   const checked = runCheck(explained("{ pattern: regex }"))
+  if (checked is failure) {
+    return [problemFields(checked), getMutable("effects", [])]
+  }
+  return "checked"
+}
+
+// A type name the program has no binding for would pass the typecheck and
+// fail inside the schemas node with "is not defined". The check refuses it
+// first, naming the field, on inputs and on an LLM step's output alike.
+node unreachableInputsTypeIsRefused(): Json {
+  const checked = runCheck(namedInputs())
+  if (checked is failure) {
+    return [problemFields(checked), getMutable("effects", [])]
+  }
+  return "checked"
+}
+
+node unreachableOutputTypeIsRefused(): Json {
+  const checked = runCheck(explained("Note[]"))
   if (checked is failure) {
     return [problemFields(checked), getMutable("effects", [])]
   }

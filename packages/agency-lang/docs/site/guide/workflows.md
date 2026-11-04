@@ -72,8 +72,9 @@ Create a `workflows` folder in your project. Save this as
 The outer `workflow` field is the saved-file format. The object inside it is
 the workflow itself. The workflow name must match the filename without `.json`.
 
-`inputs` declares an Agency object type as text. Here, callers must supply two
-numbers. Each step has a unique `id`. A `tool` step names the function's module,
+`inputs` declares an Agency object type as text, written out in full: a
+workflow cannot name a type from a tool's module, since its program imports
+only the tools. Here, callers must supply two numbers. Each step has a unique `id`. A `tool` step names the function's module,
 the function, and its arguments. In Agency, functions are tools.
 
 Run these commands from the project directory:
@@ -161,8 +162,8 @@ Then change the workflow's result:
 "result": { "$ref": "steps.explain.explanation" }
 ```
 
-`output` is an Agency type written as text. It sets the shape of the model's
-response. Here, the response has an `explanation` string. Other examples include
+`output` is an Agency type written as text, in full like `inputs`. It sets
+the shape of the model's response. Here, the response has an `explanation` string. Other examples include
 `"string[]"` or `"{ title: string; items: string[] }"`.
 
 The model receives the prompt followed by the context values, each with a

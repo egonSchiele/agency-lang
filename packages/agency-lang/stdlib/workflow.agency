@@ -1033,6 +1033,7 @@ ${request}
 
 Rules:
 - Values that change from run to run are inputs. Everything else is a literal in a step's args.
+- The `inputs` type and each `output` type use only built-in types: string, number, boolean, null, arrays, objects, unions of literals, and Json. A type name from a tool's signature, such as `Note`, is not available to the workflow.
 - When the request leaves out something a step needs, such as which list or which folder, make it an input and say so in the description. Do not guess it.
 - Pick a short camelCase identifier for the name, and a one-sentence description.
 - Reply with the workflow object only, as JSON text. Do not wrap it in another object, and do not add limits.
@@ -1145,7 +1146,11 @@ def draftFrom(
   let problem: DraftProblem | null = revise
   for (attempt in range(DESIGN_ATTEMPTS)) {
     const brief = workflowDesignBrief(request, tools.entries, problem)
-    const reply: WorkflowDraftReply! = llm(brief, options)
+    // On its own thread: the brief carries everything the attempt needs,
+    // and a host calling from a conversation keeps its history clean.
+    thread {
+      const reply: WorkflowDraftReply! = llm(brief, options)
+    }
     if (reply is failure(replyErr)) {
       return failure("the model's reply had the wrong shape: ${replyErr}")
     }
@@ -1165,9 +1170,10 @@ def draftFrom(
 Use this when the host reviews and saves workflows itself. It makes one
 draft and raises no interrupt of its own: reading the tools' local modules
 asks with `std::read`, once per module. Problems the check finds go back to
-the model, up to six times. To redraft after a person's feedback, pass
-`revise` with the draft they saw as JSON text and their words as
-`problems`.
+the model, up to six times, and so does a name in `takenNames`, compared
+ignoring case. To redraft after a person's feedback, pass `revise` with the
+draft they saw as JSON text and their words as `problems`. The model calls
+run on their own thread, so the caller's conversation does not see them.
 */
 @capabilities(fileRead)
 export def draftWorkflow(
@@ -1177,6 +1183,7 @@ export def draftWorkflow(
   revise: DraftProblem | null = null,
   model: string = "",
   provider: string = "",
+  takenNames: string[] = [],
 ): Result<WorkflowDraft> raises <std::read> {
   """
   Draft a workflow over these tools from a request, and check it.
@@ -1187,11 +1194,12 @@ export def draftWorkflow(
   @param revise - A previous draft and what to change in it, or null for a first draft.
   @param model - Model override, or "" for the configured model.
   @param provider - Provider for the model override, ignored when model is empty.
+  @param takenNames - Names the draft may not take, such as the host's saved workflows and its tools.
   """
   const root = expandRoot(dir)?
   const described = describeTools(tools, root)?
   const options = llmOptions(model, provider, validationRetries: 1)
-  return draftFrom(request, described, root, [], revise, options)
+  return draftFrom(request, described, root, takenNames, revise, options)
 }
 
 /** Raised with each draft that passed the check, before it is saved. The

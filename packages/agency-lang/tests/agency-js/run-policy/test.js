@@ -44,10 +44,24 @@ const inputRes = await inputIt();
 const inputSurfacedExpectsValue =
   Array.isArray(inputRes.data) && inputRes.data[0].expectsValue === true;
 
+// Scenario 4: the same raise under a policy that approves everything. An
+// approve carries no value, so the policy must not answer it: it surfaces
+// as in scenario 3, and the node does not return null as if answered.
+process.env.AGENCY_RUN_POLICY = s({ "*": [{ action: "approve" }] });
+const approveAllRes = await inputIt();
+const approveAllLeavesQuestion =
+  Array.isArray(approveAllRes.data) && approveAllRes.data[0].expectsValue === true;
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
-    { readApproved, writeRejected, unlistedSurfaced, inputSurfacedExpectsValue },
+    {
+      readApproved,
+      writeRejected,
+      unlistedSurfaced,
+      inputSurfacedExpectsValue,
+      approveAllLeavesQuestion,
+    },
     null,
     2,
   ),

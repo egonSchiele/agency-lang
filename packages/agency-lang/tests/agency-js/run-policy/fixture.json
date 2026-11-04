@@ -2,5 +2,6 @@
   "readApproved": true,
   "writeRejected": true,
   "unlistedSurfaced": true,
-  "inputSurfacedExpectsValue": true
+  "inputSurfacedExpectsValue": true,
+  "approveAllLeavesQuestion": true
 }

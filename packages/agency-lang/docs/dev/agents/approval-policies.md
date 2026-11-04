@@ -155,6 +155,23 @@ an interrupt by three routes:
   reject it: rejecting is the fail-closed direction and carries its
   message.
 
+The run-level policy follows the same rule, outside `_handler`. `agency
+run --policy`, `--approve`, and a serve host's `InvocationOptions.policy`
+install `makeRunPolicyHandler` (`lib/runtime/runPolicyHandler.ts`), which
+stays silent when an approve rule matches such a raise. The raise then
+goes on to whoever can answer it: a program handler, the prompt under
+`--interactive` (the value prompt in `buildDecider`), or the caller of a
+served run. `agency remote call` applies its policy in `buildDecider`
+(`lib/runtime/interruptResolution.ts`), which checks a reject rule first,
+then sends a value-expecting raise to the value prompt, or rejects it in
+a non-interactive run, before it looks at an approve rule. Until this,
+both approved such a raise with no value, so `agency run --approve
+std::toolbox::review` accepted a draft nobody looked at.
+
+`checkPolicy` from `std::policy`, called in a program's own handler, does
+not follow the rule: it returns what the rule says. A program that hands
+its interrupts to `checkPolicy` has chosen to.
+
 The cost is that a policy file cannot express "approve this
 value-expecting effect without asking", and `approve-all` is no longer
 quite all — its description says so. For the effects that expect a value

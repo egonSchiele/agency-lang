@@ -70,6 +70,25 @@ describe("makeRunPolicyHandler", () => {
     const h = makeRunPolicyHandler({ "*": [{ action: "approve" }] }, DIRS);
     expect((await h(intr("anything::at::all")))!.type).toBe("approve");
   });
+
+  // An approve carries no value, so it would read as an empty answer: for
+  // std::workflow::review, accepting a draft nobody looked at.
+  it("stays silent when an approve rule matches a raise that expects a value", async () => {
+    const asking = { ...intr("std::workflow::review"), expectsValue: true };
+    const named = makeRunPolicyHandler({ "std::workflow::review": [{ action: "approve" }] }, DIRS);
+    expect(await named(asking)).toBeUndefined();
+    const wildcard = makeRunPolicyHandler({ "*": [{ action: "approve" }] }, DIRS);
+    expect(await wildcard(asking)).toBeUndefined();
+  });
+
+  it("still rejects a raise that expects a value when a reject rule matches", async () => {
+    const asking = { ...intr("std::question"), expectsValue: true };
+    const h = makeRunPolicyHandler(
+      { "std::question": [{ action: "reject", rejectMessage: "No questions" }] },
+      DIRS,
+    );
+    expect(await h(asking)).toEqual({ type: "reject", value: "No questions" });
+  });
 });
 
 describe("parsePromptAnswer", () => {

@@ -25,11 +25,19 @@ export type { PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts
 // the chain resolves by the program's own handlers; what nothing settles
 // surfaces to the user endpoint (resolveCliInterrupts) instead of being
 // decided here.
+//
+// An approve rule does not answer a raise that expects a value, such as
+// `std::question` or `std::workflow::review`. `approve()` carries no value,
+// so the raise would read it as an empty answer: for a review, accepting a
+// draft nobody looked at. The handler stays silent instead, so the raise
+// goes on to whoever can answer it: a program handler, the prompt under
+// --interactive, or a serve host's caller. A reject rule still rejects.
+// cliPolicyHandler follows the same rule (docs/dev/agents/approval-policies.md).
 export function makeRunPolicyHandler(policy: Policy, dirs: PolicyDirs): HandlerFn {
   return async (intr: Intr) => {
     const decision = checkPolicyExplicit(policy, intr, dirs);
     if (decision === null) return undefined;
-    if (decision.type === "approve") return approve();
+    if (decision.type === "approve") return intr.expectsValue ? undefined : approve();
     if (decision.type === "reject") return reject(decision.message);
     // An explicit `propagate` rule: force the interrupt to the user.
     return { type: "propagate" };

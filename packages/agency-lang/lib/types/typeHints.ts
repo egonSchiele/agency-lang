@@ -151,6 +151,16 @@ export type ValueParam = {
  */
 export type TypeAliasEntry = {
   body: VariableType;
+  /** The file an alias imported by name was declared in. Its body was
+   *  checked there, so the importer does not check it again. */
+  importedFrom?: string;
+  /**
+   * The file that declares an alias the unit pulled in to resolve an
+   * imported signature, without a named import. The checker reads through
+   * it but refuses a reference to it by name: the generated code has no
+   * binding for the name, and a schema built from it fails at run time.
+   */
+  pulledFrom?: string;
   typeParams?: TypeParam[];
   /**
    * Value parameters for value-parameterized aliases (e.g. `low` and

@@ -8,6 +8,8 @@ import { visitTypes } from "./typeWalker.js";
 import { BUILTIN_GENERIC_ARITY } from "./builtinGenerics.js";
 import { isDataShaped } from "./dataShape.js";
 import { formatTypeHint } from "../utils/formatType.js";
+import path from "node:path";
+import { getStdlibDir, stdlibModuleName } from "../importPaths.js";
 
 /**
  * Validate value-param arity at a use site. Pushes one error to `errors`
@@ -108,6 +110,18 @@ export function validateResultDataTypes(
   });
 }
 
+/** A reference by name to an alias the unit only pulled in through an
+ *  imported signature. The message names the module to import it from. */
+function notImported(
+  alias: string,
+  file: string,
+  context: string,
+  loc?: SourceLocation,
+): TypeCheckError {
+  const module = file.startsWith(getStdlibDir() + path.sep) ? stdlibModuleName(file) : file;
+  return diagnostic("typeAliasNotImported", { alias, module, context }, loc ?? null);
+}
+
 export function validateTypeReferences(
   vt: VariableType,
   context: string,
@@ -121,6 +135,10 @@ export function validateTypeReferences(
       const entry = typeAliases[t.aliasName];
       if (!entry) {
         errors.push(diagnostic("unknownTypeAlias", { alias: t.aliasName, context }, loc ?? null));
+        return;
+      }
+      if (entry.pulledFrom !== undefined) {
+        errors.push(notImported(t.aliasName, entry.pulledFrom, context, loc));
         return;
       }
       // Bare reference to a generic alias is only legal if every type
@@ -170,6 +188,10 @@ export function validateTypeReferences(
       const entry = typeAliases[t.name];
       if (!entry) {
         errors.push(diagnostic("unknownGenericType", { alias: t.name, context }, loc ?? null));
+        return;
+      }
+      if (entry.pulledFrom !== undefined) {
+        errors.push(notImported(t.name, entry.pulledFrom, context, loc));
         return;
       }
       if (!entry.typeParams) {

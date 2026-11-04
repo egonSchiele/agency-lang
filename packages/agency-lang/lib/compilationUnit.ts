@@ -51,17 +51,23 @@ export class ScopedTypeAliases {
     scopeKey: string,
     name: string,
     body: VariableType,
-    typeParams?: TypeParam[],
-    tags?: Tag[],
-    valueParams?: ValueParam[],
-    isEffectSet?: boolean,
+    options: {
+      typeParams?: TypeParam[];
+      tags?: Tag[];
+      valueParams?: ValueParam[];
+      isEffectSet?: boolean;
+      importedFrom?: string;
+      pulledFrom?: string;
+    } = {},
   ): void {
     if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
     const entry: TypeAliasEntry = { body };
-    if (typeParams) entry.typeParams = typeParams;
-    if (valueParams) entry.valueParams = valueParams;
-    if (tags && tags.length > 0) entry.tags = tags;
-    if (isEffectSet) entry.isEffectSet = true;
+    if (options.typeParams) entry.typeParams = options.typeParams;
+    if (options.valueParams) entry.valueParams = options.valueParams;
+    if (options.tags && options.tags.length > 0) entry.tags = options.tags;
+    if (options.isEffectSet) entry.isEffectSet = true;
+    if (options.importedFrom) entry.importedFrom = options.importedFrom;
+    if (options.pulledFrom) entry.pulledFrom = options.pulledFrom;
     this.byScope[scopeKey][name] = entry;
   }
 
@@ -278,15 +284,12 @@ export function buildCompilationUnit(
     const key = scopeKey(scopes[scopes.length - 1]);
     if (node.type === "typeAlias") {
       const tags = node.tags && node.tags.length > 0 ? node.tags : localAliasTags[node.aliasName];
-      unit.typeAliases.add(
-        key,
-        node.aliasName,
-        node.aliasedType,
-        node.typeParams,
+      unit.typeAliases.add(key, node.aliasName, node.aliasedType, {
+        typeParams: node.typeParams,
         tags,
-        node.valueParams,
-        node.isEffectSet,
-      );
+        valueParams: node.valueParams,
+        isEffectSet: node.isEffectSet,
+      });
     }
   }
 
@@ -330,15 +333,13 @@ export function buildCompilationUnit(
           registerMarkers(unit, r.localName, r.symbol.markers);
         }
         if (r.symbol.kind === "type") {
-          unit.typeAliases.add(
-            GLOBAL_SCOPE_KEY,
-            r.localName,
-            r.symbol.aliasedType,
-            r.symbol.typeParams,
-            r.symbol.tags,
-            r.symbol.valueParams,
-            r.symbol.isEffectSet,
-          );
+          unit.typeAliases.add(GLOBAL_SCOPE_KEY, r.localName, r.symbol.aliasedType, {
+            typeParams: r.symbol.typeParams,
+            tags: r.symbol.tags,
+            valueParams: r.symbol.valueParams,
+            isEffectSet: r.symbol.isEffectSet,
+            importedFrom: r.file,
+          });
           // Imported type's body may reference other aliases from its
           // module — pull those transitively too.
           aliasSeeds.push({ type: r.symbol.aliasedType, preferFile: r.file });
@@ -399,14 +400,12 @@ function pullTransitiveAliases(
     if (globalAliases[name] !== undefined) continue; // already known
     const found = resolveTypeFromFile(symbolTable, name, preferFile);
     if (!found) continue;
-    unit.typeAliases.add(
-      GLOBAL_SCOPE_KEY,
-      name,
-      found.aliasedType,
-      found.typeParams,
-      found.tags,
-      found.valueParams,
-    );
+    unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, found.aliasedType, {
+      typeParams: found.typeParams,
+      tags: found.tags,
+      valueParams: found.valueParams,
+      pulledFrom: found.file,
+    });
     // Nested aliases referenced by this type should resolve in the file
     // the type was actually found in (not the original preferFile) — the
     // body's references are scoped to that module.

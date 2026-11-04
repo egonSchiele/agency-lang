@@ -1,0 +1,5 @@
+export type Delivery = "screen" | "text"
+
+export def describeDelivery(delivery: Delivery): string {
+  return "delivery " + delivery
+}

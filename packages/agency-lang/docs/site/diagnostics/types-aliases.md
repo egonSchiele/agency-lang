@@ -358,3 +358,13 @@ def greet(): Result {
 The statements after an `async` call, up to the first use of its value or the end of the block, run as their own branch beside the call. A `goto`, `break`, or `continue` inside that stretch would have to leave the block from inside the branch, which a branch cannot do. When one of them is the last statement of the stretch, at the block's top level, the compiler ends the branch just before it, so that case works. This one is nested inside an `if` or another statement.
 
 **How to fix:** start the `async` call after the `goto`, `break`, or `continue`, or read the call's value before it so the branch ends there.
+
+<a id="ag1034"></a>
+
+## AG1034 — Type alias '&#123;alias&#125;' is declared in '&#123;module&#125;' but not imported here (referenced in '&#123;context&#125;'). Import it by name, or write the type out.
+
+*Default severity: error.*
+
+A type name was used that the checker knows only through an import's signature: a function you imported takes or returns it, so the checker read its shape to type that call. The name itself was never imported, so the generated code has no binding for it, and a validation or schema built from the type fails at run time with `<Name> is not defined`.
+
+**How to fix:** add the alias to the import line of the module named in the message, or write the type's shape out where it is used.

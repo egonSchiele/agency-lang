@@ -4,6 +4,8 @@
 import { draftWorkflow, WorkflowDraft } from "std::workflow"
 import { add, multiply } from "std::math"
 import { searchNotes } from "./fixtures/tools/notes.agency"
+import { send } from "./fixtures/tools/send.agency"
+import { currentThreadId, getThread, listThreads, userMessage } from "std::thread"
 import { keys } from "std::object"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
@@ -19,6 +21,31 @@ def runDraft(tools: any[], dir: string): Result<WorkflowDraft> {
     getMutable("effects", []).push(intr.effect)
     return approve()
   }
+}
+
+/** Drafts with names the host has already taken, every interrupt approved. */
+def runDraftTaken(takenNames: string[]): Result<WorkflowDraft> {
+  handle {
+    return draftWorkflow("Add two numbers and double the sum.", TOOLS, __dirname, null, "", "", takenNames)
+  } with approve
+}
+
+/** How many threads the run has opened so far. */
+def threadCount(): number {
+  const threads = listThreads(false)
+  if (threads is failure) {
+    return -1
+  }
+  return threads.value.length
+}
+
+/** How many messages the current thread holds. */
+def threadLength(): number {
+  const messages = getThread(currentThreadId(), 0, 1000)
+  if (messages is failure) {
+    return -1
+  }
+  return messages.value.length
 }
 
 /** The failure's message, or "" for a success. */
@@ -87,4 +114,39 @@ node localModuleReadOnce(): Json {
     return "failed: ${err}"
   }
   return [drafted.value.attempts, getMutable("effects", [])]
+}
+
+// A name in takenNames goes back to the model in the same attempt loop as
+// a check problem, compared ignoring case.
+node takenNameIsRedrafted(): Json {
+  const drafted = runDraftTaken(["DOUBLESUM"])
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [drafted.value.workflow.name, drafted.value.attempts]
+}
+
+// A type name from a tool's signature has no binding in the workflow's
+// program, which imports only its tools. The check refuses it, and the
+// second draft leaves that parameter to its default.
+node unreachableTypeIsRedrafted(): Json {
+  const drafted = runDraft([send], __dirname + "/fixtures/tools")
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [drafted.value.workflow.inputs, drafted.value.attempts]
+}
+
+// The model calls run on threads of their own, one per attempt, so a host
+// that drafts from inside a conversation keeps its history as it was, and
+// a later attempt does not see the earlier briefs.
+node draftStaysOffTheCallersThread(): Json {
+  userMessage("Add milk to the grocery list.")
+  const messagesBefore = threadLength()
+  const threadsBefore = threadCount()
+  const drafted = runDraft(TOOLS, __dirname)
+  if (drafted is failure(err)) {
+    return "failed: ${err}"
+  }
+  return [messagesBefore, threadLength(), threadCount() - threadsBefore, drafted.value.attempts]
 }

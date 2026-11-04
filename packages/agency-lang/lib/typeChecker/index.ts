@@ -197,6 +197,11 @@ export class TypeChecker {
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
         for (const [name, entry] of Object.entries(scopeAliases)) {
+          // An alias that came through an import was checked in the module
+          // that declares it, against that module's imports, not this one's.
+          if (entry.importedFrom !== undefined || entry.pulledFrom !== undefined) {
+            continue;
+          }
           // Type parameters declared on a generic alias are in scope inside
           // its own body. Add them to the visible alias set as opaque entries
           // so references like `T` don't get flagged as undefined.

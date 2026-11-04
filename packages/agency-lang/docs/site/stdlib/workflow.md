@@ -269,7 +269,7 @@ export type WorkflowDraft = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1057))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1058))
 
 ## Effects
 
@@ -358,7 +358,7 @@ effect std::workflow::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1220))
 
 ## Functions
 
@@ -715,6 +715,7 @@ draftWorkflow(
   revise: DraftProblem | null = null,
   model: string = "",
   provider: string = "",
+  takenNames: string[] = [],
 ): Result<WorkflowDraft> raises <std::read>
 ```
 
@@ -723,9 +724,10 @@ Draft a workflow over these tools from a request, and check it.
 Use this when the host reviews and saves workflows itself. It makes one
 draft and raises no interrupt of its own: reading the tools' local modules
 asks with `std::read`, once per module. Problems the check finds go back to
-the model, up to six times. To redraft after a person's feedback, pass
-`revise` with the draft they saw as JSON text and their words as
-`problems`.
+the model, up to six times, and so does a name in `takenNames`, compared
+ignoring case. To redraft after a person's feedback, pass `revise` with the
+draft they saw as JSON text and their words as `problems`. The model calls
+run on their own thread, so the caller's conversation does not see them.
 
 **Parameters:**
 
@@ -737,6 +739,7 @@ the model, up to six times. To redraft after a person's feedback, pass
 | revise | `DraftProblem \| null` | null | A previous draft and what to change in it, or null for a first draft. |
 | model | `string` | "" | Model override, or "" for the configured model. |
 | provider | `string` | "" | Provider for the model override, ignored when model is empty. |
+| takenNames | `string[]` | [] | Names the draft may not take, such as the host's saved workflows and its tools. |
 
 **Returns:** `Result<WorkflowDraft>`
 
@@ -744,7 +747,7 @@ the model, up to six times. To redraft after a person's feedback, pass
 
 **Needs:** `fileRead`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1187))
 
 ### designWorkflow
 
@@ -785,4 +788,4 @@ edited workflow, which is checked and saved without another draft.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1266))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1282))

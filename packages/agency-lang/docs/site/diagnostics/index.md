@@ -46,6 +46,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1031](types-aliases.md#ag1031) | `async &#123;expr&#125;?` cannot unwrap the call. Unwrap the value after it is ready: `let r = async &#123;expr&#125;`, then `const x = r?`. |
 | [AG1032](types-aliases.md#ag1032) | `async` must be followed by a call, and `&#123;expr&#125;` is not a call. |
 | [AG1033](types-aliases.md#ag1033) | `&#123;keyword&#125;` runs beside `async &#123;expr&#125;`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `&#123;keyword&#125;`, or use its value before it. |
+| [AG1034](types-aliases.md#ag1034) | Type alias '&#123;alias&#125;' is declared in '&#123;module&#125;' but not imported here (referenced in '&#123;context&#125;'). Import it by name, or write the type out. |
 
 ## Assignability and checking
 

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two async calls and the main-arm call all overlap",
+      "input": "",
+      "expectedOutput": "{\"saved\":\"title for hello | facts from hello | reply to hello\",\"factsStartedBeforeNameEnded\":true,\"replyStartedBeforeNameEnded\":true,\"replyStartedBeforeFactsEnded\":true,\"nameStartedBeforeFactsEnded\":true,\"nameStartedBeforeReplyEnded\":true,\"factsStartedBeforeReplyEnded\":true}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

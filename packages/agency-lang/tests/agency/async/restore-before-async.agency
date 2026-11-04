@@ -1,0 +1,27 @@
+// A checkpoint taken before the async call, restored after the join. The
+// restore rolls the whole block back, so the side call and the main arm
+// both run again, once each, and the second pass finishes normally. The
+// counters live in JavaScript, so the restore does not reset them: two
+// side runs and two main runs prove the block ran exactly twice.
+import { bump, countOf } from "./counters.js"
+
+def side(): string {
+  bump("side")
+  return "side value"
+}
+
+def mainWork(): string {
+  bump("main")
+  return "main value"
+}
+
+node main() {
+  const cp = checkpoint()
+  let fromSide = async side()
+  const fromMain = mainWork()
+  const joined = "${fromMain} + ${fromSide}"
+  if (countOf("side") < 2) {
+    restore(cp, {})
+  }
+  return { joined: joined, sideRuns: countOf("side"), mainRuns: countOf("main") }
+}

@@ -1,0 +1,32 @@
+// The root policy (what `agency run --policy` and `--reject` install) is
+// registered above every branch, so branch scoping must not cut it off
+// inside a fork arm. Two arms raise `test::arm`: the "own" arm inside its
+// own `with approve`, the "bare" arm with no handler.
+//
+// test.js runs this twice, with a root policy that rejects `test::arm`
+// and then one that approves it. This is an agency-js test because a
+// `.test.json` cannot set a policy.
+effect test::arm { tag: string }
+
+def ask(tag: string): string {
+  return interrupt test::arm("arm ${tag} asks", { tag: tag })
+  return "approved"
+}
+
+node main() {
+  const results = fork(["own", "bare"]) as tag {
+    if (tag == "own") {
+      const own = ask(tag) with approve
+      if (isFailure(own)) {
+        return "own: rejected"
+      }
+      return "own: ${own}"
+    }
+    const bare = ask(tag)
+    if (isFailure(bare)) {
+      return "bare: rejected"
+    }
+    return "bare: ${bare}"
+  }
+  return results
+}

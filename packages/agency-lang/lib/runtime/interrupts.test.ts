@@ -13,6 +13,8 @@ import {
   reject,
   validateResumeBatch,
   respondToInterrupts,
+  isApproved,
+  isRejected,
 } from "./interrupts.js";
 import type { InterruptResponse } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
@@ -47,7 +49,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     });
     // The test's handlers take only the interrupt. `pushHandler` wraps each
     // into the shape the chain calls, as it does for a handler from TypeScript.
-    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, [], null));
     return ctx;
   };
 
@@ -200,7 +202,7 @@ describe("interruptWithHandlers expectsValue", () => {
     });
     // The test's handlers take only the interrupt. `pushHandler` wraps each
     // into the shape the chain calls, as it does for a handler from TypeScript.
-    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, [], null));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -385,7 +387,7 @@ describe("pass()", () => {
     });
     // The test's handlers take only the interrupt. `pushHandler` wraps each
     // into the shape the chain calls, as it does for a handler from TypeScript.
-    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, [], null));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -596,5 +598,185 @@ describe("escapedTurnText", () => {
         '  {"path":"a"}',
       ].join("\n"),
     );
+  });
+});
+
+describe("runHandlerChain walks a snapshot of the handler list", () => {
+  it("does not run a handler twice when a sibling removes its entry during the walk", async () => {
+    // Three entries that all apply everywhere. The newest one, `b`, waits
+    // until the test has removed `a`, as a sibling branch leaving its
+    // `handle` block does while `b` is awaiting. Walking the live list
+    // would then step onto `b` again.
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    const heard: string[] = [];
+    let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    ctx.pushHandler(
+      async () => {
+        heard.push("outer");
+        return approve();
+      },
+      [],
+      null,
+    );
+    const a = ctx.pushHandler(
+      async () => {
+        heard.push("a");
+        return approve();
+      },
+      [],
+      null,
+    );
+    ctx.pushHandler(
+      async () => {
+        heard.push("b");
+        await released;
+        return approve();
+      },
+      [],
+      null,
+    );
+    const stack = new StateStack();
+    const walk = inFrameOf(ctx, stack, (run) =>
+      interruptWithHandlers(run, "test::x", "m", {}, "o", { stack }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    ctx.removeHandler(a);
+    release();
+    const result = await walk;
+    expect(isApproved(result)).toBe(true);
+    expect(heard).toEqual(["b", "a", "outer"]);
+  });
+});
+
+describe("runHandlerChain skips handlers registered in a sibling branch", () => {
+  // root -> a -> a1, and root -> b, linked through `parent` as runBatch
+  // links branch stacks. Each handler records the label it was registered
+  // with when it hears a raise. A catch-all approver with no stack is last
+  // in the chain walk, so every raise is answered without a human.
+  function setup() {
+    const root = new StateStack();
+    const a = new StateStack();
+    a.parent = { stack: root, key: "fork_0" };
+    const a1 = new StateStack();
+    a1.parent = { stack: a, key: "fork_0" };
+    const b = new StateStack();
+    b.parent = { stack: root, key: "fork_1" };
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    const heard: string[] = [];
+    ctx.handlers = [
+      {
+        fn: async () => approve(),
+        liveGuardIds: [],
+        stack: null,
+      },
+    ];
+    const register = (
+      label: string,
+      stack: StateStack | null,
+      verdict: "approve" | "reject" = "approve",
+    ) => {
+      ctx.handlers.push({
+        fn: async () => {
+          heard.push(label);
+          return verdict === "approve" ? approve() : reject();
+        },
+        liveGuardIds: [],
+        stack,
+      });
+    };
+    const raiseFrom = (raising: StateStack, passed: StateStack = raising) =>
+      inFrameOf(ctx, raising, (run) =>
+        interruptWithHandlers(run, "test::x", "m", {}, "o", { stack: passed }),
+      );
+    return { root, a, a1, b, heard, register, raiseFrom };
+  }
+
+  it("does not consult a handler registered on a sibling branch", async () => {
+    const { a, b, heard, register, raiseFrom } = setup();
+    register("sibling", b);
+    await raiseFrom(a);
+    expect(heard).toEqual([]);
+  });
+
+  it("does not let a sibling branch's handler reject the raise", async () => {
+    const { a, b, heard, register, raiseFrom } = setup();
+    register("sibling rejects", b, "reject");
+    const result = await raiseFrom(a);
+    expect(heard).toEqual([]);
+    expect(isApproved(result)).toBe(true);
+  });
+
+  it("does not consult a handler on a sibling of an ancestor branch", async () => {
+    const { a1, b, heard, register, raiseFrom } = setup();
+    register("uncle", b);
+    await raiseFrom(a1);
+    expect(heard).toEqual([]);
+  });
+
+  it("consults a handler registered on an ancestor stack", async () => {
+    const { root, a, a1, heard, register, raiseFrom } = setup();
+    register("root", root);
+    register("parent", a);
+    await raiseFrom(a1);
+    expect(heard).toEqual(["parent", "root"]);
+  });
+
+  it("consults a handler registered on the raising stack", async () => {
+    const { a, heard, register, raiseFrom } = setup();
+    register("own", a);
+    await raiseFrom(a);
+    expect(heard).toEqual(["own"]);
+  });
+
+  it("lets a handler on an ancestor stack reject the raise", async () => {
+    const { root, a, heard, register, raiseFrom } = setup();
+    register("root rejects", root, "reject");
+    const result = await raiseFrom(a);
+    expect(heard).toEqual(["root rejects"]);
+    expect(isRejected(result)).toBe(true);
+  });
+
+  it("consults a handler with no stack from every branch", async () => {
+    const { root, a, a1, b, heard, register, raiseFrom } = setup();
+    register("everywhere", null);
+    await raiseFrom(root);
+    await raiseFrom(a);
+    await raiseFrom(a1);
+    await raiseFrom(b);
+    expect(heard).toEqual(["everywhere", "everywhere", "everywhere", "everywhere"]);
+  });
+
+  it("fails closed: a branch's handler still hears a raise that passes an ancestor of that branch", async () => {
+    // A raise path that passes an ancestor of the stack it really runs on
+    // is a mistake, but it must not silently skip the handler registered
+    // on that real branch.
+    const { root, a, a1, heard, register, raiseFrom } = setup();
+    register("branch", a1);
+    await raiseFrom(a1, root);
+    await raiseFrom(a1, a);
+    expect(heard).toEqual(["branch", "branch"]);
   });
 });

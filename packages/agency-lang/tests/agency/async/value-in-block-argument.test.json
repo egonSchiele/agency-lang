@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A mention inside a block argument is the join",
+      "input": "",
+      "expectedOutput": "\"main, side end, use: side 1 and side 2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

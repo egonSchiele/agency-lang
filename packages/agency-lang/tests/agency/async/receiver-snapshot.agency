@@ -1,0 +1,15 @@
+// `let value = async word.concat(bang("!"))`, then the main arm reassigns
+// `word`. The receiver is read at the `async` line, so the value is
+// "first!". Without the snapshot, the side branch would call `bang` in its
+// first step, the main branch would set `word = "second"` while it waited,
+// and the side branch would then read "second".
+def bang(text: string): string {
+  return text
+}
+
+node main() {
+  let word = "first"
+  let value = async word.concat(bang("!"))
+  word = "second"
+  return "${value} ${word}"
+}

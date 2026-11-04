@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "returnsEarly",
+      "description": "A return nested in two ifs in the main arm returns from the function after the side call finishes",
+      "input": "",
+      "expectedOutput": "\"main, side end, result: early\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runsToTheEnd",
+      "description": "When the nested return does not fire, the arm finishes and the later use returns the value",
+      "input": "",
+      "expectedOutput": "\"main, not early, side end, result: late side\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

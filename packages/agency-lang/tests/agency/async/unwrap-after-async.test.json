@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A ? failure in the main arm returns the failure from the function after the side call finishes",
+      "input": "",
+      "expectedOutput": "\"main, side end, failure: mayFail failed\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

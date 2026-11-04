@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A decorated def that uses async returns early from its block, and the decorator keeps running",
+      "input": "",
+      "expectedOutput": "\"before, main, side end, after: early, decorated early, before, main, side end, after: late side, decorated late side\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

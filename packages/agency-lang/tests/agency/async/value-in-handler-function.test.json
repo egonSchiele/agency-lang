@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A mention inside a handler function is the join",
+      "input": "",
+      "expectedOutput": "\"main, side end, handler sees: side value, asked\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

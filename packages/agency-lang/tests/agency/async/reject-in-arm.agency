@@ -1,0 +1,30 @@
+// An `interrupt` raised directly in the main arm (not inside a called
+// function) is rejected by the host. The enclosing function returns the
+// failure, and "approved" is never recorded. The side call has finished by
+// then, so "side end" is in the log.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def work(): string {
+  let value = async slowSide()
+  record("main")
+  return interrupt("may I?")
+  record("approved")
+  return "done ${value}"
+}
+
+node main() {
+  reset()
+  const result = work()
+  if (isFailure(result)) {
+    record("work failed")
+  } else {
+    record("work returned: ${result}")
+  }
+  return logText()
+}

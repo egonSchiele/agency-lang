@@ -1,0 +1,22 @@
+// The side call is a JavaScript helper that throws while the main arm is
+// paused on an interrupt (the helper waits 100ms first, and the main arm
+// raises at once).
+//
+// PINNED, current behaviour: the host gets no interrupt at all. The
+// throw fails the whole node: the run ends with a failure whose error is
+// the helper's message, "side helper blew up", and the main arm's pending
+// interrupt is dropped without anyone being asked. If the interrupt were
+// surfaced instead, the node's output would be the interrupt list and the
+// exact match would fail.
+import { explodeLater } from "./counters.js"
+
+def risky(): string {
+  return interrupt("main asks")
+  return "main approved"
+}
+
+node main() {
+  let fromSide = async explodeLater()
+  const fromMain = risky()
+  return { main: fromMain, side: fromSide }
+}

@@ -1,0 +1,20 @@
+// `let value = async ask() with approve`: the `with approve` belongs to the
+// side call and answers the interrupt it raises. The test has no interrupt
+// handlers, so an unanswered interrupt fails it. "main" lands before "side
+// end" (the side call still overlaps), and the use sees the approved value.
+import { reset, record, logText } from "./order-log.js"
+
+def ask(): string {
+  return interrupt("may I?")
+  sleep(200)
+  record("side end")
+  return "approved value"
+}
+
+node main() {
+  reset()
+  let value = async ask() with approve
+  record("main")
+  record("use: ${value}")
+  return logText()
+}

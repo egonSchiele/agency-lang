@@ -881,6 +881,63 @@ The body of a decorated function runs as the decorator's block, so a draft saved
 
 **How to fix:** unwrap into a variable first, then assign to the variable's field.`,
 
+  asyncInExpression: `\`async f()\` runs \`f\` beside the statements that follow it in the same block, and the block waits for \`f\` at the first use of its value or at its end. That needs a statement to start from and statements to run beside, so \`async\` can only begin a statement or the right-hand side of a \`let\` or \`const\`. Inside a larger expression, such as an argument or a condition, there are no following statements for it to run beside.
+
+**How to fix:** give the call its own line.
+
+\`\`\`agency
+def summarize(text: string): string {
+  return text
+}
+
+def turn(msg: string) {
+  let summary = async summarize(msg)
+  print("working")
+  print(summary)
+}
+\`\`\``,
+
+  asyncOutsideBody: `\`async\` lowers to a branch that runs beside the rest of a function or node body. A module-level initializer and a parameter default run outside any body, so there is nothing for the call to run beside.
+
+**How to fix:** move the call into a node or a def.`,
+
+  asyncInHandlerBody: `A handler body (\`with (intr) { ... }\`) compiles to plain code that answers an interrupt. It has no steps and cannot start branches, so \`async\` has nothing to lower to there.
+
+**How to fix:** make the call before the \`handle\` block, or inside a def the handler calls without \`async\`.`,
+
+  asyncInCallback: `A callback body runs as a side effect of a lifecycle hook. It cannot pause, and it cannot wait for a branch, which is what an \`async\` call needs at its join.
+
+**How to fix:** make the call from the node or def that registers the callback.`,
+
+  asyncAsParallelArm: `The arms of a \`parallel\` block already run beside each other. An \`async\` call written directly as an arm would have no following statements in its own arm to run beside, so the keyword means nothing there.
+
+**How to fix:** remove \`async\`, and the call runs beside the other arms. Inside a \`seq { }\` arm, \`async\` works as it does anywhere else.`,
+
+  asyncUnwrap: `The \`?\` operator returns a failure from the enclosing function. On an \`async\` call, that return would happen inside the branch that runs the call, where it cannot return from the function, and the failure would be lost.
+
+**How to fix:** keep the Result and unwrap it after it is ready.
+
+\`\`\`agency
+def fetchName(): Result {
+  return success("Ada")
+}
+
+def greet(): Result {
+  let named = async fetchName()
+  print("working")
+  const name = named?
+  return success(name)
+}
+\`\`\``,
+
+  asyncNonCall: `\`async\` starts a call that runs beside the statements after it. A variable, a property, or a literal is not a call, so there is nothing to start.
+
+**How to fix:** remove \`async\`, or call the function: \`async load()\` rather than \`async load\`.`,
+
+  asyncBranchExit: `The statements after an \`async\` call, up to the first use of its value or the end of the block, run as their own branch beside the call. A \`goto\`, \`break\`, or \`continue\` inside that stretch would have to leave the block from inside the branch, which a branch cannot do. When one of them is the last statement of the stretch, at the block's top level, the compiler ends the branch just before it, so that case works. This one is nested inside an \`if\` or another statement.
+
+**How to fix:** start the \`async\` call after the \`goto\`, \`break\`, or \`continue\`, or read the call's value before it so the branch ends there.`,
+
   unwrapNonResult: `The \`?\` operator reads a \`Result\`: it gives the success value, and if the Result is a failure it returns that failure from the enclosing function. The expression before this \`?\` is not a \`Result\`, so there is nothing to unwrap. The usual causes are a function that returns a plain value, or JavaScript-style optional chaining (\`obj?.name\`), which Agency does not have.
 
 **How to fix:** remove the \`?\` if the value is already plain. If you meant to tolerate a null, check for it with \`if\` or \`??\` instead.`,

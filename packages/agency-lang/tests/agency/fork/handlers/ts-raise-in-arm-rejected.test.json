@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A raise from a TypeScript helper inside a fork arm is answered by that arm's own with-reject, and not by its sibling's",
+      "input": "",
+      "expectedOutput": "[\"a: reject\",\"b: approve\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "ts raise in arm b"
+        }
+      ]
+    }
+  ]
+}

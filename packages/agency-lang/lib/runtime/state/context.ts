@@ -737,19 +737,47 @@ export class RuntimeContext<T> {
    *  for handlers registered before any guard can exist, like the
    *  --policy handler and top-level init wrappers). Agency handle
    *  blocks capture it in Runner.handle; TS callers capture at call
-   *  time in withPushedHandler. See HandlerEntry. */
-  pushHandler(fn: HandlerFn, liveGuardIds: string[]): void {
+   *  time in withPushedHandler. See HandlerEntry.
+   *
+   *  `stack` is REQUIRED for the same reason: it is the stack the handler
+   *  is registered on, and it decides which raises the handler hears (that
+   *  stack and the branches started from it). `null` means everywhere and
+   *  is right only for registrations with no runner stack, the --policy
+   *  handler and the global-init wrapper. */
+  pushHandler(fn: HandlerFn, liveGuardIds: string[], stack: StateStack | null): HandlerEntry {
     // A handler from TypeScript takes only the interrupt. The chain calls
     // every handler with the run first, so wrap it once here. `callPlain`
     // makes the run readable on the handler's first line.
-    this.pushRunHandler((run, interrupt) => callPlain(run, fn, [interrupt]), liveGuardIds);
+    return this.pushRunHandler(
+      (run, interrupt) => callPlain(run, fn, [interrupt]),
+      liveGuardIds,
+      stack,
+    );
   }
   /** Register a handler function in the shape the chain calls: the run it
    *  runs under, then the interrupt. Handler functions the compiler wrote
-   *  already have this shape. */
-  pushRunHandler(fn: RunHandlerFn, liveGuardIds: string[]): void {
-    this.handlers.push({ fn, liveGuardIds });
+   *  already have this shape. Returns the entry, which the caller hands
+   *  back to `removeHandler` when its scope ends. */
+  pushRunHandler(fn: RunHandlerFn, liveGuardIds: string[], stack: StateStack | null): HandlerEntry {
+    const entry: HandlerEntry = { fn, liveGuardIds, stack };
+    this.handlers.push(entry);
+    return entry;
   }
+  /** Remove the entry `pushHandler` or `pushRunHandler` returned. By
+   *  identity, not by position: concurrent branches share this one list and
+   *  leave their `handle` blocks in any order, so the newest entry is not
+   *  necessarily the caller's. An entry that is already gone is left
+   *  alone. */
+  removeHandler(entry: HandlerEntry): void {
+    const index = this.handlers.lastIndexOf(entry);
+    if (index !== -1) {
+      this.handlers.splice(index, 1);
+    }
+  }
+  /** Remove the newest entry. Only for the global-init wrapper
+   *  (`withHandlerWrapper.mustache`), which runs before any branch exists,
+   *  so its entry is always the newest. Everything else uses
+   *  `removeHandler`. */
   popHandler(): void {
     this.handlers.pop();
   }

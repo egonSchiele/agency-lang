@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A with suffix on the async call answers the side call's interrupt",
+      "input": "",
+      "expectedOutput": "\"main, side end, use: approved value\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

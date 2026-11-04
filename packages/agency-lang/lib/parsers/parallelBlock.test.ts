@@ -68,6 +68,23 @@ describe("parallelBlockParser", () => {
     const input = `parallel oops`;
     expect(() => parallelBlockParser(input)).toThrow(/expected `\{` to open parallel block body/);
   });
+
+  it("accepts `shared` as a named argument", () => {
+    const result = parallelBlockParser(`parallel(shared: true) {
+  let a = foo()
+}`);
+    expect(result.success).toBe(true);
+  });
+
+  it("refuses `mainThread` as a named argument", () => {
+    // `mainThread` is a field only the async lowering sets on the fork it
+    // writes. A program must not be able to claim the conversation thread
+    // for an arm of a block it wrote.
+    const input = `parallel(mainThread: 1) {
+  let a = foo()
+}`;
+    expect(() => parallelBlockParser(input)).toThrow();
+  });
 });
 
 describe("seqBlockParser", () => {

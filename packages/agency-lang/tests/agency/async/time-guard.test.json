@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "underBudget",
+      "description": "Two 600ms arms under a 1000ms guard overlap and do not trip it",
+      "input": "",
+      "expectedOutput": "\"slept 600, slept 600\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "longerArmTrips",
+      "description": "A 1500ms side call under a 1000ms guard trips it, though the main arm is short",
+      "input": "",
+      "expectedOutput": "\"tripped: timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

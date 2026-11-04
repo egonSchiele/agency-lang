@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A with-approve inside the async call does not approve the main arm's interrupt; the host's rejection reaches it",
+      "input": "",
+      "expectedOutput": "\"main rejected, side: side done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

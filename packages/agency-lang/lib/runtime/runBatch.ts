@@ -83,6 +83,13 @@ export type BatchChild<T> = {
   /** `run` is the branch's own run: its stack, its thread view, and its
    *  copy of the globals. */
   invoke: (run: Run, childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
+  /** Per-child override of `RunBatchOpts.shareThreads`: this one child
+   *  writes to the parent's active thread while its siblings get
+   *  branch-local subthreads. The main arm of an `async` block uses it, so
+   *  the reply it produces lands in the conversation. At most one child of
+   *  a batch may set it: two children sharing one active stack would push
+   *  and pop on it concurrently and corrupt the conversation. */
+  shareThreads?: boolean;
 };
 
 export type BatchHooks = {
@@ -383,7 +390,7 @@ function startInvoke<T>(
   hooks?.onBranchStart?.(t.child.key, i);
   t.startedAt = performance.now();
   const shareGlobals = opts.shareGlobals ?? false;
-  const shareThreads = opts.shareThreads ?? false;
+  const shareThreads = t.child.shareThreads ?? opts.shareThreads ?? false;
   const decisions: DecisionScope | undefined =
     opts.decisionCollector === undefined
       ? undefined
@@ -976,7 +983,7 @@ async function runRaceResume<T>(
   let value: T | Interrupt[];
   try {
     const shareGlobals = opts.shareGlobals ?? false;
-    const shareThreads = opts.shareThreads ?? false;
+    const shareThreads = child.shareThreads ?? opts.shareThreads ?? false;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, (spans) =>
       runInBranchAlsFrame(
         opts.run,

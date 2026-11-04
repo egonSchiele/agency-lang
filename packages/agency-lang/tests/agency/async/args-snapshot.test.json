@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An argument is read at the async line, before the main arm reassigns it",
+      "input": "",
+      "expectedOutput": "\"10 2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

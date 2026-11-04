@@ -1,0 +1,30 @@
+// An `async` call inside a `seq` arm of a `parallel` block. It runs beside
+// the rest of the arm and joins at its use there. The other arm of the
+// `parallel` sleeps longer, so its end is last.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def otherArm(): string {
+  sleep(500)
+  record("other end")
+  return "other"
+}
+
+node main() {
+  reset()
+  parallel {
+    seq {
+      let value = async slowSide()
+      record("main")
+      record("use ${value}")
+    }
+    const other = otherArm()
+  }
+  record("after parallel: ${other}")
+  return logText()
+}

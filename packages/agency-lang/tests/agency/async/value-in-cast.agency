@@ -1,0 +1,18 @@
+// The first mention of `value` is the operand of a cast. The join is before
+// that statement, so the cast reads the side call's value, after "side end".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): any {
+  sleep(200)
+  record("side end")
+  return "side value"
+}
+
+node main() {
+  reset()
+  let value = async slowSide()
+  record("main")
+  const text = value as string
+  record("use: ${text}")
+  return logText()
+}

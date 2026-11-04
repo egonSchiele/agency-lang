@@ -1,0 +1,27 @@
+// `let value = async slowItem(i)` in a loop body, never used. The join is
+// the end of the body, so each iteration waits for its side call: the
+// second side call starts only after the first has ended, and each "main"
+// record overlaps its own iteration's side call. The `before` checks fail
+// if the iterations' side calls overlapped.
+import { reset, record, logText, before } from "./order-log.js"
+
+def slowItem(i: number): number {
+  record("start ${i}")
+  sleep(200)
+  record("end ${i}")
+  return i
+}
+
+node main() {
+  reset()
+  for (i in [1, 2]) {
+    let value = async slowItem(i)
+    record("main ${i}")
+  }
+  return {
+    secondStartsAfterFirstEnds: before("end 1", "start 2"),
+    mainOneBeforeEndOne: before("main 1", "end 1"),
+    mainTwoBeforeEndTwo: before("main 2", "end 2"),
+    mainTwoAfterEndOne: before("end 1", "main 2")
+  }
+}

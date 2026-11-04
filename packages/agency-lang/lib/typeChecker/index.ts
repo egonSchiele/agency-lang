@@ -27,6 +27,7 @@ import { desugarGuardsInBody } from "../preprocessors/guardDesugar.js";
 import { decoratorLookup, desugarDecorators } from "../preprocessors/decoratorDesugar.js";
 import { checkCastPositions } from "./castPositions.js";
 import { checkUnwraps } from "./unwrapChecks.js";
+import { asyncRefusals } from "./asyncChecks.js";
 import { buildFlowGraphs } from "./flowBuilder.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
@@ -392,6 +393,9 @@ export class TypeChecker {
     checkConflictingMarkers(ctx);
     checkCastPositions(ctx);
     checkUnwraps(scopes, ctx);
+    // Where `async f()` cannot go (AG1026 to AG1033). Tree-only, like the
+    // unwrap refusals, and called from the compile path too.
+    ctx.errors.push(...asyncRefusals(ctx.programNodes));
 
     // Defaulted parameters must come last (positional binding makes a
     // required-after-defaulted parameter silently unfillable).

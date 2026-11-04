@@ -1,17 +1,22 @@
-// Fork branches SHARE the handler chain: branch B's handler is invoked
-// for branch A's interrupt — including the kickoffs. Each handler gates
-// its read on ITS OWN branch's kickoff message, so the only read a
-// handler should ever be ASKED about is the sibling branch's.
+// A handler applies only inside the branch that registered it: branch B's
+// handler is never consulted for branch A's interrupt, and the other way
+// round (HandlerEntry.stack, docs/dev/runtime/interrupts.md).
+//
+// Each branch's handler approves its own kickoff and, while answering it,
+// reads a file. That read raises std::read from inside the handler body.
+// The handler that is running never hears its own raise, and the sibling's
+// handler is in another branch, so no handler answers the read and it is
+// rejected. Before branch scoping, the sibling's handler was asked about it
+// (and printed ASKED).
 //
 // This is an agency-js test because the ask-counts cannot ride the
-// return value: the sibling's handler runs in the RAISER's lineage, so
-// its counter write lands in the raising branch's isolated state and is
-// discarded at the join. Prints share one stdout, so the JS side counts
-// the ASKED lines instead.
+// return value: prints share one stdout, so the JS side counts the ASKED
+// lines instead.
 //
-// Correct: each tag ASKED exactly once. A missing line means exclusion
-// leaked across lineages; a doubled line means a handler was re-entered
-// for its own read.
+// Correct: no ASKED line at all (no cross-branch ask), both reads
+// rejected, and "A done,B done", which shows each branch's own handler
+// still answered its own kickoff. A check that skipped every handler
+// would leave the kickoffs unanswered and fail that last part.
 node runForkIsolation(): string {
   const results = fork(["A", "B"]) as tag {
     handle {

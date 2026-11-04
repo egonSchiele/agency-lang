@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An async call nested in another call's arm overlaps and joins on its own",
+      "input": "",
+      "expectedOutput": "\"main, inner main, inner end, use inner, outer end, use outer\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

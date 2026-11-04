@@ -1,0 +1,29 @@
+// Two async calls with nothing to overlap: one is used on the very next
+// line, and one is the last statement of the body. Both run as plain calls:
+// each value is ready where it is used, and the last call finishes before
+// the function returns.
+import { reset, record, logText } from "./order-log.js"
+
+def callA(): string {
+  sleep(100)
+  record("a end")
+  return "a"
+}
+
+def callB() {
+  sleep(100)
+  record("b end")
+}
+
+def work() {
+  let a = async callA()
+  record("use ${a}")
+  async callB()
+}
+
+node main() {
+  reset()
+  work()
+  record("after work")
+  return logText()
+}

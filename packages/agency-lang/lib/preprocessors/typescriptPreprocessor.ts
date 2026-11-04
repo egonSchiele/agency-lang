@@ -31,7 +31,8 @@ import {
   walkNodesArray,
   type WalkAncestor,
 } from "@/utils/node.js";
-import { desugarParallelInBody } from "./parallelDesugar.js";
+import { desugarParallelInBody, resetParallelCounter } from "./parallelDesugar.js";
+import { desugarAsyncInProgram } from "./asyncDesugar.js";
 import { desugarGuardsInBody } from "./guardDesugar.js";
 import { decoratorLookup, desugarDecorators } from "./decoratorDesugar.js";
 import { hoistCallsInProgram } from "./hoistCalls.js";
@@ -335,6 +336,10 @@ export class TypescriptPreprocessor {
   }
 
   preprocess(): AgencyProgram {
+    // The `__arms_N` names only need to be unique within one program. A
+    // counter carried over from an earlier compile in the same process
+    // made a file's output depend on what compiled before it.
+    resetParallelCounter();
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
@@ -363,6 +368,14 @@ export class TypescriptPreprocessor {
     // Idempotent: the TypeChecker constructor may have desugared this
     // program already. See guardDesugar.ts.
     this.program.nodes = desugarGuardsInBody(this.program.nodes);
+    // `async f()` lowers to a parallel block, so it runs just before the
+    // parallel desugar, which turns that block into a fork. Before the
+    // hoist pass, so the `return`s that pass writes for `?` land inside
+    // the arm, where the join check finds them. See asyncDesugar.ts.
+    desugarAsyncInProgram(this.program, [
+      ...Object.keys(this.functionDefinitions),
+      ...Object.keys(this.importedFunctions),
+    ]);
     this.desugarParallelBlocks();
     prunePreludeShadows(this.program);
     this.propagateBlockTypes();
@@ -372,14 +385,12 @@ export class TypescriptPreprocessor {
     // never re-executes a completed call (frame-queue desync; spec
     // docs/superpowers/specs/2026-07-22-hoist-calls-resume-safety-design.md).
     // After collectSkills so skill detection sees original call shapes;
-    // before addAwaitPendingCalls and resolveVariableScopes so the
-    // __hoist temps get awaits and scopes like hand-written statements.
-    //
-    // Accepted behavior change: `for (x in async getItems())` was
-    // rejected by validateNoAsyncInLoops (the async call sat under the
-    // loop node); hoisting moves it above the loop, so it now compiles.
-    // A relaxation, recorded here and in docs/dev/compiler/hoist-calls.md.
+    // before resolveVariableScopes so the __hoist temps get scopes like
+    // hand-written statements.
     this.program = hoistCallsInProgram(this.program);
+    // The old pending-promise `async` runtime. The async lowering above
+    // clears every flag before these run, so they see nothing; they are
+    // deleted with that runtime.
     this.addAwaitPendingCalls();
     this.validateNoAsyncInLoops();
 

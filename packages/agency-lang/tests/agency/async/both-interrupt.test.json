@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Both arms interrupt; the host answers both, and each answer reaches the arm that raised it",
+      "input": "",
+      "expectedOutput": "\"main rejected, side: side approved\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "side asks" },
+        { "action": "reject", "expectedMessage": "main asks" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Each loop iteration joins its side call at the end of the body; iterations never overlap",
+      "input": "",
+      "expectedOutput": "{\"secondStartsAfterFirstEnds\":true,\"mainOneBeforeEndOne\":true,\"mainTwoBeforeEndTwo\":true,\"mainTwoAfterEndOne\":true}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

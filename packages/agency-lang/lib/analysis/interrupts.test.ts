@@ -47,6 +47,33 @@ node main() {
     );
   });
 
+  it("finds the handler around an async call that interrupts", () => {
+    // `async` is a flag on an ordinary call, so every walker sees the call.
+    // If the analysis lost it, the site would report no handler.
+    withSingleFile(
+      `
+def remember(msg: string): string {
+  return interrupt std::write("Save a memory?", { path: "memories.md" })
+  return msg
+}
+
+node turn(msg: string) {
+  handle {
+    let saved = async remember(msg)
+    print(saved)
+  } with approve
+}
+`,
+      (file) => {
+        const result = analyzeInterrupts(file, {});
+        expect(result.sites).toHaveLength(1);
+        expect(result.sites[0].site.effect).toBe("std::write");
+        expect(result.sites[0].handlers).toHaveLength(1);
+        expect(result.sites[0].handlers[0]).toMatchObject({ line: 8 });
+      },
+    );
+  });
+
   it("reports an empty handler list when the interrupt is bare", () => {
     withSingleFile(
       `

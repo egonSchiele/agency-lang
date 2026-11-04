@@ -1,0 +1,24 @@
+// `let unused = async slowSide()` is never mentioned again, so its join is
+// the end of the function body. "main" lands before "side end" (they
+// overlapped), and "side end" lands before "after work" (the function
+// waited for the side call before returning).
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def work(): string {
+  let unused = async slowSide()
+  record("main")
+  return "done"
+}
+
+node main() {
+  reset()
+  const result = work()
+  record("after work: ${result}")
+  return logText()
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1033: `break` runs beside `async slowSide()`, in a separate branch",
+  "description": "agency compile refuses a break nested inside an async call's arm"
+}

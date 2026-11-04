@@ -1,0 +1,38 @@
+// A `return` two `if`s deep in the main arm returns from the function, after
+// the side call has finished. With `flag` true, "not reached" is never
+// recorded and the result is "early". With `flag` false, the arm runs to
+// its end and the function returns the value through the later use.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def work(flag: boolean): string {
+  let value = async slowSide()
+  record("main")
+  const inner = true
+  if (flag) {
+    if (inner) {
+      return "early"
+    }
+  }
+  record("not early")
+  return "late ${value}"
+}
+
+node returnsEarly() {
+  reset()
+  const result = work(true)
+  record("result: ${result}")
+  return logText()
+}
+
+node runsToTheEnd() {
+  reset()
+  const result = work(false)
+  record("result: ${result}")
+  return logText()
+}

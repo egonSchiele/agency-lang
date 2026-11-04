@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "The main arm runs while the side call sleeps; the first use of the value waits for it",
+      "input": "",
+      "expectedOutput": "\"main 1, main 2, side end, use: name of hi\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

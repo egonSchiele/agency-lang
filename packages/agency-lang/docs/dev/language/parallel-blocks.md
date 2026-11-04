@@ -121,10 +121,17 @@ Two checks run during the preprocessor pass:
    > Parallel arm references `posts`, which is declared by a sibling arm. Wrap both arms in a single `seq { ... }` block to make the dependency explicit.
 
    `binds` is a deep walk (`collectBindings`): every `let`/`const` at any depth
-   inside the arm counts, including ones inside a nested `seq`, `if`, or loop.
-   It stops at nested `def`/`node` definitions, which have their own scope. A
-   called function's name counts as a reference, so
+   inside the arm counts, including ones inside a nested `seq`, `if`, loop, or
+   `with` statement. It stops at nested `def`/`node` definitions, which have
+   their own scope. A called function's name counts as a reference, so
    `let foo = ...` in one arm and `foo()` in another is an error.
+
+   `frees` comes from `namesMentioned`, which reads every variable, called
+   function name, and assignment target that `walkNodes` reaches. That
+   descent covers every expression position, so a reference inside a `with`
+   statement, a `match` arm, or a cast is found. An earlier hand-written walk
+   missed those, and an arm reading a sibling's binding inside
+   `print(x) with approve` compiled and read `undefined`.
 
    A `seq { }` block is one child for this check, so a sibling arm that
    references a name the `seq` declares is an error.
@@ -388,6 +395,24 @@ A small fixture that runs only through the preprocessor and snapshots the desuga
 
 `lib/preprocessors/parallelDesugar.test.ts` covers the allowlist, the cross-arm
 reference check, and the shape of the desugared AST.
+
+## `async` blocks
+
+`async f()` lowers to a `parallel` block marked `origin: "async"`, built by
+`lib/preprocessors/asyncDesugar.ts`. `desugarOneParallel` treats such a block
+in three extra ways: arm 1 gets the parent's conversation thread
+(`mainThread: 1` on the fork), arm 1 ends with a marked completion, and a join
+check between the fork and the hoists returns an early `return` from the
+function. An allowlist or cross-arm error on an `async` block is a compiler
+bug and is reported as one. See `docs/dev/runtime/async.md`.
+
+## Nested bodies
+
+`desugarParallelInBody` reaches nested `parallel` and `seq` blocks through
+the slot tables: statement bodies through `mapBodies` (`bodySlots`), and
+bodies held inside expressions, such as a block argument passed to a call,
+through `expressionSlots`. A new body-bearing node is covered without a case
+here.
 
 ## Future work
 

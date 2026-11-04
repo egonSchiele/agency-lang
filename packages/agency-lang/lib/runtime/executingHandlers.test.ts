@@ -6,8 +6,8 @@ import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
 
-const entryA: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };
-const entryB: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };
+const entryA: HandlerEntry = { fn: async () => undefined, liveGuardIds: [], stack: null };
+const entryB: HandlerEntry = { fn: async () => undefined, liveGuardIds: [], stack: null };
 
 describe("executing handlers", () => {
   it("is empty outside any handler", () => {

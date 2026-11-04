@@ -1,0 +1,32 @@
+// A TypeScript helper raises an interrupt from inside each of two fork
+// arms. Arm "a" raises at once inside `handle { ... } with reject`, and
+// stays inside that handler for 300ms. Arm "b" has no handler and raises
+// after 100ms, while arm "a"'s handler is still live.
+//
+// - Arm "a"'s raise must be answered by arm "a"'s own handler: rejected,
+//   without reaching the host.
+// - Arm "b"'s raise must not be answered by arm "a"'s handler: it reaches
+//   the host, which approves it (the test file expects exactly one host
+//   interrupt, with arm "b"'s message).
+//
+// If a raise from TypeScript skipped the handlers of its own arm, the host
+// would get two interrupts and the run would stop at the second, which has
+// no answer. If arm "a"'s rejection leaked into arm "b", the host would get
+// none, and the runner would report the missing interrupt.
+import { raiseFromTs } from "./ts-helper.js"
+
+node main() {
+  const results = fork(["a", "b"]) as tag {
+    if (tag == "a") {
+      let response: any = null
+      handle {
+        response = raiseFromTs(tag, 0)
+        sleep(300)
+      } with reject
+      return "${tag}: ${response.type}"
+    }
+    const response = raiseFromTs(tag, 100)
+    return "${tag}: ${response.type}"
+  }
+  return results
+}

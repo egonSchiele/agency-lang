@@ -1,0 +1,23 @@
+// A `return` at the top level of the main arm returns from the function,
+// with the arm's value, after the side call has finished: "side end" lands
+// before "after work", and the result is "early", not "late".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def work(): string {
+  let unused = async slowSide()
+  record("main")
+  return "early"
+}
+
+node main() {
+  reset()
+  const result = work()
+  record("after work: ${result}")
+  return logText()
+}

@@ -1,0 +1,20 @@
+// `let name = async slowName()` joins just before the first statement that
+// mentions `name`. The side call sleeps, so the two main-arm records land
+// before "side end", and the use after it sees the value. If the join came
+// right after the `async` line, "side end" would come first.
+import { reset, record, logText } from "./order-log.js"
+
+def slowName(msg: string): string {
+  sleep(200)
+  record("side end")
+  return "name of ${msg}"
+}
+
+node main() {
+  reset()
+  let name = async slowName("hi")
+  record("main 1")
+  record("main 2")
+  record("use: ${name}")
+  return logText()
+}

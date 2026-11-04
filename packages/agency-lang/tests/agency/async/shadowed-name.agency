@@ -1,0 +1,25 @@
+// A later block argument names its parameter `value`, the same name as the
+// async binding. The join rule is "the first statement that mentions the
+// name anywhere", so the `map` statement is the join even though its
+// `value` is a different variable: "side end" lands before "mapped". Inside
+// the block, `value` is still the block's own parameter (10 and 20, not the
+// side call's text), and after the block the binding holds the side value.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side value"
+}
+
+node main() {
+  reset()
+  let value = async slowSide()
+  record("main")
+  const tens = map([1, 2]) as value {
+    return value * 10
+  }
+  record("mapped: ${tens.join(" ")}")
+  record("binding: ${value}")
+  return logText()
+}

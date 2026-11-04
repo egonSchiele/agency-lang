@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A use in a return expression is the join",
+      "input": "",
+      "expectedOutput": "\"main, side end, got side value\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

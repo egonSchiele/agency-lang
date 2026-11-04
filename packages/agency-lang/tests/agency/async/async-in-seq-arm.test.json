@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An async call in a seq arm runs beside the rest of that arm",
+      "input": "",
+      "expectedOutput": "\"main, side end, use side, other end, after parallel: other\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

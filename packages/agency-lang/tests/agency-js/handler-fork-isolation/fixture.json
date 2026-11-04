@@ -1,6 +1,6 @@
 {
   "result": "A done,B done",
-  "askedA": 1,
-  "askedB": 1,
+  "askedA": 0,
+  "askedB": 0,
   "readsRejected": 2
 }

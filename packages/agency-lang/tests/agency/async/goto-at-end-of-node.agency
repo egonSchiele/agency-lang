@@ -1,0 +1,22 @@
+// A node starts `async slowSide()` and ends in `goto finish()`. A `goto`
+// cannot run inside a fork arm, so the join moves to just before it: this
+// compiles, "main" overlaps the side call, and "side end" lands before the
+// next node runs.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide() {
+  sleep(200)
+  record("side end")
+}
+
+node finish() {
+  record("finish")
+  return logText()
+}
+
+node main() {
+  reset()
+  async slowSide()
+  record("main")
+  goto finish()
+}

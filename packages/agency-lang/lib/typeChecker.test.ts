@@ -7116,7 +7116,7 @@ describe("TypeChecker", () => {
       const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
       // The table has no file on disk, so the import itself is also reported;
       // only the alias diagnostic is under test.
-      const errors = typeCheck(program, {}, info).errors.filter((e) => e.code === "AG1026");
+      const errors = typeCheck(program, {}, info).errors.filter((e) => e.code === "AG1034");
       expect(errors.map((e) => e.message)).toEqual([
         "Type alias 'Delivery' is declared in '/project/delivery.agency' but not imported here (referenced in 'Inputs'). Import it by name, or write the type out.",
       ]);
@@ -7151,7 +7151,7 @@ describe("TypeChecker", () => {
         ],
       };
       const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
-      expect(typeCheck(program, {}, info).errors.filter((e) => e.code === "AG1026")).toEqual([]);
+      expect(typeCheck(program, {}, info).errors.filter((e) => e.code === "AG1034")).toEqual([]);
     });
 
     it("a builtin call is rejected when given a block argument", () => {

@@ -492,7 +492,13 @@ export class AgencyFunction {
     // handler conceptually registers above any guard (its body never
     // spends, so the hide-everything reading is also harmless).
     const wrapped: AgencyFunctionBody = (run, ...args) =>
-      withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), []);
+      withPushedHandler(
+        run.ctx,
+        autoApprove,
+        () => Promise.resolve(original(run, ...args)),
+        [],
+        run.stack,
+      );
     return this.#derive({ fn: wrapped, isPreapproved: true });
   }
 

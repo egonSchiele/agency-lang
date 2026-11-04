@@ -1,0 +1,18 @@
+// The side call returns a failure. After the join, the bound name holds
+// that failure, with its message, and the main arm's work is kept.
+def side(): Result<string> {
+  return failure("side broke")
+}
+
+def mainWork(): string {
+  return "main value"
+}
+
+node main() {
+  let fromSide = async side()
+  const fromMain = mainWork()
+  if (isFailure(fromSide)) {
+    return "failure: ${fromSide.error}, main: ${fromMain}"
+  }
+  return "unexpected success: ${fromSide.value}"
+}

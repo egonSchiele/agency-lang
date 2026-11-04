@@ -1,0 +1,26 @@
+// A bare `return` in the main arm returns from the function with no value,
+// after the side call has finished. "not reached" is never recorded, and
+// the function's result is null.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide() {
+  sleep(200)
+  record("side end")
+}
+
+def work() {
+  async slowSide()
+  record("main")
+  const stop = true
+  if (stop) {
+    return
+  }
+  record("not reached")
+}
+
+node main() {
+  reset()
+  const result = work()
+  record("result: ${result}")
+  return logText()
+}

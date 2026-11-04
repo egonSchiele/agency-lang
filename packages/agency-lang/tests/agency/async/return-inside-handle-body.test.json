@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A return inside a handle body in the main arm returns from the function",
+      "input": "",
+      "expectedOutput": "\"main, side end, result: from handle\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

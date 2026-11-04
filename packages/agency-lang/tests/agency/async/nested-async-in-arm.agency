@@ -1,0 +1,30 @@
+// An `if` inside the first call's arm starts its own async call. The inner
+// call runs beside the rest of the `if` body and joins at its use there;
+// the outer call is still running and joins at its use after the `if`.
+import { reset, record, logText } from "./order-log.js"
+
+def outerCall(): string {
+  sleep(400)
+  record("outer end")
+  return "outer"
+}
+
+def innerCall(): string {
+  sleep(100)
+  record("inner end")
+  return "inner"
+}
+
+node main() {
+  reset()
+  const go = true
+  let outer = async outerCall()
+  record("main")
+  if (go) {
+    let inner = async innerCall()
+    record("inner main")
+    record("use ${inner}")
+  }
+  record("use ${outer}")
+  return logText()
+}

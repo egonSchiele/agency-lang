@@ -101,9 +101,9 @@
     },
     {
       "nodeName": "unboundAliasHasNoReturnSchema",
-      "description": "a return type that reaches an alias the module never imports has no return schema; a string return has one",
+      "description": "an imported type prints by name and has a schema; a Record of it inlines its body, names an alias the module never imports, and has none; a string return has one",
       "input": "",
-      "expectedOutput": "[[\"nested\",\"Result<Outer>\",null],[\"greet\",\"string\",\"string\"]]",
+      "expectedOutput": "[[\"outer\",\"Result<Outer>\",\"object\"],[\"nested\",\"Result<Record<string, Outer>>\",null],[\"greet\",\"string\",\"string\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"

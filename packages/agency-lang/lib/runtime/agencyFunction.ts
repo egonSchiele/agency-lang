@@ -128,8 +128,10 @@ export type AgencyFunctionOpts = {
   toolDefinition: ToolDefinition | null;
   /** Makes the zod schema of the value a call returns: the declared return
    *  type, or the success type inside a `Result`. A thunk, so nothing is
-   *  built at module load. Absent for a def that is not exported, declares
-   *  no return type, or returns a function or a regex. */
+   *  built at module load. Absent for a def that is not exported or declares
+   *  no return type, or whose return type holds a function or a `regex`
+   *  (which JSON Schema cannot express) or names a type its module cannot
+   *  reach at run time (#1371). */
   returnSchema?: ReturnSchema | null;
   exported?: boolean;
   markers?: ToolMarkers;

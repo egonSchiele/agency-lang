@@ -23,7 +23,9 @@ export type CatalogEntry = {
   returns: string | null;
   /** The JSON Schema of the value a reference into this tool's step reads:
    *  the declared return type, or the success type inside a `Result`. Null
-   *  when the tool declares no return type or returns a function. */
+   *  when the tool declares no return type, or its return type holds a
+   *  function or a `regex` (which JSON Schema cannot express), or names a
+   *  type its module cannot reach at run time (#1371). */
   returnSchema: unknown | null;
   /** What the tool can raise, as `describe` reports it. A tool that uses
    *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard

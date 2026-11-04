@@ -73,4 +73,10 @@ describe("returnSchema on a registered function", () => {
     );
     expect(out).toContain("z.lazy(() => Note)");
   });
+  it("is left out for a function type nested in an object, which the zod mapper would print as a string", () => {
+    const nestedFunction = gen(
+      "def same(x: number): number {\n  return x\n}\nexport def f(): { cb: (number) => number; n: number } {\n  return { cb: same, n: 1 }\n}\n",
+    );
+    expect(returnSchemaLine(nestedFunction, "f")).toBeNull();
+  });
 });

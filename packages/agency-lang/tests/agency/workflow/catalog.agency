@@ -5,7 +5,7 @@ import { catalog, CatalogEntry, CatalogParam } from "std::workflow"
 import { add, round } from "std::math"
 import { searchNotes } from "./fixtures/tools/notes.agency"
 import { addListItems } from "./fixtures/tools/lists.agency"
-import { greet, nested } from "./fixtures/tools/withHelper.agency"
+import { greet, nested, outer } from "./fixtures/tools/withHelper.agency"
 import { keys } from "std::object"
 import { Json } from "std::validation"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
@@ -125,12 +125,14 @@ node returnSchemas(): Json {
   return [notes.type, notes.items.type, keys(notes.items.properties), notes.items.required, rounded.type]
 }
 
-// `nested` returns `Outer`, whose body names `Inner`, which withHelper.agency
-// never imports: the compiled module has no binding for it, so the compiler
-// emits no return schema rather than one that fails at load. `greet` returns
-// a string and has one.
+// `outer` returns `Outer`, which withHelper.agency imports, so its schema
+// prints `Outer` by name and has a binding, although `Outer`'s body names
+// `Inner`, which the module never imports. `nested` returns a Record of
+// `Outer`, whose schema inlines `Outer` and so prints `Inner`: no binding,
+// so the compiler emits no schema rather than one that fails at load.
+// `greet` returns a string.
 node unboundAliasHasNoReturnSchema(): Json {
-  const listed = runCatalog([nested, greet])
+  const listed = runCatalog([outer, nested, greet])
   if (listed is failure(err)) {
     return "failed: ${err}"
   }

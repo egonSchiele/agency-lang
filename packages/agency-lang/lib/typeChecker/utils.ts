@@ -144,6 +144,12 @@ function rejectRegexInLlmType(
   }
 }
 
+/** True when a function type appears anywhere in `t`, not only at its top
+ *  or in a union arm as `isFunctionTyped` asks. */
+export function containsFunction(t: VariableType): boolean {
+  return visitTypes(t, (n) => n.type === "blockType");
+}
+
 export function containsRegex(t: VariableType): boolean {
   return visitTypes(t, (n) => n.type === "primitiveType" && n.value === "regex");
 }

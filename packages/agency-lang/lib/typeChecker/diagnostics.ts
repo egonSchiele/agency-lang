@@ -931,6 +931,53 @@ export const DIAGNOSTICS = {
     message:
       "`{expr}?` cannot be a write target. Unwrap into a variable first, then assign to its field.",
   },
+  asyncInExpression: {
+    code: "AG1026",
+    severity: "error",
+    message:
+      "`async {expr}` must start a statement: write `async {expr}` on its own line, or `let x = async {expr}`. It cannot be part of a larger expression.",
+  },
+  asyncOutsideBody: {
+    code: "AG1027",
+    severity: "error",
+    message:
+      "`async {expr}` runs beside the rest of a function or node body, and a module-level initializer or a parameter default is not inside one. Use it inside a node or a def.",
+  },
+  asyncInHandlerBody: {
+    code: "AG1028",
+    severity: "error",
+    message:
+      "`async {expr}` cannot be used inside a handler body. Call it before the `handle` block, or in a def the handler calls.",
+  },
+  asyncInCallback: {
+    code: "AG1029",
+    severity: "error",
+    message:
+      "`async {expr}` cannot be used inside a callback body. Callbacks run as side effects of a hook and cannot wait for a branch. Call it from the node or def instead.",
+  },
+  asyncAsParallelArm: {
+    code: "AG1030",
+    severity: "error",
+    message:
+      "`async {expr}` cannot be an arm of a `parallel` block, because the arms already run beside each other. Remove the `async`.",
+  },
+  asyncUnwrap: {
+    code: "AG1031",
+    severity: "error",
+    message:
+      "`async {expr}?` cannot unwrap the call. Unwrap the value after it is ready: `let r = async {expr}`, then `const x = r?`.",
+  },
+  asyncNonCall: {
+    code: "AG1032",
+    severity: "error",
+    message: "`async` must be followed by a call, and `{expr}` is not a call.",
+  },
+  asyncBranchExit: {
+    code: "AG1033",
+    severity: "error",
+    message:
+      "`{keyword}` runs beside `async {expr}`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `{keyword}`, or use its value before it.",
+  },
   unwrapNonResult: {
     code: "AG2023",
     severity: "error",

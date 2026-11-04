@@ -587,7 +587,7 @@ describe("suspension", () => {
     const after = new CostGuard(1);
     const stack = new StateStack();
     stack.pushGuard(before);
-    const entry = { fn: async () => undefined, liveGuardIds: [before.guardId] };
+    const entry = { fn: async () => undefined, liveGuardIds: [before.guardId], stack: null };
     stack.pushGuard(after);
     const hidden = stack.guardsHiddenFrom(entry);
     expect(hidden.map((g) => g.guardId)).toEqual([after.guardId]);

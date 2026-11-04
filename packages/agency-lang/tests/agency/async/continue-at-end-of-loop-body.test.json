@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A continue at the end of a loop body moves the join before it",
+      "input": "",
+      "expectedOutput": "\"main 1, end 1, main 2, end 2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

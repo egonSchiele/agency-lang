@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A preapproved function running in one fork arm does not answer an interrupt raised in its sibling; the host's rejection reaches it",
+      "input": "",
+      "expectedOutput": "[\"quiet done\",\"asker: rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject", "expectedMessage": "asker asks" }]
+    }
+  ]
+}

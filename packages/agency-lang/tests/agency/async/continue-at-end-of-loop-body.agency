@@ -1,0 +1,20 @@
+// A loop body starts `async slowSide(i)` and ends in `continue`. The join
+// moves to just before the `continue`, so this compiles, and each
+// iteration's side call finishes before the next iteration starts: "end 1"
+// lands before "main 2".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(i: number) {
+  sleep(200)
+  record("end ${i}")
+}
+
+node main() {
+  reset()
+  for (i in [1, 2]) {
+    async slowSide(i)
+    record("main ${i}")
+    continue
+  }
+  return logText()
+}

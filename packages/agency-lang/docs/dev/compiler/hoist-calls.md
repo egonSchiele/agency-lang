@@ -48,7 +48,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 
 The type checker refuses a checked cast to a tagged type wherever the pass does not lift it. `lib/preprocessors/hoistPositions.ts` models the three layers that decide this — which top-level nodes the pass enters, which statement kinds it extracts from, and which slots it skips — and its test runs the real pass on the same programs and asserts the two agree. So the residuals listed below for calls do not exist for casts: a cast in one of those positions is AG1017 (there is a line to move it to) or AG1019 (a module-level initializer or a parameter default, where there is not). A cast in a handler body gets AG1020, whose advice is to do the cast before the `handle` block, because the pass never rewrites a handler body and moving the cast to its own line inside it changes nothing. What any pausing Agency call should do in a handler body is still open.
 
-Accepted behavior change: `for (x in async getItems())` used to be rejected by `validateNoAsyncInLoops`; hoisting moves the call above the loop, so it now compiles. A relaxation, not a breakage.
+`for (x in async getItems())` is refused before this pass runs (AG1026: `async` must start a statement or the right-hand side of a `let` or `const`; see `docs/dev/runtime/async.md`).
 
 ## Temp naming
 

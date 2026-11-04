@@ -1,0 +1,31 @@
+// Two fork arms. The "quiet" arm calls a preapproved function value, so an
+// approve-everything handler is live while it runs (400ms). The "asker"
+// arm waits 100ms, so that handler is surely registered, and then raises
+// with no handler of its own. The preapproval must not answer it: the
+// interrupt reaches the host, which rejects it. If the preapproval leaked
+// across branches, the asker would read "asker: approved".
+def quiet(): string {
+  sleep(400)
+  return "quiet done"
+}
+
+def risky(): string {
+  sleep(100)
+  return interrupt("asker asks")
+  return "approved"
+}
+
+node main() {
+  const preapproved = quiet.preapprove()
+  const results = fork(["quiet", "asker"]) as tag {
+    if (tag == "quiet") {
+      return preapproved()
+    }
+    const answer = risky()
+    if (isFailure(answer)) {
+      return "asker: rejected"
+    }
+    return "asker: ${answer}"
+  }
+  return results
+}

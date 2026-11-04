@@ -1,0 +1,20 @@
+// `async` inside a handler function body is refused with AG1028.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+def ask() {
+  return interrupt("may I?")
+}
+
+node main() {
+  handle {
+    ask()
+  } with (intr) {
+    let value = async slowSide()
+    print(value)
+    return approve()
+  }
+  return "end"
+}

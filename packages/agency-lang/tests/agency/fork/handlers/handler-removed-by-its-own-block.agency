@@ -1,0 +1,58 @@
+// Fork arms share one handler list and leave their `handle` blocks in any
+// order. Each block must remove its own handler, not the newest one.
+//
+// `siblingKeepsItsHandler`: arm a leaves its block first. If that removed
+// the newest handler, arm b's would go, and arm b's raise would reach the
+// host. The test has no interrupt answers, so that would fail it.
+//
+// `handlerEndsWithItsBlock`: arm a raises after its block has ended, while
+// arm b is still inside its own block. If arm a's handler were still on
+// the list, the raise would be approved silently. It must reach the host,
+// which rejects it here.
+def ask(tag: string): string {
+  sleep(200)
+  return interrupt("arm ${tag} asks")
+  return "approved"
+}
+
+def askNow(tag: string): string {
+  return interrupt("arm ${tag} asks")
+  return "approved"
+}
+
+node siblingKeepsItsHandler() {
+  const results = fork(["a", "b"]) as tag {
+    if (tag == "a") {
+      handle {
+        sleep(10)
+      } with approve
+      return "a: done"
+    }
+    handle {
+      const answer = ask(tag)
+      return "b: ${answer}"
+    } with approve
+  }
+  return results
+}
+
+node handlerEndsWithItsBlock() {
+  const results = fork(["a", "b"]) as tag {
+    if (tag == "a") {
+      handle {
+        sleep(10)
+      } with approve
+      sleep(50)
+      const answer = askNow(tag)
+      if (isFailure(answer)) {
+        return "a: rejected"
+      }
+      return "a: ${answer}"
+    }
+    handle {
+      sleep(300)
+    } with approve
+    return "b: done"
+  }
+  return results
+}

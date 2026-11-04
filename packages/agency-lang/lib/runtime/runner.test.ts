@@ -749,7 +749,7 @@ describe("Runner", () => {
     it("pushes and pops handler", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { stack: new StateStack() });
       const handler = async () => ({ type: "approve" as const });
 
       expect(ctx.handlers.length).toBe(0);
@@ -762,7 +762,7 @@ describe("Runner", () => {
     it("pops handler even on halt", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { stack: new StateStack() });
       const handler = async () => ({ type: "approve" as const });
 
       await runner.handle(0, testRun(), handler, async (runner) => {
@@ -771,6 +771,14 @@ describe("Runner", () => {
 
       expect(ctx.handlers.length).toBe(0);
       expect(runner.halted).toBe(true);
+    });
+
+    it("refuses to register a handler when the runner has no stack", async () => {
+      const runner = new Runner(makeMockCtx(), makeFrame());
+      const handler = async () => ({ type: "approve" as const });
+      await expect(runner.handle(0, testRun(), handler, async () => {})).rejects.toThrow(
+        /StateStack/,
+      );
     });
   });
 
@@ -819,7 +827,7 @@ describe("Runner", () => {
     it("step inside ifElse inside loop inside handle", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { stack: new StateStack() });
       const handler = async () => ({ type: "approve" as const });
       const trace: string[] = [];
 
@@ -947,7 +955,7 @@ describe("Runner", () => {
     }
 
     it("keeps the executing-handler list", async () => {
-      const entry: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };
+      const entry: HandlerEntry = { fn: async () => undefined, liveGuardIds: [], stack: null };
       let seen: HandlerEntry[] = [];
       await runAsHandler(testRun(), entry, (run) =>
         makeRunner().step(0, run, async (_runner, stepRun) => {
@@ -1431,7 +1439,11 @@ describe("Runner — external pause", () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
     const stack = ctx.stateStack;
-    stack.executingHandlerEntries.push({ fn: async () => undefined, liveGuardIds: [] });
+    stack.executingHandlerEntries.push({
+      fn: async () => undefined,
+      liveGuardIds: [],
+      stack: null,
+    });
     const runner = new Runner(ctx, makeFrame(), { stack });
     let ran = false;
     await runner.step(0, testRun(), async () => {
@@ -1548,5 +1560,53 @@ describe("Runner — external pause", () => {
     await expect(runner.step(0, testRun(), async () => {})).rejects.toBeInstanceOf(
       AgencyCancelledError,
     );
+  });
+});
+
+describe("Runner.fork — mainThread", () => {
+  // The `async` lowering passes `mainThread: 1` so the main arm writes to
+  // the conversation and the side call gets a subthread of its own. Each
+  // branch here records the active thread it sees.
+  async function activeIdsSeen(mainThread: number | undefined) {
+    const ctx = makeBareMockCtx();
+    const threads = ThreadStore.withDefaultActive();
+    const parentActiveId = threads.activeId();
+    const seen: (string | undefined)[] = [];
+    await runInTestContext(
+      ctx,
+      ctx.stateStack,
+      threads,
+      asRootRun(async (run) => {
+        const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack, threads });
+        return runner.fork(
+          0,
+          run,
+          ["a", "b", "c"],
+          async (branchRun, _item, index) => {
+            seen[index] = branchRun.threads.activeId();
+            return index;
+          },
+          "all",
+          ctx.stateStack,
+          false,
+          mainThread,
+        );
+      }),
+    );
+    return { parentActiveId, seen };
+  }
+
+  baseIt("gives exactly branch 1 the parent's active thread", async () => {
+    const { parentActiveId, seen } = await activeIdsSeen(1);
+    expect(seen[1]).toBe(parentActiveId);
+    expect(seen[0]).not.toBe(parentActiveId);
+    expect(seen[2]).not.toBe(parentActiveId);
+    expect(seen[0]).not.toBe(seen[2]);
+  });
+
+  baseIt("gives every branch its own subthread without mainThread", async () => {
+    const { parentActiveId, seen } = await activeIdsSeen(undefined);
+    expect(seen).toHaveLength(3);
+    expect(seen).not.toContain(parentActiveId);
   });
 });

@@ -1,0 +1,13 @@
+{
+  "pausedOn": ["main arm asks"],
+  "finalData": {
+    "joined": "reply from the main arm / confirmed / side value",
+    "followUp": "reply to the follow-up"
+  },
+  "requestCount": 2,
+  "followUpRequest": [
+    { "role": "user", "content": "reply to the user" },
+    { "role": "assistant", "content": "reply from the main arm" },
+    { "role": "user", "content": "follow up" }
+  ]
+}

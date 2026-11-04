@@ -1,0 +1,27 @@
+// A `return` inside a `handle` body in the main arm returns from the
+// function, after the side call has finished. "not reached" is never
+// recorded.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+def work(): string {
+  let value = async slowSide()
+  record("main")
+  handle {
+    return "from handle"
+  } with approve
+  record("not reached")
+  return "late ${value}"
+}
+
+node main() {
+  reset()
+  const result = work()
+  record("result: ${result}")
+  return logText()
+}

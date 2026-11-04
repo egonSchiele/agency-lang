@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two async calls used in reverse order each join at their own first use",
+      "input": "",
+      "expectedOutput": "\"main, quick end, use quick, slow end, use slow\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

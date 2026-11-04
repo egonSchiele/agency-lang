@@ -300,6 +300,59 @@ each load-bearing:
 - Nothing about suspension serializes. A handler that propagates gets
   checkpointed mid-suspension; the resumed run's guards must meter.
 
+**Branch scoping.** Every entry also carries `stack`, the stack that
+registered it, and `runHandlerChain` skips an entry registered in a
+sibling branch of the raise (`inSiblingBranch`, `lib/runtime/interrupts.ts`).
+Example: a fork with arms A and B. A `handle { } with approve` live in arm A
+is skipped for a raise in arm B. A `handle` around the whole fork is on the
+parent stack and is consulted for both arms.
+
+The rule is "the two stacks sit in separate subtrees":
+
+1. the raising stack is not the entry's stack and not a branch started from
+   it (`StateStack.isWithin`, which walks `parent`), and
+2. the entry's stack is not a branch started from the raising stack.
+
+The first condition isolates siblings. The second makes the rule fail
+closed. If a raise path ever passed an ancestor of the stack it really runs
+on, a handler registered on that branch would still be consulted, as it was
+before this rule existed, instead of being skipped. Legitimately, a raiser
+is never an ancestor of a live handler's stack, because a parent stack waits
+while its branches run.
+
+Which entries have a stack:
+
+- `Runner.handle` (every `handle` block and runner-scope `with` modifier)
+  records `this.stack`.
+- `withPushedHandler` takes the stack. `AgencyFunction.preapprove()` passes
+  the run's stack from the wrapped call, so a preapproved function running
+  in one branch approves only that branch's raises. `agency.withHandler`
+  passes `currentRun().stack`.
+- `null`, meaning every branch, only for the two registrations with no
+  runner stack: the `--policy` handler and the global-init wrapper
+  (`withHandlerWrapper.mustache`).
+
+The `stack` parameter of `pushHandler` and `pushRunHandler` is required, so
+a new registration path has to choose instead of applying everywhere by
+omission.
+
+Both return the entry they pushed, and the caller removes that entry with
+`removeHandler` when its scope ends. Branches share the list and leave their
+blocks in any order, so removing the newest entry (`popHandler`) would take
+a sibling's handler away while it was still live, and leave the caller's
+own handler applying after its scope ended. `popHandler` is kept only for
+the global-init wrapper, which runs before any branch exists.
+
+Every caller of the chain passes the stack the raise runs on: generated
+`interrupt` code passes `run.stack`, which inside a branch is the branch
+stack `runInBranchAlsFrame` installed; guard trips pass the stack whose gate
+tripped; a subprocess's forwarded interrupt passes the stack `_run` was
+called on, an ancestor of everything the child does. `parent` is live-only,
+but `runBatch` sets it on every entry into a branch, including re-entry
+after a resume, before the branch runs any code. A resumed raise therefore
+sees the same ancestry as the original one, and a replayed `Runner.handle`
+records the resumed branch's live stack.
+
 ## Guard trips as interrupts (resumable guards, PR 2)
 
 A cost-guard trip raises an ordinary interrupt (effect `std::guard`)

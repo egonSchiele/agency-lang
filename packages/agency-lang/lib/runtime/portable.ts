@@ -256,6 +256,7 @@ export type { CheckOutcome, ParamCheck, ParamChecks } from "./paramChecks.js";
 export { __eq } from "./eq.js";
 export { __requireLength } from "./requireLength.js";
 export { __nn } from "./nn.js";
+export { __asyncDone, __asyncFinished } from "./asyncJoin.js";
 export {
   __validateChain,
   __validateChainRecursive,

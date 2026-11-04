@@ -1,0 +1,39 @@
+// A decorator wraps a def that uses `async` and returns early from its main
+// arm. The def's body runs as the decorator's block, so the early return
+// ends the block, not the decorator: the decorator still records "after"
+// and wraps the result. If the join check's return were taken as a return
+// from the decorator, "after" would be missing and the result would not be
+// wrapped.
+import { reset, record, logText } from "./order-log.js"
+
+decorator def logged(call: Call, block: () -> any): any {
+  record("before")
+  let result = block(call.args)
+  record("after: ${result}")
+  return "decorated ${result}"
+}
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side"
+}
+
+@logged
+def work(flag: boolean): string {
+  let value = async slowSide()
+  record("main")
+  if (flag) {
+    return "early"
+  }
+  return "late ${value}"
+}
+
+node main() {
+  reset()
+  const early = work(true)
+  record(early)
+  const late = work(false)
+  record(late)
+  return logText()
+}

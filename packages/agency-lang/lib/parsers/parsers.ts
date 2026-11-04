@@ -7,6 +7,7 @@
 // --- tarsec imports (combined from all parser files) ---
 import { TarsecError, getDiagnostics } from "tarsec";
 import {
+  ASYNC_BLOCK_MESSAGE,
   BLOCK_AS_VALUE_MESSAGE,
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
@@ -1061,11 +1062,17 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
   // chained accesses (`foo()`, `foo.bar`, `foo.bar()`, `foo[0]`) interpolate
   // correctly. Without this, `"hi" + foo()` would parse `"hi" + foo` as a
   // string with `foo` interpolated and leave `()` unparsed.
+  //
+  // `valueAccessParser`, not `_valueAccessParser`, so an `async` prefix is
+  // read as part of the call. Otherwise `"got " + async f()` read `async`
+  // as a variable and `f()` as a separate statement, and compiled. Read
+  // this way, the flagged call is refused (AG1026), like `async` in any
+  // other expression.
   const parser = sepBy1(
     plusSign,
     or(
       _stringParser,
-      lazy(() => _valueAccessParser),
+      lazy(() => valueAccessParser),
     ),
   );
   const result = parser(input);
@@ -4927,10 +4934,20 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
 const arrowBlockParser: Parser<BlockArgument> = memo(
   "arrowBlockParser",
   (input: string): ParserResult<BlockArgument> => {
-    // `async` is accepted and discarded, the same treatment `await` and `sync`
-    // already get: models write it from JS habit and Agency awaits everything.
-    const afterAsync = optional(seqC(str("async"), spaces))(input);
-    const rest = afterAsync.success ? afterAsync.rest : input;
+    // `async (x) => ...` is refused with a message. `async` starts a call
+    // that runs beside the statements after it, so on a block it would mean
+    // something it does not do, and dropping it silently would hide that
+    // from the author.
+    const asyncPrefix = seqC(str("async"), spaces)(input);
+    if (asyncPrefix.success) {
+      const asyncArrow = seqC(blockParamsParser, optionalSpaces, str("=>"))(asyncPrefix.rest);
+      if (asyncArrow.success) {
+        const declined = committedFailure(ASYNC_BLOCK_MESSAGE, input);
+        getParseState().committedFailure = declined;
+        return declined as ParserResult<BlockArgument>;
+      }
+    }
+    const rest = input;
 
     // `blockParamsParser` returns an empty list without consuming when it
     // matches nothing, so a bare `=>` would otherwise read as a zero-parameter
@@ -6728,6 +6745,9 @@ export const withModifierParser: Parser<WithModifier> = withLoc((input: string) 
     modifiedAssignmentParser,
     assignmentParser,
     returnStatementParser,
+    // `async f() with approve`: the async call statement, flag and all, so
+    // the `with` suffix wraps the flagged call as one statement.
+    withLoc(asyncValueAccessParser),
     functionCallParser,
   )(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);

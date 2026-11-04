@@ -29,6 +29,7 @@ import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { isPlatformDiagnostic } from "@/typeChecker/platformCheck.js";
 import { unwrapRefusals } from "@/typeChecker/unwrapChecks.js";
+import { asyncRefusals } from "@/typeChecker/asyncChecks.js";
 import type { TypeCheckError } from "@/typeChecker/types.js";
 import {
   agencyImportTargets,
@@ -661,9 +662,13 @@ function checkDecoratorsOrExit(
  *  `?` the hoist pass would leave in place, and codegen throws on one, so
  *  the check has to happen here, like the decorator check above. The type
  *  checker stamps the file onto its own errors; these come straight from
- *  the tree, so the file is stamped here for the `file:line:col` prefix. */
+ *  the tree, so the file is stamped here for the `file:line:col` prefix.
+ *  AG1026 to AG1033 are the same kind of check for `async`: each marks a
+ *  call the async lowering cannot take. */
 function checkUnwrapsOrExit(program: AgencyProgram, absPath: string): void {
-  const errors = unwrapRefusals(program.nodes).map((error) => ({ ...error, file: absPath }));
+  const errors = [...unwrapRefusals(program.nodes), ...asyncRefusals(program.nodes)].map(
+    (error) => ({ ...error, file: absPath }),
+  );
   if (errors.length === 0) return;
   console.error(formatErrors(errors));
   process.exit(1);

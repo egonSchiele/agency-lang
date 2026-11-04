@@ -1,0 +1,21 @@
+// A `return` in the main arm of an `async` inside a node returns the
+// node's result. The log is read when the `return` runs, before the side
+// call ends, so it holds only "main". If the join check did not return the
+// node's result, the node would go on to return "not reached".
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide() {
+  sleep(200)
+  record("side end")
+}
+
+node main() {
+  reset()
+  async slowSide()
+  record("main")
+  const stop = true
+  if (stop) {
+    return "early: ${logText()}"
+  }
+  return "not reached"
+}

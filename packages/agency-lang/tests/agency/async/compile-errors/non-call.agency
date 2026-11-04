@@ -1,0 +1,7 @@
+// `async` on something that is not a call is refused with AG1032.
+node main() {
+  const name = "ada"
+  let value = async name
+  print("main")
+  return value
+}

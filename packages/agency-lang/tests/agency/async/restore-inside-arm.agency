@@ -1,0 +1,29 @@
+// A checkpoint taken inside the main arm, after the side call has already
+// finished (the main arm waits 200ms first), then restored from inside the
+// same arm.
+//
+// PINNED, current behaviour: the restore starts the whole async block
+// again, so the side call runs a second time even though it had finished
+// before the checkpoint was taken. The counters live in JavaScript, which
+// a restore does not reset: sideRuns 2 and mainRuns 2 show both arms ran
+// twice. The side call's work is repeated, so a side call with an effect
+// outside the program (a write, a request) would do it twice. If a later
+// change keeps the finished side call, sideRuns becomes 1 and this test
+// should be updated on purpose.
+import { bump, countOf } from "./counters.js"
+
+def side(): string {
+  bump("side")
+  return "side value"
+}
+
+node main() {
+  let fromSide = async side()
+  sleep(200)
+  const cp = checkpoint()
+  bump("main")
+  if (countOf("main") < 2) {
+    restore(cp, {})
+  }
+  return { side: fromSide, sideRuns: countOf("side"), mainRuns: countOf("main") }
+}

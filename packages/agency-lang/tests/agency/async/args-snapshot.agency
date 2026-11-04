@@ -1,0 +1,22 @@
+// `let n = 1; let value = async slowTimesTen(zero() + n); n = 2`. The
+// argument is read where the `async` line is, as a plain call would read
+// it, so the side call gets 1 and the value is 10. The `zero()` call
+// matters: without the snapshot, the side branch would call `zero()` in its
+// first step, the main branch would set `n = 2` while it waited, and the
+// side branch would then read 2 and return 20. (A bare `n` argument is read
+// before the main branch starts, so it would not show the difference.)
+def slowTimesTen(n: number): number {
+  sleep(100)
+  return n * 10
+}
+
+def zero(): number {
+  return 0
+}
+
+node main() {
+  let n = 1
+  let value = async slowTimesTen(zero() + n)
+  n = 2
+  return "${value} ${n}"
+}

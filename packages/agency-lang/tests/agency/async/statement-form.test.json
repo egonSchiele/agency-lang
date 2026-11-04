@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "The statement form runs beside the rest of the block and joins at its end",
+      "input": "",
+      "expectedOutput": "\"main, side end, after work\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

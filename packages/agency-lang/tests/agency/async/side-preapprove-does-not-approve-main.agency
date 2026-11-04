@@ -1,0 +1,27 @@
+// The side call is a preapproved function value, so an approve-everything
+// handler is live for as long as it runs (the sleep). The main arm waits a
+// moment, so that handler is surely registered, and then raises with no
+// handler of its own. The preapproval must not answer it: the interrupt
+// reaches the host, which rejects it, so the main arm sees a failure. If
+// the preapproval leaked into the main arm, the result would read
+// "main: main approved, ...".
+def quiet(): string {
+  sleep(400)
+  return "side done"
+}
+
+def risky(): string {
+  sleep(100)
+  return interrupt("main asks")
+  return "main approved"
+}
+
+node main() {
+  const preapproved = quiet.preapprove()
+  let fromSide = async preapproved()
+  const fromMain = risky()
+  if (isFailure(fromMain)) {
+    return "main rejected, side: ${fromSide}"
+  }
+  return "main: ${fromMain}, side: ${fromSide}"
+}

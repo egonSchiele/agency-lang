@@ -28,7 +28,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
-  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
+  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength, __asyncDone, __asyncFinished,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides, __rebindParameters, __releaseRebind,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
@@ -369,48 +369,251 @@ await callHook(__run, {
             }
           })
         });
-        await runner.branchStep(1, __run, "1", async (runner, __run) => {
-if ((__stack.branches && __stack.branches["1"])) {
-            __forked = __stack.branches["1"].stack;
-            __forked.deserializeMode()
-          } else {
-            __forked = __run.ctx.forkStack();
-          }
-__stack.branches = (__stack.branches || {});
-__stack.branches["1"] = {
-            stack: __forked
-          };
-__stack.locals.x = __withRun(__detachedRun(__run, {
-            stack: __forked
-          }), (__run) => __call(__run, compute, {
+        await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__arms_0 = await runner.fork(1, __run, [`arm_0`, `arm_1`], async (__run, __forkItem, __forkIndex, __forkBranchStack) => {
+            
+const __bstack = __forkBranchStack.getNewState();
+const __self = __bstack.locals;
+const __bframe___block_0 = __bstack;
+// Claim site: this branch just pulled its frame from the branch stack.
+// A mismatched claim on resume replay is a frame desync and throws.
+claimFrameForScope(__bstack, "__block_0", "asyncAssigned.agency", __run.log);
+// `__stateStack` is read from ALS via the `__stateStack()` accessor.
+// The branch ALS frame seeded by `runBatch.runInBranchAlsFrame`
+// (lib/runtime/runBatch.ts) already carries `stack: __forkBranchStack`,
+// so accessor calls inside the branch body resolve to the branch
+// stack automatically — no local rebind needed. The earlier
+// `const __stateStack = __forkBranchStack` line was removed because
+// it shadowed the runtime import and made `__stateStack()` calls
+// (emitted by interrupt/checkpoint templates) crash with
+// "__stateStack2 is not a function".
+const __arm_0 = __forkItem;
+
+__bstack.args["__arm_0"] = __forkItem;
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "asyncAssigned.agency", scopeName: "__block_0", stack: __run.stack, threads: __run.threads });
+try {
+await runner.ifElse(0, __run, [
+
+  {
+    condition: async (__run) => __eq(__bstack.args.__arm_0, `arm_0`),
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+__bstack.locals.x = await __call(__run, compute, {
             type: "positional",
             args: [5]
-          }));
-__self.__pendingKey_x = __run.ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
-        });
-        await runner.branchStep(2, __run, "2", async (runner, __run) => {
-if ((__stack.branches && __stack.branches["2"])) {
-            __forked = __stack.branches["2"].stack;
-            __forked.deserializeMode()
-          } else {
-            __forked = __run.ctx.forkStack();
+          });
+if (hasInterrupts(__bstack.locals.x)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt(__bstack.locals.x)
+            return;
           }
-__stack.branches = (__stack.branches || {});
-__stack.branches["2"] = {
-            stack: __forked
-          };
-__stack.locals.y = __withRun(__detachedRun(__run, {
-            stack: __forked
-          }), (__run) => __call(__run, compute, {
+if (isAborted(__bstack.locals.x)) {
+            runner.halt(__bstack.locals.x.carryThrough(__run.log, __bstack, "__block_0"))
+            return;
+          }
+        });
+await runner.step(1, __run, async (runner, __run) => {
+runner.halt({
+            "x": __bstack.locals.x
+          })
+return;
+        });
+    },
+  },
+
+]);
+await runner.ifElse(1, __run, [
+
+  {
+    condition: async (__run) => __eq(__bstack.args.__arm_0, `arm_1`),
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+__bstack.locals.__arms_1 = await runner.fork(0, __run, [`arm_0`, `arm_1`], async (__run, __forkItem, __forkIndex, __forkBranchStack) => {
+            
+// Capture the parent fork-block's args via closure BEFORE the inner
+// block scope opens; otherwise the inner `const __bstack = ...` would
+// put __bstack in TDZ for this entire arrow function's body.
+const __parentForkArgs = __bstack.args;
+{
+
+const __bstack = __forkBranchStack.getNewState();
+const __self = __bstack.locals;
+const __bframe___block_1 = __bstack;
+// Claim site: this branch just pulled its frame from the branch stack.
+// A mismatched claim on resume replay is a frame desync and throws.
+claimFrameForScope(__bstack, "__block_1", "asyncAssigned.agency", __run.log);
+// `__stateStack` is read from ALS via the `__stateStack()` accessor.
+// The branch ALS frame seeded by `runBatch.runInBranchAlsFrame`
+// (lib/runtime/runBatch.ts) already carries `stack: __forkBranchStack`,
+// so accessor calls inside the branch body resolve to the branch
+// stack automatically — no local rebind needed. The earlier
+// `const __stateStack = __forkBranchStack` line was removed because
+// it shadowed the runtime import and made `__stateStack()` calls
+// (emitted by interrupt/checkpoint templates) crash with
+// "__stateStack2 is not a function".
+const __arm_1 = __forkItem;
+
+Object.assign(__bstack.args, __parentForkArgs);
+
+__bstack.args["__arm_1"] = __forkItem;
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "asyncAssigned.agency", scopeName: "__block_1", stack: __run.stack, threads: __run.threads });
+try {
+await runner.ifElse(0, __run, [
+
+  {
+    condition: async (__run) => __eq(__bstack.args.__arm_1, `arm_0`),
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+__bstack.locals.y = await __call(__run, compute, {
             type: "positional",
             args: [10]
-          }));
-__self.__pendingKey_y = __run.ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
+          });
+if (hasInterrupts(__bstack.locals.y)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt(__bstack.locals.y)
+            return;
+          }
+if (isAborted(__bstack.locals.y)) {
+            runner.halt(__bstack.locals.y.carryThrough(__run.log, __bstack, "__block_1"))
+            return;
+          }
         });
-        await runner.step(3, __run, async (runner, __run) => {
-await __run.ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+await runner.step(1, __run, async (runner, __run) => {
+runner.halt({
+            "y": __bstack.locals.y
+          })
+return;
         });
+    },
+  },
+
+]);
+await runner.ifElse(1, __run, [
+
+  {
+    condition: async (__run) => __eq(__bstack.args.__arm_1, `arm_1`),
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+runner.halt(await __asyncDone({}))
+return;
+        });
+    },
+  },
+
+]);
+return runner.halted ? runner.haltResult : undefined;
+} finally {
+__forkBranchStack.pop();
+}
+
+}
+
+
+          }, "all", __run.stack, true, 1);
+if (hasInterrupts(__bstack.locals.__arms_1)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt(__bstack.locals.__arms_1)
+            return;
+          }
+if (isAborted(__bstack.locals.__arms_1)) {
+            runner.halt(__bstack.locals.__arms_1.carryThrough(__run.log, __bstack, "__block_0"))
+            return;
+          }
+        });
+await runner.step(1, __run, async (runner, __run) => {
+__bstack.locals.__hoist_0 = await __asyncFinished(__nn(__bstack.locals.__arms_1[1]));
+if (hasInterrupts(__bstack.locals.__hoist_0)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt(__bstack.locals.__hoist_0)
+            return;
+          }
+if (isAborted(__bstack.locals.__hoist_0)) {
+            runner.halt(__bstack.locals.__hoist_0.carryThrough(__run.log, __bstack, "__block_0"))
+            return;
+          }
+        });
+await runner.ifElse(2, __run, [
+
+  {
+    condition: async (__run) => !__bstack.locals.__hoist_0,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+runner.halt(__nn(__bstack.locals.__arms_1[1]))
+return;
+              });
+    },
+  },
+
+]);
+await runner.step(3, __run, async (runner, __run) => {
+__bstack.locals.y = __bstack.locals.__arms_1[0].y;
+        });
+await runner.step(4, __run, async (runner, __run) => {
+runner.halt(await __asyncDone({
+            "y": __bstack.locals.y
+          }))
+return;
+        });
+    },
+  },
+
+]);
+return runner.halted ? runner.haltResult : undefined;
+} finally {
+__forkBranchStack.pop();
+}
+
+
+          }, "all", __run.stack, true, 1);
+if (hasInterrupts(__stack.locals.__arms_0)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__arms_0
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__arms_0)) {
+            throw __stack.locals.__arms_0.toError()
+          }
+        });
+        await runner.step(2, __run, async (runner, __run) => {
+__stack.locals.__hoist_0 = await __asyncFinished(__nn(__stack.locals.__arms_0[1]));
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_0
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_0)) {
+            throw __stack.locals.__hoist_0.toError()
+          }
+        });
+        await runner.ifElse(3, __run, [
+
+  {
+    condition: async (__run) => !__stack.locals.__hoist_0,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+runner.halt({
+                  messages: __run.threads,
+                  data: __nn(__stack.locals.__arms_0[1])
+                })
+return;
+              });
+    },
+  },
+
+]);
         await runner.step(4, __run, async (runner, __run) => {
+__stack.locals.x = __stack.locals.__arms_0[0].x;
+        });
+        await runner.step(5, __run, async (runner, __run) => {
+__stack.locals.y = __stack.locals.__arms_0[1].y;
+        });
+        await runner.step(6, __run, async (runner, __run) => {
 runner.halt({
             messages: __run.threads,
             data: [__stack.locals.x, __stack.locals.y]
@@ -419,7 +622,7 @@ return;
         });
       })
       if (runner.halted) return runner.haltResult;
-      await runner.hook(5, __run, async (__run) => {
+      await runner.hook(7, __run, async (__run) => {
 await callHook(__run, {
           name: "onNodeEnd",
           data: {
@@ -511,4 +714,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"asyncAssigned.agency:compute":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"asyncAssigned.agency:main":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"4":{"line":8,"col":2}}};
+export const __sourceMap = {"asyncAssigned.agency:compute":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"asyncAssigned.agency:main":{"6":{"line":8,"col":2}},"asyncAssigned.agency:__block_0":{"0.0":{"line":6,"col":2}},"asyncAssigned.agency:__block_1":{"0.0":{"line":7,"col":2}}};

@@ -246,7 +246,13 @@ describe("withPushedHandler", () => {
     const seed = makeStore();
     await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
       const before = seed.ctx.handlers.length;
-      const result = await withPushedHandler(seed.ctx, noopHandler, async () => "result", []);
+      const result = await withPushedHandler(
+        seed.ctx,
+        noopHandler,
+        async () => "result",
+        [],
+        seed.stack,
+      );
       expect(result).toBe("result");
       expect(seed.ctx.handlers.length).toBe(before);
     });
@@ -264,6 +270,7 @@ describe("withPushedHandler", () => {
             throw new Error("boom");
           },
           [],
+          seed.stack,
         ),
       ).rejects.toThrow("boom");
       expect(seed.ctx.handlers.length).toBe(before);
@@ -282,6 +289,7 @@ describe("withPushedHandler", () => {
           lenDuring = seed.ctx.handlers.length;
         },
         [],
+        seed.stack,
       );
       expect(lenDuring).toBe(before + 1);
       expect(seed.ctx.handlers.length).toBe(before);

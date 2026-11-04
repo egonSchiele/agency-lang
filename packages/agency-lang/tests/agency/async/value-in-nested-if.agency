@@ -1,0 +1,25 @@
+// The first mention of `value` is two `if`s deep. The join must be before
+// the outer `if`, so the nested record sees the value and comes after
+// "side end". A join walk that only looked at top-level expressions would
+// put the `if` in the main arm, where `value` is not set yet.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side value"
+}
+
+node main() {
+  reset()
+  const outer = true
+  const inner = true
+  let value = async slowSide()
+  record("main")
+  if (outer) {
+    if (inner) {
+      record("use: ${value}")
+    }
+  }
+  return logText()
+}

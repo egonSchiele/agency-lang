@@ -1,0 +1,12 @@
+// `async` as an argument to another call is part of a larger expression,
+// with no statement of its own to run beside. The compiler refuses it with
+// AG1026.
+def slowSide(): string {
+  sleep(100)
+  return "side"
+}
+
+node main() {
+  print(async slowSide())
+  return "end"
+}

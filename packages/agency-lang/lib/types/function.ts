@@ -334,7 +334,6 @@ export type FunctionDefinition = BaseNode & {
   returnTypeValidated?: boolean;
   docString?: MultiLineStringLiteral;
   docComment?: AgencyMultiLineComment;
-  async?: boolean;
   markers?: FunctionMarkers;
   exported?: boolean;
   tags?: Tag[];
@@ -369,6 +368,12 @@ export type FunctionCall = BaseNode & {
   argumentTrivia?: ListTrivia[];
   block?: BlockArgument;
   async?: boolean;
+  /** Only on a `fork` the `async` lowering synthesized: the index of the
+   *  arm that writes to the parent's active conversation thread instead of
+   *  a branch-local subthread. Set by `forkCall` in parallelDesugar.ts for
+   *  a block with `origin: "async"`, read by the builder. There is no
+   *  syntax for it; see docs/dev/runtime/async.md. */
+  mainThread?: number;
   /** Where the callee's name starts, when that is not where the node starts:
    *  in `async foo()` the node's `loc` starts at `async`. */
   nameLoc?: SourceLocation;

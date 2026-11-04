@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An assignment to the async binding is a use, so it runs after the join",
+      "input": "",
+      "expectedOutput": "\"main, side end, after: overwritten\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A side call that returns a failure leaves that failure in its name after the join",
+      "input": "",
+      "expectedOutput": "\"failure: side broke, main: main value\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

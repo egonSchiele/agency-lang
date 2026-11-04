@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A mention inside a later loop body is the join",
+      "input": "",
+      "expectedOutput": "\"main, side end, side 1, side 2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

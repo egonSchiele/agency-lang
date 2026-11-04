@@ -1,0 +1,22 @@
+// The main arm of an async call talks to the model and then pauses on an
+// interrupt. test.js approves it and resumes from the checkpoint. After
+// the join, a second llm() call must still see the main arm's prompt and
+// reply: the main arm writes to the conversation thread itself, and that
+// survives the pause and the resume. See test.js for what is checked.
+def side(): string {
+  return "side value"
+}
+
+def confirm(): string {
+  return interrupt("main arm asks")
+  return "confirmed"
+}
+
+node main() {
+  let fromSide = async side()
+  const reply: string = llm("reply to the user")
+  const confirmed = confirm()
+  const joined = "${reply} / ${confirmed} / ${fromSide}"
+  const followUp: string = llm("follow up")
+  return { joined: joined, followUp: followUp }
+}

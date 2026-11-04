@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A global written in either arm is visible in the other arm and after the join",
+      "input": "",
+      "expectedOutput": "{\"seenByMain\":[\"main\",\"side\"],\"afterJoin\":[\"main\",\"side\"],\"side\":\"side value\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

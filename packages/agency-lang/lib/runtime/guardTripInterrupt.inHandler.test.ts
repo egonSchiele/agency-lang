@@ -19,7 +19,7 @@ const makeCtx = (): RuntimeContext<any> => {
   return ctx;
 };
 
-const entry = (): HandlerEntry => ({ fn: async () => undefined, liveGuardIds: [] });
+const entry = (): HandlerEntry => ({ fn: async () => undefined, liveGuardIds: [], stack: null });
 
 /** A tripped single-member time scope on a marked stack, plus its error —
  *  the state a guard gate sees when a 5ms guard inside a handler is blown. */

@@ -1,0 +1,20 @@
+// `value = "overwritten"` assigns to the async binding. That counts as a
+// use, so the join is before it: the assignment runs after the side call
+// has finished and wins. If it ran in the main arm, the side call's result
+// would be hoisted after it and overwrite it.
+import { reset, record, logText } from "./order-log.js"
+
+def slowSide(): string {
+  sleep(200)
+  record("side end")
+  return "side value"
+}
+
+node main() {
+  reset()
+  let value = async slowSide()
+  record("main")
+  value = "overwritten"
+  record("after: ${value}")
+  return logText()
+}

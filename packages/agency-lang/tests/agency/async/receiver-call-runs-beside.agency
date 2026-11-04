@@ -1,0 +1,24 @@
+// `let value = async client(label("x")).toUpperCase()`: the receiver is
+// itself a call. It is part of the work that runs beside the block, so
+// `client` runs in the side arm, and "main" is recorded before "client
+// end". Only what the calls read, here the argument `label("x")`, is read
+// at the `async` line.
+import { reset, record, logText } from "./order-log.js"
+
+def client(tag: string): string {
+  sleep(200)
+  record("client end")
+  return "client ${tag}"
+}
+
+def label(text: string): string {
+  return text
+}
+
+node main() {
+  reset()
+  let value = async client(label("x")).toUpperCase()
+  record("main")
+  record("value: ${value}")
+  return logText()
+}

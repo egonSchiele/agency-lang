@@ -1,0 +1,28 @@
+// The main arm sits inside `handle { ... } with approve` for 400ms. The
+// side call waits 100ms, so that handler is surely registered, and then
+// raises. The main arm's handler must not answer it: the interrupt
+// reaches the host, which rejects it, so the side call's value is a
+// failure. If the main arm's approval leaked into the side call, the
+// result would read "side: side approved, ...".
+def asker(): string {
+  sleep(100)
+  return interrupt("side asks")
+  return "side approved"
+}
+
+def mainWork(): string {
+  sleep(400)
+  return "main done"
+}
+
+node main() {
+  let fromMain = ""
+  let fromSide = async asker()
+  handle {
+    fromMain = mainWork()
+  } with approve
+  if (isFailure(fromSide)) {
+    return "side rejected, main: ${fromMain}"
+  }
+  return "side: ${fromSide}, main: ${fromMain}"
+}

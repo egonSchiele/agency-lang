@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A goto at the end of a node moves the join before it",
+      "input": "",
+      "expectedOutput": "\"main, side end, finish\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

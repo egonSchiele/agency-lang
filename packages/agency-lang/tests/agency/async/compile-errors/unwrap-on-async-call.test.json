@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG1031: `async mayFail()?` cannot unwrap the call",
+  "description": "agency compile refuses ? on the async call itself"
+}

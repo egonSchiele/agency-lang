@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "siblingKeepsItsHandler",
+      "description": "Arm a leaving its handle block does not remove arm b's handler, so arm b's raise is approved without the host",
+      "input": "",
+      "expectedOutput": "[\"a: done\",\"b: approved\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "handlerEndsWithItsBlock",
+      "description": "Arm a's handler is gone once its block ends, so its later raise reaches the host, which rejects it",
+      "input": "",
+      "expectedOutput": "[\"a: rejected\",\"b: done\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "reject", "expectedMessage": "arm a asks" }]
+    }
+  ]
+}

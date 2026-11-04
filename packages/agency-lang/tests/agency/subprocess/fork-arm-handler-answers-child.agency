@@ -1,0 +1,62 @@
+import { compile, run } from "std::agency"
+
+// A fork with two arms. The "child" arm runs a subprocess inside its own
+// handler, and the child raises "child asks" with no handler of its own,
+// so the interrupt is forwarded to the parent. The parent's handler in
+// the "child" arm must answer it (approve), because the child was started
+// from that arm. The "plain" arm waits 200ms, so the child arm's handler
+// is live, and then raises "plain asks" with no handler. That raise must
+// not be answered by the child arm's handler: it reaches the host, which
+// rejects it.
+//
+// If the child arm's handler were skipped for the forwarded interrupt, the
+// host would see "child asks" first, which does not match the one answer
+// the test file gives. If that handler leaked into the "plain" arm, the
+// host would see no interrupt, and the runner would report the missing one.
+def plainAsk(): string {
+  sleep(200)
+  return interrupt("plain asks")
+  return "plain approved"
+}
+
+node main() {
+  const source = """
+def ask(): string {
+  return interrupt("child asks")
+  return "child approved"
+}
+
+node main() {
+  const answer = ask()
+  if (isFailure(answer)) {
+    return "child rejected"
+  }
+  return answer
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed: " + compileResult.error
+  }
+  const compiled = compileResult.value
+
+  const results = fork(["child", "plain"]) as tag {
+    if (tag == "child") {
+      handle {
+        const result = run(compiled: compiled, node: "main", args: {})
+        if (isSuccess(result)) {
+          return "child: ${result.value.data}"
+        }
+        return "child run failed: ${result.error}"
+      } with (intr) {
+        return approve()
+      }
+    }
+    const answer = plainAsk()
+    if (isFailure(answer)) {
+      return "plain: rejected"
+    }
+    return "plain: ${answer}"
+  }
+  return results
+}

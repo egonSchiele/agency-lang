@@ -921,13 +921,25 @@ export class Runner {
       this.frame.locals[memoKey] = liveGuardIds;
     }
 
-    this.ctx.pushRunHandler(handlerFn, liveGuardIds);
+    // Recorded so a sibling fork arm's raise never reaches this handler
+    // (HandlerEntry.stack). A runner with no stack cannot say where its
+    // handler applies, and a handler that applies everywhere is reserved
+    // for the two registrations with no runner at all (the `--policy`
+    // handler and the global-init wrapper), so refuse rather than widen.
+    if (this.stack === undefined) {
+      throw new Error(
+        "Runner.handle needs the runner's StateStack to record where the handler applies. Pass `stack` when constructing the Runner.",
+      );
+    }
+    const entry = this.ctx.pushRunHandler(handlerFn, liveGuardIds, this.stack);
     this.path.push(id);
     try {
       await this.runInScope(run, (stepRun) => callback(this, stepRun));
     } finally {
       this.path.pop();
-      this.ctx.popHandler();
+      // This block's own entry: a sibling fork arm may have pushed a newer
+      // one that is still live (RuntimeContext.removeHandler).
+      this.ctx.removeHandler(entry);
       delete this.frame.locals[memoKey];
     }
 
@@ -1240,6 +1252,11 @@ export class Runner {
     // `thread(continue: id)` / `thread(session: ...)` keep working.
     // Forwarded to `runBatch` as `shareGlobals: shared`.
     shared: boolean = false,
+    // Index of the one branch that writes to the parent's active thread
+    // instead of a branch-local subthread (BatchChild.shareThreads).
+    // Undefined = none. Only the `async` lowering sets it, and `race`
+    // never receives it.
+    mainThread: number | undefined = undefined,
   ): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return undefined;
@@ -1275,7 +1292,16 @@ export class Runner {
       // the winner" via the persisted __race_winner_<id> key, so the
       // caller does NOT need to dispatch between them.
       if (mode === "all") {
-        result = await this.runForkAll(id, run, items, blockFn, stateStack, forkId, shared);
+        result = await this.runForkAll(
+          id,
+          run,
+          items,
+          blockFn,
+          stateStack,
+          forkId,
+          shared,
+          mainThread,
+        );
         if (hasInterrupts(result)) return result;
       } else {
         result = await this.runRace(id, run, items, blockFn, stateStack, forkId, shared);
@@ -1330,6 +1356,7 @@ export class Runner {
     stateStack: StateStack,
     forkId: string,
     shared: boolean,
+    mainThread: number | undefined = undefined,
   ): Promise<any> {
     // One collector per block. A decision call inside any arm submits to it
     // through the arm's frame. See docs/dev/llm/decision-models.md.
@@ -1400,6 +1427,7 @@ export class Runner {
       children: items.map((item, i) => ({
         key: this.forkBranchKey(id, i),
         invoke: (branchRun, branchStack) => blockFn(branchRun, item, i, branchStack),
+        ...(mainThread === i && { shareThreads: true }),
       })),
       hooks: {
         seedBranchCost: (childStack, parentStack) => this.seedBranchCost(childStack, parentStack),

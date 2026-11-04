@@ -63,7 +63,7 @@ These are built-in methods you can call on any Agency function or tool value (th
 | `.partial` | `fn.partial(name: value, ...)` | Bind some of a function's arguments by name, producing a new function that takes the rest. See [Partial Application](/guide/partial-application). |
 | `.describe` | `fn.describe(text): tool` | Override the tool description an LLM sees for this function. |
 | `.rename` | `fn.rename(name): tool` | Give this tool a distinct name (the name the LLM sees). Use when deriving several tools from one function, since `.partial()`/`.describe()`/import aliases keep the base name and would collide in one `llm({ tools })` call. |
-| `.preapprove` | `fn.preapprove(): tool` | Auto-approve every interrupt this function raises. |
+| `.preapprove` | `fn.preapprove(): tool` | Auto-approve every interrupt this function raises. It does not approve interrupts raised beside it in another branch, such as a sibling tool call or the other side of an `async` call. |
 
 ## Types and Schemas
 

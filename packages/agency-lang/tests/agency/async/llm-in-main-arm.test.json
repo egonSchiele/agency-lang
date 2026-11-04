@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "The main arm's llm() reply is on the conversation thread after the join, so a later llm() sees it",
+      "input": "",
+      "expectedOutput": "{\"joined\":\"main reply / side value\",\"followUp\":\"follow-up reply\",\"messages\":[{\"role\":\"user\",\"content\":\"reply to the user\"},{\"role\":\"assistant\",\"content\":\"main reply\"},{\"role\":\"user\",\"content\":\"follow up\"},{\"role\":\"assistant\",\"content\":\"follow-up reply\"}]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "main reply"
+        },
+        {
+          "return": "follow-up reply"
+        }
+      ]
+    }
+  ]
+}

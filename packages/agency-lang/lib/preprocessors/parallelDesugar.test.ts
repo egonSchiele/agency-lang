@@ -11,6 +11,8 @@ import {
 } from "./parallelDesugar.js";
 import { ParallelBlock } from "@/types/parallelBlock.js";
 import { AgencyNode, AgencyProgram, GraphNodeDefinition } from "@/types.js";
+import { generateAgency } from "../backends/agencyGenerator.js";
+import { desugarAsyncInProgram } from "./asyncDesugar.js";
 
 function parse(src: string): AgencyProgram {
   const result = parseAgency(src);
@@ -78,7 +80,26 @@ describe("collectReferences", () => {
     const refs = collectReferences(body[0]);
     expect(refs.has("foo")).toBe(true);
     expect(refs.has("x")).toBe(true);
-    expect(refs.has("r")).toBe(false); // r is a binding, not a ref
+    // An assignment target counts too: a name is mentioned whether it is
+    // read or written. The cross-arm check subtracts the arm's own bindings.
+    expect(refs.has("r")).toBe(true);
+  });
+
+  it("finds a name inside a with statement, a match arm, and a cast", () => {
+    const body = getMainBody(`
+      node main() {
+        print(a) with approve
+        match (mode) {
+          "x" => print(b)
+          _ => print(1)
+        }
+        const n = c as number
+      }
+    `);
+    const refs = new Set(body.flatMap((node) => [...collectReferences(node)]));
+    expect(refs.has("a")).toBe(true);
+    expect(refs.has("b")).toBe(true);
+    expect(refs.has("c")).toBe(true);
   });
 });
 
@@ -526,5 +547,123 @@ describe("desugar → codegen snapshot", () => {
     // 4. parallelBlock and seqBlock should have no representation in the
     //    generated TS — they're pure preprocessor sugar.
     expect(ts).not.toMatch(/parallelBlock|seqBlock/);
+  });
+});
+
+describe("with statements in seq arms", () => {
+  beforeEach(() => resetParallelCounter());
+
+  it("refuses a seq arm that reads a sibling's binding inside a with statement", () => {
+    // The reference sits inside `print(x) with approve`. Before the walk
+    // reached with statements this compiled and printed `undefined`.
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          let x = foo()
+          seq {
+            print(x) with approve
+          }
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /Parallel arm references `x`, which is declared by a sibling arm/,
+    );
+  });
+
+  it("hoists a binding declared by `let x = f() with approve` in a seq arm", () => {
+    const src = `
+      def foo(): string { return "f" }
+      def bar(): string { return "b" }
+      node main() {
+        parallel {
+          let a = foo()
+          seq {
+            let x = bar() with approve
+          }
+        }
+        print(x)
+      }
+    `;
+    const program = parse(src);
+    const main = program.nodes.find(
+      (n) => n.type === "graphNode" && n.nodeName === "main",
+    ) as GraphNodeDefinition;
+    main.body = desugarParallelInBody(main.body);
+    expect(generateAgency({ ...program, nodes: [main] })).toContain(
+      "  let a = __arms_0[0].a\n  let x = __arms_0[1].x\n  print(x)\n",
+    );
+  });
+});
+
+describe("a parallel block from the async lowering", () => {
+  beforeEach(() => resetParallelCounter());
+
+  function lowerAsync(): { program: AgencyProgram; main: GraphNodeDefinition } {
+    const program = parse(`
+      def f(n: number): string { return "a" }
+      node main() {
+        let x = async f(1)
+        let y = f(2)
+        print(x)
+      }
+    `);
+    desugarAsyncInProgram(program, ["f"]);
+    const main = program.nodes.find(
+      (n) => n.type === "graphNode" && n.nodeName === "main",
+    ) as GraphNodeDefinition;
+    main.body = desugarParallelInBody(main.body);
+    return { program, main };
+  }
+
+  it("gives the fork mainThread 1, so arm 1 keeps the conversation thread", () => {
+    const { main } = lowerAsync();
+    const forkAssign = main.body[0] as any;
+    expect(forkAssign.value.functionName).toBe("fork");
+    expect(forkAssign.value.mainThread).toBe(1);
+  });
+
+  it("marks arm 1's completion and checks it between the fork and the hoists", () => {
+    const { program, main } = lowerAsync();
+    expect(generateAgency({ ...program, nodes: [main] })).toBe(`node main() {
+  let __arms_0 = fork(["arm_0", "arm_1"], shared: true) as __arm_0 {
+    if (__arm_0 == "arm_0") {
+      let x = f(1)
+      return {
+        x: x
+      }
+    }
+    if (__arm_0 == "arm_1") {
+      let y = f(2)
+      return __asyncDone({
+        y: y
+      })
+    }
+  }
+  if (!__asyncFinished(__arms_0[1])) {
+    return __arms_0[1]
+  }
+  let x = __arms_0[0].x
+  let y = __arms_0[1].y
+  print(x)
+}
+`);
+  });
+
+  it("leaves a hand-written parallel block without mainThread or the join check", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          let a = foo()
+          let b = bar()
+        }
+      }
+    `);
+    const out = desugarParallelInBody(body);
+    const forkAssign = out[0] as any;
+    expect(forkAssign.value.mainThread).toBeUndefined();
+    const names = out.flatMap((node) => [...collectReferences(node)]);
+    expect(names).not.toContain("__asyncDone");
+    expect(names).not.toContain("__asyncFinished");
   });
 });

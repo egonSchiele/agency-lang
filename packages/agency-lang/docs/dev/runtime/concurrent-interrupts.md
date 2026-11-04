@@ -132,6 +132,10 @@ These behaviours come from the pre-refactor code; `runBatch` preserves them exac
 - **Race cost asymmetry.** When the winner settles and `runBatch` aborts the losers, each loser's accumulated cost (any LLM calls it actually made before being aborted) is propagated to the parent right then. The winner's cost is *deferred*: it isn't propagated until the winner's branch finally pops on a no-interrupt resume. This matches the pre-refactor `runRace` semantics.
 - **The leaf stamps its own per-branch checkpoint** at `interruptReturn`. `runBatch` reads it off the surfaced interrupt and stores it on `BranchState.checkpoint`. Do not move leaf stamping anywhere.
 
+### Handlers belong to the branch that registered them
+
+Branches share the run's one handler list, `ctx.handlers`. Each entry records the stack that registered it (`HandlerEntry.stack`), and `runHandlerChain` skips an entry registered in a sibling branch. A `handle` block live in fork arm A therefore never answers an interrupt raised in arm B, and a handler inside one tool call never answers a sibling tool call of the same model round. A handler registered before the batch, on the parent stack, answers every branch. The rule and why it fails closed are in "Handler verdicts" in `docs/dev/runtime/interrupts.md`.
+
 ---
 
 ## Implementation details: how each call site uses `runBatch`
@@ -145,6 +149,7 @@ Mode: `"all"`. `recordBranchOutcomes` defaults to true.
 The adapter:
 
 - Builds `children` from `items.map((item, i) => ({ key: forkBranchKey(id, i), invoke: (branchStack) => blockFn(item, i, branchStack) }))`.
+- One arm may share the parent's active thread. `runForkAll` takes `mainThread`, the index of that arm, and sets `shareThreads: true` on that one child (`BatchChild.shareThreads` overrides the batch-level option). That child's run gets the parent's thread view, and every other child gets its own subthread as usual. Only the `async` lowering sets it, through a field on the fork node it synthesizes (`docs/dev/runtime/async.md`). `race` never takes it.
 - Hooks: `seedBranchCost`, `propagateBranchCost` delegate to `Runner`'s existing helpers. `onBranchEnd → forkBranchEnd` and `onCheckpoint → checkpointCreated` wire up the statelog events. No `propagateLoserCost`/`propagateWinnerCost` (not race).
 - Returns: `result.kind === "interrupts" ? result.interrupts : result.values`.
 

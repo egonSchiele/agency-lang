@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A handler around the async block answers the side call's interrupt",
+      "input": "",
+      "expectedOutput": "\"main, side rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

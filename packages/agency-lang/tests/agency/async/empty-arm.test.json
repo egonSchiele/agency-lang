@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An async call with nothing after it, or used right away, runs as a plain call",
+      "input": "",
+      "expectedOutput": "\"a end, use a, b end, after work\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

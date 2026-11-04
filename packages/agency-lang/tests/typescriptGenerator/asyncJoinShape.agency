@@ -1,0 +1,15 @@
+// One lowered `async` call. The argument `n` is copied into a temporary
+// before the block, so the side call reads 5 even though the main arm sets
+// `n` to 6. The main arm prints and reassigns `n`, and `x` is read after
+// the join, which is where the fork's result is checked and hoisted.
+def double(n: number): number {
+  return n * 2
+}
+
+node main() {
+  let n = 5
+  let x = async double(n)
+  print("working")
+  n = 6
+  return x + n
+}

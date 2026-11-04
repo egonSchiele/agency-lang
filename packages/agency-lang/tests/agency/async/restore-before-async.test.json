@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Restoring a checkpoint taken before an async call reruns the side call and the main arm once each",
+      "input": "",
+      "expectedOutput": "{\"joined\":\"main value + side value\",\"sideRuns\":2,\"mainRuns\":2}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+// `let value = async pick(label("x"))` where `pick` is a module-level
+// variable holding a function, then the main arm points `pick` at another
+// function. The callee is read at the `async` line, so `fromA` runs, the
+// same as for a callee held in a local (callee-snapshot).
+def fromA(tag: string): string {
+  sleep(100)
+  return "from A ${tag}"
+}
+
+def fromB(tag: string): string {
+  sleep(100)
+  return "from B ${tag}"
+}
+
+def label(text: string): string {
+  return text
+}
+
+let pick = fromA
+
+node main() {
+  let value = async pick(label("x"))
+  pick = fromB
+  return "${value}, then ${pick("y")}"
+}

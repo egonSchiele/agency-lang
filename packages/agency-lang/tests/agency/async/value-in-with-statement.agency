@@ -1,0 +1,25 @@
+// `saveTitle(name) with approve` is the first use of `name`. A `with`
+// statement wraps the call, so the join walk has to look inside it. The
+// join is before it: "main" lands before "side end", and saveTitle sees
+// the value. saveTitle raises an interrupt that the `with approve` answers;
+// the test has no interrupt handlers, so an unanswered interrupt fails it.
+import { reset, record, logText } from "./order-log.js"
+
+def nameConversation(): string {
+  sleep(200)
+  record("side end")
+  return "the title"
+}
+
+def saveTitle(title: string) {
+  return interrupt("save the title?")
+  record("saved: ${title}")
+}
+
+node main() {
+  reset()
+  let name = async nameConversation()
+  record("main")
+  saveTitle(name) with approve
+  return logText()
+}

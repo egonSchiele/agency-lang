@@ -49,8 +49,9 @@ describe("typing the ? operator", () => {
     expect(allCodes(wrap(`  const n: string = parseNamed("x")?`))).toEqual([]);
   });
 
-  it("? on an async call is AG2023: the handle is not a Result", () => {
-    expect(count(`  const n = async parseName("x")?`, "AG2023")).toBe(1);
+  it("? on an async call is AG1031, not AG2023: unwrap after the join", () => {
+    expect(count(`  const n = async parseName("x")?`, "AG1031")).toBe(1);
+    expect(count(`  const n = async parseName("x")?`, "AG2023")).toBe(0);
   });
 
   it("names the expression and its type in the message", () => {

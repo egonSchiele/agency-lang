@@ -501,6 +501,17 @@ export class StateStack {
     return [...this.parent.stack.branchPath(), this.parent.key];
   }
 
+  /** True when this stack is `other`, or a branch started from `other`
+   *  directly or through other branches. Walks `parent` like
+   *  `branchPath`. The handler chain uses it to decide which handlers a
+   *  raise may consult (HandlerEntry.stack). */
+  isWithin(other: StateStack): boolean {
+    if (this === other) {
+      return true;
+    }
+    return this.parent !== undefined && this.parent.stack.isWithin(other);
+  }
+
   other: Record<string, any> = {};
   deserializeStackLength: number = 0;
 

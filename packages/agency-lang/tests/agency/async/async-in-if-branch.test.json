@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An async call in an if branch runs beside the rest of the branch",
+      "input": "",
+      "expectedOutput": "\"main, side end, use side, after if\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

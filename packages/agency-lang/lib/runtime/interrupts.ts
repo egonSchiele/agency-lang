@@ -269,6 +269,39 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
  *  read with `requireFrame`, which throws when there is no frame: reading "no
  *  frame" as depth 0 would let a lost frame turn this limit off. */
 
+/** True when `entry` was registered in a branch the raise is not part of:
+ *  a sibling fork arm, a sibling tool call of the same model round, or a
+ *  branch of either. Such a handler is skipped, silently, the way the
+ *  `eligible` filter skips one.
+ *
+ *  The rule is "the two stacks sit in separate subtrees": the raising
+ *  stack is not the entry's stack or a branch of it, AND the entry's
+ *  stack is not a branch of the raising stack. The first half is what
+ *  isolates siblings. The second half makes the rule fail closed: if a
+ *  raise path ever passes an ancestor of the stack it really runs on, a
+ *  handler registered on that real branch is still consulted, as it was
+ *  before this check existed, instead of being skipped. A raiser can be
+ *  an ancestor of a live handler's stack only through such a mistake,
+ *  because a parent stack waits while its branches run.
+ *
+ *  Every caller passes the stack the raise runs on:
+ *    - generated `interrupt` code: `run.stack`, which inside a fork arm or
+ *      a tool call is the branch stack `runInBranchAlsFrame` installed;
+ *    - the TypeScript `interrupt()` (agencyInterrupt.ts): the stack of the
+ *      run it was handed;
+ *    - guard trips (guardTripInterrupt.ts): the stack whose gate tripped;
+ *    - a subprocess's forwarded interrupt (ipc.ts): the stack `_run` was
+ *      called on, which is an ancestor of everything the child does.
+ *  `StateStack.parent` is live-only, but `runBatch` sets it on every entry
+ *  into a branch, including re-entry after a resume, before the branch
+ *  runs any code, so a resumed raise sees the same ancestry. */
+function inSiblingBranch(entry: HandlerEntry, stack: StateStack | undefined): boolean {
+  if (entry.stack === null || stack === undefined) {
+    return false;
+  }
+  return !stack.isWithin(entry.stack) && !entry.stack.isWithin(stack);
+}
+
 /** Run all registered handlers for an interrupt (top of the stack first).
  * Emits handlerDecision/interruptResolved events along the way and returns
  * a summary outcome the caller uses to decide whether to propagate. */
@@ -310,14 +343,24 @@ async function runHandlerChain(
     let hasPropagation = false;
     const executing = executingHandlers(run);
     const chainSpanId = run.log.startSpan("handlerChain");
+    // Walk a copy of the list. A sibling branch can leave its `handle`
+    // block while a handler here is awaiting, and `removeHandler` splices
+    // that entry out of the live list. Indexing the live list would then
+    // land on the handler that just ran and run it a second time.
+    const chain = [...(ctx.handlers ?? [])];
     try {
-      for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
+      for (let i = chain.length - 1; i >= 0; i--) {
         if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
-        const entry = ctx.handlers[i];
+        const entry = chain[i];
         // Ineligible handlers never see the interrupt — no invocation,
         // no statelog decision, exactly as if they were not registered.
         // Guard trips use this for the registration-site visibility rule.
         if (eligible && !eligible(entry)) continue;
+        // A handler registered in a sibling branch never hears this raise.
+        // See `inSiblingBranch` for the rule and why it fails closed.
+        if (inSiblingBranch(entry, stack)) {
+          continue;
+        }
         // A handler never hears its own raises: an entry currently
         // executing in this lineage is skipped and the rest of the chain
         // decides. Per-LINEAGE (the ALS), not the per-branch stack mark:

@@ -1,0 +1,27 @@
+// The first async value is an argument to a second `async` call. That call
+// mentions `first`, so `first` joins just before it, and the second call
+// receives the finished value. "main 1" overlaps the first call, "main 2"
+// overlaps the second.
+import { reset, record, logText } from "./order-log.js"
+
+def slowFirst(): string {
+  sleep(200)
+  record("first end")
+  return "one"
+}
+
+def slowSecond(input: string): string {
+  sleep(200)
+  record("second end")
+  return "two after ${input}"
+}
+
+node main() {
+  reset()
+  let first = async slowFirst()
+  record("main 1")
+  let second = async slowSecond(first)
+  record("main 2")
+  record("use: ${second}")
+  return logText()
+}

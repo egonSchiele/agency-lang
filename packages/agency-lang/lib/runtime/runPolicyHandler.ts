@@ -95,7 +95,7 @@ export function hasRunPolicyMechanism(settings: HostSettings): boolean {
 // handler is re-installed on a resumed leg too.
 export function installRunPolicyHandler(
   execCtx: {
-    pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
+    pushHandler: (h: HandlerFn, liveGuardIds: string[], stack: null) => void;
     host: Host;
     policyDirs: PolicyDirs;
   },
@@ -110,7 +110,9 @@ export function installRunPolicyHandler(
   // start, before any guard exists, and it is the outermost supervisory
   // layer; a policy answering an interrupt is never metered or gated by
   // user guards.
-  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs, interactive), []);
+  // stack: null — the policy applies to every raise in the run, in every
+  // branch (HandlerEntry.stack).
+  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs, interactive), [], null);
 }
 
 // The CLI-driven run's user endpoint (`resolveCliInterrupts`) lives in

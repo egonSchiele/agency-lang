@@ -118,6 +118,51 @@ describe("snapshotting what the side call reads", () => {
 `);
   });
 
+  it("keeps a receiver that is a call in the arm, and copies that call's arguments", () => {
+    expect(
+      lowered(`node main() {
+  const tag = "x"
+  let x = async client(tag).toUpperCase()
+  print("a")
+  print(x)
+}
+`),
+    ).toBe(`node main() {
+  const tag = "x"
+  const __async_arg_0 = tag
+  parallel(shared: true) {
+    let x = client(__async_arg_0).toUpperCase()
+    seq {
+      print("a")
+    }
+  }
+  print(x)
+}
+`);
+  });
+
+  it("copies a callee that is a module-level variable holding a function", () => {
+    expect(
+      lowered(`const g = f
+node main() {
+  let x = async g(1)
+  print("a")
+  print(x)
+}
+`),
+    ).toBe(`node main() {
+  const __async_arg_0 = g
+  parallel(shared: true) {
+    let x = __async_arg_0(1)
+    seq {
+      print("a")
+    }
+  }
+  print(x)
+}
+`);
+  });
+
   it("does not copy a known function's name, even when a local elsewhere shares it", () => {
     const out = lowered(`node main() {
   let x = async f(1)

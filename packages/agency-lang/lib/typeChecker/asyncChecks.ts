@@ -1,6 +1,7 @@
 import type { AgencyNode, Expression } from "../types.js";
 import type { ValueAccess } from "../types/access.js";
 import { hasUnwrap, isUnwrapElement } from "../types/access.js";
+import { isAsyncFlagged, type AsyncFlagged } from "../types/asyncCall.js";
 import { hoistPositions, type HoistStatus } from "../preprocessors/hoistPositions.js";
 import { asyncArm, asAsyncStatement } from "../preprocessors/asyncDesugar.js";
 import { isLiftedCallbackName } from "../runtime/blockNames.js";
@@ -8,13 +9,6 @@ import { bodySlots } from "../utils/bodySlots.js";
 import { expressionToString, walkNodes } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckError } from "./types.js";
-
-/** A node carrying the `async` flag, whatever its shape. */
-type Flagged = AgencyNode & { async?: boolean };
-
-const isFlagged = (node: AgencyNode): node is Flagged =>
-  (node.type === "functionCall" || node.type === "valueAccess" || node.type === "variableName") &&
-  (node as Flagged).async === true;
 
 /** The two `hoistPositions` statuses a statement-position `async` call is
  *  refused in. */
@@ -61,7 +55,7 @@ export function asyncRefusals(programNodes: AgencyNode[]): TypeCheckError[] {
   const errors: TypeCheckError[] = [];
 
   for (const { node } of walkNodes(programNodes)) {
-    if (!isFlagged(node)) {
+    if (!isAsyncFlagged(node)) {
       continue;
     }
     const params = { expr: callText(node) };
@@ -89,9 +83,7 @@ export function asyncRefusals(programNodes: AgencyNode[]): TypeCheckError[] {
     if (name === undefined) {
       continue;
     }
-    errors.push(
-      diagnostic(name, { expr: callText(position.node as Flagged) }, position.node.loc ?? null),
-    );
+    errors.push(diagnostic(name, { expr: callText(position.node) }, position.node.loc ?? null));
   }
 
   const reported: AgencyNode[] = [];
@@ -193,8 +185,8 @@ function exitKeyword(node: AgencyNode): string {
 
 /** The call as the user wrote it, without the keyword and without any
  *  `?` (messages add the `?` back where they mean it). */
-function callText(node: Flagged): string {
-  const { async: _flag, ...call } = node;
+function callText(node: AgencyNode): string {
+  const { async: _flag, ...call } = node as AsyncFlagged;
   if (call.type !== "valueAccess") {
     return expressionToString(call as Expression);
   }

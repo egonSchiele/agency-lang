@@ -55,6 +55,7 @@ import type { WithModifier } from "@/types/withModifier.js";
 import { mapBodies } from "@/utils/mapBodies.js";
 import { expressionSlots } from "@/utils/expressionSlots.js";
 import { walkNodes } from "@/utils/node.js";
+import { isAsyncFlagged } from "@/types/asyncCall.js";
 import { namesMentioned } from "./parallelDesugar.js";
 
 /** The call an `async` statement starts. */
@@ -70,13 +71,14 @@ type AsyncStatement = {
 };
 
 type LowerContext = {
-  /** The names whose calls go through a local: every name a frame of the
-   *  enclosing function or node can hold (its parameters, loop binders, and
-   *  `let`/`const` declarations), minus the names of known functions. A
-   *  call to a known function's name resolves to the function even when a
-   *  local of the same name is declared elsewhere in the body, so copying
-   *  that name into a temporary would copy the wrong thing. */
-  localCallees: string[];
+  /** The names whose calls go through a variable: every name a frame of
+   *  the enclosing function or node can hold (its parameters, loop binders,
+   *  and `let`/`const` declarations) and every module-level `let`/`const`,
+   *  minus the names of known functions. A call to a known function's name
+   *  resolves to the function even when a variable of the same name is
+   *  declared elsewhere, so copying that name into a temporary would copy
+   *  the wrong thing. */
+  variableCallees: string[];
   counter: { n: number };
 };
 
@@ -86,12 +88,17 @@ const COMMENT_TYPES = ["comment", "multiLineComment", "newLine"];
  *  bodies. Mutates each definition's `body` in place, like the other
  *  preprocessor passes, so the definition tables keep pointing at them. */
 export function desugarAsyncInProgram(program: AgencyProgram, functionNames: string[]): void {
+  const globalNames = program.nodes
+    .filter((node) => node.type === "assignment" && node.declKind !== undefined)
+    .map((node) => (node as Assignment).variableName);
   for (const node of program.nodes) {
     if (node.type !== "function" && node.type !== "graphNode") {
       continue;
     }
-    const localCallees = frameNames(node).filter((name) => !functionNames.includes(name));
-    const ctx: LowerContext = { localCallees, counter: { n: 0 } };
+    const variableCallees = [...frameNames(node), ...globalNames].filter(
+      (name) => !functionNames.includes(name),
+    );
+    const ctx: LowerContext = { variableCallees, counter: { n: 0 } };
     node.body = lowerList(node.body, ctx);
   }
 }
@@ -202,11 +209,7 @@ export function asAsyncStatement(stmt: AgencyNode): AsyncStatement | null {
 }
 
 function isAsyncCall(node: AgencyNode | undefined): node is AsyncCall {
-  return (
-    node !== undefined &&
-    (node.type === "functionCall" || node.type === "valueAccess") &&
-    node.async === true
-  );
+  return node !== undefined && isAsyncFlagged(node) && node.type !== "variableName";
 }
 
 function clearFlag(call: AsyncCall): AsyncCall {
@@ -242,12 +245,16 @@ function isBranchExit(stmt: AgencyNode): boolean {
 
 /** Hoist what the side call reads into `const` temporaries before the
  *  block, so it reads what a plain call at that line would have read:
- *  each argument that names anything, the receiver of a method call, and
- *  the callee when it is a function value held in a local. Otherwise the
- *  side arm evaluates them inside its first step, after several awaits,
- *  and a write in the main arm's first statements could land first.
- *  Objects stay aliased, as they do for any call. A block argument stays
- *  where it is. */
+ *  each argument that names anything, the receiver of a method call when
+ *  it is a variable, and the callee when it is a function value held in a
+ *  variable. Otherwise the side arm evaluates them inside its first step,
+ *  after several awaits, and a write in the main arm's first statements
+ *  could land first. Objects stay aliased, as they do for any call. A
+ *  block argument stays where it is.
+ *
+ *  A call is never hoisted, only what it reads. In `async a().b()`, `a()`
+ *  is part of the work that runs beside the block, so it stays in the arm
+ *  and its arguments are the ones copied. */
 function snapshotCall(
   call: AsyncCall,
   ctx: LowerContext,
@@ -274,19 +281,24 @@ function snapshotCall(
     }
     return out as FunctionCall;
   };
-
-  if (call.type === "functionCall") {
-    let out = call;
-    if (ctx.localCallees.includes(call.functionName)) {
-      const callee = hoist({ type: "variableName", value: call.functionName } as AgencyNode);
+  const snapshotFunctionCall = (fnCall: FunctionCall): FunctionCall => {
+    let out = fnCall;
+    if (ctx.variableCallees.includes(fnCall.functionName)) {
+      const callee = hoist({ type: "variableName", value: fnCall.functionName } as AgencyNode);
       out = { ...out, functionName: (callee as { value: string }).value };
     }
-    return { temps, call: snapshotArguments(out) };
+    return snapshotArguments(out);
+  };
+
+  if (call.type === "functionCall") {
+    return { temps, call: snapshotFunctionCall(call) };
   }
 
   // A method call: the receiver, then the arguments of each call in the
   // chain. The chain's index expressions are hoisted like arguments.
-  let out: AgencyNode = { ...call, base: hoist(call.base) };
+  const base =
+    call.base.type === "functionCall" ? snapshotFunctionCall(call.base) : hoist(call.base);
+  let out: AgencyNode = { ...call, base };
   for (const slot of expressionSlots(out)) {
     if (slot.expr === (out as ValueAccess).base) {
       continue;

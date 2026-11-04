@@ -9,8 +9,32 @@ behaviour, so interrupts are batched and resumable and the checkpoint is
 always complete.
 
 The user guide is the `async` section of `docs/site/guide/concurrency.md`.
-The design discussion, the alternatives set aside, and the spike results are
-in `docs/dev/language/fire-and-forget-notes.md`.
+
+## Why a lowering to `parallel`
+
+The need is work that runs beside the main reply without delaying it:
+naming a conversation, extracting memories, compacting a thread. Two
+constraints shape the design. A checkpoint must hold the whole execution
+state, so a host can store it and resume months later in another process;
+work still running when the checkpoint is taken is work the checkpoint does
+not hold. And any function may raise an interrupt, callers never need to
+know, and the user always gets to answer.
+
+Two alternatives were set aside:
+
+- A detached run that may not raise. It breaks the second constraint:
+  every standard-library function that raises would be unusable inside it.
+- A self-pausing task with its own checkpoint, modelled on `run()`. It keeps
+  both constraints, but each thing `fork` gets for free needs its own rule:
+  a `restore()` past the spawn would have to cancel the task, a node's
+  result would need a shape for a value plus the task's interrupts, a
+  handler that enclosed the spawn would have to be copied into the task's
+  checkpoint, and a task spawned inside a branch would need a run-level
+  registry because branch frames are discarded at the join.
+
+A fork arm inherits all of those answers. Its cost is latency, not
+correctness: the main arm's interrupt waits for the side arm to settle, and
+the function's return waits for the side call.
 
 ## The lowering
 
@@ -65,12 +89,15 @@ print(name)
 The pieces, in the order they appear:
 
 1. **The snapshot temporaries.** Each argument of the call that names
-   anything, the receiver of a method call, and the callee when it is a
-   function value in a local are copied into `const __async_arg_N` before
-   the block. Without them, arm 0 would read them inside its first step,
-   after several awaits, and a write in arm 1's first statements could land
-   first. Literals are left in place. Objects stay aliased, as for any call.
-   A block argument stays on the call.
+   anything, the receiver of a method call when it is a variable, and the
+   callee when it is a function value in a variable (local or module-level)
+   are copied into `const __async_arg_N` before the block. Without them, arm
+   0 would read them inside its first step, after several awaits, and a
+   write in arm 1's first statements could land first. Literals are left in
+   place. Objects stay aliased, as for any call. A block argument stays on
+   the call. A call is never copied, only what it reads: in
+   `async client(tag).fetch()`, `client(tag)` runs in arm 0 and `tag` is the
+   value copied.
 2. **`shared: true`.** Globals stay shared, as they are between a plain call
    and the code after it.
 3. **`mainThread: 1` on the fork.** A field on the synthesized `fork` call
@@ -133,11 +160,10 @@ checker's refusals read the arm through the same function.
   loop exit cannot run inside a fork arm (a `goto` in a branch crashes
   checkpoint serialization).
 
-`identifierSlots` looks like the obvious table for "mentions", and it is the
-wrong one. It answers where a name is written in the user's file, so it
-drops every node without a source position, including the base of a
-`valueAccess` (`name` in `name.length`) and every node the compiler
-creates.
+`identifierSlots` is not the table for this. It answers where a name is
+written in the user's file, so it drops every node without a source
+position: the base of a `valueAccess` (`name` in `name.length`) and every
+node the compiler creates.
 
 ## Why the calls lower first to last
 
@@ -232,14 +258,11 @@ the side call and the main arm each run twice. A `restore()` to a checkpoint
 taken before the `async` line is an ordinary restore, and also runs both
 arms again (`restore-before-async`).
 
-## What the old runtime did
+## The old runtime
 
-Before this lowering, `async f()` compiled to a call with no `await`. The
-promise was stored in a `PendingPromiseStore`, the preprocessor inserted
-`awaitPending` before the first use, and every node return, interrupt
-return, `checkpoint()`, and handler exit drained the store. An interrupt
-raised inside the call threw `ConcurrentInterruptError`, because a
-checkpoint taken while the call was in flight could not hold it, and
-`async` was refused inside loops. The lowering clears the flag before
-codegen, so none of that code runs any more; removing it is a separate
-change. The notes file has the full comparison.
+Before this lowering, `async f()` compiled to an un-awaited call whose
+promise sat in a `PendingPromiseStore`, drained at the next node return,
+interrupt, `checkpoint()`, or handler exit. An interrupt inside the call
+threw `ConcurrentInterruptError`. The lowering clears the flag before
+codegen, so none of that code runs any more; deleting it is a separate
+change.

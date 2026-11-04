@@ -59,6 +59,7 @@ import { parseDurationMs } from "@/duration.js";
 import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { walkNodes } from "@/utils/node.js";
+import { isAsyncFlagged } from "@/types/asyncCall.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject, AgencyObjectKV } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
@@ -577,13 +578,9 @@ export class TypeScriptBuilder {
     // checker refuses `async` everywhere the lowering cannot take it. A
     // flagged call here would compile with the old pending-promise
     // runtime, which raises no resumable interrupt, so refuse it.
+    // `isAsyncFlagged` names every node kind the parser can flag.
     for (const { node } of walkNodes(program.nodes)) {
-      if (
-        (node.type === "functionCall" ||
-          node.type === "valueAccess" ||
-          node.type === "variableName") &&
-        node.async
-      ) {
+      if (isAsyncFlagged(node)) {
         throw new Error(
           "An `async` call reached codegen; the async lowering should have removed it. This is a toolchain bug.",
         );
@@ -3038,11 +3035,12 @@ export class TypeScriptBuilder {
     // A `__` name that resolved to a local or a parameter is not a helper:
     // it is a compiler temporary holding a function value (the async
     // lowering snapshots a callee that way), so it is dispatched like any
-    // other call through a local.
+    // other call through a local. A DIRECT_CALL_FUNCTIONS name stays a
+    // direct call whatever the scope says, as it always has.
     const callsFrameValue = node.scope === "local" || node.scope === "args";
     if (
-      !callsFrameValue &&
-      (functionName.startsWith("__") || this.names.isDirectCallFunction(functionName))
+      (functionName.startsWith("__") && !callsFrameValue) ||
+      this.names.isDirectCallFunction(functionName)
     ) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }

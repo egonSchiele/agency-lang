@@ -137,7 +137,7 @@ saveFacts(facts)
 
 1. The function waits for the call. A slow call delays the rest of the function by the difference. The call never outlives the function.
 2. An early `return` waits for the call too. If a turn can stop early, start its `async` calls after the early exits.
-3. The arguments are read when the `async` line runs, the same as for a plain call. In `async f(llm(prompt))`, that `llm()` call happens first, before anything runs beside it.
+3. The arguments are read when the `async` line runs, the same as for a plain call. In `async f(llm(prompt))`, that `llm()` call happens first, before anything runs beside it. The calls themselves all run beside the block: in `async client(tag).fetch()`, `client(tag)` and `fetch()` both run beside, and only `tag` is read first.
 4. An interrupt in either the call or the rest of the block works as it does in a `fork`. The first interrupt is shown only once the other side has stopped running or is waiting on its own interrupt. Interrupts from both sides are answered together, and the program resumes where each one paused.
 5. A handler inside the call answers only the call's interrupts. A handler around the whole block answers both sides.
 6. The rest of the block keeps the conversation thread: an `llm()` call there adds its messages to the conversation. The call's own `llm()` calls start from a copy of the conversation so far, and their messages stay off it. Use `thread { }` inside the call for a blank conversation.

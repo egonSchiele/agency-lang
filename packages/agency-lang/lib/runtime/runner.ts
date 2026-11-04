@@ -922,9 +922,16 @@ export class Runner {
     }
 
     // Recorded so a sibling fork arm's raise never reaches this handler
-    // (HandlerEntry.stack). Undefined only for a runner with no stack,
-    // which then applies everywhere, as before.
-    const entry = this.ctx.pushRunHandler(handlerFn, liveGuardIds, this.stack ?? null);
+    // (HandlerEntry.stack). A runner with no stack cannot say where its
+    // handler applies, and a handler that applies everywhere is reserved
+    // for the two registrations with no runner at all (the `--policy`
+    // handler and the global-init wrapper), so refuse rather than widen.
+    if (this.stack === undefined) {
+      throw new Error(
+        "Runner.handle needs the runner's StateStack to record where the handler applies. Pass `stack` when constructing the Runner.",
+      );
+    }
+    const entry = this.ctx.pushRunHandler(handlerFn, liveGuardIds, this.stack);
     this.path.push(id);
     try {
       await this.runInScope(run, (stepRun) => callback(this, stepRun));

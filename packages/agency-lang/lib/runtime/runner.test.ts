@@ -749,7 +749,7 @@ describe("Runner", () => {
     it("pushes and pops handler", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { stack: new StateStack() });
       const handler = async () => ({ type: "approve" as const });
 
       expect(ctx.handlers.length).toBe(0);
@@ -762,7 +762,7 @@ describe("Runner", () => {
     it("pops handler even on halt", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { stack: new StateStack() });
       const handler = async () => ({ type: "approve" as const });
 
       await runner.handle(0, testRun(), handler, async (runner) => {
@@ -771,6 +771,14 @@ describe("Runner", () => {
 
       expect(ctx.handlers.length).toBe(0);
       expect(runner.halted).toBe(true);
+    });
+
+    it("refuses to register a handler when the runner has no stack", async () => {
+      const runner = new Runner(makeMockCtx(), makeFrame());
+      const handler = async () => ({ type: "approve" as const });
+      await expect(runner.handle(0, testRun(), handler, async () => {})).rejects.toThrow(
+        /StateStack/,
+      );
     });
   });
 
@@ -819,7 +827,7 @@ describe("Runner", () => {
     it("step inside ifElse inside loop inside handle", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { stack: new StateStack() });
       const handler = async () => ({ type: "approve" as const });
       const trace: string[] = [];
 

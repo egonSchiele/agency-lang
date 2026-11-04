@@ -4934,10 +4934,10 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
 const arrowBlockParser: Parser<BlockArgument> = memo(
   "arrowBlockParser",
   (input: string): ParserResult<BlockArgument> => {
-    // `async (x) => ...` is refused with a message. `async` now starts a call
+    // `async (x) => ...` is refused with a message. `async` starts a call
     // that runs beside the statements after it, so on a block it would mean
-    // something it does not do. Silently dropping it, as this parser used
-    // to, would hide that from the author.
+    // something it does not do, and dropping it silently would hide that
+    // from the author.
     const asyncPrefix = seqC(str("async"), spaces)(input);
     if (asyncPrefix.success) {
       const asyncArrow = seqC(blockParamsParser, optionalSpaces, str("=>"))(asyncPrefix.rest);
@@ -6745,9 +6745,8 @@ export const withModifierParser: Parser<WithModifier> = withLoc((input: string) 
     modifiedAssignmentParser,
     assignmentParser,
     returnStatementParser,
-    // `async f() with approve`: the async call statement, flag and all.
-    // Without this the statement parsed as `async f()` followed by two
-    // stray names, `with` and `approve`.
+    // `async f() with approve`: the async call statement, flag and all, so
+    // the `with` suffix wraps the flagged call as one statement.
     withLoc(asyncValueAccessParser),
     functionCallParser,
   )(input);

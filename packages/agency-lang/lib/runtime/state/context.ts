@@ -766,10 +766,8 @@ export class RuntimeContext<T> {
   /** Remove the entry `pushHandler` or `pushRunHandler` returned. By
    *  identity, not by position: concurrent branches share this one list and
    *  leave their `handle` blocks in any order, so the newest entry is not
-   *  necessarily the caller's. Removing the newest one instead took a
-   *  sibling branch's handler away while it was still inside its block, and
-   *  left the caller's own handler applying after its block had ended. An
-   *  entry that is already gone is left alone. */
+   *  necessarily the caller's. An entry that is already gone is left
+   *  alone. */
   removeHandler(entry: HandlerEntry): void {
     const index = this.handlers.lastIndexOf(entry);
     if (index !== -1) {

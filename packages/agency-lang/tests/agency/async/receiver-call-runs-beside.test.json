@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A receiver that is a call runs beside the block, not before it",
+      "input": "",
+      "expectedOutput": "\"main, client end, value: CLIENT X\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

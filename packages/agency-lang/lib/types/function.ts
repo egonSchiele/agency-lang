@@ -334,7 +334,6 @@ export type FunctionDefinition = BaseNode & {
   returnTypeValidated?: boolean;
   docString?: MultiLineStringLiteral;
   docComment?: AgencyMultiLineComment;
-  async?: boolean;
   markers?: FunctionMarkers;
   exported?: boolean;
   tags?: Tag[];

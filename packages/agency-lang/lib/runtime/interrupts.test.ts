@@ -601,6 +601,66 @@ describe("escapedTurnText", () => {
   });
 });
 
+describe("runHandlerChain walks a snapshot of the handler list", () => {
+  it("does not run a handler twice when a sibling removes its entry during the walk", async () => {
+    // Three entries that all apply everywhere. The newest one, `b`, waits
+    // until the test has removed `a`, as a sibling branch leaving its
+    // `handle` block does while `b` is awaiting. Walking the live list
+    // would then step onto `b` again.
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    const heard: string[] = [];
+    let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    ctx.pushHandler(
+      async () => {
+        heard.push("outer");
+        return approve();
+      },
+      [],
+      null,
+    );
+    const a = ctx.pushHandler(
+      async () => {
+        heard.push("a");
+        return approve();
+      },
+      [],
+      null,
+    );
+    ctx.pushHandler(
+      async () => {
+        heard.push("b");
+        await released;
+        return approve();
+      },
+      [],
+      null,
+    );
+    const stack = new StateStack();
+    const walk = inFrameOf(ctx, stack, (run) =>
+      interruptWithHandlers(run, "test::x", "m", {}, "o", { stack }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    ctx.removeHandler(a);
+    release();
+    const result = await walk;
+    expect(isApproved(result)).toBe(true);
+    expect(heard).toEqual(["b", "a", "outer"]);
+  });
+});
+
 describe("runHandlerChain skips handlers registered in a sibling branch", () => {
   // root -> a -> a1, and root -> b, linked through `parent` as runBatch
   // links branch stacks. Each handler records the label it was registered

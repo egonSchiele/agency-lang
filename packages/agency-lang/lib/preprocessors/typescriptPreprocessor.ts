@@ -385,14 +385,12 @@ export class TypescriptPreprocessor {
     // never re-executes a completed call (frame-queue desync; spec
     // docs/superpowers/specs/2026-07-22-hoist-calls-resume-safety-design.md).
     // After collectSkills so skill detection sees original call shapes;
-    // before addAwaitPendingCalls and resolveVariableScopes so the
-    // __hoist temps get awaits and scopes like hand-written statements.
-    //
-    // Accepted behavior change: `for (x in async getItems())` was
-    // rejected by validateNoAsyncInLoops (the async call sat under the
-    // loop node); hoisting moves it above the loop, so it now compiles.
-    // A relaxation, recorded here and in docs/dev/compiler/hoist-calls.md.
+    // before resolveVariableScopes so the __hoist temps get scopes like
+    // hand-written statements.
     this.program = hoistCallsInProgram(this.program);
+    // The old pending-promise `async` runtime. The async lowering above
+    // clears every flag before these run, so they see nothing; they are
+    // deleted with that runtime.
     this.addAwaitPendingCalls();
     this.validateNoAsyncInLoops();
 

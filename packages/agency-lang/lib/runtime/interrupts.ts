@@ -343,10 +343,15 @@ async function runHandlerChain(
     let hasPropagation = false;
     const executing = executingHandlers(run);
     const chainSpanId = run.log.startSpan("handlerChain");
+    // Walk a copy of the list. A sibling branch can leave its `handle`
+    // block while a handler here is awaiting, and `removeHandler` splices
+    // that entry out of the live list. Indexing the live list would then
+    // land on the handler that just ran and run it a second time.
+    const chain = [...(ctx.handlers ?? [])];
     try {
-      for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
+      for (let i = chain.length - 1; i >= 0; i--) {
         if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
-        const entry = ctx.handlers[i];
+        const entry = chain[i];
         // Ineligible handlers never see the interrupt — no invocation,
         // no statelog decision, exactly as if they were not registered.
         // Guard trips use this for the registration-site visibility rule.

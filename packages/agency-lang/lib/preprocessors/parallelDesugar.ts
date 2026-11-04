@@ -210,9 +210,7 @@ function walkForBindings(node: AgencyNode, binds: Set<string>): void {
  * Walks with `walkNodes`, the descent template hygiene and scope resolution
  * already rely on to reach every expression, so a name inside a `with`
  * statement, a `match` arm, a cast, an interrupt's arguments, or a node kind
- * added later is found. A hand-written switch over node types used to live
- * here and missed all of those: a `seq` arm reading a sibling's binding
- * inside `print(x) with approve` compiled and read `undefined`.
+ * added later is found without a case here.
  */
 export function collectReferences(node: AgencyNode): Set<string> {
   return new Set(namesMentioned([node]));

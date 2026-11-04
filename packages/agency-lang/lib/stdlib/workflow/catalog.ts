@@ -31,6 +31,8 @@ export type CatalogEntry = {
    *  `guard` lists `std::guard`. `stepEffects` leaves it out, since a guard
    *  trip is a question about budget, not a permission. */
   effects: string[];
+  /** True for a `handoff def`, so a picker can tell an agent from a function. */
+  handoff: boolean;
 };
 
 /** The JSON Schema of each parameter in the tool's definition, by name.
@@ -49,7 +51,8 @@ function parameterSchemas(tool: unknown): Record<string, unknown> {
 
 /** The JSON Schema of what the tool returns, from the zod schema the
  *  compiler emitted for its return type. The compiler leaves out a type
- *  JSON Schema cannot express, so the conversion here does not throw. */
+ *  JSON Schema cannot express, but a schema that still cannot be converted
+ *  gives this one entry null rather than failing the whole catalog. */
 function returnSchemaOf(tool: unknown): unknown | null {
   if (!AgencyFunction.isAgencyFunction(tool) || tool.returnSchema === null) {
     return null;
@@ -58,7 +61,11 @@ function returnSchemaOf(tool: unknown): unknown | null {
   if (typeof schema?.toJSONSchema !== "function") {
     return null;
   }
-  return schema.toJSONSchema();
+  try {
+    return schema.toJSONSchema();
+  } catch {
+    return null;
+  }
 }
 
 function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): CatalogEntry {
@@ -76,6 +83,7 @@ function catalogEntry(tool: unknown, ref: ToolRef, signature: Signature): Catalo
     returns: signature.returnType,
     returnSchema: returnSchemaOf(tool),
     effects: signature.effects,
+    handoff: signature.handoff,
   };
 }
 

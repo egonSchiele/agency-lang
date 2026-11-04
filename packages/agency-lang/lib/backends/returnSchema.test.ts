@@ -73,6 +73,17 @@ describe("returnSchema on a registered function", () => {
     );
     expect(out).toContain("z.lazy(() => Note)");
   });
+  it("looks inside a generic alias's body for a function or a regex", () => {
+    const boxed = gen(
+      "type Box<T> = { v: T; cb: (number) => number }\ndef same(x: number): number {\n  return x\n}\nexport def h(): Box<number> {\n  return { v: 1, cb: same }\n}\n",
+    );
+    expect(returnSchemaLine(boxed, "h")).toBeNull();
+    const regexBoxed = gen(
+      "type RBox<T> = { v: T; r: regex }\nexport def k(): RBox<number> {\n  return { v: 1, r: re/a/ }\n}\n",
+    );
+    expect(returnSchemaLine(regexBoxed, "k")).toBeNull();
+  });
+
   it("is left out for a function type nested in an object, which the zod mapper would print as a string", () => {
     const nestedFunction = gen(
       "def same(x: number): number {\n  return x\n}\nexport def f(): { cb: (number) => number; n: number } {\n  return { cb: same, n: 1 }\n}\n",

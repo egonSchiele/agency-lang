@@ -1,0 +1,9 @@
+/** A handoff: the catalog marks it, and a step calls it like any tool. */
+export handoff def askPlanner(question: string): string {
+  """
+  Hand the run to the planner with a question.
+
+  @param question - What to ask the planner
+  """
+  return "planner: ${question}"
+}

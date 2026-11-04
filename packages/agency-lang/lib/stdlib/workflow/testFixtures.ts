@@ -93,7 +93,15 @@ export const mealRefs: ToolRef[] = [
 ];
 
 function signature(text: string, returnType: string | null, effects: string[] = []): Signature {
-  return { signature: text, returnType, returnsResult: true, docstring: null, params: [], effects };
+  return {
+    signature: text,
+    returnType,
+    returnsResult: true,
+    docstring: null,
+    params: [],
+    effects,
+    handoff: false,
+  };
 }
 
 export const mealSignatures: Record<string, Signature> = {

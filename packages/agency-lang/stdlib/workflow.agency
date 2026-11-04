@@ -72,6 +72,9 @@ Use `writeWorkflow` to save under `<dir>/workflows`, then `loadWorkflow` or
 `listWorkflows` to read saved workflows. `workflowTool` and `workflowTools`
 expose workflows as tools for an LLM. `catalog` describes available tool
 parameters, return types, and effects for workflow authors.
+`checkWorkflowWithSchemas` gives a host that stores workflows itself the
+check's warnings with the JSON Schemas of the inputs and of each LLM step's
+output, from one compile.
 */
 
 /** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
@@ -264,6 +267,42 @@ export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: strin
   return success(checked.warnings)
 }
 
+/** What `checkWorkflowWithSchemas` reports for a workflow that passed. */
+export type CheckedWorkflow = {
+  /** What the check could not settle until the workflow runs. */
+  warnings: WorkflowProblem[];
+  /** The JSON Schema of the workflow's `inputs` type, in the input form: an input with a default is optional. */
+  inputsSchema: Json;
+  /** The JSON Schema of each LLM step's `output` type, by step id. Tool steps are not here. */
+  outputSchemas: Record<string, Json>
+}
+
+/**
+Use this where the check's warnings and the schemas are needed together,
+such as a host that saves workflows itself and shows a later step what an
+LLM step produces. It compiles once and runs the program's `workflowSchemas`
+node in one subprocess, which raises `std::run`. A workflow with problems
+fails with them, as `checkWorkflow` does, and starts no process.
+*/
+@capabilities(fileRead, fileWrite, subprocess)
+export def checkWorkflowWithSchemas(workflow: Workflow, tools: any[], dir: string = ""): Result<CheckedWorkflow, WorkflowFailure> {
+  """
+  Check a workflow and return its warnings with the JSON Schemas of its inputs and of each LLM step's output.
+
+  @param tools - Original exported Agency functions available to the workflow's steps.
+  @param dir - Directory containing any local tool modules and resolving their paths.
+  """
+  const checked = _checked(workflow, tools, dir)?
+  // A failure comes back as it came: a refused or failed run has
+  // `rejected` and no `problems`, a failed node has its problem.
+  const schemas = _workflowSchemas(checked.program)?
+  return success({
+    warnings: checked.warnings,
+    inputsSchema: schemas.inputs,
+    outputSchemas: schemas.outputs
+  })
+}
+
 /** One parameter a workflow step can pass to a tool. */
 export type CatalogParam = {
   name: string;
@@ -291,7 +330,9 @@ export type CatalogEntry = {
   /** The JSON Schema of the value a reference into this tool's step reads: the declared return type, or the success type inside a `Result`. Null when the tool declares no return type, or its return type holds a function or a `regex` (which JSON Schema cannot express), or names a type its module cannot reach at run time (#1371). */
   returnSchema: Json;
   /** What the tool can raise, as `describe` reports it. A tool that uses `guard` lists `std::guard`. `checkWorkflow`'s `raises` check leaves it out, since a guard trip is a question about budget, not a permission. */
-  effects: string[]
+  effects: string[];
+  /** True for a `handoff def`, so a picker can tell an agent from a function. A step calls it like any tool. */
+  handoff: boolean
 }
 
 /**
@@ -435,7 +476,7 @@ export def workflowTools(dir: string, tools: any[]): Result<any[]> {
 const WORKFLOWS_DIR = "workflows"
 const FILE_SUFFIX = ".json"
 const MAX_WORKFLOWS = 500
-const INPUTS_SCHEMA_NODE = "inputsSchema"
+const SCHEMAS_NODE = "workflowSchemas"
 
 /** What a saved workflow's file records beside the workflow. */
 export type WorkflowMeta = {
@@ -444,7 +485,7 @@ export type WorkflowMeta = {
   /** What saved it, such as `writeWorkflow`. */
   savedBy: string;
   /** The JSON Schema of the workflow's `inputs` type, from the program's
-    own `inputsSchema` node at save time; null for a workflow saved before
+    own `workflowSchemas` node's `inputs` at save time; null for a workflow saved before
     schemas were recorded. */
   inputsSchema: Json | null
 }
@@ -511,15 +552,39 @@ def savedFile(name: string): string {
   return "${WORKFLOWS_DIR}/${name}${FILE_SUFFIX}"
 }
 
-/** The JSON Schema of the program's `Inputs` type, from its `inputsSchema` node. */
+/** What the program's `workflowSchemas` node returns. */
+type WorkflowSchemas = {
+  inputs: Json;
+  outputs: Record<string, Json>
+}
+
+/** The JSON Schemas of the program's `Inputs` type and of each LLM step's
+  output type, from one run of its `workflowSchemas` node. */
+@hidden
+@capabilities(fileWrite, subprocess)
+export def _workflowSchemas(program: CompiledProgram): Result<WorkflowSchemas> {
+  const ran = run(compiled: program, node: SCHEMAS_NODE)
+  if (ran is failure) {
+    // A rejected std::run, a spawn error, a timeout: not the workflow's
+    // fault, so returned as it came, with its `rejected` flag and no
+    // `problems`.
+    return ran
+  }
+  // The envelope's `data` is what the node returned. The check refuses
+  // the one type JSON Schema cannot express, a regex, so the node does
+  // not fail in practice; if it does, that is the workflow's fault.
+  if (ran.value.data is failure(nodeErr)) {
+    return _workflowFailure("could not derive the workflow's schemas: ${nodeErr}")
+  }
+  return success(ran.value.data)
+}
+
+/** The JSON Schema of the program's `Inputs` type. */
 @hidden
 @capabilities(fileWrite, subprocess)
 export def _inputsSchema(program: CompiledProgram): Result<Json> {
-  const ran = run(compiled: program, node: INPUTS_SCHEMA_NODE)
-  if (ran is failure(runErr)) {
-    return failure("could not derive the inputs schema: ${runErr}")
-  }
-  return success(ran.value.data)
+  const schemas = _workflowSchemas(program)?
+  return success(schemas.inputs)
 }
 
 /**

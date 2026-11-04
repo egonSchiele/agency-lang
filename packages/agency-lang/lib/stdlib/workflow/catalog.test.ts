@@ -43,6 +43,7 @@ const searchSignature: Signature = {
     { name: "each", type: "(string) -> any", default: null, description: "Called once per note" },
   ],
   effects: ["std::read", "std::guard"],
+  handoff: false,
 };
 
 const ref = { module: "./notes.agency", name: "searchNotes" };
@@ -67,6 +68,7 @@ describe("catalogEntries", () => {
         returns: "Result<Note[]>",
         returnSchema: z.toJSONSchema(noteList),
         effects: ["std::read", "std::guard"],
+        handoff: false,
       },
     ]);
   });
@@ -84,6 +86,30 @@ describe("catalogEntries", () => {
     );
     const [entry] = catalogEntries([untyped], [ref], signatures);
     expect(entry.returnSchema).toBeNull();
+  });
+
+  it("gives a tool whose schema JSON Schema cannot express a null one, and keeps the rest", () => {
+    const withRegex = AgencyFunction.create(
+      {
+        name: "searchNotes",
+        module: "agent/notes.agency",
+        fn: (_run, query: string) => [query],
+        params: [param("query")],
+        toolDefinition: searchNotes.toolDefinition,
+        returnSchema: () => z.object({ pattern: z.instanceof(RegExp) }),
+      },
+      {},
+    );
+    const [bad, good] = catalogEntries([withRegex, searchNotes], [ref, ref], signatures);
+    expect(bad.returnSchema).toBeNull();
+    expect(good.returnSchema).toEqual(z.toJSONSchema(noteList));
+  });
+
+  it("carries handoff through from the signature", () => {
+    const [entry] = catalogEntries([searchNotes], [ref], {
+      [signatureKey(ref.module, ref.name)]: { ...searchSignature, handoff: true },
+    });
+    expect(entry.handoff).toBe(true);
   });
 
   it("gives a tool with no docstring an empty description", () => {

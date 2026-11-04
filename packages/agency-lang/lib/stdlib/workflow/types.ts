@@ -111,6 +111,9 @@ export type Signature = {
   params: ExportParam[];
   /** What `describe` reports the tool can raise. */
   effects: string[];
+  /** True for a `handoff def`. A step calls it like any other function;
+   *  the handoff behaviour applies only when a model calls it as a tool. */
+  handoff: boolean;
 };
 
 /** A checked reference. `path` is the text after the root name, such as

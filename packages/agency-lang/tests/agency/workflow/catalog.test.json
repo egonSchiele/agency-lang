@@ -109,6 +109,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "handoffMarked",
+      "description": "a handoff def's entry says so; a plain function's does not",
+      "input": "",
+      "expectedOutput": "[[\"askPlanner\",true],[\"add\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

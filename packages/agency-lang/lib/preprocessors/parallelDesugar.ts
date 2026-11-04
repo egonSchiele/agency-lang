@@ -15,6 +15,9 @@ import {
 } from "@/types.js";
 import { BinOpExpression } from "@/types/binop.js";
 import { BlockArgument } from "@/types/blockArgument.js";
+import { isNullLiteral, walkNodes } from "@/utils/node.js";
+import { mapBodies } from "@/utils/mapBodies.js";
+import { expressionSlots } from "@/utils/expressionSlots.js";
 
 /**
  * Statement allowlist enforcement and cross-arm reference checks for `parallel`
@@ -74,6 +77,24 @@ function isAssignmentDecl(node: AgencyNode): node is Assignment {
  * then check cross-arm references. Throws on violation.
  */
 export function validateParallelBlock(pb: ParallelBlock): void {
+  // An `async` block is built by asyncDesugar from allowed shapes, and its
+  // side arm reads only snapshot temporaries, so neither check below can
+  // fire on one. If one does, the lowering is wrong, and the user should
+  // not see a message about a `parallel` block they never wrote.
+  if (pb.origin === "async") {
+    try {
+      validateUserParallelBlock(pb);
+    } catch (err) {
+      throw new Error(
+        `Internal error lowering an \`async\` call: ${(err as Error).message} This is a compiler bug.`,
+      );
+    }
+    return;
+  }
+  validateUserParallelBlock(pb);
+}
+
+function validateUserParallelBlock(pb: ParallelBlock): void {
   // A `destructive { }` region inside an arm is allowed. Its flip is written
   // to `__activation`, which a fork branch reaches lexically, so it marks the
   // calling function the same way a bare destructive call in an arm does
@@ -164,6 +185,12 @@ function walkForBindings(node: AgencyNode, binds: Set<string>): void {
     for (const n of node.body) walkForBindings(n, binds);
     return;
   }
+  // `let x = f() with approve` declares `x` in the enclosing scope, the
+  // same as the plain assignment it wraps.
+  if (node.type === "withModifier") {
+    walkForBindings(node.statement, binds);
+    return;
+  }
   if (node.type === "matchBlock") {
     for (const c of node.cases) {
       if (c.type === "comment") continue;
@@ -175,142 +202,41 @@ function walkForBindings(node: AgencyNode, binds: Set<string>): void {
 }
 
 /**
- * Collect every variable name referenced (read) anywhere in the subtree.
- * "Referenced" means a `variableName` literal — i.e., a use of the name as a
- * value. Excludes the LHS of declarations (those are bindings, not refs).
+ * Collect every name mentioned anywhere in the subtree: each variable read,
+ * each called function's name, and each assignment target. A name counts
+ * whether it is read or written, because either one depends on the value a
+ * sibling arm would have to produce first.
+ *
+ * Walks with `walkNodes`, the descent template hygiene and scope resolution
+ * already rely on to reach every expression, so a name inside a `with`
+ * statement, a `match` arm, a cast, an interrupt's arguments, or a node kind
+ * added later is found. A hand-written switch over node types used to live
+ * here and missed all of those: a `seq` arm reading a sibling's binding
+ * inside `print(x) with approve` compiled and read `undefined`.
  */
 export function collectReferences(node: AgencyNode): Set<string> {
-  const refs = new Set<string>();
-  walkForReferences(node, refs);
-  return refs;
+  return new Set(namesMentioned([node]));
 }
 
-function walkForReferences(node: AgencyNode, refs: Set<string>): void {
-  if (!node) return;
-  switch (node.type) {
-    case "variableName":
-      refs.add(node.value);
-      return;
-    case "assignment": {
-      // The LHS variableName is a binding, NOT a reference. The RHS value
-      // is the only source of references here. (Compound forms like x.y = z
-      // would also produce a reference to x via accessChain, but the v1
-      // allowlist bans plain reassignment in parallel arms.)
-      walkForReferences(node.value as AgencyNode, refs);
-      return;
+/** The names `collectReferences` finds, for a list of statements, in the
+ *  order they are first met. */
+export function namesMentioned(nodes: AgencyNode[]): string[] {
+  const names: string[] = [];
+  const add = (name: unknown) => {
+    if (typeof name === "string" && !names.includes(name)) {
+      names.push(name);
     }
-    case "functionCall": {
-      // Function names ARE references — they could collide with bindings
-      // declared by sibling arms (e.g., `let foo = ...; let r = foo()`).
-      refs.add(node.functionName);
-      for (const arg of node.arguments) {
-        if (arg.type === "splat") {
-          walkForReferences(arg.value as AgencyNode, refs);
-        } else if (arg.type === "namedArgument") {
-          walkForReferences(arg.value as AgencyNode, refs);
-        } else {
-          walkForReferences(arg as AgencyNode, refs);
-        }
-      }
-      if (node.block) {
-        for (const n of node.block.body) walkForReferences(n, refs);
-      }
-      return;
+  };
+  for (const { node } of walkNodes(nodes)) {
+    if (node.type === "variableName" && !isNullLiteral(node)) {
+      add(node.value);
+    } else if (node.type === "functionCall") {
+      add(node.functionName);
+    } else if (node.type === "assignment") {
+      add(node.variableName);
     }
-    case "binOpExpression":
-      walkForReferences(node.left as AgencyNode, refs);
-      walkForReferences(node.right as AgencyNode, refs);
-      return;
-    case "valueAccess":
-      walkForReferences(node.base, refs);
-      for (const el of node.chain) {
-        if (el.kind === "index") walkForReferences(el.index as AgencyNode, refs);
-        else if (el.kind === "slice") {
-          if (el.start) walkForReferences(el.start as AgencyNode, refs);
-          if (el.end) walkForReferences(el.end as AgencyNode, refs);
-        } else if (el.kind === "methodCall") {
-          for (const arg of el.functionCall.arguments) {
-            if (arg.type === "splat" || arg.type === "namedArgument") {
-              walkForReferences(arg.value as AgencyNode, refs);
-            } else {
-              walkForReferences(arg as AgencyNode, refs);
-            }
-          }
-        } else if (el.kind === "call") {
-          for (const arg of el.arguments) {
-            if (arg.type === "splat" || arg.type === "namedArgument") {
-              walkForReferences(arg.value as AgencyNode, refs);
-            } else {
-              walkForReferences(arg as AgencyNode, refs);
-            }
-          }
-        }
-      }
-      return;
-    case "agencyArray":
-      for (const item of node.items) {
-        if (item.type === "splat") walkForReferences(item.value as AgencyNode, refs);
-        else walkForReferences(item as AgencyNode, refs);
-      }
-      return;
-    case "agencyObject":
-      for (const e of node.entries) {
-        if ("type" in e && e.type === "splat") {
-          walkForReferences(e.value as AgencyNode, refs);
-        } else {
-          const kv = e as { computedKey?: AgencyNode; value: AgencyNode };
-          if (kv.computedKey) walkForReferences(kv.computedKey, refs);
-          walkForReferences(kv.value, refs);
-        }
-      }
-      return;
-    case "string":
-    case "multiLineString":
-      for (const seg of node.segments) {
-        if (seg.type === "interpolation") {
-          walkForReferences(seg.expression as AgencyNode, refs);
-        }
-      }
-      return;
-    case "ifElse": {
-      walkForReferences(node.condition as AgencyNode, refs);
-      // References inside thenBody/elseBody might bind their own locals —
-      // shadowing is handled at outer-arm level since we collect refs and
-      // binds independently and subtract. Simpler: just collect all refs,
-      // subtract all binds. Same outcome.
-      for (const n of node.thenBody) walkForReferences(n, refs);
-      if (node.elseBody) for (const n of node.elseBody) walkForReferences(n, refs);
-      return;
-    }
-    case "forLoop": {
-      walkForReferences(node.iterable as AgencyNode, refs);
-      for (const n of node.body) walkForReferences(n, refs);
-      return;
-    }
-    case "whileLoop": {
-      walkForReferences(node.condition as AgencyNode, refs);
-      for (const n of node.body) walkForReferences(n, refs);
-      return;
-    }
-    case "returnStatement":
-      if (node.value) walkForReferences(node.value as AgencyNode, refs);
-      return;
-    case "seqBlock":
-    case "parallelBlock":
-      for (const n of node.body) walkForReferences(n, refs);
-      return;
-    case "messageThread":
-      for (const n of node.body) walkForReferences(n, refs);
-      return;
-    case "handleBlock":
-      for (const n of node.body) walkForReferences(n, refs);
-      if (node.handler.kind === "inline") {
-        for (const n of node.handler.body) walkForReferences(n, refs);
-      }
-      return;
-    default:
-      return;
   }
+  return names;
 }
 
 function setMinus(a: Set<string>, b: Set<string>): Set<string> {
@@ -359,6 +285,23 @@ function objectLit(keys: string[]): AgencyObject {
   };
 }
 
+/** The arm of an `async` block that runs the statements after the call:
+ *  arm 0 is the call, arm 1 the rest of the block. */
+const ASYNC_MAIN_ARM = 1;
+
+/** A call to a `__`-prefixed runtime helper, which the builder emits as a
+ *  plain direct call. */
+function directCall(name: string, args: Expression[]): FunctionCall {
+  return { type: "functionCall", functionName: name, arguments: args };
+}
+
+/** `__asyncDone({ ... })`: the main arm's marked completion object. The
+ *  runtime pair `__asyncDone` / `__asyncFinished` owns the marker's shape,
+ *  so generated code never spells it. */
+function asyncDoneCall(bindings: AgencyObject): FunctionCall {
+  return directCall("__asyncDone", [bindings]);
+}
+
 function arrayLit(items: Expression[]): AgencyArray {
   return { type: "agencyArray", items };
 }
@@ -378,7 +321,12 @@ function ifStmt(cond: Expression, body: AgencyNode[]): IfElse {
   return { type: "ifElse", condition: cond, thenBody: body };
 }
 
-function forkCall(items: Expression[], block: BlockArgument, shared?: Expression): FunctionCall {
+function forkCall(
+  items: Expression[],
+  block: BlockArgument,
+  shared: Expression | undefined,
+  mainThread: number | undefined,
+): FunctionCall {
   const args: FunctionCall["arguments"] = [arrayLit(items)];
   if (shared !== undefined) {
     args.push({
@@ -392,6 +340,7 @@ function forkCall(items: Expression[], block: BlockArgument, shared?: Expression
     functionName: "fork",
     arguments: args,
     block,
+    ...(mainThread !== undefined && { mainThread }),
   };
 }
 
@@ -429,57 +378,25 @@ export function desugarParallelInBody(body: AgencyNode[]): AgencyNode[] {
       }
       result.push(...desugarParallelInBody(node.body));
     } else {
-      // Recurse into nested control-flow bodies, then keep the node.
-      descendIntoSubstructures(node);
-      result.push(node);
+      // Recurse into nested bodies, then keep the node.
+      result.push(descendIntoSubstructures(node));
     }
   }
   return result;
 }
 
-function descendIntoSubstructures(node: AgencyNode): void {
-  switch (node.type) {
-    case "ifElse":
-      node.thenBody = desugarParallelInBody(node.thenBody);
-      if (node.elseBody) node.elseBody = desugarParallelInBody(node.elseBody);
-      return;
-    case "forLoop":
-    case "whileLoop":
-    case "messageThread":
-      node.body = desugarParallelInBody(node.body);
-      return;
-    case "handleBlock":
-      node.body = desugarParallelInBody(node.body);
-      if (node.handler.kind === "inline") {
-        node.handler.body = desugarParallelInBody(node.handler.body);
-      }
-      return;
-    case "matchBlock":
-      for (const c of node.cases) {
-        if (c.type === "comment") continue;
-        if (c.type === "newLine") continue;
-        c.body = desugarParallelInBody(c.body);
-      }
-      return;
-    case "withModifier":
-      node.statement = desugarParallelInBody([node.statement as any])[0];
-      return;
-    case "assignment":
-      // The RHS may be a function call that has a block (e.g. fork) whose
-      // body might contain a parallel block.
-      descendIntoSubstructures(node.value as AgencyNode);
-      return;
-    case "returnStatement":
-      if (node.value) descendIntoSubstructures(node.value as AgencyNode);
-      return;
-    case "functionCall":
-      if (node.block) {
-        node.block.body = desugarParallelInBody(node.block.body);
-      }
-      return;
-    default:
-      return;
+/** Desugar every parallel and seq block nested anywhere inside `node`: in
+ *  its statement bodies (`bodySlots`, through `mapBodies`) and inside its
+ *  expressions (`expressionSlots`), which is where a block argument passed
+ *  as a call's argument or a `fork` on an assignment's right-hand side
+ *  keeps its body. Driven by the two slot tables so a new body-bearing
+ *  node is covered without a case here. */
+function descendIntoSubstructures(node: AgencyNode): AgencyNode {
+  let out = mapBodies(node, desugarParallelInBody);
+  for (const slot of expressionSlots(out)) {
+    out = slot.write(out, descendIntoSubstructures(slot.expr));
   }
+  return out;
 }
 
 function desugarOneParallel(pb: ParallelBlock): AgencyNode[] {
@@ -516,8 +433,13 @@ function desugarOneParallel(pb: ParallelBlock): AgencyNode[] {
       armStmts = desugarParallelInBody([arm]);
     }
 
-    // Append `return { binding1: binding1, binding2: binding2, ... }`.
-    armStmts.push(ret(objectLit(bindings)));
+    // Append `return { binding1: binding1, binding2: binding2, ... }`. The
+    // main arm of an `async` block marks its object as a normal completion,
+    // so the join can tell it from a value the arm returned early.
+    const completion = objectLit(bindings);
+    armStmts.push(
+      ret(pb.origin === "async" && i === ASYNC_MAIN_ARM ? asyncDoneCall(completion) : completion),
+    );
 
     ifChainBody.push(ifStmt(eqExpr(varRef(armParam), strLit(armName)), armStmts));
   }
@@ -535,9 +457,39 @@ function desugarOneParallel(pb: ParallelBlock): AgencyNode[] {
       body: ifChainBody,
     },
     pb.shared,
+    pb.origin === "async" ? ASYNC_MAIN_ARM : undefined,
   );
 
   const out: AgencyNode[] = [letAssign(armsVar, fork)];
+
+  // The join check of an `async` block, between the fork and the hoists:
+  //   if (!__asyncFinished(__arms_n[1])) { return __arms_n[1] }
+  // A main arm that ran to its end returned the marked object. Anything
+  // else is a value the arm returned early: a user `return` at any depth,
+  // the `return` the hoist pass later writes for a `?`, a bare `return`,
+  // or the failure of an interrupt rejected in the arm. That value is the
+  // enclosing function's (or node's) return value, so return it. It must
+  // come before the hoists, which read properties off the marked object.
+  // Only this function knows `__arms_n`, so the check is written here and
+  // not by the async lowering. See docs/dev/runtime/async.md.
+  if (pb.origin === "async") {
+    const mainArm: ValueAccess = {
+      type: "valueAccess",
+      base: varRef(armsVar),
+      chain: [{ kind: "index", index: numLit(ASYNC_MAIN_ARM) }],
+    };
+    out.push(
+      ifStmt(
+        {
+          type: "binOpExpression",
+          operator: "!",
+          left: { type: "boolean", value: true },
+          right: directCall("__asyncFinished", [mainArm]),
+        } as BinOpExpression,
+        [ret(mainArm)],
+      ),
+    );
+  }
 
   // Hoist bindings out: `let X = __arms_<n>[i].X` for each arm's bindings.
   for (let i = 0; i < arms.length; i++) {

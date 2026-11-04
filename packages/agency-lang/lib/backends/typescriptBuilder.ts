@@ -572,6 +572,24 @@ export class TypeScriptBuilder {
       throw new Error(`${DIAGNOSTICS.topLevelStatementNotAllowed.code}: ${message}`);
     }
 
+    // A tripwire. The async lowering (asyncDesugar.ts) turns every
+    // `async f()` into a parallel block and clears the flag, and the type
+    // checker refuses `async` everywhere the lowering cannot take it. A
+    // flagged call here would compile with the old pending-promise
+    // runtime, which raises no resumable interrupt, so refuse it.
+    for (const { node } of walkNodes(program.nodes)) {
+      if (
+        (node.type === "functionCall" ||
+          node.type === "valueAccess" ||
+          node.type === "variableName") &&
+        node.async
+      ) {
+        throw new Error(
+          "An `async` call reached codegen; the async lowering should have removed it. This is a toolchain bug.",
+        );
+      }
+    }
+
     // A tripwire. Expansion removes every splice before codegen, so one
     // reaching here means a compile path skipped expandSplices, and every
     // compile path must run it. Without this the symptom is a raw "Unhandled
@@ -3016,8 +3034,16 @@ export class TypeScriptBuilder {
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
-    if (functionName.startsWith("__") || this.names.isDirectCallFunction(functionName)) {
+    // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call.
+    // A `__` name that resolved to a local or a parameter is not a helper:
+    // it is a compiler temporary holding a function value (the async
+    // lowering snapshots a callee that way), so it is dispatched like any
+    // other call through a local.
+    const callsFrameValue = node.scope === "local" || node.scope === "args";
+    if (
+      !callsFrameValue &&
+      (functionName.startsWith("__") || this.names.isDirectCallFunction(functionName))
+    ) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
 
@@ -3168,6 +3194,12 @@ export class TypeScriptBuilder {
     // want to mutate the same global state. Any other named arg is a
     // user error and gets reported.
     let sharedNode: TsNode = ts.bool(false);
+    // The one branch that writes to the parent's active thread. A field the
+    // `async` lowering sets on the fork it synthesizes, never a named
+    // argument, so no program can claim the conversation for an arm of a
+    // fork it wrote. See FunctionCall.mainThread.
+    const mainThreadNode: TsNode =
+      node.mainThread === undefined ? ts.id("undefined") : ts.num(node.mainThread);
     const positionalArgs: typeof node.arguments = [];
     for (const arg of node.arguments) {
       if (arg.type === "namedArgument") {
@@ -3238,6 +3270,8 @@ export class TypeScriptBuilder {
         // stay branch-local regardless (concurrent push/pop on a
         // shared activeStack would corrupt the conversation).
         sharedNode,
+        // Trailing `mainThread` index, or undefined for no such arm.
+        mainThreadNode,
       ])
       .await()
       .done();

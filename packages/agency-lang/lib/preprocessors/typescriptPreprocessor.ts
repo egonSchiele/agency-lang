@@ -31,7 +31,8 @@ import {
   walkNodesArray,
   type WalkAncestor,
 } from "@/utils/node.js";
-import { desugarParallelInBody } from "./parallelDesugar.js";
+import { desugarParallelInBody, resetParallelCounter } from "./parallelDesugar.js";
+import { desugarAsyncInProgram } from "./asyncDesugar.js";
 import { desugarGuardsInBody } from "./guardDesugar.js";
 import { decoratorLookup, desugarDecorators } from "./decoratorDesugar.js";
 import { hoistCallsInProgram } from "./hoistCalls.js";
@@ -335,6 +336,10 @@ export class TypescriptPreprocessor {
   }
 
   preprocess(): AgencyProgram {
+    // The `__arms_N` names only need to be unique within one program. A
+    // counter carried over from an earlier compile in the same process
+    // made a file's output depend on what compiled before it.
+    resetParallelCounter();
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
@@ -363,6 +368,14 @@ export class TypescriptPreprocessor {
     // Idempotent: the TypeChecker constructor may have desugared this
     // program already. See guardDesugar.ts.
     this.program.nodes = desugarGuardsInBody(this.program.nodes);
+    // `async f()` lowers to a parallel block, so it runs just before the
+    // parallel desugar, which turns that block into a fork. Before the
+    // hoist pass, so the `return`s that pass writes for `?` land inside
+    // the arm, where the join check finds them. See asyncDesugar.ts.
+    desugarAsyncInProgram(this.program, [
+      ...Object.keys(this.functionDefinitions),
+      ...Object.keys(this.importedFunctions),
+    ]);
     this.desugarParallelBlocks();
     prunePreludeShadows(this.program);
     this.propagateBlockTypes();

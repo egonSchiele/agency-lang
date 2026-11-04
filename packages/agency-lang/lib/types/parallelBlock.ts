@@ -11,6 +11,12 @@ export type ParallelBlock = BaseNode & {
   shared?: Expression;
   /** Comments between the named arguments. */
   argumentTrivia?: ListTrivia[];
+  /** Set only by the `async` lowering (asyncDesugar.ts) on the block it
+   *  builds from `async f()`: arm 0 is the call, arm 1 the rest of the
+   *  block. `parallelDesugar` then gives arm 1 the parent's conversation
+   *  thread, marks its normal completion, and writes the join check. No
+   *  syntax sets it. See docs/dev/runtime/async.md. */
+  origin?: "async";
 };
 
 export type SeqBlock = BaseNode & {

@@ -187,6 +187,14 @@ export const DUPLICATE_ON_CLAUSE = (effect: string): string =>
 
 Give each clause a different effect, or merge the two into one.`;
 
+export const ASYNC_BLOCK_MESSAGE = `\`async\` cannot mark a block. In Agency, \`async\` starts a call that runs beside the
+statements after it, so it goes on a call statement:
+
+  map(xs, (x) => summarize(x))          // a block: no \`async\`
+  let summary = async summarize(text)   // a call that runs beside what follows
+
+Remove \`async\` from the block. Every call inside it is awaited already.`;
+
 export const BLOCK_AS_VALUE_MESSAGE = `Agency blocks are arguments, not values, so a block cannot be assigned to a variable:
 
   const double = (n) => n * 2      // not allowed

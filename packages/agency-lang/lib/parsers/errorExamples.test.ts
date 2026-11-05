@@ -37,6 +37,43 @@ function parses(src: string) {
   return parseAgency(src, {}, false).success;
 }
 
+// The old async runtime's `await x` and `sync x` prefixes. Without the
+// refusal, `const x = await foo()` parsed as `const x = await` followed by a
+// separate `foo()`, and nothing reported it.
+describe("the removed await and sync prefixes are refused", () => {
+  it.each([
+    ["a const value", `node main() {\n  const x = await foo()\n}`],
+    ["a bare statement", `node main() {\n  await foo()\n}`],
+    ["a return value", `def f(): number {\n  return await foo()\n}`],
+    ["a call argument", `node main() {\n  print(await x)\n}`],
+    ["an interpolation", `node main() {\n  print("got \${await x}")\n}`],
+    ["a try operand", `node main() {\n  const x = try await foo()\n}`],
+    ["a bare word", `node main() {\n  const x = await\n}`],
+  ])("refuses await as %s", (_name, src) => {
+    const message = failure(src);
+    expect(message).toContain("Agency has no `await`");
+    expect(message).toMatch(/^Line 2,/);
+  });
+
+  it.each([
+    ["a const value", `node main() {\n  const x = sync foo()\n}`],
+    ["a variable", `node main() {\n  const b = sync a\n}`],
+    ["a parenthesized value", `node main() {\n  const b = sync (a)\n}`],
+  ])("refuses sync before %s", (_name, src) => {
+    expect(failure(src)).toContain("Agency has no `sync`");
+  });
+
+  // `sync` is not a reserved word, so a variable may be called `sync`.
+  it.each([
+    ["a plain read", `node main() {\n  const sync = 1\n  return sync\n}`],
+    ["an operand", `node main() {\n  const sync = 1\n  return sync + 1\n}`],
+    ["a cast", `node main() {\n  const sync: any = 1\n  return sync as number\n}`],
+    ["a call", `def sync(n: number): number {\n  return n\n}\nnode main() {\n  return sync(1)\n}`],
+  ])("still reads a variable named sync in %s", (_name, src) => {
+    expect(parses(src)).toBe(true);
+  });
+});
+
 describe("ternaries are refused with the if-then-else form", () => {
   it.each([
     ["a const value", `node main() { const y = x ? 1 : 2 }`],

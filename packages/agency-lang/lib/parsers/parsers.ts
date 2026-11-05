@@ -25,6 +25,7 @@ import {
   JS_REGEX_MESSAGE,
   MATCH_CASES_MESSAGE,
   MODIFIER_AFTER_KEYWORD_MESSAGE,
+  REMOVED_ASYNC_PREFIX_MESSAGE,
   RESERVED_CLASS_MESSAGE,
   STATIC_ASSIGN_MESSAGE,
   STATIC_INNER_MESSAGE,
@@ -3375,7 +3376,7 @@ export const _functionCallParser = functionCallParserFor("_functionCallParser", 
  *  not checked against the reserved names. */
 const methodCallParser = functionCallParserFor("methodCallParser", many1WithJoin(varNameChar));
 
-// functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
+// functionCallParser is plain _functionCallParser. The `async` prefix is read by valueAccessParser.
 export const functionCallParser: Parser<FunctionCall> = label(
   "a function call",
   _functionCallParser,
@@ -3696,10 +3697,41 @@ export const asyncValueAccessParser = (
   return success({ ...withNameLoc(result.result.access), async: true }, result.rest);
 };
 
+/**
+ * Refuses `await x` and `sync x`. The old async runtime kept an `async`
+ * call's result in a pending promise, and these prefixes waited for it. The
+ * call now finishes before its value is read, so neither prefix means
+ * anything. Without this check, `const x = await foo()` reads as
+ * `const x = await` followed by a separate statement `foo()`, and nothing
+ * reports it.
+ *
+ * It throws through `parseError` for the reason `reservedClassParser` does:
+ * a returned failure is dropped by the surrounding `or`, and
+ * `_valueAccessParser` then reads the word as a variable name.
+ *
+ * `await` is a reserved word, so `await` is always refused. `sync` is an
+ * ordinary name, so it is refused only when a name or `(` follows it on the
+ * same line (`sync a`, `sync (a)`) and that name is not a keyword:
+ * `sync as number` and `sync in items` still read a variable named `sync`.
+ */
+const removedAsyncPrefixParser: Parser<never> = (input: string) => {
+  const awaitWord = /^await(?![A-Za-z0-9_$])/.test(input);
+  const syncPrefix = /^sync[ \t]+([A-Za-z_$][A-Za-z0-9_$]*|\()/.exec(input);
+  const syncRefused = syncPrefix !== null && !RESERVED_WORDS.includes(syncPrefix[1]);
+  if (!awaitWord && !syncRefused) {
+    return failure("", input);
+  }
+  const word = awaitWord ? "await" : "sync";
+  return parseError(
+    REMOVED_ASYNC_PREFIX_MESSAGE(word),
+    fail(`${word} prefix`),
+  )(input) as ParserResult<never>;
+};
+
 export function valueAccessParser(
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
-  const parser = withLoc(or(asyncValueAccessParser, _valueAccessParser));
+  const parser = withLoc(or(asyncValueAccessParser, removedAsyncPrefixParser, _valueAccessParser));
   return parser(input);
 }
 

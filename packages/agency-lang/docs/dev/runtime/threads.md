@@ -46,7 +46,6 @@ Every bailout path in `runPrompt` stores a snapshot into `self.messagesJSON`: th
 - Key methods:
   - `create(meta?)` — new empty thread, returns ID
   - `createSubthread(meta?)` — new thread inheriting active thread's messages
-  - `createAndReturnSubthread()` — the same fork, returning the `MessageThread` itself
   - `pushActive(id)` / `popActive()` — manage the active stack
   - `getOrCreateActive()` — lazy creation of the active thread
   - `resumeExisting(id)` / `openSession(name, meta)` — reopen a thread for `thread(continue:)` and `thread(session:)`

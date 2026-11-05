@@ -27,7 +27,7 @@ It is plain JSON, so a host can store it and resume in another process.
    A model call or fetch in flight keeps going.
 2. Every runner method that starts a statement calls `pauseIfRequested`:
    `step`, `hook`, `pipe`, `thread`, `handle`, `ifElse`, `loop`, `whileLoop`,
-   `branchStep`, `fork`, and `debugger`. The call comes after `shouldSkip()`
+   `fork`, and `debugger`. The call comes after `shouldSkip()`
    and before the statement does any work. In `step` and `hook` it also comes
    after the guard-trip raise.
 3. If the context is cancelled, `pauseIfRequested` throws the cancel reason.

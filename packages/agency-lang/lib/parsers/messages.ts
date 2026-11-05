@@ -58,6 +58,12 @@ export const STATIC_INNER_MESSAGE =
   "or an expression statement (e.g., `static foo()` or " +
   "`static logger.flush()`).";
 
+/** `await x` or `sync x`, the prefixes the old async runtime used to wait
+ *  for an `async` call. The call now finishes before its value is read. */
+export const REMOVED_ASYNC_PREFIX_MESSAGE = (word: string): string =>
+  `Agency has no \`${word}\`. An \`async\` call has finished by the time you read its value, ` +
+  `so write \`x\`, not \`${word} x\`.`;
+
 export const RESERVED_CLASS_MESSAGE =
   "`class` definitions are no longer supported in Agency. " +
   "Use functions and plain objects instead, or instantiate an imported " +

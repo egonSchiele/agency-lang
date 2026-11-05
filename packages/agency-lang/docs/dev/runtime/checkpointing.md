@@ -69,7 +69,7 @@ All three functions live in `lib/runtime/checkpoint.ts`. None of them take a `__
 
 **`checkpoint()`**:
 1. Calls `ctx.checkpoints.create(ctx.stateStack, ctx, location)`, which deep-clones StateStack and GlobalStore
-3. Returns the numeric ID
+2. Returns the numeric ID
 
 The location comes from the active frame's `callsite` slot, which `Runner.runInScope` seeds for every step body. A call made outside a runner step, such as from bootstrap scope, falls back to the empty `""::""::""` location.
 

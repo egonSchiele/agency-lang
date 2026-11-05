@@ -406,9 +406,8 @@ describe("async/sync function calls via valueAccessParser", () => {
     }
   });
 
-  it("does not read await as a prefix", () => {
-    const result = valueAccessParser("await bar()");
-    expect(result.success && result.result.type === "functionCall").toBe(false);
+  it("refuses the removed await prefix", () => {
+    expect(() => valueAccessParser("await bar()")).toThrow(/Agency has no `await`/);
   });
 
   it("should parse without keyword and not set async field", () => {

@@ -204,7 +204,7 @@ describe("cachedFetch and recordFetch", () => {
       });
       // A subthread starts with its parent's messages, so the page is in
       // its conversation.
-      const child = run.threads.createAndReturnSubthread();
+      const child = run.threads.get(run.threads.createSubthread());
       await inToolCall(run, child, async (run) => {
         expect(cachedFetch(run, get("https://example.com/parent"), false)).not.toBeNull();
         recordFetch(run, get("https://example.com/child"), "a page");

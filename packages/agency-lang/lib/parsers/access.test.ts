@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  valueAccessParser,
-  _valueAccessParser,
-  asyncValueAccessParser,
-  syncValueAccessParser,
-} from "./parsers.js";
+import { valueAccessParser, _valueAccessParser, asyncValueAccessParser } from "./parsers.js";
 
 describe("valueAccessParser", () => {
   describe("bare variable names (unwrapped)", () => {
@@ -518,122 +513,6 @@ describe("valueAccessParser", () => {
     });
   });
 
-  describe("syncValueAccessParser", () => {
-    it('should parse "sync obj.foo" with async: false', () => {
-      const result = syncValueAccessParser("sync obj.foo");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "obj" },
-          chain: [{ kind: "property", name: "foo" }],
-          async: false,
-        });
-      }
-    });
-
-    it('should parse "await obj.foo" with async: false', () => {
-      const result = syncValueAccessParser("await obj.foo");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "obj" },
-          chain: [{ kind: "property", name: "foo" }],
-          async: false,
-        });
-      }
-    });
-
-    it('should parse "sync Promise.resolve()" with async: false', () => {
-      const result = syncValueAccessParser("sync Promise.resolve()");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "Promise" },
-          chain: [
-            {
-              kind: "methodCall",
-              functionCall: {
-                type: "functionCall",
-                functionName: "resolve",
-                arguments: [],
-              },
-            },
-          ],
-          async: false,
-        });
-      }
-    });
-
-    it('should parse "await Promise.race(res1, res2)" with async: false', () => {
-      const result = syncValueAccessParser("await Promise.race(res1, res2)");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "Promise" },
-          chain: [
-            {
-              kind: "methodCall",
-              functionCall: {
-                type: "functionCall",
-                functionName: "race",
-                arguments: [
-                  { type: "variableName", value: "res1" },
-                  { type: "variableName", value: "res2" },
-                ],
-              },
-            },
-          ],
-          async: false,
-        });
-      }
-    });
-
-    it('should parse "sync response.data.items" with async: false', () => {
-      const result = syncValueAccessParser("sync response.data.items");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "response" },
-          chain: [
-            { kind: "property", name: "data" },
-            { kind: "property", name: "items" },
-          ],
-          async: false,
-        });
-      }
-    });
-
-    // sync on bare function call
-    it('should parse "sync fetch()" with async: false', () => {
-      const result = syncValueAccessParser("sync fetch()");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "functionCall",
-          functionName: "fetch",
-          arguments: [],
-          async: false,
-        });
-      }
-    });
-
-    // Failure cases
-    it("should fail on async keyword", () => {
-      expect(syncValueAccessParser("async obj.foo").success).toBe(false);
-    });
-    it("should fail without keyword", () => {
-      expect(syncValueAccessParser("obj.foo").success).toBe(false);
-    });
-    it("should fail on empty string", () => {
-      expect(syncValueAccessParser("").success).toBe(false);
-    });
-  });
-
   describe("asyncValueAccessParser", () => {
     it('should parse "async obj.foo" with async: true', () => {
       const result = asyncValueAccessParser("async obj.foo");
@@ -747,29 +626,7 @@ describe("valueAccessParser", () => {
     });
   });
 
-  describe("valueAccessParser with async/sync/await keywords", () => {
-    it("should parse 'await' keyword and set async: false", () => {
-      const result = valueAccessParser("await Promise.bar()");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "Promise" },
-          chain: [
-            {
-              kind: "methodCall",
-              functionCall: {
-                type: "functionCall",
-                functionName: "bar",
-                arguments: [],
-              },
-            },
-          ],
-          async: false,
-        });
-      }
-    });
-
+  describe("valueAccessParser with the async keyword", () => {
     it("should parse 'async' keyword and set async: true", () => {
       const result = valueAccessParser("async Promise.sayHi()");
       expect(result.success).toBe(true);
@@ -788,28 +645,6 @@ describe("valueAccessParser", () => {
             },
           ],
           async: true,
-        });
-      }
-    });
-
-    it("should parse 'sync' keyword and set async: false", () => {
-      const result = valueAccessParser("sync Promise.sayHi()");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({
-          type: "valueAccess",
-          base: { type: "variableName", value: "Promise" },
-          chain: [
-            {
-              kind: "methodCall",
-              functionCall: {
-                type: "functionCall",
-                functionName: "sayHi",
-                arguments: [],
-              },
-            },
-          ],
-          async: false,
         });
       }
     });

@@ -10,7 +10,6 @@ describe("BootstrapThreadStore", () => {
       { name: "create", fn: () => store.create() },
       { name: "createAndReturnThread", fn: () => store.createAndReturnThread() },
       { name: "createSubthread", fn: () => store.createSubthread() },
-      { name: "createAndReturnSubthread", fn: () => store.createAndReturnSubthread() },
       { name: "get", fn: () => store.get("0") },
       { name: "pushActive", fn: () => store.pushActive("0") },
       { name: "popActive", fn: () => store.popActive() },

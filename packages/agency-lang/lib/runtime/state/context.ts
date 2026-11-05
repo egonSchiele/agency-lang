@@ -42,7 +42,6 @@ import type { ResolvedInvocation } from "../invocationOptions.js";
 import { readConfigOverrides, TRACE_ID_ENV } from "../../config/config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
-import { PendingPromiseStore } from "./pendingPromiseStore.js";
 import { reportWaits, type OpenWait } from "../waits.js";
 
 /** See `RuntimeContext.debugSlot`. `waits` is what the module's runs are
@@ -131,7 +130,6 @@ export class RuntimeContext<T> {
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
   lockReleasers: Record<string, () => void>;
-  pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
   /** Called before any checkpoint is built, from whichever stack. An
@@ -399,7 +397,6 @@ export class RuntimeContext<T> {
     this.pauseRequested = false;
     this._restoreCount = 0;
     this._toolCallDepth = 0;
-    this.pendingPromises = new PendingPromiseStore();
     this.debugSlot = { state: null, waits: [] };
     this.traceWriter = null;
     this.traceConfig = args.traceConfig || {};
@@ -567,7 +564,6 @@ export class RuntimeContext<T> {
     execCtx.subprocessDepth = getSubprocessRunInfo().depth;
     execCtx.verbose = this.verbose;
     execCtx.logLevel = this.logLevel;
-    execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.abortController = new AbortController();
     execCtx.statelogClient = new StatelogClient({
       ...effective.statelogConfig,
@@ -700,37 +696,6 @@ export class RuntimeContext<T> {
     return Object.values(this.memoryManagerCache);
   }
 
-  /* Let's chat through what's going on here. Because since this function
-  is called "fork"Stack, you may think that it clone the current stateStack.
-  And that's exactly what I had earlier:
-
-  ```
-  return StateStack.fromJSON(this.stateStack.toJSON());
-  ```
-
-  This function was created for asynchronous threads, so we could keep track
-  of their state. But the way we store the state is for each async thread,
-  in branches. It's execution starts at the point it is defined. It doesn't
-  have any previous state it's not going to wind up to back to a point *before*
-  it was defined.
-  Another way to think about it: Suppose node main, calls function foo,
-  calls function A, which creates an async thread function A1, and A1 throws an interrupt:
-
-  ```
-    main -> foo -> A -> A1 (async thread) -> interrupt
-  ```
-
-  When we resume from the interrupt, we deserialize up to A1 using A's state stack.
-  And from that point, we deserialize A1 using A1's state stack. So A1's state stack
-  should *only* contain the state created after the A1 thread was initialized.
-  Otherwise, there will be a bunch of extra frames on the state stack related
-  to calling through our A1, which will be a mismatch.
-
-  I'm still leaving this function because I think its name helps explain what
-  is happening, and also because it's easier to find the code that creates these
-  async threads. But we could just replace all calls to `forkStack`
-  with `new StateStack()`.
-  */
   /** Register a handler. `liveGuardIds` is REQUIRED and each caller
    *  must decide it explicitly (an empty array is NOT neutral — it
    *  means "hide every guard from this handler", which is correct only
@@ -862,10 +827,6 @@ export class RuntimeContext<T> {
     this.abortController = new AbortController();
   }
 
-  forkStack(): StateStack {
-    return new StateStack();
-  }
-
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
     if (!this.abortController.signal.aborted) {
@@ -873,7 +834,6 @@ export class RuntimeContext<T> {
         new AgencyCancelledError("cleanup", makeAbortCause({ kind: "cleanup" })),
       );
     }
-    this.pendingPromises.clear();
     this.stateStack = null as any;
     this.globals = null as any;
     this.checkpoints = null as any;
@@ -909,7 +869,6 @@ export class RuntimeContext<T> {
     // Cost is state: it goes wherever the stack goes, so the meter, getCost()
     // and getTokens() agree after a restore as well as before one.
     this.invocationUsage.resumeFrom(checkpoint.usage);
-    this.pendingPromises.clear();
   }
 
   /** @deprecated Use checkpoints.create() instead */

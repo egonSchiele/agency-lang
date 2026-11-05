@@ -398,7 +398,6 @@ __bstack.locals.x = await __call(__run, double, {
             args: [__stack.locals.__async_arg_0]
           });
 if (hasInterrupts(__bstack.locals.x)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__bstack.locals.x)
             return;
           }
@@ -428,7 +427,6 @@ const __funcResult = await __call(__run, print, {
             args: [`working`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__funcResult)
             return;
           }
@@ -456,7 +454,6 @@ __forkBranchStack.pop();
 
           }, "all", __run.stack, true, 1);
 if (hasInterrupts(__stack.locals.__arms_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__arms_0
@@ -470,7 +467,6 @@ if (isAborted(__stack.locals.__arms_0)) {
         await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await __asyncFinished(__nn(__stack.locals.__arms_0[1]));
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0

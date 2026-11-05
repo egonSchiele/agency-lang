@@ -673,7 +673,6 @@ __stack.locals.result = await __call(__run, __stack.locals.fn, {
             args: [`Bob`]
           });
 if (hasInterrupts(__stack.locals.result)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.result
@@ -690,7 +689,6 @@ __stack.locals.doubled = await __call(__run, applyToAll, {
             args: [[1, 2, 3], double]
           });
 if (hasInterrupts(__stack.locals.doubled)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.doubled

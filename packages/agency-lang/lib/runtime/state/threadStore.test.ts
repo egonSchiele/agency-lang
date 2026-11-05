@@ -140,7 +140,7 @@ describe("ThreadStore.viewWithActive", () => {
   it("makes the thread active in the view and leaves the store's own stack alone", () => {
     const store = new ThreadStore();
     const main = store.getOrCreateActive();
-    const side = store.createAndReturnSubthread();
+    const side = store.get(store.createSubthread());
     const view = store.viewWithActive(side);
     expect(view.active()).toBe(side);
     expect(store.active()).toBe(main);
@@ -158,8 +158,8 @@ describe("ThreadStore.viewWithActive", () => {
   it("gives two callers independent active stacks over one registry", () => {
     const store = new ThreadStore();
     store.getOrCreateActive();
-    const first = store.createAndReturnSubthread();
-    const second = store.createAndReturnSubthread();
+    const first = store.get(store.createSubthread());
+    const second = store.get(store.createSubthread());
     const viewA = store.viewWithActive(first);
     const viewB = store.viewWithActive(second);
     viewA.pushActive(viewA.createSubthread());

@@ -210,7 +210,6 @@ const REGISTRY: { [K in AgencyNode["type"]]: SlotExtractor<K> } = {
   keyword: none,
   tag: none,
   debuggerStatement: none,
-  awaitPending: none,
   markDestructiveRan: none,
   rebindParameters: none,
   decoratorCallField: none,

@@ -386,7 +386,6 @@ async function runHandlerChain(
         // site and therefore its own hidden set.
         const suspensionToken = stack ? stack.beginSuspension(entry.liveGuardIds) : undefined;
         stack!.executingHandlerEntries.push(entry);
-        const promiseWatermark = ctx.pendingPromises.watermark();
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
         ctx.enterToolCall();
         let result: any;
@@ -395,26 +394,13 @@ async function runHandlerChain(
             entry.fn(handlerRun, interruptObj),
           );
         } finally {
-          try {
-            // Handler exit is an await boundary for the promises the
-            // handler launched: an async call that outlived the body
-            // would otherwise keep running un-marked. Scoped by the
-            // watermark, not awaitAll — the full pending set can
-            // contain the async call whose raise is being dispatched
-            // right now, which cannot settle until this chain returns.
-            await ctx.pendingPromises.awaitPending(
-              ctx.pendingPromises.keysSince(promiseWatermark),
-              { rejectInterrupts: true },
-            );
-          } finally {
-            const idx = stack!.executingHandlerEntries.lastIndexOf(entry);
-            if (idx !== -1) {
-              stack!.executingHandlerEntries.splice(idx, 1);
-            }
-            ctx.exitToolCall();
-            if (suspensionToken !== undefined) {
-              stack!.endSuspension(suspensionToken);
-            }
+          const idx = stack!.executingHandlerEntries.lastIndexOf(entry);
+          if (idx !== -1) {
+            stack!.executingHandlerEntries.splice(idx, 1);
+          }
+          ctx.exitToolCall();
+          if (suspensionToken !== undefined) {
+            stack!.endSuspension(suspensionToken);
           }
         }
         // A handler that is a compiled def returns an AbortedResult when
@@ -823,7 +809,6 @@ async function runResumeLoop(
           },
         ),
       );
-      await execCtx.pendingPromises.awaitAll();
       await throwIfNodeResultAborted(result, execCtx, { endsRun: true });
       const returnObject = createReturnObject({ result, globals: execCtx.globals });
       if (hasInterrupts(returnObject.data)) {

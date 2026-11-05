@@ -40,7 +40,7 @@ Now, `foo` will be a `Result` type. If the validation fails, it will be a `failu
 You can use this with llm calls too:
 
 ```ts
-const result: Person! = await llm("Describe a person.")
+const result: Person! = llm("Describe a person.")
 ```
 
 Remember to unwrap the `Result` type to get the value out of it.

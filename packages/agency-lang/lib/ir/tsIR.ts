@@ -40,7 +40,6 @@ export type TsNode =
   | TsRunnerExitMatch
   | TsRunnerLoop
   | TsRunnerWhileLoop
-  | TsRunnerBranchStep
   | TsRunnerDebugger
   | TsRunnerPipe
   | TsEmpty
@@ -396,14 +395,6 @@ export interface TsRunnerWhileLoop {
   kind: "runnerWhileLoop";
   id: number;
   condition: TsNode;
-  body: TsNode[];
-}
-
-/** runner.branchStep(id, branchKey, async (runner) => { body }) */
-export interface TsRunnerBranchStep {
-  kind: "runnerBranchStep";
-  id: number;
-  branchKey: string;
   body: TsNode[];
 }
 

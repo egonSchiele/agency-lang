@@ -344,18 +344,6 @@ export class TypeScriptBuilder {
   // wrong answer).
   private insidePlainMatchExpr: boolean = false;
 
-  /*
-  We break up every function and node body into steps,
-  and wrap each statement in an if statement. If that statement
-  contains an async function call, we also need to check
-  whether we have branch data for this function call already,
-  which would indicate that we are returning from an interrupt,
-  and need to deserialize the state for this branch. This property
-  is here as a flag to indicate that the branch check is needed,
-  because this statement contains an async function call.
-  */
-  private _asyncBranchCheckNeeded: boolean = false;
-
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
   private compilationUnit: CompilationUnit;
@@ -483,35 +471,6 @@ export class TypeScriptBuilder {
     };
   }
 
-  private forkBranchSetup(branchKey: string): TsNode[] {
-    const stackBranches = ts.prop(ts.runtime.stack, "branches");
-    const branchWithBranchKey = ts.index(stackBranches, ts.str(branchKey));
-
-    // forked is a state stack that we will either get from the branch data (if returning from an interrupt)
-    // or create new by forking the current stack (if first time hitting this async call)
-    const forked = ts.id("__forked");
-    return [
-      ts.if(
-        ts.and(stackBranches, branchWithBranchKey),
-        ts.statements([
-          ts.assign(forked, ts.prop(branchWithBranchKey, "stack")),
-          ts.call(ts.prop(forked, "deserializeMode")),
-        ]),
-        {
-          elseBody: ts.assign(
-            forked,
-            // Immediate deref inside a step body — use the strict
-            // accessor so a missing ALS frame throws the dedicated
-            // error instead of `Cannot read 'forkStack' of undefined`.
-            ts.call(ts.prop(ts.runtime.ctx, "forkStack")),
-          ),
-        },
-      ),
-      ts.assign(stackBranches, ts.or(stackBranches, ts.obj({}))),
-      ts.assign(branchWithBranchKey, ts.obj({ stack: forked })),
-    ];
-  }
-
   /** Generate a TsNode for `hasInterrupts(x)` */
   private interruptCheck(expr: TsNode): TsNode {
     return ts.call(ts.id("hasInterrupts"), [expr]);
@@ -576,9 +535,9 @@ export class TypeScriptBuilder {
     // A tripwire. The async lowering (asyncDesugar.ts) turns every
     // `async f()` into a parallel block and clears the flag, and the type
     // checker refuses `async` everywhere the lowering cannot take it. A
-    // flagged call here would compile with the old pending-promise
-    // runtime, which raises no resumable interrupt, so refuse it.
-    // `isAsyncFlagged` names every node kind the parser can flag.
+    // flagged call here would compile as a plain call, silently dropping
+    // the overlap, so refuse it. `isAsyncFlagged` names every node kind
+    // the parser can flag.
     for (const { node } of walkNodes(program.nodes)) {
       if (isAsyncFlagged(node)) {
         throw new Error(
@@ -2900,30 +2859,7 @@ export class TypeScriptBuilder {
     const scope = this.scopes.current();
 
     if (this.names.shouldHandleInterrupts(node.functionName) && scope.type !== "global") {
-      // Async unassigned calls: register with pending promise store, no interrupt check
-      if (node.async) {
-        // Fork the stack for per-thread isolation
-        if (this.names.shouldHandleInterrupts(node.functionName)) {
-          this._asyncBranchCheckNeeded = true;
-          const branchKey = this.steps.joined();
-          let statements = ts.statements(this.forkBranchSetup(branchKey));
-          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", {
-            stateStack: ts.id("__forked"),
-          });
-
-          statements = ts.statementsPush(
-            statements,
-            // Strict accessor inside a step body (under the
-            // withAlsFrame wrap) — keeps missing-frame failures
-            // actionable instead of "Cannot read 'add' of undefined".
-            ts.raw(`__run.ctx.pendingPromises.add(${this.str(callWithStack)})`),
-          );
-          return statements;
-        }
-        return ts.raw(`__run.ctx.pendingPromises.add(${this.str(callNode)})`);
-      }
-
-      // Sync calls: bind the result to a temp and emit the shared interrupt
+      // Bind the result to a temp and emit the shared interrupt
       // guard (assignmentInterruptGuard owns the handler-body-throw vs
       // halt dispatch and the node-vs-function halt shape). Handler-body
       // statements share one scope, so those get a unique temp name.
@@ -3029,7 +2965,7 @@ export class TypeScriptBuilder {
     const functionName =
       context === "valueAccess" ? node.functionName : mapFunctionName(node.functionName);
 
-    const shouldAwait = !node.async && context !== "valueAccess";
+    const shouldAwait = context !== "valueAccess";
 
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call.
     // A `__` name that resolved to a local or a parameter is not a helper:
@@ -3719,9 +3655,8 @@ export class TypeScriptBuilder {
    * result). Two markers can come back instead of a normal value, and
    * both must stop this scope:
    *
-   * - an Interrupt[] — the callee paused; halt so the batch propagates
-   *   (awaitAll first), or throw inside a handler body, where interrupts
-   *   are not allowed.
+   * - an Interrupt[] — the callee paused; halt so the batch propagates,
+   *   or throw inside a handler body, where interrupts are not allowed.
    * - an AbortedResult — the callee was aborted; this scope stops too and
    *   returns ITS OWN saved draft via carryThrough (the callee's partial
    *   is dropped: salvage is opt-in per level). Nodes and handler bodies
@@ -3748,7 +3683,7 @@ export class TypeScriptBuilder {
         abortedGuard,
       ]);
     }
-    // Sync: interrupt check with awaitAll before halt.
+    // Interrupt check before halt.
     // In function context, halt with the interrupt array directly so
     // the caller's hasInterrupts check can detect it.
     const haltValue =
@@ -3758,15 +3693,7 @@ export class TypeScriptBuilder {
     return ts.statements([
       ts.if(
         this.interruptCheck(varRef),
-        ts.statements([
-          ts.awaitMethodCall(
-            // Strict accessor — immediate deref inside step body.
-            ts.prop(ts.runtime.ctx, "pendingPromises"),
-            "awaitAll",
-          ),
-          ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-          ts.return(),
-        ]),
+        ts.statements([ts.methodCall(ts.id("runner"), "halt", [haltValue]), ts.return()]),
       ),
       abortedGuard,
     ]);
@@ -3871,38 +3798,8 @@ export class TypeScriptBuilder {
         ),
       ];
 
-      if (value.async) {
-        // Fork the stack for per-thread isolation
-        if (this.names.shouldHandleInterrupts(value.functionName)) {
-          this._asyncBranchCheckNeeded = true;
-          const branchKey = this.steps.joined();
-          stmts.unshift(...this.forkBranchSetup(branchKey));
-          stmts[stmts.length - 1] = this.assigns.scopedAssign(
-            node.scope!,
-            variableName,
-            this.generateFunctionCallExpression(value, "topLevelStatement", {
-              stateStack: ts.id("__forked"),
-            }),
-            node.accessChain,
-            node.blockDepth ?? 0,
-          );
-        }
-
-        // Async: register with pending promise store, store the key, skip interrupt check
-        const pendingKeyVar = `__pendingKey_${variableName}`;
-        stmts.push(
-          ts.assign(
-            ts.self(pendingKeyVar),
-            ts.raw(
-              // Strict accessor — inside step body under the wrap.
-              `__run.ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
-            ),
-          ),
-        );
-      } else {
-        const guard = this.assignmentInterruptGuard(varRef);
-        if (guard) stmts.push(guard);
-      }
+      const guard = this.assignmentInterruptGuard(varRef);
+      if (guard) stmts.push(guard);
       return ts.statements(stmts);
     } else if (this.rhsMayBubbleInterrupts(value)) {
       // `try` catches FAILURES, not interrupts — an Interrupt[] bubbling out
@@ -4004,13 +3901,8 @@ export class TypeScriptBuilder {
       clientConfig = ts.obj(configEntries);
     }
 
-    // Thread expression — always use the shared active thread.
-    // For async prompts, fork via subthread so they get context but don't
-    // write back to the shared thread.
-    let threadExpr: TsNode = ts.threads.getOrCreateActive();
-    if (node.async) {
-      threadExpr = ts.threads.createAndReturnSubthread();
-    }
+    // Thread expression: the shared active thread.
+    const threadExpr: TsNode = ts.threads.getOrCreateActive();
 
     // Build runPrompt config object. `ctx` and `stateStack` are no longer
     // passed at the call site — `runPrompt` reads them from the active
@@ -4063,50 +3955,26 @@ export class TypeScriptBuilder {
       ts.assign(this.removedToolsSlot(), ts.binOp(this.removedToolsSlot(), "||", ts.arr([]))),
     ];
 
-    if (node.async) {
-      // Async: no await, no interrupt check. Register with pending promise store.
-      stmts.push(ts.assign(varRef, runPromptCall));
-      const pendingKeyVar = `__pendingKey_${variableName}`;
+    stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
+    if (this.insideHandlerBody) {
       stmts.push(
-        ts.assign(
-          ts.self(pendingKeyVar),
-          ts.raw(
-            // Strict accessor — inside step body under the wrap.
-            `__run.ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
-          ),
+        ts.if(
+          this.interruptCheckRaw(this.str(varRef)),
+          ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
         ),
       );
     } else {
-      // Sync: await + interrupt check
-      stmts.push(ts.assign(varRef, ts.await(runPromptCall)));
-      if (this.insideHandlerBody) {
-        stmts.push(
-          ts.if(
-            this.interruptCheckRaw(this.str(varRef)),
-            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
-          ),
-        );
-      } else {
-        stmts.push(ts.comment("halt if this is an interrupt"));
-        const isNodeContext = this.scopes.current().type === "node";
-        const haltValue = isNodeContext
-          ? ts.obj({ messages: ts.runtime.threads, data: varRef })
-          : varRef;
-        stmts.push(
-          ts.if(
-            this.interruptCheck(varRef),
-            ts.statements([
-              ts.awaitMethodCall(
-                // Strict accessor — immediate deref inside step body.
-                ts.prop(ts.runtime.ctx, "pendingPromises"),
-                "awaitAll",
-              ),
-              ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-              ts.return(),
-            ]),
-          ),
-        );
-      }
+      stmts.push(ts.comment("halt if this is an interrupt"));
+      const isNodeContext = this.scopes.current().type === "node";
+      const haltValue = isNodeContext
+        ? ts.obj({ messages: ts.runtime.threads, data: varRef })
+        : varRef;
+      stmts.push(
+        ts.if(
+          this.interruptCheck(varRef),
+          ts.statements([ts.methodCall(ts.id("runner"), "halt", [haltValue]), ts.return()]),
+        ),
+      );
     }
 
     return ts.statements(stmts);
@@ -4468,7 +4336,6 @@ export class TypeScriptBuilder {
 
   private processBodyAsParts(body: AgencyNode[], startId = 0): TsNode[] {
     const result: TsNode[] = [];
-    const branchKeys: Record<number, string> = {};
 
     // Track the current "part" being built (for non-pipe statements)
     let currentPart: TsNode[] | null = null;
@@ -4478,17 +4345,7 @@ export class TypeScriptBuilder {
     const flushPart = () => {
       if (currentPart) {
         const id = nextId();
-        if (branchKeys[id]) {
-          result.push(
-            ts.runnerBranchStep({
-              id,
-              branchKey: branchKeys[id],
-              body: currentPart,
-            }),
-          );
-        } else {
-          result.push(ts.runnerStep({ id, body: currentPart }));
-        }
+        result.push(ts.runnerStep({ id, body: currentPart }));
         currentPart = null;
       }
     };
@@ -4570,10 +4427,6 @@ export class TypeScriptBuilder {
       if (post) {
         if (!currentPart) currentPart = [];
         currentPart.push(post);
-      }
-      if (this._asyncBranchCheckNeeded) {
-        branchKeys[nextId()] = this.steps.joined();
-        this._asyncBranchCheckNeeded = false;
       }
       this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
       this.steps.pop();

@@ -363,7 +363,6 @@ const __funcResult = await __call(__run, print, {
             args: [`hello ${__stack.args.name}`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -455,7 +454,6 @@ __stack.locals.__hoist_0 = await __call(__run, decorate, {
             args: [`world`]
           });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0

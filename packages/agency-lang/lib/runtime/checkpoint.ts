@@ -19,7 +19,6 @@ export async function checkpoint(): Promise<number> {
  *  a checkpoint after an `await`. */
 export async function checkpointFor(run: Run): Promise<number> {
   const { ctx, callsite } = run;
-  await ctx.pendingPromises.awaitAll();
   return ctx.checkpoints.create(ctx.stateStack, ctx, {
     moduleId: callsite?.moduleId ?? "",
     scopeName: callsite?.scopeName ?? "",
@@ -84,6 +83,5 @@ export function restoreFor(
     ctx.checkpoints.trackLocationRestore(location);
   }
   ctx.checkpoints.deleteAfterCheckpoint(cp.id);
-  ctx.pendingPromises.clear();
   throw new RestoreSignal(cp, options);
 }

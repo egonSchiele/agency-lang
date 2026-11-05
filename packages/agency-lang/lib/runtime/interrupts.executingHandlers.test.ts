@@ -108,47 +108,4 @@ describe("stack-carried handler execution mark", () => {
     expect(isRejected(refusal)).toBe(true);
     expect(refusal.value).toMatch(/inside a handler/);
   });
-
-  it("handler exit awaits promises the handler launched, while the mark is still set", async () => {
-    const ctx = makeCtx();
-    const stack = new StateStack();
-    let markAtStragglerEnd = -1;
-    ctx.handlers = [
-      {
-        fn: async () => {
-          ctx.pendingPromises.add(
-            (async () => {
-              await new Promise((r) => setTimeout(r, 10));
-              markAtStragglerEnd = stack.executingHandlerEntries.length;
-            })(),
-          );
-          return { type: "approve" as const }; // handler returns while the straggler still runs
-        },
-        liveGuardIds: [],
-        stack: null,
-      },
-    ];
-    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
-    expect(markAtStragglerEnd).toBe(1); // straggler finished BEFORE the pop
-    expect(stack.executingHandlerEntries).toEqual([]);
-  });
-
-  it("handler exit does not await promises launched before the handler began", async () => {
-    const ctx = makeCtx();
-    const stack = new StateStack();
-    let preSettled = false;
-    ctx.pendingPromises.add(
-      new Promise<void>((r) =>
-        setTimeout(() => {
-          preSettled = true;
-          r();
-        }, 30),
-      ),
-    );
-    ctx.handlers = [
-      { fn: async () => ({ type: "approve" as const }), liveGuardIds: [], stack: null },
-    ];
-    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
-    expect(preSettled).toBe(false); // the deadlock-shaped promise was left alone
-  });
 });

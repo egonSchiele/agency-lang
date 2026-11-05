@@ -229,7 +229,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.exprKind]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -246,7 +245,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.stmtsKind]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -263,7 +261,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.programKind]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -280,7 +277,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.holed]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

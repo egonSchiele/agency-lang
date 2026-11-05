@@ -255,7 +255,6 @@ const __funcResult = await __call(__run, print, {
           args: [__stack.args.c.value]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -390,7 +389,6 @@ __stack.locals.c = await __call(__run, process, {
             }]
           });
 if (hasInterrupts(__stack.locals.c)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.c
@@ -404,7 +402,6 @@ if (isAborted(__stack.locals.c)) {
         await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await isSuccess(__stack.locals.c);
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0
@@ -426,7 +423,6 @@ const __funcResult = await __call(__run, print, {
                   args: [__stack.locals.c.value]
                 });
 if (hasInterrupts(__funcResult)) {
-                  await __run.ctx.pendingPromises.awaitAll()
                   runner.halt({
                     ...__state,
                     data: __funcResult

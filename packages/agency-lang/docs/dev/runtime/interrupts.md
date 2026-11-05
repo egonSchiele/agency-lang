@@ -29,8 +29,6 @@ All substep tracking is built on a path of integers that tracks the current posi
 
 The path names the frame locals that hold the tracking state. A path of `[3, 1]` gives a key of `"3.1"`, which produces locals like `__substep_3.1` and `__condbranch_3.1`. Nested blocks at different positions can therefore never collide. `Runner.getCounter()` reads `__substep_<key>` when the path is non-empty, and `frame.step` at the top level.
 
-The joined path is also the branch key for async function calls. `forkBranchSetup` uses `this.steps.joined()` to store and retrieve branch state in `__stack.branches`.
-
 ## If/else blocks
 
 Codegen lowers an if/else chain to a single `runner.ifElse` call. `processIfElseWithSteps` (`lib/backends/typescriptBuilder.ts`) builds the `runnerIfElse` IR node, and `lib/ir/prettyPrint.ts` prints it through `runnerIfElse.mustache`:

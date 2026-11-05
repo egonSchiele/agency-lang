@@ -68,9 +68,8 @@ Each execution context, built by `RuntimeContext.createExecutionContext()`, gets
 All three functions live in `lib/runtime/checkpoint.ts`. None of them take a `__state` parameter. Each reads the ambient frame with `getRuntimeContext()`, the `agencyStore` AsyncLocalStorage seam described in [`async-context.md`](./async-context.md).
 
 **`checkpoint()`**:
-1. Awaits all pending async promises, so the snapshot is consistent
-2. Calls `ctx.checkpoints.create(ctx.stateStack, ctx, location)`, which deep-clones StateStack and GlobalStore
-3. Returns the numeric ID
+1. Calls `ctx.checkpoints.create(ctx.stateStack, ctx, location)`, which deep-clones StateStack and GlobalStore
+2. Returns the numeric ID
 
 The location comes from the active frame's `callsite` slot, which `Runner.runInScope` seeds for every step body. A call made outside a runner step, such as from bootstrap scope, falls back to the empty `""::""::""` location.
 
@@ -84,8 +83,7 @@ The location comes from the active frame's `callsite` slot, which `Runner.runInS
 2. Returns silently, without restoring, when `options.maxRestores` is set and this checkpoint's source location has already hit that many restores
 3. Calls `trackRestore()` for infinite-loop protection, and `trackLocationRestore()` when `options.maxRestores` is set
 4. Calls `deleteAfterCheckpoint()` to delete later checkpoints
-5. Clears pending promises, discarding in-flight async work
-6. Throws `RestoreSignal`, so it never returns
+5. Throws `RestoreSignal`, so it never returns
 
 ### How restore works end-to-end
 
@@ -107,7 +105,6 @@ restore() → throws RestoreSignal
 2. Revives the checkpoint's stack and globals JSON, then deserializes `StateStack` and enters deserialize mode
 3. Deserializes `GlobalStore` from the checkpoint
 4. Restores token stats onto the new GlobalStore
-5. Clears pending promises
 
 `options.globals` is applied afterwards by `runNode()`, and only against the checkpoint's own `moduleId`. Globals from other imported files come back from the checkpoint unchanged.
 
@@ -141,7 +138,6 @@ type RestoreOptions = {
 | State held in imported JS modules | **No** | Never serialized, so it lives outside the rollback |
 | Token stats | **No** | Accounting data should accumulate, not reset |
 | Later checkpoints (ID > restored) | Deleted | Prevents inconsistent timeline |
-| Pending promises | Cleared | In-flight async work is discarded |
 
 Something has to survive the rollback for a retry loop to terminate. That is why the loop counter usually lives outside the GlobalStore, either as a `static` value or in a plain JS module the program imports.
 

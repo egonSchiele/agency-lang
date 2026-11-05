@@ -452,7 +452,6 @@ __stack.locals.response = await runPrompt(__run, {
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.response)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.response)
           return;
         }
@@ -463,7 +462,6 @@ const __funcResult = await __call(__run, print, {
           args: [`Greeted, age is still ${__stack.args.age}...`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -606,7 +604,6 @@ const __funcResult = await __call(__run, print, {
             args: [`Saying hi to ${__stack.args.name}...`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -626,7 +623,6 @@ __stack.locals.response = await __call(__run, foo2, {
             args: [__stack.args.name, __stack.locals.age]
           });
 if (hasInterrupts(__stack.locals.response)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.response
@@ -643,7 +639,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.response]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -660,7 +655,6 @@ const __funcResult = await __call(__run, print, {
             args: [`Greeting sent.`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

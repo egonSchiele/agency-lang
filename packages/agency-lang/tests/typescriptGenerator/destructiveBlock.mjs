@@ -528,7 +528,6 @@ __stack.locals.p = await __call(__run, prep, {
           args: [__stack.args.x]
         });
 if (hasInterrupts(__stack.locals.p)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.p)
           return;
         }

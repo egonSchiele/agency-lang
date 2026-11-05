@@ -266,12 +266,3 @@ call runs a second time. `tests/agency/async/restore-inside-arm` pins this:
 the side call and the main arm each run twice. A `restore()` to a checkpoint
 taken before the `async` line is an ordinary restore, and also runs both
 arms again (`restore-before-async`).
-
-## The old runtime
-
-Before this lowering, `async f()` compiled to an un-awaited call whose
-promise sat in a `PendingPromiseStore`, drained at the next node return,
-interrupt, `checkpoint()`, or handler exit. An interrupt inside the call
-threw `ConcurrentInterruptError`. The lowering clears the flag before
-codegen, so none of that code runs any more; deleting it is a separate
-change.

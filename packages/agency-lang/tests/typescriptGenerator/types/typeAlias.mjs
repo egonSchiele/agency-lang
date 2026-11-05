@@ -229,7 +229,6 @@ __stack.locals.foo = await runPrompt(__run, {
           });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.foo)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               messages: __run.threads,
               data: __stack.locals.foo
@@ -243,7 +242,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.foo]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

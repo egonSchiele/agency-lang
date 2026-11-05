@@ -172,7 +172,7 @@ node nestedPause() {
 // the next llm() call reads.
 node asyncHandoff() {
   const side = async llm("Answer with the subagent.", { tools: [subagent] })
-  const sideAnswer = await side
+  const sideAnswer = side
   const mainAnswer = llm("What happened?")
   return "${sideAnswer} / ${mainAnswer}"
 }
@@ -189,8 +189,8 @@ node callerSystemVisible() {
 node twoAsyncHandoffs() {
   const first = async llm("A", { tools: [subagent] })
   const second = async llm("B", { tools: [subagent] })
-  const firstAnswer = await first
-  const secondAnswer = await second
+  const firstAnswer = first
+  const secondAnswer = second
   const mainAnswer = llm("What happened?")
   return "${firstAnswer} / ${secondAnswer} / ${mainAnswer}"
 }

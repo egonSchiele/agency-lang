@@ -428,7 +428,6 @@ __stack.locals.response = await runPrompt(__run, {
           });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.response)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               messages: __run.threads,
               data: __stack.locals.response
@@ -442,7 +441,6 @@ const __funcResult = await __call(__run, print, {
             args: [`Greeted, age is still ${__stack.args.age}...`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult
@@ -544,7 +542,6 @@ const __funcResult = await __call(__run, print, {
             args: [`Saying hi to ${__stack.args.name}...`]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

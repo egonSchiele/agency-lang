@@ -252,7 +252,6 @@ __bstack.locals.x = await runPrompt(__run, {
           });
 // halt if this is an interrupt
 if (hasInterrupts(__bstack.locals.x)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__bstack.locals.x)
             return;
           }
@@ -321,7 +320,6 @@ __bstack.locals.y = await runPrompt(__run, {
           });
 // halt if this is an interrupt
 if (hasInterrupts(__bstack.locals.y)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__bstack.locals.y)
             return;
           }
@@ -359,7 +357,6 @@ __forkBranchStack.pop();
 
           }, "all", __run.stack, true, 1);
 if (hasInterrupts(__bstack.locals.__arms_1)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__bstack.locals.__arms_1)
             return;
           }
@@ -371,7 +368,6 @@ if (isAborted(__bstack.locals.__arms_1)) {
 await runner.step(1, __run, async (runner, __run) => {
 __bstack.locals.__hoist_0 = await __asyncFinished(__nn(__bstack.locals.__arms_1[1]));
 if (hasInterrupts(__bstack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt(__bstack.locals.__hoist_0)
             return;
           }
@@ -414,7 +410,6 @@ __forkBranchStack.pop();
 
           }, "all", __run.stack, true, 1);
 if (hasInterrupts(__stack.locals.__arms_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__arms_0
@@ -428,7 +423,6 @@ if (isAborted(__stack.locals.__arms_0)) {
         await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await __asyncFinished(__nn(__stack.locals.__arms_0[1]));
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0

@@ -254,7 +254,6 @@ const __funcResult = await __call(__run, print, {
           args: [__stack.args.data]
         });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -387,7 +386,6 @@ __stack.locals.result = await __call(__run, process, {
             args: [`not a number`]
           });
 if (hasInterrupts(__stack.locals.result)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.result
@@ -404,7 +402,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.result]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

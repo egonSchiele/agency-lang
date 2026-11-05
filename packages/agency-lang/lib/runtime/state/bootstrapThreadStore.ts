@@ -52,9 +52,6 @@ export class BootstrapThreadStore extends ThreadStore {
   override createSubthread(): never {
     return this.throwBootstrap("createSubthread");
   }
-  override createAndReturnSubthread(): never {
-    return this.throwBootstrap("createAndReturnSubthread");
-  }
   override get(_id: string): never {
     return this.throwBootstrap("get");
   }

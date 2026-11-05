@@ -242,7 +242,6 @@ __stack.locals.a = await __call(__run, __stack.args.block, {
           args: []
         });
 if (hasInterrupts(__stack.locals.a)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.a)
           return;
         }
@@ -257,7 +256,6 @@ __stack.locals.b = await __call(__run, __stack.args.block, {
           args: []
         });
 if (hasInterrupts(__stack.locals.b)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.b)
           return;
         }
@@ -429,7 +427,6 @@ __bsetup.stateStack.pop();
             }, params: [], toolDefinition: null }, __toolRegistry)
           });
 if (hasInterrupts(__stack.locals.results)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.results
@@ -446,7 +443,6 @@ const __funcResult = await __call(__run, print, {
             args: [__stack.locals.results]
           });
 if (hasInterrupts(__funcResult)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __funcResult

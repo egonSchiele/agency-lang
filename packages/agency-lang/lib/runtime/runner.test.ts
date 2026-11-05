@@ -782,47 +782,6 @@ describe("Runner", () => {
     });
   });
 
-  describe("branchStep()", () => {
-    it("executes when counter not past", async () => {
-      const frame = makeFrame();
-      const runner = new Runner(makeMockCtx(), frame);
-      let executed = false;
-
-      await runner.branchStep(0, testRun(), "0_1", async () => {
-        executed = true;
-      });
-
-      expect(executed).toBe(true);
-    });
-
-    it("executes when counter past but branch data exists", async () => {
-      const frame = makeFrame();
-      frame.step = 5;
-      frame.newBranch("0_1"); // simulate that branch data was created in a previous run
-      const runner = new Runner(makeMockCtx(), frame);
-      let executed = false;
-
-      await runner.branchStep(0, testRun(), "0_1", async () => {
-        executed = true;
-      });
-
-      expect(executed).toBe(true);
-    });
-
-    it("skips when counter past and no branch data", async () => {
-      const frame = makeFrame();
-      frame.step = 5;
-      const runner = new Runner(makeMockCtx(), frame);
-      let executed = false;
-
-      await runner.branchStep(0, testRun(), "0_1", async () => {
-        executed = true;
-      });
-
-      expect(executed).toBe(false);
-    });
-  });
-
   describe("nested composition", () => {
     it("step inside ifElse inside loop inside handle", async () => {
       const frame = makeFrame();
@@ -1493,20 +1452,6 @@ describe("Runner — external pause", () => {
     });
     expect(ran).toBe(true);
     expect(ctx.pauseRequested).toBe(true);
-  });
-
-  it("settles pending async results before stamping the checkpoint", async () => {
-    const ctx = makeMockCtx();
-    ctx.pauseRequested = true;
-    const frame = ctx.stateStack.stack[0];
-    ctx.pendingPromises.add(Promise.resolve("async value"), (value: unknown) => {
-      frame.locals.asyncResult = value;
-    });
-    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
-    const caught = await runner.step(0, testRun(), async () => {}).catch((e: unknown) => e);
-    expect(caught).toBeInstanceOf(PauseSignal);
-    const checkpoint = (caught as PauseSignal).checkpoint;
-    expect(checkpoint.stack.stack[0].locals.asyncResult).toBe("async value");
   });
 
   it("checks for a pause before an if statement evaluates its condition", async () => {

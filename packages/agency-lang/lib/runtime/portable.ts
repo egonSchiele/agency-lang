@@ -86,7 +86,6 @@ export { StateStack, State, claimFrameForScope } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";
 export { ThreadStore } from "./state/threadStore.js";
-export { PendingPromiseStore } from "./state/pendingPromiseStore.js";
 export { TraceWriter } from "./trace/traceWriter.js";
 export type { TraceSink } from "./trace/sinks.js";
 export { CallbackSink } from "./trace/sinks.js";
@@ -166,7 +165,6 @@ export { fetchMock } from "./fetchMock.js";
 export type { FetchMock } from "./fetchMock.js";
 
 export {
-  ConcurrentInterruptError,
   CheckpointError,
   CheckpointCodeChangedError,
   RestoreSignal,

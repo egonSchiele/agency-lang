@@ -156,7 +156,6 @@ async function replayLoop(
             },
           ),
         );
-        await execCtx.pendingPromises.awaitAll();
         await throwIfNodeResultAborted(result, execCtx, { endsRun: false });
         const returnObject = createReturnObject({ result, globals: execCtx.globals });
         if (agentEnd !== null && !hasInterrupts(returnObject.data)) {

@@ -387,7 +387,6 @@ __stack.locals.a = await __call(__run, greet, {
             }
           });
 if (hasInterrupts(__stack.locals.a)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.a
@@ -409,7 +408,6 @@ __stack.locals.b = await __call(__run, greet, {
             }
           });
 if (hasInterrupts(__stack.locals.b)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.b
@@ -430,7 +428,6 @@ __stack.locals.c = await __call(__run, greet, {
             }
           });
 if (hasInterrupts(__stack.locals.c)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.c

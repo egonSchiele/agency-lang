@@ -417,7 +417,6 @@ __stack.locals.__hoist_0 = await __call(__run, gcd, {
           args: [__stack.args.a, __stack.args.b]
         });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_0)
           return;
         }
@@ -560,7 +559,6 @@ __stack.locals.__hoist_0 = await __call(__run, range, {
             args: [2, 21]
           });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.__hoist_0
@@ -578,7 +576,6 @@ __stack.locals.result = await __call(__run, lcm, {
               args: [__stack.locals.result, i]
             });
 if (hasInterrupts(__stack.locals.result)) {
-              await __run.ctx.pendingPromises.awaitAll()
               runner.halt({
                 ...__state,
                 data: __stack.locals.result

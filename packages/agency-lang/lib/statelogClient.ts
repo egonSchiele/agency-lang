@@ -1684,8 +1684,9 @@ export class StatelogClient {
     const span = this.currentSpan;
     // The one place every statelog event is serialized, so the scrub rules
     // (the redact tag, binary data such as pictures, checkpoints) and the
-    // size cap run here, inside the single JSON.stringify of the event, on
-    // `data` only.
+    // string cap run here, inside the single JSON.stringify of the event, on
+    // `data` only. An event whose text is over the cap is then parsed once
+    // more to cap its fields; see `trimStatelogText`.
     //
     // A run's logger redacts with its own branch's tag store, so each branch
     // redacts using its own tags (see docs/dev/runtime/globalstore.md on

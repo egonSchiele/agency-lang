@@ -105,20 +105,23 @@ function trimArray(items: unknown[], budget: Budget): unknown[] {
   return kept;
 }
 
+/** Built from an entry list with `Object.fromEntries`, never by assigning
+ *  `kept[key]`: `JSON.parse` gives a `__proto__` key as an own property, and
+ *  assigning it to a plain object would set the prototype and drop the key. */
 function trimObject(record: Record<string, unknown>, budget: Budget): Record<string, unknown> {
   budget.left -= 2;
   const entries = Object.entries(record);
-  const kept: Record<string, unknown> = {};
-  for (const [index, [key, value]] of entries.entries()) {
+  const kept: [string, unknown][] = [];
+  for (const [key, value] of entries) {
     if (budget.left <= 0) {
       budget.cut = true;
-      kept[TRUNCATED_KEY] = `${entries.length - index} more keys`;
-      return kept;
+      kept.push([TRUNCATED_KEY, `${entries.length - kept.length} more keys`]);
+      return Object.fromEntries(kept);
     }
     budget.left -= JSON.stringify(key).length + 1;
-    kept[key] = trimValue(value, budget);
+    kept.push([key, trimValue(value, budget)]);
   }
-  return kept;
+  return Object.fromEntries(kept);
 }
 
 /**
@@ -131,18 +134,19 @@ export function trimEventData(
   maxChars: number,
 ): { data: Record<string, unknown>; cut: boolean } {
   const unbudgeted = UNBUDGETED_FIELDS[String(data.type)] ?? [];
-  const trimmed: Record<string, unknown> = {};
+  // An entry list, for the same `__proto__` reason as `trimObject`.
+  const trimmed: [string, unknown][] = [];
   let cut = false;
   for (const [key, value] of Object.entries(data)) {
     if (unbudgeted.includes(key)) {
-      trimmed[key] = value;
+      trimmed.push([key, value]);
       continue;
     }
     const field = trimField(value, maxChars);
-    trimmed[key] = field.value;
+    trimmed.push([key, field.value]);
     cut = cut || field.cut;
   }
-  return { data: trimmed, cut };
+  return { data: Object.fromEntries(trimmed), cut };
 }
 
 /**
@@ -158,7 +162,10 @@ export function trimStatelogText(text: string, maxChars: number, stringCut: bool
   if (maxChars === 0) {
     return text;
   }
-  // A text no longer than the cap cannot hold a field over it.
+  // A text no longer than the cap cannot hold a field over it. A long
+  // conversation's `promptCompletion` is over the cap with nothing to cut,
+  // since its `messages` are exempt, so it is parsed for nothing below. See
+  // docs/dev/hosting/statelog.md, "Order of work".
   if (text.length <= maxChars && !stringCut) {
     return text;
   }

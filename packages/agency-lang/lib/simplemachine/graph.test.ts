@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { StatelogClient } from "@/statelogClient.js";
 import { goToNode, SimpleMachine } from "./graph.js";
 
 type State = { value: number };
@@ -29,5 +30,41 @@ describe("SimpleMachine.endsRunAt", () => {
     const graph = machine();
     graph.edge("alone", "next");
     expect(graph.endsRunAt("alone", { value: 1 })).toBe(false);
+  });
+});
+
+describe("SimpleMachine.run and endsRun", () => {
+  /** A client that records the `endsRun` of each `exitNode` and ignores the
+   *  other events. */
+  function recordingClient(): { client: StatelogClient; endsRun: (boolean | undefined)[] } {
+    const endsRun: (boolean | undefined)[] = [];
+    const ignore = () => undefined;
+    const client = {
+      graph: ignore,
+      enterNode: ignore,
+      followEdge: ignore,
+      startSpan: ignore,
+      endSpan: ignore,
+      exitNode: (event: { endsRun?: boolean }) => {
+        endsRun.push(event.endsRun);
+      },
+    } as unknown as StatelogClient;
+    return { client, endsRun };
+  }
+
+  it("marks the last exitNode when the caller logs the value in agentEnd", async () => {
+    const { client, endsRun } = recordingClient();
+    await machine().run(
+      "alone",
+      { value: 1 },
+      { statelogClient: client, finalValueInAgentEnd: true },
+    );
+    expect(endsRun).toEqual([true]);
+  });
+
+  it("leaves the last exitNode whole for a caller that logs no agentEnd", async () => {
+    const { client, endsRun } = recordingClient();
+    await machine().run("alone", { value: 1 }, { statelogClient: client });
+    expect(endsRun).toEqual([false]);
   });
 });

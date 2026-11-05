@@ -244,11 +244,20 @@ since every reader of `promptCompletion` changes.
 
 **Order of work.** The event is serialized once, as before, with strings
 capped on the way. If no string was cut and the text is no longer than the
-cap, no field can be over it, and that text is the result: the path almost
-every event takes. Otherwise the text is parsed, `trimEventData` trims each
+cap, no field can be over it, and that text is the result: the path most
+events take. Otherwise the text is parsed, `trimEventData` trims each
 field, and the event is written again with `truncated: true` on `data`. If
 nothing was cut after all, the original text is returned, because a parse and
-stringify can reorder integer-like keys. The text, not the live value, is
+stringify can reorder integer-like keys.
+
+One event type often takes the slow path for nothing. A `promptCompletion`
+logs the whole conversation, so in a long session its text is over 100,000
+characters on most rounds. It is parsed and walked, nothing is cut (its
+`messages` are exempt), and the original text is returned. That is one
+`JSON.parse` of up to a few megabytes per model call. Next to the model call
+itself it is small, so there is no guard for it. A guard would have to learn
+each top-level field's serialized length during the one stringify, and skip
+the parse when the only field over the cap is exempt. The text, not the live value, is
 trimmed so redaction keeps working: redact tags live on the original objects,
 and a trimmed copy would not carry them.
 
@@ -391,7 +400,13 @@ as `run.stack`, and no reader uses them.
 
 The `exitNode` of the node that ends a run also leaves out `data`, its return
 value, because `agentEnd.result` logs the same value. Logging both doubled
-the largest value of every run. `SimpleMachine.endsRunAt` decides: the node
+the largest value of every run. Only a caller that logs `agentEnd` asks for
+this, with the `finalValueInAgentEnd` option of `SimpleMachine.run`: `runNode`
+(`lib/runtime/node.ts`) and the resume loop (`lib/runtime/interrupts.ts`).
+A rewind (`lib/runtime/rewind.ts`) logs no `agentEnd`, so it leaves the
+option unset and its last `exitNode` keeps the value. Without that, a rewound
+run's return value would be in no event. `SimpleMachine.endsRunAt` decides
+which node is last: the node
 returned no `GoToNode`, and its edge, if any, is a conditional edge with no
 condition function. Agency gives every node that can go to another node such
 an edge, so checking only for a missing edge would miss a node like this:

@@ -1,0 +1,8 @@
+// test.js runs main, then rewinds to its checkpoint with `mood` changed. A
+// rewind logs no agentEnd, so the rewound run's return value must still be
+// in the last node's exitNode.
+node main(): object {
+  let mood = "sad"
+  const cid = checkpoint()
+  return { value: "mood-is-" + mood, cp: getCheckpoint(cid) }
+}

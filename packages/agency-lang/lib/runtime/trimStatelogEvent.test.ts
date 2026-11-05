@@ -103,3 +103,21 @@ describe("trimEventData", () => {
     expect((data.messages as unknown[]).length).toBeLessThan(200);
   });
 });
+
+describe("a __proto__ key", () => {
+  // JSON.parse gives `__proto__` as an own key, as it does for tool
+  // arguments parsed from a model's output.
+  const parsed = () => JSON.parse('{"__proto__": "from the model", "rows": [1, 2, 3]}');
+
+  it("is kept when its object is trimmed", () => {
+    const field = trimField(parsed(), 1000);
+    expect(Object.keys(field.value as object)).toEqual(["__proto__", "rows"]);
+    expect(JSON.stringify(field.value)).toBe('{"__proto__":"from the model","rows":[1,2,3]}');
+  });
+
+  it("is kept as a top-level field of data", () => {
+    const data = JSON.parse('{"type": "toolCall", "__proto__": "from the model"}');
+    const trimmed = trimEventData(data, 1000);
+    expect(Object.keys(trimmed.data)).toEqual(["type", "__proto__"]);
+  });
+});

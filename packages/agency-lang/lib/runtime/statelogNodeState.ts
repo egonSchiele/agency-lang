@@ -19,6 +19,10 @@ export function nodeStateForLog(state: unknown): unknown {
  * value once, in `agentEnd.result`; logging it here too doubled the largest
  * value of the run. A run that paused keeps its interrupts here, because a
  * paused run writes no `agentEnd` and no other event has them.
+ *
+ * Used only when the caller of `SimpleMachine.run` logs `agentEnd` and says
+ * so with `finalValueInAgentEnd`. A rewind logs no `agentEnd`, so its last
+ * `exitNode` keeps the value.
  */
 export function withoutFinalValue(state: unknown): unknown {
   if (state === null || typeof state !== "object") {

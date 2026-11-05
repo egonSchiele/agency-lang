@@ -801,6 +801,7 @@ async function runResumeLoop(
           {
             onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
             statelogClient: execCtx.rootLogWithSpans,
+            finalValueInAgentEnd: true,
           },
         ),
       );

@@ -55,12 +55,15 @@ sinks. The value handed back to the caller is unchanged.
 When a run finishes, the `exitNode` event of its last node leaves out
 `data.data`, and `agentEnd.result` holds the value.
 
-Two cases keep the value in `exitNode`:
+Three cases keep the value in `exitNode`:
 
 - A node that hands off to another node logs the data it passes on, as it
   does today.
 - A run that pauses logs its interrupts. A paused run writes no `agentEnd`,
   so no other event has them.
+- A rewound run logs its return value. A rewind writes no `agentEnd`
+  either. The value is left out only when the caller of the graph says it
+  logs `agentEnd`, with the `finalValueInAgentEnd` run option.
 
 A node with conditional edges that returns normally also ends the run, and
 its value is left out in the same way.

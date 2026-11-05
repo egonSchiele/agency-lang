@@ -328,6 +328,28 @@ Agency hands every node this state:
 hold the whole state stack, since `run` carries `ctx` again and the same stack
 as `run.stack`, and no reader uses them.
 
+The `exitNode` of the node that ends a run also leaves out `data`, its return
+value, because `agentEnd.result` logs the same value. Logging both doubled
+the largest value of every run. `SimpleMachine.endsRunAt` decides: the node
+returned no `GoToNode`, and its edge, if any, is a conditional edge with no
+condition function. Agency gives every node that can go to another node such
+an edge, so checking only for a missing edge would miss a node like this:
+
+```
+node main(draft: string) {
+  if (needsReview(draft)) {
+    return review(draft)
+  }
+  return draft
+}
+```
+
+Two cases keep `data`. A node that hands off logs what it passes on. A node
+whose value is a list of interrupts keeps them, since a paused run writes no
+`agentEnd`. `hasInterrupts` lives in `lib/runtime/isInterrupt.ts`, a module
+with no runtime imports, because the client cannot import `interrupts.ts`:
+that file imports the execution context, which imports the client.
+
 LLM: `promptStart` (request shape, before dispatch) → terminated by exactly one
 of `promptCompletion` (full redacted messages + completion + usage/cost),
 an `error` with `errorType: "llmError"`, or `promptCancelled` (race loser /

@@ -10,6 +10,7 @@ import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { sendStatelogPost } from "./statelogSender.js";
+import { hasInterrupts } from "./runtime/isInterrupt.js";
 import { savedSpanIdFor, saveSpan, spanSlot } from "./statelog/spanSlot.js";
 
 // Bump this when the wire format changes in a way the viewer needs
@@ -164,6 +165,24 @@ function nodeStateForLog(state: unknown): unknown {
   }
   const kept = Object.entries(state).filter(([key]) => !RUNTIME_STATE_KEYS.includes(key));
   return Object.fromEntries(kept);
+}
+
+/**
+ * The last node's state without its return value. A finished run logs that
+ * value once, in `agentEnd.result`; logging it here too doubled the largest
+ * value of the run. A run that paused keeps its interrupts here, because a
+ * paused run writes no `agentEnd` and no other event has them.
+ */
+function withoutFinalValue(state: unknown): unknown {
+  if (state === null || typeof state !== "object") {
+    return state;
+  }
+  const record = state as Record<string, unknown>;
+  if (hasInterrupts(record.data)) {
+    return state;
+  }
+  const { data: _finalValue, ...rest } = record;
+  return rest;
 }
 
 // === Client ===
@@ -466,15 +485,20 @@ export class StatelogClient {
     nodeId,
     data,
     timeTaken,
+    endsRun,
   }: {
     nodeId: string;
     data: any;
     timeTaken?: number;
+    /** True for the node that ends the run. Its value is logged by
+     *  `agentEnd`, so it is left out here. */
+    endsRun?: boolean;
   }): Promise<void> {
+    const state = nodeStateForLog(data);
     await this.post({
       type: "exitNode",
       nodeId,
-      data: nodeStateForLog(data),
+      data: endsRun ? withoutFinalValue(state) : state,
       timeTaken,
     });
   }

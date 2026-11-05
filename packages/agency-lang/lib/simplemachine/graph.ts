@@ -140,6 +140,7 @@ export class SimpleMachine<T> {
           nodeId: currentId,
           data,
           timeTaken: endTime - startTime,
+          endsRun: this.endsRunAt(currentId, result),
         });
       } finally {
         client?.endSpan(nodeSpanId);
@@ -211,6 +212,24 @@ export class SimpleMachine<T> {
       }
     }
     return data;
+  }
+
+  /**
+   * Whether the run ends after this node returned `result`: it went to no
+   * other node, and its edge, if it has one, has no condition to pick the
+   * next. Agency gives every node that can go to another node a conditional
+   * edge with no condition, so a node that returns normally ends the run
+   * even though it has an edge.
+   */
+  endsRunAt(nodeId: string, result: T | GoToNode<T>): boolean {
+    if (result instanceof GoToNode) {
+      return false;
+    }
+    const edge = this.edges[nodeId];
+    if (edge === undefined) {
+      return true;
+    }
+    return !isRegularEdge(edge) && !edge.condition;
   }
 
   async runAndValidate(

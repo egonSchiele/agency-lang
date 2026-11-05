@@ -720,6 +720,33 @@ describe("StatelogClient", () => {
       expect(evt.data.args.attachment.source.base64).toBe("[image/png: 6000 bytes omitted]");
     });
 
+    it("the node that ends a run leaves its return value to agentEnd", async () => {
+      const file = newLogFile("exit-ends-run");
+      const client = fileClient(file);
+      const state = { messages: { threads: {} }, data: { answer: 42 }, isResume: false };
+      await client.exitNode({ nodeId: "main", data: state, endsRun: true });
+      const [evt] = readEvents(file);
+      expect(evt.data.data).toEqual({ messages: { threads: {} }, isResume: false });
+    });
+
+    it("the node that ends a run still logs the interrupts it paused on", async () => {
+      const file = newLogFile("exit-ends-run-interrupts");
+      const client = fileClient(file);
+      const interrupt = { type: "interrupt", effect: "std::read", checkpointId: 1 };
+      const state = { messages: { threads: {} }, data: [interrupt] };
+      await client.exitNode({ nodeId: "main", data: state, endsRun: true });
+      const [evt] = readEvents(file);
+      expect(evt.data.data.data).toEqual([interrupt]);
+    });
+
+    it("a node that does not end the run logs its return value", async () => {
+      const file = newLogFile("exit-not-ends-run");
+      const client = fileClient(file);
+      await client.exitNode({ nodeId: "main", data: { data: { answer: 42 } } });
+      const [evt] = readEvents(file);
+      expect(evt.data.data.data).toEqual({ answer: 42 });
+    });
+
     it("a node event whose state is not an object logs it as it is", async () => {
       const file = newLogFile("node-state-primitive");
       const client = fileClient(file);

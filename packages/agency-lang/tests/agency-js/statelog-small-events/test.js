@@ -41,7 +41,7 @@ const nodeEvents = events.filter((event) =>
   ["enterNode", "exitNode", "followEdge"].includes(event.data.type),
 );
 const interruptedExit = events.find(
-  (event) => event.data.type === "exitNode" && event.data.data?.data?.[0]?.checkpoint,
+  (event) => event.data.type === "exitNode" && event.data.data?.data?.[0]?.type === "interrupt",
 );
 const promptCompletion = events.find((event) => event.data.type === "promptCompletion");
 
@@ -60,9 +60,11 @@ writeFileSync(
           linesOfType(type).some((line) => line.includes(marker)),
         ]),
       ),
-      checkpointHoldsTheMarker:
+      // The log names the checkpoint; the caller still gets all of it.
+      checkpointLoggedAsItsId:
         interruptedExit !== undefined &&
-        JSON.stringify(interruptedExit.data.data.data[0].checkpoint).includes(marker),
+        /^\[checkpoint \d+\]$/.test(interruptedExit.data.data.data[0].checkpoint),
+      callerGetsTheCheckpoint: typeof result.data[0].checkpoint === "object",
       nodeEventsHoldNoRuntime: nodeEvents.every(
         (event) => !("ctx" in event.data.data) && !("run" in event.data.data),
       ),

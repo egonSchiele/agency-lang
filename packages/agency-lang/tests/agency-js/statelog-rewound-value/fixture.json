@@ -1,0 +1,9 @@
+{
+  "rewoundValue": "mood-is-rewound",
+  "rewoundValueLoggedIn": [
+    "exitNode"
+  ],
+  "freshValueLoggedIn": [
+    "agentEnd"
+  ]
+}

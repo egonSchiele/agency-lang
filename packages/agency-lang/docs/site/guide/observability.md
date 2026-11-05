@@ -55,6 +55,16 @@ Every event is sent, including prompts, model replies, and tool arguments and re
 
 Pictures and other binary data are never logged. Any string over 4,096 characters that holds base64 data, such as a picture attached to a message, is replaced with a marker that gives its type and size, like `[image/png: 6000 bytes omitted]`.
 
+Checkpoints are never logged. When a run pauses on an interrupt, the interrupt in the log names its checkpoint, like `[checkpoint 3]`, instead of holding it. A failure result's checkpoint is logged the same way. The interrupt your code gets back still has the whole checkpoint.
+
+Very large values are cut. By default no string, and no top-level field of an event (such as a node's return value or a tool's arguments), is logged longer than 100,000 characters; set `log.maxValueChars` to change that, or to `0` to turn it off. A long string keeps its start and ends with how much was removed:
+
+```
+the first part of the text…[truncated 115,748 chars]
+```
+
+A large list keeps its first items and ends with one item like `"[truncated: 131 more items]"`. A large object keeps its first keys and gains one key, `"__truncated": "12 more keys"`. An event that lost anything has `truncated: true`, so you can tell a partial value from a whole one. The `messages` of an LLM call are never shortened, because the newest messages are the ones worth reading; only their long strings are cut.
+
 Logs are sent in the background. A node never waits for them before returning. A run from the command line waits for the last few to finish before it exits, at most 1.5 seconds per request (set `log.requestTimeoutMs` to change that).
 
 If you call a node from TypeScript and then call `process.exit()` yourself, wait for the logs first. Otherwise the last few are lost:

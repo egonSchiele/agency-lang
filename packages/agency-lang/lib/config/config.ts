@@ -122,6 +122,14 @@ export interface AgencyConfig {
      * process exit. Default: 1500ms.
      */
     requestTimeoutMs: number;
+    /**
+     * The most characters any string in a logged event, or any top-level
+     * field of an event, may hold. A longer string is cut and ends with
+     * `…[truncated N chars]`; a larger field keeps what fits and ends with a
+     * marker. An event that lost anything carries `truncated: true`.
+     * Default: 100000. `0` turns the cap off.
+     */
+    maxValueChars: number;
     metadata: {
       tags?: string[];
       environment?: string;
@@ -573,6 +581,7 @@ export const AgencyConfigSchema = z
         apiKey: z.string(),
         logFile: z.string(),
         requestTimeoutMs: z.number().int().positive(),
+        maxValueChars: z.number().int().nonnegative(),
         metadata: z
           .object({
             tags: z.array(z.string()),

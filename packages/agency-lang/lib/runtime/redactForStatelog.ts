@@ -1,4 +1,5 @@
 import type { GlobalStore } from "./state/globalStore.js";
+import { capString, trimStatelogText } from "./trimStatelogEvent.js";
 
 export const REDACTED = "[REDACTED]";
 
@@ -153,10 +154,44 @@ function decodedLength(base64: string): number {
   return Math.floor((base64.length * 3) / 4) - padding;
 }
 
+/**
+ * Replace the checkpoint an interrupt or a failure result carries with
+ * `[checkpoint 3]`. A checkpoint holds every frame's arguments and locals, so
+ * it can be far larger than the event around it, and no reader of the log
+ * uses it: `checkpointCreated` already records its id and location.
+ *
+ * The id is the interrupt's `checkpointId`, else the checkpoint's own `id`.
+ * Only the logged text changes; the caller still gets the checkpoint.
+ */
+export const omitCheckpointRule: ScrubRule = (raw, parent) => {
+  if (raw === null || typeof raw !== "object" || !carriesCheckpoint(parent)) {
+    return undefined;
+  }
+  if (raw !== parent.checkpoint) {
+    return undefined;
+  }
+  const id = parent.checkpointId ?? (raw as Record<string, unknown>).id;
+  return typeof id === "number" || typeof id === "string" ? `[checkpoint ${id}]` : "[checkpoint]";
+};
+
+/** An interrupt, or a failure result: the two values that carry a checkpoint. */
+function carriesCheckpoint(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const isInterrupt = record.type === "interrupt";
+  const isFailure = record.__type === "resultType" && record.success === false;
+  return isInterrupt || isFailure;
+}
+
 /** The rules every statelog event goes through, in order: the redact tag
- *  first, so a redacted picture shows its redaction marker, then binary data. */
+ *  first, so a redacted picture shows its redaction marker, then binary data,
+ *  then checkpoints. */
 export function statelogScrubRules(globals: GlobalStore | undefined): ScrubRule[] {
-  return globals === undefined ? [omitBinaryRule] : [redactRule(globals), omitBinaryRule];
+  return globals === undefined
+    ? [omitBinaryRule, omitCheckpointRule]
+    : [redactRule(globals), omitBinaryRule, omitCheckpointRule];
 }
 
 /** The fields every statelog line has. The rules apply to `data` alone. */
@@ -173,16 +208,29 @@ export type StatelogEnvelope = {
  * Serialize an event in one `JSON.stringify`. The scrub rules see only `data`,
  * so a pathological redaction, such as a tag on the number 1, can never blank
  * an envelope field such as `format_version`.
+ *
+ * `maxValueChars` caps the event's size (`0` for no cap). Every string is cut
+ * to it here, on what the rules return. It is not a rule itself: the first
+ * rule that fires wins, so a rule would never see a string the redact rule
+ * had rewritten, nor a string a `toJSON` method produced. Then
+ * `trimStatelogText` bounds each top-level field of `data`.
  */
 export function stringifyStatelogEvent(
   envelope: StatelogEnvelope,
   rules: readonly ScrubRule[],
+  maxValueChars: number,
 ): string {
   const scrub = makeScrubReplacer(rules);
-  return JSON.stringify(envelope, function (this: unknown, key: string, value: unknown) {
+  let stringCut = false;
+  const markCut = () => {
+    stringCut = true;
+  };
+  const text = JSON.stringify(envelope, function (this: unknown, key: string, value: unknown) {
     if (this === envelope && key !== "data") {
       return value;
     }
-    return scrub.call(this, key, value);
+    const scrubbed = scrub.call(this, key, value);
+    return typeof scrubbed === "string" ? capString(scrubbed, maxValueChars, markCut) : scrubbed;
   });
+  return trimStatelogText(text, maxValueChars, stringCut);
 }

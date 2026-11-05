@@ -678,6 +678,38 @@ describe("agent output: the node return value", () => {
     }
   });
 
+  it("marks a return value the statelog cut as truncated", () => {
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("agentEnd", {
+        threadId: "0",
+        entryNode: "main",
+        result: ["row", "[truncated: 40 more items]"],
+        truncated: true,
+      }),
+    ];
+    const rec = extractEvalRecord(events, "src");
+    expect(rec.evalOutputs).toEqual([
+      { value: ["row", "[truncated: 40 more items]"], threadId: "0", tMs: 100, truncated: true },
+    ]);
+  });
+
+  it("marks an evalOutput value the statelog cut as truncated", () => {
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("evalOutputRecorded", {
+        threadId: "0",
+        value: "cut…[truncated 9 chars]",
+        truncated: true,
+      }),
+      ev("agentEnd", { threadId: "0", entryNode: "main", result: null }),
+    ];
+    const rec = extractEvalRecord(events, "src");
+    expect(rec.evalOutputs[0].truncated).toBe(true);
+  });
+
   it("lets evalOutput() stand in for a null return", () => {
     resetClock();
     const events: EventEnvelope[] = [

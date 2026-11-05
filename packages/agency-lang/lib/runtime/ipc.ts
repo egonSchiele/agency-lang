@@ -1468,6 +1468,7 @@ export function withParentStatelog(
     apiKey?: string;
     projectId?: string;
     requestTimeoutMs?: number;
+    maxValueChars?: number;
     metadata?: NonNullable<AgencyConfig["log"]>["metadata"];
     logFile?: string;
   },
@@ -1489,6 +1490,9 @@ export function withParentStatelog(
     ...(parentConfig.projectId !== undefined ? { projectId: parentConfig.projectId } : {}),
     ...(parentConfig.requestTimeoutMs !== undefined
       ? { requestTimeoutMs: parentConfig.requestTimeoutMs }
+      : {}),
+    ...(parentConfig.maxValueChars !== undefined
+      ? { maxValueChars: parentConfig.maxValueChars }
       : {}),
     ...(parentConfig.metadata !== undefined ? { metadata: parentConfig.metadata } : {}),
     ...(logFile ? { logFile } : {}),

@@ -10,6 +10,8 @@ import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { sendStatelogPost } from "./statelogSender.js";
+import { nodeStateForLog, withoutFinalValue } from "./runtime/statelogNodeState.js";
+import { DEFAULT_MAX_VALUE_CHARS } from "./runtime/trimStatelogEvent.js";
 import { savedSpanIdFor, saveSpan, spanSlot } from "./statelog/spanSlot.js";
 
 // Bump this when the wire format changes in a way the viewer needs
@@ -98,6 +100,9 @@ export type StatelogConfig = {
    * end-of-run cleanup. Default: 1500ms.
    */
   requestTimeoutMs?: number;
+  /** The most characters a logged string or a top-level event field may
+   *  hold. Default `DEFAULT_MAX_VALUE_CHARS`; `0` turns the cap off. */
+  maxValueChars?: number;
 };
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
@@ -152,20 +157,6 @@ function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
   };
 }
 
-/** Fields of the graph's node state that hold the runtime, not the node's data. */
-const RUNTIME_STATE_KEYS = ["ctx", "run"];
-
-/** A node event's state without the runtime. The graph hands each node
- *  `{ messages, data, ctx, isResume, run }`, and `ctx` and `run` both hold
- *  the whole state stack, which no reader of the log uses. */
-function nodeStateForLog(state: unknown): unknown {
-  if (state === null || typeof state !== "object") {
-    return state;
-  }
-  const kept = Object.entries(state).filter(([key]) => !RUNTIME_STATE_KEYS.includes(key));
-  return Object.fromEntries(kept);
-}
-
 // === Client ===
 
 // Shared empty stack returned by `snapshotStack()` when the client is
@@ -209,6 +200,7 @@ export class StatelogClient {
   private metadata?: RunMetadata;
   private code?: CodeIdentity;
   private requestTimeoutMs: number;
+  private maxValueChars: number;
   // The tag store the client itself redacts with, for posts made outside
   // any run (agentEnd and the resume-path finalization events post after the
   // run has ended). Wired by the execution context to read the CURRENT
@@ -230,6 +222,7 @@ export class StatelogClient {
     this.debugMode = debugMode || false;
     this.traceId = traceId || nanoid();
     this.requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.maxValueChars = config.maxValueChars ?? DEFAULT_MAX_VALUE_CHARS;
 
     this.metadata = config.metadata;
     this.code = config.code;
@@ -466,15 +459,20 @@ export class StatelogClient {
     nodeId,
     data,
     timeTaken,
+    endsRun,
   }: {
     nodeId: string;
     data: any;
     timeTaken?: number;
+    /** True for the node that ends the run. Its value is logged by
+     *  `agentEnd`, so it is left out here. */
+    endsRun?: boolean;
   }): Promise<void> {
+    const state = nodeStateForLog(data);
     await this.post({
       type: "exitNode",
       nodeId,
-      data: nodeStateForLog(data),
+      data: endsRun ? withoutFinalValue(state) : state,
       timeTaken,
     });
   }
@@ -1685,8 +1683,10 @@ export class StatelogClient {
 
     const span = this.currentSpan;
     // The one place every statelog event is serialized, so the scrub rules
-    // (the redact tag, then binary data such as pictures) run here, inside
-    // the single JSON.stringify of the event, on `data` only.
+    // (the redact tag, binary data such as pictures, checkpoints) and the
+    // string cap run here, inside the single JSON.stringify of the event, on
+    // `data` only. An event whose text is over the cap is then parsed once
+    // more to cap its fields; see `trimStatelogText`.
     //
     // A run's logger redacts with its own branch's tag store, so each branch
     // redacts using its own tags (see docs/dev/runtime/globalstore.md on
@@ -1704,6 +1704,7 @@ export class StatelogClient {
         data: { ...body, timestamp: new Date().toISOString() },
       },
       statelogScrubRules(globals),
+      this.maxValueChars,
     );
 
     // File sink: one JSON object per line.

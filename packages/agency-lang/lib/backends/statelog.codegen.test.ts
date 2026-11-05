@@ -67,4 +67,14 @@ describe("statelog codegen", () => {
     expect(out).toContain("STATELOG_SMOLTALK_API_KEY");
     expect(out).toContain('projectId: "llm-calls"');
   });
+
+  it("writes log.maxValueChars into the program's statelog config when it is set", () => {
+    const out = generate(PROGRAM, { observability: true, log: { maxValueChars: 5000 } });
+    expect(out).toContain("maxValueChars: 5000");
+  });
+
+  it("leaves maxValueChars out when it is not set", () => {
+    const out = generate(PROGRAM, { observability: true, log: { logFile: "log.jsonl" } });
+    expect(out).not.toContain("maxValueChars");
+  });
 });

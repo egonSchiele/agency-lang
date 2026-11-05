@@ -70,6 +70,7 @@ describe("withParentStatelog", () => {
       apiKey: "call-key",
       projectId: "call-proj",
       requestTimeoutMs: 500,
+      maxValueChars: 2000,
       metadata: { environment: "test" },
     });
     expect(out).toEqual({
@@ -79,6 +80,7 @@ describe("withParentStatelog", () => {
         apiKey: "call-key",
         projectId: "call-proj",
         requestTimeoutMs: 500,
+        maxValueChars: 2000,
         metadata: { environment: "test" },
       },
     });

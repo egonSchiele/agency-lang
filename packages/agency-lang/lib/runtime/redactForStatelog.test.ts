@@ -4,9 +4,12 @@ import {
   BINARY_OMIT_MIN_LENGTH,
   makeScrubReplacer,
   omitBinaryRule,
+  omitCheckpointRule,
   redactRule,
   stringifyStatelogEvent,
+  type ScrubRule,
 } from "./redactForStatelog.js";
+import { DEFAULT_MAX_VALUE_CHARS } from "./trimStatelogEvent.js";
 
 // Serialize `body` the way StatelogClient.post does, then parse back so we
 // can assert on structure.
@@ -207,15 +210,19 @@ describe("stringifyStatelogEvent", () => {
 
   it("writes the same text as a plain stringify when no rule fires", () => {
     const event = envelope({ type: "toolCall", args: { city: "Mumbai" }, when: new Date(0) });
-    expect(stringifyStatelogEvent(event, [omitBinaryRule])).toBe(JSON.stringify(event));
+    expect(stringifyStatelogEvent(event, [omitBinaryRule], DEFAULT_MAX_VALUE_CHARS)).toBe(
+      JSON.stringify(event),
+    );
   });
 
   it("applies the rules inside data but never to envelope fields", () => {
     const gs = new GlobalStore();
     gs.markRedacted("trace");
-    const text = stringifyStatelogEvent(envelope({ type: "toolCall", note: "trace" }), [
-      redactRule(gs),
-    ]);
+    const text = stringifyStatelogEvent(
+      envelope({ type: "toolCall", note: "trace" }),
+      [redactRule(gs)],
+      DEFAULT_MAX_VALUE_CHARS,
+    );
     expect(JSON.parse(text)).toMatchObject({
       trace_id: "trace",
       data: { note: "[REDACTED]" },
@@ -224,10 +231,152 @@ describe("stringifyStatelogEvent", () => {
 
   it("omits picture bytes inside data", () => {
     const picture = Buffer.alloc(6000, 7).toString("base64");
-    const text = stringifyStatelogEvent(envelope({ type: "agentStart", args: { picture } }), [
-      omitBinaryRule,
-    ]);
+    const text = stringifyStatelogEvent(
+      envelope({ type: "agentStart", args: { picture } }),
+      [omitBinaryRule],
+      DEFAULT_MAX_VALUE_CHARS,
+    );
     expect(text).not.toContain(picture);
     expect(JSON.parse(text).data.args.picture).toBe("[base64: 6000 bytes omitted]");
+  });
+});
+
+describe("stringifyStatelogEvent size cap", () => {
+  const CAP = 1000;
+  const envelope = (data: Record<string, unknown>) => ({
+    format_version: 1,
+    trace_id: "trace",
+    project_id: "project",
+    span_id: null,
+    parent_span_id: null,
+    data,
+  });
+  const logged = (data: Record<string, unknown>, rules: ScrubRule[] = [], cap = CAP) =>
+    JSON.parse(stringifyStatelogEvent(envelope(data), rules, cap));
+
+  it("cuts a string over the cap and reports the count removed", () => {
+    const original = "x".repeat(CAP + 1234);
+    const output: string = logged({ type: "toolCall", output: original }).data.output;
+    const [, kept, removed] = output.match(/^(x+)…\[truncated ([\d,]+) chars\]$/) ?? [];
+    expect(output.length).toBeLessThanOrEqual(CAP);
+    expect(kept.length + Number(removed.replace(",", ""))).toBe(original.length);
+  });
+
+  it("cuts a long string that holds a redacted secret, and keeps the secret out", () => {
+    const gs = new GlobalStore();
+    gs.markRedacted("sk-secret");
+    const output = `sk-secret ${"x".repeat(CAP * 2)}`;
+    const data = logged({ type: "toolCall", output }, [redactRule(gs)]);
+    expect(data.data.output.startsWith("[REDACTED] x")).toBe(true);
+    expect(data.data.output).toContain("…[truncated");
+    expect(JSON.stringify(data)).not.toContain("sk-secret");
+  });
+
+  it("cuts a long string that came from a toJSON method", () => {
+    const value = { toJSON: () => "y".repeat(CAP * 2) };
+    const data = logged({ type: "toolCall", output: value });
+    expect(data.data.output).toMatch(/…\[truncated [\d,]+ chars\]$/);
+    expect(data.data.output.length).toBeLessThanOrEqual(CAP);
+  });
+
+  it("writes an event under the cap byte-for-byte as before", () => {
+    const event = envelope({ type: "toolCall", args: { city: "Mumbai" }, when: new Date(0) });
+    expect(stringifyStatelogEvent(event, [], CAP)).toBe(JSON.stringify(event));
+  });
+
+  it("writes an event over the cap with no field over it byte-for-byte as before", () => {
+    // JSON.parse puts integer-like keys first, so a needless rewrite would
+    // move "10" ahead of "b".
+    const fields = { b: "z".repeat(600), "10": "z".repeat(600) };
+    const event = envelope({ type: "toolCall", ...fields });
+    expect(stringifyStatelogEvent(event, [], CAP)).toBe(JSON.stringify(event));
+  });
+
+  it("trims one oversized field and keeps the others whole", () => {
+    const rows = Array.from({ length: 500 }, (_unused, index) => ({ index }));
+    const data = logged({ type: "agentEnd", entryNode: "main", result: rows, timeTaken: 5 });
+    expect(data.data.entryNode).toBe("main");
+    expect(data.data.timeTaken).toBe(5);
+    expect(data.data.result.at(-1)).toMatch(/^\[truncated: \d+ more items\]$/);
+    expect(data.data.truncated).toBe(true);
+  });
+
+  it("keeps a redacted value redacted inside an oversized field", () => {
+    const gs = new GlobalStore();
+    const creds = { user: "a", pass: "b" };
+    gs.markRedacted(creds);
+    const rows = [creds, ...Array.from({ length: 500 }, (_unused, index) => index)];
+    const data = logged({ type: "agentEnd", result: rows }, [redactRule(gs)]);
+    expect(data.data.result[0]).toBe("[REDACTED]");
+    expect(data.data.truncated).toBe(true);
+  });
+
+  it("turns both caps off with 0", () => {
+    const output = "x".repeat(CAP * 3);
+    const rows = Array.from({ length: 2000 }, (_unused, index) => index);
+    const event = envelope({ type: "agentEnd", output, result: rows });
+    expect(stringifyStatelogEvent(event, [], 0)).toBe(JSON.stringify(event));
+  });
+
+  it("logs a 40,000-character return value whole under the default cap", () => {
+    const result = "w".repeat(40_000);
+    const data = logged({ type: "agentEnd", result }, [], DEFAULT_MAX_VALUE_CHARS);
+    expect(data.data.result).toBe(result);
+    expect(data.data).not.toHaveProperty("truncated");
+  });
+
+  it("logs a promptCompletion's messages whole, with each long string cut", () => {
+    const messages = Array.from({ length: 50 }, (_unused, index) => ({
+      role: "user",
+      content: `${index} ${"m".repeat(CAP * 2)}`,
+    }));
+    const data = logged({ type: "promptCompletion", messages, usage: { totalTokens: 9 } });
+    expect(data.data.messages).toHaveLength(50);
+    expect(data.data.messages[49].content.startsWith("49 m")).toBe(true);
+    expect(data.data.messages[49].content).toContain("…[truncated");
+    expect(data.data.usage).toEqual({ totalTokens: 9 });
+  });
+});
+
+describe("omitCheckpointRule", () => {
+  const scrub = (body: unknown) =>
+    JSON.parse(JSON.stringify(body, makeScrubReplacer([omitCheckpointRule])));
+  const checkpoint = { id: 7, stack: { frames: [{ args: { tools: ["a", "b"] } }] } };
+
+  it("logs an interrupt's checkpoint as its id", () => {
+    const interrupt = { type: "interrupt", effect: "std::read", checkpointId: 3, checkpoint };
+    expect(scrub({ data: [interrupt] })).toEqual({
+      data: [
+        { type: "interrupt", effect: "std::read", checkpointId: 3, checkpoint: "[checkpoint 3]" },
+      ],
+    });
+  });
+
+  it("logs a failure result's checkpoint by the checkpoint's own id", () => {
+    const failure = { __type: "resultType", success: false, error: "boom", checkpoint };
+    expect(scrub({ result: failure }).result.checkpoint).toBe("[checkpoint 7]");
+  });
+
+  it("writes a bare marker when there is no id", () => {
+    const interrupt = { type: "interrupt", checkpoint: { stack: {} } };
+    expect(scrub(interrupt).checkpoint).toBe("[checkpoint]");
+  });
+
+  it("logs a failure result with no checkpoint as it is", () => {
+    const failure = { __type: "resultType", success: false, error: "boom", checkpoint: null };
+    expect(scrub(failure)).toEqual(failure);
+  });
+
+  it("logs a checkpoint key on any other object whole", () => {
+    const success = { __type: "resultType", success: true, checkpoint };
+    const other = { kind: "note", checkpoint };
+    expect(scrub(success).checkpoint).toEqual(checkpoint);
+    expect(scrub(other).checkpoint).toEqual(checkpoint);
+  });
+
+  it("leaves the interrupt itself holding its checkpoint", () => {
+    const interrupt = { type: "interrupt", checkpointId: 3, checkpoint };
+    scrub(interrupt);
+    expect(interrupt.checkpoint).toBe(checkpoint);
   });
 });

@@ -1,0 +1,11 @@
+{
+  "straightReturnLoggedIn": [
+    "agentEnd"
+  ],
+  "lastExitHasNoValue": true,
+  "handedOffReturnLoggedIn": [
+    "agentEnd"
+  ],
+  "handOffDataInMainExit": true,
+  "finishExitHasNoValue": true
+}

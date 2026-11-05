@@ -1,0 +1,15 @@
+// main can go on to `finish`, so the compiler gives it a conditional edge.
+// test.js runs it twice: once returning straight from main, once handing off
+// to finish. Either way the run's return value is logged once, in agentEnd,
+// and the node that hands off still logs what it passes on.
+
+node finish(answer: string) {
+  return "${answer}-returned"
+}
+
+node main(answer: string, handOff: boolean) {
+  if (handOff) {
+    return finish(answer)
+  }
+  return "${answer}-returned"
+}

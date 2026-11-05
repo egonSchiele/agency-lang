@@ -21,6 +21,8 @@ export type SimpleMachineConfig<T> = {
     debugMode?: boolean;
     observability?: boolean;
     logFile?: string;
+    /** The size cap on logged values; see `StatelogConfig.maxValueChars`. */
+    maxValueChars?: number;
   };
 };
 

@@ -48,6 +48,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
+import { hasInterrupts, isInterrupt } from "./isInterrupt.js";
 import type { CheckpointInterrupt, InterruptSummary } from "../statelogClient.js";
 import { sendInterruptToParent } from "./ipcChild.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
@@ -164,13 +165,7 @@ export function createDebugInterrupt<T = any>(
   };
 }
 
-export function isInterrupt(obj: any): obj is Interrupt {
-  return obj && obj.type === "interrupt";
-}
-
-export function hasInterrupts(data: any): data is Interrupt[] {
-  return Array.isArray(data) && data.length > 0 && data.every(isInterrupt);
-}
+export { isInterrupt, hasInterrupts };
 
 /**
  * Called from the generated CLI bootstrap (the `argv[1] === import.meta.url`
@@ -806,6 +801,7 @@ async function runResumeLoop(
           {
             onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
             statelogClient: execCtx.rootLogWithSpans,
+            finalValueInAgentEnd: true,
           },
         ),
       );

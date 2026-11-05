@@ -720,6 +720,51 @@ describe("StatelogClient", () => {
       expect(evt.data.args.attachment.source.base64).toBe("[image/png: 6000 bytes omitted]");
     });
 
+    it("the node that ends a run leaves its return value to agentEnd", async () => {
+      const file = newLogFile("exit-ends-run");
+      const client = fileClient(file);
+      const state = { messages: { threads: {} }, data: { answer: 42 }, isResume: false };
+      await client.exitNode({ nodeId: "main", data: state, endsRun: true });
+      const [evt] = readEvents(file);
+      expect(evt.data.data).toEqual({ messages: { threads: {} }, isResume: false });
+    });
+
+    it("the node that ends a run still logs the interrupts it paused on", async () => {
+      const file = newLogFile("exit-ends-run-interrupts");
+      const client = fileClient(file);
+      const interrupt = { type: "interrupt", effect: "std::read", checkpointId: 1 };
+      const state = { messages: { threads: {} }, data: [interrupt] };
+      await client.exitNode({ nodeId: "main", data: state, endsRun: true });
+      const [evt] = readEvents(file);
+      expect(evt.data.data.data).toEqual([interrupt]);
+    });
+
+    it("a node that does not end the run logs its return value", async () => {
+      const file = newLogFile("exit-not-ends-run");
+      const client = fileClient(file);
+      await client.exitNode({ nodeId: "main", data: { data: { answer: 42 } } });
+      const [evt] = readEvents(file);
+      expect(evt.data.data.data).toEqual({ answer: 42 });
+    });
+
+    it("cuts a value over the configured maxValueChars", async () => {
+      const file = newLogFile("max-value-chars");
+      const client = fileClient(file, { maxValueChars: 500 });
+      await client.agentEnd({ entryNode: "main", result: "r".repeat(2000), timeTaken: 1 });
+      const [evt] = readEvents(file);
+      expect(evt.data.result.length).toBeLessThanOrEqual(500);
+      expect(evt.data.truncated).toBe(true);
+    });
+
+    it("keeps a 40,000-character value whole under the default cap", async () => {
+      const file = newLogFile("default-max-value-chars");
+      const client = fileClient(file);
+      await client.agentEnd({ entryNode: "main", result: "r".repeat(40_000), timeTaken: 1 });
+      const [evt] = readEvents(file);
+      expect(evt.data.result).toHaveLength(40_000);
+      expect(evt.data).not.toHaveProperty("truncated");
+    });
+
     it("a node event whose state is not an object logs it as it is", async () => {
       const file = newLogFile("node-state-primitive");
       const client = fileClient(file);

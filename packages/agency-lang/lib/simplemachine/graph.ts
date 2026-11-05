@@ -25,6 +25,18 @@ export function goToNode<T>(to: string, data: T): GoToNode<T> {
   return new GoToNode(to, data);
 }
 
+export type RunOptions = {
+  onNodeEnter?: (id: string) => void;
+  statelogClient?: StatelogClient;
+  /**
+   * Set when the caller logs the run's return value in `agentEnd`. The last
+   * node's `exitNode` then leaves the value out, so it is logged once. A
+   * caller that logs no `agentEnd`, such as a rewind, leaves this unset and
+   * the value stays in `exitNode`, the only event that has it.
+   */
+  finalValueInAgentEnd?: boolean;
+};
+
 export class SimpleMachine<T> {
   private nodes: Partial<Record<string, (data: T) => Promise<T | GoToNode<T>>>> = {};
   private edges: Partial<Record<string, Edge<T, string>>> = {};
@@ -41,6 +53,7 @@ export class SimpleMachine<T> {
         debugMode: config.statelog.debugMode ?? false,
         observability: config.statelog.observability,
         logFile: config.statelog.logFile,
+        maxValueChars: config.statelog.maxValueChars,
       });
     }
   }
@@ -84,11 +97,7 @@ export class SimpleMachine<T> {
     //this.statelogClient?.debug(message, data || {});
   }
 
-  async run(
-    startId: string,
-    input: T,
-    options?: { onNodeEnter?: (id: string) => void; statelogClient?: StatelogClient },
-  ): Promise<T> {
+  async run(startId: string, input: T, options?: RunOptions): Promise<T> {
     const client = options?.statelogClient ?? this.statelogClient;
     const jsonEdges: Record<string, JSONEdge> = {};
     for (const from in this.edges) {
@@ -140,6 +149,7 @@ export class SimpleMachine<T> {
           nodeId: currentId,
           data,
           timeTaken: endTime - startTime,
+          endsRun: options?.finalValueInAgentEnd === true && this.endsRunAt(currentId, result),
         });
       } finally {
         client?.endSpan(nodeSpanId);
@@ -211,6 +221,24 @@ export class SimpleMachine<T> {
       }
     }
     return data;
+  }
+
+  /**
+   * Whether the run ends after this node returned `result`: it went to no
+   * other node, and its edge, if it has one, has no condition to pick the
+   * next. Agency gives every node that can go to another node a conditional
+   * edge with no condition, so a node that returns normally ends the run
+   * even though it has an edge.
+   */
+  endsRunAt(nodeId: string, result: T | GoToNode<T>): boolean {
+    if (result instanceof GoToNode) {
+      return false;
+    }
+    const edge = this.edges[nodeId];
+    if (edge === undefined) {
+      return true;
+    }
+    return !isRegularEdge(edge) && !edge.condition;
   }
 
   async runAndValidate(

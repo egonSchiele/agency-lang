@@ -129,6 +129,12 @@ Turns on logging. See [Observability](/guide/observability) for details.
 }
 ```
 
+| Option | Description |
+| --- | --- |
+| `log.logFile` | Write every event to this file, one JSON object per line. |
+| `log.requestTimeoutMs` | How long to wait for the statelog server on each event, in milliseconds. Default `1500`. |
+| `log.maxValueChars` | The most characters any string, and any top-level field of an event, may hold in the log. A longer value is cut and marked. Default `100000`; `0` turns the cap off. Like the other `log` settings, it is read when the program is compiled, so recompile after you change it. |
+
 ## Memory
 
 Enable the memory layer so agents can store and recall facts across runs. Setting this makes `std::memory` usable and lets `llm({ memory: true })` inject relevant facts. See [Memory](/guide/memory) for details.

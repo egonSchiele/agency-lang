@@ -167,9 +167,12 @@ One key, `log.maxValueChars`. Copy how `requestTimeoutMs` travels:
 In `redactForStatelog.ts`:
 
 1. Add `capString(text, maxChars, onCut): string`. A string longer than
-   `maxChars` becomes its first `maxChars` characters followed by
-   `…[truncated N chars]`, where N is the number removed, and `onCut` is
-   called. With `maxChars` of `0` it returns the text.
+   `maxChars` is cut so that it ends with `…[truncated N chars]`, where N
+   is the number removed, and is at most `maxChars` long with the marker.
+   `onCut` is called. With `maxChars` of `0` it returns the text. (Changed
+   while building: with the marker outside the cap, a cut string was over
+   the field budget and was cut a second time.) It lives in
+   `trimStatelogEvent.ts` beside the field budget.
 2. `stringifyStatelogEvent` takes the cap as a third argument and applies
    `capString` to the **output** of the scrub replacer:
 

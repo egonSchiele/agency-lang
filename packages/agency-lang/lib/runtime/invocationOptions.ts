@@ -68,6 +68,7 @@ export type PerInvocationLogConfig = {
   apiKey?: string;
   projectId?: string;
   requestTimeoutMs?: number;
+  maxValueChars?: number;
   metadata?: NonNullable<AgencyConfig["log"]>["metadata"];
 };
 
@@ -170,6 +171,10 @@ function selectLogConfig(log: AgencyConfig["log"] | undefined): PerInvocationLog
   }
   if (log.requestTimeoutMs !== undefined) {
     selected.requestTimeoutMs = log.requestTimeoutMs;
+    hasKey = true;
+  }
+  if (log.maxValueChars !== undefined) {
+    selected.maxValueChars = log.maxValueChars;
     hasKey = true;
   }
   if (log.metadata !== undefined) {

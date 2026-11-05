@@ -76,8 +76,10 @@ One cap, `log.maxValueChars`, default 100,000. It bounds two things:
 Setting it to `0` turns both off. Like the other `log` keys, it is read
 when the program is compiled.
 
-**Strings.** A longer string is cut to the cap and ends with
-`…[truncated 115,748 chars]`, giving the number removed. The cap is
+**Strings.** A longer string is cut so that, with its marker, it fits the
+cap. It ends with `…[truncated 115,748 chars]`, giving the number removed.
+The marker fits inside the cap so that a cut string is never over a field
+budget of the same size and cut a second time. The cap is
 applied to what the scrub rules produce, so a string that was redacted or
 came from a `toJSON` method is cut too.
 

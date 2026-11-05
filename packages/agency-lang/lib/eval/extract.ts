@@ -339,9 +339,21 @@ function collectExplicit(eventType: string, n: Normalized): WithWarnings<EvalVal
       value: ev.raw.data.value,
       threadId: ev.threadId,
       tMs: ev.tMs,
+      ...truncatedInLog(ev),
     })),
     warnings: [],
   };
+}
+
+/**
+ * `{ truncated: true }` when the statelog cut the event a value came from.
+ * The flag is one per event, not per field. On `agentEnd`,
+ * `evalOutputRecorded`, and `evalValueRecorded` the value is the only field
+ * big enough to be cut, so it reads as "the value was cut". That would not
+ * hold for every event type.
+ */
+function truncatedInLog(ev: NormalizedEnvelope): { truncated?: true } {
+  return ev.raw.data.truncated === true ? { truncated: true } : {};
 }
 
 function heuristicValues(prompts: NormalizedEnvelope[], warn: boolean): WithWarnings<EvalValue[]> {
@@ -376,7 +388,7 @@ function returnValueOutputs(n: Normalized): WithWarnings<EvalValue[]> {
     return { result: [], warnings: [NO_OUTPUT_ERROR] };
   }
   return {
-    result: [{ value: result, threadId: last.threadId, tMs: last.tMs }],
+    result: [{ value: result, threadId: last.threadId, tMs: last.tMs, ...truncatedInLog(last) }],
     warnings: [],
   };
 }

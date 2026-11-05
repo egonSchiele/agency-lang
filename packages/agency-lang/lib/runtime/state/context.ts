@@ -464,6 +464,7 @@ export class RuntimeContext<T> {
     apiKey?: string;
     projectId?: string;
     requestTimeoutMs?: number;
+    maxValueChars?: number;
     metadata?: StatelogConfig["metadata"];
     logFile?: string;
   } {
@@ -481,6 +482,7 @@ export class RuntimeContext<T> {
       ...(config?.requestTimeoutMs !== undefined
         ? { requestTimeoutMs: config.requestTimeoutMs }
         : {}),
+      ...(config?.maxValueChars !== undefined ? { maxValueChars: config.maxValueChars } : {}),
       ...(config?.metadata !== undefined ? { metadata: config.metadata } : {}),
       ...(config?.logFile !== undefined ? { logFile: config.logFile } : {}),
     };

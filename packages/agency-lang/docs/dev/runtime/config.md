@@ -316,7 +316,7 @@ Type-checker settings live under `typechecker`, not at the top level.
 | Option | Type | Description |
 |--------|------|-------------|
 | `observability` | `boolean` | Activate statelog. When false (the default) the StatelogClient is a complete no-op: no events, no network calls. |
-| `log` | object | Statelog configuration: `host`, `projectId`, `apiKey`, `debugMode`, `logFile`, `requestTimeoutMs` (default 1500), `metadata`, and `code`. See [`docs/dev/hosting/statelog.md`](../hosting/statelog.md) |
+| `log` | object | Statelog configuration: `host`, `projectId`, `apiKey`, `debugMode`, `logFile`, `requestTimeoutMs` (default 1500), `maxValueChars` (default 100000, `0` for no cap), `metadata`, and `code`. See [`docs/dev/hosting/statelog.md`](../hosting/statelog.md) |
 | `trace` | `boolean` | Write an execution trace |
 | `traceFile` | `string` | Trace file path (default: `<program>.trace`) |
 | `traceDir` | `string` | Directory for auto-generated `<timestamp>_<id>.agencytrace` files |

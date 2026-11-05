@@ -747,6 +747,24 @@ describe("StatelogClient", () => {
       expect(evt.data.data.data).toEqual({ answer: 42 });
     });
 
+    it("cuts a value over the configured maxValueChars", async () => {
+      const file = newLogFile("max-value-chars");
+      const client = fileClient(file, { maxValueChars: 500 });
+      await client.agentEnd({ entryNode: "main", result: "r".repeat(2000), timeTaken: 1 });
+      const [evt] = readEvents(file);
+      expect(evt.data.result.length).toBeLessThanOrEqual(500);
+      expect(evt.data.truncated).toBe(true);
+    });
+
+    it("keeps a 40,000-character value whole under the default cap", async () => {
+      const file = newLogFile("default-max-value-chars");
+      const client = fileClient(file);
+      await client.agentEnd({ entryNode: "main", result: "r".repeat(40_000), timeTaken: 1 });
+      const [evt] = readEvents(file);
+      expect(evt.data.result).toHaveLength(40_000);
+      expect(evt.data).not.toHaveProperty("truncated");
+    });
+
     it("a node event whose state is not an object logs it as it is", async () => {
       const file = newLogFile("node-state-primitive");
       const client = fileClient(file);

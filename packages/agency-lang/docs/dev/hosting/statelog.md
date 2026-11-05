@@ -203,6 +203,66 @@ top-level store via `setFallbackGlobals`. Prompt/embed/image previews are
 capped at `PROMPT_PREVIEW_MAX = 200` chars; embedding vectors and generated
 image bytes are never logged.
 
+## Size cap
+
+One number, `log.maxValueChars` (default `DEFAULT_MAX_VALUE_CHARS`, 100,000;
+`0` for no cap), bounds two things in every event. The code is in
+`lib/runtime/trimStatelogEvent.ts`; `stringifyStatelogEvent` calls it.
+
+**Every string.** `capString` cuts a longer string so that, marker included,
+it fits the cap: `the first part…[truncated 115,748 chars]`. The marker fits
+inside the cap so a cut string never goes over a field budget of the same
+size and gets cut a second time. A string is never swapped for a longer one: near the
+end of a field's budget, `"row 2683"` would become `"…[truncated 8 chars]"`,
+so it is kept.
+
+The string cap is applied to the **output** of the scrub replacer, not as a
+scrub rule. `makeScrubReplacer` stops at the first rule that fires, and the
+redact rule fires on every string that contains a secret, returning the same
+long string with the secret swapped out. As a rule, the cap would never see
+those strings. Rules also see a value before its `toJSON` runs, so a rule
+would miss a long string that a `toJSON` method produced.
+
+**Every top-level field of `data`.** A wide value made of many small pieces
+(a list of 30,000 records) has no long string, so the string cap removes
+nothing from it. `trimField` walks the value in order, counting what it will
+serialize to: a scalar costs its JSON length plus one for the comma, a key its
+JSON length plus one for the colon, a container two for its brackets. Once
+the budget is spent, the rest of an array becomes one item,
+`"[truncated: 131 more items]"`, the rest of an object becomes one key,
+`"__truncated": "12 more keys"`, and a string is cut to what is left.
+Everything before the cut is kept whole. A real key named `__truncated`
+cannot be told from the marker.
+
+Each field has its own budget, so a large `args` cannot push `usage` or
+`cost` out of an event. `promptCompletion.messages` has no budget: a budget
+keeps the start of a list, and for a conversation the newest messages are the
+ones worth reading. Cutting the list would also make the logs viewer show a
+rewritten history. Its strings are still capped. Logging only the messages a
+round added would shrink these events properly; that needs its own spec,
+since every reader of `promptCompletion` changes.
+
+**Order of work.** The event is serialized once, as before, with strings
+capped on the way. If no string was cut and the text is no longer than the
+cap, no field can be over it, and that text is the result: the path almost
+every event takes. Otherwise the text is parsed, `trimEventData` trims each
+field, and the event is written again with `truncated: true` on `data`. If
+nothing was cut after all, the original text is returned, because a parse and
+stringify can reorder integer-like keys. The text, not the live value, is
+trimmed so redaction keeps working: redact tags live on the original objects,
+and a trimmed copy would not carry them.
+
+`truncated` is one flag per event. Eval copies it onto the value it reads
+from `agentEnd`, `evalOutputRecorded`, and `evalValueRecorded`
+(`truncatedInLog` in `lib/eval/extract.ts`), where the value is the only
+field large enough to be cut.
+
+The cap reaches the client the way `requestTimeoutMs` does: written into the
+compiled program's `statelogConfig` by `TypeScriptBuilder.generateImports`,
+allowed as a per-invocation override in `invocationOptions.ts`, and passed to
+a subprocess by `getStatelogSink` and `withParentStatelog`. It is not passed
+to `safeStatelogValue`, which has its own cap, `FORK_VALUE_CHAR_CAP`.
+
 ## Span model
 
 The client maintains a span stack to give every event a place in a
@@ -324,7 +384,8 @@ Agency hands every node this state:
 { messages, data, ctx, isResume, run }
 ```
 
-`nodeStateForLog` in the client drops `ctx` and `run` before posting. Both
+`nodeStateForLog` (`lib/runtime/statelogNodeState.ts`) drops `ctx` and `run`
+before posting. Both
 hold the whole state stack, since `run` carries `ctx` again and the same stack
 as `run.stack`, and no reader uses them.
 
@@ -346,7 +407,8 @@ node main(draft: string) {
 
 Two cases keep `data`. A node that hands off logs what it passes on. A node
 whose value is a list of interrupts keeps them, since a paused run writes no
-`agentEnd`. `hasInterrupts` lives in `lib/runtime/isInterrupt.ts`, a module
+`agentEnd`. `withoutFinalValue`, beside `nodeStateForLog`, does the
+dropping. `hasInterrupts` lives in `lib/runtime/isInterrupt.ts`, a module
 with no runtime imports, because the client cannot import `interrupts.ts`:
 that file imports the execution context, which imports the client.
 

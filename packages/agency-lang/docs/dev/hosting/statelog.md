@@ -171,6 +171,15 @@ place, or undefined to leave the value to the next rule.
    filler. The mime type comes from the `data:` header, or from a string
    `mimeType` on the object holding the bytes, which is where Agency's
    attachment shape `{ kind: "base64", base64, mimeType }` keeps it.
+3. `omitCheckpointRule` replaces the `checkpoint` of an interrupt
+   (`type: "interrupt"`) or of a failure result
+   (`__type: "resultType", success: false`) with `[checkpoint 3]`. A
+   checkpoint holds every frame's arguments and locals, so one paused run
+   could log megabytes: a list of 143 tools passed down three frames is
+   three copies of that list. No reader uses it, and `checkpointCreated`
+   already records the id and location. The id is the interrupt's
+   `checkpointId`, else the checkpoint's own `id`. A `checkpoint` key on any
+   other object is logged as it is.
 
 `stringifyStatelogEvent` serializes the envelope in one `JSON.stringify`
 with `makeScrubReplacer(rules)`. The replacer returns the envelope's own

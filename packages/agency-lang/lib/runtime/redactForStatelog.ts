@@ -153,10 +153,44 @@ function decodedLength(base64: string): number {
   return Math.floor((base64.length * 3) / 4) - padding;
 }
 
+/**
+ * Replace the checkpoint an interrupt or a failure result carries with
+ * `[checkpoint 3]`. A checkpoint holds every frame's arguments and locals, so
+ * it can be far larger than the event around it, and no reader of the log
+ * uses it: `checkpointCreated` already records its id and location.
+ *
+ * The id is the interrupt's `checkpointId`, else the checkpoint's own `id`.
+ * Only the logged text changes; the caller still gets the checkpoint.
+ */
+export const omitCheckpointRule: ScrubRule = (raw, parent) => {
+  if (raw === null || typeof raw !== "object" || !carriesCheckpoint(parent)) {
+    return undefined;
+  }
+  if (raw !== parent.checkpoint) {
+    return undefined;
+  }
+  const id = parent.checkpointId ?? (raw as Record<string, unknown>).id;
+  return typeof id === "number" || typeof id === "string" ? `[checkpoint ${id}]` : "[checkpoint]";
+};
+
+/** An interrupt, or a failure result: the two values that carry a checkpoint. */
+function carriesCheckpoint(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const isInterrupt = record.type === "interrupt";
+  const isFailure = record.__type === "resultType" && record.success === false;
+  return isInterrupt || isFailure;
+}
+
 /** The rules every statelog event goes through, in order: the redact tag
- *  first, so a redacted picture shows its redaction marker, then binary data. */
+ *  first, so a redacted picture shows its redaction marker, then binary data,
+ *  then checkpoints. */
 export function statelogScrubRules(globals: GlobalStore | undefined): ScrubRule[] {
-  return globals === undefined ? [omitBinaryRule] : [redactRule(globals), omitBinaryRule];
+  return globals === undefined
+    ? [omitBinaryRule, omitCheckpointRule]
+    : [redactRule(globals), omitBinaryRule, omitCheckpointRule];
 }
 
 /** The fields every statelog line has. The rules apply to `data` alone. */

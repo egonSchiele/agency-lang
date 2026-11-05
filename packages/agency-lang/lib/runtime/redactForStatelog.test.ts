@@ -4,6 +4,7 @@ import {
   BINARY_OMIT_MIN_LENGTH,
   makeScrubReplacer,
   omitBinaryRule,
+  omitCheckpointRule,
   redactRule,
   stringifyStatelogEvent,
 } from "./redactForStatelog.js";
@@ -229,5 +230,48 @@ describe("stringifyStatelogEvent", () => {
     ]);
     expect(text).not.toContain(picture);
     expect(JSON.parse(text).data.args.picture).toBe("[base64: 6000 bytes omitted]");
+  });
+});
+
+describe("omitCheckpointRule", () => {
+  const scrub = (body: unknown) =>
+    JSON.parse(JSON.stringify(body, makeScrubReplacer([omitCheckpointRule])));
+  const checkpoint = { id: 7, stack: { frames: [{ args: { tools: ["a", "b"] } }] } };
+
+  it("logs an interrupt's checkpoint as its id", () => {
+    const interrupt = { type: "interrupt", effect: "std::read", checkpointId: 3, checkpoint };
+    expect(scrub({ data: [interrupt] })).toEqual({
+      data: [
+        { type: "interrupt", effect: "std::read", checkpointId: 3, checkpoint: "[checkpoint 3]" },
+      ],
+    });
+  });
+
+  it("logs a failure result's checkpoint by the checkpoint's own id", () => {
+    const failure = { __type: "resultType", success: false, error: "boom", checkpoint };
+    expect(scrub({ result: failure }).result.checkpoint).toBe("[checkpoint 7]");
+  });
+
+  it("writes a bare marker when there is no id", () => {
+    const interrupt = { type: "interrupt", checkpoint: { stack: {} } };
+    expect(scrub(interrupt).checkpoint).toBe("[checkpoint]");
+  });
+
+  it("logs a failure result with no checkpoint as it is", () => {
+    const failure = { __type: "resultType", success: false, error: "boom", checkpoint: null };
+    expect(scrub(failure)).toEqual(failure);
+  });
+
+  it("logs a checkpoint key on any other object whole", () => {
+    const success = { __type: "resultType", success: true, checkpoint };
+    const other = { kind: "note", checkpoint };
+    expect(scrub(success).checkpoint).toEqual(checkpoint);
+    expect(scrub(other).checkpoint).toEqual(checkpoint);
+  });
+
+  it("leaves the interrupt itself holding its checkpoint", () => {
+    const interrupt = { type: "interrupt", checkpointId: 3, checkpoint };
+    scrub(interrupt);
+    expect(interrupt.checkpoint).toBe(checkpoint);
   });
 });

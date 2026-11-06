@@ -1,0 +1,166 @@
+/** @module
+  @summary Compaction: when the conversation nears the model's context
+  window, a summary replaces its older messages. It runs between turns,
+  and by hand with `/compact`. See docs/dev/agents/agent-compaction.md.
+*/
+import { hostedModelInfo } from "std::llm"
+
+import { getResolvedSlots } from "../shared.agency"
+import {
+  _applyCompaction,
+  _compactionInput,
+  _contextTokens,
+ } from "agency-lang/stdlib-lib/agentCompaction.js"
+
+// Compact once the next request would fill this share of the window.
+static const COMPACT_AT_SHARE = 0.8
+
+// Recent messages kept as they are: this share of the window, up to
+// MAX_KEEP_TOKENS. The share matters for a small local model.
+static const KEEP_SHARE = 0.25
+static const MAX_KEEP_TOKENS = 20000
+
+type CompactionInput = {
+  transcript: string;
+  previousSummary: string;
+  messageCount: number
+}
+
+/** The smallest context window among the models the conversation may run
+  on, in tokens. 0 when none of them is in the catalog, as with a local
+  model. */
+export def smallestWindow(models: string[]): number {
+  const infos = [hostedModelInfo(model) for model in models]
+  const windows = [info.contextWindow for info in infos if info != null && info.contextWindow > 0]
+  if (windows.length == 0) {
+    return 0
+  }
+  return Math.min(...windows)
+}
+
+/** The context window to plan against. A brain's conversation runs on the
+  main or the reasoning slot, so the smaller of the two is the safe one. */
+export def conversationWindow(): number {
+  const slots = getResolvedSlots()
+  const models = [slots[name].model for name in ["main", "reasoning"] if slots[name] != null]
+  return smallestWindow(models)
+}
+
+export def keepTokensFor(window: number): number {
+  if (window <= 0) {
+    return MAX_KEEP_TOKENS
+  }
+  return Math.min(MAX_KEEP_TOKENS, Math.floor(window * KEEP_SHARE))
+}
+
+/** True when the next request would pass the compaction share of the
+  window. Never true for an unknown window. */
+export def shouldCompact(tokens: number, window: number): boolean {
+  return window > 0 && tokens >= window * COMPACT_AT_SHARE
+}
+
+/** The footer text, such as "context 42%". "" for an unknown window or an
+  empty conversation. */
+export def contextLabel(tokens: number, window: number): string {
+  if (window <= 0 || tokens <= 0) {
+    return ""
+  }
+  return "context ${Math.round(tokens / window * 100)}%"
+}
+
+export def contextStatus(session: string): string {
+  return contextLabel(_contextTokens(session), conversationWindow())
+}
+
+export def summaryPrompt(
+  transcript: string,
+  previousSummary: string,
+  instructions: string,
+): string {
+  const earlier = if previousSummary == "" then "" else """
+
+  The conversation before this part was summarized earlier. Fold that
+  summary into the new one, so nothing in it is lost:
+
+  <earlier_summary>
+  ${previousSummary}
+  </earlier_summary>
+  """
+  const focus = if instructions == "" then "" else """
+
+  The user asked for this in the summary: ${instructions}
+  """
+  return """
+  Below is the older part of a conversation between a user and a coding
+  agent. It is being removed to save space, and your summary will take its
+  place. The agent will continue the work with only your summary and the
+  most recent messages, so write down what it needs to carry on.
+
+  Use these headings, and leave out a heading that has nothing under it:
+
+  ## Goal
+  What the user is trying to get done.
+
+  ## Constraints
+  Requirements and preferences the user stated.
+
+  ## Done
+  What has been finished, with file paths.
+
+  ## In progress
+  What was being worked on, and its state.
+
+  ## Decisions
+  Choices that were made, each with its reason.
+
+  ## Files
+  The files read and the files changed.
+
+  ## Next steps
+  What is left to do.
+
+  Be specific: keep exact names, paths, commands, and error messages.
+  Reply with the summary only.${earlier}${focus}
+
+  <conversation>
+  ${transcript}
+  </conversation>
+  """
+}
+
+// Its own hidden thread, so the call never touches the conversation.
+def summaryCall(prompt: string): string {
+  let summary = ""
+  thread(hidden: true) {
+    summary = llm(prompt)
+  }
+  return summary
+}
+
+/** Summarize the older messages of `session` and replace them. Success
+  holds how many messages the summary replaced, 0 when there was nothing
+  old enough to summarize. */
+export def compactConversation(
+  session: string,
+  instructions: string = "",
+): Result<number> {
+  const keepTokens = keepTokensFor(conversationWindow())
+  const input: CompactionInput | null = _compactionInput(session, keepTokens)
+  if (input == null) {
+    return success(0)
+  }
+  const prompt = summaryPrompt(input.transcript, input.previousSummary, instructions)
+  const summary = try summaryCall(prompt)
+  if (summary is failure(reason)) {
+    return failure("The summary call failed: ${reason}")
+  }
+  if (summary.value.trim() == "") {
+    return failure("The model returned an empty summary.")
+  }
+  return success(_applyCompaction(session, keepTokens, summary.value.trim()))
+}
+
+/** True when `session` should be compacted now. */
+export def compactionDue(session: string): boolean {
+  return shouldCompact(_contextTokens(session), conversationWindow())
+}

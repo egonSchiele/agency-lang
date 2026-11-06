@@ -1,0 +1,124 @@
+/*
+ * The decisions around compaction: which window to plan against, when to
+ * compact, how much to keep, the footer text, and the summary prompt. The
+ * nodes that compact a thread build it by hand and mock the summary call.
+ */
+import {
+  ThreadMessage,
+  assistantMessage,
+  getThread,
+  sessionThreadId,
+  systemMessage,
+  userMessage,
+ } from "std::thread"
+
+import {
+  compactConversation,
+  contextLabel,
+  keepTokensFor,
+  shouldCompact,
+  smallestWindow,
+  summaryPrompt,
+ } from "../lib/compaction.agency"
+
+node unknownModelsHaveNoWindow(): boolean {
+  return smallestWindow(["no-such-model-xyz"]) == 0 && smallestWindow([]) == 0
+}
+
+node compactsAtEightyPercent(): boolean {
+  return !shouldCompact(79000, 100000) && shouldCompact(80000, 100000)
+}
+
+node neverCompactsForAnUnknownWindow(): boolean {
+  return !shouldCompact(5000000, 0)
+}
+
+node keepsTwentyThousandTokensOfABigWindow(): boolean {
+  return keepTokensFor(200000) == 20000 && keepTokensFor(0) == 20000
+}
+
+node keepsAQuarterOfASmallWindow(): boolean {
+  return keepTokensFor(8000) == 2000
+}
+
+node labelIsAPercentage(): boolean {
+  return contextLabel(42000, 100000) == "context 42%"
+}
+
+node labelIsEmptyWhenUnknown(): boolean {
+  return contextLabel(42000, 0) == "" && contextLabel(0, 100000) == ""
+}
+
+node promptHoldsTheTranscript(): boolean {
+  const prompt = summaryPrompt("[user] fix the parser", "", "")
+  const hasTranscript = prompt.includes("[user] fix the parser")
+  const noExtras = !prompt.includes("<earlier_summary>") && !prompt.includes("The user asked for this")
+  return hasTranscript && noExtras
+}
+
+node promptCarriesTheEarlierSummaryAndInstructions(): boolean {
+  const prompt = summaryPrompt("[user] hi", "They fixed the lexer.", "keep the bug details")
+  const hasEarlier = prompt.includes("<earlier_summary>") && prompt.includes("They fixed the lexer.")
+  const hasFocus = prompt.includes("The user asked for this in the summary: keep the bug details")
+  return hasEarlier && hasFocus
+}
+
+// A session thread with a system prompt and `turns` turns of 400-character
+// messages (about 100 tokens each), built without a model call.
+def buildConversation(session: string, turns: number) {
+  thread(session: session) {
+    systemMessage("You are a test agent.")
+    for (turn in range(turns)) {
+      const question = "question ${turn} "
+      const answer = "answer ${turn} "
+      userMessage(question.padEnd(400, "."))
+      assistantMessage(answer.padEnd(400, "."))
+    }
+  }
+}
+
+def messagesOf(session: string): ThreadMessage[] {
+  const messages = getThread(sessionThreadId(session), 0, 1000)
+  return messages catch []
+}
+
+node summaryReplacesTheOlderMessages(): boolean {
+  // 300 turns is about 60,000 tokens, and 20,000 are kept.
+  buildConversation("compactMe", 300)
+  const before = messagesOf("compactMe").length
+  const replaced = compactConversation("compactMe") catch -1
+  const after = messagesOf("compactMe")
+  const keptSystemPrompt = after[0].content == "You are a test agent."
+  const summaryIsSecond = after[1].role == "system" && after[1].content.endsWith("THE SUMMARY")
+  const startsAtAUserMessage = after[2].role == "user"
+  const endsWithTheLastAnswer = after[after.length - 1].content.startsWith("answer 299 ")
+  const countsAddUp = after.length == before - replaced + 1
+  return replaced > 300 && keptSystemPrompt && summaryIsSecond && startsAtAUserMessage && endsWithTheLastAnswer && countsAddUp
+}
+
+node secondCompactionKeepsOneSummary(): boolean {
+  buildConversation("compactTwice", 300)
+  compactConversation("compactTwice")
+  buildConversation("compactTwice", 300)
+  compactConversation("compactTwice")
+  const summaries = [message for message in messagesOf("compactTwice") if message.content.includes("Summary of the conversation so far")]
+  return summaries.length == 1 && summaries[0].content.endsWith("SECOND SUMMARY")
+}
+
+node shortConversationIsLeftAlone(): boolean {
+  buildConversation("tooShort", 3)
+  const replaced = compactConversation("tooShort") catch -1
+  return replaced == 0 && messagesOf("tooShort").length == 7
+}
+
+node failedSummaryLeavesTheThreadAlone(): boolean {
+  buildConversation("emptySummary", 300)
+  const before = messagesOf("emptySummary").length
+  const result = compactConversation("emptySummary")
+  return isFailure(result) && messagesOf("emptySummary").length == before
+}
+
+node unknownSessionIsNothingToCompact(): boolean {
+  const replaced = compactConversation("neverOpened") catch -1
+  return replaced == 0
+}

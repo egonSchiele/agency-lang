@@ -1,0 +1,68 @@
+/** @module
+  @summary `searchSessions`: the tool that finds text in the user's
+  earlier conversations in this project directory. The sessions are the
+  saved ones in sessions.agency.
+*/
+import { conversationSession, currentSessionId } from "./resume.agency"
+import { projectDir } from "./sessions.agency"
+import { _searchSessions } from "agency-lang/stdlib-lib/agentSessions.js"
+import { _realDir } from "agency-lang/stdlib-lib/fs.js"
+
+// `std::read` is also declared in the prelude. A module that raises an
+// effect declares it itself.
+@alwaysUnder(dir)
+effect std::read {
+  dir: string;
+  filename: string
+}
+
+/** One message of an earlier conversation that matched a search. */
+export type SessionHit = {
+  sessionId: string;
+  title: string;
+  lastActive: number;
+  role: "user" | "assistant";
+  snippet: string
+}
+
+static const MAX_HITS = 25
+
+@capabilities(fileRead)
+export idempotent def searchSessions(
+  query: string,
+  limit: number = 10,
+): Result<SessionHit[]> raises <std::read> {
+  """
+  Search the user's earlier conversations with this agent in this project
+  directory. Use it when the user refers to something from a past session
+  that is not in this conversation, such as "what did we decide about X
+  last week?".
+
+  A message matches when it contains every word of the query, in any
+  order and any letter case, so use a few distinctive words and not a
+  sentence. Each hit is the text around the match, with the title of its
+  session and when that session was last used, in milliseconds since the
+  Unix epoch. The current conversation is not searched.
+
+  @param query - The words to look for
+  @param limit - The most hits to return, up to 25
+  """
+  const session = conversationSession()
+  // No saved session yet means no directory, and nothing to ask about.
+  const dir = try _realDir(projectDir()) catch ""
+  if (session == "" || dir == "") {
+    return success([])
+  }
+  return interrupt std::read("Are you sure you want to search your saved sessions?", {
+    dir: dir,
+    filename: "*.json"
+  })
+  const hits = _searchSessions(
+    dir,
+    session,
+    query,
+    currentSessionId(),
+    Math.min(limit, MAX_HITS),
+  )
+  return success(hits)
+}

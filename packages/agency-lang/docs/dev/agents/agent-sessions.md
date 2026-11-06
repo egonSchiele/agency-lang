@@ -118,7 +118,46 @@ The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
 thread store serializes; a field missing there is dropped when the checkpoint
 file is read back (see `docs/dev/runtime/checkpointing.md`).
 
+## `/fork`
+
+`/fork` makes the running session a copy of itself. `forkSession` in
+`resume.agency` gives `_current` a new record: a new id, the same turn
+count, and the title with `(fork)` after it. It marks the record changed,
+so the save that follows the REPL line writes the checkpoint under the new
+id. The original session's two files are not touched. They hold the
+conversation as it was last saved, and `--resume <id>` reopens it.
+
+To try something from an earlier point, resume that session and run
+`/fork` before the next message. A turn taken before `/fork` is saved to
+the original first.
+
+There is no `--fork <id>` flag. The record is a `let` global inside the
+checkpoint, and nothing placed after `restore` runs, so a restored run
+cannot be handed a new id from Agency code at startup.
+
+## Searching saved sessions
+
+`searchSessions` in `lib/sessionSearch.agency` is a tool the coordinator
+carries. It finds messages in the sessions saved for this project
+directory, so the model can answer "what did we decide last week?".
+
+- **What is read.** `_searchSessions` in `agentSessions.ts` reads the 50
+  most recently used sessions, newest first. For each it reads the
+  conversation thread with `_readTranscript`, the same reader the resume
+  transcript uses, so only user and assistant text is searched. The
+  running session is left out.
+- **What matches.** A message that holds every word of the query, in any
+  order and letter case. No index is kept and no model is called.
+- **What comes back.** Up to 3 hits a session and 25 in all. A hit is the
+  session's id, title, and last-used time, the role, and 200 characters on
+  each side of the first matched word.
+- **Approval.** The tool raises `std::read` with the real sessions
+  directory and `*.json` as the file name, so the policy decides, and a
+  user can approve the directory once. With no sessions directory yet it
+  returns nothing and raises nothing.
+- An `--incognito` run has no session, and the tool returns nothing there.
+
 ## Not in v1
 
-Forking, `/resume` inside a session, saving one-shot
+`--fork <id>`, `/resume` inside a session, saving one-shot
 (`-p`) runs, mid-turn crash recovery, and cleanup of old sessions.

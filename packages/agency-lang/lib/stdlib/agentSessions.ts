@@ -166,6 +166,99 @@ function sessionThread(cp: Checkpoint, session: string): ThreadJSON | null {
   return null;
 }
 
+/** One message of a saved session that matched a search. */
+export type SessionHit = {
+  sessionId: string;
+  title: string;
+  /** When the session was last used, in milliseconds since the Unix epoch. */
+  lastActive: number;
+  role: "user" | "assistant";
+  snippet: string;
+};
+
+// A search reads this many of the most recent sessions. Each one is a whole
+// checkpoint file, so an old project's every session is too much to read.
+const MAX_SESSIONS_SEARCHED = 50;
+
+// The most hits one session gives, so one long session cannot fill the list.
+const MAX_HITS_PER_SESSION = 3;
+
+// Characters shown on each side of the first matched word.
+const SNIPPET_RADIUS = 200;
+
+/** The words of a query, lower-cased. A message matches when it holds every
+ *  one of them, in any order and any letter case. */
+export function queryWords(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word !== "");
+}
+
+/** The text around the first place `word` appears in `text`, with `…` on a
+ *  side that was cut. */
+function snippetAround(text: string, word: string): string {
+  const at = text.toLowerCase().indexOf(word);
+  const start = Math.max(0, at - SNIPPET_RADIUS);
+  const end = Math.min(text.length, at + word.length + SNIPPET_RADIUS);
+  const before = start > 0 ? "…" : "";
+  const after = end < text.length ? "…" : "";
+  return `${before}${text.slice(start, end)}${after}`;
+}
+
+/** The messages that hold every word, newest first, as snippets. */
+export function matchingMessages(
+  messages: TranscriptMessage[],
+  words: string[],
+): TranscriptMessage[] {
+  if (words.length === 0) {
+    return [];
+  }
+  const holdsEveryWord = (message: TranscriptMessage) => {
+    const text = message.content.toLowerCase();
+    return words.every((word) => text.includes(word));
+  };
+  return messages
+    .filter(holdsEveryWord)
+    .reverse()
+    .map((message) => ({ role: message.role, content: snippetAround(message.content, words[0]) }));
+}
+
+/**
+ * Search the conversations of the sessions saved in `dir` for messages
+ * that hold every word of `query`. Sessions are read most recent first,
+ * and `skipId` (the running session) is left out. Returns at most `limit`
+ * hits.
+ */
+export async function _searchSessions(
+  dir: string,
+  session: string,
+  query: string,
+  skipId: string,
+  limit: number,
+): Promise<SessionHit[]> {
+  const words = queryWords(query);
+  const records = (await _listSessions(dir)).filter((record) => record.id !== skipId);
+  const hits: SessionHit[] = [];
+  for (const record of records.slice(0, MAX_SESSIONS_SEARCHED)) {
+    if (hits.length >= limit) {
+      break;
+    }
+    const transcript = _readTranscript(await _readCheckpointFile(dir, record.id), session);
+    const matches = matchingMessages(transcript, words).slice(0, MAX_HITS_PER_SESSION);
+    hits.push(
+      ...matches.map((match) => ({
+        sessionId: record.id,
+        title: record.title,
+        lastActive: record.lastActive,
+        role: match.role,
+        snippet: match.content,
+      })),
+    );
+  }
+  return hits.slice(0, limit);
+}
+
 type SaveTarget = { dir: string; record: SessionRecord } | null;
 
 // The Agency callbacks the REPL turn wraps. Installed from `main()` before

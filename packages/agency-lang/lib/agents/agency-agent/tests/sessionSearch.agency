@@ -1,0 +1,139 @@
+/*
+ * /fork and the search over saved sessions. The search nodes save a real
+ * checkpoint of a hand-built conversation into the test's own agent home,
+ * then search it from a second session.
+ */
+import { assistantMessage, userMessage } from "std::thread"
+
+import { AgentBrain } from "../brains/brain.agency"
+import {
+  currentSessionId,
+  forkSession,
+  forkTitle,
+  markTurnDone,
+  recordTurn,
+  startSession,
+ } from "../lib/resume.agency"
+import { SessionRecord, saveSession } from "../lib/sessions.agency"
+import { SessionHit, searchSessions } from "../lib/sessionSearch.agency"
+
+def noTurn(target: string, prompt: any): string {
+  return ""
+}
+
+def noInit(context: any) {
+}
+
+static const BRAIN: AgentBrain = {
+  name: "test",
+  session: "talk",
+  description: "",
+  startTargets: [],
+  init: noInit,
+  runTurn: noTurn
+}
+
+// An older session whose conversation is `said` and its reply, saved on
+// disk under `id`.
+def saveOlderSession(
+  id: string,
+  title: string,
+  lastActive: number,
+  said: string,
+): boolean {
+  thread(session: "talk") {
+    userMessage(said)
+    assistantMessage("Noted: ${said}")
+  }
+  const record: SessionRecord = {
+    id: id,
+    cwd: "/work",
+    brain: "test",
+    created: 1,
+    lastActive: lastActive,
+    turns: 1,
+    title: title
+  }
+  const saved = saveSession(record, getCheckpoint(checkpoint()))
+  return saved is success
+}
+
+def search(query: string): SessionHit[] {
+  const hits = searchSessions(query) with approve
+  return hits catch []
+}
+
+node forkTitleMarksTheCopy(): boolean {
+  return forkTitle("Fix the parser") == "Fix the parser (fork)" && forkTitle("") == "fork"
+}
+
+node forkNeedsATurn(): boolean {
+  startSession(null, BRAIN)
+  const before = currentSessionId()
+  const line = forkSession()
+  return line.includes("no turns yet") && currentSessionId() == before
+}
+
+node forkWritesToANewSession(): boolean {
+  startSession(null, BRAIN)
+  markTurnDone()
+  recordTurn("hello")
+  const original = currentSessionId()
+  const line = forkSession()
+  const target = recordTurn("")
+  const isNew = currentSessionId() != original
+  const namesTheOriginal = line.includes("--resume ${original}")
+  const savedWithoutATurn = target != null && target.record.id == currentSessionId() && target.record.turns == 1
+  return isNew && namesTheOriginal && savedWithoutATurn
+}
+
+node findsAMessageInAnEarlierSession(): boolean {
+  if (!saveOlderSession(
+    "older-1",
+    "Grep work",
+    100,
+    "We decided the grep flags are a rule table.",
+  )) {
+    return false
+  }
+  startSession(null, BRAIN)
+  const hits = search("GREP flags")
+  if (hits.length != 2) {
+    return false
+  }
+  const hit = hits[1]
+  return hit.sessionId == "older-1" && hit.title == "Grep work" && hit.role == "user" && hit.snippet.includes("rule table")
+}
+
+node needsEveryWord(): boolean {
+  if (!saveOlderSession(
+    "older-2",
+    "Ledger work",
+    100,
+    "The kumquat ledger is balanced.",
+  )) {
+    return false
+  }
+  startSession(null, BRAIN)
+  return search("kumquat ledger").length == 2 && search("kumquat banana").length == 0
+}
+
+node newestSessionComesFirst(): boolean {
+  const savedOld = saveOlderSession("older-3", "Old", 100, "the marmalade plan")
+  const savedNew = saveOlderSession("older-4", "New", 200, "the marmalade recipe")
+  if (!savedOld || !savedNew) {
+    return false
+  }
+  startSession(null, BRAIN)
+  const ids = [hit.sessionId for hit in search("marmalade")]
+  return ids[0] == "older-4" && ids.includes("older-3")
+}
+
+node rejectedSearchReturnsAFailure(): boolean {
+  if (!saveOlderSession("older-5", "Any", 100, "something to find")) {
+    return false
+  }
+  startSession(null, BRAIN)
+  const hits = searchSessions("something") with reject
+  return isFailure(hits)
+}

@@ -50,3 +50,29 @@ node answeredAfterPause() {
   const both = label(interrupt ask("first")) + label(interrupt ask("second"))
   return both
 }
+
+let labelCalls = 0
+
+def countedLabel(answer: any): string {
+  labelCalls = labelCalls + 1
+  return "L:${answer}"
+}
+
+// The interrupt is written directly inside the handle block, so its lifted
+// line must stay inside that block, and a rejection must stop the outer call.
+def rejectedInsideHandle(): string {
+  handle {
+    const labelled = countedLabel(interrupt ask("rejected"))
+    return labelled
+  } with (intr) {
+    return reject()
+  }
+}
+
+node answeredWithReject() {
+  const result = rejectedInsideHandle()
+  if (result is failure) {
+    return "rejected, labelCalls=${labelCalls}"
+  }
+  return "approved, labelCalls=${labelCalls}"
+}

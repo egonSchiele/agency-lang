@@ -315,6 +315,9 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
               `slot on "${stmt.type}" — see expressionSlots.ts`,
           );
         }
+        // interruptStatement: a `return interrupt` must stay a return of the
+        // interrupt itself, which carries on when approved
+        // (docs/dev/language/interrupt-as-value.md).
         const isTail =
           TAIL_VALUE_KINDS.includes(stmt.type) &&
           i === slots.length - 1 &&

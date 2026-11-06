@@ -31,6 +31,17 @@
           "expectedMessage": "second"
         }
       ]
+    },
+    {
+      "nodeName": "answeredWithReject",
+      "description": "A nested interrupt keeps its handler, and a rejection stops the call it was an argument of",
+      "input": "",
+      "expectedOutput": "\"rejected, labelCalls=0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

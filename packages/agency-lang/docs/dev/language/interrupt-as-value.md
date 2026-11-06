@@ -89,6 +89,13 @@ The right side of `&&`, `||`, or `??` may never run, so it cannot move to the
 line above. A statement under `with approve` cannot have part of it moved
 outside the approval. In both cases, assign the interrupt to a variable first.
 
+A handler body is the third such place. The pass never rewrites one, so a
+nested interrupt inside `with (intr) { ... }` also fails the build.
+
+Inside a `handle` block's own body the lift is safe: the temporary is written
+inside that body, so the interrupt keeps its handler, and a rejection stops
+the function before the outer call runs.
+
 This is left as it is on purpose. These are rare shapes, they fail at build
 time, and refusing them with a diagnostic of their own was judged not worth
 the code.

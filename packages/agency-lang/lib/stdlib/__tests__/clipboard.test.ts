@@ -40,12 +40,27 @@ describe("_pasteImage", () => {
   });
 
   it("fails when the clipboard holds no image", async () => {
-    run.mockResolvedValueOnce(failed("Can’t make some data into the expected type."));
+    run.mockResolvedValueOnce(
+      failed("execution error: Can’t make some data into the expected type. (-1700)"),
+    );
 
     const result = await _pasteImage();
 
     expect(isFailure(result)).toBe(true);
     expect(result.error).toBe("The clipboard does not hold an image.");
+  });
+
+  it("reports any other osascript failure in its own words", async () => {
+    run.mockResolvedValueOnce(
+      failed("execution error: File not open with write permission. (-61)"),
+    );
+
+    const result = await _pasteImage();
+
+    expect(isFailure(result)).toBe(true);
+    expect(result.error).toBe(
+      "Could not save the clipboard image: execution error: File not open with write permission. (-61)",
+    );
   });
 
   it("fails on another system without running anything", async () => {

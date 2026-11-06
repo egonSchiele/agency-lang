@@ -59,9 +59,15 @@ const CLIPBOARD_PNG_SCRIPT = [
   "end run",
 ];
 
+// What osascript reports when the clipboard has nothing it can turn into a
+// PNG: "Can't make some data into the expected type."
+const NOT_AN_IMAGE_ERROR = "-1700";
+
 /** Save the image on the clipboard to a new PNG file in the temp directory
- *  and return its path. A failure when the clipboard holds no image, or on
- *  a system other than macOS. */
+ *  and return its path. macOS converts other image formats, such as the
+ *  TIFF a browser copies, to PNG itself. A failure when the clipboard holds
+ *  no image, when the file cannot be written, or on a system other than
+ *  macOS. */
 export async function _pasteImage(): Promise<ResultValue> {
   const host = currentHost();
   if (host.system.operatingSystem() !== "macos") {
@@ -73,10 +79,13 @@ export async function _pasteImage(): Promise<ResultValue> {
   try {
     await runProgram(host, "osascript", [...scriptArgs, file]);
   } catch (err) {
-    if (err instanceof ProgramFailed) {
+    if (!(err instanceof ProgramFailed)) {
+      throw err;
+    }
+    if (err.stderr.includes(NOT_AN_IMAGE_ERROR)) {
       return failure("The clipboard does not hold an image.");
     }
-    throw err;
+    return failure(`Could not save the clipboard image: ${err.stderr.trim()}`);
   }
   return success(file);
 }

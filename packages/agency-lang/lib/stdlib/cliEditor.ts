@@ -2,7 +2,7 @@
 import * as readline from "readline";
 import process from "process";
 import { RESET, styles } from "@/utils/termcolors.js";
-import { editorCommand, openInEditor, type Releasable } from "../eval/newTest/editor.js";
+import { editorCommand, openInEditor, type Releasable } from "../utils/editor.js";
 
 /** The Ctrl+G key at the REPL prompt. */
 export type EditorKey = {

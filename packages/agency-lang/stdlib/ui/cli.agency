@@ -2,6 +2,7 @@ import {
   _runLineRepl,
   _setSlashPalette,
   _clearScreen,
+  _lineWasTyped,
   _termWidth,
   _interruptBodyWidth,
   _clearHistory,
@@ -102,6 +103,19 @@ export def setSlashPalette(paletteCommands: Record<string, string>) {
 }
 
 @capabilities(terminal)
+/**
+Use this before acting on a line in a way no approval covers. Text the
+user pasted, wrote in `/paste`, or wrote in their editor is not typed, and
+neither is a line read from a pipe. Outside a `repl()` callback it is
+always false.
+*/
+export def lineWasTyped(): boolean {
+  """
+  True when the line the repl is handling was typed and entered by hand.
+  """
+  return _lineWasTyped()
+}
+
 export def clearScreen() {
   """Clear the terminal screen."""
   _clearScreen()

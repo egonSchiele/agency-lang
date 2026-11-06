@@ -37,6 +37,8 @@ export def shellCommand(command: string): boolean {
     pushMessage("Type a shell command after the !, for example: !git status")
     return true
   }
+  // Nothing is printed until the command ends, and it has no time limit.
+  pushMessage(color.dim("Running. Press Esc to stop it."))
   const result = _bash(command, "", 0, "", {
     blockedCommands: [],
     allowedPaths: []

@@ -331,6 +331,16 @@ export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
   },
 };
 
+/** The signature of a method every function value has (`describe`,
+ *  `preapprove`, ...), or undefined when `name` is not one. `name` is
+ *  whatever the program wrote after the dot, so this must not find
+ *  `constructor` or `toString` on the table's prototype. */
+export function agencyFunctionMethod(name: string): BuiltinSignature | undefined {
+  return Object.hasOwn(AGENCY_FUNCTION_METHOD_TYPES, name)
+    ? AGENCY_FUNCTION_METHOD_TYPES[name]
+    : undefined;
+}
+
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- LLM primitive ---
   llm: {

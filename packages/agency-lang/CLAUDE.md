@@ -260,7 +260,7 @@ Other process docs:
 - `docs/dev/runtime/concurrent-interrupts.md` — What happens when several concurrent execution paths interrupt at the same time.
 - `docs/dev/runtime/config.md` — Every `AgencyConfig` option, with types and defaults, and how config is resolved.
 - `docs/dev/runtime/globalstore.md` — Module-namespaced storage for top-level variables at runtime.
-- `docs/dev/runtime/interrupts.md` — How a program resumes in the middle of a block after an interrupt, using step counters.
+- `docs/dev/runtime/interrupts.md` — How a program resumes in the middle of a block after an interrupt, using step counters; why a handler never pauses and how the runtime enforces it; and why an inline handler function compiles as a block argument, where that pass sits, and the edges it leaves.
 - `docs/dev/runtime/lock.md` — A per-run mutex for serializing access to shared resources such as the terminal prompt.
 - `docs/dev/runtime/rewind.md` — Replaying execution from a checkpoint, optionally with different values for its local variables.
 - `docs/dev/runtime/pause.md` — Pausing a node run from outside with `pauseSignal`: the runner check, the thrown signal, which steps defer a pause, cancel precedence, and `resumeFromCheckpoint`.

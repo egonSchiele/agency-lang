@@ -8,7 +8,7 @@ description: Developer docs for the Agency runtime: the execution engine, interr
 Paths are relative to `packages/agency-lang/`. Read the one that matches the task; each doc records the key decisions, the architecture, the relevant files, and the subtleties that are easy to miss.
 
 - `docs/dev/runtime/simplemachine.md` — The graph execution engine that runs compiled Agency programs.
-- `docs/dev/runtime/interrupts.md` — How a program resumes in the middle of a block after an interrupt, using step counters.
+- `docs/dev/runtime/interrupts.md` — How a program resumes in the middle of a block after an interrupt, using step counters; why a handler never pauses and how the runtime enforces it; and why an inline handler function compiles as a block argument, where that pass sits, and the edges it leaves.
 - `docs/dev/runtime/concurrent-interrupts.md` — What happens when several concurrent execution paths interrupt at the same time.
 - `docs/dev/runtime/runBatch.md` — The one primitive that owns concurrent-interrupt orchestration for forks, parallel blocks, tool calls, and subprocesses.
 - `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.

@@ -208,8 +208,9 @@ matches TypeScript and is intended.
 
 ### Handler bodies, AG1020
 
-The pass never touches a handler body, because it compiles to plain
-JavaScript with no steps and cannot pause. A tagged cast there is refused
+The pass never touches a handler function, because a handler never pauses
+(the runtime refuses a pause inside one; see `docs/dev/runtime/interrupts.md`,
+"No pause inside handlers"). A tagged cast there is refused
 with its own code, because AG1017's advice would be wrong: moving the cast
 to its own line inside the handler changes nothing. AG1020 says to do the
 cast before the `handle` block instead.

@@ -311,5 +311,5 @@ Three things that are easy to get wrong:
 - **Conditional breakpoints**: not supported. Use `debugger("label")` statements in code for manual breakpoints.
 - **Checkpoint rewind vs resume**: rolling checkpoints capture state before the step advances, while the interrupt checkpoint captures state after. This means rewinding to a checkpoint re-enters at that step, while resuming from an interrupt advances past it.
 - **Several stops at once**: one is shown; the next command moves all of them (see "Stops inside a tool call").
-- **`debugger()` inside a handler body**: does not stop. A handler body has no step address a resume could re-enter, so the hook skips it, as it skips a callback body. A tool called from an `llm()` inside a handler body does not stop either.
+- **`debugger()` inside a handler function**: does not stop. A handler never pauses, so a stop inside one could never be resumed; the hook skips it, as it skips a callback body. A tool called from an `llm()` inside a handler body does not stop either.
 - **Trace replay inside a tool call**: a trace records root-stack steps only.

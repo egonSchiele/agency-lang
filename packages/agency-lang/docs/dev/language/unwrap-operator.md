@@ -132,7 +132,7 @@ mean what it says (`lib/typeChecker/unwrapChecks.ts`, run beside
 | AG2024 | `unwrapReturnTypeNotResult` | The nearest def or node has a declared return type that `Result<any, any>` is not assignable to. A `?` inside a block argument is not checked against the def. |
 | AG1021 | `unwrapInOpaquePosition` | A position the hoist pass never lifts from: the right side of `&&`, `\|\|`, or `??`, either side of `catch`, a `\|>` stage, a `try` operand, or a bare expression statement such as a compound assignment. |
 | AG1022 | `unwrapOutsideBody` | A module-level initializer or a parameter default. |
-| AG1023 | `unwrapInHandlerBody` | A handler body (`with (intr) { ... }`), which compiles to plain code with no steps. |
+| AG1023 | `unwrapInHandlerBody` | A handler function (`with (intr) { ... }`), which never pauses and which the hoist pass leaves alone. |
 | AG1024 | `unwrapInParallelArm` | The top level of a `parallel` arm. An arm hands its bindings back when it finishes and cannot return early. Checked on the pre-desugar tree, where the `parallelBlock` ancestor is still visible. |
 | AG1025 | `unwrapInAssignmentTarget` | A write target, `obj?.field = 1`. An assignment's target chain is not an expression slot, so `hoistPositions` never lists it; the check walks every assignment's `accessChain`. |
 

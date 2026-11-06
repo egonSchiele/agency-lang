@@ -68,9 +68,18 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 - `lib/repl.agency`: the interactive terminal. It calls the harness
   `runTurn` and never a brain directly.
 - `lib/grounding.agency`: builds the grounding text with `groundingText`.
-  The project block (date, cwd, AGENTS.md or else CLAUDE.md) is
-  `projectContextText` in `lib/projectContext.agency`, a leaf module so
-  the code subagent can put the same block in its own prompt.
+  The project block (date, cwd, project instructions) is
+  `projectContextText` in `lib/projectContext.agency`. The code subagent
+  puts the same block in its own prompt. The instructions come from the
+  working directory and each parent up to the folder that holds `.git`,
+  the same walk the Claude Code skills use (`projectFolders`). Each folder
+  gives its `AGENTS.md`, or else its `CLAUDE.md`. The blocks are ordered
+  root first, so the nearest folder's rules are read last. Outside a
+  repository only the working directory is read.
+- `lib/commandPalette.agency`: `promptCommands` holds the commands that
+  ship with the agent and expand to a prompt, such as `/init`. They come
+  last in `slashCommands()`, so a skill or command file of the same name
+  replaces one.
 - `lib/globalInstructions.agency`: reads optional `AGENTS.md` from
   `POLICY_DIR` at startup. This uses the same agent-home override as
   settings and history. Both brains add it before each LLM call with

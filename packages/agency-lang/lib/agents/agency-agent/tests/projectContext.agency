@@ -1,0 +1,88 @@
+/*
+ * Project instructions from the working directory and its parents. The
+ * nodes build a tree under test-output (git-ignored) and remove it before
+ * and after.
+ */
+import { mkdir, remove } from "std::fs"
+
+import {
+  InstructionFile,
+  instructionFolders,
+  instructionsText,
+  loadProjectInstructions,
+ } from "../lib/projectContext.agency"
+
+def tree(): string {
+  return __dirname + "/test-output/project-context"
+}
+
+def clearTree() {
+  remove(tree(), allowedPaths: [__dirname + "/test-output"]) with approve
+}
+
+def addFile(folder: string, name: string, text: string): boolean {
+  const written = write(name, text, dir: folder) with approve
+  return written is success
+}
+
+// repo has `.git` and AGENTS.md; repo/sub has CLAUDE.md; repo/sub/work has
+// AGENTS.md and CLAUDE.md; repo/sub/empty has neither. False when a file
+// could not be written, so a node fails instead of testing an empty tree.
+def buildTree(): boolean {
+  clearTree()
+  const repo = tree() + "/repo"
+  mkdir(repo + "/.git") with approve
+  mkdir(repo + "/sub/work") with approve
+  mkdir(repo + "/sub/empty") with approve
+  const written = [
+    addFile(repo, "AGENTS.md", "root rules"),
+    addFile(repo + "/sub", "CLAUDE.md", "sub rules"),
+    addFile(repo + "/sub/work", "AGENTS.md", "work rules"),
+    addFile(repo + "/sub/work", "CLAUDE.md", "ignored rules"),
+  ]
+  return !written.includes(false)
+}
+
+def load(start: string): InstructionFile[] {
+  return loadProjectInstructions(instructionFolders(start)) with approve
+}
+
+node readsRootFirstNearestLast(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const files = load(tree() + "/repo/sub/work")
+  clearTree()
+  const texts = [file.text for file in files]
+  return JSON.stringify(texts) == JSON.stringify(["root rules", "sub rules", "work rules"])
+}
+
+node skipsFoldersWithNoFile(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const files = load(tree() + "/repo/sub/empty")
+  clearTree()
+  const texts = [file.text for file in files]
+  return JSON.stringify(texts) == JSON.stringify(["root rules", "sub rules"])
+}
+
+node textNamesEachFolder(): boolean {
+  const text = instructionsText(
+    [
+      {
+        dir: "/r",
+        text: "root rules"
+      },
+      {
+        dir: "/r/s",
+        text: "sub rules"
+      },
+    ],
+  )
+  return text == "Instructions from /r:\nroot rules\n\nInstructions from /r/s:\nsub rules"
+}
+
+node noFilesIsEmptyText(): boolean {
+  return instructionsText([]) == ""
+}

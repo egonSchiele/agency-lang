@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { definedVariables, nodeSubprocess } from "./nodeSubprocess.js";
+import { definedVariables, nodeSubprocess, shellEnvironment } from "./nodeSubprocess.js";
 import type { RunOptions } from "../host.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
@@ -20,7 +20,40 @@ async function withTempDir(work: (dir: string) => Promise<void>): Promise<void> 
 
 const parentEnv = () => definedVariables(process.env);
 
+describe("shellEnvironment", () => {
+  it("removes the variables that point git elsewhere or make it run a program", () => {
+    const env = {
+      PATH: "/usr/bin",
+      GIT_DIR: "/elsewhere/.git",
+      GIT_WORK_TREE: "/elsewhere",
+      GIT_INDEX_FILE: "/elsewhere/index",
+      GIT_EXTERNAL_DIFF: "/tmp/run-me",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_GLOBAL: "/tmp/config",
+      "BASH_FUNC_git%%": "() { echo FAKE; }",
+      BASH_ENV: "/tmp/env.sh",
+    };
+    expect(shellEnvironment(env)).toEqual({ PATH: "/usr/bin" });
+  });
+
+  it("keeps the variables that name git's SSH program, and unrelated GIT_ names", () => {
+    const env = {
+      GIT_SSH_COMMAND: "ssh -i ~/.ssh/work",
+      GIT_SSH: "/usr/bin/ssh",
+      GIT_PROXY_COMMAND: "proxy",
+      GIT_AUTHOR_NAME: "Dana",
+    };
+    expect(shellEnvironment(env)).toEqual(env);
+  });
+});
+
 describe("the shell a script runs under", () => {
+  it("does not hand GIT_DIR to the script", async () => {
+    const env = { ...parentEnv(), GIT_DIR: "/elsewhere/.git", GIT_SSH_COMMAND: "ssh -v" };
+    const result = await shell('echo "${GIT_DIR:-unset} ${GIT_SSH_COMMAND:-unset}"', { env });
+    expect(result.stdout).toBe("unset ssh -v\n");
+  });
+
   it("runs scripts with bash: &> redirects both streams into the file", () =>
     withTempDir(async (dir) => {
       const result = await shell("echo hi &> out.txt", { cwd: dir });

@@ -101,12 +101,12 @@ node classifyOneCommand() {
     effectNamesFor("git log"),
     effectNamesFor("echo hi"),
     effectNamesFor("xargs"),
-    effectNamesFor("git log --graph"),
+    effectNamesFor("git log --all"),
     effectNamesFor("/bin/git status"),
     effectNamesFor("FOO=1 git status"),
     effectNamesFor("echo -n hi"),
     effectNamesFor("echo \"quoted\""),
-    effectNamesFor("git diff --staged --stat"),
+    effectNamesFor("git diff --staged --no-index"),
   ]
 }
 
@@ -859,7 +859,7 @@ node grepUnderRecommendedNeedsNoPrompt() {
 
 node grepOutsideTheLaunchDirIsUndecided() {
   const plan = planFor("grep -rn root /etc", FIXTURES)
-  const effect = plan.effects[0]
+  const effect: any = plan.effects[0]
   const intr = { effect: effect.name, data: effect.payload }
   return checkPolicy(recommendedAutoApprovePolicy, intr).type
 }
@@ -1830,4 +1830,352 @@ node listingOfAFileAsksOneQuestion() {
     return "FAILED: ${why}"
   }
   return result.value.includes("one.txt")
+}
+
+// ---------------------------------------------------------------------------
+// git
+//
+// Every node below but the last three goes through `planFor`, `effectsFor`,
+// or `isRefused`, and runs nothing. That matters most for the refusals: a
+// test that called `safeBash("git checkout -- .")` to see it refused would,
+// on the day the refusal broke, discard every uncommitted change in the
+// checkout the tests run in.
+// ---------------------------------------------------------------------------
+
+/** A plan's outcome and each effect's name and payload, planned in a
+  folder that does not exist, so no word names anything on disk. */
+def gitPlan(source: string): any {
+  const plan = planFor(source, "/repo")
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects]]
+}
+
+node gitReads() {
+  return [
+    gitPlan("git status"),
+    gitPlan("git status --porcelain"),
+    gitPlan("git status -sb"),
+    gitPlan("git log"),
+    gitPlan("git log --oneline -n 5 main"),
+    gitPlan("git log -5"),
+    gitPlan("git log --follow -p main"),
+    gitPlan("git diff"),
+    gitPlan("git diff --staged --stat"),
+    gitPlan("git diff main feature"),
+    gitPlan("git diff main..feature"),
+    gitPlan("git diff HEAD~1"),
+    gitPlan("git show"),
+    gitPlan("git show --stat abc123"),
+    gitPlan("git branch"),
+    gitPlan("git branch -a"),
+    gitPlan("git branch --merged main"),
+    gitPlan("git remote -v"),
+    gitPlan("git stash list"),
+  ]
+}
+
+/** In the fixtures folder, where `one.txt` and `two.txt` exist: the
+  outcome, and the first effect's name, ref, and path. */
+def refAndPath(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  if (plan.effects.length == 0) {
+    return [outcomeOf(plan)]
+  }
+  const effect: any = plan.effects[0]
+  if (effect.payload == null) {
+    return [outcomeOf(plan), effect.name]
+  }
+  return [outcomeOf(plan), effect.name, effect.payload.ref ?? null, effect.payload.path ?? null]
+}
+
+node gitRefsAndPaths() {
+  return [
+    refAndPath("git log one.txt"),
+    refAndPath("git log main one.txt"),
+    refAndPath("git log main"),
+    refAndPath("git log -- one.txt"),
+    refAndPath("git log main -- nope.txt"),
+    refAndPath("git log one.txt --"),
+    refAndPath("git diff main one.txt"),
+    refAndPath("git diff main -- one.txt"),
+    refAndPath("git blame one.txt"),
+    refAndPath("git blame -- one.txt"),
+    refAndPath("git blame nope.txt"),
+    refAndPath("git log one.txt two.txt"),
+    refAndPath("git log -- -x"),
+    refAndPath("git log 'one.txt'"),
+  ]
+}
+
+node gitWrites() {
+  return [
+    gitPlan("git add a.py b.py"),
+    gitPlan("git add -A"),
+    gitPlan("git add ."),
+    gitPlan("git add -- a.py"),
+    gitPlan("git commit -m \"fix the bug\""),
+    gitPlan("git commit -am 'x y'"),
+    gitPlan("git commit -q -m x"),
+    gitPlan("git checkout main"),
+    gitPlan("git checkout -b fix/x"),
+    gitPlan("git switch main"),
+    gitPlan("git switch -c fix/x"),
+    gitPlan("git branch newbranch"),
+    gitPlan("git branch -d old1 old2"),
+    gitPlan("git stash"),
+    gitPlan("git stash push -m wip"),
+    gitPlan("git stash pop"),
+    gitPlan("git restore --staged a.py b.py"),
+  ]
+}
+
+// The test that keeps the allowlists honest: every spelling the design
+// says has no rule.
+node gitStaysBroad() {
+  return [
+    planOutcome("git log --all"),
+    planOutcome("git diff --no-index a b"),
+    planOutcome("git diff --output=x"),
+    planOutcome("git diff -- a.py b.py"),
+    planOutcome("git commit --amend -m x"),
+    planOutcome("git commit"),
+    planOutcome("git commit -m \"$MSG\""),
+    planOutcome("git commit -m a -m b"),
+    planOutcome("git commit -m a --message b"),
+    planOutcome("git commit -m x a.py"),
+    planOutcome("git branch -D x"),
+    planOutcome("git branch name start"),
+    planOutcome("git checkout -f main"),
+    planOutcome("git checkout -b fix origin/main"),
+    outcomeOf(planFor("git checkout one.txt", FIXTURES)),
+    planOutcome("git add *.py"),
+    planOutcome("git add -u"),
+    planOutcome("git stash drop"),
+    planOutcome("git stash -u"),
+    planOutcome("git stash pop -m x"),
+    planOutcome("git stash -m a --message b"),
+    planOutcome("git add"),
+    planOutcome("git add ~/x"),
+    planOutcome("git log ~/x"),
+    planOutcome("git show HEAD -- a.py"),
+    planOutcome("git status src"),
+    planOutcome("git switch -- main"),
+    planOutcome("git restore --staged"),
+    planOutcome("git -C /tmp status"),
+    planOutcome("GIT_DIR=/x git status"),
+    planOutcome("/usr/bin/git status"),
+    planOutcome("git push"),
+    planOutcome("git log --format=%h"),
+    planOutcome("git log --author=\"Dana X\""),
+    planOutcome("git"),
+  ]
+}
+
+node gitInChains() {
+  return [
+    gitPlan("git add a.py && git commit -m \"x\""),
+    gitPlan("git status | head -5"),
+    gitPlan("git log | grep fix"),
+    gitPlan("git add a.py && git push"),
+  ]
+}
+
+node gitRestoreStaged() {
+  return [
+    gitPlan("git restore --staged a.py"),
+    gitPlan("git restore --staged -- a.py"),
+    refusedFor("git restore a.py"),
+    refusedFor("git restore -- a.py"),
+    refusedFor("git restore --staged --worktree a.py"),
+    refusedFor("git restore --staged a.py"),
+    refusedFor("git restore --staged -- a.py"),
+  ]
+}
+
+node gitCheckoutRefusals() {
+  return [
+    refusedFor("git checkout main src/utils.py"),
+    refusedFor("git checkout main \"utils.py\""),
+    refusedFor("git checkout HEAD~1 ."),
+    refusedFor("git checkout -b fix origin/main"),
+    refusedFor("git checkout -B fix origin/main"),
+    refusedFor("git checkout main"),
+    refusedFor("git checkout -b fix"),
+  ]
+}
+
+// The text each plan runs. safeBash writes a git command itself, so this
+// is where the two holes are pinned: a `--` after the one ref of a
+// checkout, and a diff behind the repository check with its refs and
+// paths on either side of a `--`.
+node gitRunsWhatItAsked() {
+  return [
+    executionCommand("git status"),
+    executionCommand("git checkout '*.py'"),
+    executionCommandIn("git log one.txt", FIXTURES),
+    executionCommand("git diff /dev/null /etc/hosts"),
+    executionCommand("git diff main | head -5"),
+    planOutcome("git diff -- a.py b.py"),
+    gitPlan("git diff > out.patch"),
+    executionCommand("git diff > out.patch"),
+    outcomeAndNames("git log > /etc/hosts"),
+    executionCommand("git log -n5"),
+    executionCommand("git log -n 5"),
+    executionCommand("git log -5"),
+    executionCommand("git log --max-count=5"),
+    executionCommand("git commit -am \"x\""),
+    executionCommand("git log --author=dana"),
+    executionCommand("git commit -m \"it's a fix\""),
+    executionCommand("git commit -m \"~/x\""),
+    executionCommand("git add '~/x'"),
+    executionCommand("git add -- a.py"),
+    executionCommand("git stash"),
+    executionCommand("git stash push -m wip"),
+    executionCommand("git branch --merged main -a"),
+    executionCommand("git status --porcelain=v1"),
+    executionCommand("git checkout -b fix/x"),
+    executionCommand("git switch main"),
+  ]
+}
+
+def outcomeAndNames(source: string): any {
+  const plan = planFor(source, "/repo")
+  return [outcomeOf(plan), [effect.name for effect in plan.effects]]
+}
+
+// `git branch -v newname` creates a branch, so a listing flag beside a
+// name must have no rule.
+node gitBranchShapes() {
+  return [
+    outcomeAndNames("git branch"),
+    outcomeAndNames("git branch -v"),
+    outcomeAndNames("git branch -a -v"),
+    outcomeAndNames("git branch -r"),
+    outcomeAndNames("git branch --show-current"),
+    outcomeAndNames("git branch -v newname"),
+    outcomeAndNames("git branch --list newname"),
+    outcomeAndNames("git branch -a newname"),
+    outcomeAndNames("git branch --merged"),
+    outcomeAndNames("git branch --merged main"),
+    outcomeAndNames("git branch --merged main other"),
+    outcomeAndNames("git branch -a --merged main"),
+    outcomeAndNames("git branch newname"),
+    outcomeAndNames("git branch newname start"),
+    outcomeAndNames("git branch -d a"),
+    outcomeAndNames("git branch --delete a b"),
+    outcomeAndNames("git branch -d"),
+    outcomeAndNames("git branch -d -v a"),
+    outcomeAndNames("git branch -d --merged a"),
+    outcomeAndNames("git branch -- newname"),
+  ]
+}
+
+node gitReadRuns() {
+  const result = safeBash("git log -1 --oneline")
+  if (result is failure(why)) {
+    return "FAILED"
+  }
+  return result.value.length > 0
+}
+
+// Rejected, so nothing runs and the test cannot commit to the repository
+// it runs in.
+node gitWriteIsAsked() {
+  const result = safeBash("git commit -m \"a test commit\"")
+  if (isFailure(result)) {
+    return result.rejected
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+/** A repository of its own for the test that runs real git. */
+static const GIT_FIXTURE = __dirname + "/stdlib/__safebash_git__"
+
+/** A folder with no repository above it. It has to be outside the
+  checkout, because every folder under the checkout has the checkout's
+  repository above it. */
+static const GIT_NO_REPO = "/tmp/__safebash_git_norepo__"
+
+/** A bare repository: git sees a repository there, and no work tree. */
+static const GIT_BARE = __dirname + "/stdlib/__safebash_git_bare__"
+
+static const GIT_MARKER = "MARKER-ONLY-IN-THE-OUTSIDE-FILE"
+
+/** Run a command through safeBash in a folder, after checking the plan
+  is narrow. Without that check `with approve` would approve a std::bash
+  for the model's own text, and a case would pass while testing nothing. */
+def runNarrow(source: string, dir: string): any {
+  if (outcomeOf(planFor(source, dir)) != "narrow") {
+    return ["NOT-NARROW"]
+  }
+  const result = safeBash(source, cwd: dir) with approve
+  if (result is failure(why)) {
+    return ["failure", why]
+  }
+  return ["success", result.value]
+}
+
+def fileText(dir: string, name: string): string {
+  const result = bash("cat " + name, cwd: dir) with approve
+  return result.stdout
+}
+
+// The claims the git rules rest on are claims about git: what it does
+// with a `--`, with a path outside the repository, with a pathspec, with
+// no repository at all, with a repository that has no work tree. No plan
+// test can check those, so this runs the real thing in folders it makes.
+node gitRunsSafely() {
+  remove(GIT_FIXTURE) with approve
+  mkdir(GIT_FIXTURE) with approve
+  remove(GIT_NO_REPO) with approve
+  mkdir(GIT_NO_REPO) with approve
+  remove(GIT_BARE) with approve
+  mkdir(GIT_BARE) with approve
+  bash("git init -q --bare", cwd: GIT_BARE) with approve
+  bash("printf '" + GIT_MARKER + "\\n' > outside.txt", cwd: GIT_NO_REPO) with approve
+  const setup = "git init -q -b main && printf 'a = 1\\n' > a.py && printf 'b = 1\\n' > b.py && git add a.py b.py && git -c user.name=Test -c user.email=test@example.com commit -q -m 'Add a and b' && printf 'a = 2\\n' > a.py && printf 'b = 2\\n' > b.py"
+  bash(setup, cwd: GIT_FIXTURE) with approve
+  const outside = GIT_NO_REPO + "/outside.txt"
+
+  const pathspec = runNarrow("git checkout '*.py'", GIT_FIXTURE)
+  const outsideDiff = runNarrow("git diff /dev/null " + outside, GIT_FIXTURE)
+  const checkout = runNarrow("git checkout main", GIT_FIXTURE)
+  const log = runNarrow("git log --oneline", GIT_FIXTURE)
+  const redirected = runNarrow("git diff > out.patch", GIT_FIXTURE)
+  const noRepository = runNarrow("git diff /dev/null " + outside, GIT_NO_REPO)
+  const bare = runNarrow("git diff /dev/null " + outside, GIT_BARE)
+  const gitFolder = runNarrow("git diff /dev/null " + outside, GIT_FIXTURE + "/.git")
+
+  const seen = [
+    // The pathspec failed, named the model's own text, and changed no file.
+    pathspec[0],
+    pathspec[1].includes("\"command\":\"git checkout '*.py'\""),
+    pathspec[1].includes("core.fsmonitor"),
+    fileText(GIT_FIXTURE, "a.py"),
+    fileText(GIT_FIXTURE, "b.py"),
+    // A file outside the repository was not printed.
+    outsideDiff[0],
+    outsideDiff[1].includes(GIT_MARKER),
+    checkout[0],
+    log[0],
+    log[1].includes("Add a and b"),
+    redirected[0],
+    fileText(GIT_FIXTURE, "out.patch").includes("+a = 2"),
+    // With no repository above the folder, the diff did not run.
+    noRepository[0],
+    noRepository[1].includes("not a git repository"),
+    noRepository[1].includes(GIT_MARKER),
+    // In a bare repository, and inside a `.git` folder, git sees a
+    // repository and no work tree, and the diff did not run either.
+    bare[0],
+    bare[1].includes("must be run in a work tree"),
+    bare[1].includes(GIT_MARKER),
+    gitFolder[0],
+    gitFolder[1].includes("must be run in a work tree"),
+    gitFolder[1].includes(GIT_MARKER),
+  ]
+  remove(GIT_FIXTURE) with approve
+  remove(GIT_NO_REPO) with approve
+  remove(GIT_BARE) with approve
+  return seen
 }

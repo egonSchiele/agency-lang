@@ -15,7 +15,7 @@
       "nodeName": "endOfFlagsAndInnerTilde",
       "description": "What tarsec 0.5.7 lets through. `--` is a flag no table lists, so ls, echo, and cd with one are broad. A program with no rule takes `--` as an argument, so `pnpm test -- --watch` asks std::exec. A `~` or `^` inside a word is plain text: a redirect to `a~b` writes a file of that name. A `~` after `=` is still not parsed.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::exec\"]],[\"test\",\"--\",\"--watch\"],[\"write\",\"hi\\n\",\"a~b\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"HEAD^\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::exec\"]],[\"test\",\"--\",\"--watch\"],[\"write\",\"hi\\n\",\"a~b\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"HEAD^\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"narrow\",[\"std::git::diff\"]],[\"broad\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -68,9 +68,9 @@
     },
     {
       "nodeName": "rebuiltVersusOriginal",
-      "description": "A narrow plan runs the tree it classified (whitespace normalized); a broad plan runs the caller's text verbatim.",
+      "description": "A narrow plan runs the tree it classified (whitespace normalized, and a git command written by safeBash with the git tools' fixed flags); a broad plan runs the caller's text verbatim.",
       "input": "",
-      "expectedOutput": "[\"git status\",\"xargs    -0\"]",
+      "expectedOutput": "[\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status\",\"xargs    -0\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -412,7 +412,7 @@
       "nodeName": "newShapes",
       "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::exec\"]],null,\"git status | git log\"]",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::exec\"]],null,\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status | git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1298,6 +1298,150 @@
           "expectedMessage": "Are you sure you want to list this directory?"
         }
       ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitReads",
+      "description": "Each git read asks the effect its git tool raises, with the payload filled from the command's own words. A flag that only changes how the result is shown, or shows less, keeps the rule.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::git::status\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::status\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::status\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::log\",{\"cwd\":\"/repo\",\"ref\":\"\",\"path\":\"\"}]]],[\"narrow\",[[\"std::git::log\",{\"cwd\":\"/repo\",\"ref\":\"main\",\"path\":\"\"}]]],[\"narrow\",[[\"std::git::log\",{\"cwd\":\"/repo\",\"ref\":\"\",\"path\":\"\"}]]],[\"narrow\",[[\"std::git::log\",{\"cwd\":\"/repo\",\"ref\":\"main\",\"path\":\"\"}]]],[\"narrow\",[[\"std::git::diff\",{\"cwd\":\"/repo\",\"ref\":\"\",\"ref2\":\"\",\"staged\":false,\"path\":\"\"}]]],[\"narrow\",[[\"std::git::diff\",{\"cwd\":\"/repo\",\"ref\":\"\",\"ref2\":\"\",\"staged\":true,\"path\":\"\"}]]],[\"narrow\",[[\"std::git::diff\",{\"cwd\":\"/repo\",\"ref\":\"main\",\"ref2\":\"feature\",\"staged\":false,\"path\":\"\"}]]],[\"narrow\",[[\"std::git::diff\",{\"cwd\":\"/repo\",\"ref\":\"main..feature\",\"ref2\":\"\",\"staged\":false,\"path\":\"\"}]]],[\"narrow\",[[\"std::git::diff\",{\"cwd\":\"/repo\",\"ref\":\"HEAD~1\",\"ref2\":\"\",\"staged\":false,\"path\":\"\"}]]],[\"narrow\",[[\"std::git::show\",{\"cwd\":\"/repo\",\"ref\":\"HEAD\"}]]],[\"narrow\",[[\"std::git::show\",{\"cwd\":\"/repo\",\"ref\":\"abc123\"}]]],[\"narrow\",[[\"std::git::branchList\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::branchList\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::branchList\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::remoteList\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::stashList\",{\"cwd\":\"/repo\"}]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitRefsAndPaths",
+      "description": "Words before a `--` are refs and words after it are paths, whether or not they exist. With no `--`, a word that names a file or folder is a path and any other word is a ref. A word after `--` that looks like a flag has no rule.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",\"std::git::log\",\"\",\"one.txt\"],[\"narrow\",\"std::git::log\",\"main\",\"one.txt\"],[\"narrow\",\"std::git::log\",\"main\",\"\"],[\"narrow\",\"std::git::log\",\"\",\"one.txt\"],[\"narrow\",\"std::git::log\",\"main\",\"nope.txt\"],[\"narrow\",\"std::git::log\",\"one.txt\",\"\"],[\"narrow\",\"std::git::diff\",\"main\",\"one.txt\"],[\"narrow\",\"std::git::diff\",\"main\",\"one.txt\"],[\"narrow\",\"std::git::blame\",null,\"one.txt\"],[\"narrow\",\"std::git::blame\",null,\"one.txt\"],[\"broad\",\"std::bash\"],[\"broad\",\"std::bash\"],[\"broad\",\"std::bash\"],[\"narrow\",\"std::git::log\",\"\",\"one.txt\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitWrites",
+      "description": "Each git write asks the effect its git tool raises. `commit -a` asks for the staging as well. `checkout -b` asks std::git::switch with create.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::git::add\",{\"cwd\":\"/repo\",\"paths\":[\"a.py\",\"b.py\"],\"all\":false}]]],[\"narrow\",[[\"std::git::add\",{\"cwd\":\"/repo\",\"paths\":[],\"all\":true}]]],[\"narrow\",[[\"std::git::add\",{\"cwd\":\"/repo\",\"paths\":[\".\"],\"all\":false}]]],[\"narrow\",[[\"std::git::add\",{\"cwd\":\"/repo\",\"paths\":[\"a.py\"],\"all\":false}]]],[\"narrow\",[[\"std::git::commit\",{\"cwd\":\"/repo\",\"message\":\"fix the bug\"}]]],[\"narrow\",[[\"std::git::add\",{\"cwd\":\"/repo\",\"paths\":[],\"all\":true}],[\"std::git::commit\",{\"cwd\":\"/repo\",\"message\":\"x y\"}]]],[\"narrow\",[[\"std::git::commit\",{\"cwd\":\"/repo\",\"message\":\"x\"}]]],[\"narrow\",[[\"std::git::checkout\",{\"cwd\":\"/repo\",\"target\":\"main\",\"force\":false}]]],[\"narrow\",[[\"std::git::switch\",{\"cwd\":\"/repo\",\"branch\":\"fix/x\",\"create\":true}]]],[\"narrow\",[[\"std::git::switch\",{\"cwd\":\"/repo\",\"branch\":\"main\",\"create\":false}]]],[\"narrow\",[[\"std::git::switch\",{\"cwd\":\"/repo\",\"branch\":\"fix/x\",\"create\":true}]]],[\"narrow\",[[\"std::git::branchCreate\",{\"cwd\":\"/repo\",\"branch\":\"newbranch\"}]]],[\"narrow\",[[\"std::git::branchDelete\",{\"cwd\":\"/repo\",\"branch\":\"old1\",\"force\":false}],[\"std::git::branchDelete\",{\"cwd\":\"/repo\",\"branch\":\"old2\",\"force\":false}]]],[\"narrow\",[[\"std::git::stashPush\",{\"cwd\":\"/repo\",\"message\":\"\"}]]],[\"narrow\",[[\"std::git::stashPush\",{\"cwd\":\"/repo\",\"message\":\"wip\"}]]],[\"narrow\",[[\"std::git::stashPop\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::restore\",{\"cwd\":\"/repo\",\"paths\":[\"a.py\",\"b.py\"],\"staged\":true}]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitStaysBroad",
+      "description": "Every git spelling with no rule asks std::bash: a flag that shows more or does something else, a second message, a bare `git add`, an unquoted `~`, a start point, a forced form, a glob, a path where the effect has no field for one, a leading flag or assignment, and a subcommand with no effect.",
+      "input": "",
+      "expectedOutput": "[\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitInChains",
+      "description": "A chain of recognized git commands is narrow and asks each effect in order. A pipe into a filter needs only the git question. One command with no rule makes the whole string broad.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::git::add\",{\"cwd\":\"/repo\",\"paths\":[\"a.py\"],\"all\":false}],[\"std::git::commit\",{\"cwd\":\"/repo\",\"message\":\"x\"}]]],[\"narrow\",[[\"std::git::status\",{\"cwd\":\"/repo\"}]]],[\"narrow\",[[\"std::git::log\",{\"cwd\":\"/repo\",\"ref\":\"\",\"path\":\"\"}]]],[\"broad\",[[\"std::bash\",null]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitRestoreStaged",
+      "description": "`git restore --staged` takes files out of the index and has a rule, with or without a `--`. Any other restore discards work and is refused.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::git::restore\",{\"cwd\":\"/repo\",\"paths\":[\"a.py\"],\"staged\":true}]]],[\"narrow\",[[\"std::git::restore\",{\"cwd\":\"/repo\",\"paths\":[\"a.py\"],\"staged\":true}]]],true,true,true,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitCheckoutRefusals",
+      "description": "`git checkout` with a second word beside the ref overwrites that file, so it is refused, whatever tag the parser gave the word. `-b` and `-B` take a start point and are not refused.",
+      "input": "",
+      "expectedOutput": "[true,true,true,false,false,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitRunsWhatItAsked",
+      "description": "safeBash writes the git command it runs: the git tools' fixed flags, the checked flags, and a `--` between refs and paths. A diff runs behind a check that git sees a work tree. Redirects are kept and asked about. Every spelling of a flag runs as the built one, and a value is always quoted.",
+      "input": "",
+      "expectedOutput": "[\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks checkout '*.py' --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log -- one.txt\",\"(git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks rev-parse --show-toplevel > /dev/null && git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks diff /dev/null -- /etc/hosts)\",\"(git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks rev-parse --show-toplevel > /dev/null && git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks diff main --) | head -5\",\"broad\",[\"narrow\",[[\"std::git::diff\",{\"cwd\":\"/repo\",\"path\":\"\",\"ref\":\"\",\"ref2\":\"\",\"staged\":false}],[\"std::write\",{\"content\":\"\",\"dir\":\"/repo\",\"filename\":\"out.patch\",\"mode\":\"overwrite\"}]]],\"(git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks rev-parse --show-toplevel > /dev/null && git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks diff -- > out.patch)\",[\"narrow\",[\"std::git::log\",\"std::write\"]],\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log -n '5' --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log -n '5' --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log -n '5' --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --max-count=5 --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks commit -a -m 'x'\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --author=dana --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks commit -m 'it'\\\\''s a fix'\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks commit -m '~/x'\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks add -- '~/x'\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks add -- a.py\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks stash push\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks stash push -m 'wip'\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks branch -a --merged main\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status --porcelain=v1\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks checkout -b fix/x\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks switch main\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitBranchShapes",
+      "description": "`git branch` is a listing, a new branch, or a delete. A listing flag beside a name has no rule, because git would create the branch. Only `--merged` and `--no-merged` take a word.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[\"std::git::branchList\"]],[\"narrow\",[\"std::git::branchList\"]],[\"narrow\",[\"std::git::branchList\"]],[\"narrow\",[\"std::git::branchList\"]],[\"narrow\",[\"std::git::branchList\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::git::branchList\"]],[\"narrow\",[\"std::git::branchList\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::git::branchList\"]],[\"narrow\",[\"std::git::branchCreate\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::git::branchDelete\"]],[\"narrow\",[\"std::git::branchDelete\",\"std::git::branchDelete\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitReadRuns",
+      "description": "A git read with flags runs after one std::git::log approval, and git's output comes back.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Show git log"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitWriteIsAsked",
+      "description": "A git commit through the shell asks std::git::commit. Rejected here, so nothing is committed, and the failure is marked rejected.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Commit the staged changes"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitRunsSafely",
+      "description": "Real git, in folders the test makes. A pathspec given to checkout fails and changes no file, and the failure names the model's text. A diff of a file outside the repository prints none of it, inside a repository, where there is none, in a bare repository, and inside a `.git` folder. A checkout, a log, and a redirected diff work.",
+      "input": "",
+      "expectedOutput": "[\"failure\",true,false,\"a = 2\\n\",\"b = 2\\n\",\"failure\",false,\"success\",\"success\",true,\"success\",true,\"failure\",true,false,\"failure\",true,false,\"failure\",true,false]",
       "evaluationCriteria": [
         {
           "type": "exact"

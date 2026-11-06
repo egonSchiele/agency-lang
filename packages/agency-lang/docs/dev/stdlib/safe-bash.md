@@ -34,7 +34,9 @@ bash runs the original text.
   without adding information.
 - **Rebuilt text when narrow.** When every command was recognized, the
   text that runs is rendered from the tree that was classified
-  (`astToBash`), so a parser bug degrades to running what was read.
+  (`astToBash`), so a parser bug degrades to running what was read. Two
+  commands in that tree are written by the classifier: a `cd` names the
+  folder it resolved, and a git command is the one `gitCommand` built.
 - **Every shell spawn raises at least one effect.** A string of nothing
   but echoes still raises `std::bash` (`bashPlan` substitutes it for an
   empty effect list), so the effect log is a complete audit of shell
@@ -51,10 +53,21 @@ A plan ends one of three ways: refused, shell-free, or handed to bash.
 
 `refuse`: the refuse wall (`isRefused`) matches `rm`, `rmdir`, `dd`,
 `shred`, `mkfs`, `truncate`, and the destructive git spellings, by command
-word including the last part of a path. The git spellings are `clean`,
-`restore`, `reset --hard`, and `checkout` with a `.` argument or with a
-`--` (`git checkout -- utils.py`), which says the words after it are
-paths to discard. Nothing is raised. The wall is
+word including the last part of a path. The git spellings are:
+
+- `clean`.
+- `reset --hard`.
+- `restore`, unless its only flag is `--staged`, which takes files out of
+  the index and leaves the working tree alone. A `--` before the paths
+  does not count as a flag.
+- `checkout` with a `.` argument, with a `--` (`git checkout --
+  utils.py`), or with a second word beside the ref (`git checkout main
+  utils.py`). Each discards or overwrites files. `-b` and `-B` take a
+  second word as a start point and are not refused. The count is of every
+  argument that is not a flag (`plainWordCount`), because the parser tags
+  a word with a slash as a path and a quoted word as quoted.
+
+Nothing is raised. The wall is
 friction against the obvious spelling; `find -delete` gets past it and is
 approvable under `std::bash`, which is where the control lives.
 
@@ -68,9 +81,8 @@ chain of such commands joined by `;`, `&&`, or `||` runs them in process
 in order (see "Chains in process" below). An `agency <sub> <file>` line
 runs in-process through `std::agency`.
 
-`bash`: everything else. Narrow when every command was recognized
-(`git status`, `git log`, `git diff`, `git diff --staged`, a grep of one
-named file, a read of named files, a listing of named folders, a find, a
+`bash`: everything else. Narrow when every command was recognized: a git
+command with a rule, see "git" below; a grep of one named file, a read of named files, a listing of named folders, a find, a
 program safeBash has no rule for (`std::exec`), a redirect contributing
 `std::write` or `std::read`), broad otherwise.
 
@@ -137,7 +149,20 @@ every `BASH_FUNC_*` (an exported function that shadows a program, so
 mode, where macOS bash prints `echo -n hi` as `-n hi`), `SHELLOPTS` and
 `BASHOPTS` (shell options at startup, such as `xpg_echo`), `CDPATH`
 (sends `cd target` somewhere else), and `GLOBIGNORE` (drops names from a
-glob). The list is `SHELL_ENV_REMOVED` in
+glob). It also removes the variables that change what a `git` in the
+script does: the ones that point git at another repository (`GIT_DIR`,
+`GIT_WORK_TREE`, `GIT_INDEX_FILE`, and the rest of `GIT_RETARGET_ENV`),
+and the ones that name a program git runs or config it loads
+(`GIT_EXTERNAL_DIFF`, `GIT_EDITOR`, `GIT_CONFIG*`, and the rest of
+`GIT_CODE_ENV`). With `GIT_DIR` set, the `cwd` in a git payload would be
+false. The variables that name git's SSH program (`GIT_SSH_COMMAND`,
+`GIT_SSH`, `GIT_PROXY_COMMAND`) are kept, because a person sets those on
+purpose so that `git push` uses a particular key. `GIT_CONFIG_GLOBAL`
+and `GIT_CONFIG_NOSYSTEM` are removed with the rest of the prefix, so a
+person who keeps their git config where `GIT_CONFIG_GLOBAL` points will
+see git ignore it in the shell, as the git tools already do. The git
+lists live in `lib/host/gitEnvironment.ts`, and the git tools remove the
+same entries plus the SSH ones. The list is `SHELL_ENV_REMOVED` in
 `lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
 programs in the child read options anywhere on the line. No plan
 changes, because the flag tables that care set `optionsFirst`.
@@ -227,6 +252,24 @@ reason reaches the model as `Error: <reason>. The call failed. You may
 call this tool again.`, and the model takes the user's words for a tool
 error. The lint rule AL0004 reports that rebuild shape anywhere in the
 stdlib (see `docs/dev/agents/tool-loop-guards.md`).
+
+## A failure names the model's text
+
+When a command that ran through bash exits non-zero, the failure is JSON
+with `command`, `exitCode`, `stderr`, and `stdout`. `command` is the text
+the model wrote, not the text that ran. The two differ for a `cd`, which
+runs with the folder the classifier resolved, and for a git command,
+which runs as the one `gitCommand` built:
+
+```
+{"command":"git checkout '*.py'","exitCode":128,"stderr":"fatal: invalid reference: *.py", ...}
+```
+
+Git commands fail often, and a model that read the built text could
+write it next time. `git -c ...` has no rule, because the first word
+after `git` is a flag, so the copy would ask `std::bash`. `runBash`
+already holds the model's text as `label`, for the trace, and passes it
+to `exitFailure` and to the "was not run" message.
 
 ## Pipelines, dup redirects, and glob words
 
@@ -858,6 +901,254 @@ covers every file named after them. `rg --pre=<program>` runs
 another program for each file, so a saved rule for `rg` covers that
 too.
 
+## git
+
+```
+git log --oneline -n 5 src
+```
+
+This asks `std::git::log` with `ref: ""` and `path: "src"`, the effect the
+`gitLog` tool raises, and runs:
+
+```
+git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --oneline -n '5' -- src
+```
+
+### The rule
+
+A git command is recognized only when an existing `std::git::*` effect
+describes it completely. The rule fills that effect's payload from the
+command's own words. So a policy that approves the `gitCommit` tool in a
+project approves `git commit -m "..."` there, with no change to the
+policy. A command with no such effect (`git push`, `git revert`, `git
+rev-parse`) has no rule and asks `std::bash`.
+
+A flag is allowed only when it leaves the payload true. A flag that
+changes how the result is shown (`--oneline`, `--stat`) or shows less of
+it (`-n 5`, `--author=dana`) is allowed. A flag that shows more or does
+something else is not: `--all` on log shows every branch, `--no-index`
+on diff compares files outside the repository, and `--output` on diff
+writes a file. The tables are allowlists, and the comment above
+`GIT_VERBS` names what was left out and why.
+
+### What is recognized
+
+Reads:
+
+| Subcommand | Words | Effect |
+|---|---|---|
+| `status` | none | `status { cwd }` |
+| `log` | at most one ref and one path | `log { cwd, ref, path }` |
+| `diff` | at most two refs and one path | `diff { cwd, ref, ref2, staged, path }` |
+| `show` | at most one ref | `show { cwd, ref }`, `HEAD` when none is given |
+| `blame` | exactly one path | `blame { cwd, path }` |
+| `branch`, with a listing flag or alone | none, or one after `--merged` or `--no-merged` | `branchList { cwd }` |
+| `remote`, `remote -v` | none | `remoteList { cwd }` |
+| `stash list` | | `stashList { cwd }` |
+
+Writes:
+
+| Command | Effect |
+|---|---|
+| `add <paths>`, `add -A` | `add { cwd, paths, all }`; a bare `git add` stages nothing and has no rule |
+| `commit -m <msg>` | `commit { cwd, message }` |
+| `commit -am <msg>` | `add { cwd, paths: [], all: true }`, then `commit` |
+| `checkout <ref>` | `checkout { cwd, target, force: false }` |
+| `checkout -b <name>`, `switch -c <name>` | `switch { cwd, branch, create: true }` |
+| `switch <name>` | `switch { cwd, branch, create: false }` |
+| `branch <name>` | `branchCreate { cwd, branch }` |
+| `branch -d <names>` | one `branchDelete { cwd, branch, force: false }` per name |
+| `stash`, `stash push`, with one `-m` | `stashPush { cwd, message }` |
+| `stash pop` | `stashPop { cwd }` |
+| `restore --staged <paths>` | `restore { cwd, paths, staged: true }` |
+
+`commit -a` asks for the staging as well as the commit. The add's `all:
+true` describes staging everything, which is slightly more than `-a`
+does, so the approval covers what happens.
+
+Not recognized, on purpose: a forced form (`branch -D`, `checkout -f`),
+`commit --amend` and `--no-verify`, a start point (`branch name start`,
+`checkout -b name start`), `add -u`, `stash -u` and `stash drop`, a path
+on `show` or `status`, and a ref on `blame`. For the last three the
+effect has no field to hold the word.
+
+### safeBash writes the git command it runs
+
+Every other narrow command runs as the text that was classified, printed
+back from the tree. A git command does not. Git reads a command line
+with rules of its own, and they can disagree with the classifier in ways
+that matter:
+
+- `git diff /dev/null /Users/me/.ssh/id_rsa` prints the file. Given two
+  words, one of them a path outside the repository, git compares the two
+  files, as `git diff --no-index` does. No flag is needed.
+- `git checkout '*.py'` discards the changes to every Python file. When
+  the word is not a ref, git reads it as a pathspec, a pattern it matches
+  itself. The quotes make it literal text to bash and to safeBash.
+
+A `--` settles both. Git reads the words before it as refs and the words
+after it as paths, and fails when a word is not what its side says: `git
+diff /dev/null -- <file>` is "bad revision", and `git checkout '*.py' --`
+is "invalid reference". So `gitCommand` assembles the command:
+
+```
+git <fixed flags> <subcommand> <flags> <refs> <names> -- <paths>
+```
+
+1. The fixed flags are `GIT_HARDENING_FLAGS`, the list the git tools put
+   on every git command (`lib/stdlib/gitCore.ts`), read through
+   `_gitHardeningFlags` so the two paths cannot drift. They turn off
+   `core.fsmonitor`, a setting in the repository's config that names a
+   program git runs on `git status`.
+2. The flags are built from what `splitFlags` returned, and are not
+   copied from the model's text. `splitFlags` returns checked data, a
+   list of plain flags and a list of flags with values, and does not keep
+   the words. So `-n5`, `-n 5`, and `-5` all run as `-n '5'`. A letter's
+   value is written as a quoted word of its own, because a bare `~/x` in
+   a commit message would be expanded by bash. A long flag's value is
+   part of the flag word, and the printer quotes the whole word when the
+   value needs it.
+3. The refs, names, and paths are the parser's own words, kept as
+   `GitWord` beside their text. The text goes in the payload. The word
+   goes in the command, so the model's quoting is kept and a quoted
+   `'~/x'` stays quoted. An unquoted word that starts with `~` has no
+   rule (`gitWordsOf`): bash would expand it, so the payload's `~/x`
+   would not be the path git gets, and the git tools read the same text
+   as a folder named `~`. `git add ~/x` asks `std::bash`.
+4. The `--` is written whenever the subcommand's words are refs or paths,
+   including when there are no paths. `git checkout main` runs as `git
+   ... checkout main --`. A subcommand whose words are names (`switch`,
+   `branch`) gets none.
+5. The model's redirects stay on the command, and `redirectEffect` asks
+   about them as for any other verb.
+
+The result is a `SimpleCommand`, the parser's type, so `astToBash` prints
+it and quotes what needs quoting.
+
+`stash` writes its action right after the subcommand, before the flags
+(`git stash push -m 'wip'`): after them, git would read `push` as a path
+to stash. `branch` writes `--merged` last, right before the branch it
+compares with.
+
+### A diff runs behind a repository check
+
+Outside a repository `git diff` ignores the `--` and compares files. The
+model chooses the working directory with `cd`, so the `--` alone is not
+enough for `diff`. A recognized `git diff` runs as:
+
+```
+(git <fixed flags> rev-parse --show-toplevel > /dev/null && git <fixed flags> diff <flags> <refs> -- <paths>)
+```
+
+When git sees no work tree, `rev-parse` fails and the diff never runs:
+"not a git repository" outside one, and "this operation must be run in
+a work tree" in a bare repository or inside a `.git` folder.
+`--is-inside-work-tree` would not do, because in those two it prints
+`false` and exits 0. The parentheses make the pair one
+unit, which the parser allows as a stage of a pipe, so `git diff main |
+head` works.
+
+The check runs when the command runs, and git answers it. Looking for a
+`.git` folder while planning would be a second guess about what git will
+do: an empty folder named `.git` passes that check, and git still sees no
+repository. No other subcommand needs the check, because each fails by
+itself outside a repository. `gitRunsSafely` runs the guarded diff in a
+folder with no repository above it, in a bare repository, and inside a
+`.git` folder.
+
+`diff` takes at most one path, and that limit is a safety rule. Two
+paths after `--` is the one spelling that still compares files outside
+the repository, so `git diff -- a.py b.py` has no rule.
+
+### Refs and paths
+
+`log`, `diff`, `show`, `blame`, and `checkout <ref>` read their words as
+refs and paths (`GitWords` is `refsAndPaths`).
+
+- With a `--`, the words before it are refs and the words after it are
+  paths, whether or not they exist. The parser returns `--` as a flag
+  word, so `gitArgsFor` splits the words at it before `splitFlags` sees
+  them.
+- With no `--`, a word that names a file or folder on disk is a path, and
+  any other word is a ref (`refsAndPathsByDisk`). The check is
+  `resolveTarget` on the parser's word, the function that decides whether
+  `cat <word>` reads a file.
+
+Because the command that runs has a `--`, a wrong sort cannot make git do
+something other than what was asked. It can make git fail, or answer a
+different question than the model meant, in three cases:
+
+- A word that is both a branch and a folder, such as `docs`. safeBash
+  asks about the path and runs `git log -- docs`. Plain git would have
+  refused the command as ambiguous. The model writes `git log docs --`
+  for the branch.
+- A path that no longer exists. `git log removed.py` is sorted as a ref,
+  and git fails with "bad revision". The model writes `git log --
+  removed.py`.
+- A path made earlier in the same line, since the plan is made before
+  anything runs (see "Resolving the path when the plan is made").
+
+`checkout <ref>` allows exactly one ref and no path. A word that names a
+file is a path, so `git checkout utils.py`, which discards the changes
+to that file, has no rule. A word that is not on disk and is not a real
+ref makes git fail, because of the `--`. So a discard never runs under a
+`std::git::checkout` approval. `checkout -b <name>` is read first, as a
+name, so `git checkout -b src` works beside a `src` folder.
+
+### One path into the rules
+
+`simpleCommandRule` is the one function every simple command is
+classified by. It makes four checks before it looks at the verb: there is
+a command word, the word is literal (`/bin/git` is not `git`), there is
+no leading assignment (`GIT_DIR=/x git status`), and the redirects have
+effects. It returns the effects and the command to run. For every verb
+but git the command is the one it was given.
+
+`effectsFor` is a call to `simpleCommandRule` that returns the effects.
+`classifySimple` calls it and passes on both. `gitEffects` has no other
+caller, so no path reaches a git rule without the four checks. A second
+caller would have to repeat them, and one that forgot the redirects would
+let `git log > ~/.zshrc` ask only `std::git::log`.
+
+### The table and the four functions
+
+Nine subcommands have one shape, and each is a row of `GIT_VERBS`: its
+flags, how its words are read, and how many refs, paths, and names it
+takes. `gitRowRule` checks any row, and `gitPayloads` fills the payload
+with one `match` arm per subcommand. Adding one is a row and an arm.
+
+For `branch`, `stash`, `commit`, and `checkout` the allowed words depend
+on the flags, so each has a function of its own, using the same helpers.
+`branch` is the one to be careful with: `git branch -v newname` creates a
+branch, so a listing flag beside a name has no rule, and only `--merged`
+and `--no-merged` take a word.
+
+### What git itself can run
+
+Approving a git effect approves running the `git` program, and git can
+run other programs. The shell path and the git tools compare like this:
+
+| | Git tool | Git through safeBash |
+|---|---|---|
+| `core.fsmonitor`, the pager, optional locks | fixed flags | the same fixed flags |
+| Refs and paths | separated with `--` | separated with `--` |
+| `git diff` outside a repository | compares files | does not run |
+| `GIT_DIR` and the other variables | removed | removed (see "Which shell runs the text") |
+| Time limit | 30 seconds | none |
+| Output size | capped at 2 MB | saved by the spill tools past a preview |
+| `destructive` mark on a write | yes | no (see "Why a bash call is never destructive") |
+
+On both paths the repository's own config still decides what runs for
+hooks on commit and checkout, `diff.external`, textconv filters, and
+`gpg.program`. A policy that approves a git effect in a repository
+approves whatever that repository's config names for those. That makes a
+write under `.git` the thing to guard, and `**` in a policy rule never
+matches a dot-led folder (`docs/dev/agents/approval-policies.md`).
+
+Any agent that carries `safeBash` can now write to git when the policy
+approves the effect, including the agents whose own git tools are
+read-only.
+
 ## `cd` on the left of `&&`
 
 ```
@@ -1062,7 +1353,10 @@ write a file, or read a file with no approval at all.
 - `stdlib/safeBash.agency`: the classifier, `planFor`, `safeBash`, and
   the private executors.
 - `stdlib/safeBash/actions.agency`: `Plan`, `BroadReason`, `Effect`, and
-  `Execution`.
+  `Execution`, with a named payload type and a constructor per git
+  effect.
+- `lib/host/gitEnvironment.ts`: the git environment variables, in three
+  lists the shell and the git tools share.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
 - `lib/stdlib/grepDialect.ts`: the pattern translation, grep's output
   format, and the skipped-folders note.
@@ -1080,6 +1374,12 @@ write a file, or read a file with no approval at all.
   `wholeShortFlags`, `listingsAskStdLs`, `lsPayloadFields`,
   `listingPayloadNamesTheRealFolder`, `findAsksStdGlob`, `findPatterns`,
   and the end-to-end runs under `recommended`.
+  The git nodes are `gitReads`, `gitRefsAndPaths`, `gitWrites`,
+  `gitStaysBroad` (every spelling with no rule), `gitInChains`,
+  `gitRestoreStaged`, `gitCheckoutRefusals`, `gitRunsWhatItAsked` (the
+  text each plan runs), `gitBranchShapes`, and `gitRunsSafely`, which
+  runs real git in a repository and in a folder with none, both made by
+  the test. No test approves a git write in the checkout it runs in.
 - `lib/stdlib/safeBash.test.ts`: `astToBash` round-trips every command
   family the classifier sees.
 - `lib/stdlib/statelog.test.ts`: `_debug`.

@@ -64,6 +64,8 @@ import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkMissingImports } from "./missingImportDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { checkSandboxNames } from "./sandboxNameCheck.js";
+import { codeFromStringRefusals } from "./codeFromStrings.js";
+import { collectProgramShadowing } from "./shadowing.js";
 import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
@@ -440,6 +442,17 @@ export class TypeChecker {
     // do not reach (new-expression callees, the constructor/prototype walk,
     // and names in tag arguments / default parameter values).
     checkSandboxNames(ctx);
+
+    // `eval` and `Function` are refused in every program, flag or no flag.
+    ctx.errors.push(
+      ...codeFromStringRefusals(ctx.programNodes, [
+        ...Object.keys(ctx.functionDefs),
+        ...Object.keys(ctx.nodeDefs),
+        ...Object.keys(ctx.importedFunctions),
+        ...Object.keys(ctx.jsImportedNames ?? {}),
+        ...collectProgramShadowing(ctx.programNodes).importedNodeNames,
+      ]),
+    );
 
     // Tool-position binding validator: at every llm(...) call site
     // with a statically-known tools array, require every function-typed

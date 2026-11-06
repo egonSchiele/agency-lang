@@ -30,6 +30,7 @@ import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/in
 import { isPlatformDiagnostic } from "@/typeChecker/platformCheck.js";
 import { unwrapRefusals } from "@/typeChecker/unwrapChecks.js";
 import { asyncRefusals } from "@/typeChecker/asyncChecks.js";
+import { codeFromStringRefusals, namesOwnedBy } from "@/typeChecker/codeFromStrings.js";
 import type { TypeCheckError } from "@/typeChecker/types.js";
 import {
   agencyImportTargets,
@@ -464,7 +465,7 @@ export class BuildSession {
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
     const info = buildCompilationUnit(liftedProgram, symbolTable, absoluteInputFile, contents);
     checkDecoratorsOrExit(liftedProgram, info, absoluteInputFile);
-    checkUnwrapsOrExit(liftedProgram, absoluteInputFile);
+    checkTreeRefusalsOrExit(liftedProgram, info, absoluteInputFile);
     const compilationUnitEndTime = performance.now();
     logTime({
       label: `Built compilation unit for ${absoluteInputFile}`,
@@ -664,11 +665,18 @@ function checkDecoratorsOrExit(
  *  checker stamps the file onto its own errors; these come straight from
  *  the tree, so the file is stamped here for the `file:line:col` prefix.
  *  AG1026 to AG1033 are the same kind of check for `async`: each marks a
- *  call the async lowering cannot take. */
-function checkUnwrapsOrExit(program: AgencyProgram, absPath: string): void {
-  const errors = [...unwrapRefusals(program.nodes), ...asyncRefusals(program.nodes)].map(
-    (error) => ({ ...error, file: absPath }),
-  );
+ *  call the async lowering cannot take. AG4014 refuses `eval` and
+ *  `Function`, which no program may name whatever its settings. */
+function checkTreeRefusalsOrExit(
+  program: AgencyProgram,
+  info: CompilationUnit,
+  absPath: string,
+): void {
+  const errors = [
+    ...unwrapRefusals(program.nodes),
+    ...asyncRefusals(program.nodes),
+    ...codeFromStringRefusals(program.nodes, namesOwnedBy(program.nodes, info)),
+  ].map((error) => ({ ...error, file: absPath }));
   if (errors.length === 0) return;
   console.error(formatErrors(errors));
   process.exit(1);

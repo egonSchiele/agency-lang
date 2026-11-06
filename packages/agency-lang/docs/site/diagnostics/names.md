@@ -141,3 +141,19 @@ The code was checked the strict way, `typecheck(source, strict: true)`, which is
 `compile` and `runFile` refuse the same things, so this error means the code could not have run.
 
 **How to fix:** import the function from a `std::` module, or move the code it needs into an `.agency` file beside it.
+
+<a id="ag4014"></a>
+
+## AG4014 — '&#123;name&#125;' builds code from a string, which Agency does not allow. To write code with code, use a splice or a template.
+
+*Default severity: error.*
+
+`eval` and `Function` are JavaScript globals that turn a string into running code. Agency refuses them in every program, with or without `--agency-only`. Code built from a string at run time raises no interrupt, no policy sees it, and it is not split into steps, so a resume can run it again.
+
+```ts
+const total = eval("1 + 2")              // AG4014
+const add = new Function("a", "b", "return a + b")   // AG4014
+const run = globalThis.eval              // AG4014
+```
+
+**How to fix:** write the code directly. To write code with code, use a splice (`$( ... )`) or a template, which run when the program is compiled. A function you define or import under one of these names is not refused.

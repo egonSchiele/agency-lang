@@ -23,6 +23,16 @@ describe("compileSource", () => {
     }
   });
 
+  it.each([
+    ["eval", `node main() { return eval("1 + 2") }`],
+    ["new Function", `node main() { return new Function("return 1") }`],
+  ])("refuses %s with the type checker off", (_name, source) => {
+    const result = compileSource(source, {});
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errors.join("\n")).toContain("AG4014");
+  });
+
   describe("sourcePath — resolving relative imports", () => {
     const HELPERS = `export def helper(x: string): string {\n  """h"""\n  return x\n}\n`;
     const MAIN = `import { helper } from "./helpers.agency"\n\nexport node main(x: string) {\n  return helper(x)\n}\n`;

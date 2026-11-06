@@ -73,7 +73,7 @@ export function checkSandboxNames(ctx: TypeCheckerContext): void {
 
 /** Names of top-level `const`/`let` declarations — the module scope a
  *  declaration-hanging expression can reference. */
-function moduleScopeNames(nodes: AgencyNode[]): string[] {
+export function moduleScopeNames(nodes: AgencyNode[]): string[] {
   const names: string[] = [];
   for (const node of nodes) {
     if (node.type === "assignment" && node.declKind && typeof node.variableName === "string") {
@@ -186,7 +186,7 @@ function checkDeclExpressionName(
  */
 type DeclHangingExpression = { expr: AgencyNode; scopeNames: string[] };
 
-function collectDeclHangingExpressions(
+export function collectDeclHangingExpressions(
   nodes: AgencyNode[],
   moduleScope: string[],
 ): DeclHangingExpression[] {

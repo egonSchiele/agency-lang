@@ -128,6 +128,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG4011](names.md#ag4011) | '&#123;name&#125;' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use. |
 | [AG4012](names.md#ag4012) | Cannot redeclare parameter '&#123;name&#125;' with '&#123;declKind&#125;'. Reads after the redeclare would still see the parameter. Assign to it instead, or pick a different name. |
 | [AG4013](names.md#ag4013) | &#123;violation&#125; |
+| [AG4014](names.md#ag4014) | '&#123;name&#125;' builds code from a string, which Agency does not allow. To write code with code, use a splice or a template. |
 
 ## Match and narrowing
 

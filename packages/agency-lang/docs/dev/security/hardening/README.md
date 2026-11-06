@@ -55,6 +55,17 @@ Depth: `docs/dev/compiler/agency-only-bound-names.md`. It is defense in depth,
 not the whole boundary — that doc explains what the check is and is not sound
 against.
 
+### `eval` and `Function` are refused in every program (#991)
+
+Naming `eval` or `Function` is a compile error (AG4014) with or without
+`--agency-only`, and whether or not the type checker is on. It covers a
+call, the bare name, `new Function`, and either name read from
+`globalThis`. Like layer 1 it reads spellings, so a key built at run time
+gets past it.
+
+Depth: `docs/dev/compiler/agency-only-bound-names.md`, "Two names are
+refused in every program".
+
 ### Layer 2 — no code generation from strings (#975)
 
 `agency run --agency-only` spawns the child Node process with

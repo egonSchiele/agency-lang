@@ -100,6 +100,40 @@ resolver, not to write a second rule. The security guarantee still does not
 rest here — it rests on layer 2 and, ultimately, on removing ambient
 authority (roadmap).
 
+## Two names are refused in every program
+
+`eval` and `Function` are refused with or without `--agency-only`
+(AG4014, roadmap F1). Code built from a string at run time raises no
+interrupt, no policy sees it, and it is not split into steps, so a resume
+can run it again. Agency has splices and templates for writing code with
+code, so no program needs these names.
+
+`codeFromStringRefusals` (`lib/typeChecker/codeFromStrings.ts`) reads only
+the tree. It reports:
+
+- a call to either name, or either name used as a value;
+- `new Function(...)`;
+- either name read from the global object: `globalThis.eval`,
+  `globalThis["eval"]`, and the same on `global`, `window`, and `self`.
+
+It walks the program with `walkNodes` and the declaration-hanging
+expressions with `collectDeclHangingExpressions`, the same two walks the
+sandbox check uses.
+
+A name the program defines with `def` or imports is left alone. A local
+variable is not, because it could hold the real `eval`. A method on a
+value, `model.eval()`, is not the global and is left alone.
+
+The type checker is off by default, so reporting this from the checker
+alone would not stop a build. Three places call the function: the type
+checker, `checkTreeRefusalsOrExit` in `lib/compiler/buildSession.ts`
+(`agency run`, `compile`, `test`), and `compileSource` in
+`lib/compiler/compile.ts` (code compiled at run time). The last two run it
+whatever the checker settings are, as they do for the `?` refusals.
+
+Like every check on names, this reads spellings. `x["ev" + "al"]` gets
+past it. Under `--agency-only`, layer 2 still stops the call.
+
 ## Note on a pre-existing gap
 
 Template hygiene (AG8015) rides the same body walk and is likely blind to
@@ -116,6 +150,8 @@ here because a fix to either should consider both.
 - `lib/typeChecker/sandboxNameCheck.ts` — new-callee, forbidden-property, and
   declaration-hanging-expression checks.
 - `lib/compiler/compileValidatedClosure.ts` — sets `jsGlobals: "sandbox"`.
+- `lib/typeChecker/codeFromStrings.ts` — the always-on `eval` / `Function`
+  refusal, with `codeFromStrings.test.ts`.
 - Tests: `lib/typeChecker/sandboxRegistry.test.ts`,
   `lib/compiler/compileSandboxed.test.ts` (bound-names describe),
   `tests/agency-js/test-cli-agency-only`.

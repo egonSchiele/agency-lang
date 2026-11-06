@@ -249,7 +249,10 @@ write path computes the bytes it writes and a dup changes which stream
    `std::write` as `>` to that file, with the same mode. `make
    2>build.log` asks `std::exec` and `std::write`.
 
-Any other explicit descriptor is unrecognized, so `make 3>x` is broad.
+Descriptor 1 means the same as no descriptor, so `make 1>out.log` is
+`make >out.log`. Any other explicit descriptor is unrecognized, so
+`make 3>x` is broad. `&>` is not one of these redirects, so
+`pnpm test &>/dev/null` is still broad.
 Both rules live in `redirectEffect` only. `prepareRedirectWrite` still
 refuses every explicit descriptor, so `echo hi 2>err.txt` is never a
 shell-free write. It runs through bash and asks `std::write` for

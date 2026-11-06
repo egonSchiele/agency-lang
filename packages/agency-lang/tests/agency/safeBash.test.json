@@ -35,9 +35,9 @@
     },
     {
       "nodeName": "stderrAndDevNullRedirects",
-      "description": "A redirect of standard output or standard error to /dev/null writes no file, so it adds no effect. 2>file asks std::write for that file, with the same overwrite and append modes as >file. Any other descriptor, a second output file, or a variable target stays broad. The rebuilt text keeps the redirect.",
+      "description": "A redirect of standard output or standard error to /dev/null writes no file, so it adds no effect. 2>file asks std::write for that file, with the same overwrite and append modes as >file, and descriptor 1 means the same as no descriptor. &>/dev/null is still broad. Any other descriptor, a second output file, or a variable target stays broad. The rebuilt text keeps the redirect.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
+      "expectedOutput": "[[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -314,8 +314,8 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
     effects.push(readEffect(read.value))
   }
   for (redirect in outputs) {
-    // `2>file` writes that file the way `>file` does. This path runs the
-    // command through bash, so it never computes the bytes written.
+    // `2>file` and `1>file` write that file the way `>file` does. This path
+    // runs the command through bash, so it never computes the bytes written.
     if (!redirectsStdoutOrStderr(redirect)) {
       return failure("redirect with an explicit file descriptor")
     }
@@ -330,9 +330,9 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
 
 def redirectsStdoutOrStderr(redirect: Redirect): boolean {
   """
-  Check that a redirect names no descriptor, or names standard error.
+  Check that a redirect names no descriptor, standard output, or standard error.
   """
-  return redirect.fd == null || redirect.fd == 2
+  return redirect.fd == null || redirect.fd == 1 || redirect.fd == 2
 }
 
 def discardsOutput(redirect: Redirect): boolean {

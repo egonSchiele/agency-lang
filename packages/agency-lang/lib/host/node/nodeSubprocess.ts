@@ -10,6 +10,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import fs from "fs";
 import path from "path";
+import { GIT_CODE_ENV, GIT_RETARGET_ENV, namedBy } from "../gitEnvironment.js";
 import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "../host.js";
 
 /**
@@ -52,8 +53,9 @@ export function definedVariables(env: NodeJS.ProcessEnv): Record<string, string>
 }
 
 /** Variables removed from a shell script's environment, because each makes
- *  bash do something the script does not say. */
-const SHELL_ENV_REMOVED = [
+ *  the script do something its text does not say. A trailing `*` matches
+ *  every name with that prefix. */
+const SHELL_ENV_REMOVED: string[] = [
   // Names a file bash sources before the script.
   "BASH_ENV",
   // Starts bash in POSIX mode, where macOS bash 3.2 prints `echo -n hi` as
@@ -69,19 +71,25 @@ const SHELL_ENV_REMOVED = [
   "CDPATH",
   // Drops names from a glob's expansion.
   "GLOBIGNORE",
+  // An exported function arrives as `BASH_FUNC_<name>%%` (bash 4.3 and
+  // later) or `BASH_FUNC_<name>()` (older), and shadows the program of that
+  // name, so `git status` would run the function instead of git.
+  "BASH_FUNC_*",
+  // Make a `git` in the script act on another repository than the working
+  // directory, or run a program the script does not name. safeBash asks
+  // about a git command by its working directory, so with one of these set
+  // the question would be about the wrong repository. The variables that
+  // name git's SSH program are kept: a person sets those on purpose.
+  ...GIT_RETARGET_ENV,
+  ...GIT_CODE_ENV,
 ];
-
-/** An exported function arrives as `BASH_FUNC_<name>%%` (bash 4.3 and
- *  later) or `BASH_FUNC_<name>()` (older), and shadows the program of that
- *  name, so `git status` would run the function instead of git. */
-const SHELL_ENV_REMOVED_PREFIX = "BASH_FUNC_";
 
 /** The environment a shell script runs with: `env` without the variables
  *  above. */
 export function shellEnvironment(env: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
-    if (!SHELL_ENV_REMOVED.includes(key) && !key.startsWith(SHELL_ENV_REMOVED_PREFIX)) {
+    if (!namedBy(SHELL_ENV_REMOVED, key)) {
       out[key] = value;
     }
   }

@@ -26,6 +26,23 @@ import {
   globEffect,
   execEffect,
   ExecPayload,
+  gitStatusEffect,
+  gitLogEffect,
+  gitDiffEffect,
+  gitShowEffect,
+  gitBlameEffect,
+  gitBranchListEffect,
+  gitRemoteListEffect,
+  gitStashListEffect,
+  gitAddEffect,
+  gitCommitEffect,
+  gitCheckoutEffect,
+  gitSwitchEffect,
+  gitBranchCreateEffect,
+  gitBranchDeleteEffect,
+  gitStashPushEffect,
+  gitStashPopEffect,
+  gitRestoreEffect,
   ReadPayload,
   ReadView,
   readExecution,
@@ -41,6 +58,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
@@ -401,6 +419,14 @@ def writeMode(op: string): WriteMode {
   }
 }
 
+/** What one simple command asks, and the command bash runs for it. The
+ command is the one that was written, except a git command, which safeBash
+ writes itself. */
+type SimpleRule = {
+  effects: Effect[];
+  command: Command
+}
+
 export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean = false): Result<Effect[]> {
   """
   Classify the approvals needed by one simple command.
@@ -408,6 +434,18 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
 
   @param cwd - The resolved working directory used in approval payloads.
   @param readsStdin - Whether a pipe supplies this command's input.
+  """
+  const rule = simpleCommandRule(command, cwd, readsStdin)?
+  return success(rule.effects)
+}
+
+// The one path every simple command is classified by. The checks before
+// the verb apply to every verb, git included, which is why `gitEffects`
+// has no other caller: a second path would have to repeat them.
+@capabilities(fileRead)
+def simpleCommandRule(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<SimpleRule> {
+  """
+  Classify one simple command: the approvals it needs and the command to run for it.
   """
   const name = command.command
   if (name == null) {
@@ -424,35 +462,33 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
   if (command.assignments.length > 0) {
     return failure("a leading assignment changes what the command does")
   }
-  const flags = flagNames(command)
-  const redirect = redirectEffect(command.redirects, cwd)
-  if (isFailure(redirect)) {
-    return redirect
+  const redirect = redirectEffect(command.redirects, cwd)?
+  if (name.text == "git") {
+    const git = gitEffects(command, cwd)?
+    return success({ effects: [...git.effects, ...redirect], command: git.command })
   }
+  const effects = verbEffects(name.text, command, cwd, readsStdin, redirect)?
+  return success({ effects: effects, command: command })
+}
 
-  // `echo` contributes nothing on its own, whatever its arguments: bash
-  // runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
-  // are both fine on this path. The flag and literal-argument restrictions
-  // belong to the shell-free path, which computes the output itself. Only
-  // the git arm reads the arguments as text — a quoted `echo "hi"` must
-  // not be demoted by a check that only git needs.
-  return match(name.text) {
-    "echo" => success(redirect.value)
+// `echo` contributes nothing on its own, whatever its arguments: bash
+// runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
+// are both fine on this path. The flag and literal-argument restrictions
+// belong to the shell-free path, which computes the output itself.
+@capabilities(fileRead)
+def verbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  """
+  Classify a command that bash runs as written, by its verb.
+  """
+  return match(verb) {
+    "echo" => success(redirects)
     "grep" => match(readGrep(command, cwd, GREP_FLAGS)) {
-      success(found) => grepReadEffects(found, readsStdin, redirect.value)
+      success(found) => grepReadEffects(found, readsStdin, redirects)
       failure(why) => failure(why)
     }
-    "git" => {
-      // Validate literal arguments before applying the Git rule.
-      const git: Result<Effect[]> = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
-      if (git is failure(why)) {
-        return failure(why)
-      }
-      return success([...git.value, ...redirect.value])
-    }
-    "tr" => trEffects(command, readsStdin, redirect.value)
-    "find" => findEffects(command, cwd, redirect.value)
-    _ => otherVerbEffects(name.text, command, cwd, readsStdin, redirect.value)
+    "tr" => trEffects(command, readsStdin, redirects)
+    "find" => findEffects(command, cwd, redirects)
+    _ => otherVerbEffects(verb, command, cwd, readsStdin, redirects)
   }
 }
 
@@ -589,72 +625,6 @@ def fileReadEffects(verb: string, found: FileRead, readsStdin: boolean, redirect
   return match(found) {
     { kind: "stdin" } => stdinStage(verb, readsStdin, redirects)
     { kind: "files", paths } => success([...readEffects(paths), ...redirects])
-  }
-}
-
-// A flag with no rule is a failure, so the command asks std::bash.
-// Answering `git log --graph` with a plain std::git::log approval would
-// describe a different command from the one that runs.
-def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
-  """
-  Classify supported Git reads, rejecting arguments or flags without an exact rule.
-  """
-  if (args.length != 1) {
-    return failure("only a bare git subcommand is recognized")
-  }
-  const sub = args[0]
-  return match(sub) {
-    "status" if (flags.length == 0) => success(
-      [
-      {
-      name: "std::git::status",
-      payload: {
-        cwd: cwd
-      }
-    },
-    ],
-    )
-    "log" if (flags.length == 0) => success(
-      [
-      {
-      name: "std::git::log",
-      payload: {
-        cwd: cwd,
-        ref: "",
-        path: ""
-      }
-    },
-    ],
-    )
-    "diff" if (flags.length == 0) => success(
-      [
-      {
-      name: "std::git::diff",
-      payload: {
-        cwd: cwd,
-        ref: "",
-        ref2: "",
-        staged: false,
-        path: ""
-      }
-    },
-    ],
-    )
-    "diff" if (flags.length == 1 && flags[0] == "--staged") => success(
-      [
-      {
-      name: "std::git::diff",
-      payload: {
-        cwd: cwd,
-        ref: "",
-        ref2: "",
-        staged: true,
-        path: ""
-      }
-    },
-    ],
-    )
-    _ => failure("no rule for `git ${sub}`")
   }
 }
 
@@ -1867,6 +1837,690 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
   })
 }
 
+// ---------------------------------------------------------------------------
+// git
+//
+// A git command gets a rule only when an existing `std::git::*` effect
+// describes it completely. safeBash then asks that effect, and runs a git
+// command it writes itself (`gitCommand`), not the text the model wrote.
+// Git reads a command line with rules of its own, and they can disagree
+// with this classifier: `git checkout '*.py'` discards files, and `git
+// diff /dev/null <file>` prints a file outside the repository. Writing
+// the `--` between refs and paths makes git read each word the way it was
+// classified, or fail.
+// ---------------------------------------------------------------------------
+
+/** The flag that ends the flags, as the parser returns it. */
+static const END_OF_FLAGS = "--"
+
+/** How a git subcommand's words are read.
+ - `refsAndPaths`: words before `--` are refs and words after it are
+   paths. With no `--`, a word that names something on disk is a path.
+ - `paths`: every word is a path, on either side of a `--`.
+ - `names`: every word is a plain name, such as a branch. A `--` has no
+   rule. */
+type GitWords = "refsAndPaths" | "paths" | "names"
+
+/** A git subcommand's flags, how its words are read, and how many of
+ each kind it takes. */
+type GitVerb = {
+  flags: FlagSpec;
+  words: GitWords;
+  refs: CountRange;
+  paths: CountRange;
+  names: CountRange
+}
+
+static const NONE: CountRange = { least: 0, most: 0 }
+static const EXACTLY_ONE: CountRange = { least: 1, most: 1 }
+static const AT_MOST_TWO: CountRange = { least: 0, most: 2 }
+static const AT_LEAST_ONE: CountRange = { least: 1, most: null }
+
+/** The git subcommands with one shape, and the flags each takes. An
+ allowlist: a subcommand or flag left out sends the command to std::bash.
+ A listed flag changes how a result is shown (`--oneline`, `--stat`) or
+ shows less of it (`-n`, `--author`). None shows more than the payload
+ describes or does something else. Left out on purpose:
+ - `--all` on log shows every branch, and the payload has one `ref`.
+ - `--no-index` on diff compares two files outside the repository.
+ - `--output` on diff writes a file.
+ - `--format` and `--pretty`: the value is nearly always quoted, and a
+   flag with a quoted value is not read as a flag yet.
+ - `-u` on add stages tracked changes only, and the payload cannot say so.
+ - A path on show or status, and a ref on blame: the effect has no field
+   for it.
+ diff takes at most one path, and that is a safety rule: with two paths
+ after `--` git compares the two files, wherever they are. */
+static const GIT_VERBS: Record<string, GitVerb> = {
+  status: {
+    flags: { plain: ["s", "b", "--short", "--branch", "--porcelain", "--porcelain=v1"], valued: [], optionsFirst: false },
+    words: "names",
+    refs: NONE,
+    paths: NONE,
+    names: NONE
+  },
+  log: {
+    flags: {
+      plain: ["p", "--patch", "--oneline", "--stat", "--name-only", "--name-status", "--graph", "--decorate", "--no-color", "--reverse", "--no-merges", "--follow"],
+      valued: ["n", "S", "G", "--max-count", "--author", "--grep", "--since", "--until"],
+      optionsFirst: false,
+      digitFlag: "n"
+    },
+    words: "refsAndPaths",
+    refs: AT_MOST_ONE,
+    paths: AT_MOST_ONE,
+    names: NONE
+  },
+  diff: {
+    flags: {
+      plain: ["w", "--staged", "--cached", "--stat", "--shortstat", "--numstat", "--name-only", "--name-status", "--no-color"],
+      valued: [],
+      optionsFirst: false
+    },
+    words: "refsAndPaths",
+    refs: AT_MOST_TWO,
+    paths: AT_MOST_ONE,
+    names: NONE
+  },
+  show: {
+    flags: { plain: ["s", "--no-patch", "--stat", "--name-only", "--name-status", "--oneline", "--no-color"], valued: [], optionsFirst: false },
+    words: "refsAndPaths",
+    refs: AT_MOST_ONE,
+    paths: NONE,
+    names: NONE
+  },
+  blame: {
+    flags: { plain: [], valued: [], optionsFirst: false },
+    words: "refsAndPaths",
+    refs: NONE,
+    paths: EXACTLY_ONE,
+    names: NONE
+  },
+  remote: {
+    flags: { plain: ["v"], valued: [], optionsFirst: false },
+    words: "names",
+    refs: NONE,
+    paths: NONE,
+    names: NONE
+  },
+  add: {
+    flags: { plain: ["A", "--all"], valued: [], optionsFirst: false },
+    words: "paths",
+    refs: NONE,
+    paths: ANY_NUMBER,
+    names: NONE
+  },
+  switch: {
+    flags: { plain: ["c", "--create"], valued: [], optionsFirst: false },
+    words: "names",
+    refs: NONE,
+    paths: NONE,
+    names: EXACTLY_ONE
+  },
+  restore: {
+    flags: { plain: ["--staged"], valued: [], optionsFirst: false },
+    words: "paths",
+    refs: NONE,
+    paths: AT_LEAST_ONE,
+    names: NONE
+  }
+}
+
+// The four subcommands whose words depend on their flags. One row cannot
+// state them, so each has a function below. Left out on purpose: `-D` on
+// branch and `-f` on checkout force, `--amend` and `--no-verify` on
+// commit do more than the payload says, and `-u` on stash takes untracked
+// files too.
+static const GIT_BRANCH_FLAGS: FlagSpec = {
+  plain: ["a", "r", "v", "d", "--all", "--remotes", "--list", "--show-current", "--merged", "--no-merged", "--delete"],
+  valued: [],
+  optionsFirst: false
+}
+static const GIT_STASH_FLAGS: FlagSpec = { plain: [], valued: ["m", "--message"], optionsFirst: false }
+static const GIT_COMMIT_FLAGS: FlagSpec = { plain: ["a", "q", "--all", "--quiet"], valued: ["m", "--message"], optionsFirst: false }
+static const GIT_NEW_BRANCH_FLAGS: FlagSpec = { plain: ["b"], valued: [], optionsFirst: false }
+static const NO_GIT_FLAGS: FlagSpec = { plain: [], valued: [], optionsFirst: false }
+
+static const MESSAGE_FLAGS: string[] = ["m", "--message"]
+static const DELETE_FLAGS: string[] = ["d", "--delete"]
+/** The listing flags that take a branch to compare with. */
+static const MERGED_FLAGS: string[] = ["--merged", "--no-merged"]
+/** The words `git stash` takes as a second subcommand here. */
+static const STASH_PUSH = "push"
+static const STASH_LIST = "list"
+static const STASH_POP = "pop"
+/** The commit `git show` shows when none is named. */
+static const SHOW_DEFAULT_REF = "HEAD"
+
+/** One of a git command's words: its text, for a payload, and the word
+ the parser produced, for the command that runs. The word keeps the
+ model's quoting, so a quoted `'~/x'` stays quoted. */
+type GitWord = {
+  text: string;
+  word: Word
+}
+
+/** A git command after its flags and words were checked against its row. */
+type GitArgs = {
+  sub: string;
+  plain: string[];
+  values: FlagValue[];
+  refs: GitWord[];
+  paths: GitWord[];
+  names: GitWord[];
+  cwd: string
+}
+
+type SortedGitWords = {
+  refs: GitWord[];
+  paths: GitWord[];
+  names: GitWord[]
+}
+
+/** One count a row limits: how many were given, the limit, and what to
+ call them in a message. */
+type GitCount = {
+  given: number;
+  range: CountRange;
+  noun: string
+}
+
+// The caller, `simpleCommandRule`, has already checked the command word,
+// refused a leading assignment, and worked out the redirect effects. Do
+// not add a second caller: it would skip those checks.
+@capabilities(fileRead)
+def gitEffects(command: SimpleCommand, cwd: string): Result<SimpleRule> {
+  """
+  Classify a git command: the effects it asks and the git command to run for it.
+  Fail for a subcommand, flag, or word without an exact rule.
+  """
+  if (command.args.length == 0) {
+    return failure("git with no subcommand")
+  }
+  const first = command.args[0]
+  if (first.tag != "literal") {
+    return failure("the git subcommand is not a plain word")
+  }
+  const sub = first.text
+  const words = command.args.slice(1)
+  const verb = GIT_VERBS[sub]
+  if (verb != null) {
+    return gitRowRule(sub, verb, words, cwd, command.redirects)
+  }
+  return match(sub) {
+    "branch" => gitBranchRule(words, cwd, command.redirects)
+    "stash" => gitStashRule(words, cwd, command.redirects)
+    "commit" => gitCommitRule(words, cwd, command.redirects)
+    "checkout" => gitCheckoutRule(words, cwd, command.redirects)
+    _ => failure("no rule for `git ${sub}`")
+  }
+}
+
+@capabilities(fileRead)
+def gitRowRule(sub: string, verb: GitVerb, words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Apply a subcommand's table row: check its flags and word counts, then build its effects and command.
+  """
+  const read = gitArgsFor(sub, words, verb.flags, verb.words, cwd)?
+  const args = checkGitCounts(read, verb)?
+  const effects = gitPayloads(args)?
+  const built = gitCommand([sub], args, verb.words, redirects)
+  // Outside a repository `git diff` ignores the `--` and compares files.
+  // It is the one subcommand that does anything there.
+  if (sub == "diff") {
+    return success({ effects: effects, command: insideRepository(built) })
+  }
+  return success({ effects: effects, command: built })
+}
+
+@capabilities(fileRead)
+def gitArgsFor(sub: string, words: Word[], flags: FlagSpec, kind: GitWords, cwd: string): Result<GitArgs> {
+  """
+  Check a git subcommand's flags against a flag table and sort its other words into refs, paths, and names.
+  """
+  // `splitFlags` would report `--` as a flag the table does not list, so
+  // only the words before it go through the table.
+  const cut = endOfFlagsIndex(words)
+  const split = splitFlags("git ${sub}", gitWordsCommand(words.slice(0, cut)), flags)?
+  const front = gitWordsOf(split.positionals)?
+  // A word after `--` that looks like a flag is tagged a flag by the
+  // parser, and `gitWordsOf` fails on it, so `git log -- -x` has no rule.
+  const back = gitWordsOf(words.slice(cut + 1))?
+  const sorted = sortGitWords(sub, kind, cut < words.length, front, back, cwd)?
+  return success({
+    sub: sub,
+    plain: split.plain,
+    values: split.values,
+    refs: sorted.refs,
+    paths: sorted.paths,
+    names: sorted.names,
+    cwd: cwd
+  })
+}
+
+/* Where the first `--` is, or the number of words when there is none. */
+def endOfFlagsIndex(words: Word[]): number {
+  for (word, index in words) {
+    if (word.tag == "flag" && word.flagName == END_OF_FLAGS) {
+      return index
+    }
+  }
+  return words.length
+}
+
+/* `splitFlags` reads a command, so the words are given to it as one. */
+def gitWordsCommand(words: Word[]): SimpleCommand {
+  return {
+    tag: "simpleCommand",
+    assignments: [],
+    command: GIT_WORD,
+    args: words,
+    redirects: []
+  }
+}
+
+def gitWordsOf(words: Word[]): Result<GitWord[]> {
+  """
+  Pair each word with its text, failing when a word is not fully literal.
+  """
+  const texts = literalWords(words)?
+  let paired: GitWord[] = []
+  for (word, index in words) {
+    paired.push({ text: texts[index], word: word })
+  }
+  return success(paired)
+}
+
+@capabilities(fileRead)
+def sortGitWords(
+  sub: string,
+  kind: GitWords,
+  separated: boolean,
+  front: GitWord[],
+  back: GitWord[],
+  cwd: string,
+): Result<SortedGitWords> {
+  """
+  Sort a git command's words by how its subcommand reads them. `front` and `back` are the words before and after a `--`.
+  """
+  return match(kind) {
+    "names" => {
+      if (separated) {
+        return failure("`git ${sub}` with a `--` has no rule")
+      }
+      return success({ refs: [], paths: [], names: front })
+    }
+    "paths" => success({ refs: [], paths: [...front, ...back], names: [] })
+    "refsAndPaths" => {
+      if (separated) {
+        return success({ refs: front, paths: back, names: [] })
+      }
+      return success(refsAndPathsByDisk(front, cwd))
+    }
+  }
+}
+
+// Git decides whether a word is a ref or a path by looking at the
+// repository. Nothing runs while a command is classified, so this reads
+// the disk: a word that names a file or folder is a path, and any other
+// word is a ref. The command that runs has a `--` between the two, so a
+// wrong sort cannot make git do something else. It can only make git
+// fail, or answer about a path where the model meant a branch of the
+// same name.
+@capabilities(fileRead)
+def refsAndPathsByDisk(words: GitWord[], cwd: string): SortedGitWords {
+  let refs: GitWord[] = []
+  let paths: GitWord[] = []
+  for (entry in words) {
+    if (onDisk(entry, cwd)) {
+      paths.push(entry)
+    } else {
+      refs.push(entry)
+    }
+  }
+  return { refs: refs, paths: paths, names: [] }
+}
+
+// The check reads the parser's own word, so a quoted `'~/x'` is looked up
+// as a folder named `~`, the way bash will pass it. `resolveTarget` fails
+// for a device such as `/dev/null`, so a device is sorted as a ref, and
+// git then rejects it as one.
+@capabilities(fileRead)
+def onDisk(entry: GitWord, cwd: string): boolean {
+  return !isFailure(resolveTarget(entry.text, entry.word, cwd))
+}
+
+def checkGitCounts(args: GitArgs, verb: GitVerb): Result<GitArgs> {
+  """
+  Check how many refs, paths, and names a git command gave against its row.
+  """
+  const counts: GitCount[] = [
+    { given: args.refs.length, range: verb.refs, noun: "ref" },
+    { given: args.paths.length, range: verb.paths, noun: "path" },
+    { given: args.names.length, range: verb.names, noun: "name" },
+  ]
+  for (count in counts) {
+    if (!countFits(count.given, count.range)) {
+      return failure("git ${args.sub} takes ${describeCount(count.range, count.noun)}")
+    }
+  }
+  return success(args)
+}
+
+// What each single-shape subcommand asks. The words were checked against
+// the row, so an arm only fills a payload. Add a subcommand by adding its
+// row to `GIT_VERBS` and its arm here.
+def gitPayloads(args: GitArgs): Result<Effect[]> {
+  """
+  Build the effects of a single-shape git subcommand from its checked flags and words.
+  """
+  const cwd = args.cwd
+  return match(args.sub) {
+    "status" => success([gitStatusEffect({ cwd: cwd })])
+    "log" => success(
+      [gitLogEffect({ cwd: cwd, ref: firstText(args.refs, ""), path: firstText(args.paths, "") })],
+    )
+    "diff" => success(
+      [
+      gitDiffEffect({
+        cwd: cwd,
+        ref: firstText(args.refs, ""),
+        ref2: firstText(args.refs.slice(1), ""),
+        staged: hasAny(args.plain, ["--staged", "--cached"]),
+        path: firstText(args.paths, "")
+      }),
+    ],
+    )
+    "show" => success([gitShowEffect({ cwd: cwd, ref: firstText(args.refs, SHOW_DEFAULT_REF) })])
+    "blame" => success([gitBlameEffect({ cwd: cwd, path: args.paths[0].text })])
+    "remote" => success([gitRemoteListEffect({ cwd: cwd })])
+    "add" => success(
+      [gitAddEffect({ cwd: cwd, paths: textsOf(args.paths), all: hasAny(args.plain, ["A", "--all"]) })],
+    )
+    "switch" => success(
+      [gitSwitchEffect({ cwd: cwd, branch: args.names[0].text, create: hasAny(args.plain, ["c", "--create"]) })],
+    )
+    "restore" => restoreEffects(args)
+    _ => failure("no rule for `git ${args.sub}`")
+  }
+}
+
+// Only the form that unstages has a rule. The refuse wall refuses every
+// other restore before a plan is made, and this does not rely on that.
+def restoreEffects(args: GitArgs): Result<Effect[]> {
+  if (!hasAny(args.plain, ["--staged"])) {
+    return failure("`git restore` without `--staged` discards work")
+  }
+  return success([gitRestoreEffect({ cwd: args.cwd, paths: textsOf(args.paths), staged: true })])
+}
+
+@capabilities(fileRead)
+def gitBranchRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git branch`: a listing, a new branch, or a delete.
+  """
+  const args = gitArgsFor("branch", words, GIT_BRANCH_FLAGS, "names", cwd)?
+  const effects = branchEffects(args)?
+  // `--merged` takes the next word as the branch to compare with, so it
+  // is written last, right before that word.
+  const others = [flag for flag in args.plain if !MERGED_FLAGS.includes(flag)]
+  const merged = [flag for flag in args.plain if MERGED_FLAGS.includes(flag)]
+  const ordered: GitArgs = { ...args, plain: [...others, ...merged] }
+  return success({ effects: effects, command: gitCommand(["branch"], ordered, "names", redirects) })
+}
+
+// `git branch -v newname` creates a branch, so a listing flag beside a
+// name has no rule. Only `--merged` and `--no-merged` take a word.
+def branchEffects(args: GitArgs): Result<Effect[]> {
+  const cwd = args.cwd
+  const names = textsOf(args.names)
+  if (hasAny(args.plain, DELETE_FLAGS)) {
+    if (args.plain.length != 1 || !countFits(names.length, AT_LEAST_ONE)) {
+      return failure("`git branch -d` takes branch names and no other flag")
+    }
+    return success([gitBranchDeleteEffect({ cwd: cwd, branch: name, force: false }) for name in names])
+  }
+  if (args.plain.length > 0 || names.length == 0) {
+    const allowed = if (hasAny(args.plain, MERGED_FLAGS)) then AT_MOST_ONE else NONE
+    if (!countFits(names.length, allowed)) {
+      return failure("a listing `git branch` takes ${describeCount(allowed, "name")}")
+    }
+    return success([gitBranchListEffect({ cwd: cwd })])
+  }
+  if (!countFits(names.length, EXACTLY_ONE)) {
+    return failure("`git branch` takes one new branch name here, and a start point has no rule")
+  }
+  return success([gitBranchCreateEffect({ cwd: cwd, branch: names[0] })])
+}
+
+@capabilities(fileRead)
+def gitStashRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git stash`: push, pop, or list.
+  """
+  const args = gitArgsFor("stash", words, GIT_STASH_FLAGS, "names", cwd)?
+  if (!countFits(args.names.length, AT_MOST_ONE)) {
+    return failure("`git stash` with these arguments has no rule")
+  }
+  const action = firstText(args.names, STASH_PUSH)
+  const effects = stashEffects(cwd, action, flagValues(args.values, MESSAGE_FLAGS))?
+  // The action is written right after `stash`, before the flags. After
+  // them, git would read it as a path to stash.
+  const flagsOnly: GitArgs = { ...args, names: [] }
+  return success({ effects: effects, command: gitCommand(["stash", action], flagsOnly, "names", redirects) })
+}
+
+def stashEffects(cwd: string, action: string, messages: string[]): Result<Effect[]> {
+  if (action == STASH_PUSH) {
+    return success([gitStashPushEffect({ cwd: cwd, message: messages.join("") })])
+  }
+  if (messages.length > 0) {
+    return failure("`git stash ${action}` takes no message")
+  }
+  return match(action) {
+    STASH_LIST => success([gitStashListEffect({ cwd: cwd })])
+    STASH_POP => success([gitStashPopEffect({ cwd: cwd })])
+    _ => failure("no rule for `git stash ${action}`")
+  }
+}
+
+// `-a` stages every tracked change before the commit, so it asks for the
+// add as well. The add's `all: true` describes staging everything, which
+// is slightly more than `-a` does, so the approval covers what happens.
+@capabilities(fileRead)
+def gitCommitRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git commit -m`, with or without `-a`.
+  """
+  const args = gitArgsFor("commit", words, GIT_COMMIT_FLAGS, "names", cwd)?
+  const messages = flagValues(args.values, MESSAGE_FLAGS)
+  // The payload has one message. `-m a --message b` gives git two.
+  if (!countFits(messages.length, EXACTLY_ONE) || args.names.length > 0) {
+    return failure("`git commit` needs one `-m` and no paths")
+  }
+  const commit = gitCommitEffect({ cwd: cwd, message: messages[0] })
+  const built = gitCommand(["commit"], args, "names", redirects)
+  if (hasAny(args.plain, ["a", "--all"])) {
+    const add = gitAddEffect({ cwd: cwd, paths: [], all: true })
+    return success({ effects: [add, commit], command: built })
+  }
+  return success({ effects: [commit], command: built })
+}
+
+@capabilities(fileRead)
+def gitCheckoutRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git checkout <ref>` and `git checkout -b <name>`.
+  """
+  // `-b` is looked for first: its word is a new branch name, and sorting
+  // it by the disk would refuse `git checkout -b src` beside a `src` folder.
+  const creating = [word for word in words if word.tag == "flag" && word.flagName == "-b"].length > 0
+  if (creating) {
+    return gitCheckoutNewBranch(words, cwd, redirects)
+  }
+  return gitCheckoutRef(words, cwd, redirects)
+}
+
+@capabilities(fileRead)
+def gitCheckoutNewBranch(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  const args = gitArgsFor("checkout", words, GIT_NEW_BRANCH_FLAGS, "names", cwd)?
+  if (!countFits(args.names.length, EXACTLY_ONE)) {
+    return failure("`git checkout -b` takes one new branch name here, and a start point has no rule")
+  }
+  const effect = gitSwitchEffect({ cwd: cwd, branch: args.names[0].text, create: true })
+  return success({ effects: [effect], command: gitCommand(["checkout"], args, "names", redirects) })
+}
+
+// `git checkout <word>` discards the changes to a file when the word is
+// not a ref: git then reads it as a pathspec, so `'*.py'` matches every
+// Python file. The word is sorted like a log's, and exactly one ref and
+// no path is allowed, so a word that names a file has no rule. The
+// command that runs ends in `--`, so a word that is not a real ref makes
+// git fail with "invalid reference" and no file is touched.
+@capabilities(fileRead)
+def gitCheckoutRef(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  const args = gitArgsFor("checkout", words, NO_GIT_FLAGS, "refsAndPaths", cwd)?
+  if (!countFits(args.refs.length, EXACTLY_ONE) || !countFits(args.paths.length, NONE)) {
+    return failure("`git checkout` takes one branch or commit here, and a path would discard its changes")
+  }
+  const effect = gitCheckoutEffect({ cwd: cwd, target: args.refs[0].text, force: false })
+  return success({ effects: [effect], command: gitCommand(["checkout"], args, "refsAndPaths", redirects) })
+}
+
+static const GIT_WORD: LiteralWord = { tag: "literal", text: "git" }
+static const END_OF_FLAGS_WORD: FlagWord = { tag: "flag", flagName: "--" }
+
+// The one place a git command is assembled. It returns the parser's own
+// type, so the text that runs is printed by `astToBash` like every other
+// narrow command, and that printer quotes whatever needs quoting.
+//
+// The flags are built from what `splitFlags` checked, not copied from the
+// model's text. The refs, names, and paths are the model's own words,
+// with their quoting. The `--` is written whenever the words are refs or
+// paths, including when there are no paths: `git checkout main` runs as
+// `git checkout main --`.
+def gitCommand(subcommand: string[], args: GitArgs, kind: GitWords, redirects: Redirect[]): SimpleCommand {
+  """
+  Build the git command to run: the fixed flags, the subcommand, the checked flags, and the words in the order git reads them.
+  """
+  const separator: Word[] = if (kind == "names") then [] else [END_OF_FLAGS_WORD]
+  return {
+    tag: "simpleCommand",
+    assignments: [],
+    command: GIT_WORD,
+    args: [
+      ...fixedFlagWords(),
+      ...[literalWordOf(word) for word in subcommand],
+      ...flagWords(args.plain, args.values),
+      ...wordsOf(args.refs),
+      ...wordsOf(args.names),
+      ...separator,
+      ...wordsOf(args.paths),
+    ],
+    redirects: redirects
+  }
+}
+
+// `(git rev-parse --is-inside-work-tree >/dev/null && git diff ...)`.
+// When git sees no repository, `rev-parse` fails with "not a git
+// repository" and the diff never runs. The check runs when the command
+// runs, and git answers it: looking for a `.git` folder while planning
+// would be a second guess about what git will do. The parentheses make
+// the pair one unit, so it can be a stage of a pipe.
+def insideRepository(diff: SimpleCommand): Command {
+  """
+  Wrap a git diff so it runs only where git sees a repository.
+  """
+  const check: SimpleCommand = {
+    tag: "simpleCommand",
+    assignments: [],
+    command: GIT_WORD,
+    args: [...fixedFlagWords(), literalWordOf("rev-parse"), { tag: "flag", flagName: "--is-inside-work-tree" }],
+    redirects: [{ tag: "redirect", op: ">", target: { tag: "path", text: "/dev/null" } }]
+  }
+  return { tag: "parens", command: { tag: "and", left: check, right: diff } }
+}
+
+/* The flags every git command starts with, the same list the git tools
+  use, as words. */
+def fixedFlagWords(): Word[] {
+  const flags: string[] = _gitHardeningFlags()
+  return [fixedWord(text) for text in flags]
+}
+
+def fixedWord(text: string): Word {
+  if (text.startsWith("-")) {
+    return { tag: "flag", flagName: text }
+  }
+  return literalWordOf(text)
+}
+
+def literalWordOf(text: string): Word {
+  return { tag: "literal", text: text }
+}
+
+// Several spellings of a flag run as one: `-n5`, `-n 5`, `-5`, and
+// `--max-count=5` were all read by `splitFlags`, and each is written back
+// from what it read.
+def flagWords(plain: string[], values: FlagValue[]): Word[] {
+  """
+  Build flag words from the flags `splitFlags` checked.
+  """
+  let valued: Word[] = []
+  for (entry in values) {
+    valued = [...valued, ...valuedFlagWords(entry)]
+  }
+  return [...[plainFlagWord(name) for name in plain], ...valued]
+}
+
+/* A plain flag as the table spells it: a letter (`p`), a long name
+  (`--oneline`), or a long name with its value (`--porcelain=v1`). */
+def plainFlagWord(name: string): Word {
+  if (!name.startsWith("--")) {
+    return { tag: "flag", flagName: "-${name}" }
+  }
+  const equals = name.indexOf("=")
+  if (equals < 0) {
+    return { tag: "flag", flagName: name }
+  }
+  return { tag: "flag", flagName: name.slice(0, equals), flagValue: name.slice(equals + 1) }
+}
+
+// A letter's value is written as a quoted word of its own. A literal
+// word would print bare when its text allows, and bash would then expand
+// a leading `~` in a commit message.
+def valuedFlagWords(entry: FlagValue): Word[] {
+  if (entry.flag.startsWith("--")) {
+    return [{ tag: "flag", flagName: entry.flag, flagValue: entry.value }]
+  }
+  return [{ tag: "flag", flagName: "-${entry.flag}" }, { tag: "singleQuoted", text: entry.value }]
+}
+
+def wordsOf(words: GitWord[]): Word[] {
+  return [entry.word for entry in words]
+}
+
+def textsOf(words: GitWord[]): string[] {
+  return [entry.text for entry in words]
+}
+
+def firstText(words: GitWord[], fallback: string): string {
+  if (words.length == 0) {
+    return fallback
+  }
+  return words[0].text
+}
+
+def hasAny(items: string[], wanted: string[]): boolean {
+  return [item for item in items if wanted.includes(item)].length > 0
+}
+
+/* The values given for any of these spellings of a flag. */
+def flagValues(values: FlagValue[], flags: string[]): string[] {
+  return [entry.value for entry in values if flags.includes(entry.flag)]
+}
+
+
 /** How many lines head and tail print when no count is given. */
 static const DEFAULT_LINE_COUNT = 10
 
@@ -2283,7 +2937,7 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
   if (command.redirects.length > 0) {
     return success(refusePlan(CLI_NOT_AVAILABLE, verbNames([command])))
   }
-  return match(echoWords(command.args)) {
+  return match(literalWords(command.args)) {
     success(args) => success({
       effects: [],
       execution: {
@@ -2298,9 +2952,9 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
 }
 
 // This path never invokes a shell, so it cannot expand variables or globs.
-def echoWords(words: Word[]): Result<string[]> {
+def literalWords(words: Word[]): Result<string[]> {
   """
-  Return argument text only when every word is fully literal.
+  Return each word's text, failing when any word is not fully literal.
   """
   let out: string[] = []
   for (arg in words) {
@@ -2356,7 +3010,7 @@ def echoText(command: SimpleCommand): Result<string> {
   if (isFailure(split)) {
     return split
   }
-  const words = echoWords(split.value.positionals)
+  const words = literalWords(split.value.positionals)
   if (isFailure(words)) {
     return words
   }
@@ -2503,7 +3157,8 @@ export def planFor(source: string, cwd: string): Plan {
 
 /** The effects of a command, the working directory once it has run, and
   the command as bash will run it. That is the command as written, except
-  that each recognized `cd` names the directory the classifier resolved. */
+  that each recognized `cd` names the directory the classifier resolved,
+  and each recognized git command is the one `gitCommand` built. */
 type Classified = {
   effects: Effect[];
   cwd: string;
@@ -2554,8 +3209,8 @@ def classify(command: Command, cwd: string, readsStdin: boolean): Result<Classif
 
 @capabilities(fileRead)
 def classifySimple(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<Classified> {
-  const effects = effectsFor(command, cwd, readsStdin)?
-  return success({ effects: effects, cwd: cwd, command: command })
+  const rule = simpleCommandRule(command, cwd, readsStdin)?
+  return success({ effects: rule.effects, cwd: cwd, command: rule.command })
 }
 
 // The first stage reads what the pipeline itself reads, and every later
@@ -2721,7 +3376,7 @@ export def isRefused(command: SimpleCommand): boolean {
 // a reset, and matching a subcommand name anywhere in the arguments would
 // refuse it.
 //
-// `clean` and `restore` are destructive by purpose. `reset` and `checkout`
+// `clean` is destructive by purpose. `restore`, `reset`, and `checkout`
 // are only destructive in particular spellings, and refusing the whole
 // subcommand would refuse `git checkout main`, which agents do constantly.
 def isDestructiveGit(command: SimpleCommand): boolean {
@@ -2735,16 +3390,45 @@ def isDestructiveGit(command: SimpleCommand): boolean {
   if (first.tag != "literal") {
     return false
   }
-  // Checkout discards work in two spellings: with a `.` argument, and
-  // with a `--`, which says every word after it is a path
-  // (`git checkout -- utils.py`). The parser returns `--` as a flag word.
   return match(first.text) {
     "clean" => true
-    "restore" => true
+    "restore" => !onlyUnstages(command)
     "reset" => hasFlag(command, "--hard")
-    "checkout" => hasLiteralArg(command, ".") || hasFlag(command, "--")
+    "checkout" => checkoutDiscards(command)
     _ => false
   }
+}
+
+// `git restore --staged <paths>` takes files out of the index and leaves
+// the working tree alone. With any other flag, or none, restore discards
+// work. The `--` that separates paths is not counted: the parser returns
+// it as a flag word.
+def onlyUnstages(command: SimpleCommand): boolean {
+  const flags = [flag for flag in flagNames(command) if flag != END_OF_FLAGS]
+  return flags.length == 1 && flags[0] == "--staged"
+}
+
+// Checkout discards work in three spellings: with a `.` argument; with a
+// `--`, which says every word after it is a path (`git checkout --
+// utils.py`); and with a second word beside the ref (`git checkout main
+// utils.py`), which overwrites that file. `-b` and `-B` take a second
+// word as a start point, so they are let through.
+def checkoutDiscards(command: SimpleCommand): boolean {
+  if (hasLiteralArg(command, ".") || hasFlag(command, END_OF_FLAGS)) {
+    return true
+  }
+  const creates = hasFlag(command, "-b") || hasFlag(command, "-B")
+  return plainWordCount(command) >= CHECKOUT_WITH_A_SECOND_WORD && !creates
+}
+
+/** `checkout`, a ref, and one more word. The subcommand is itself a word. */
+static const CHECKOUT_WITH_A_SECOND_WORD = 3
+
+// Every argument that is not a flag, whatever tag the parser gave it: a
+// word with a slash is a `path` and a quoted word is `singleQuoted`, and
+// both count.
+def plainWordCount(command: SimpleCommand): number {
+  return [arg for arg in command.args if arg.tag != "flag"].length
 }
 
 def hasFlag(command: SimpleCommand, name: string): boolean {
@@ -2808,7 +3492,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run Bash commands after approval of the actions they perform.
   Return stdout on success. A nonzero exit is a failure carrying the exit
@@ -3084,6 +3768,119 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
       })
       return success(null)
     }
+    "std::git::show" => {
+      raise std::git::show("Show a commit", {
+        cwd: effect.payload.cwd,
+        ref: effect.payload.ref,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::blame" => {
+      raise std::git::blame("Show who last changed each line of a file", {
+        cwd: effect.payload.cwd,
+        path: effect.payload.path,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::branchList" => {
+      raise std::git::branchList("List branches", {
+        cwd: effect.payload.cwd,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::remoteList" => {
+      raise std::git::remoteList("List remotes", {
+        cwd: effect.payload.cwd,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::stashList" => {
+      raise std::git::stashList("List stashes", {
+        cwd: effect.payload.cwd,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::add" => {
+      raise std::git::add("Stage files", {
+        cwd: effect.payload.cwd,
+        paths: effect.payload.paths,
+        all: effect.payload.all,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::commit" => {
+      raise std::git::commit("Commit the staged changes", {
+        cwd: effect.payload.cwd,
+        message: effect.payload.message,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::checkout" => {
+      raise std::git::checkout("Check out a branch or commit", {
+        cwd: effect.payload.cwd,
+        target: effect.payload.target,
+        force: effect.payload.force,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::switch" => {
+      raise std::git::switch("Switch branches", {
+        cwd: effect.payload.cwd,
+        branch: effect.payload.branch,
+        create: effect.payload.create,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::branchCreate" => {
+      raise std::git::branchCreate("Create a branch", {
+        cwd: effect.payload.cwd,
+        branch: effect.payload.branch,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::branchDelete" => {
+      raise std::git::branchDelete("Delete a branch", {
+        cwd: effect.payload.cwd,
+        branch: effect.payload.branch,
+        force: effect.payload.force,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::stashPush" => {
+      raise std::git::stashPush("Stash the uncommitted changes", {
+        cwd: effect.payload.cwd,
+        message: effect.payload.message,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::stashPop" => {
+      raise std::git::stashPop("Apply and drop the newest stash", {
+        cwd: effect.payload.cwd,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::restore" => {
+      raise std::git::restore("Take files out of the staging area", {
+        cwd: effect.payload.cwd,
+        paths: effect.payload.paths,
+        staged: effect.payload.staged,
+        command: fullCommand
+      })
+      return success(null)
+    }
   }
   return success(null)
 }
@@ -3118,17 +3915,20 @@ def runBash(command: string, cwd: string, source: string = ""): Result<string> {
   // Every plan raises at least one effect, so no classification bug can
   // turn into an ungated shell call. Do not add a caller that skips
   // `raiseAll`, and do not copy this call anywhere else.
+  // `source` is the command as the model wrote it, which can differ from
+  // the text this function runs: a `cd` names its resolved folder, and a
+  // git command is the one `gitCommand` built. The trace and a failure
+  // both name the model's text. A model that read the rewritten text in a
+  // failure could copy it, and `git -c ...` has no rule.
+  const label = if (source == "") then command else source
   const attempt = try _bash(command, cwd, 0, "", {})
   if (attempt is failure(why)) {
-    return failure("`${command}` was not run: ${why}")
+    return failure("`${label}` was not run: ${why}")
   }
   // try wraps the returned ExecResult in the success value.
   const result: any = attempt.value
-  // `source` is the command as the user typed it, which can differ from
-  // the narrowed text this function ran; the trace names the original.
-  const label = if (source == "") then command else source
   if (result.exitCode != 0) {
-    return exitFailure(command, result.exitCode, result.stdout, result.stderr, label)
+    return exitFailure(label, result.exitCode, result.stdout, result.stderr, label)
   }
   return success(keepOutput(result.stdout, result.exitCode, label))
 }

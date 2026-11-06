@@ -4,6 +4,8 @@
 // Agency's per-run isolation. The output parsers live in gitParse.ts;
 // path-containment (async + symlink-aware) lives in git.ts.
 
+import { GIT_CODE_ENV, GIT_RETARGET_ENV, GIT_SSH_ENV, namedBy } from "../host/gitEnvironment.js";
+
 // git's porcelain change codes are a closed set:
 //   "." = unmodified          "M" = modified
 //   "A" = added               "D" = deleted
@@ -102,34 +104,13 @@ export const GIT_HARDENING_FLAGS: string[] = [
   "--no-optional-locks",
 ];
 
-// Env vars we strip before invoking git. Two classes:
-//   (a) command-execution vectors (run arbitrary code / load attacker config)
-//   (b) repo/worktree overrides that would retarget git away from `cwd` —
-//       these would defeat the explicit-cwd contract AND allowedPaths
-//       containment (which resolves against cwd, not an overridden work tree).
-// A trailing "*" matches any var starting with that prefix.
-const SCRUB_ENV_KEYS: string[] = [
-  // (a) code execution / config injection
-  "GIT_EXTERNAL_DIFF",
-  "GIT_PAGER",
-  "GIT_SSH_COMMAND",
-  "GIT_SSH",
-  "GIT_PROXY_COMMAND",
-  "GIT_EXEC_PATH",
-  "GIT_EDITOR",
-  "GIT_SEQUENCE_EDITOR",
-  "GIT_ATTR_SOURCE",
-  "GIT_CONFIG*", // GIT_CONFIG, GIT_CONFIG_GLOBAL/SYSTEM, GIT_CONFIG_COUNT/KEY_n/VALUE_n
-  // (b) repo / worktree retargeting
-  "GIT_DIR",
-  "GIT_WORK_TREE",
-  "GIT_INDEX_FILE",
-  "GIT_OBJECT_DIRECTORY",
-  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-  "GIT_COMMON_DIR",
-  "GIT_NAMESPACE",
-  "GIT_CEILING_DIRECTORIES",
-];
+// Env vars we strip before invoking git: the ones that run a program or
+// load config, the ones that name the program git connects with, and the
+// ones that retarget git away from `cwd`. The last would defeat the
+// explicit-cwd contract AND allowedPaths containment (which resolves
+// against cwd, not an overridden work tree). The lists live in the host
+// layer, where the shell's environment reads two of them.
+const SCRUB_ENV_KEYS: string[] = [...GIT_CODE_ENV, ...GIT_SSH_ENV, ...GIT_RETARGET_ENV];
 
 /** Copy of `base` with git command-injection vars removed, and with no
  *  unset entries, the way a host takes a child's environment. */
@@ -140,10 +121,7 @@ export function scrubEnv(base: Record<string, string | undefined>): Record<strin
     if (value === undefined) {
       continue;
     }
-    const scrub = SCRUB_ENV_KEYS.some((rule) =>
-      rule.endsWith("*") ? key.startsWith(rule.slice(0, -1)) : key === rule,
-    );
-    if (!scrub) {
+    if (!namedBy(SCRUB_ENV_KEYS, key)) {
       scrubbed[key] = value;
     }
   }

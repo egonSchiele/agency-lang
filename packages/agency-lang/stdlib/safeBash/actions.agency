@@ -29,6 +29,20 @@ export type Effect =
   | { name: "std::git::status"; payload: { cwd: string } }
   | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
   | { name: "std::git::diff"; payload: GitDiffPayload }
+  | { name: "std::git::show"; payload: GitShowPayload }
+  | { name: "std::git::blame"; payload: GitBlamePayload }
+  | { name: "std::git::branchList"; payload: GitRepoPayload }
+  | { name: "std::git::remoteList"; payload: GitRepoPayload }
+  | { name: "std::git::stashList"; payload: GitRepoPayload }
+  | { name: "std::git::add"; payload: GitAddPayload }
+  | { name: "std::git::commit"; payload: GitCommitPayload }
+  | { name: "std::git::checkout"; payload: GitCheckoutPayload }
+  | { name: "std::git::switch"; payload: GitSwitchPayload }
+  | { name: "std::git::branchCreate"; payload: GitBranchCreatePayload }
+  | { name: "std::git::branchDelete"; payload: GitBranchDeletePayload }
+  | { name: "std::git::stashPush"; payload: GitStashPushPayload }
+  | { name: "std::git::stashPop"; payload: GitRepoPayload }
+  | { name: "std::git::restore"; payload: GitRestorePayload }
   | { name: "std::grep"; payload: GrepPayload }
   | { name: "std::read"; payload: ReadPayload }
   | { name: "std::ls"; payload: LsPayload }
@@ -161,6 +175,212 @@ export type GitDiffPayload = {
   ref2: string;
   staged: boolean;
   path: string
+}
+
+// The payload of each git effect safeBash can ask for, as its declaration
+// in `stdlib/git.agency` has it. The raise sites in `stdlib/safeBash.agency`
+// check each against that declaration.
+
+/** The payload of a git effect that names only the repository. */
+export type GitRepoPayload = {
+  cwd: string
+}
+
+export type GitLogPayload = {
+  cwd: string;
+  ref: string;
+  path: string
+}
+
+export type GitShowPayload = {
+  cwd: string;
+  ref: string
+}
+
+export type GitBlamePayload = {
+  cwd: string;
+  path: string
+}
+
+export type GitAddPayload = {
+  cwd: string;
+  paths: string[];
+  all: boolean
+}
+
+export type GitCommitPayload = {
+  cwd: string;
+  message: string
+}
+
+export type GitCheckoutPayload = {
+  cwd: string;
+  target: string;
+  force: boolean
+}
+
+export type GitSwitchPayload = {
+  cwd: string;
+  branch: string;
+  create: boolean
+}
+
+export type GitBranchCreatePayload = {
+  cwd: string;
+  branch: string
+}
+
+export type GitBranchDeletePayload = {
+  cwd: string;
+  branch: string;
+  force: boolean
+}
+
+export type GitStashPushPayload = {
+  cwd: string;
+  message: string
+}
+
+export type GitRestorePayload = {
+  cwd: string;
+  paths: string[];
+  staged: boolean
+}
+
+export def gitStatusEffect(payload: GitRepoPayload): Effect {
+  """Build a std::git::status approval descriptor without raising it."""
+  return {
+    name: "std::git::status",
+    payload: payload
+  }
+}
+
+export def gitLogEffect(payload: GitLogPayload): Effect {
+  """Build a std::git::log approval descriptor without raising it."""
+  return {
+    name: "std::git::log",
+    payload: payload
+  }
+}
+
+export def gitDiffEffect(payload: GitDiffPayload): Effect {
+  """Build a std::git::diff approval descriptor without raising it."""
+  return {
+    name: "std::git::diff",
+    payload: payload
+  }
+}
+
+export def gitShowEffect(payload: GitShowPayload): Effect {
+  """Build a std::git::show approval descriptor without raising it."""
+  return {
+    name: "std::git::show",
+    payload: payload
+  }
+}
+
+export def gitBlameEffect(payload: GitBlamePayload): Effect {
+  """Build a std::git::blame approval descriptor without raising it."""
+  return {
+    name: "std::git::blame",
+    payload: payload
+  }
+}
+
+export def gitBranchListEffect(payload: GitRepoPayload): Effect {
+  """Build a std::git::branchList approval descriptor without raising it."""
+  return {
+    name: "std::git::branchList",
+    payload: payload
+  }
+}
+
+export def gitRemoteListEffect(payload: GitRepoPayload): Effect {
+  """Build a std::git::remoteList approval descriptor without raising it."""
+  return {
+    name: "std::git::remoteList",
+    payload: payload
+  }
+}
+
+export def gitStashListEffect(payload: GitRepoPayload): Effect {
+  """Build a std::git::stashList approval descriptor without raising it."""
+  return {
+    name: "std::git::stashList",
+    payload: payload
+  }
+}
+
+export def gitAddEffect(payload: GitAddPayload): Effect {
+  """Build a std::git::add approval descriptor without raising it."""
+  return {
+    name: "std::git::add",
+    payload: payload
+  }
+}
+
+export def gitCommitEffect(payload: GitCommitPayload): Effect {
+  """Build a std::git::commit approval descriptor without raising it."""
+  return {
+    name: "std::git::commit",
+    payload: payload
+  }
+}
+
+export def gitCheckoutEffect(payload: GitCheckoutPayload): Effect {
+  """Build a std::git::checkout approval descriptor without raising it."""
+  return {
+    name: "std::git::checkout",
+    payload: payload
+  }
+}
+
+export def gitSwitchEffect(payload: GitSwitchPayload): Effect {
+  """Build a std::git::switch approval descriptor without raising it."""
+  return {
+    name: "std::git::switch",
+    payload: payload
+  }
+}
+
+export def gitBranchCreateEffect(payload: GitBranchCreatePayload): Effect {
+  """Build a std::git::branchCreate approval descriptor without raising it."""
+  return {
+    name: "std::git::branchCreate",
+    payload: payload
+  }
+}
+
+export def gitBranchDeleteEffect(payload: GitBranchDeletePayload): Effect {
+  """Build a std::git::branchDelete approval descriptor without raising it."""
+  return {
+    name: "std::git::branchDelete",
+    payload: payload
+  }
+}
+
+export def gitStashPushEffect(payload: GitStashPushPayload): Effect {
+  """Build a std::git::stashPush approval descriptor without raising it."""
+  return {
+    name: "std::git::stashPush",
+    payload: payload
+  }
+}
+
+export def gitStashPopEffect(payload: GitRepoPayload): Effect {
+  """Build a std::git::stashPop approval descriptor without raising it."""
+  return {
+    name: "std::git::stashPop",
+    payload: payload
+  }
+}
+
+export def gitRestoreEffect(payload: GitRestorePayload): Effect {
+  """Build a std::git::restore approval descriptor without raising it."""
+  return {
+    name: "std::git::restore",
+    payload: payload
+  }
 }
 
 // One variant per way a plan can be carried out, each carrying only the

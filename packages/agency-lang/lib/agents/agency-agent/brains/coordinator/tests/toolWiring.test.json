@@ -16,6 +16,36 @@
       ]
     },
     {
+      "nodeName": "composedCodeToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
+    },
+    {
+      "nodeName": "composedAgencyCodeToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
+    },
+    {
       "nodeName": "researchToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",

@@ -13,8 +13,8 @@ Run it with `agency agent` (it is the default) or `agency agent --brain coordina
 
 One coordinator LLM reads each turn and either answers itself or calls a
 specialist. The specialists are ordinary Agency functions handed to the
-coordinator as tools, so "routing" is the model choosing a tool. The research,
-oracle, and explorer specialists are handoffs: they continue the coordinator's
+coordinator as tools, so "routing" is the model choosing a tool. The two
+coders and the research, oracle, and explorer specialists are handoffs: they continue the coordinator's
 conversation, so it sees their steps as well as their answer. The review,
 writing, and rewrite specialists run in a thread of their own, and the
 coordinator sees only their final answer.
@@ -34,7 +34,7 @@ tests/                  Agency execution tests for this brain
 `coordinatorBrain()` returns the record the registry hands to the harness:
 
 - `name: "coordinator"`, the `--brain` value.
-- `startTargets`: `code`, `research`, `oracle`, `explorer`, `review`, `writing`, `rewrite`. These
+- `startTargets`: `code`, `agencyCode`, `research`, `oracle`, `explorer`, `review`, `writing`, `rewrite`. These
   are the names `--agent <name>` may route the starting prompt to directly.
   `--agent main` (or no flag) goes through the coordinator.
 - `init(context)`: runs once per session, inside the harness policy handler.
@@ -90,6 +90,16 @@ from `shared.agency`, the session name, the seconds-to-milliseconds line
 subagent has one. The two coders share `code.agency`, which also holds the
 tools they add to the stdlib coding agent, the superpowers skill files, and
 the one-shot flag.
+
+When a coder finishes, the coordinator's own call continues and writes the
+reply. That call is kept on purpose: the coordinator may follow a coder with
+`reviewAgent` or a second dispatch in the same turn, and `endTurn()` in the
+wrapper would stop it. The researcher ends the turn because its answer is the
+reply.
+
+The coder's search tools follow the user's `/search` choice. `runCoder`
+passes the client tool or the hosted list from `withWebSearch` to the stdlib
+agent, which would otherwise pick hosted search by the model's provider.
 
 The coders have no expert, brainstorm, supervisor, or verifier
 around the coder, so one model works the task from real tool output. The

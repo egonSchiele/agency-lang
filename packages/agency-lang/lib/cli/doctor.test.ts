@@ -29,6 +29,11 @@ describe("buildDoctorArgs", () => {
     expect(args[args.indexOf("--trace") + 1]).toBe("--");
   });
 
+  it("starts the Agency coder, which carries the tools the prompt names", () => {
+    const args = buildDoctorArgs({ file: "x.agency" });
+    expect(args.slice(0, 3)).toEqual(["--interactive", "--agent", "agencyCode"]);
+  });
+
   it("omits the debug flags entirely when not requested", () => {
     const args = buildDoctorArgs({ file: "x.agency", symptom: "boom" });
     expect(args).not.toContain("--trace");

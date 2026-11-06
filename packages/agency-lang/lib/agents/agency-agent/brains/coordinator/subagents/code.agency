@@ -23,6 +23,7 @@ import { ensureSystemMessage } from "std::thread"
 
 import { AGENT_SOURCE_DIR } from "../../../lib/agentSource.agency"
 import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
+import { getSearchBackend, withWebSearch } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
 
@@ -145,28 +146,41 @@ export static const agencyCodeAgentTools: any[] = [...codingAgentTools(), ...age
 
 static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown, and put code and command output in fenced code blocks."
 
+// The stdlib coding prompt tells the model it has web search.
+static const SEARCH_OFF_NOTE = "Web search is turned off for this session. Do not plan on searching the web."
+
 // An unattended run has no reader for a formatted reply and no next turn,
 // and oneShot.md holds the rules for working that way.
 def dispatchContext(): string {
+  let style = REPL_STYLE
   if (_oneShot) {
-    return "${ONE_SHOT_NOTE}\n\n${globalInstructionsText()}"
+    style = ONE_SHOT_NOTE
   }
-  return "${REPL_STYLE}\n\n${globalInstructionsText()}"
+  if (getSearchBackend() == "off") {
+    style = "${style}\n\n${SEARCH_OFF_NOTE}"
+  }
+  return "${style}\n\n${globalInstructionsText()}"
 }
 
 // Both coders are the stdlib coding agent. They differ in the tools they add.
+// The search backend the user picked with /search decides the search tools:
+// a client tool for Tavily or Brave, the provider's hosted search, or none.
+// Left to itself the stdlib agent would pick hosted search by the model's
+// provider and ignore the setting.
 def runCoder(
   userMsg: string,
   maxSeconds: number | null,
   maxDollars: number | null,
   extras: any[],
 ): Result<string> {
+  const search = withWebSearch({ tools: [] })
   return codingAgent(
     task: userMsg,
     context: dispatchContext(),
     maxCost: maxDollars ?? CODE_MAX_COST,
     maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
-    extraTools: [...extras, escalate.partial(task: userMsg)],
+    extraTools: [...extras, ...(search.tools ?? []), escalate.partial(task: userMsg)],
+    hostedTools: search.hostedTools ?? [],
   )
 }
 

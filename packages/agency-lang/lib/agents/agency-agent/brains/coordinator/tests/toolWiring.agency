@@ -13,7 +13,7 @@
  * tests run against a real provider — the assertions only depend on the
  * call succeeding, not on the response content, so both modes pass.
  */
-import { codeTools } from "../subagents/code.agency"
+import { agencyCodeAgentTools, codeTools } from "../subagents/code.agency"
 import { researchTools } from "../subagents/research.agency"
 // The oracle and the explorer live in the stdlib now, so their tool lists
 // come from there. The check is the same: the agency agent still offers them,
@@ -33,6 +33,7 @@ import { buildTools as reviewTools } from "std::agents/review"
 import { buildTools as writingReviewTools } from "std::agents/writing/review"
 
 import test { _setLearnedRoot } from "../../../lib/learned.agency"
+import test { escalate } from "../subagents/code.agency"
 import { LEARNED_SKILLS_TOOL, LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
 import { mainAgentTools, turnTools } from "../coordinator.agency"
 import { checkBundledSkill } from "../lib/bundledSkills.agency"
@@ -64,6 +65,19 @@ def pingWith(tools: any[]): string {
 
 node codeToolsHaveUniqueNames() {
   return pingWith(codeTools)
+}
+
+// What each coder really sends: the stdlib coding agent's tools, the tools
+// this agent adds, escalate bound to the task, and the saveDraft the stdlib
+// agent appends. The Agency coder is the one at risk, because the brief docs
+// tools, agencyCli, and the superpowers skill tool join the coding agent's
+// own skill tool.
+node composedCodeToolsHaveUniqueNames() {
+  return pingWith([...codeTools, escalate.partial(task: "x"), saveDraft])
+}
+
+node composedAgencyCodeToolsHaveUniqueNames() {
+  return pingWith([...agencyCodeAgentTools, escalate.partial(task: "x"), saveDraft])
 }
 
 node researchToolsHaveUniqueNames() {

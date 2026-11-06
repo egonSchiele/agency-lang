@@ -50,6 +50,8 @@ static const importableSurface = """You may import and compose these building bl
 - import { plannerAgent } from "std::agents/planner"            decompose a genuinely complex sub-task into its own planned agent
 - direct tools from std::shell, std::fs, std::http, and the rest of the standard library
 
+codingAgent and researcherAgent run on the current thread. Wrap each call in its own `thread { }` block, as the example does, so one step does not carry the messages and tool output of the steps before it.
+
 Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct tools) to actually create files, run commands, and produce the deliverable. Use plannerAgent ONLY for a sub-task that is itself large and multi-step; never call plannerAgent for a concrete, single-step piece of work, and never just re-plan without doing anything.
 
 
@@ -60,7 +62,10 @@ Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct to
 static const planExample = """EXAMPLE, compose a worker in a node main. Worker agents return a Result, so unwrap it:
 import { codingAgent } from "std::agents/coding"
 node main(): string {
-  const result = codingAgent("clone the repo, install deps, and run the test suite")
+  let result: Result<string> = failure("the coding agent never ran")
+  thread {
+    result = codingAgent("clone the repo, install deps, and run the test suite")
+  }
   if (isFailure(result)) {
     return "failed: \${result.error}"
   }

@@ -86,6 +86,7 @@ def solve(
   model: string,
   provider: string,
   extraTools: any[],
+  hostedTools: string[] | null,
 ): string {
   ensureSystemMessage(systemPrompt)
   const prompt = """
@@ -100,7 +101,7 @@ ${finalizeReminder}
     provider: provider,
     tools: [...buildTools(), ...extraTools, saveDraft],
     spillToolResultsOver: AGENT_SPILL_OVER,
-    hostedTools: hostedSearchTools(model, provider),
+    hostedTools: hostedTools ?? hostedSearchTools(model, provider),
   ),
   )
 }
@@ -117,6 +118,7 @@ export handoff def codingAgent(
   model: string = "",
   provider: string = "",
   extraTools: any[] = [],
+  hostedTools: string[] | null = null,
 ): Result<string> {
   """
   Write, edit, and run code to complete a task on disk. Returns a short
@@ -130,6 +132,8 @@ export handoff def codingAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override, ignored when model is empty.
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param hostedTools - Provider-hosted tools to enable, or null to enable
+    hosted web search when the model's provider offers it. Pass [] for none.
   """
 
   // Return position: a draft the model saved reaches the guard, which
@@ -140,5 +144,6 @@ export handoff def codingAgent(
     model: model,
     provider: provider,
     extraTools: extraTools,
+    hostedTools: hostedTools,
   )
 }

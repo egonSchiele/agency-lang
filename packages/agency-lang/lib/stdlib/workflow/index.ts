@@ -62,9 +62,9 @@ export function describeProblem({ step, field, message }: Problem): string {
 }
 
 /** A failure whose message lists the problems and whose data carries them. */
-export function _problemsFailure(problems: Problem[]): ResultFailure {
+export function _problemsFailure(problems: Problem[], rejected: boolean = false): ResultFailure {
   const message = `the workflow has problems:\n${problems.map(describeProblem).join("\n")}`;
-  return failure(message, { problems });
+  return failure(message, { problems }, { rejected });
 }
 
 /** The tools as import references, or a failure naming every tool that
@@ -147,9 +147,11 @@ export function _compileWorkflowSource(
   return result.compiled === null ? _problemsFailure(result.problems) : success(result.compiled);
 }
 
-/** A failure for one problem that belongs to the whole workflow. */
-export function _workflowFailure(message: string): ResultFailure {
-  return _problemsFailure([{ step: null, field: null, message }]);
+/** A failure for one problem that belongs to the whole workflow. Pass the
+ *  `rejected` flag of the failure this one replaces, so the tool loop can
+ *  still tell the model that the user said no. */
+export function _workflowFailure(message: string, rejected: boolean = false): ResultFailure {
+  return _problemsFailure([{ step: null, field: null, message }], rejected);
 }
 
 export function _problemsFromDiagnostics(

@@ -103,6 +103,13 @@ export const TERNARY_MESSAGE = `Agency has no ternary (\`? :\`). Use an \`if ...
 
 The \`else\` is required. The expression is only allowed as a \`const\`/\`let\` value or a \`return\` — for anything more involved, use \`match\`.`;
 
+export const NON_NULL_ASSERTION_MESSAGE = `Agency has no \`!\` after a value. \`!\` belongs to a type, as in \`const n: number! = 42\`. Reading an item of a list or an object gives a value that may be null, so check for null:
+
+  const last = items[items.length - 1]
+  if (last == null) {
+    return "empty"
+  }`;
+
 export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, not \`/.../\`:
 
   const lines = text.split(re/,\\s*/)`;

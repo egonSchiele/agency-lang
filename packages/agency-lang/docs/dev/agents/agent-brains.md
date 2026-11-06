@@ -68,9 +68,28 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 - `lib/repl.agency`: the interactive terminal. It calls the harness
   `runTurn` and never a brain directly.
 - `lib/grounding.agency`: builds the grounding text with `groundingText`.
-  The project block (date, cwd, AGENTS.md or else CLAUDE.md) is
-  `projectContextText` in `lib/projectContext.agency`, a leaf module so
-  the code subagent can put the same block in its own prompt.
+  The project block (date, cwd, project instructions) is
+  `projectContextText` in `lib/projectContext.agency`. The code subagent
+  puts the same block in its own prompt. The instructions come from the
+  working directory and each parent up to the folder that holds `.git`,
+  the same walk the Claude Code skills use (`projectFolders`). Each folder
+  gives its `AGENTS.md`, or else its `CLAUDE.md`, also when the
+  `AGENTS.md` cannot be read. The blocks are ordered root first, so the
+  nearest folder's rules are read last. Outside a repository only the
+  working directory is read.
+
+  The reads are approved with `with approve`. The harness builds its
+  grounding in `runSession` before it installs the policy handler, so no
+  rule in the agent policy can stop those reads. The code subagent builds
+  its block inside a turn, under the handler. There a `reject` rule for
+  `std::read` on one of the folders wins over the `with approve`, and that
+  folder's instructions are left out of the subagent's prompt.
+- `lib/commandPalette.agency`: `promptCommands` holds the commands that
+  ship with the agent and expand to a prompt, such as `/init`. They come
+  last in `slashCommands()`, so a skill or command file of the same name
+  replaces one. `/init` names the file to write, `AGENTS.md` in the
+  repository root, because that is the one folder every start directory
+  in the project reads.
 - `lib/globalInstructions.agency`: reads optional `AGENTS.md` from
   `POLICY_DIR` at startup. This uses the same agent-home override as
   settings and history. Both brains add it before each LLM call with

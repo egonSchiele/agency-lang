@@ -1,0 +1,70 @@
+node plainReply() {
+  const result = try llm("Say hello.")
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}
+
+node valueField() {
+  const result = try llm("Say hello.")
+  if (isFailure(result)) {
+    return "failed"
+  }
+  return result.value
+}
+
+def replyOrFailure(): Result<string> {
+  return try llm("Say hello.")
+}
+
+node returnedFromDef() {
+  const result = replyOrFailure()
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}
+
+effect test::lookUp { topic: string }
+
+def lookUp(topic: string): string {
+  """
+  Look up a topic.
+
+  @param topic - The topic to look up
+  """
+  interrupt test::lookUp("Look this up?", { topic: topic })
+  return "facts about ${topic}"
+}
+
+def askWithTool(): Result<string> {
+  return try llm("Tell me about whales.", tools: [lookUp])
+}
+
+// The model calls lookUp, which raises an interrupt nothing in the program
+// answers. It has to come out of the def as an interrupt. The test file
+// approves it, the run resumes, and the reply comes back.
+node toolInterruptSurfaces() {
+  const result = askWithTool()
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}
+
+node toolInterruptApprovedInCode() {
+  const result = askWithTool() with approve
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}
+
+node toolInterruptInAnAssignment() {
+  const result = try llm("Tell me about whales.", tools: [lookUp])
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}

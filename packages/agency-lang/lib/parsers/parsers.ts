@@ -31,6 +31,7 @@ import {
   STATIC_INNER_MESSAGE,
   STATIC_LET_MESSAGE,
   SWITCH_MESSAGE,
+  NON_NULL_ASSERTION_MESSAGE,
   TERNARY_MESSAGE,
   UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
@@ -4595,6 +4596,15 @@ const ternaryRefusal = (expression: Expression, rest: string): ParserFailure | n
   return committedFailure(TERNARY_MESSAGE, tail.rest);
 };
 
+/** `!` straight after a value, as in TypeScript's `items[0]!`. `!=` and `!~`
+ *  are operators, so they are left alone. Only a `!` with no space before it
+ *  is taken, because nothing valid puts one there: a prefix `!` starts a
+ *  value, and the `!` of `x as Positive!` is read with the type. */
+const nonNullAssertionMarker = seqC(char("!"), not(oneOf("=~")));
+
+const nonNullAssertionRefusal = (rest: string): ParserFailure | null =>
+  nonNullAssertionMarker(rest).success ? committedFailure(NON_NULL_ASSERTION_MESSAGE, rest) : null;
+
 /** `/.../` where a value should start. Nothing in Agency begins a value with
  *  `/`, so this is a JavaScript regex unless it opens a comment. */
 const jsRegexMarker = seqC(char("/"), not(oneOf("/* \n")), many1(noneOf("/\n")), char("/"));
@@ -4610,7 +4620,8 @@ export const exprParser: Parser<Expression> = (input: string) => {
   }
   const result = _exprParserBase(input);
   if (!result.success) return result;
-  const refused = ternaryRefusal(result.result, result.rest);
+  const refused =
+    ternaryRefusal(result.result, result.rest) ?? nonNullAssertionRefusal(result.rest);
   if (!refused) return result;
   // The enclosing node body is wrapped in a `parseError` that would otherwise
   // win the reporting contest, so record the commit in the parse state too.

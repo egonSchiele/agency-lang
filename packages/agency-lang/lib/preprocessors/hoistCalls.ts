@@ -253,20 +253,13 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
       ];
     }
     case "valueAccess": {
-      // A bare statement holding the `?` operator must be split like any
-      // other, because the guard needs the value in a local. The chain is
-      // the statement tail, so it is not hoisted as a unit itself.
-      if (hasUnwrap(stmt)) {
-        const walked = walk(stmt, counter, false);
-        return [...walked.temps, walked.expr];
-      }
-      // A bare method-call statement (`result.push(transform(item))`).
-      // The pre-slots pass never extracted from these — a recorded
-      // coverage hole kept for behavior identity, tripwire-covered like
-      // the other residuals. Extraction here would also need a
-      // dedicated tail rule for the chain itself; revisit deliberately,
-      // with fixtures, not as a refactor side effect.
-      return [recurseSlots(stmt, counter)];
+      // A bare chain statement, such as `result.push(transform(item))` or
+      // one holding the `?` operator. The chain is the statement tail, so
+      // it stays where it is, and the calls in its arguments become temps.
+      // Each temp gets the post-call guard, so an argument that paused or
+      // was aborted stops the scope before the method runs.
+      const walked = walk(stmt, counter, false);
+      return [...walked.temps, walked.expr];
     }
     case "withModifier": {
       // A `with` statement holding the `?` operator is rewritten INSIDE its

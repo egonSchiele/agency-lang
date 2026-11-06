@@ -6167,6 +6167,11 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     // dangling and unparseable. bodyReservedModifierParser sits before
     // it so top-level-only `static`/`export` declarations are still
     // rejected inside function and node bodies.
+    // Ahead of withModifierParser, which tries a function call first. A call
+    // may take a block, so `match(y) {` reads as a call to `match` with the
+    // arms as its block, and a guarded arm (`y if (y > 2) => ...`) then reads
+    // as an `if` statement with no `{`, which is a hard error.
+    lazy(() => matchBlockParser),
     lazy(() => withModifierParser),
     returnStatementParser,
     gotoStatementParser,
@@ -6177,7 +6182,6 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     lazy(() => parallelBlockParser),
     lazy(() => seqBlockParser),
     lazy(() => destructiveBlockParser),
-    matchBlockParser,
     lazy(() => ifParser),
     lazy(() => messageThreadParser),
     lazy(() => guardBlockParser),

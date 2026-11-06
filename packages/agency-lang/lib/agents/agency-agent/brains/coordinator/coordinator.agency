@@ -4,52 +4,34 @@
   and lib/) owns the CLI, the REPL, the policy handler, and the per-turn
   guard; this module only answers turns.
 */
-import { AgencySource } from "std::agency"
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { question } from "std::agent"
+import { AgencySource } from "std::agency"
 import { writableFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
 import { Attachment, endTurn, systemMessage } from "std::thread"
 
-import { claudeSkillTools } from "../../lib/claudeSkills.agency"
-import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
+import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 import { learnedExtras } from "../../lib/learned.agency"
+import { claudeSkillTools } from "../../lib/claudeSkills.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { searchSessions } from "../../lib/sessionSearch.agency"
-import {
-  getCapabilities,
-  getSlowModel,
-  getSlowProvider,
- } from "../../shared.agency"
-import { AgentBrain, BrainContext } from "../brain.agency"
-import {
-  getGeneratedTools,
-  learnSessionTools,
-  learnSkill,
-  writeToolFor,
- } from "./learn.agency"
+import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "./learn.agency"
 import { checkBundledSkill } from "./lib/bundledSkills.agency"
 import { useLlmOptions } from "./llmOptionTools.agency"
-import {
-  deletePreset,
-  listPresets,
-  savePreset,
-  setDefaultPreset,
- } from "./presetTools.agency"
-import {
-  codeAgent,
-  setCodeOneShot,
-  superpowersSkill,
- } from "./subagents/code.agency"
+import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
+import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
+import { AgentBrain, BrainContext } from "../brain.agency"
+import { codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
 import { reviewAgent } from "./subagents/review.agency"
 import { rewriteAgent } from "./subagents/rewrite.agency"
 import { writingAgent } from "./subagents/writing.agency"
-import { _exit } from "agency-lang/stdlib-lib/system.js"
 
 // Per-run grounding, from BrainContext. Spliced into the system prompt.
 let _context: string = ""
@@ -64,7 +46,11 @@ static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with
 // Skills about the agent itself. The folder ships with the agent, so the
 // scan is approved here, as the prompt reads above are. An outer handler
 // that rejects the scan still wins.
-static const coordinatorSkills = skillsDir(__dirname + "/skills", "flat", name: "coordinator_skills") with approve
+static const coordinatorSkills = skillsDir(
+  __dirname + "/skills",
+  "flat",
+  name: "coordinator_skills",
+) with approve
 
 // The read-only file tools let the coordinator answer a question that
 // hinges on a few files from its own context, instead of paying for a
@@ -146,10 +132,7 @@ export def turnTools(turnStart: any): any[] {
 }
 
 def mainOptions(turnStart: any): any {
-  const options: any = {
-    memory: true,
-    tools: turnTools(turnStart)
-  }
+  const options: any = { memory: true, tools: turnTools(turnStart) }
   const slowModel = getSlowModel()
   if (slowModel != "") {
     options.model = slowModel

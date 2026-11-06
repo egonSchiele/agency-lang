@@ -1,7 +1,37 @@
 {
   "tests": [
     {
-      "nodeName": "forkTitleMarksTheCopy",
+      "nodeName": "aForkIsMarkedInItsTitle",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aForkIsMarkedInThePicker",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "theForkMarkSurvivesANewTitle",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aHitCarriesADateAndAnAge",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

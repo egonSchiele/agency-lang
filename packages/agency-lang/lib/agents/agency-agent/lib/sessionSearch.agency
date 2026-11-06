@@ -3,8 +3,10 @@
   earlier conversations in this project directory. The sessions are the
   saved ones in sessions.agency.
 */
+import { formatDate, now } from "std::date"
+
 import { conversationSession, currentSessionId } from "./resume.agency"
-import { projectDir } from "./sessions.agency"
+import { projectDir, relativeAge } from "./sessions.agency"
 import { _searchSessions } from "agency-lang/stdlib-lib/agentSessions.js"
 import { _realDir } from "agency-lang/stdlib-lib/fs.js"
 
@@ -16,13 +18,38 @@ effect std::read {
   filename: string
 }
 
-/** One message of an earlier conversation that matched a search. */
+/** One message of an earlier conversation that matched a search. `date`
+  is the day the session was last used, and `age` is how long ago that
+  was, such as "3d ago". */
 export type SessionHit = {
+  sessionId: string;
+  title: string;
+  date: string;
+  age: string;
+  role: "user" | "assistant";
+  snippet: string
+}
+
+/** What `_searchSessions` returns: the time is in milliseconds. */
+export type TimedHit = {
   sessionId: string;
   title: string;
   lastActive: number;
   role: "user" | "assistant";
   snippet: string
+}
+
+/** A hit with its time as a date and an age, which a model reads more
+  reliably than a millisecond count. */
+export def datedHit(hit: TimedHit, nowMs: number): SessionHit {
+  return {
+    sessionId: hit.sessionId,
+    title: hit.title,
+    date: formatDate(hit.lastActive),
+    age: relativeAge(hit.lastActive, nowMs),
+    role: hit.role,
+    snippet: hit.snippet
+  }
 }
 
 static const MAX_HITS = 25
@@ -41,8 +68,8 @@ export idempotent def searchSessions(
   A message matches when it contains every word of the query, in any
   order and any letter case, so use a few distinctive words and not a
   sentence. Each hit is the text around the match, with the title of its
-  session and when that session was last used, in milliseconds since the
-  Unix epoch. The current conversation is not searched.
+  session, the date that session was last used, and how long ago that
+  was. The current conversation is not searched.
 
   @param query - The words to look for
   @param limit - The most hits to return, up to 25
@@ -57,12 +84,13 @@ export idempotent def searchSessions(
     dir: dir,
     filename: "*.json"
   })
-  const hits = _searchSessions(
+  const hits: TimedHit[] = _searchSessions(
     dir,
     session,
     query,
     currentSessionId(),
     Math.min(limit, MAX_HITS),
   )
-  return success(hits)
+  const nowMs = now()
+  return success([datedHit(hit, nowMs) for hit in hits])
 }

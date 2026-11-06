@@ -29,6 +29,8 @@ export type SessionRecord = {
   lastActive: number;
   turns: number;
   title: string;
+  /** The id of the session this one was forked from, when it is a fork. */
+  forkedFrom?: string;
 };
 
 const META_SUFFIX = ".meta.json";
@@ -57,7 +59,9 @@ function isRecord(value: unknown): value is SessionRecord {
   const r = value as Record<string, unknown>;
   const isText = (k: string) => typeof r[k] === "string";
   const isCount = (k: string) => typeof r[k] === "number" && Number.isFinite(r[k]) && r[k] >= 0;
+  const forkIsValid = r.forkedFrom === undefined || isText("forkedFrom");
   return (
+    forkIsValid &&
     isText("id") &&
     isText("cwd") &&
     isText("brain") &&

@@ -9,13 +9,12 @@ import { AgentBrain } from "../brains/brain.agency"
 import {
   currentSessionId,
   forkSession,
-  forkTitle,
   markTurnDone,
   recordTurn,
   startSession,
  } from "../lib/resume.agency"
-import { SessionRecord, saveSession } from "../lib/sessions.agency"
-import { SessionHit, searchSessions } from "../lib/sessionSearch.agency"
+import { SessionRecord, displayTitle, saveSession, sessionLabel } from "../lib/sessions.agency"
+import { SessionHit, TimedHit, datedHit, searchSessions } from "../lib/sessionSearch.agency"
 
 def noTurn(target: string, prompt: any): string {
   return ""
@@ -63,8 +62,53 @@ def search(query: string): SessionHit[] {
   return hits catch []
 }
 
-node forkTitleMarksTheCopy(): boolean {
-  return forkTitle("Fix the parser") == "Fix the parser (fork)" && forkTitle("") == "fork"
+def record(title: string, forkedFrom: string | null): SessionRecord {
+  const base: SessionRecord = {
+    id: "id-1",
+    cwd: "/work",
+    brain: "test",
+    created: 1,
+    lastActive: 1000,
+    turns: 2,
+    title: title
+  }
+  if (forkedFrom != null) {
+    base.forkedFrom = forkedFrom
+  }
+  return base
+}
+
+node aForkIsMarkedInItsTitle(): boolean {
+  const forked = displayTitle(record("Fix the parser", "id-0")) == "Fix the parser (fork)"
+  const original = displayTitle(record("Fix the parser", null)) == "Fix the parser"
+  return forked && original
+}
+
+node aForkIsMarkedInThePicker(): boolean {
+  const titled = sessionLabel(record("Fix the parser", "id-0"), 1000) == "Fix the parser (fork) · just now · 2 turns"
+  const untitled = sessionLabel(record("", "id-0"), 1000) == "id-1 (fork) · just now · 2 turns"
+  return titled && untitled
+}
+
+// The mark is on the record, so the title a refresh writes keeps it.
+node theForkMarkSurvivesANewTitle(): boolean {
+  const forked = record("Fix the parser", "id-0")
+  forked.title = "Parser error recovery"
+  return displayTitle(forked) == "Parser error recovery (fork)"
+}
+
+node aHitCarriesADateAndAnAge(): boolean {
+  const day = 24 * 60 * 60 * 1000
+  const usedAt = 1762300800000
+  const timed: TimedHit = {
+    sessionId: "s",
+    title: "t",
+    lastActive: usedAt,
+    role: "user",
+    snippet: "x"
+  }
+  const hit = datedHit(timed, usedAt + 3 * day)
+  return hit.age == "3d ago" && hit.date.startsWith("2025-11-0")
 }
 
 node forkNeedsATurn(): boolean {
@@ -84,7 +128,8 @@ node forkWritesToANewSession(): boolean {
   const isNew = currentSessionId() != original
   const namesTheOriginal = line.includes("--resume ${original}")
   const savedWithoutATurn = target != null && target.record.id == currentSessionId() && target.record.turns == 1
-  return isNew && namesTheOriginal && savedWithoutATurn
+  const remembersItsOrigin = target != null && target.record.forkedFrom == original
+  return isNew && namesTheOriginal && savedWithoutATurn && remembersItsOrigin
 }
 
 node findsAMessageInAnEarlierSession(): boolean {

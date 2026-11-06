@@ -4,13 +4,17 @@
   record. The files live in sessions.agency and the title in
   sessionTitle.agency.
 */
+import { _exit } from "agency-lang/stdlib-lib/system.js"
+import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
 import { now } from "std::date"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 
-import { AgentBrain } from "../brains/brain.agency"
+import { _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
+
 import {
   SessionRecord,
+  displayTitle,
   findSession,
   listSessions,
   mostRecentSession,
@@ -20,16 +24,9 @@ import {
   saveSession,
   sessionLabel,
  } from "./sessions.agency"
-import {
-  cleanTitle,
-  conversationText,
-  shouldRefreshTitle,
-  titleFor,
- } from "./sessionTitle.agency"
+import { cleanTitle, conversationText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
 import { showTranscript } from "./transcript.agency"
-import { _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
-import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
-import { _exit } from "agency-lang/stdlib-lib/system.js"
+import { AgentBrain } from "../brains/brain.agency"
 
 // The session this run writes to; null for one-shot runs, which are not
 // saved. A `let`, so a restore brings back the resumed session's own
@@ -64,7 +61,7 @@ export def sessionTitle(): string {
   if (record == null) {
     return ""
   }
-  return record.title
+  return displayTitle(record)
 }
 
 export def markTurnDone() {
@@ -106,13 +103,6 @@ export def conversationSession(): string {
   return _conversation
 }
 
-export def forkTitle(title: string): string {
-  if (title == "") {
-    return "fork"
-  }
-  return "${title} (fork)"
-}
-
 /** `/fork`: from here on this run writes to a new session, a copy of the
   one it was. The original stays on disk as it was last saved. Returns the
   line to show. The REPL saves after this line. */
@@ -135,7 +125,8 @@ export def forkSession(): string {
     created: t,
     lastActive: t,
     turns: record.turns,
-    title: forkTitle(record.title)
+    title: record.title,
+    forkedFrom: record.id
   }
   // Marks the record changed, so it is saved without a turn.
   _renamed = true
@@ -148,11 +139,7 @@ export def startIncognito() {
   _incognito = true
 }
 
-export def incognitoProblem(
-  continueFlag: boolean,
-  resumeArg: string | null,
-  logging: boolean,
-): string {
+export def incognitoProblem(continueFlag: boolean, resumeArg: string | null, logging: boolean): string {
   """
   Why an --incognito run cannot start, or "" when it can.
 
@@ -192,9 +179,7 @@ export def chooseSession(
   if (continueFlag) {
     const recent = mostRecentSession()
     if (recent == null) {
-      print(
-        color.yellow("No saved session for this directory; starting a new one."),
-      )
+      print(color.yellow("No saved session for this directory; starting a new one."))
     }
     return recent
   }
@@ -204,18 +189,18 @@ export def chooseSession(
 def pickSession(): SessionRecord | null {
   const all = listSessions()
   if (all.length == 0) {
-    print(
-      color.yellow("No saved sessions for this directory; starting a new one."),
-    )
+    print(color.yellow("No saved sessions for this directory; starting a new one."))
     return null
   }
   const nowMs = now()
   // A "new session" row rather than allowCancel: before the REPL exists,
   // Escape raises a cancellation instead of returning "".
-  let items: ChoiceItem[] = [{
+  let items: ChoiceItem[] = [
+    {
     key: "new",
     label: "Start a new session"
-  }]
+  },
+  ]
   for (record in all) {
     items.push({
       key: record.id,
@@ -255,11 +240,7 @@ export def startSession(chosen: SessionRecord | null, brain: AgentBrain) {
   }
   const cp = readCheckpointFile(chosen.id)
   if (cp == null) {
-    print(
-      color.red(
-        "The checkpoint file for session ${chosen.id} is missing or malformed.",
-      ),
-    )
+    print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
     _exit(1)
   }
   print(color.dim("Resuming: ${chosen.title}"))
@@ -272,7 +253,7 @@ export def startSession(chosen: SessionRecord | null, brain: AgentBrain) {
   nothing to save: no turn ran and no rename happened. */
 export def recordTurn(userMsg: string): SaveTarget | null {
   const record = _current
-  if (record == null || !_turnDone && !_renamed) {
+  if (record == null || (!_turnDone && !_renamed)) {
     return null
   }
   _renamed = false
@@ -315,11 +296,6 @@ export def saveSeedTurn(userMsg: string) {
   const id = checkpoint()
   const saved = saveSession(target.record, getCheckpoint(id))
   if (isFailure(saved)) {
-    _printAgentTrace(
-      {
-        kind: "sessionSaveFailure",
-        message: saved.error
-      },
-    )
+    _printAgentTrace({ kind: "sessionSaveFailure", message: saved.error })
   }
 }

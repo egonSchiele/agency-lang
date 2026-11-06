@@ -100,29 +100,35 @@ This is left as it is on purpose. These are rare shapes, they fail at build
 time, and refusing them with a diagnostic of their own was judged not worth
 the code.
 
-## A function named `raise` or `interrupt` cannot be called
+## A function cannot be named `raise` or `interrupt`
 
 `raise(...)` and `interrupt(...)` are interrupts wherever an expression starts.
-If a program imports or defines a function named `raise`, the text `raise()`
-does not call it:
+A function with either name could be declared and never called: the text
+`raise()` would raise an interrupt with no effect name instead. So the parser
+refuses the name on a `def`, a `node`, and an import:
 
 ```ts
-import { raise } from "./helper.js"
-
-node main() {
-  return raise()   // an interrupt with no effect name, not a call to the helper
-}
+import { raise } from "./helper.js"                  // refused
+import { raise as raiseFromJs } from "./helper.js"   // fine
 ```
 
-Nothing refuses the import or the `def` today, so the program compiles and
-does something else. Issue #1413 tracks refusing those names.
+`callableNameParser` in `lib/parsers/parsers.ts` reads an import's local name
+with the check, and `declNameParserFor` runs the same check on the name after
+`def` or `node`. The exported name before `as` is not checked, so a JavaScript
+function with either name can still be imported under another one.
+
+A variable or a parameter with one of these names is left alone. It holds
+data, and handlers are commonly written `with (interrupt) { ... }`.
+
+A template hole filled with either word is refused separately, because both
+are in `RESERVED_WORDS` (`identifierFillFor` in
+`lib/runtime/template/fill.ts`).
 
 There is one position where the text is still read as a call: straight after a
 string and `+`, as in `"x" + raise("q")`. `stringParser` reads that operand
 with `valueAccessParser`, which does not go through `baseAtom`. The call is to
-a function named `raise`. If the program has no such function, it fails when
-it runs. If the program imports one, as in the example above, this is the one
-position where the import is called.
+a function named `raise`. A program can no longer define or import one, so it
+fails when it runs.
 
 ## An interrupt is written on one line
 
@@ -145,5 +151,4 @@ keyword is refused even when it closes on the same line, as in
 line break.
 
 The refusal also means a variable named `raise` or `interrupt` cannot be the
-last thing on a line. Such a variable can still be declared; issue #1413 is
-about refusing the name.
+last thing on a line. Such a variable can still be declared.

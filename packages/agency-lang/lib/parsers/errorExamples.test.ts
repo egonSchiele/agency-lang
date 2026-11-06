@@ -17,6 +17,7 @@ import {
   TERNARY_MESSAGE,
   WITH_NOT_ALLOWED_HERE_MESSAGE,
   INTERRUPT_KEYWORD_ALONE_MESSAGE,
+  INTERRUPT_KEYWORD_AS_NAME_MESSAGE,
 } from "./messages.js";
 
 /** Pull the code example out of a message. `messages.ts` requires every example
@@ -248,6 +249,11 @@ node main(shape: Shape) {
       `node main() {\n  %s\n}`,
     ],
     ["raise on one line", INTERRUPT_KEYWORD_ALONE_MESSAGE("raise"), `node main() {\n  %s\n}`],
+    [
+      "import under another name",
+      INTERRUPT_KEYWORD_AS_NAME_MESSAGE("raise"),
+      `%s\nnode main() {\n  print(1)\n}`,
+    ],
     [
       "C-style-for alternatives",
       C_STYLE_FOR_MESSAGE,

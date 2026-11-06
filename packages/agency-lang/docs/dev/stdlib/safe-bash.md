@@ -51,7 +51,10 @@ A plan ends one of three ways: refused, shell-free, or handed to bash.
 
 `refuse`: the refuse wall (`isRefused`) matches `rm`, `rmdir`, `dd`,
 `shred`, `mkfs`, `truncate`, and the destructive git spellings, by command
-word including the last part of a path. Nothing is raised. The wall is
+word including the last part of a path. The git spellings are `clean`,
+`restore`, `reset --hard`, and `checkout` with a `.` argument or with a
+`--` (`git checkout -- utils.py`), which says the words after it are
+paths to discard. Nothing is raised. The wall is
 friction against the obvious spelling; `find -delete` gets past it and is
 approvable under `std::bash`, which is where the control lives.
 
@@ -262,6 +265,19 @@ A `glob` word is never a literal:
 `literalWordText` refuses it, so every rule that needs a literal (a
 redirect target, an `echo` argument, a git argument) treats a command
 with one as unrecognized until a later slice gives globs a meaning.
+
+The parser returns a bare `--` as a flag word whose name is `--`. No
+flag table lists it, so `ls -- src` and `cat -- a.txt` are unrecognized,
+as any unknown flag is. Two readers of a command's words do not go
+through a flag table. The refuse wall looks for `--` after `git
+checkout`. And a program with no rule takes it as one more argument, so
+`pnpm test -- --watch` asks `std::exec` with `--` and `--watch` in its
+arguments.
+
+A `~` or a `^` after the first character of a word is plain text, as it
+is to bash: `HEAD~1` and `HEAD^` are literal words, and `echo hi > a~b`
+writes a file named `a~b`. A `~` right after `=` or `:` is still
+unparseable (`make DIR=~/x`), because bash expands it there.
 
 An unquoted `~` now parses, so `echo hi > ~/x` is a recognized write to
 the real home directory (`tildeModeFor` expands an unquoted word); a

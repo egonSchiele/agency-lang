@@ -2735,13 +2735,14 @@ def isDestructiveGit(command: SimpleCommand): boolean {
   if (first.tag != "literal") {
     return false
   }
-  // Recognize checkout's explicit discard spelling. A bare -- is not
-  // parsed, so git checkout -- . instead requires broad Bash approval.
+  // Checkout discards work in two spellings: with a `.` argument, and
+  // with a `--`, which says every word after it is a path
+  // (`git checkout -- utils.py`). The parser returns `--` as a flag word.
   return match(first.text) {
     "clean" => true
     "restore" => true
     "reset" => hasFlag(command, "--hard")
-    "checkout" => hasLiteralArg(command, ".")
+    "checkout" => hasLiteralArg(command, ".") || hasFlag(command, "--")
     _ => false
   }
 }

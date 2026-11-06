@@ -258,8 +258,8 @@ export def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): S
 }
 
 /** Which traces of a log to read. Give at most one of `trace` and `all`;
- *  `last` and `since` can go together. A field left out or set to `null`
- *  does not count. With none, `logTraces` reads the 20 most recent traces and
+ *  `last` and `since` can go together. A field left out, or set to `null`
+ *  or `""`, does not count. With none, `logTraces` reads the 20 most recent traces and
  *  the other readers read the most recent one. */
 export type StatelogTraceSelection = {
   trace?: string;
@@ -460,24 +460,28 @@ export idempotent def logSearch(
 /**
   Open one row by the address `logOutline` or `logSearch` gave, as the logs
   viewer shows it, with the statelog events behind it. `maxChars` bounds
-  `text`, the marker included; `events` is not capped.
+  `text`, the marker included. `events` is not capped, and for an LLM call
+  it holds the call's whole message history, so pass `events: false` when
+  a model calls this as a tool.
 */
 @capabilities(fileRead)
 export idempotent def logRow(
   address: string,
   log: string = "",
   maxChars: number = 0,
+  events: boolean = true,
 ): Result<StatelogExpandedRow> raises <std::read> {
   """
   Open one row of a statelog file by its address.
 
-  @param address - A row address, <trace id>/<row id>, as logOutline and logSearch return it.
+  @param address - A row address, `traceId/rowId`, as logOutline and logSearch return it.
   @param log - The statelog file, relative to the working directory or absolute. Empty reads this run's own log.
   @param maxChars - Cut the text to at most this many characters, 0 for no cap or at least 100.
+  @param events - Include the statelog events behind the row, and a hosted row's provider items. They can be very large.
   """
   const where = approvedLog(log)
   if (isFailure(where)) {
     return where
   }
-  return try _logRow(where.value, address, maxChars)
+  return try _logRow(where.value, address, maxChars, events)
 }

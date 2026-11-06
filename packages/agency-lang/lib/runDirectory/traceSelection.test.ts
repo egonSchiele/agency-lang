@@ -183,6 +183,11 @@ describe("null fields", () => {
     const flags = { trace: null, last: 2, since: null, all: null };
     expect(ids(selectTraces(traces, flags, options))).toEqual(["bbb-newest", "ddd-middle"]);
   });
+
+  it("an empty string counts as left out too", () => {
+    const flags = { trace: "", last: 2, since: "" };
+    expect(ids(selectTraces(traces, flags, options))).toEqual(["bbb-newest", "ddd-middle"]);
+  });
 });
 
 describe("the combinations table", () => {

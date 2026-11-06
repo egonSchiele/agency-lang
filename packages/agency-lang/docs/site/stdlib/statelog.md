@@ -114,14 +114,14 @@ export type StatelogEvalRecord = {
 ### StatelogTraceSelection
 
 Which traces of a log to read. Give at most one of `trace` and `all`;
- `last` and `since` can go together. A field left out or set to `null`
- does not count. With none, `logTraces` reads the 20 most recent traces and
+ `last` and `since` can go together. A field left out, or set to `null`
+ or `""`, does not count. With none, `logTraces` reads the 20 most recent traces and
  the other readers read the most recent one.
 
 ```ts
 /** Which traces of a log to read. Give at most one of `trace` and `all`;
- *  `last` and `since` can go together. A field left out or set to `null`
- *  does not count. With none, `logTraces` reads the 20 most recent traces and
+ *  `last` and `since` can go together. A field left out, or set to `null`
+ *  or `""`, does not count. With none, `logTraces` reads the 20 most recent traces and
  *  the other readers read the most recent one. */
 export type StatelogTraceSelection = {
   trace?: string;
@@ -634,6 +634,7 @@ logRow(
   address: string,
   log: string = "",
   maxChars: number = 0,
+  events: boolean = true,
 ): Result<StatelogExpandedRow> raises <std::read>
 ```
 
@@ -641,15 +642,18 @@ Open one row of a statelog file by its address.
 
 Open one row by the address `logOutline` or `logSearch` gave, as the logs
   viewer shows it, with the statelog events behind it. `maxChars` bounds
-  `text`, the marker included; `events` is not capped.
+  `text`, the marker included. `events` is not capped, and for an LLM call
+  it holds the call's whole message history, so pass `events: false` when
+  a model calls this as a tool.
 
 **Parameters:**
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| address | `string` |  | A row address, <trace id>/<row id>, as logOutline and logSearch return it. |
+| address | `string` |  | A row address, `traceId/rowId`, as logOutline and logSearch return it. |
 | log | `string` | "" | The statelog file, relative to the working directory or absolute. Empty reads this run's own log. |
 | maxChars | `number` | 0 | Cut the text to at most this many characters, 0 for no cap or at least 100. |
+| events | `boolean` | true | Include the statelog events behind the row, and a hosted row's provider items. They can be very large. |
 
 **Returns:** `Result<StatelogExpandedRow>`
 
@@ -657,4 +661,4 @@ Open one row by the address `logOutline` or `logSearch` gave, as the logs
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L466))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L468))

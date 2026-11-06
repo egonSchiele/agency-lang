@@ -75,6 +75,17 @@ describe("logsRow", () => {
     expect(cut.json).toMatchObject({ truncated: true });
   });
 
+  it("leaves out the events and provider items when asked", async () => {
+    const hosted = (await rowsOf("searched")).find((row) => row.kind === "hosted")!;
+    const result = await logsRow(
+      { address: hosted.address, log: "log.jsonl", maxChars: 0, events: false },
+      deps(),
+    );
+    expect(result.json).toMatchObject({ events: [] });
+    expect(result.json).not.toHaveProperty("providerItems");
+    expect(result.text.startsWith(hosted.address)).toBe(true);
+  });
+
   it.each([50, 2.5, -1])("refuses maxChars of %d, naming the field", async (maxChars) => {
     const result = await logsRow({ address: "run-one/guide", log: "log.jsonl", maxChars }, deps());
     expect(result).toMatchObject({

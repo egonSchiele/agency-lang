@@ -1,9 +1,7 @@
 // The std::statelog readers: logTraces, logOutline, logSearch, and logRow.
 // Each is one of the `agency logs` query functions (lib/logsQuery/) called
 // on the one log the Agency wrapper named, took the real path of, and got
-// approved under `std::read`. A separate file from statelog.ts, which every
-// program that uses safeBash or the REPL loads; the logs viewer modules
-// these reach load only for a program that reads a log.
+// approved under `std::read`.
 import path from "path";
 
 import type { Host } from "../host/host.js";
@@ -47,7 +45,10 @@ function approvedLogDeps(host: Host, logPath: string): QueryDeps {
     cwd: host.system.cwd(),
     loadLog: async () => {
       const root = await host.files.fixedRoot(path.dirname(logPath));
-      const read = await readTracesFromChunks(host.files.readChunks(root, path.basename(logPath)));
+      const name = path.basename(logPath);
+      // The size now bounds the read: other runs may be appending.
+      const size = (await host.files.stat(root, name))?.size;
+      const read = await readTracesFromChunks(host.files.readChunks(root, name), size);
       return { logPath, traces: read.traces };
     },
     now: () => host.clock.wallTime(),
@@ -108,7 +109,8 @@ export async function _logRow(
   logPath: string,
   address: string,
   maxChars: number,
+  events: boolean,
 ): Promise<Record<string, unknown>> {
   const deps = approvedLogDeps(currentHost(), logPath);
-  return answerOf(await logsRow({ address, maxChars }, deps));
+  return answerOf(await logsRow({ address, maxChars, events }, deps));
 }

@@ -121,6 +121,25 @@ describe("readTracesFromChunks", () => {
     },
   );
 
+  it("stops at the byte limit and closes the source, however much more arrives", async () => {
+    const first = new TextEncoder().encode(line("aaa", "agentStart") + "\n");
+    let closed = false;
+    async function* endless(): AsyncIterable<Uint8Array> {
+      try {
+        yield first;
+        while (true) {
+          yield new TextEncoder().encode(line("zzz", "agentStart") + "\n");
+        }
+      } finally {
+        closed = true;
+      }
+    }
+    // The limit falls inside the second chunk.
+    const { traces } = await readTracesFromChunks(endless(), first.length + 5);
+    expect(traces.map((trace) => trace.traceId)).toEqual(["aaa"]);
+    expect(closed).toBe(true);
+  });
+
   it("cuts a chunk inside a multi-byte character", async () => {
     const bytes = new TextEncoder().encode(text);
     const inside = text.indexOf("☕");

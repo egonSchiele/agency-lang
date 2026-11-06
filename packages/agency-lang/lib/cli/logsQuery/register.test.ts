@@ -103,9 +103,9 @@ describe("addLogsQueryCommands", () => {
 
   it("text that is not a number is refused for each count flag", async () => {
     await parse("traces", "--last", "abc");
-    expect(printed.at(-1)).toBe("--last needs a positive whole number\n");
+    expect(printed.at(-1)).toBe('--last needs a positive whole number, not "abc"\n');
     await parse("search", "module", "--limit", "2.5");
-    expect(printed.at(-1)).toBe("--limit needs a positive whole number\n");
+    expect(printed.at(-1)).toBe('--limit needs a positive whole number, not "2.5"\n');
   });
 
   it("a --kind with no names in it is refused", async () => {

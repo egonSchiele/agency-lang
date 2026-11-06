@@ -278,23 +278,18 @@ The functions reuse the viewer's modules and add three small pure ones:
 
 | | CLI | `std::statelog` |
 | --- | --- | --- |
-| `loadLog` | `chooseLog`, then `readTraces` from disk | The one log the Agency wrapper named, took the real path of, and got approved under `std::read`, read with `readTracesFromChunks` over `host.files.readChunks` under `fixedRoot` of its directory |
+| `loadLog` | `chooseLog`, then `readTraces` from disk | The one log the Agency wrapper named, took the real path of, and got approved under `std::read`. It is read through `host.files` under `fixedRoot` of its directory, up to the size it had when the read began, so a log another run is appending to still ends. |
 | `names` | `FLAG_NAMES_CLI`: `--last` | `FIELD_NAMES`: `last` |
 | `now` | `Date.now()` | The host's wall clock |
 
 `names` is how one set of rules gives two spellings of the same message:
 `--trace names one trace; drop --last, --since, and --all` from the CLI,
 `trace names one trace; drop last, since, and all` from Agency. Counts
-(`last`, `limit`, `context`) are checked once, by `countProblem`, which
-takes a number; the CLI turns flag text that is not digits into `NaN`. A
-`null` selection field counts as left out, because a model calling a
-reader as a tool sends `null` for each field of `select` it does not use,
-and the runtime drops `null` only from top-level arguments.
-
-The readers' bindings are a file of their own, on `NODE_ONLY`, and not in
-`lib/stdlib/statelog.ts`, which every program that uses `safeBash` or the
-REPL loads. The viewer modules they reach load only for a program that
-reads a log.
+(`last`, `limit`, `context`) are checked once, by `countProblem`. A
+selection field set to `null` or `""` counts as left out, because a model
+calling a reader as a tool sends one of those for each field of `select`
+it does not use, and the runtime drops `null` only from top-level
+arguments.
 
 **Finding the log.** `chooseLog` in `lib/cli/logsSession/target.ts` is the
 one place any logs command finds its log: `--log`, else the one open
@@ -310,23 +305,23 @@ writes `""` there to cancel a configured file. A directory with no
 `--csv`.
 
 **What went wrong.** `TraceSummary` counts each trace's tool calls by
-status: `toolsFailed`, `toolsRejected`, `toolsUnfinished`, and
-`otherErrors`. Each status is `classifyTool(toolEvidence(...))` on
-the tool's own span, the same reading as the trace screen's tool rows, so
-the two agree; the counts do not build the story outline, which would
-compare every LLM call's messages for every trace in the log. A failed
-tool call always logs an `error` event inside its span (`recordFailure` in
-`prompt.ts`), so `hasError` is already true for any trace with one, and
-`--errors` keeps its meaning. `otherErrors` is the trace's errors less
-the ones its failed tools own, so the marker column prints `error` only
-for an error no failed tool explains, then the counts:
-`error, 2 failed, 1 rejected`. An error inside a tool that went on to
-complete is counted, so every trace `--errors` keeps shows something in
-the column.
+status: `toolsFailed`, `toolsRejected`, and `toolsUnfinished`. Each status
+is `classifyTool(toolEvidence(...))` on the tool's own span, the same
+reading as the trace screen's tool rows, so the two agree. The counts do
+not build the story outline, which is too slow to run for every trace in
+a log.
+
+A failed tool call always logs an `error` event inside its span, so
+`hasError` is true for any trace with one. `otherErrors` is the trace's
+errors less the ones its failed tools own: errors outside any tool, and
+errors inside a tool that went on to complete. The marker column prints
+`error` when `otherErrors` is above zero, then the counts:
+`error, 2 failed, 1 rejected`. Every trace `--errors` keeps therefore
+shows something in the column.
+
 `TOOL_TROUBLE` is the one table of which statuses are trouble and the word
 each prints. A call awaiting approval belongs to a paused run and is in
-`toolCalls` only. Counting cost about 8% on a 54 MB synthetic log of 300
-traces with 30 tool calls each (0.73 s to 0.79 s for `traces --all`).
+`toolCalls` only.
 
 **Picking traces.** `selectTraces` takes anything with a `traceId` and a
 `startedAt`, which `TraceSummary` has, so start time is computed once, in

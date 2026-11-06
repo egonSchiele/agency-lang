@@ -18,6 +18,9 @@ export type RowOptions = {
   /** At most this many characters of text, the marker included; 0 for no
    *  cap. */
   maxChars: number;
+  /** False leaves out the row's events and a hosted row's provider items,
+   *  which for an LLM call hold its whole message history. Default true. */
+  events?: boolean;
 };
 
 export async function logsRow(options: RowOptions, deps: QueryDeps): Promise<QueryResult> {
@@ -47,7 +50,8 @@ export async function logsRow(options: RowOptions, deps: QueryDeps): Promise<Que
   const text = capString(expanded.text, maxChars, () => {
     truncated = true;
   });
-  const { providerItems } = expanded.json;
+  const withEvents = options.events ?? true;
+  const providerItems = withEvents ? expanded.json.providerItems : undefined;
   return {
     text,
     json: {
@@ -55,7 +59,7 @@ export async function logsRow(options: RowOptions, deps: QueryDeps): Promise<Que
       kind: expanded.kind,
       header: expanded.header,
       truncated,
-      events: expanded.json.events,
+      events: withEvents ? expanded.json.events : [],
       ...(providerItems === undefined ? {} : { providerItems }),
     },
     exitCode: 0,

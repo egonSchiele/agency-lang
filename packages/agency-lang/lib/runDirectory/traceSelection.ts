@@ -4,8 +4,9 @@
 // `--last 2` means.
 import { matchTraceId } from "./traces.js";
 
-/** A field set to `null` counts as left out: a model calling a reader as a
- *  tool sends `null` for each field of `select` it does not use. */
+/** A field set to `null` or `""` counts as left out: a model calling a
+ *  reader as a tool sends one or the other for each field of `select` it
+ *  does not use. */
 export type TraceSelectionFlags = {
   trace?: string | null;
   last?: number | null;
@@ -112,9 +113,7 @@ export function parseSince(text: string, now: number): { at: number } | { error:
 }
 
 /** Why `value` is not a count (a positive whole number), naming the
- *  option as the caller spells it; undefined when it is one. This is the
- *  only place the rule lives: the CLI turns flag text that is not digits
- *  into `NaN`, which is refused here. */
+ *  option as the caller spells it; undefined when it is one. */
 export function countProblem(name: string, value: number): string | undefined {
   if (Number.isInteger(value) && value >= 1) {
     return undefined;
@@ -135,9 +134,8 @@ export function selectTraces<T extends Pickable>(
   flags: TraceSelectionFlags,
   options: { defaultLast: number; now: number; names: OptionNames },
 ): TraceSelection<T> {
-  const given = FLAG_NAMES.filter(
-    (name) => flags[name] !== undefined && flags[name] !== null && flags[name] !== false,
-  );
+  const leftOut: unknown[] = [undefined, null, false, ""];
+  const given = FLAG_NAMES.filter((name) => !leftOut.includes(flags[name]));
   const row = COMBINATIONS.find((candidate) => candidate.given.join() === given.join());
   if (row === undefined) {
     // The table has a row for each of the sixteen sets of flags.

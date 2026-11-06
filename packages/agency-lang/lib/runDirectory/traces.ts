@@ -65,16 +65,27 @@ export function readTraces(statelogPath: string): ReadTracesResult {
  * the middle of a line or of a character; the splitter keeps the partial
  * line for the next chunk. The lines are grouped and parsed exactly as
  * `readTraces` does, and the partial last line follows the same rule.
+ *
+ * Reading stops after `byteLimit` bytes, and leaving the loop closes the
+ * source. A caller passes the file's size from before the read, so a log
+ * another run keeps appending to is read as it was then and the read ends.
  */
 export async function readTracesFromChunks(
   chunks: AsyncIterable<Uint8Array>,
+  byteLimit: number = Infinity,
 ): Promise<ReadTracesResult> {
   const splitter = makeLineSplitter();
   const collector = makeTraceCollector();
+  let left = byteLimit;
   for await (const chunk of chunks) {
+    const taken = chunk.byteLength <= left ? chunk : chunk.subarray(0, left);
     collector.addLines(
-      splitter.push(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)),
+      splitter.push(Buffer.from(taken.buffer, taken.byteOffset, taken.byteLength)),
     );
+    left -= taken.byteLength;
+    if (left <= 0) {
+      break;
+    }
   }
   collector.addLines(splitter.finish());
   return collector.result();

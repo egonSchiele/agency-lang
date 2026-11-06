@@ -2388,9 +2388,6 @@ export def planFor(source: string, cwd: string): Plan {
   const flat = flattenCommands(commands)
   const verbs = verbNames([entry.command for entry in flat])
 
-  let narrow: Effect[] = []
-  let firstMiss = ""
-  let allRecognized = true
   for (entry in flat) {
     const command = entry.command
     if (isRefused(command)) {
@@ -2400,23 +2397,16 @@ export def planFor(source: string, cwd: string): Plan {
       }
       return refusePlan("`${name.text}` is not allowed", verbs)
     }
-    const effects = effectsFor(command, cwd, entry.readsStdin)
-    if (effects is failure(why)) {
-      if (firstMiss == "") {
-        firstMiss = why
-      }
-      allRecognized = false
-    } else {
-      narrow = [...narrow, ...effects.value]
-    }
   }
 
-  if (!allRecognized) {
+  const classified = classifyAll(commands, cwd)
+  if (classified is failure(firstMiss)) {
     // We have to ask the broad question anyway, so asking narrow ones
     // first adds prompts without adding information. The ORIGINAL text
     // runs, because that is what the human read.
     return broadPlan(source, verbs, { kind: "unrecognized", detail: firstMiss })
   }
+  const narrow: Effect[] = classified.value
   if (narrow.length == 0) {
     // Everything recognized but nothing contributed an effect — a string
     // of nothing but echoes. The audit rule makes this a std::bash
@@ -2432,6 +2422,144 @@ export def planFor(source: string, cwd: string): Plan {
     return broadPlan(source, verbs, { kind: "unrenderable", detail: why })
   }
   return bashPlan(rebuilt.value, narrow, verbs, null)
+}
+
+/** The effects of a command, and the working directory once it has run. */
+type Classified = {
+  effects: Effect[];
+  cwd: string
+}
+
+// Classify the whole string. This walks the command tree, where the refuse
+// wall reads the flat list, because a `cd` on the left of `&&` moves the
+// working directory for the commands to its right.
+@capabilities(fileRead)
+def classifyAll(commands: Command[], cwd: string): Result<Effect[]> {
+  """
+  Return the effects of every command, or the first reason one needs the broad Bash approval.
+  """
+  let effects: Effect[] = []
+  for (command, index in commands) {
+    const classified = classify(command, cwd, false)?
+    // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
+    // payload for `b` would be true in both cases.
+    if (classified.cwd != cwd && index < commands.length - 1) {
+      return failure("a command after `;` follows a `cd`, and its directory depends on whether the `cd` worked")
+    }
+    effects = [...effects, ...classified.effects]
+  }
+  return success(effects)
+}
+
+@capabilities(fileRead)
+def classify(command: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+  // Keep this exhaustive, like flattenOne, so a new command shape cannot
+  // be classified by accident.
+  return match(command) {
+    { tag: "simpleCommand" } => classifySimple(command, cwd, readsStdin)
+    { tag: "pipeline", stages } => classifyPipeline(stages, cwd, readsStdin)
+    { tag: "and", left, right } => classifyAnd(left, right, cwd, readsStdin)
+    { tag: "or", left, right } => classifyOr(left, right, cwd, readsStdin)
+    { tag: "parens", command as inner } => classifyGroup(inner, cwd, readsStdin)
+  }
+}
+
+@capabilities(fileRead)
+def classifySimple(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<Classified> {
+  const effects = effectsFor(command, cwd, readsStdin)?
+  return success({ effects: effects, cwd: cwd })
+}
+
+// The first stage reads what the pipeline itself reads, and every later
+// stage reads a pipe. Each stage runs in a subshell of its own, so a `cd`
+// inside one moves nothing outside it.
+@capabilities(fileRead)
+def classifyPipeline(stages: PipelineStage[], cwd: string, readsStdin: boolean): Result<Classified> {
+  let effects: Effect[] = []
+  for (stage, index in stages) {
+    const classified = classify(stage, cwd, readsStdin || index > 0)?
+    effects = [...effects, ...classified.effects]
+  }
+  return success({ effects: effects, cwd: cwd })
+}
+
+// Parentheses run a subshell, so a `cd` inside them ends with them.
+@capabilities(fileRead)
+def classifyGroup(inner: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+  const classified = classify(inner, cwd, readsStdin)?
+  return success({ effects: classified.effects, cwd: cwd })
+}
+
+// `cd dir && rest`: when the `cd` fails, bash runs nothing to its right, so
+// `rest` only ever runs in `dir`. That makes `dir` the true working
+// directory for every payload of `rest`. The `cd` itself raises nothing.
+//
+// `&&` groups to the left, so `cd x && a && b` is `(cd x && a) && b`. The
+// directory after the left side is carried to the right side, which is how
+// `b` is classified in `x` as well.
+@capabilities(fileRead)
+def classifyAnd(left: Command, right: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+  if (isCd(left)) {
+    const moved = cdTarget(left, cwd)?
+    return classify(right, moved, readsStdin)
+  }
+  const first = classify(left, cwd, readsStdin)?
+  const second = classify(right, first.cwd, readsStdin)?
+  return success({ effects: [...first.effects, ...second.effects], cwd: second.cwd })
+}
+
+// `cd x && a || b`: `b` runs when the `cd` failed and also when `a` failed,
+// and the working directory differs between the two. No payload for `b`
+// would be true in both cases, so the string asks the broad question.
+@capabilities(fileRead)
+def classifyOr(left: Command, right: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+  const first = classify(left, cwd, readsStdin)?
+  if (first.cwd != cwd) {
+    return failure("a command after `||` follows a `cd`, and its directory depends on whether the `cd` worked")
+  }
+  const second = classify(right, cwd, readsStdin)?
+  return success({ effects: [...first.effects, ...second.effects], cwd: second.cwd })
+}
+
+def isCd(command: Command): boolean {
+  """
+  Check for a simple command whose command word is the literal cd.
+  """
+  if (command.tag != "simpleCommand") {
+    return false
+  }
+  const name = command.command
+  return name != null && name.tag == "literal" && name.text == "cd"
+}
+
+// The directory a `cd` moves to. It has to exist now, because every payload
+// to the right of the `cd` names it. `cd` alone goes home, `cd -` goes to
+// the previous directory, and a variable is unknown until bash expands it,
+// so none of those has a directory to name.
+@capabilities(fileRead)
+def cdTarget(command: SimpleCommand, cwd: string): Result<string> {
+  """
+  Resolve the one literal directory a cd command names.
+  """
+  if (command.assignments.length > 0 || command.redirects.length > 0) {
+    return failure("`cd` with an assignment or a redirect")
+  }
+  if (command.args.length != 1) {
+    return failure("`cd` needs exactly one directory to be recognized")
+  }
+  const word = command.args[0]
+  const text = literalWordText(word)
+  if (text is failure(why)) {
+    return failure("the `cd` directory is not literal")
+  }
+  if (text.value == "-") {
+    return failure("`cd -` goes to the previous directory, which is not known here")
+  }
+  const target = resolveTarget(text.value, word, cwd)?
+  if (target.file != null) {
+    return failure("`cd` names a file")
+  }
+  return success(target.dir)
 }
 
 /** Commands we decline to run even when a human approves. */

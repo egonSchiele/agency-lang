@@ -1286,6 +1286,91 @@ node chainOfReadsAsksOnlyTheReads() {
   return result.value
 }
 
+/** The folder that holds the two fixture folders. */
+static const STDLIB_TESTS = __dirname + "/stdlib"
+
+/** A plan's outcome, and for each effect its name and the last folder of
+  the directory its payload names. */
+def cdSummary(source: string): any {
+  const plan = planFor(source, STDLIB_TESTS)
+  let seen: any[] = []
+  for (effect in plan.effects) {
+    seen.push([effect.name, payloadFolder(effect)])
+  }
+  return [outcomeOf(plan), seen]
+}
+
+def payloadFolder(effect: any): string {
+  const payload = effect.payload
+  if (payload == null) {
+    return ""
+  }
+  const dir: string = payload.dir ?? payload.cwd ?? ""
+  const parts = dir.split("/")
+  return parts[parts.length - 1]
+}
+
+node cdMovesTheRestOfAnAndChain() {
+  return [
+    cdSummary("cd grep-fixtures && ls"),
+    cdSummary("cd grep-fixtures && cat one.txt"),
+    cdSummary("cd grep-fixtures && pnpm test"),
+    cdSummary("cd grep-fixtures && ls && cat two.txt"),
+    cdSummary("cd grep-fixtures && ls | head"),
+    cdSummary("cd ./grep-fixtures/ && ls"),
+    cdSummary("ls && cd grep-fixtures && ls"),
+    executionCommandIn("cd grep-fixtures && ls", STDLIB_TESTS),
+  ]
+}
+
+node cdAnywhereElseIsBroad() {
+  return [
+    cdSummary("cd grep-fixtures"),
+    cdSummary("cd grep-fixtures; ls"),
+    cdSummary("cd grep-fixtures || ls"),
+    cdSummary("ls && cd grep-fixtures"),
+    cdSummary("cd grep-fixtures | ls"),
+    cdSummary("cd missing && ls"),
+    cdSummary("cd grep-fixtures/one.txt && ls"),
+    cdSummary("cd && ls"),
+    cdSummary("cd - && ls"),
+    cdSummary("cd $HOME && ls"),
+    cdSummary("cd grep-fixtures read-fixtures && ls"),
+    cdSummary("cd grep-fixtures > out.txt && ls"),
+    cdSummary("cd grep-fixtures && cd ../read-fixtures && ls"),
+  ]
+}
+
+// The directory after a `cd` is known only inside the `&&` chain that
+// holds it. A subshell ends the move, so the command after it is
+// classified in the original folder. After `;` or `||` the directory
+// depends on whether the `cd` worked, so the string is broad.
+node cdDoesNotLeakOutOfItsChain() {
+  return [
+    cdSummary("(cd grep-fixtures && ls) && ls"),
+    cdSummary("(cd grep-fixtures && ls) | head"),
+    cdSummary("cd grep-fixtures && ls; ls"),
+    cdSummary("cd grep-fixtures && ls || ls"),
+    cdSummary("ls; cd grep-fixtures && ls"),
+  ]
+}
+
+def executionCommandIn(source: string, cwd: string): any {
+  return match(planFor(source, cwd).execution) {
+    { kind: "bash", command } => command
+    _ => "NOT-BASH"
+  }
+}
+
+node cdRunsInTheNewFolder() {
+  // Approved by the test file: one std::read for one.txt in grep-fixtures.
+  const result = safeBash("cd grep-fixtures && cat one.txt | head -1", cwd: STDLIB_TESTS)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.trim() != ""
+}
+
 node listingsAskStdLs() {
   return [
     grepNames("ls"),
@@ -1534,7 +1619,7 @@ node programsAskStdExec() {
     grepNames("git log | python3 count.py"),
     grepNames("pnpm test < one.txt"),
     grepNames("echo a; agency --version"),
-    grepNames("cd .. && cat one.txt"),
+    grepNames("cd .."),
     grepNames("hash -p /tmp/x git; git status"),
     grepNames("export X=1; pnpm test"),
     grepNames("true"),

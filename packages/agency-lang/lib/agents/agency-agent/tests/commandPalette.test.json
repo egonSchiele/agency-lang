@@ -29,6 +29,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "initExpandsWithItsArguments",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "userCommandHidesInit",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

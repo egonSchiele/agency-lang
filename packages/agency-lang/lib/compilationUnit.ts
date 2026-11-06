@@ -85,6 +85,13 @@ export class ScopedTypeAliases {
     return Object.entries(this.byScope);
   }
 
+  /** Give the alias `name` in `scopeKey` a new body and keep the rest of
+   *  its entry. The entry object is replaced, not changed, so a clone made
+   *  earlier still holds the old body. */
+  replaceBody(scopeKey: string, name: string, body: VariableType): void {
+    this.byScope[scopeKey][name] = { ...this.byScope[scopeKey][name], body };
+  }
+
   clone(): ScopedTypeAliases {
     return new ScopedTypeAliases(this.byScope);
   }

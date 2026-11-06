@@ -148,6 +148,12 @@ export const DIAGNOSTICS = {
     message:
       "Type alias '{alias}' is declared in '{module}' but not imported here (referenced in '{context}'). Import it by name, or write the type out.",
   },
+  typeAliasIsItsOwnMember: {
+    code: "AG1035",
+    severity: "error",
+    message:
+      "Type alias '{alias}' lists itself as a member of its own union. It may refer to itself only inside an object, an array, or another structure.",
+  },
   castUnrelatedTypes: {
     code: "AG1014",
     severity: "error",

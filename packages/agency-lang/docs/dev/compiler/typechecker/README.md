@@ -218,6 +218,35 @@ This is what makes `type Tree = { children: Tree[] }` comparable to
 itself instead of a stack overflow. The public `isAssignable` signature
 still takes three arguments.
 
+The guard covers an alias that refers to itself inside a structure. It
+does not cover one that lists itself as a member of its own union:
+
+```
+type A = number | A
+```
+
+Resolving `A` never ends, in assignability and in every other walk that
+resolves a type. So the checker handles it once, before anything resolves
+a type. `neutralizeSelfMemberAliases` in `lib/typeChecker/index.ts` finds
+each such alias with `aliasIsItsOwnMember`
+(`lib/typeChecker/selfMemberAliases.ts`) and makes its body `any` in the
+checker's own copy of the alias table. `check` then reports AG1035 on the
+alias declaration. No later walk needs a cycle guard for this shape.
+
+A reference to a generic alias is followed with its type arguments put
+into the alias body. With `type Maybe<T> = T | null`, the alias
+`type A = number | Maybe<A>` is reported, because `Maybe<A>` is
+`A | null`. With `type List<T> = { items: T[] }`,
+`type Tree = number | List<Tree>` is not, because the parameter sits
+inside a structure.
+
+Codegen reads the unit's alias table, which still holds the original
+body, so this changes nothing when the checker is off, which is the
+default in a user's project. There the program compiles, and the schema
+for `A` is `z.union([z.number(), z.lazy(() => A)])`. A number validates.
+A value that matches no other member makes zod follow the lazy reference
+without end, and the run dies with a stack overflow.
+
 ### The `never` type
 
 `never` is Agency's bottom type, represented as `{ type: "primitiveType", value: "never" }` rather than as its own AST node. That mirrors how `any`, `unknown`, `void`, and `null` are modeled. Its rules:
@@ -248,6 +277,18 @@ Splat expressions (`...x`) in arrays and objects cause the type checker to bail 
 ### Imported names
 
 An imported Agency function gets a real `functionRefType` built from the signature the `CompilationUnit` resolved for it. A name from a plain JavaScript import, or one the compilation unit could not resolve, falls back to `ANY_T`. See `importedValueType` in `lib/typeChecker/scopes.ts`.
+
+An imported type brings the aliases its body names into the type table, so the checker can read through them (`pullTransitiveAliases` in `lib/compilationUnit.ts`). Each of these is marked `pulledFrom`. Take this module:
+
+```
+import { Outer } from "./types.agency"   // type Outer = { inner: Inner }
+
+type Bag = { items: Record<string, Outer> }
+```
+
+`Inner` is in the type table, marked `pulledFrom`. The module has no schema const for `Inner` and no JavaScript import of it, so naming it in the schema for `Bag` would fail when the module loads. The schema mapper writes `Inner`'s body in place of its name (`pulledAliasBody` in `lib/backends/typescriptGenerator/typeToZodSchema.ts`).
+
+A pulled alias that refers to itself cannot be written in place. `pulledAliasRefersToItself`, in the same file, is the one function that decides this. The mapper asks it before writing a body, and stops codegen with an error that names the file to import the alias from. A named import gives the alias a const. `returnSchemaFor` asks it too, and emits no return schema for a function whose return type reaches such an alias, so an exported def never causes the error by its return type alone.
 
 ### For loops
 

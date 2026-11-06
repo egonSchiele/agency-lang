@@ -148,8 +148,8 @@ decide where the pass lifts from:
 
 1. Which top-level nodes it enters: `function` and `graphNode` bodies only.
 2. Which statement kinds it extracts from, which is
-   `EXTRACTING_STATEMENT_KINDS`. A bare method-call statement such as
-   `xs.push(a as Asked!)` is not one of them.
+   `EXTRACTING_STATEMENT_KINDS`, plus a bare method-call statement such as
+   `xs.push(a as Asked!)`, which has its own case in the pass.
 3. Which slots it skips: a slot whose eval mode is `opaque` or
    `conditional`, skipped without being walked, so nothing beneath it is
    lifted, block bodies included.

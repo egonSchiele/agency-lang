@@ -88,9 +88,35 @@ node redirectsContribute() {
     effectNamesFor("echo hi >> out.txt"),
     effectNamesFor("echo hi > $F"),
     effectNamesFor("echo hi < in.txt"),
-    effectNamesFor("echo hi 2> err.txt"),
+    effectNamesFor("echo hi 3> err.txt"),
     effectNamesFor("echo hi > a.txt > b.txt"),
   ]
+}
+
+node stderrAndDevNullRedirects() {
+  return [
+    planSummary("pnpm test 2>/dev/null"),
+    planSummary("pnpm test >/dev/null"),
+    planSummary("pnpm test >/dev/null 2>&1"),
+    planSummary("make 2>build.log"),
+    planSummary("make 2>>build.log"),
+    planSummary("make >out.log 2>/dev/null"),
+    planSummary("pnpm test 1>/dev/null"),
+    planSummary("make 1>out.log"),
+    planSummary("pnpm test &>/dev/null"),
+    planSummary("make 3>x"),
+    planSummary("make 3>/dev/null"),
+    planSummary("make >out.log 2>err.log"),
+    planSummary("make > $NULL"),
+    stderrWriteMode("make 2>build.log"),
+    stderrWriteMode("make 2>>build.log"),
+    executionCommand("pnpm test 2>/dev/null"),
+  ]
+}
+
+def stderrWriteMode(source: string): any {
+  const write: any = planFor(source, "/repo").effects[1]
+  return [write.payload.filename, write.payload.mode]
 }
 
 def planSummary(source: string): any {
@@ -1286,6 +1312,137 @@ node chainOfReadsAsksOnlyTheReads() {
   return result.value
 }
 
+/** The folder that holds the two fixture folders. */
+static const STDLIB_TESTS = __dirname + "/stdlib"
+
+/** A plan's outcome, and for each effect its name and the last folder of
+  the directory its payload names. */
+def cdSummary(source: string): any {
+  const plan = planFor(source, STDLIB_TESTS)
+  let seen: any[] = []
+  for (effect in plan.effects) {
+    seen.push([effect.name, payloadFolder(effect)])
+  }
+  return [outcomeOf(plan), seen]
+}
+
+def payloadFolder(effect: any): string {
+  const payload = effect.payload
+  if (payload == null) {
+    return ""
+  }
+  const dir: string = payload.dir ?? payload.cwd ?? ""
+  const parts = dir.split("/")
+  return parts[parts.length - 1]
+}
+
+node cdMovesTheRestOfAnAndChain() {
+  return [
+    cdSummary("cd grep-fixtures && ls"),
+    cdSummary("cd grep-fixtures && cat one.txt"),
+    cdSummary("cd grep-fixtures && pnpm test"),
+    cdSummary("cd grep-fixtures && ls && cat two.txt"),
+    cdSummary("cd grep-fixtures && ls | head"),
+    cdSummary("cd ./grep-fixtures/ && ls"),
+    cdSummary("ls && cd grep-fixtures && ls"),
+    rebuiltCdNamesTheResolvedFolder("cd grep-fixtures && ls"),
+  ]
+}
+
+// The rebuilt `cd` names the absolute folder in single quotes. The path
+// differs by machine, so check its two ends.
+def rebuiltCdNamesTheResolvedFolder(source: string): boolean {
+  const command: string = executionCommandIn(source, STDLIB_TESTS)
+  return command.startsWith("cd '/") && command.endsWith("/stdlib/grep-fixtures' && ls")
+}
+
+node cdAnywhereElseIsBroad() {
+  return [
+    cdSummary("cd grep-fixtures"),
+    cdSummary("cd grep-fixtures; ls"),
+    cdSummary("cd grep-fixtures || ls"),
+    cdSummary("ls && cd grep-fixtures"),
+    cdSummary("cd grep-fixtures | ls"),
+    cdSummary("cd missing && ls"),
+    cdSummary("cd grep-fixtures/one.txt && ls"),
+    cdSummary("cd && ls"),
+    cdSummary("cd - && ls"),
+    cdSummary("cd $HOME && ls"),
+    cdSummary("cd grep-fixtures read-fixtures && ls"),
+    cdSummary("cd grep-fixtures > out.txt && ls"),
+    cdSummary("cd grep-fixtures && cd ../read-fixtures && ls"),
+    cdSummary("ls || cd grep-fixtures && ls"),
+  ]
+}
+
+// The directory after a `cd` is known only inside the `&&` chain that
+// holds it. A subshell ends the move, so the command after it is
+// classified in the original folder. After `;` or `||` the directory
+// depends on whether the `cd` worked, so the string is broad.
+node cdDoesNotLeakOutOfItsChain() {
+  return [
+    cdSummary("(cd grep-fixtures && ls) && ls"),
+    cdSummary("(cd grep-fixtures && ls) | head"),
+    cdSummary("cd grep-fixtures && ls; ls"),
+    cdSummary("cd grep-fixtures && ls || ls"),
+    cdSummary("ls; cd grep-fixtures && ls"),
+  ]
+}
+
+def executionCommandIn(source: string, cwd: string): any {
+  return match(planFor(source, cwd).execution) {
+    { kind: "bash", command } => command
+    _ => "NOT-BASH"
+  }
+}
+
+/** A folder of its own for the cd tests that need a link and a folder
+  whose name starts with a dash. */
+static const CD_FIXTURE = __dirname + "/stdlib/__safebash_cd__"
+
+// Two cases where bash, given the word as written, goes somewhere other
+// than the folder the payload names. The rebuilt `cd` names the resolved
+// folder, so each command is run for real and must print the file in the
+// folder its payload named.
+//
+// `link` points at `real/deep`. Bash applies `..` to the path it came by,
+// so `cd link && (cd .. && cat x.txt)` as written reads the `x.txt` beside
+// the link. The classifier resolves `..` from the link's target, which is
+// `real`.
+//
+// `cd '-P'` as written is a flag to bash, which then goes to the home
+// folder. Unquoted, the parser reads `-P` as a flag, so that form is broad.
+node cdGoesWhereThePayloadSays() {
+  remove(CD_FIXTURE) with approve
+  mkdir(CD_FIXTURE) with approve
+  bash("mkdir -p real/deep ./-P && echo beside-link > x.txt && echo beside-target > real/x.txt && echo dash > ./-P/notes.txt && ln -s real/deep link", cwd: CD_FIXTURE) with approve
+  const linked = "cd link && (cd .. && cat x.txt)"
+  const dashed = "cd '-P' && cat notes.txt"
+  const linkedFolder = payloadFolder(planFor(linked, CD_FIXTURE).effects[0])
+  const dashedFolder = payloadFolder(planFor(dashed, CD_FIXTURE).effects[0])
+  const unquoted = outcomeOf(planFor("cd -P && cat notes.txt", CD_FIXTURE))
+  const linkedRan = safeBash(linked, cwd: CD_FIXTURE) with approve
+  const dashedRan = safeBash(dashed, cwd: CD_FIXTURE) with approve
+  remove(CD_FIXTURE) with approve
+  return [linkedFolder, printed(linkedRan), dashedFolder, printed(dashedRan), unquoted]
+}
+
+def printed(result: Result<string>): string {
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.trim()
+}
+
+node cdRunsInTheNewFolder() {
+  // Approved by the test file: one std::read for one.txt in grep-fixtures.
+  const result = safeBash("cd grep-fixtures && cat one.txt | head -1", cwd: STDLIB_TESTS)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.trim() != ""
+}
+
 node listingsAskStdLs() {
   return [
     grepNames("ls"),
@@ -1534,7 +1691,7 @@ node programsAskStdExec() {
     grepNames("git log | python3 count.py"),
     grepNames("pnpm test < one.txt"),
     grepNames("echo a; agency --version"),
-    grepNames("cd .. && cat one.txt"),
+    grepNames("cd .."),
     grepNames("hash -p /tmp/x git; git status"),
     grepNames("export X=1; pnpm test"),
     grepNames("true"),

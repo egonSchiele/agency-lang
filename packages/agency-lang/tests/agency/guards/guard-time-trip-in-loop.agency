@@ -1,0 +1,51 @@
+// The call that trips the guard is an argument of `out.push(...)`, or the
+// body of a comprehension, which `map` passes to `push` the same way. The
+// guard has to fail. It used to return success([]), because nothing
+// checked the argument before `push` ran.
+//
+// Real time on purpose: a fake clock raises the trip between statements,
+// and this bug needs the trip to cancel a call that is in flight. Each
+// sleep is ten times the budget, so the trip always lands inside one.
+def slow(doc: string): string {
+  sleep(500ms)
+  return "summary of ${doc}"
+}
+
+def outcome(result: Result<string[]>): string {
+  if (result is failure) {
+    return result.data.type
+  }
+  return "success with ${result.value.length} items"
+}
+
+node loopBody() {
+  handle {
+    const result = guard(time: 50ms) {
+      let out: string[] = []
+      for (doc in ["a", "b"]) {
+        out.push(slow(doc))
+      }
+      return out
+    }
+    return outcome(result)
+  } with (intr) {
+    return match(intr.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+node comprehension() {
+  handle {
+    const result = guard(time: 50ms) {
+      return [slow(doc) for doc in ["a", "b"]]
+    }
+    return outcome(result)
+  } with (intr) {
+    return match(intr.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}

@@ -1,8 +1,10 @@
 // What `agency logs traces`, `outline`, and `search` share: opening the
 // log, picking traces, and the line every command prints first. Each
-// command is a function from parsed options to a `QueryResult`; only
-// `register.ts` touches the process. Which log a command reads, and how its
-// bytes are read, is the caller's: `QueryDeps.loadLog`.
+// command is a function from parsed options to a `QueryResult`, called by
+// the CLI (`lib/cli/logsQuery/register.ts`, the only part that touches the
+// process) and by `std::statelog` (`lib/stdlib/statelogReaders.ts`). Which
+// log a command reads, and how its bytes are read, is the caller's:
+// `QueryDeps.loadLog`.
 import * as path from "path";
 
 import { TOOL_TROUBLE, traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
@@ -42,7 +44,7 @@ export type QueryDeps = {
   /** The directory `shown` paths are relative to. */
   cwd: string;
   /** The log this `log` option names, read, or why there is none. The CLI
-   *  chooses it as the session commands do (`cliLog.ts`); the standard
+   *  chooses it as the session commands do (`lib/cli/logsQuery/cliLog.ts`); the standard
    *  library reads the one log the caller named and approved. */
   loadLog(log: string | undefined): Promise<LoadedLog | { refused: string }>;
   now(): number;

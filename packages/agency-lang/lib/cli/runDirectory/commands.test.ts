@@ -23,7 +23,7 @@ import {
   runDirectoryCommandDependencies,
   type RunDirectoryCommandDependencies,
 } from "./commands.js";
-import { formatTextTable } from "./table.js";
+import { formatTextTable } from "@/runDirectory/table.js";
 import { logsExtract } from "./extract.js";
 import { relativeAgentLabel, runsList } from "./list.js";
 

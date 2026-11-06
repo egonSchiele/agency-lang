@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Command } from "@/vendor/commander/index.js";
 
-import { queryDeps, queryDir, writeLog } from "./queryFixture.js";
+import { queryDeps, queryDir, writeLog } from "@/logsQuery/queryFixture.js";
 import { addLogsQueryCommands } from "./register.js";
 
 describe("addLogsQueryCommands", () => {

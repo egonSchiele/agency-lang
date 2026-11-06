@@ -1,7 +1,7 @@
 // `agency logs outline`: every row of a trace with its address, so an agent
 // can read what happened in a run and pick the rows to open with
 // `agency logs session show`.
-import { oneLine } from "@/cli/runDirectory/table.js";
+import { oneLine } from "@/runDirectory/table.js";
 import { fmtStartedAt, fmtUsd } from "@/logsViewer/format.js";
 import { outlineLines, type OutlineFlags, type OutlineLine } from "@/logsViewer/outlineText.js";
 import { fmtDuration } from "@/logsViewer/spanText.js";

@@ -10,10 +10,10 @@ import type { CommentsStore } from "@/runDirectory/commentsStore.js";
 import { readTraces } from "@/runDirectory/traces.js";
 
 import { cliLoadLog, type CliLogDeps } from "./cliLog.js";
-import { queryDeps, queryDir, writeLog } from "./queryFixture.js";
-import { logsSearch } from "./search.js";
-import type { QueryDeps } from "./shared.js";
-import { logsTraces } from "./traces.js";
+import { queryDeps, queryDir, writeLog } from "@/logsQuery/queryFixture.js";
+import { logsSearch } from "@/logsQuery/search.js";
+import type { QueryDeps } from "@/logsQuery/shared.js";
+import { logsTraces } from "@/logsQuery/traces.js";
 
 /** A probed viewer that answers, open on `logPath` at `traceId`. */
 function liveViewer(logPath: string, traceId: string): ProbedRecord {

@@ -8,7 +8,7 @@ import * as path from "path";
 import { chooseLog, type LiveSession, type LogDeps } from "@/cli/logsSession/target.js";
 import type { Trace } from "@/runDirectory/traces.js";
 
-import type { QueryDeps } from "./shared.js";
+import type { QueryDeps } from "@/logsQuery/shared.js";
 
 export type CliLogDeps = LogDeps & {
   /** The open viewers, probed as the session commands probe them. A query

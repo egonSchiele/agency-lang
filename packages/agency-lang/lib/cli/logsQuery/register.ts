@@ -12,11 +12,16 @@ import { FLAG_NAMES_CLI, type TraceSelectionFlags } from "@/runDirectory/traceSe
 import { readTraces } from "@/runDirectory/traces.js";
 import type { Command } from "@/vendor/commander/index.js";
 
-import { logsOutline } from "./outline.js";
-import { DEFAULT_SEARCH_LIMIT, DEFAULT_SNIPPET_CONTEXT, KINDS_LIST, logsSearch } from "./search.js";
+import { logsOutline } from "@/logsQuery/outline.js";
+import {
+  DEFAULT_SEARCH_LIMIT,
+  DEFAULT_SNIPPET_CONTEXT,
+  KINDS_LIST,
+  logsSearch,
+} from "@/logsQuery/search.js";
 import { cliLoadLog } from "./cliLog.js";
-import { refusal, type QueryDeps, type QueryResult } from "./shared.js";
-import { logsTraces } from "./traces.js";
+import { refusal, type QueryDeps, type QueryResult } from "@/logsQuery/shared.js";
+import { logsTraces } from "@/logsQuery/traces.js";
 
 export type LogsQueryDeps = QueryDeps & { writeStdout(text: string): void };
 

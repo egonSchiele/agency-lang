@@ -2,7 +2,7 @@
 // with the address `agency logs session show` opens. A row's own text is
 // what the transcript shows on it, so a word repeated in every later LLM
 // call's history is found once, where it first appeared.
-import { oneLine } from "@/cli/runDirectory/table.js";
+import { oneLine } from "@/runDirectory/table.js";
 import { formatAddress } from "@/logsViewer/address.js";
 import {
   matcherFor,

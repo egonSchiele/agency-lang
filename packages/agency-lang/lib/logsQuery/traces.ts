@@ -1,6 +1,6 @@
 // `agency logs traces`: one line per trace, newest first, so an agent can
 // tell which run it wants before reading any of it.
-import { formatTextTable, oneLine } from "@/cli/runDirectory/table.js";
+import { formatTextTable, oneLine } from "@/runDirectory/table.js";
 import { fmtStartedAt, fmtUsd } from "@/logsViewer/format.js";
 import { fmtDuration } from "@/logsViewer/spanText.js";
 import type { TraceSummary } from "@/logsViewer/traceSummaries.js";

@@ -90,7 +90,7 @@ export function queryDir(): string {
 }
 
 /** Deps that read the log a query names, against `cwd`. Choosing a log
- *  when none is named is the CLI's (`cliLog.ts`), tested there. */
+ *  when none is named is the CLI's (`lib/cli/logsQuery/cliLog.ts`), tested there. */
 export function queryDeps(cwd: string, overrides: Partial<QueryDeps> = {}): QueryDeps {
   return {
     cwd,

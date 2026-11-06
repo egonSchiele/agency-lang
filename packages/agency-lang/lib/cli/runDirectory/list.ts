@@ -9,7 +9,7 @@ import {
 } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { formatTextTable, oneLine } from "./table.js";
+import { formatTextTable, oneLine } from "@/runDirectory/table.js";
 
 export type RunsListDependencies = { report(message: string): void };
 

@@ -5,8 +5,6 @@
   the in-memory presets. The policy handler decides the read and the
   write. Nothing here approves them.
 */
-// Imported only so the inlined PresetInput schema can find it (#1283).
-import { LlmOptions } from "../../lib/llmOptions.agency"
 import { PresetInput, checkPreset } from "../../lib/presetRules.agency"
 import {
   PresetEdit,

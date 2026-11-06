@@ -1,0 +1,20 @@
+import { Outer } from "./types.agency"
+
+// The schema for `Bag` holds `Outer`'s body, which names `Inner`. This
+// module has no schema const for `Inner`, so the compiler writes
+// `Inner`'s body in its place. Naming it failed at module load.
+type Bag = {
+  items: Record<string, Outer>
+}
+
+node acceptsAGoodValue(): boolean {
+  const raw: any = { items: { first: { inner: { count: 1 } } } }
+  const bag: Bag! = raw
+  return isSuccess(bag)
+}
+
+node refusesAWrongInnerField(): boolean {
+  const raw: any = { items: { first: { inner: { count: "one" } } } }
+  const bag: Bag! = raw
+  return isFailure(bag)
+}

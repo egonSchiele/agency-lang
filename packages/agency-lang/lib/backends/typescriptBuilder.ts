@@ -92,6 +92,7 @@ import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/b
 import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
+  pulledAliasRefersToItself,
 } from "./typescriptGenerator/typeToZodSchema.js";
 import {
   buildValidationDescriptor,
@@ -2168,12 +2169,12 @@ export class TypeScriptBuilder {
    * or null. The schema prints a plain alias by name and leaves its body to
    * the module that declares it, so only the names it prints need a
    * binding: those left after `resolveTypeDeep` inlines generic aliases,
-   * plus the body of a value-parameterized alias, which the schema inlines
-   * at the use site. An alias that reached the type table through an
-   * imported signature or another alias's body (`pullTransitiveAliases`)
-   * has no const here and no JavaScript import, so naming it would fail at
-   * module load (#1371). A parameter schema has the same gap; this keeps a
-   * return schema from widening it.
+   * plus the body of every alias the schema writes in place. Those are a
+   * value-parameterized alias, and an alias that reached the type table
+   * through an imported signature or another alias's body
+   * (`pullTransitiveAliases`), which has no const here and no JavaScript
+   * import. One of the second kind that refers to itself cannot be written
+   * in place, so it is reported as unbound.
    */
   private unboundAliasIn(type: VariableType): string | null {
     const aliases = this.scopes.visibleTypeAliasesFull();
@@ -2188,12 +2189,17 @@ export class TypeScriptBuilder {
       }
       seen.push(name);
       const entry = aliases[name];
-      const inlined = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
-      if (inlined) {
-        collectAliasNames(entry.body, printed);
+      const hasBinding = declaredHere.includes(name) || this.names.isAgencyImport(name);
+      const takesValues = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
+      const pulled = entry?.pulledFrom !== undefined && !hasBinding;
+      if (pulled && pulledAliasRefersToItself(name, aliases)) {
+        return name;
+      }
+      if (takesValues || pulled) {
+        collectAliasNames(resolveTypeDeep(entry.body, aliases), printed);
         continue;
       }
-      if (!declaredHere.includes(name) && !this.names.isAgencyImport(name)) {
+      if (!hasBinding) {
         return name;
       }
     }

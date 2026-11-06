@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "acceptsAGoodValue",
+      "description": "a module loads and validates a type whose schema reaches an alias the module never imports",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "refusesAWrongInnerField",
+      "description": "the body of the alias that was never imported is part of the schema, so a wrong field in it is refused",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

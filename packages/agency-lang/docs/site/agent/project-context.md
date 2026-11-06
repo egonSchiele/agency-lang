@@ -23,9 +23,10 @@ directory instead. The agent does not create the file for you.
 ## Project instructions
 
 The agent reads `AGENTS.md` in the working directory. If that file is
-absent, it reads `CLAUDE.md` there instead. It does not search parent
-directories. Project instructions apply alongside the global file and
-take precedence when they conflict.
+absent, it reads `CLAUDE.md` there instead. Inside a git repository it
+does the same in each parent directory, up to the repository root. Project
+instructions apply alongside the global file and take precedence when
+they conflict.
 
 ## Custom slash commands
 

@@ -286,7 +286,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /paste, /help",
       )
       return true
     }

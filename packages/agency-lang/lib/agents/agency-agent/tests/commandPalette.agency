@@ -5,7 +5,7 @@
  */
 import { SkillCommand, expandSlash } from "std::skills"
 
-import { builtinPalette, paletteFrom } from "../lib/commandPalette.agency"
+import { builtinPalette, paletteFrom, promptCommands } from "../lib/commandPalette.agency"
 
 def command(name: string, description: string): SkillCommand {
   return {
@@ -28,4 +28,13 @@ node builtinHidesSkill(): boolean {
 
 node expandUsesFirstMatch(): boolean {
   return expandSlash("/deploy", [command("deploy", "skill"), command("deploy", "file")]) == "skill body"
+}
+
+node initExpandsWithItsArguments(): boolean {
+  const expanded = expandSlash("/init the test setup", promptCommands)
+  return expanded.includes("/AGENTS.md") && expanded.includes("the test setup") && !expanded.includes("$ARGUMENTS")
+}
+
+node userCommandHidesInit(): boolean {
+  return expandSlash("/init", [command("init", "mine"), ...promptCommands]) == "mine body"
 }

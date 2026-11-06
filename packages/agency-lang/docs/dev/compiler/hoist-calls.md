@@ -31,6 +31,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 |---|---|---|
 | arguments, literals, interpolations, binary operands | hoist | unconditionally evaluated |
 | statement tail call | stays | it is the pending call itself; also node calls are control flow and throw in value position |
+| arguments of a bare method-call statement, `result.push(transform(item))` | hoist; the chain itself stays | the chain is the statement tail. A temp carries the post-call guard, so an argument that paused or was aborted stops the scope before the method runs. Without it a guard trip inside `transform` was lost and the guard returned a success |
 | `if` conditions, `for` iterables, `match` scrutinees | hoist before the statement | single evaluation either way |
 | `while` conditions with calls | loop rewritten: `while (true) { temps; if (cond) { body } else { break } }` | conditions re-evaluate per iteration; pre-pass they re-ran once per completed iteration on resume |
 | `try` operands, `catch` expressions | opaque | the whole expression compiles into a runtime thunk; moving code out moves the error boundary |
@@ -56,7 +57,7 @@ The type checker refuses a checked cast to a tagged type wherever the pass does 
 
 ## The tripwire
 
-Residual shapes the pass does not cover can still desync. There are four of them. Calls nested inside opaque positions, meaning short-circuit right sides, catch expressions, try operands, and with-modified statements. Block bodies nested inside opaque expressions. Mid-chain method calls inside a hoisted access chain: the chain BASE and every argument hoist, so what remains is a later chain segment re-running an earlier method call. Finally, two holes the expressionSlots refactor DISCOVERED in the original pass and preserved for behavior identity. Those are bare method-call statements, where `result.push(transform(item))` does not hoist `transform`, and bare expression statements, such as the parsed form of `print(...) + greet`. Closing those two is a deliberate follow-up with its own fixtures, not a refactor side effect. Those now fail loudly instead of corrupting silently: every frame is stamped with its owner's scope name at CLAIM time, and a mismatched claim throws
+Residual shapes the pass does not cover can still desync. There are four of them. Calls nested inside opaque positions, meaning short-circuit right sides, catch expressions, try operands, and with-modified statements. Block bodies nested inside opaque expressions. Mid-chain method calls inside a hoisted access chain: the chain BASE and every argument hoist, so what remains is a later chain segment re-running an earlier method call. Finally, one hole the expressionSlots refactor DISCOVERED in the original pass and preserved for behavior identity: bare expression statements, such as the parsed form of `print(...) + greet`. Closing it is a deliberate follow-up with its own fixtures, not a refactor side effect. Those now fail loudly instead of corrupting silently: every frame is stamped with its owner's scope name at CLAIM time, and a mismatched claim throws
 
 ```
 Resume desync: function "X" tried to claim the saved state of "Y".

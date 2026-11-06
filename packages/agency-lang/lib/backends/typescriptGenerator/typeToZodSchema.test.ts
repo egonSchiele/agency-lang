@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { mapTypeToZodSchema, mapTypeToValidationSchema, appendMeta } from "./typeToZodSchema.js";
+import {
+  mapTypeToZodSchema,
+  mapTypeToValidationSchema,
+  appendMeta,
+  pulledAliasRefersToItself,
+} from "./typeToZodSchema.js";
 import { TypeAliasEntry, VariableType } from "../../types.js";
 import type { Tag } from "../../types/tag.js";
 
@@ -447,6 +452,49 @@ describe("an alias the module neither declares nor imports", () => {
     };
     const entries = { Tree: { body: tree, pulledFrom: "types.agency" } };
     expect(() => schemaFor(named("Tree"), entries)).toThrow("Import it by name from types.agency");
+  });
+
+  it("says to export the alias when it is not exported", () => {
+    const entries = {
+      Tree: {
+        body: holds("kids", { type: "arrayType", elementType: named("Tree") }),
+        pulledFrom: "types.agency",
+      },
+    };
+    expect(() => schemaFor(named("Tree"), entries)).toThrow(
+      "If it is not exported there, export it first.",
+    );
+  });
+
+  it("refuses one that reaches itself through another alias written in place", () => {
+    const entries = {
+      First: { body: holds("second", named("Second")), pulledFrom: "types.agency" },
+      Second: { body: holds("first", named("First")), pulledFrom: "types.agency" },
+    };
+    expect(() => schemaFor(named("First"), entries)).toThrow("Import it by name from types.agency");
+    expect(pulledAliasRefersToItself("First", entries)).toBe(true);
+    expect(pulledAliasRefersToItself("Second", entries)).toBe(true);
+  });
+
+  it("follows a value-parameterized alias, which is also written in place", () => {
+    const sized = { type: "typeAliasVariable", aliasName: "Sized", valueArgs: [] } as VariableType;
+    const entries = {
+      Rec: { body: holds("sized", sized), pulledFrom: "types.agency" },
+      Sized: {
+        body: holds("rec", named("Rec")),
+        valueParams: [{ name: "n" }],
+      } as unknown as TypeAliasEntry,
+    };
+    expect(pulledAliasRefersToItself("Rec", entries)).toBe(true);
+  });
+
+  it("does not count a path that goes through an alias with a schema const", () => {
+    const entries = {
+      Outer: { body: holds("local", named("Local")), pulledFrom: "types.agency" },
+      Local: { body: holds("outer", named("Outer")) },
+    };
+    expect(pulledAliasRefersToItself("Outer", entries)).toBe(false);
+    expect(schemaFor(named("Outer"), entries)).toBe(`z.object({ "local": Local })`);
   });
 
   it("refuses one that refers to itself through a Result", () => {

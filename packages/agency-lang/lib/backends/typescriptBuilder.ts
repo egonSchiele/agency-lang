@@ -92,6 +92,7 @@ import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/b
 import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
+  pulledAliasRefersToItself,
 } from "./typescriptGenerator/typeToZodSchema.js";
 import {
   buildValidationDescriptor,
@@ -2171,11 +2172,11 @@ export class TypeScriptBuilder {
       const hasBinding = declaredHere.includes(name) || this.names.isAgencyImport(name);
       const takesValues = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
       const pulled = entry?.pulledFrom !== undefined && !hasBinding;
-      if (pulled && this.pulledAliasNamesItself(name)) {
+      if (pulled && pulledAliasRefersToItself(name, aliases)) {
         return name;
       }
       if (takesValues || pulled) {
-        collectAliasNames(entry.body, printed);
+        collectAliasNames(resolveTypeDeep(entry.body, aliases), printed);
         continue;
       }
       if (!hasBinding) {
@@ -2183,28 +2184,6 @@ export class TypeScriptBuilder {
       }
     }
     return null;
-  }
-
-  /** Whether the body of the pulled alias `name` reaches `name` again
-   *  through aliases that are also pulled. */
-  private pulledAliasNamesItself(name: string): boolean {
-    const aliases = this.scopes.visibleTypeAliasesFull();
-    const queue: string[] = [];
-    collectAliasNames(aliases[name].body, queue);
-    const seen: string[] = [];
-    while (queue.length > 0) {
-      const next = queue.shift()!;
-      if (next === name) {
-        return true;
-      }
-      const entry = aliases[next];
-      if (seen.includes(next) || entry?.pulledFrom === undefined) {
-        continue;
-      }
-      seen.push(next);
-      collectAliasNames(entry.body, queue);
-    }
-    return false;
   }
 
   /**

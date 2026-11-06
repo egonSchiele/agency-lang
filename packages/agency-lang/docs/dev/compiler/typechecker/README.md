@@ -259,7 +259,7 @@ type Bag = { items: Record<string, Outer> }
 
 `Inner` is in the type table, marked `pulledFrom`. The module has no schema const for `Inner` and no JavaScript import of it, so naming it in the schema for `Bag` would fail when the module loads. The schema mapper writes `Inner`'s body in place of its name (`pulledAliasBody` in `lib/backends/typescriptGenerator/typeToZodSchema.ts`).
 
-A pulled alias that refers to itself cannot be written in place. Codegen stops with an error that names the file to import it from, and a named import gives it a const. `returnSchemaFor` emits no return schema for a function whose return type reaches one, so an exported def never causes that error by its return type alone.
+A pulled alias that refers to itself cannot be written in place. `pulledAliasRefersToItself`, in the same file, is the one function that decides this. The mapper asks it before writing a body, and stops codegen with an error that names the file to import the alias from. A named import gives the alias a const. `returnSchemaFor` asks it too, and emits no return schema for a function whose return type reaches such an alias, so an exported def never causes the error by its return type alone.
 
 ### For loops
 

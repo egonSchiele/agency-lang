@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { EvalTarget } from "@/agentTarget.js";
 import { finishedTraceLines } from "@/runDirectory/testFixtures.js";
+import { failure } from "@/runtime/result.js";
 
 import { runAgent } from "./runAgent.js";
 import type { EvalRunnerJob } from "./subprocess.js";
@@ -81,6 +82,45 @@ describe("runAgent", () => {
     // The harness-minted trace id and the seeded code's identity reach the child.
     expect(observed?.traceId).toBe("trace-1");
     expect(observed?.kind === "file" && observed.code.entry).toBe("agent.agency");
+  });
+
+  // An agent that throws does not crash the run: the entry node returns the
+  // error as a failure value. Without this check the run counted as a
+  // success and the graders were handed the failure as the output.
+  it("an entry node that returns a failure is an error, with the failure's message", async () => {
+    const { agentPath } = makeAgentProject();
+    const runDir = path.join(tmp(), "run-1");
+    const returned = failure("the search index is missing");
+
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      { runDir, traceId: "trace-1", config: {} },
+      { runner: traceWritingRunner(JSON.parse(JSON.stringify(returned))) },
+    );
+
+    expect(run.status).toBe("error");
+    if (run.status === "error") {
+      expect(run.errorMessage).toBe(
+        "the entry node returned a failure: the search index is missing",
+      );
+      // The trace is kept: it is the evidence of what the agent did.
+      expect(run.statelogPath).toBe(path.join(runDir, "agent", "statelog.jsonl"));
+    }
+  });
+
+  it("an output that only looks like a failure in part is still a success", async () => {
+    const { agentPath } = makeAgentProject();
+    const runDir = path.join(tmp(), "run-1");
+
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      { runDir, traceId: "trace-1", config: {} },
+      { runner: traceWritingRunner({ success: false, error: "the agent's own answer shape" }) },
+    );
+
+    expect(run.status).toBe("success");
   });
 
   it("seedFiles land in the workdir; a failed run lists what was seeded and leaves no statelog", async () => {

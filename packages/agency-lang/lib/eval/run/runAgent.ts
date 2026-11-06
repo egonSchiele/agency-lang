@@ -7,6 +7,7 @@ import { extractEvalRecord } from "@/eval/extract.js";
 import type { EvalRecord } from "@/eval/types.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { readTraces } from "@/runDirectory/traces.js";
+import { isFailure } from "@/runtime/result.js";
 
 import { substituteInput } from "./commandLine.js";
 import { agentRunPaths, hasStatelog, type AgentRunPaths } from "./extract.js";
@@ -74,9 +75,9 @@ export type AgentRun =
   /** Ran and left a statelog behind. `output` is the trace's last recorded
    *  eval output; the statelog is the evidence anything downstream reads. */
   | ({ status: "success"; output: unknown } & AgentRunArtifacts)
-  /** Anything else: crashed, failed to seed/compile, or the run left no
+  /** Anything else: crashed, failed to seed/compile, the run left no
    *  statelog behind (a completed run always writes one, so its absence is a
-   *  failure too). */
+   *  failure too), or the entry node returned a failure value. */
   | ({ status: "error"; errorMessage: string } & AgentRunArtifacts);
 
 const MAX_LISTED_SEEDED_FILES = 50;
@@ -145,7 +146,14 @@ class AgentRunner {
         "run completed but wrote no statelog (or it landed somewhere unexpected)." + commandHint,
       );
     }
-    return { status: "success", output: lastOutput(record), ...this.artifacts() };
+    const output = lastOutput(record);
+    // An agent that throws does not crash the run: Agency turns the error
+    // into a failure value and the entry node returns it. That is a run
+    // that did not work, so it is not handed to the graders as an answer.
+    if (isFailure(output)) {
+      return this.fail(`the entry node returned a failure: ${output.error}`);
+    }
+    return { status: "success", output, ...this.artifacts() };
   }
 
   private artifacts(): AgentRunArtifacts {

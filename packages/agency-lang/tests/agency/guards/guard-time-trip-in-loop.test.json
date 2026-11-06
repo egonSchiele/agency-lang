@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "nodeName": "loopBody",
+      "input": "",
+      "expectedOutput": "\"timeoutFailure\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A time guard whose block loops over a slow call fails with timeoutFailure when the budget trips inside the call. The call is an argument of out.push(...)."
+    },
+    {
+      "nodeName": "comprehension",
+      "input": "",
+      "expectedOutput": "\"timeoutFailure\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "The same trip inside a list comprehension, where map pushes the block's value."
+    }
+  ]
+}

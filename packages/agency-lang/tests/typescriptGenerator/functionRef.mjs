@@ -530,12 +530,23 @@ __stack.locals.result = [];
       });
       await runner.loop(2, __run, async (__run) => (__stack.args.items), async (item, _, runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
+__stack.locals.__hoist_0 = await __call(__run, __stack.args.transform, {
+            type: "positional",
+            args: [item]
+          });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+            runner.halt(__stack.locals.__hoist_0)
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_0)) {
+            runner.halt(__stack.locals.__hoist_0.carryThrough(__run.log, __stack, "applyToAll"))
+            return;
+          }
+        });
+await runner.step(1, __run, async (runner, __run) => {
 await __callMethod(__run, __stack.locals.result, "push", {
             type: "positional",
-            args: [await __call(__run, __stack.args.transform, {
-              type: "positional",
-              args: [item]
-            })]
+            args: [__stack.locals.__hoist_0]
           })
         });
       });
@@ -793,4 +804,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"functionRef.agency:greet":{"1":{"line":1,"col":2}},"functionRef.agency:double":{"1":{"line":5,"col":2}},"functionRef.agency:applyToAll":{"1":{"line":9,"col":2},"2":{"line":10,"col":2},"3":{"line":13,"col":2},"2.0":{"line":11,"col":4}},"functionRef.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":19,"col":2}}};
+export const __sourceMap = {"functionRef.agency:greet":{"1":{"line":1,"col":2}},"functionRef.agency:double":{"1":{"line":5,"col":2}},"functionRef.agency:applyToAll":{"1":{"line":9,"col":2},"2":{"line":10,"col":2},"3":{"line":13,"col":2},"2.0":{"line":11,"col":16},"2.1":{"line":11,"col":4}},"functionRef.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":19,"col":2}}};

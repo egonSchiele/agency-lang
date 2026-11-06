@@ -33,6 +33,9 @@ import {
   SWITCH_MESSAGE,
   NON_NULL_ASSERTION_MESSAGE,
   TERNARY_MESSAGE,
+  NAME_BEFORE_STATEMENT_MESSAGE,
+  TEXT_AFTER_STATEMENT_MESSAGE,
+  WITH_NOT_ALLOWED_HERE_MESSAGE,
   UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
 import {
@@ -377,6 +380,9 @@ export const newLineParser: Parser<NewLine> = seqC(
 );
 
 export const BLANK_LINE_SENTINEL = "\uE000";
+
+/** Text that ends with a line break or a `;`, with only spaces after it. */
+const STATEMENT_END = /[\n;\uE000][ \t]*$/;
 
 /** Blank lines become sentinel characters before parsing (statement
  *  boundaries depend on it). Lives here, next to the sentinel it emits;
@@ -6213,9 +6219,86 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
   ),
 );
 
+/** What may follow a statement on its own line: the block's `}`, a `//`
+ *  comment, a line ending the statement did not take, or the end of the
+ *  text. */
+const afterStatement = or(char("}"), str("//"), char(BLANK_LINE_SENTINEL), newline, eof);
+
+/** `/* ... *\/` comments, and the spaces around them, at the start of a
+ *  text. A comment after a statement does not end its line: in
+ *  `print(1) /* note *\/ print(2)` the second call is still on the line of
+ *  the first. So the check looks at what comes after the comments. */
+const BLOCK_COMMENTS = /^(?:[ \t]*\/\*[\s\S]*?\*\/)*[ \t]*/;
+
+function pastBlockComments(rest: string): string {
+  return rest.slice(BLOCK_COMMENTS.exec(rest)![0].length);
+}
+
+/** Whether the statement just read is the last thing on its line, or is one
+ *  that may share its line: a comment, or a tag such as `@validate(...)`,
+ *  which may sit before the declaration it describes. `read` is the text the
+ *  statement took, and `rest` is what follows it and any block comments. */
+function endsItsLine(node: AgencyNode, read: string, rest: string): boolean {
+  return (
+    node.type === "comment" ||
+    node.type === "multiLineComment" ||
+    node.type === "newLine" ||
+    node.type === "tag" ||
+    STATEMENT_END.test(read) ||
+    afterStatement(rest).success
+  );
+}
+
+/** Whether `input` is one or more whole statements that run to the end of
+ *  their line. Text that is not, such as the `=` left by `const broken =`,
+ *  is a statement that could not be read, and the caller reports that. */
+function readsAsStatements(entry: Parser<AgencyNode>, input: string): boolean {
+  let rest = input;
+  while (true) {
+    const result = entry(rest);
+    if (!result.success) return false;
+    const read = rest.slice(0, rest.length - result.rest.length);
+    const after = pastBlockComments(result.rest);
+    if (endsItsLine(result.result, read, after)) return true;
+    rest = after;
+  }
+}
+
+/** The message for text left on the line of `statement`. Two mistakes get a
+ *  message of their own, because the general one tells their author to add
+ *  a `;`, which would not help. */
+function textAfterStatementMessage(statement: AgencyNode, after: string): string {
+  if (/^with[ \t]/.test(after)) return WITH_NOT_ALLOWED_HERE_MESSAGE;
+  if (statement.type === "variableName") return NAME_BEFORE_STATEMENT_MESSAGE(statement.value);
+  return TEXT_AFTER_STATEMENT_MESSAGE;
+}
+
+/** One statement, which must be the last thing on its line. Wraps the
+ *  statement parser of a block body or of the top level.
+ *
+ *  A statement parser stops where its statement ends. In `const x = 1.2.3`
+ *  that is after `1.2`, and `.3` then read as a second statement, so the
+ *  program ran with a value the author did not write. A second statement on
+ *  the same line needs a `;` before it. */
+export function statementOnItsLine(statement: Parser<AgencyNode>): Parser<AgencyNode> {
+  const entry = completeConstructEntry(statement);
+  return (input: string) => {
+    const result = entry(input);
+    if (!result.success) return result;
+    const read = input.slice(0, input.length - result.rest.length);
+    const after = pastBlockComments(result.rest);
+    if (endsItsLine(result.result, read, after) || !readsAsStatements(entry, after)) {
+      return result;
+    }
+    const declined = committedFailure(textAfterStatementMessage(result.result, after), after);
+    getParseState().committedFailure = declined;
+    return declined as ParserResult<AgencyNode>;
+  };
+}
+
 const _bodyParserImpl: Parser<AgencyNode[]> = memo(
   "functionBodyParser",
-  many(completeConstructEntry(_bodyNodeParser)),
+  many(statementOnItsLine(_bodyNodeParser)),
 );
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {

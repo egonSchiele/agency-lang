@@ -1,4 +1,4 @@
-global let threshold = 10
+let threshold = 10
 
 def check(value: number): Result {
   if (value < threshold) {

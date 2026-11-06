@@ -12,6 +12,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
 - `docs/dev/compiler/locations.md` — How source positions flow through the parser, and what to check when a reported location is wrong.
 - `docs/dev/compiler/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where the author wrote it.
+- `docs/dev/compiler/statement-boundaries.md` — Why a statement must be the last thing on its line, the check that wraps the statement parser in a block and at the top level, what may follow a statement, and why text that does not read as a statement is left to the unreadable-statement error.
 - `docs/dev/compiler/prepare-program.md` — `prepareProgram`, the one pipeline from source text to a `CompilationUnit`: the steps in order, the option each caller sets and why, how failures are returned, why resolver errors carry AG codes, and which callers are deliberately not on it.
 - `docs/dev/compiler/rewriting-imports.md` — How imports in generated output are rewritten, and why compile mode and run mode differ.
 - `docs/dev/compiler/codegen-run-parameter.md` — How generated code receives the run as `__run` and passes it on: the four rules, how runtime values are read, and what to do when adding a place that emits code.

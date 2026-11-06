@@ -345,7 +345,6 @@ export def add(a: number, b: number): number {
 }
 
 export node main() {
-  uses greet
   const result = llm("Say hello")
   print(result)
 }

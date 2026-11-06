@@ -288,6 +288,7 @@ Other process docs:
 - `docs/dev/compiler/prepare-program.md` — `prepareProgram`, the one pipeline from source text to a `CompilationUnit`: the steps in order, the option each caller sets and why, how failures are returned, why resolver errors carry AG codes, and which callers are deliberately not on it.
 - `docs/dev/compiler/rewriting-imports.md` — How imports in generated output are rewritten, and why compile mode and run mode differ.
 - `docs/dev/compiler/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where the author wrote it.
+- `docs/dev/compiler/statement-boundaries.md` — Why a statement must be the last thing on its line, the check that wraps the statement parser in a block and at the top level, what may follow a statement, and why text that does not read as a statement is left to the unreadable-statement error.
 - `docs/dev/compiler/ts-ir-readability-backlog.md` — A backlog of pain points in the TypeScript builder. Nothing here is actioned yet.
 - `docs/dev/compiler/typechecker/README.md` — How bidirectional type checking works: the phases, the scopes, and the diagnostic registry.
 - `docs/dev/compiler/typechecker/definite-returns-remaining-work.md` — What shipped for definite-return checking and which parts are still open.

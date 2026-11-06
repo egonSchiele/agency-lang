@@ -1852,17 +1852,10 @@ describe("number literal grammar", () => {
     expect(r.rest).toBe("_");
   });
 
-  // Pins what actually happens at program level, which is NOT an error: the
-  // number parser stops after `1.2` and the body parser tolerates the leftover
-  // `.3`, dropping it. Worth recording rather than assuming — the local fix
-  // stops the number parser building a malformed literal, but it does not make
-  // the whole expression fail. Tightening that tolerance is a separate change.
-  it("parses 1.2.3 as 1.2 and silently drops the rest", () => {
+  // The number parser stops after `1.2`. The `.3` left on the line is refused
+  // by the body parser; see statementBoundary.test.ts.
+  it("refuses 1.2.3 in a program", () => {
     const parsed = parseAgency(`node main() { const x = 1.2.3 }`, {}, false);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    expect((parsed.result.nodes[0] as any).body[0].value).toEqual(
-      expect.objectContaining({ type: "number", value: "1.2" }),
-    );
+    expect(parsed.success).toBe(false);
   });
 });

@@ -54,12 +54,15 @@ describe("issue #229: top-level bare `with` modifier", () => {
     expect(pop).toBeGreaterThan(call);
   });
 
-  it("still compiles when the handler is a user-defined function name", () => {
+  // Only `approve`, `reject`, and `propagate` may follow `with` here. A
+  // function name used to parse as two stray names after the call, so the
+  // call ran with no handler at all.
+  it("refuses a function name after `with`", () => {
     const src =
       `def myHandler(): void { }\n` +
       `def foo(): number { return 42 }\n` +
       `foo() with myHandler\n` +
       `node main() { print("ok") }\n`;
-    expect(() => compileSource(src)).not.toThrow();
+    expect(() => compileSource(src)).toThrow("`with` cannot go here");
   });
 });

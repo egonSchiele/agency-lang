@@ -46,7 +46,6 @@ describe("AG3017: statements that cannot sit at the top level", () => {
     ["assignment", "x = 1\n\nnode main() { print(2) }\n"],
     ["bare debugger", "debugger\n\nnode main() { print(2) }\n"],
     ["declarations", "def f(): number {\n  return 1\n}\n\nnode main() { print(2) }\n"],
-    ["goto, which is two bare names", "goto other\n\nnode main() { print(2) }\n"],
   ];
 
   for (const [label, source] of allowed) {

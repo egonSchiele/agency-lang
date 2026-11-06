@@ -59,9 +59,14 @@ against.
 
 Naming `eval` or `Function` is a compile error (AG4014) with or without
 `--agency-only`, and whether or not the type checker is on. It covers a
-call, the bare name, `new Function`, and either name read from
-`globalThis`. Like layer 1 it reads spellings, so a key built at run time
-gets past it.
+call, the bare name, `new Function`, either name read from the global
+object, `globalThis` used as a value, and `.constructor.constructor`.
+
+This stops honest mistakes and model-written `eval`. It is not a
+boundary: it reads spellings, and a key built at run time or a
+`constructor` taken one statement at a time gets past it. Without
+`--agency-only`, nothing stops a program that is trying. Layer 2 below is
+the boundary.
 
 Depth: `docs/dev/compiler/agency-only-bound-names.md`, "Two names are
 refused in every program".

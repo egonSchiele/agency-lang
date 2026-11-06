@@ -110,13 +110,20 @@ function checkForbiddenProperty(node: AgencyNode, ctx: TypeCheckerContext): void
 
 /** The forbidden property name a chain element names, or null. */
 function forbiddenPropertyName(element: ValueAccess["chain"][number]): string | null {
-  if (element.kind === "property" && SANDBOX_FORBIDDEN_PROPERTIES.includes(element.name)) {
-    return element.name;
+  const key = literalKeyOf(element);
+  return key !== null && SANDBOX_FORBIDDEN_PROPERTIES.includes(key) ? key : null;
+}
+
+/** The property a chain element reads when the source spells it out:
+ *  `.name`, `.name(...)`, or `["name"]`. Null for a computed key, a slice,
+ *  or a call. */
+export function literalKeyOf(element: ValueAccess["chain"][number]): string | null {
+  if (element.kind === "property") return element.name;
+  if (element.kind === "methodCall") {
+    const called = element.functionCall.functionName;
+    return typeof called === "string" ? called : null;
   }
-  if (element.kind === "index") {
-    const literal = stringLiteralValue(element.index);
-    if (literal !== null && SANDBOX_FORBIDDEN_PROPERTIES.includes(literal)) return literal;
-  }
+  if (element.kind === "index") return stringLiteralValue(element.index);
   return null;
 }
 

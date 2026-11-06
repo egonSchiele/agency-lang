@@ -633,7 +633,7 @@ export const DIAGNOSTICS = {
     code: "AG4014",
     severity: "error",
     message:
-      "'{name}' builds code from a string, which Agency does not allow. To write code with code, use a splice or a template.",
+      "'{name}' is a way to build code from a string at run time, which Agency does not allow. To write code with code, use a splice or a template.",
   },
   parameterRedeclared: {
     code: "AG4012",

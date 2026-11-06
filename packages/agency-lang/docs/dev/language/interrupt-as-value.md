@@ -105,7 +105,8 @@ the code.
 `raise(...)` and `interrupt(...)` are interrupts wherever an expression starts.
 A function with either name could be declared and never called: the text
 `raise()` would raise an interrupt with no effect name instead. So the parser
-refuses the name on a `def`, a `node`, and an import:
+refuses the name on a `def`, a `node`, an import, and a re-export
+(`export { raise } from "./helper.js"`):
 
 ```ts
 import { raise } from "./helper.js"                  // refused
@@ -117,8 +118,19 @@ with the check, and `declNameParserFor` runs the same check on the name after
 `def` or `node`. The exported name before `as` is not checked, so a JavaScript
 function with either name can still be imported under another one.
 
-A variable or a parameter with one of these names is left alone. It holds
-data, and handlers are commonly written `with (interrupt) { ... }`.
+A variable or a parameter with one of these names is not checked, because
+handlers are commonly written `with (interrupt) { ... }`. That leaves one case
+open. A variable or a parameter named `raise` can hold a function, and calling
+it raises an interrupt instead:
+
+```ts
+def applyIt(raise: (x: string) => string): string {
+  return raise("hi")   // an interrupt with no effect name; the function is not called
+}
+```
+
+The parser does not know which names are in scope, so it cannot tell this from
+an interrupt.
 
 A template hole filled with either word is refused separately, because both
 are in `RESERVED_WORDS` (`identifierFillFor` in

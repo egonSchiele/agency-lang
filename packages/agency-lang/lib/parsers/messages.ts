@@ -136,11 +136,11 @@ export const INTERRUPT_KEYWORD_ALONE_MESSAGE = (keyword: string): string =>
 
   ${keyword} deploy("Ship it?", {})`;
 
-/** A `def`, a `node`, or an import named `raise` or `interrupt`. The text
+/** A `def`, a `node`, an import, or a re-export named `raise` or `interrupt`. The text
  *  `raise(...)` always raises an interrupt, so the function could be declared
  *  and never called. */
 export const INTERRUPT_KEYWORD_AS_NAME_MESSAGE = (keyword: string): string =>
-  `\`${keyword}\` cannot be the name of a function, a node, or an import. \`${keyword}(...)\` always raises an interrupt, so it would never call one. Use another name. To import a JavaScript function that has this name, rename it in the import:
+  `\`${keyword}\` cannot be the name of a function or a node, or a name in an import or an export. \`${keyword}(...)\` always raises an interrupt, so it would never call one. Use another name. To import a JavaScript function that has this name, rename it in the import:
 
   import { ${keyword} as ${keyword}FromJs } from "./helper.js"`;
 

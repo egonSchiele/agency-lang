@@ -53,6 +53,16 @@ describe("a callable cannot be named raise or interrupt", () => {
       lines: ['import raise from "./helper.js"'],
     },
     {
+      name: "a re-export named raise",
+      keyword: "raise",
+      lines: ['export { raise } from "./helper.js"'],
+    },
+    {
+      name: "a re-export renamed to interrupt",
+      keyword: "interrupt",
+      lines: ['export { helper as interrupt } from "./helper.agency"'],
+    },
+    {
       name: "a namespace import named raise",
       keyword: "raise",
       lines: ['import * as raise from "./helper.js"'],

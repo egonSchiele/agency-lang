@@ -1203,9 +1203,13 @@ function refuseInterruptKeywordName(name: string, input: string): null {
 }
 
 /**
- * The name a `def`, a `node`, or an import gives to something that is called.
- * A variable or a parameter named `interrupt` is left alone: it holds data,
- * and existing handlers are written `with (interrupt) { ... }`.
+ * The name a `def`, a `node`, an import, or a re-export gives to something
+ * that is called.
+ *
+ * A variable or a parameter is not checked, because handlers are written
+ * `with (interrupt) { ... }`. That leaves one case open: a variable or a
+ * parameter named `raise` that holds a function. `raise("hi")` raises an
+ * interrupt and does not call it.
  */
 const callableNameParser: Parser<string> = (input: string) => {
   const result = identifierParser(input);

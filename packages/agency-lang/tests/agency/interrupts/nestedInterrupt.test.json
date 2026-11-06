@@ -1,0 +1,47 @@
+{
+  "tests": [
+    {
+      "nodeName": "answeredByHandler",
+      "description": "A nested interrupt delivers its answer in an argument, a string, a condition, a list, and a loop condition",
+      "input": "",
+      "expectedOutput": "\"L:yes S:yes C:yes yes+end 3\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "answeredAfterPause",
+      "description": "Two nested interrupts in one expression each pause and resume",
+      "input": "",
+      "expectedOutput": "\"L:trueL:true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "first"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "second"
+        }
+      ]
+    },
+    {
+      "nodeName": "answeredWithReject",
+      "description": "A nested interrupt keeps its handler, and a rejection stops the call it was an argument of",
+      "input": "",
+      "expectedOutput": "\"rejected, labelCalls=0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

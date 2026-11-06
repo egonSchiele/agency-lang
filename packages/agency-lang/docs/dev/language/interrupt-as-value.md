@@ -28,13 +28,32 @@ and then the end of the statement.
 
 ## Where the answer is delivered
 
-Parsing as a value and working as a value are different. The answer arrives in
-three positions:
+An interrupt compiles to several statements: raise it, pause, read the answer.
+So it has to be a statement of its own, or the whole value of one:
 
 1. The right side of an assignment: `const mood = raise feel("How?")`.
 2. A match arm: `1 => raise feel("How?")`. The arm is lowered to an assignment
    to a temporary, so this is the first case again.
 3. A `return`, with a difference described below.
+
+Nested anywhere else, the hoist pass (`lib/preprocessors/hoistCalls.ts`) lifts
+the interrupt into a temporary on the line above, exactly as it lifts a nested
+call. So this:
+
+```ts
+const labelled = label(interrupt feel("How?"))
+```
+
+compiles as if it were the first case:
+
+```ts
+const __hoist_0 = interrupt feel("How?")
+const labelled = label(__hoist_0)
+```
+
+That covers a call argument, a string interpolation, a list or object literal,
+an operand of `+`, an `if` condition, a `for` iterable, and a `while`
+condition, which is asked again on every pass.
 
 ### `return` carries on when the interrupt is approved
 
@@ -53,24 +72,33 @@ work. The type checker models it in `returnStatement` in
 flow, so the lines after it are still checked as reachable code.
 `return raise ...` behaves the same way.
 
-## Every other position does not compile
+## Where a nested interrupt does not compile
 
-Anywhere except the right side of an assignment, a match arm, and a `return`,
-an interrupt parses and then compiles to broken JavaScript:
+The hoist pass leaves some positions alone, and a nested interrupt there still
+compiles to broken JavaScript. The build fails in esbuild with
+`Unexpected "const"`, so nothing runs. The positions are the ones
+`docs/dev/compiler/hoist-calls.md` lists as opaque or conditional. The two a
+person is most likely to write:
 
 ```ts
-const labelled = label(interrupt feel("q"))
-const text = "x ${interrupt feel("q")}"
-if (interrupt feel("q")) { }
-const list = [interrupt feel("q")]
-const total = 1 + interrupt feel("q")
+const answer = ready && interrupt feel("q")
+const labelled = label(interrupt feel("q")) with approve
 ```
 
-The hoist pass lifts a nested call into a temporary but leaves a nested
-interrupt where it is (`walk` in `lib/preprocessors/hoistCalls.ts`), so the
-interrupt's generated statements land in the middle of an expression. The
-build fails in esbuild, so nothing runs. Issue #1412 tracks this. Until it is
-fixed, assign the interrupt to a variable first.
+The right side of `&&`, `||`, or `??` may never run, so it cannot move to the
+line above. A statement under `with approve` cannot have part of it moved
+outside the approval. In both cases, assign the interrupt to a variable first.
+
+A handler body is the third such place. The pass never rewrites one, so a
+nested interrupt inside `with (intr) { ... }` also fails the build.
+
+Inside a `handle` block's own body the lift is safe: the temporary is written
+inside that body, so the interrupt keeps its handler, and a rejection stops
+the function before the outer call runs.
+
+This is left as it is on purpose. These are rare shapes, they fail at build
+time, and refusing them with a diagnostic of their own was judged not worth
+the code.
 
 ## A function named `raise` or `interrupt` cannot be called
 
@@ -94,8 +122,7 @@ string and `+`, as in `"x" + raise("q")`. `stringParser` reads that operand
 with `valueAccessParser`, which does not go through `baseAtom`. The call is to
 a function named `raise`. If the program has no such function, it fails when
 it runs. If the program imports one, as in the example above, this is the one
-position where the import is called. Issue #1412 lists this position with the
-others.
+position where the import is called.
 
 ## An interrupt is written on one line
 

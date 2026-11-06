@@ -1,3 +1,4 @@
+import { FakeClock } from "./clock.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CostGuard,
@@ -162,6 +163,27 @@ describe("TimeGuard", () => {
     expect(composed).not.toBe(outerCtl.signal); // composed signal
     outerCtl.abort();
     expect(composed.aborted).toBe(true);
+  });
+
+  // The stdlib guard holds its guards between the push and the block.
+  it("is not charged while held, and runs from the moment it is released", () => {
+    const clock = new FakeClock();
+    const stack = new StateStack();
+    const g = new TimeGuard(500, undefined, clock);
+    stack.pushGuard(g);
+    stack.holdGuards([g.guardId]);
+    clock.advance(10_000);
+    expect(g.snapshotElapsed()).toBe(0);
+    expect(g.check(stack)).toBeNull();
+
+    // No runner step happens here: release alone has to start the clock,
+    // or a block that is one TypeScript call would never be timed.
+    stack.releaseGuards([g.guardId]);
+    clock.advance(300);
+    expect(g.snapshotElapsed()).toBe(300);
+    expect(g.check(stack)).toBeNull();
+    clock.advance(300);
+    expect(g.check(stack)?.message).toContain("spent 600");
   });
 
   it("trips after timeLimit ms and check() returns the error", () => {

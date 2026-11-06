@@ -473,7 +473,9 @@ them. PR 3 adds two raise surfaces and the join rule:
   `stack.holdGuards(ids)`, `_runGuarded` starts with
   `stack.releaseGuards(ids)`, and it holds them again when the block
   exits. A hold suspends the guards: the clock is paused and no trip is
-  raised. Two things follow. Time that passes before the block starts is
+  raised. The release restarts the clock itself and does not wait for
+  the block's first runner step, because a block that is one TypeScript
+  call has none. Two things follow. Time that passes before the block starts is
   not charged to the guard. And after the block, a clock crossing its
   limit cannot raise a question about work that is already done, and a
   late timer cannot turn a computed success into a failure.

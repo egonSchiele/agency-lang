@@ -947,12 +947,17 @@ export class StateStack {
     this.rebuildAbortSignal();
   }
 
-  /** Undo `holdGuards` as the guarded block starts. The clock restarts
-   *  at the block's first step (Runner.beforeStep resumes every guard).
+  /** Undo `holdGuards` as the guarded block starts, and start the clock.
+   *  unsuspend() alone would leave the clock stopped until the block's
+   *  first runner step, and a block that has none, such as an imported
+   *  TypeScript function, would then run with no clock and no timer.
    *  A hold is never serialized, so on a resume inside the block the
-   *  guards are already free and this does nothing. */
+   *  guards are already free and running, and this does nothing. */
   releaseGuards(ids: string[]): void {
-    this.guards.filter((g) => ids.includes(g.guardId)).forEach((g) => g.unsuspend());
+    for (const guard of this.guards.filter((g) => ids.includes(g.guardId))) {
+      guard.unsuspend();
+      guard.resume(this);
+    }
     this.rebuildAbortSignal();
   }
 

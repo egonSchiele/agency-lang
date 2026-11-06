@@ -242,6 +242,28 @@ describe("stringifyStatelogEvent", () => {
     expect(JSON.parse(text).data.args.picture).toBe("[base64: 6000 bytes omitted]");
   });
 
+  it("redacts a secret in a URL query inside a string the redact rule rewrote", () => {
+    const gs = new GlobalStore();
+    gs.markRedacted("Ada Lovelace");
+    const text = stringifyStatelogEvent(
+      envelope({ type: "print", text: "Fetching series?api_key=SENTINEL for Ada Lovelace" }),
+      statelogScrubRules(gs),
+      DEFAULT_MAX_VALUE_CHARS,
+    );
+    expect(JSON.parse(text).data.text).toBe("Fetching series?api_key=[REDACTED] for [REDACTED]");
+  });
+
+  it("keeps the marker of a value that is redacted whole", () => {
+    const gs = new GlobalStore();
+    gs.markRedacted("https://example.com/x?api_key=SENTINEL");
+    const text = stringifyStatelogEvent(
+      envelope({ type: "print", url: "https://example.com/x?api_key=SENTINEL" }),
+      statelogScrubRules(gs),
+      DEFAULT_MAX_VALUE_CHARS,
+    );
+    expect(JSON.parse(text).data.url).toBe("[REDACTED]");
+  });
+
   it("redacts a secret in a URL query with or without a tag store", () => {
     const event = envelope({
       type: "handlerDecision",
@@ -284,6 +306,28 @@ describe("urlSecretRule", () => {
       );
     },
   );
+
+  it.each(["refresh_token", "id_token", "client_key", "secret", "password", "sig"])(
+    "redacts %s",
+    (name) => {
+      expect(scrub(`https://example.com/data?n=1&${name}=SENTINEL`)).toBe(
+        `https://example.com/data?n=1&${name}=[REDACTED]`,
+      );
+    },
+  );
+
+  it("redacts the signature and the session token of a presigned S3 URL", () => {
+    const url =
+      "https://my-bucket.s3.us-east-1.amazonaws.com/a/b.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-Credential=AKIA%2F20260101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260101T000000Z" +
+      "&X-Amz-Expires=900&X-Amz-Security-Token=SENTINELTOKEN&X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=SENTINELSIG";
+    const scrubbed = scrub(url) as string;
+    expect(scrubbed).not.toContain("SENTINEL");
+    expect(scrubbed).toContain("X-Amz-Security-Token=[REDACTED]&X-Amz-SignedHeaders=host");
+    expect(scrubbed).toContain("X-Amz-Signature=[REDACTED]");
+    expect(scrubbed).toContain("X-Amz-Expires=900");
+  });
 
   it("redacts every secret parameter in one string, whatever its case", () => {
     expect(scrub("see https://a.com/x?API_KEY=one&n=2 and https://b.com/y?n=1&Token=two")).toBe(

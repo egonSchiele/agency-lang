@@ -186,15 +186,24 @@ function carriesCheckpoint(value: unknown): value is Record<string, unknown> {
 }
 
 /** Query parameter names whose values are secrets. Matched whole and without
- *  regard to case. */
+ *  regard to case. The `x-amz-` and `sig` names are what make a presigned
+ *  S3 or Azure URL usable by anyone who reads it. */
 const SECRET_QUERY_PARAMS = [
   "api_key",
   "apikey",
   "access_token",
+  "refresh_token",
+  "id_token",
   "token",
   "key",
+  "client_key",
   "client_secret",
+  "secret",
+  "password",
   "signature",
+  "sig",
+  "x-amz-signature",
+  "x-amz-security-token",
 ];
 
 /** A secret parameter after `?` or `&`, up to the end of its value. */
@@ -220,13 +229,30 @@ export const urlSecretRule: ScrubRule = (raw) => {
   return scrubbed === raw ? undefined : scrubbed;
 };
 
+/**
+ * Run `first`, then run `second` on what `first` returned, or on the value
+ * itself when `first` left it alone. The first rule that fires wins, so a
+ * string the redact rule rewrote would otherwise never reach the URL rule:
+ *
+ *     print("Fetching series?api_key=abc123 for ${redactedName}")
+ */
+function both(first: ScrubRule, second: ScrubRule): ScrubRule {
+  return (raw, parent) => {
+    const replaced = first(raw, parent);
+    if (replaced === undefined) {
+      return second(raw, parent);
+    }
+    return second(replaced, parent) ?? replaced;
+  };
+}
+
 /** The rules every statelog event goes through, in order: the redact tag
- *  first, so a redacted picture shows its redaction marker, then binary data,
- *  then secrets in a URL's query, then checkpoints. */
+ *  first, so a redacted picture shows its redaction marker, with secrets in
+ *  a URL's query scrubbed from the same string, then binary data, then
+ *  checkpoints. */
 export function statelogScrubRules(globals: GlobalStore | undefined): ScrubRule[] {
-  return globals === undefined
-    ? [omitBinaryRule, urlSecretRule, omitCheckpointRule]
-    : [redactRule(globals), omitBinaryRule, urlSecretRule, omitCheckpointRule];
+  const text = globals === undefined ? urlSecretRule : both(redactRule(globals), urlSecretRule);
+  return [text, omitBinaryRule, omitCheckpointRule];
 }
 
 /** The fields every statelog line has. The rules apply to `data` alone. */

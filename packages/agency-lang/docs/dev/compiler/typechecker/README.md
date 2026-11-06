@@ -233,6 +233,20 @@ each such alias with `aliasIsItsOwnMember`
 checker's own copy of the alias table. `check` then reports AG1035 on the
 alias declaration. No later walk needs a cycle guard for this shape.
 
+A reference to a generic alias is followed with its type arguments put
+into the alias body. With `type Maybe<T> = T | null`, the alias
+`type A = number | Maybe<A>` is reported, because `Maybe<A>` is
+`A | null`. With `type List<T> = { items: T[] }`,
+`type Tree = number | List<Tree>` is not, because the parameter sits
+inside a structure.
+
+Codegen reads the unit's alias table, which still holds the original
+body, so this changes nothing when the checker is off, which is the
+default in a user's project. There the program compiles, and the schema
+for `A` is `z.union([z.number(), z.lazy(() => A)])`. A number validates.
+A value that matches no other member makes zod follow the lazy reference
+without end, and the run dies with a stack overflow.
+
 ### The `never` type
 
 `never` is Agency's bottom type, represented as `{ type: "primitiveType", value: "never" }` rather than as its own AST node. That mirrors how `any`, `unknown`, `void`, and `null` are modeled. Its rules:

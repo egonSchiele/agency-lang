@@ -55,6 +55,57 @@ node main() {
     expect(reported(source)).toEqual(["Box"]);
   });
 
+  it("reports an alias that passes itself to a generic alias that puts it in a union", () => {
+    const source = `type Maybe<T> = T | null
+type A = number | Maybe<A>
+node main() {
+  const x: A = 1
+  const y: A = x
+}`;
+    expect(codes(source)).toEqual(["AG1035"]);
+    expect(reported(source)).toEqual(["A"]);
+  });
+
+  it("reports an alias that passes itself to a generic alias that is its parameter", () => {
+    const source = `type Id<T> = T
+type A = number | Id<A>
+node main() {
+  const x: A = 1
+}`;
+    expect(reported(source)).toEqual(["A"]);
+  });
+
+  it("allows an alias that passes itself to a generic alias that holds it in a structure", () => {
+    const source = `type List<T> = { items: T[] }
+type Tree = number | List<Tree>
+node main() {
+  const x: Tree = 1
+  const y: Tree = x
+}`;
+    expect(codes(source)).toEqual([]);
+  });
+
+  it("reports generic aliases that name each other", () => {
+    const source = `type P<T> = Q<T[]> | number
+type Q<T> = P<T[]> | string
+node main() {
+  const x: number = 1
+}`;
+    expect(reported(source).sort()).toEqual(["P", "Q"]);
+  });
+
+  it("reports an alias whose generic references never stop growing", () => {
+    // P<A> is Q<A[]>, which is P<A[][]>, and so on. The walk never meets a
+    // bare A, so it gives up after a fixed number of references.
+    const source = `type P<T> = Q<T[]>
+type Q<T> = P<T[]>
+type A = number | P<A>
+node main() {
+  const x: number = 1
+}`;
+    expect(reported(source).sort()).toEqual(["A", "P", "Q"]);
+  });
+
   it("points at the alias declaration", () => {
     const [error] = typecheckSource(`node main() {
   return 1

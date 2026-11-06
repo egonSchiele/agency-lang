@@ -5,7 +5,7 @@
 import * as path from "path";
 
 import { chooseLog, type LiveSession, type LogDeps } from "@/cli/logsSession/target.js";
-import { traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
+import { TOOL_TROUBLE, traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
 import { buildForest } from "@/logsViewer/tree.js";
 import type { TreeNode } from "@/logsViewer/types.js";
 import { selectTraces, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
@@ -116,6 +116,21 @@ export function traceRecord(summary: TraceSummary): Record<string, unknown> {
     calls: summary.rounds,
     agentName: summary.agentName ?? null,
     hasError: summary.hasError,
+    errorsOutsideTools: summary.errorsOutsideTools,
+    toolCalls: summary.toolCalls,
+    ...Object.fromEntries(TOOL_TROUBLE.map((trouble) => [trouble.field, summary[trouble.field]])),
     ask: summary.ask ?? null,
   };
+}
+
+/** What went wrong in a trace, for the marker column and the summary line:
+ *  `error, 2 failed, 1 rejected`. `error` is an error no tool call owns; a
+ *  failed tool's own error is in its count. A clean trace gives "". */
+export function troubleText(summary: TraceSummary): string {
+  return [
+    ...(summary.errorsOutsideTools > 0 ? ["error"] : []),
+    ...TOOL_TROUBLE.filter((trouble) => summary[trouble.field] > 0).map(
+      (trouble) => `${summary[trouble.field]} ${trouble.word}`,
+    ),
+  ].join(", ");
 }

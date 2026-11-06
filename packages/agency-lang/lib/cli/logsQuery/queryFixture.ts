@@ -19,8 +19,11 @@ export type FixtureTrace = {
   traceId: string;
   /** When the trace starts, as minutes before `FIXTURE_NOW`. */
   minutesAgo: number;
-  /** Add an error event, so the trace has `hasError`. */
+  /** Add an error event outside any tool, so the trace has `hasError`. */
   error?: boolean;
+  /** Add this many tool calls that failed, each a tool span with an
+   *  `error` event inside it, as a real log records one. */
+  failedTools?: number;
   /** The trace's events; `loopEvents()` when left out. */
   events?: EventEnvelope[];
 };
@@ -38,12 +41,30 @@ export function traceEventsFor(trace: FixtureTrace): EventEnvelope[] {
       timestamp: new Date(Date.parse(event.data.timestamp) + shift).toISOString(),
     },
   }));
+  const last = moved[moved.length - 1].data.timestamp;
+  const failedTools = Array.from({ length: trace.failedTools ?? 0 }, (_, n) =>
+    failedToolEvents(trace.traceId, `failed-${n}`, last),
+  ).flat();
   if (!trace.error) {
-    return moved;
+    return [...moved, ...failedTools];
   }
   const failure = errorEvent(trace.traceId);
-  const last = moved[moved.length - 1].data.timestamp;
-  return [...moved, { ...failure, data: { ...failure.data, timestamp: last } }];
+  return [...moved, ...failedTools, { ...failure, data: { ...failure.data, timestamp: last } }];
+}
+
+/** A tool call that started and logged an error in its own span. */
+function failedToolEvents(traceId: string, spanId: string, timestamp: string): EventEnvelope[] {
+  return [
+    { type: "toolCallStart", toolName: "grep" },
+    { type: "error", errorType: "toolError", message: "grep failed", functionName: "grep" },
+  ].map((data) => ({
+    format_version: 1,
+    trace_id: traceId,
+    project_id: "",
+    span_id: spanId,
+    parent_span_id: null,
+    data: { ...data, timestamp },
+  }));
 }
 
 /** A log of the traces with their lines interleaved one by one, the way

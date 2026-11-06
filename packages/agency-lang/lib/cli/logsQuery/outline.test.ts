@@ -26,7 +26,7 @@ describe("logsOutline", () => {
     const lines = result.text.split("\n");
     expect(result.exitCode).toBe(0);
     expect(lines[0]).toBe("log.jsonl · outline of 1 trace · 2 traces in the log");
-    expect(lines[2]).toMatch(/^newest-run · .* · 3 LLM calls · .* · error$/);
+    expect(lines[2]).toMatch(/^newest-run · .* · 3 LLM calls · .* · error, 1 rejected$/);
     expect(lines[4]).toMatch(/^newest-run\/round:L:0:user +User turn · write a module$/);
     expect(result.text).not.toContain("older-run");
     // The approved read in loopEvents is hidden; the rejected grep shows.

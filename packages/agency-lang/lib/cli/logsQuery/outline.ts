@@ -13,6 +13,7 @@ import {
   logLine,
   MOST_RECENT_ONLY,
   traceRecord,
+  troubleText,
   withPickedTraces,
   type QueryDeps,
   type QueryResult,
@@ -49,7 +50,7 @@ export function logsOutline(options: OutlineOptions, deps: QueryDeps): Promise<Q
   });
 }
 
-/** `<trace id> · <started> · N LLM calls · <working time> · <cost> · error` */
+/** `<trace id> · <started> · N LLM calls · <working time> · <cost> · error, 2 failed` */
 export function summaryLine(summary: TraceSummary): string {
   return [
     summary.traceId,
@@ -57,7 +58,7 @@ export function summaryLine(summary: TraceSummary): string {
     countOf(summary.rounds, "LLM call"),
     fmtDuration(summary.durationMs, { minutes: true }),
     fmtUsd(summary.costUsd),
-    summary.hasError ? "error" : undefined,
+    troubleText(summary),
   ]
     .filter((part): part is string => part !== undefined && part !== "")
     .join(" · ");

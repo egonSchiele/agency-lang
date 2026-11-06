@@ -165,10 +165,27 @@ agency logs session show k3Pq/span-9c01  # one row, expanded
 ```
 
 **`traces`** prints one line per run: its trace id, when it started, how
-long it worked, its cost, its LLM calls, its agent, `error` when it logged
-one, and its first user message. With no flag it lists the 20 most recent
-runs and says how many older ones it left out. `--errors` keeps only the
-runs that logged an error.
+long it worked, its cost, its LLM calls, its agent, what went wrong, and
+its first user message. With no flag it lists the 20 most recent runs and
+says how many older ones it left out. `--errors` keeps only the runs that
+logged an error, which includes every run with a failed tool call: a tool
+that fails logs an error.
+
+The column for what went wrong lists the parts that apply, such as
+`error, 2 failed, 1 rejected`, and is empty for a clean run:
+
+| Word | Means |
+| --- | --- |
+| `error` | The run logged an error outside any tool call, such as a crash. |
+| `2 failed` | Two tool calls failed. The model may have carried on. |
+| `1 rejected` | A handler or a person rejected one tool call's interrupt. |
+| `1 unfinished` | One tool call has no result, no error, and no interrupt waiting. The run may still be going. |
+
+A tool call waiting for approval is not listed: it belongs to a paused
+run. `outline` prints the same words on each run's summary line. With
+`--json`, each run's record has `toolCalls`, `toolsFailed`,
+`toolsRejected`, `toolsUnfinished`, and `errorsOutsideTools` beside
+`hasError`.
 
 **`outline`** prints every row of a run, the rows the viewer's trace screen
 shows, each with its address and a header such as

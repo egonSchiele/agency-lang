@@ -27,8 +27,9 @@ describe("logsTraces", () => {
     const lines = result.text.split("\n");
     expect(result.exitCode).toBe(0);
     expect(lines[0]).toBe("log.jsonl · 2 traces · showing 2, newest first");
-    expect(lines[3]).toMatch(/^new-trace .* 3 calls .* error {2}"write a module"$/);
-    expect(lines[4]).toMatch(/^old-trace /);
+    // Every fixture trace holds loopEvents' rejected grep call.
+    expect(lines[3]).toMatch(/^new-trace .* 3 calls .* error, 1 rejected +"write a module"$/);
+    expect(lines[4]).toMatch(/^old-trace .* 1 rejected +"write a module"$/);
     expect(lines[4]).not.toContain("error");
   });
 
@@ -62,6 +63,33 @@ describe("logsTraces", () => {
     expect(result.text).not.toContain("fine");
   });
 
+  it("the marker column counts failed tool calls, and says error only for an error no tool owns", async () => {
+    writeLog(dir, "log.jsonl", [
+      { traceId: "tools-failed", minutesAgo: 1, failedTools: 2 },
+      { traceId: "crashed-too", minutesAgo: 2, failedTools: 2, error: true },
+    ]);
+    const lines = (await logsTraces({ ...flags, log: "log.jsonl" }, queryDeps(dir))).text.split(
+      "\n",
+    );
+    expect(lines.find((line) => line.startsWith("tools-failed"))).toMatch(
+      / {2}2 failed, 1 rejected +"/,
+    );
+    expect(lines.find((line) => line.startsWith("crashed-too"))).toMatch(
+      / {2}error, 2 failed, 1 rejected +"/,
+    );
+  });
+
+  it("--errors keeps a trace whose only error is a failed tool call", async () => {
+    // A failed tool call logs an error inside its span, so it has hasError.
+    writeLog(dir, "log.jsonl", [
+      { traceId: "fine", minutesAgo: 1 },
+      { traceId: "tool-failed", minutesAgo: 2, failedTools: 1 },
+    ]);
+    const result = await logsTraces({ ...flags, log: "log.jsonl", errors: true }, queryDeps(dir));
+    expect(result.text).toContain("tool-failed");
+    expect(result.text).not.toContain("fine");
+  });
+
   it("--json gives one record per trace with ISO times", async () => {
     const logPath = writeLog(dir, "log.jsonl", [{ traceId: "only", minutesAgo: 10, error: true }]);
     const result = await logsTraces({ ...flags, json: true, log: "log.jsonl" }, queryDeps(dir));
@@ -79,6 +107,11 @@ describe("logsTraces", () => {
           calls: 3,
           agentName: null,
           hasError: true,
+          errorsOutsideTools: 1,
+          toolCalls: 2,
+          toolsFailed: 0,
+          toolsRejected: 1,
+          toolsUnfinished: 0,
           ask: "write a module",
         },
       ],

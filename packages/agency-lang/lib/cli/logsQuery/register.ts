@@ -14,6 +14,7 @@ import type { Command } from "@/vendor/commander/index.js";
 
 import { logsOutline } from "./outline.js";
 import { DEFAULT_SEARCH_LIMIT, DEFAULT_SNIPPET_CONTEXT, logsSearch } from "./search.js";
+import { cliLoadLog } from "./cliLog.js";
 import { refusal, type QueryDeps, type QueryResult } from "./shared.js";
 import { logsTraces } from "./traces.js";
 
@@ -23,14 +24,18 @@ export type LogsQueryDeps = QueryDeps & { writeStdout(text: string): void };
  *  disk, and `configuredLog`, which reads `log.logFile` when called. */
 export function defaultLogsQueryDeps(configuredLog: () => string | undefined): LogsQueryDeps {
   const dir = sessionsDir(nodeHost());
+  const cwd = process.cwd();
   return {
-    cwd: process.cwd(),
-    pathKind,
-    childRunDirectories,
-    configuredLog,
-    probe: async () =>
-      liveSessions(await probeAll(dir), (record) => recordPaths(dir, record.pid).sock),
-    readLog: (logPath) => readTraces(logPath).traces,
+    cwd,
+    loadLog: cliLoadLog({
+      cwd,
+      pathKind,
+      childRunDirectories,
+      configuredLog,
+      probe: async () =>
+        liveSessions(await probeAll(dir), (record) => recordPaths(dir, record.pid).sock),
+      readLog: (logPath) => readTraces(logPath).traces,
+    }),
     now: () => Date.now(),
     writeStdout: (text) => {
       process.stdout.write(text);

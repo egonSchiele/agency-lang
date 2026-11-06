@@ -1,10 +1,10 @@
-// What `agency logs traces`, `outline`, and `search` share: finding and
-// reading the log, picking traces, and the line every command prints first.
-// Each command is a function from parsed options to a `QueryResult`; only
-// `register.ts` touches the process.
+// What `agency logs traces`, `outline`, and `search` share: opening the
+// log, picking traces, and the line every command prints first. Each
+// command is a function from parsed options to a `QueryResult`; only
+// `register.ts` touches the process. Which log a command reads, and how its
+// bytes are read, is the caller's: `QueryDeps.loadLog`.
 import * as path from "path";
 
-import { chooseLog, type LiveSession, type LogDeps } from "@/cli/logsSession/target.js";
 import { TOOL_TROUBLE, traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
 import { buildForest } from "@/logsViewer/tree.js";
 import type { TreeNode } from "@/logsViewer/types.js";
@@ -21,8 +21,8 @@ export type QueryResult = { text: string; json: unknown; exitCode: number };
  *  address a command prints is one `show` resolves. */
 export type OpenedTrace = { traceId: string; root: TreeNode; summary: TraceSummary };
 
-/** The log a query reads, found by `chooseLog`. The first line of every
- *  command's text names `logPath`. */
+/** The log a query reads. The first line of every command's text names
+ *  `logPath`. */
 export type OpenedLog = {
   logPath: string;
   /** `logPath` relative to the current directory when it is inside it,
@@ -31,12 +31,16 @@ export type OpenedLog = {
   traces: OpenedTrace[];
 };
 
-export type QueryDeps = LogDeps & {
-  /** The open viewers, probed as the session commands probe them, so a
-   *  query reads the log the one open viewer has. A query never talks to
-   *  the viewer itself. */
-  probe(): Promise<LiveSession[]>;
-  readLog(logPath: string): Trace[];
+/** A log's absolute path and its traces, as `loadLog` read them. */
+export type LoadedLog = { logPath: string; traces: Trace[] };
+
+export type QueryDeps = {
+  /** The directory `shown` paths are relative to. */
+  cwd: string;
+  /** The log this `log` option names, read, or why there is none. The CLI
+   *  chooses it as the session commands do (`cliLog.ts`); the standard
+   *  library reads the one log the caller named and approved. */
+  loadLog(log: string | undefined): Promise<LoadedLog | { refused: string }>;
   now(): number;
 };
 
@@ -44,13 +48,12 @@ export async function openQueryLog(
   log: string | undefined,
   deps: QueryDeps,
 ): Promise<OpenedLog | { refused: string }> {
-  const choice = chooseLog(log, log === undefined ? await deps.probe() : [], deps);
-  if (choice.kind === "refused") {
-    return { refused: choice.reason };
+  const loaded = await deps.loadLog(log);
+  if ("refused" in loaded) {
+    return loaded;
   }
-  const logPath =
-    choice.kind === "session" ? path.resolve(choice.session.record.logPath) : choice.logPath;
-  const traces = deps.readLog(logPath).map((trace): OpenedTrace => {
+  const { logPath } = loaded;
+  const traces = loaded.traces.map((trace): OpenedTrace => {
     const root = buildForest(trace.events)[0];
     return { traceId: trace.traceId, root, summary: traceSummaries([root], {})[0] };
   });

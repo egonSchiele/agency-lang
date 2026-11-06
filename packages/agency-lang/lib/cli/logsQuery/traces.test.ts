@@ -1,10 +1,7 @@
 import * as fs from "fs";
-import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { liveSessions } from "@/cli/logsSession/target.js";
-
-import { liveViewer, queryDeps, queryDir, writeLog, type FixtureTrace } from "./queryFixture.js";
+import { queryDeps, queryDir, writeLog, type FixtureTrace } from "./queryFixture.js";
 import { DEFAULT_TRACES_SHOWN, logsTraces } from "./traces.js";
 
 const flags = { json: false, errors: false };
@@ -116,37 +113,6 @@ describe("logsTraces", () => {
         },
       ],
     });
-  });
-
-  it("with no --log, reads the configured log", async () => {
-    writeLog(dir, "configured.jsonl", [{ traceId: "from-config", minutesAgo: 1 }]);
-    const result = await logsTraces(
-      flags,
-      queryDeps(dir, { configuredLog: () => "configured.jsonl" }),
-    );
-    expect(result.text.split("\n")[0]).toContain("configured.jsonl");
-    expect(result.text).toContain("from-config");
-  });
-
-  it("the one open viewer's log wins over the configured log", async () => {
-    writeLog(dir, "log.jsonl", [{ traceId: "from-config", minutesAgo: 1 }]);
-    const viewed = writeLog(dir, "runs/today/statelog.jsonl", [
-      { traceId: "from-viewer", minutesAgo: 1 },
-    ]);
-    const record = liveViewer(viewed, "from-viewer");
-    const deps = queryDeps(dir, {
-      configuredLog: () => "log.jsonl",
-      probe: async () => liveSessions([record], () => ""),
-    });
-    const result = await logsTraces(flags, deps);
-    expect(result.text.split("\n")[0]).toContain(path.join("runs", "today", "statelog.jsonl"));
-    expect(result.text).toContain("from-viewer");
-  });
-
-  it("with no log anywhere, refuses with the three ways forward", async () => {
-    const result = await logsTraces(flags, queryDeps(dir));
-    expect(result.exitCode).toBe(1);
-    expect(result.text).toContain("No log given");
   });
 
   it("a refused selection exits 1", async () => {

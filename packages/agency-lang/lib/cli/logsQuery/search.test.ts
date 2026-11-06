@@ -1,11 +1,7 @@
 import * as fs from "fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { show, defaultCommandDeps } from "@/cli/logsSession/commands.js";
-import { liveSessions, resolveTarget } from "@/cli/logsSession/target.js";
-import type { CommentsStore } from "@/runDirectory/commentsStore.js";
-
-import { liveViewer, queryDeps, queryDir, writeLog } from "./queryFixture.js";
+import { queryDeps, queryDir, writeLog } from "./queryFixture.js";
 import { logsSearch } from "./search.js";
 
 const options = { json: false, regex: false, caseSensitive: false };
@@ -114,35 +110,5 @@ describe("logsSearch", () => {
         },
       ],
     });
-  });
-
-  it("reads the open viewer's log, the same one session show reads", async () => {
-    const viewed = writeLog(dir, "runs/today/statelog.jsonl", [
-      { traceId: "viewed-run", minutesAgo: 1 },
-    ]);
-    const record = liveViewer(viewed, "viewed-run");
-    const deps = queryDeps(dir, {
-      configuredLog: () => "log.jsonl",
-      probe: async () => liveSessions([record], () => ""),
-    });
-    const result = await logsSearch({ ...options, pattern: "write a module" }, deps);
-    expect(result.text.split("\n")[0]).toContain("runs/today/statelog.jsonl");
-    const address = result.text.split("\n")[2];
-    expect(address).toBe("viewed-run/round:L:0:user");
-
-    const target = resolveTarget({ row: address }, [record], {
-      ...deps,
-      socketPathFor: () => "",
-      openStore: (commentsPath) =>
-        ({ path: commentsPath, read: () => [] }) as unknown as CommentsStore,
-      author: { kind: "agent", id: "claude" },
-    });
-    expect(target).toMatchObject({ kind: "session", session: { record: { logPath: viewed } } });
-    const shown = show(
-      target,
-      defaultCommandDeps(async () => ({ ok: true }) as never),
-    );
-    expect(shown.exitCode).toBe(0);
-    expect(shown.text).toContain("User turn · write a module");
   });
 });

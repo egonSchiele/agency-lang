@@ -3,8 +3,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { pathKind } from "@/cli/logsSession/index.js";
-import type { ProbedRecord } from "@/logsViewer/session/registry.js";
 import { errorEvent } from "@/logsViewer/traceFixture.js";
 import { loopEvents } from "@/logsViewer/storyFixture.js";
 import type { EventEnvelope } from "@/logsViewer/types.js";
@@ -90,27 +88,19 @@ export function queryDir(): string {
   return tempDir("logs-query-");
 }
 
-/** Deps over the real files in `cwd`, with no viewer open and no config. */
+/** Deps that read the log a query names, against `cwd`. Choosing a log
+ *  when none is named is the CLI's (`cliLog.ts`), tested there. */
 export function queryDeps(cwd: string, overrides: Partial<QueryDeps> = {}): QueryDeps {
   return {
     cwd,
-    pathKind,
-    childRunDirectories: () => [],
-    configuredLog: () => undefined,
-    probe: async () => [],
-    readLog: (logPath) => readTraces(logPath).traces,
+    loadLog: async (log) => {
+      if (log === undefined) {
+        return { refused: "no log named" };
+      }
+      const logPath = path.resolve(cwd, log);
+      return { logPath, traces: readTraces(logPath).traces };
+    },
     now: () => FIXTURE_NOW,
     ...overrides,
-  };
-}
-
-/** A probed viewer that answers, open on `logPath` at `traceId`. */
-export function liveViewer(logPath: string, traceId: string): ProbedRecord {
-  return {
-    record: { pid: 7, logPath, cwd: path.dirname(logPath), started: "" },
-    result: {
-      state: "live",
-      focus: { traceId, screen: "trace", rowId: undefined, logPath, commentsPath: undefined },
-    },
   };
 }

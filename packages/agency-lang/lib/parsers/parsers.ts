@@ -36,6 +36,7 @@ import {
   NAME_BEFORE_STATEMENT_MESSAGE,
   TEXT_AFTER_STATEMENT_MESSAGE,
   WITH_NOT_ALLOWED_HERE_MESSAGE,
+  INTERRUPT_KEYWORD_ALONE_MESSAGE,
   UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
 import {
@@ -233,6 +234,9 @@ import {
 
 export const optionalSpacesOrNewline = many(space);
 export const optionalSpaces = many(oneOf(" \t"));
+/** One or more spaces or tabs. Unlike `spaces`, it does not cross a line
+ *  break, so a keyword and what follows it must share a line. */
+const sameLineSpaces = many1(oneOf(" \t"));
 export const backtick = char("`");
 export const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const plusSign = seqR(optionalSpaces, char("+"), optionalSpaces);
@@ -4239,6 +4243,7 @@ const baseAtom: Parser<Expression> = or(
   newExpressionParser,
   schemaAccessParser,
   schemaExpressionParser,
+  lazy(() => raiseExprParser),
   lazy(() => interruptExprParser),
   // MUST precede every other `[`-led parser (bracketAccessParser,
   // comprehensionParser, agencyArrayParser): `[|` is unambiguous after
@@ -4728,15 +4733,49 @@ const effectIdentifier: Parser<string> = (input: string) => {
   return bare;
 };
 
+/** A keyword followed by a line break, a comment, or the end of the file.
+ *  Any block comment counts, even one that closes on the same line, because
+ *  a block comment can hide a line break. */
+const aloneOnItsLine = (keyword: string): RegExp =>
+  new RegExp(`^${keyword}[ \\t]*(?:\\r?\\n|${BLANK_LINE_SENTINEL}|//|/\\*|$)`);
+
+const INTERRUPT_KEYWORD_ALONE = {
+  interrupt: aloneOnItsLine("interrupt"),
+  raise: aloneOnItsLine("raise"),
+};
+
+/** Refuses `interrupt` or `raise` alone on its line. Without this the
+ *  keyword reads as a bare name and the next line as a statement of its
+ *  own, so `interrupt` then `deploy("Ship it?")` would call `deploy` with no
+ *  interrupt in front of it. */
+const interruptKeywordAloneRefusal = (
+  keyword: keyof typeof INTERRUPT_KEYWORD_ALONE,
+  input: string,
+): ParserFailure | null => {
+  if (!INTERRUPT_KEYWORD_ALONE[keyword].test(input)) {
+    return null;
+  }
+  const declined = committedFailure(
+    INTERRUPT_KEYWORD_ALONE_MESSAGE(keyword),
+    input.slice(keyword.length),
+  );
+  getParseState().committedFailure = declined;
+  return declined;
+};
+
 // Core interrupt parser without trailing whitespace/semicolons (for use in expressions)
 // Handles both structured `interrupt std::read("msg")` and bare `interrupt("msg")` forms.
 // Bare form gets effect "unknown".
 const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
+  const alone = interruptKeywordAloneRefusal("interrupt", input);
+  if (alone) {
+    return alone as ParserResult<InterruptStatement>;
+  }
   // Try structured form first: interrupt <effect>(<args>)
   const structured = seqC(
     set("type", "interruptStatement"),
     str("interrupt"),
-    spaces,
+    sameLineSpaces,
     capture(effectIdentifier, "effect"),
     captureCaptures(argumentListParser),
   )(input);
@@ -4770,7 +4809,8 @@ export const interruptStatementParser: Parser<InterruptStatement> = label(
   }),
 );
 
-// `raise` raises an interrupt as a statement. Accepted forms:
+// `raise` raises an interrupt. Like `interrupt`, it is accepted as a statement
+// and as a value. Accepted forms:
 //   raise interrupt("x")            — wraps an interrupt expression → effect "unknown"
 //   raise interrupt std::write("x") — wraps an interrupt expression → effect "std::write"
 //   raise std::write("x")           — effect shorthand → effect "std::write"
@@ -4780,8 +4820,14 @@ export const interruptStatementParser: Parser<InterruptStatement> = label(
 // and effect inference are unchanged); the `viaRaise` marker only drives
 // formatter output. NOTE: distinct from the `throw(...)` builtin (JS Error).
 const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
-  // `raise ` (keyword + at least one space) introduces the long forms.
-  const head = seqC(str("raise"), spaces)(input);
+  const alone = interruptKeywordAloneRefusal("raise", input);
+  if (alone) {
+    return alone as ParserResult<InterruptStatement>;
+  }
+  // `raise ` (keyword + at least one space) introduces the long forms. A
+  // line break after the keyword was refused above, so the space is on the
+  // keyword's own line.
+  const head = seqC(str("raise"), sameLineSpaces)(input);
   if (head.success) {
     // `raise interrupt(...)` — wrap a full interrupt expression. This is why
     // `interrupt` is a reserved effect word: it routes here (effect "unknown"
@@ -4813,6 +4859,8 @@ const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
   if (!bare.success) return bare;
   return success(bare.result as InterruptStatement, bare.rest);
 };
+
+export const raiseExprParser: Parser<InterruptStatement> = withLoc(_raiseExprParser);
 
 export const raiseStatementParser: Parser<InterruptStatement> = label(
   "a raise statement",

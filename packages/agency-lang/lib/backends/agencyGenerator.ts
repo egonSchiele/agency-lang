@@ -1704,11 +1704,6 @@ export class AgencyGenerator {
       return false;
     }
     const stmt = caseNode.body[0];
-    // A raise-form interrupt is a statement, even though the interrupt
-    // EXPRESSION shares its `interruptStatement` node type.
-    if (stmt.type === "interruptStatement" && (stmt as InterruptStatement).viaRaise) {
-      return false;
-    }
     if (INLINE_ARM_STATEMENT_TYPES.includes(stmt.type)) {
       return true;
     }

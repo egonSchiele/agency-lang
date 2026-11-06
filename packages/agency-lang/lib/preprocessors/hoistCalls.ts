@@ -319,7 +319,9 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
           TAIL_VALUE_KINDS.includes(stmt.type) &&
           i === slots.length - 1 &&
           (slot.expr as any).type !== undefined &&
-          ["functionCall", "valueAccess", "castExpression"].includes((slot.expr as any).type);
+          ["functionCall", "valueAccess", "castExpression", "interruptStatement"].includes(
+            (slot.expr as any).type,
+          );
         const walked = walk(slot.expr, counter, !isTail);
         temps.push(...walked.temps);
         out = slot.write(out, walked.expr);
@@ -375,8 +377,8 @@ function walkSlots(
  *  `hoistSelf` is true everywhere except the single statement-tail
  *  node, which the statement dispatcher withholds. Structure comes from
  *  expressionSlots; the policy that stays HERE: which nodes become
- *  temps (calls, checked casts, and access chains that still contain a
- *  method call), and the chain unit-hoist decision. */
+ *  temps (calls, interrupts, checked casts, and access chains that still
+ *  contain a method call), and the chain unit-hoist decision. */
 function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
   if (!node || typeof node !== "object") return { temps: [], expr: node };
 
@@ -392,9 +394,7 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
         block: { ...node.block, body: hoistCallsInScope(node.block.body) },
       };
     }
-    if (!hoistSelf || node.type === "interruptStatement") {
-      // An interrupt expression is never hoisted as a unit (matching
-      // the pre-slots behavior, where only plain calls self-hoisted).
+    if (!hoistSelf) {
       return { temps, expr: call };
     }
     return { temps, expr: makeTemp(call, temps, counter) };

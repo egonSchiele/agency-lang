@@ -30,6 +30,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 | Position | Ruling | Why |
 |---|---|---|
 | arguments, literals, interpolations, binary operands | hoist | unconditionally evaluated |
+| a nested interrupt, `label(interrupt ask("q"))` | becomes a temp, under the same rules as a call | an interrupt compiles to several statements, which only a statement of its own can hold. Where the pass does not lift (the opaque and conditional rows below), a nested interrupt is left inline and the build fails. See `docs/dev/language/interrupt-as-value.md` |
 | statement tail call | stays | it is the pending call itself; also node calls are control flow and throw in value position |
 | arguments of a bare method-call statement, `result.push(transform(item))` | hoist; the chain itself stays | the chain is the statement tail. A temp carries the post-call guard, so an argument that paused or was aborted stops the scope before the method runs |
 | `if` conditions, `for` iterables, `match` scrutinees | hoist before the statement | single evaluation either way |

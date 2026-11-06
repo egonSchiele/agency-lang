@@ -1,0 +1,52 @@
+// An interrupt nested inside a larger expression. The compiler lifts it to a
+// line of its own, so each of these behaves like the assignment form.
+effect ask { }
+
+def label(answer: any): string {
+  return "L:${answer}"
+}
+
+def inArgument(): string {
+  return label(interrupt ask("argument"))
+}
+
+def inString(): string {
+  const text = "S:${interrupt ask("string")}"
+  return text
+}
+
+def inCondition(): string {
+  if (interrupt ask("condition") == "yes") {
+    return "C:yes"
+  }
+  return "C:no"
+}
+
+def inList(): string {
+  const items = [interrupt ask("list"), "end"]
+  return items.join("+")
+}
+
+// Raised again on every pass, because the loop asks before each one.
+def inLoopCondition(): number {
+  let count = 0
+  while (label(interrupt ask("loop")) == "L:yes" && count < 3) {
+    count = count + 1
+  }
+  return count
+}
+
+node answeredByHandler() {
+  handle {
+    const parts = [inArgument(), inString(), inCondition(), inList(), "${inLoopCondition()}"]
+    return parts.join(" ")
+  } with (intr) {
+    return approve("yes")
+  }
+}
+
+// No handler: the run pauses at each interrupt, and resumes from a checkpoint.
+node answeredAfterPause() {
+  const both = label(interrupt ask("first")) + label(interrupt ask("second"))
+  return both
+}

@@ -100,14 +100,30 @@ export function _promptOpened(): number {
   return (currentRunOrNone()?.ctx.clock ?? realClock).wallTime();
 }
 
+/** What a prompt's answer is logged as: the key of the option the person
+ *  picked, `"text"` for an answer they typed, or `""` for no answer. The
+ *  typed text is left out. Nothing reads it, and it can be a value a program
+ *  asked the person for, such as an API key. */
+export function promptAnswerKind(answer: string, keys: string[]): string {
+  if (answer === "" || keys.includes(answer)) {
+    return answer;
+  }
+  return "text";
+}
+
 /** Logs `promptWait` for a prompt that opened at `openedAt` and has just
- *  been answered; a no-op outside an Agency frame. A test's stub client may
- *  have no `promptWait`, as with `turnStart`. */
-export async function _logPromptWait(openedAt: number, answer: string): Promise<void> {
+ *  been answered; a no-op outside an Agency frame. `keys` are the prompt's
+ *  option keys (see `promptAnswerKind`). A test's stub client may have no
+ *  `promptWait`, as with `turnStart`. */
+export async function _logPromptWait(
+  openedAt: number,
+  answer: string,
+  keys: string[],
+): Promise<void> {
   const frame = currentRunOrNone();
   if (!frame) return;
   const waitMs = Math.max(0, frame.ctx.clock.wallTime() - openedAt);
-  await frame.log.promptWait?.({ waitMs, answer: String(answer) });
+  await frame.log.promptWait?.({ waitMs, answer: promptAnswerKind(String(answer), keys) });
 }
 
 /** Posts a `debug` event, the generic statelog event for anything a

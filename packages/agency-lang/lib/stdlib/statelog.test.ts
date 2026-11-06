@@ -24,6 +24,7 @@ import {
   _debug,
   _promptOpened,
   _logPromptWait,
+  promptAnswerKind,
   logReplTurn,
 } from "./statelog.js";
 
@@ -155,7 +156,7 @@ describe("std::statelog eval annotations", () => {
 
     await runInTestContext(ctx, new StateStack(), threads, async () => {
       const openedAt = _promptOpened();
-      await _logPromptWait(openedAt - WAIT_MS, "approve");
+      await _logPromptWait(openedAt - WAIT_MS, "approve", ["approve", "reject"]);
     });
 
     expect(spies.promptWait).toHaveBeenCalledOnce();
@@ -164,7 +165,13 @@ describe("std::statelog eval annotations", () => {
     // The clock moved a little between the two calls, never backwards.
     expect(logged.waitMs).toBeGreaterThanOrEqual(WAIT_MS);
     expect(logged.waitMs).toBeLessThan(WAIT_MS + 1000);
-    await expect(_logPromptWait(0, "outside a frame")).resolves.toBeUndefined();
+    await expect(_logPromptWait(0, "outside a frame", [])).resolves.toBeUndefined();
+  });
+
+  it("promptAnswerKind keeps an option key and hides typed text", () => {
+    expect(promptAnswerKind("approve", ["approve", "reject"])).toBe("approve");
+    expect(promptAnswerKind("sk-live-1234", ["approve", "reject"])).toBe("text");
+    expect(promptAnswerKind("", ["approve", "reject"])).toBe("");
   });
 
   it("_debug posts a debug event with the message and data it was given", async () => {

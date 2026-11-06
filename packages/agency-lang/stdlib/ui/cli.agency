@@ -402,6 +402,6 @@ export def interruptChoice(
   } else {
     answer = chooseOption(title, body, items, allowFreeText: allowFreeText, allowCancel: allowCancel)
   }
-  _logPromptWait(openedAt, answer)
+  _logPromptWait(openedAt, answer, [item.key for item in items])
   return answer
 }

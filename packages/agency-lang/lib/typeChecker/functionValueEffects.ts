@@ -7,7 +7,7 @@ import { synthType } from "./synthesizer.js";
 import { safeResolveType } from "./assignability.js";
 import { resolveEffectSet } from "./effectSets.js";
 import { collectRaisableEffects } from "./interruptAnalysis.js";
-import { AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
+import { agencyFunctionMethod } from "./builtins.js";
 
 /** The effects a function-valued expression may raise. `any` means "may raise
  *  anything" — a function type with no `raises` clause. `sourceName` is the base
@@ -29,7 +29,7 @@ function pfaBase(expr: Expression): Expression | null {
     (element) =>
       element.kind === "methodCall" &&
       (element.functionCall.functionName === "partial" ||
-        element.functionCall.functionName in AGENCY_FUNCTION_METHOD_TYPES),
+        agencyFunctionMethod(element.functionCall.functionName) !== undefined),
   );
   return onlyPfaMethods ? (expr.base as Expression) : null;
 }

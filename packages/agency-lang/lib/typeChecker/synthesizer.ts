@@ -77,7 +77,7 @@ import type { FunctionCall } from "../types/function.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import {
   BUILTIN_FUNCTION_TYPES,
-  AGENCY_FUNCTION_METHOD_TYPES,
+  agencyFunctionMethod,
   BUILTIN_VARIABLE_TYPES,
 } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
@@ -1210,7 +1210,7 @@ function validateAgencyFunctionMethod(
   // describe / preapprove / rename — validated generically from their
   // declared signatures in AGENCY_FUNCTION_METHOD_TYPES (builtins.ts), so
   // adding a new such method is a one-line type entry, not checker code.
-  const sig = AGENCY_FUNCTION_METHOD_TYPES[methodName];
+  const sig = agencyFunctionMethod(methodName);
   if (sig) {
     validatePrimitiveMethodCall(expr, element.functionCall, sig, scope, ctx);
   }
@@ -1331,7 +1331,7 @@ export function synthValueAccess(
     // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.
     if (element.kind === "methodCall") {
       const methodName = element.functionCall.functionName;
-      if (methodName === "partial" || methodName in AGENCY_FUNCTION_METHOD_TYPES) {
+      if (methodName === "partial" || agencyFunctionMethod(methodName) !== undefined) {
         validateAgencyFunctionMethod(expr, element, methodName, scope, ctx);
         // Chaining still works past this point because the dispatch above keys
         // on the method name, not the receiver type.

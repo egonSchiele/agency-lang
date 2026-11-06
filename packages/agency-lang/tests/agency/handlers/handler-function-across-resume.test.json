@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "nodeName": "acrossResume",
+      "description": "The run pauses for the user between two runs of the handler function. On main the nested call is still skipped after the resume: the stray counter rides the checkpoint (inner 1 ran twice).",
+      "input": "",
+      "expectedOutput": "\"work done | inner 1 ran,inner 3 ran\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "to the user"
+        }
+      ],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "acrossResumeInLoop",
+      "description": "The same, with the handle block inside a loop so the handler is registered again on each pass. On main every later run repeats the first result.",
+      "input": "",
+      "expectedOutput": "\"inner 1 ran,inner 3 ran,inner 2 ran,inner 6 ran\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "to the user"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "to the user"
+        }
+      ],
+      "llmMocks": []
+    }
+  ]
+}

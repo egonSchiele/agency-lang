@@ -1,0 +1,170 @@
+effect test::outer { n: number }
+effect test::inner { n: number }
+
+def asksTwice(): string {
+  interrupt test::outer("first?", { n: 1 })
+  interrupt test::outer("second?", { n: 2 })
+  return "both approved"
+}
+
+def asksOnce(): string {
+  interrupt test::outer("only?", { n: 1 })
+  return "approved"
+}
+
+def ask(n: number): number {
+  interrupt test::outer("ok?", { n: n })
+  return n
+}
+
+def innerAsk(n: number): string {
+  interrupt test::inner("inner?", { n: n })
+  return "inner ${n} ran"
+}
+
+def double(n: number): number {
+  return n * 2
+}
+
+// One `with approve`, and the handler function runs for two interrupts.
+node sameStatement() {
+  let out = "unset"
+  let seen = []
+  handle {
+    out = asksTwice()
+  } with (intr) {
+    const one = innerAsk(intr.data.n) with approve
+    seen.push(one)
+    return approve()
+  }
+  return "${out} | ${seen}"
+}
+
+// Several nested handlers in one run of the handler function.
+node severalInOneRun() {
+  let out = "unset"
+  let seen = []
+  handle {
+    out = asksOnce()
+  } with (intr) {
+    const a = innerAsk(1) with approve
+    const b = innerAsk(2) with approve
+    let c = "unset"
+    handle {
+      c = innerAsk(3)
+    } with (inner) {
+      return approve()
+    }
+    seen.push(a)
+    seen.push(b)
+    seen.push(c)
+    for (k in [4, 5]) {
+      const one = innerAsk(k) with approve
+      seen.push(one)
+    }
+    return approve()
+  }
+  return "${out} | ${seen}"
+}
+
+node threadRuns() {
+  let out = "unset"
+  let threads = 0
+  handle {
+    out = asksTwice()
+  } with (intr) {
+    thread {
+      threads = threads + 1
+    }
+    return approve()
+  }
+  return "${out} | threads=${threads}"
+}
+
+node parallelRuns() {
+  let out = "unset"
+  let total = 0
+  handle {
+    out = asksTwice()
+  } with (intr) {
+    parallel {
+      const x = double(intr.data.n)
+      const y = double(intr.data.n)
+    }
+    total = total + x + y
+    return approve()
+  }
+  return "${out} | total=${total}"
+}
+
+// Two interrupts at once. Each run of the handler function must read
+// back the value it stored, after waiting long enough for the other
+// run to store its own.
+node concurrentRuns() {
+  let wrong = 0
+  handle {
+    parallel {
+      const a = ask(1)
+      const b = ask(2)
+    }
+  } with (intr) {
+    const mine = intr.data.n
+    sleep(0.05)
+    if (mine != intr.data.n) {
+      wrong = wrong + 1
+    }
+    return approve()
+  }
+  return "${a} ${b} wrong=${wrong}"
+}
+
+// Two interrupts at once, and each run uses a nested handler.
+node concurrentNested() {
+  let seen = []
+  handle {
+    parallel {
+      const a = ask(1)
+      const b = ask(2)
+    }
+  } with (intr) {
+    const one = innerAsk(intr.data.n) with approve
+    sleep(0.05)
+    const two = innerAsk(intr.data.n + 10) with approve
+    seen.push("${intr.data.n}:${one}:${two}")
+    return approve()
+  }
+  return "${a} ${b} ${seen.sort()}"
+}
+
+// A return inside a nested handle block returns from the handler function.
+node returnInsideNested() {
+  let out = "unset"
+  let after = "not reached"
+  handle {
+    handle {
+      out = asksOnce()
+    } with (intr) {
+      handle {
+        return reject("from the nested block")
+      } with approve
+      after = "reached"
+      return approve()
+    }
+  } with approve
+  return "${isFailure(out)} | ${after}"
+}
+
+// A variable declared in the handler function does not replace an
+// outer one. This is the one visible change in meaning: a handler
+// function's variables are private to that run of it.
+node outerKeepsItsValue() {
+  const label = "outer label"
+  let out = "unset"
+  handle {
+    out = asksOnce()
+  } with (intr) {
+    const label = "handler label"
+    return approve()
+  }
+  return "${out} / ${label}"
+}

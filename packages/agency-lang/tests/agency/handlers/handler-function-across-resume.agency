@@ -1,0 +1,53 @@
+effect test::outer { n: number }
+effect test::inner { n: number }
+effect test::human { }
+
+def innerAsk(n: number): string {
+  interrupt test::inner("inner?", { n: n })
+  return "inner ${n} ran"
+}
+
+// Three interrupts from one function. The handler answers the first and
+// the third with a nested handler. It passes on the second, so the run
+// pauses for the user and resumes between two runs of the handler.
+def work(): string {
+  interrupt test::outer("first?", { n: 1 })
+  interrupt test::human("to the user")
+  interrupt test::outer("third?", { n: 3 })
+  return "work done"
+}
+
+node acrossResume() {
+  let out = "unset"
+  let seen = []
+  handle {
+    out = work()
+  } with (intr) {
+    if (intr.effect == "test::human") {
+      return propagate()
+    }
+    const one = innerAsk(intr.data.n) with approve
+    seen.push(one)
+    return approve()
+  }
+  return "${out} | ${seen}"
+}
+
+// The same, with the handle block inside a loop, so the handler is
+// registered again on each pass.
+node acrossResumeInLoop() {
+  let seen = []
+  for (pass in [1, 2]) {
+    handle {
+      work()
+    } with (intr) {
+      if (intr.effect == "test::human") {
+        return propagate()
+      }
+      const one = innerAsk(intr.data.n * pass) with approve
+      seen.push(one)
+      return approve()
+    }
+  }
+  return "${seen}"
+}

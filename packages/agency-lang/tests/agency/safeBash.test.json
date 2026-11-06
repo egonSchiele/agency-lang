@@ -2,9 +2,20 @@
   "tests": [
     {
       "nodeName": "refuseWall",
-      "description": "Commands we decline to run even with approval, matched by command word and by the last part of a path. Only the destructive spellings of git subcommands are refused, and only in the first argument position.",
+      "description": "Commands we decline to run even with approval, matched by command word and by the last part of a path. Only the destructive spellings of git subcommands are refused, and only in the first argument position. A `--` after checkout or restore names paths to discard, so it is refused, and `--` after another git subcommand is not.",
       "input": "",
-      "expectedOutput": "[true,true,true,true,true,true,true,false,false,true,false,false,false]",
+      "expectedOutput": "[true,true,true,true,true,true,true,false,false,true,false,false,false,true,true,true,true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "endOfFlagsAndInnerTilde",
+      "description": "What tarsec 0.5.7 lets through. `--` is a flag no table lists, so ls, echo, and cd with one are broad. A program with no rule takes `--` as an argument, so `pnpm test -- --watch` asks std::exec. A `~` or `^` inside a word is plain text: a redirect to `a~b` writes a file of that name. A `~` after `=` is still not parsed.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::exec\"]],[\"test\",\"--\",\"--watch\"],[\"write\",\"hi\\n\",\"a~b\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"HEAD^\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

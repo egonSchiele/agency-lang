@@ -45,6 +45,35 @@ node refuseWall() {
     refusedFor("git log reset"),
     refusedFor("git status"),
     refusedFor("echo hi"),
+    refusedFor("git restore -- utils.py"),
+    refusedFor("git checkout -- utils.py"),
+    refusedFor("git checkout -- ."),
+    refusedFor("rm -- file"),
+    refusedFor("git log -- utils.py"),
+  ]
+}
+
+def outcomeAndEffects(source: string): any {
+  const plan = planFor(source, "/repo")
+  return [outcomeOf(plan), [e.name for e in plan.effects]]
+}
+
+def execArgs(source: string): any {
+  const effect: any = planFor(source, "/repo").effects[0]
+  return effect.payload.args
+}
+
+node endOfFlagsAndInnerTilde() {
+  return [
+    outcomeAndEffects("ls -- src"),
+    outcomeAndEffects("echo -- hi"),
+    outcomeAndEffects("cd -- src"),
+    outcomeAndEffects("pnpm test -- --watch"),
+    execArgs("pnpm test -- --watch"),
+    writePlanDetail("echo hi > a~b"),
+    writePlanDetail("echo hi > HEAD^"),
+    outcomeAndEffects("git diff HEAD~1"),
+    outcomeAndEffects("make DIR=~/x"),
   ]
 }
 

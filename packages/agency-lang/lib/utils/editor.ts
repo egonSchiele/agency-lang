@@ -1,6 +1,5 @@
-// Editing a long field in the user's own editor. The form hands the
-// terminal to `$EDITOR` on a temp file and takes it back when the editor
-// exits. The hand-off has an order that must not change, so it lives in one
+// Editing text in the user's own editor. The caller hands the terminal to
+// `$EDITOR` on a temp file and takes it back when the editor exits. The hand-off has an order that must not change, so it lives in one
 // function here and nowhere else.
 import { spawnSync } from "node:child_process";
 import * as fs from "fs";

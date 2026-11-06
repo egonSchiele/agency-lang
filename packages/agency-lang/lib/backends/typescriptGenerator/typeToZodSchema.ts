@@ -3,6 +3,8 @@ import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
 import { applyValueArgs, isValueParamInstantiation } from "@/typeChecker/valueParamSubstitution.js";
+import { resolveTypeDeep } from "@/typeChecker/assignability.js";
+import { collectAliasNames } from "@/compilationUnit.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
 
@@ -236,6 +238,20 @@ function mapTypeToSchemaInner(
         optionalKeyMode,
       );
     }
+    // An alias this module neither declares nor imports by name has no
+    // schema const here, so its name would be unbound when the module
+    // loads. It reached the type table through the body of an imported
+    // type or an imported signature. Write its body in place.
+    if (aliasEntry?.pulledFrom !== undefined) {
+      return mapTypeToSchema(
+        pulledAliasBody(variableType.aliasName, aliasEntry, typeAliasesFull!),
+        typeAliases,
+        resultHandler,
+        typeAliasesFull,
+        optionalKeyMode,
+        pendingAliases,
+      );
+    }
     // A plain alias reference emits the alias schema const by name. When
     // the target alias is declared in the CURRENT module but its const
     // has not been emitted yet at this point (forward reference,
@@ -261,6 +277,68 @@ function mapTypeToSchemaInner(
   }
 
   return "z.string()";
+}
+
+/**
+ * The body of an alias that has no schema const in this module, ready to be
+ * written in place of its name, with the alias's own tags on it.
+ *
+ * A recursive alias cannot be written in place, because its body names
+ * itself. That one needs a const, which a named import gives it.
+ */
+function pulledAliasBody(
+  name: string,
+  entry: TypeAliasEntry,
+  typeAliasesFull: Record<string, TypeAliasEntry>,
+): VariableType {
+  if (pulledAliasRefersToItself(name, typeAliasesFull)) {
+    throw new Error(
+      `The type ${name} refers to itself, and this module uses it without importing it. ` +
+        `Import it by name from ${entry.pulledFrom}. If it is not exported there, export it first.`,
+    );
+  }
+  const body = resolveTypeDeep(entry.body, typeAliasesFull);
+  return { ...body, tags: mergeTagSets(entry.tags, body.tags) };
+}
+
+/**
+ * Whether writing the pulled alias `name` in place would never end, because
+ * its body reaches `name` again through aliases that are also written in
+ * place. Those are the other pulled aliases and the value-parameterized
+ * ones. An alias with a schema const is printed by name, so the walk stops
+ * there.
+ *
+ * This is the one place that decides it. The mapper asks before it writes a
+ * body, and the builder asks before it emits a return schema
+ * (`unboundAliasIn`), so the two cannot disagree.
+ */
+export function pulledAliasRefersToItself(
+  name: string,
+  aliases: Record<string, TypeAliasEntry>,
+): boolean {
+  const pending: string[] = [name];
+  const followed: string[] = [];
+  while (pending.length > 0) {
+    const current = pending.shift()!;
+    const referenced: string[] = [];
+    collectAliasNames(resolveTypeDeep(aliases[current].body, aliases), referenced);
+    for (const next of referenced) {
+      if (next === name) {
+        return true;
+      }
+      const entry = Object.hasOwn(aliases, next) ? aliases[next] : undefined;
+      if (entry === undefined || !isWrittenInPlace(entry) || followed.includes(next)) {
+        continue;
+      }
+      followed.push(next);
+      pending.push(next);
+    }
+  }
+  return false;
+}
+
+function isWrittenInPlace(entry: TypeAliasEntry): boolean {
+  return entry.pulledFrom !== undefined || (entry.valueParams?.length ?? 0) > 0;
 }
 
 /**

@@ -12,12 +12,20 @@ import {
   chooseOption,
   ChoiceItem,
   pushMessage,
+  lineWasTyped,
   repl,
   clearHistory,
   clearScreen,
  } from "std::ui/cli"
 
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
+import {
+  canCompact,
+  compactConversation,
+  compactionDue,
+  compactionFailed,
+  contextStatus,
+ } from "./compaction.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
@@ -59,8 +67,11 @@ import {
   sessionTitle,
  } from "./resume.agency"
 import { renderReply, renderUserLine } from "./transcript.agency"
+import { withPendingNotes } from "./pendingNotes.agency"
+import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
-import { runTurn } from "./turn.agency"
+import { shellCommand } from "./slashCommands/shell.agency"
+import { currentBrain, runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = noModelChoices()
@@ -287,7 +298,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /fork, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /compact, /fork, /paste, /help. Start a line with ! to run a shell command yourself.",
       )
       return true
     }
@@ -305,11 +316,22 @@ def _runTurn(msg: string): boolean {
     "/preset" => presetSlashCommand(trimmed)
     "/policy" => policySlashCommand()
     "/rename" => renameSlashCommand("")
+    "/image" => imageSlashCommand("")
+    "/compact" => compactSlashCommand("")
     "/fork" => {
       pushMessage(forkSession())
       return true
     }
     _ => {
+      if (isShellCommand(trimmed)) {
+        return shellCommand(trimmed.slice(1).trim())
+      }
+      if (trimmed.startsWith("/image ")) {
+        return imageSlashCommand(trimmed.slice(7).trim())
+      }
+      if (trimmed.startsWith("/compact ")) {
+        return compactSlashCommand(trimmed.slice(9).trim())
+      }
       if (trimmed.startsWith("/rename ")) {
         return renameSlashCommand(trimmed.slice(8))
       }
@@ -333,11 +355,77 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
+// The session thread the brain keeps its conversation in.
+def conversationSession(): string {
+  const brain = currentBrain()
+  if (brain == null) {
+    return ""
+  }
+  return brain.session
+}
+
+// Summarize the older messages and say what happened. False when the
+// summary could not be made.
+def compactAndReport(session: string, instructions: string): boolean {
+  pushMessage(color.dim("Compacting the conversation. Press Esc to stop."))
+  const result = compactConversation(session, instructions)
+  if (result is failure(reason)) {
+    pushMessage(color.yellow("Could not compact the conversation: ${reason}"))
+    return false
+  }
+  pushMessage(color.dim("Compacted: a summary replaced ${result.value} earlier messages."))
+  return true
+}
+
+def compactSlashCommand(instructions: string): boolean {
+  const session = conversationSession()
+  if (!canCompact(session)) {
+    pushMessage("Nothing to compact yet.")
+    return true
+  }
+  compactAndReport(session, instructions)
+  return true
+}
+
+// Runs after the turn is marked done, so a compaction the user stops with
+// Escape does not keep the turn from being saved.
+def compactIfDue() {
+  const session = conversationSession()
+  if (!compactionDue(session) || !canCompact(session)) {
+    return
+  }
+  if (!compactAndReport(session, "")) {
+    compactionFailed(session)
+  }
+}
+
+// A `!` line is a shell command only when the user typed it and pressed
+// Enter at the prompt. Pasted text, a `/paste` buffer, and text written in
+// the editor go to the model as a message, however they start, because a
+// command here runs with no approval.
+def isShellCommand(trimmed: string): boolean {
+  return trimmed.startsWith("!") && !trimmed.includes("\n") && lineWasTyped()
+}
+
+// `/image` alone holds the image for the next message. With text after
+// it, that text is sent now, with the image.
+def imageSlashCommand(message: string): boolean {
+  if (!attachClipboardImage()) {
+    return true
+  }
+  if (message == "") {
+    pushMessage(color.dim("The image will go with your next message."))
+    return true
+  }
+  return renderUserTurn(message, message)
+}
+
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try runTurn("", msg)
+  const result = try runTurn("", withPendingNotes(msg))
   renderAgentResponse(result)
   applyPendingLlmOptions()
   markTurnDone()
+  compactIfDue()
   return true
 }
 
@@ -359,7 +447,7 @@ export def buildStatus(): { left: string; right: string; context: string } {
   return {
     left: sessionTitle(),
     right: roundedCost,
-    context: ""
+    context: contextStatus(conversationSession())
   }
 }
 
@@ -372,6 +460,7 @@ export def runSeedTurn(target: string, msg: string) {
   renderAgentResponse(response)
   applyPendingLlmOptions()
   markTurnDone()
+  compactIfDue()
   saveSeedTurn(msg)
 }
 

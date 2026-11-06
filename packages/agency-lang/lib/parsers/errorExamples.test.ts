@@ -12,6 +12,7 @@ import {
   IF_IN_INTERPOLATION_MESSAGE,
   JS_REGEX_MESSAGE,
   MATCH_CASES_MESSAGE,
+  NON_NULL_ASSERTION_MESSAGE,
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
 } from "./messages.js";
@@ -70,6 +71,38 @@ describe("the removed await and sync prefixes are refused", () => {
     ["a cast", `node main() {\n  const sync: any = 1\n  return sync as number\n}`],
     ["a call", `def sync(n: number): number {\n  return n\n}\nnode main() {\n  return sync(1)\n}`],
   ])("still reads a variable named sync in %s", (_name, src) => {
+    expect(parses(src)).toBe(true);
+  });
+});
+
+describe("a postfix ! on a value is refused with a null check", () => {
+  it.each([
+    ["an index access", `node main() {\n  const last = items[items.length - 1]!\n  return last\n}`],
+    ["a variable", `node main() {\n  const sure = item!\n}`],
+    ["a call argument", `node main() {\n  print(item!)\n}`],
+    ["the start of a chain", `node main() {\n  const name = user!.name\n}`],
+    ["a return value", `def f(items: string[]): string {\n  return items[0]!\n}`],
+  ])("catches it on %s", (_name, src) => {
+    const message = failure(src);
+    expect(message).toContain("Agency has no `!` after a value");
+    expect(message).toContain("if (last == null)");
+    expect(message).toMatch(/^Line 2,/);
+  });
+
+  it.each([
+    ["!=", `node main() {\n  const same = a != b\n  const tight = a!=b\n}`],
+    ["!~", `node main() {\n  const miss = a !~ re/x/\n}`],
+    [
+      "a prefix !",
+      `node main() {\n  const no = !done\n  const both = a && !b\n  const list = [a,!b]\n}`,
+    ],
+    ["a ! in a string", `node main() {\n  const hello = "hi \${name}!"\n}`],
+    ["a validated type", `node main() {\n  const n: number! = 42\n}`],
+    [
+      "a checked cast",
+      `type Positive = number\nnode main() {\n  const n = raw as Positive!\n  print(n)\n}`,
+    ],
+  ])("leaves %s alone", (_name, src) => {
     expect(parses(src)).toBe(true);
   });
 });
@@ -191,6 +224,11 @@ node main(shape: Shape) {
       `node main(count: number) {\n  %s\n}`,
     ],
     ["ternary replacement", TERNARY_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
+    [
+      "null check in place of a postfix !",
+      NON_NULL_ASSERTION_MESSAGE,
+      `node main(items: string[]) {\n  %s\n  return last\n}`,
+    ],
     ["handler", HANDLER_BODY_MESSAGE, `node main() {\n  %s\n}`],
     ["empty handler block", EMPTY_HANDLER_BLOCK, `node main() {\n  %s\n}`],
     ["malformed on clause", MALFORMED_ON_CLAUSE, `node main() {\n  %s\n}`],

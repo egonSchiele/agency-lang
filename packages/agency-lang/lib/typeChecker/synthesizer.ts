@@ -486,10 +486,19 @@ export function synthType(expr: AgencyNode, scope: Scope, ctx: TypeCheckerContex
       // compile. See CODE_LITERAL_TYPE for why the fields match stdlib
       // Code exactly.
       return CODE_LITERAL_TYPE;
+    case "messageThread":
+      // The value of a `thread` or `subthread` block is the list of
+      // messages the block exchanged. A `return` inside the block returns
+      // from the enclosing function, so it never sets this value.
+      return MESSAGE_LIST_T;
     default:
       return ANY_T;
   }
 }
+
+/** What a `thread` block's value is. The messages are provider-shaped
+ *  records with no declared type, so the elements are `any`. */
+const MESSAGE_LIST_T: VariableType = { type: "arrayType", elementType: ANY_T };
 
 /**
  * `try expr` runs `expr` and converts a thrown error to a `failure(...)`.
@@ -622,8 +631,13 @@ function synthTryExpression(
 ): VariableType {
   const inner = synthType(expr.call, scope, ctx);
   if (isAnyType(inner)) return inner;
-  if (inner.type === "resultType") return inner;
-  return { type: "resultType", successType: inner, dataType: ANY_T };
+  const aliases = ctx.getTypeAliases();
+  if (safeResolveType(inner, aliases).type === "resultType") return inner;
+  return {
+    type: "resultType",
+    successType: passedThroughSuccessType(inner, aliases),
+    dataType: ANY_T,
+  };
 }
 
 const BOOLEAN_OPS = new Set([
@@ -858,11 +872,12 @@ function blockReturnType(
   return unionTypes(returnTypes);
 }
 
-/** What a guard's success carries when its block returns `element`. At run
- *  time a returned Result passes through unchanged and any other value is
- *  wrapped, so each Result among the returns, a type alias of one
- *  included, gives its success type, and every other return gives itself. */
-function guardSuccessType(
+/** What the success of a `guard` or a `try` carries when the guarded block
+ *  or the tried call returns `element`. At run time a returned Result
+ *  passes through unchanged and any other value is wrapped, so each Result
+ *  among the returns, a type alias of one included, gives its success
+ *  type, and every other return gives itself. */
+function passedThroughSuccessType(
   element: VariableType,
   aliases: Record<string, TypeAliasEntry>,
 ): VariableType {
@@ -871,7 +886,7 @@ function guardSuccessType(
     return resolved.successType;
   }
   if (resolved.type === "unionType") {
-    return unionTypes(resolved.types.map((member) => guardSuccessType(member, aliases)));
+    return unionTypes(resolved.types.map((member) => passedThroughSuccessType(member, aliases)));
   }
   return element;
 }
@@ -890,13 +905,13 @@ const BLOCK_CALL_RESULT: Record<
   // annotation is the generic Result, so parameterize it from the
   // block. A direct `_guard` call with a block gets the same, correct,
   // typing. A block that returns a Result<T> gives Result<T>, not
-  // Result<Result<T>> (guardSuccessType). The failure side stays `any`,
+  // Result<Result<T>> (passedThroughSuccessType). The failure side stays `any`,
   // the try-expression precedent, and because a trip fails with the
   // guard's own data: the err-side narrowing users rely on (`isFailure`,
   // `error.type`) is field-based, not type-based.
   _guard: (element, aliases) => ({
     type: "resultType",
-    successType: guardSuccessType(element, aliases),
+    successType: passedThroughSuccessType(element, aliases),
     dataType: ANY_T,
   }),
   // fork joins every branch into a list. The list shape is kept even

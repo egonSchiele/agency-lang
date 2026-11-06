@@ -27,6 +27,31 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** reorder the type parameters so all defaulted ones are last.`,
 
+  returnInThreadValue: `The value of a \`thread\` or \`subthread\` block is the list of messages the block exchanged. A \`return\` inside the block does not change that. It returns from the enclosing function or node, as a \`return\` in an \`if\` body does. So in
+
+\`\`\`
+const reply = thread {
+  return llm("Say hello.")
+}
+\`\`\`
+
+\`reply\` is never assigned, and the function ends with the model's reply as its own return value. This differs from a \`guard\` block, where \`return\` does give the block its value.
+
+**How to fix:** declare a variable before the block and assign it inside:
+
+\`\`\`
+let reply = ""
+thread {
+  reply = llm("Say hello.")
+}
+\`\`\``,
+
+  typeAliasIsItsOwnMember: `A type alias may refer to itself inside a structure. \`type Tree = { kids: Tree[] }\` and \`type Json = string | Json[]\` are both fine, because each use of the name sits inside an object or an array. This fires when the alias is a plain member of its own union, as in \`type A = number | A\`, or reaches itself that way through other aliases. Such a type has no meaning: working out what \`A\` is means working out what \`A\` is first.
+
+The checker treats the alias as \`any\` for the rest of the file, so this is the only error it causes.
+
+**How to fix:** remove the alias from its own union, or put the self-reference inside a structure.`,
+
   notValueParameterized: `Some type aliases take *value* arguments in parentheses (like a validated length), and some take none. This fires when you passed value arguments to an alias that accepts none.
 
 **How to fix:** drop the parenthesized arguments, or point at the alias you actually meant to parameterize.`,

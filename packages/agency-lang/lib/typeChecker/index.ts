@@ -41,6 +41,7 @@ import {
   checkCallbackBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkFinalizeBlocks } from "./finalizeChecks.js";
+import { checkThreadValueReturns } from "./threadValueReturns.js";
 import { checkAllRaises } from "./functionTypeRaises.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
@@ -71,6 +72,8 @@ import { checkParameterRedeclarations } from "./paramRedeclaration.js";
 import { checkValueArgReferences } from "./valueArgReferences.js";
 import { walkNodes } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
+import { ANY_T } from "./primitives.js";
+import { aliasIsItsOwnMember } from "./selfMemberAliases.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -89,6 +92,9 @@ export class TypeChecker {
   private program: AgencyProgram;
   private config: AgencyConfig;
   private scopedTypeAliases: ScopedTypeAliases = new ScopedTypeAliases();
+  /** The names of the aliases declared in this file that listed themselves
+   *  in their own union. See neutralizeSelfMemberAliases. */
+  private selfMemberAliases: string[] = [];
   private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
@@ -135,6 +141,7 @@ export class TypeChecker {
     this.program = program;
     this.config = config;
     this.scopedTypeAliases = resolved.typeAliases.clone();
+    this.selfMemberAliases = this.neutralizeSelfMemberAliases();
     this.functionDefs = { ...resolved.functionDefinitions };
     this.nodeDefs = Object.fromEntries(resolved.graphNodes.map((n) => [n.nodeName, n]));
     this.importedFunctions = { ...resolved.importedFunctions };
@@ -192,6 +199,12 @@ export class TypeChecker {
     const ctx = this.makeContext();
 
     const aliasDeclLocs = this.collectAliasDeclLocs();
+
+    for (const alias of this.selfMemberAliases) {
+      this.errors.push(
+        diagnostic("typeAliasIsItsOwnMember", { alias }, aliasDeclLocs[alias] ?? null),
+      );
+    }
 
     // Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
@@ -365,6 +378,7 @@ export class TypeChecker {
     // side effects; their body cannot pause execution.
     checkCallbackBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
     checkFinalizeBlocks(scopes, interruptEffectsByFunction, ctx);
+    checkThreadValueReturns(scopes, ctx);
 
     // Verify declared `raises` clauses (on def/node and on function types) are
     // not exceeded by the values' inferred effect sets.
@@ -568,6 +582,32 @@ export class TypeChecker {
    *  bare name: a same-named alias in another scope wins last-visited, so a
    *  diagnostic can anchor on the wrong (same-file) declaration — accepted
    *  imprecision, still strictly better than no location. */
+  /**
+   * Find every alias that lists itself as a member of its own union, such
+   * as `type A = number | A`, and make its body `any` in this checker's
+   * copy of the alias table. Resolving such an alias never ends, so this
+   * runs before anything resolves a type, and every later walk is safe
+   * without a cycle guard of its own. Returns the names declared in this
+   * file, which `check` reports. An imported one is reported by the file
+   * that declares it.
+   */
+  private neutralizeSelfMemberAliases(): string[] {
+    const found: { scopeKey: string; name: string; declaredHere: boolean }[] = [];
+    for (const [scopeKey, scopeAliases] of this.scopedTypeAliases.scopes()) {
+      const visible = this.scopedTypeAliases.visibleIn(scopeKey);
+      for (const [name, entry] of Object.entries(scopeAliases)) {
+        if (aliasIsItsOwnMember(name, visible)) {
+          const declaredHere = entry.importedFrom === undefined && entry.pulledFrom === undefined;
+          found.push({ scopeKey, name, declaredHere });
+        }
+      }
+    }
+    for (const { scopeKey, name } of found) {
+      this.scopedTypeAliases.replaceBody(scopeKey, name, ANY_T);
+    }
+    return found.filter((alias) => alias.declaredHere).map((alias) => alias.name);
+  }
+
   private collectAliasDeclLocs(): Record<string, SourceLocation> {
     const aliasDeclLocs: Record<string, SourceLocation> = Object.create(null);
     for (const { node } of walkNodes(this.program.nodes)) {

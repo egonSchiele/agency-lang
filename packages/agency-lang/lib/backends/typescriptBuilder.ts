@@ -92,6 +92,7 @@ import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/b
 import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
+  pulledAliasRefersToItself,
 } from "./typescriptGenerator/typeToZodSchema.js";
 import {
   buildValidationDescriptor,
@@ -1444,12 +1445,32 @@ export class TypeScriptBuilder {
     return this.pipes.bind(left, node.right);
   }
 
+  /** The body of the function `__tryCall` runs. An `llm()` call compiles to
+   *  statements that store the reply in a local, so the body has to return
+   *  that local, or `__tryCall` wraps `undefined`. The reply is text: the
+   *  type checker gives `try llm(...)` the type `Result<string>`.
+   *
+   *  A call that paused on an interrupt returns the interrupts the same
+   *  way. `__tryCall` passes them through unwrapped, and the code after it
+   *  halts the scope, as it does for any tried call. */
+  private triedCallBody(node: TryExpression): TsNode {
+    if (node.call.type !== "functionCall" || node.call.functionName !== "llm") {
+      return this.processNode(node.call as AgencyNode);
+    }
+    return ts.statements([
+      this.processLlmCall(DEFAULT_PROMPT_NAME, undefined, node.call, "local", "return"),
+      ts.return(ts.scopedVar(DEFAULT_PROMPT_NAME, "local", this.moduleId)),
+    ]);
+  }
+
   private processTryExpression(node: TryExpression): TsNode {
     if (node.call.type === "functionCall" && node.call.functionName === "throw") {
       throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
     }
-    const callNode = this.processNode(node.call as AgencyNode);
-    const args: TsNode[] = [ts.raw("__run.log"), ts.arrowFn([], callNode, { async: true })];
+    const args: TsNode[] = [
+      ts.raw("__run.log"),
+      ts.arrowFn([], this.triedCallBody(node), { async: true }),
+    ];
     const scope = this.scopes.current();
     if (scope.type === "function") {
       const opts: Record<string, TsNode> = {
@@ -2148,12 +2169,12 @@ export class TypeScriptBuilder {
    * or null. The schema prints a plain alias by name and leaves its body to
    * the module that declares it, so only the names it prints need a
    * binding: those left after `resolveTypeDeep` inlines generic aliases,
-   * plus the body of a value-parameterized alias, which the schema inlines
-   * at the use site. An alias that reached the type table through an
-   * imported signature or another alias's body (`pullTransitiveAliases`)
-   * has no const here and no JavaScript import, so naming it would fail at
-   * module load (#1371). A parameter schema has the same gap; this keeps a
-   * return schema from widening it.
+   * plus the body of every alias the schema writes in place. Those are a
+   * value-parameterized alias, and an alias that reached the type table
+   * through an imported signature or another alias's body
+   * (`pullTransitiveAliases`), which has no const here and no JavaScript
+   * import. One of the second kind that refers to itself cannot be written
+   * in place, so it is reported as unbound.
    */
   private unboundAliasIn(type: VariableType): string | null {
     const aliases = this.scopes.visibleTypeAliasesFull();
@@ -2168,12 +2189,17 @@ export class TypeScriptBuilder {
       }
       seen.push(name);
       const entry = aliases[name];
-      const inlined = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
-      if (inlined) {
-        collectAliasNames(entry.body, printed);
+      const hasBinding = declaredHere.includes(name) || this.names.isAgencyImport(name);
+      const takesValues = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
+      const pulled = entry?.pulledFrom !== undefined && !hasBinding;
+      if (pulled && pulledAliasRefersToItself(name, aliases)) {
+        return name;
+      }
+      if (takesValues || pulled) {
+        collectAliasNames(resolveTypeDeep(entry.body, aliases), printed);
         continue;
       }
-      if (!declaredHere.includes(name) && !this.names.isAgencyImport(name)) {
+      if (!hasBinding) {
         return name;
       }
     }
@@ -3851,6 +3877,10 @@ export class TypeScriptBuilder {
     variableType: VariableType | undefined,
     node: FunctionCall,
     scope: ScopeType,
+    // What the generated code does when the call paused on an interrupt:
+    // halt the scope here, or return the interrupts to the function that
+    // wraps the call (see triedCallBody).
+    onInterrupt: "halt" | "return" = "halt",
   ): TsNode {
     const _variableType = variableType || {
       type: "primitiveType" as const,
@@ -3963,6 +3993,8 @@ export class TypeScriptBuilder {
           ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
         ),
       );
+    } else if (onInterrupt === "return") {
+      stmts.push(ts.if(this.interruptCheck(varRef), ts.return(varRef)));
     } else {
       stmts.push(ts.comment("halt if this is an interrupt"));
       const isNodeContext = this.scopes.current().type === "node";

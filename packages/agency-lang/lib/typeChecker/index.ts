@@ -41,6 +41,7 @@ import {
   checkCallbackBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkFinalizeBlocks } from "./finalizeChecks.js";
+import { checkThreadValueReturns } from "./threadValueReturns.js";
 import { checkAllRaises } from "./functionTypeRaises.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
@@ -365,6 +366,7 @@ export class TypeChecker {
     // side effects; their body cannot pause execution.
     checkCallbackBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
     checkFinalizeBlocks(scopes, interruptEffectsByFunction, ctx);
+    checkThreadValueReturns(scopes, ctx);
 
     // Verify declared `raises` clauses (on def/node and on function types) are
     // not exceeded by the values' inferred effect sets.

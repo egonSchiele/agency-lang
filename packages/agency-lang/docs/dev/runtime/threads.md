@@ -187,6 +187,8 @@ const reply: string = thread {
 
 A `return` inside the block returns from the enclosing function. It does not set the block's value, which is the message list whatever the block holds.
 
+Without the annotation there is no type error, so the checker also warns about the `return` itself (AG6046, `lib/typeChecker/threadValueReturns.ts`). It reports each `return` under a thread block whose value is assigned, unless the `return` belongs to a block argument, a handler body, or a finalize body. A thread block used as a statement is not reported.
+
 ---
 
 ## Prompts always use the active thread

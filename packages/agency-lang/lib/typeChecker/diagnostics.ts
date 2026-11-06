@@ -1008,6 +1008,12 @@ export const DIAGNOSTICS = {
     message:
       "{kind} '{name}' raises effect '{effect}', which exceeds its declared 'raises {declared}'. It is raised by decorator '{decorator}'. Add '{effect}' to the clause.",
   },
+  returnInThreadValue: {
+    code: "AG6046",
+    severity: "warning",
+    message:
+      "This `return` leaves the enclosing function. It does not set '{variable}', which holds the thread block's list of messages. To keep a value from the block, assign it to a variable declared before the block.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

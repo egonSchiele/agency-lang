@@ -27,6 +27,25 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** reorder the type parameters so all defaulted ones are last.`,
 
+  returnInThreadValue: `The value of a \`thread\` or \`subthread\` block is the list of messages the block exchanged. A \`return\` inside the block does not change that. It returns from the enclosing function or node, as a \`return\` in an \`if\` body does. So in
+
+\`\`\`
+const reply = thread {
+  return llm("Say hello.")
+}
+\`\`\`
+
+\`reply\` is never assigned, and the function ends with the model's reply as its own return value. This differs from a \`guard\` block, where \`return\` does give the block its value.
+
+**How to fix:** declare a variable before the block and assign it inside:
+
+\`\`\`
+let reply = ""
+thread {
+  reply = llm("Say hello.")
+}
+\`\`\``,
+
   notValueParameterized: `Some type aliases take *value* arguments in parentheses (like a validated length), and some take none. This fires when you passed value arguments to an alias that accepts none.
 
 **How to fix:** drop the parenthesized arguments, or point at the alias you actually meant to parameterize.`,

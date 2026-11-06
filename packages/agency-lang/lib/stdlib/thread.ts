@@ -627,6 +627,8 @@ function pushGuardImpl(
   for (const g of stack.guards) {
     if (ids.includes(g.guardId)) g.scopeIds = ids;
   }
+  // Held until _runGuarded starts the block. See StateStack.holdGuards.
+  stack.holdGuards(ids);
   return ids;
 }
 
@@ -710,6 +712,7 @@ export async function _saveDraft(value: unknown): Promise<void> {
 export async function _runGuarded(ids: string[], block: unknown): Promise<ResultValue> {
   const run = currentRun();
   const { ctx, stack } = run;
+  stack.releaseGuards(ids);
   try {
     // Invoke the block through __call (NOT a plain block()) so it runs through
     // the same Agency call machinery the codegen `try block()` used — that is
@@ -730,13 +733,11 @@ export async function _runGuarded(ids: string[], block: unknown): Promise<Result
     // not be able to trip during it: a clock crossing its limit AFTER
     // the work concluded would raise a question about nothing (approve
     // grants time to work that is already done) or, via a late timer
-    // fire, flip a computed success into a failure. Suspending pauses
-    // the clock, cancels the armed timer, and makes both the runner's
-    // step-boundary probe and check() decline; the guards are popped at
-    // the very next step. Suspension is never serialized, so a
-    // checkpoint taken during the _popGuard step resumes unsettled —
-    // the window then reopens for that one replayed step, which can
-    // re-ask; harmless, and not worth a serialized flag.
-    stack.settleGuards(ids);
+    // fire, flip a computed success into a failure. The guards are
+    // popped at the very next step. A hold is never serialized, so a
+    // checkpoint taken during the _popGuard step resumes with the guards
+    // free. The window then reopens for that one replayed step, which
+    // can re-ask; harmless, and not worth a serialized flag.
+    stack.holdGuards(ids);
   }
 }

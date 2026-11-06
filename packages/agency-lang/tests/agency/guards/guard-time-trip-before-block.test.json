@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "gapIsNotCharged",
+      "input": "",
+      "fakeClock": true,
+      "expectedOutput": "\"ran\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Time that passes after a guard is set up and before its block starts is not charged to the guard, and does not end the run (issue #937)"
+    },
+    {
+      "nodeName": "blockTimeStillTrips",
+      "input": "",
+      "fakeClock": true,
+      "expectedOutput": "\"failure:timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A guard that was held before its block still trips on the block's own time"
+    }
+  ]
+}

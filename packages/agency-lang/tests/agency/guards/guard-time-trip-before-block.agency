@@ -1,0 +1,55 @@
+import test { _advanceTime } from "std::date"
+import { _pushGuard, _runGuarded, _popGuard } from "agency-lang/stdlib-lib/thread.js"
+
+// The stdlib `_guard` with a 20ms budget, and the clock moved 150ms between
+// the push and the block. On a loaded machine that gap can be long, and it
+// is outside the boundary that turns a trip into the guard's failure. A trip
+// noticed there used to leave the guard() call as an abort that nothing
+// converted, and the run died with "Guard exceeded its time budget"
+// (issue #937). The guard is now held until its block starts, so the gap is
+// not charged to it.
+def slowGuard(block: () -> any): Result raises <std::guard> {
+  const ids = _pushGuard(null, 20, null)
+  _advanceTime(150)
+  const result = _runGuarded(ids, block)
+  _popGuard(ids)
+  return result
+}
+
+def describe(outcome: Result): string {
+  if (isFailure(outcome)) {
+    return "failure:${outcome.data.type}"
+  }
+  return outcome.value
+}
+
+// The block does nothing slow, so the guard does not trip.
+node gapIsNotCharged() {
+  handle {
+    const outcome = slowGuard() as {
+      return "ran"
+    }
+    return describe(outcome)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// The guard still counts the block's own time once it starts.
+node blockTimeStillTrips() {
+  handle {
+    const outcome = slowGuard() as {
+      _advanceTime(150)
+      return "ran"
+    }
+    return describe(outcome)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}

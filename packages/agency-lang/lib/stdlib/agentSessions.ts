@@ -59,7 +59,8 @@ function isRecord(value: unknown): value is SessionRecord {
   const r = value as Record<string, unknown>;
   const isText = (k: string) => typeof r[k] === "string";
   const isCount = (k: string) => typeof r[k] === "number" && Number.isFinite(r[k]) && r[k] >= 0;
-  const forkIsValid = r.forkedFrom === undefined || isText("forkedFrom");
+  // Agency writes a field that was never set as null.
+  const forkIsValid = r.forkedFrom == null || isText("forkedFrom");
   return (
     forkIsValid &&
     isText("id") &&

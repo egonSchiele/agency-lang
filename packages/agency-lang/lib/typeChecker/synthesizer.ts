@@ -486,10 +486,19 @@ export function synthType(expr: AgencyNode, scope: Scope, ctx: TypeCheckerContex
       // compile. See CODE_LITERAL_TYPE for why the fields match stdlib
       // Code exactly.
       return CODE_LITERAL_TYPE;
+    case "messageThread":
+      // The value of a `thread` or `subthread` block is the list of
+      // messages the block exchanged. A `return` inside the block returns
+      // from the enclosing function, so it never sets this value.
+      return MESSAGE_LIST_T;
     default:
       return ANY_T;
   }
 }
+
+/** What a `thread` block's value is. The messages are provider-shaped
+ *  records with no declared type, so the elements are `any`. */
+const MESSAGE_LIST_T: VariableType = { type: "arrayType", elementType: ANY_T };
 
 /**
  * `try expr` runs `expr` and converts a thrown error to a `failure(...)`.

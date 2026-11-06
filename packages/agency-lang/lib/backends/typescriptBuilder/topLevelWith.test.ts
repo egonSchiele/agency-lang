@@ -63,6 +63,6 @@ describe("issue #229: top-level bare `with` modifier", () => {
       `def foo(): number { return 42 }\n` +
       `foo() with myHandler\n` +
       `node main() { print("ok") }\n`;
-    expect(() => compileSource(src)).toThrow("the statement before this has ended");
+    expect(() => compileSource(src)).toThrow("`with` cannot go here");
   });
 });

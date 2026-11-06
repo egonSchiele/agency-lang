@@ -218,7 +218,7 @@ describe("buildCompilationUnit: marker registries", () => {
     // `safe` is not a keyword anymore: in `safe def f()` it is a stray name
     // on the line of the def, which does not parse.
     expect(() => unitFromSource("safe def f(): number { return 1 }")).toThrow(
-      "the statement before this has ended",
+      "`safe` cannot start a statement here",
     );
   });
 

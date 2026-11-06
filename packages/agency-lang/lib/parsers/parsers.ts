@@ -33,7 +33,9 @@ import {
   SWITCH_MESSAGE,
   NON_NULL_ASSERTION_MESSAGE,
   TERNARY_MESSAGE,
+  NAME_BEFORE_STATEMENT_MESSAGE,
   TEXT_AFTER_STATEMENT_MESSAGE,
+  WITH_NOT_ALLOWED_HERE_MESSAGE,
   UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
 import {
@@ -6213,14 +6215,25 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
   ),
 );
 
-/** What may follow a statement on its own line: the block's `}`, a comment,
- *  a line ending the statement did not take, or the end of the text. */
-const afterStatement = or(char("}"), str("/*"), char(BLANK_LINE_SENTINEL), newline, eof);
+/** What may follow a statement on its own line: the block's `}`, a `//`
+ *  comment, a line ending the statement did not take, or the end of the
+ *  text. */
+const afterStatement = or(char("}"), str("//"), char(BLANK_LINE_SENTINEL), newline, eof);
+
+/** `/* ... *\/` comments, and the spaces around them, at the start of a
+ *  text. A comment after a statement does not end its line: in
+ *  `print(1) /* note *\/ print(2)` the second call is still on the line of
+ *  the first. So the check looks at what comes after the comments. */
+const BLOCK_COMMENTS = /^(?:[ \t]*\/\*[\s\S]*?\*\/)*[ \t]*/;
+
+function pastBlockComments(rest: string): string {
+  return rest.slice(BLOCK_COMMENTS.exec(rest)![0].length);
+}
 
 /** Whether the statement just read is the last thing on its line, or is one
  *  that may share its line: a comment, or a tag such as `@validate(...)`,
  *  which may sit before the declaration it describes. `read` is the text the
- *  statement took, and `rest` is what follows. */
+ *  statement took, and `rest` is what follows it and any block comments. */
 function endsItsLine(node: AgencyNode, read: string, rest: string): boolean {
   return (
     node.type === "comment" ||
@@ -6241,9 +6254,19 @@ function readsAsStatements(entry: Parser<AgencyNode>, input: string): boolean {
     const result = entry(rest);
     if (!result.success) return false;
     const read = rest.slice(0, rest.length - result.rest.length);
-    if (endsItsLine(result.result, read, result.rest)) return true;
-    rest = result.rest;
+    const after = pastBlockComments(result.rest);
+    if (endsItsLine(result.result, read, after)) return true;
+    rest = after;
   }
+}
+
+/** The message for text left on the line of `statement`. Two mistakes get a
+ *  message of their own, because the general one tells their author to add
+ *  a `;`, which would not help. */
+function textAfterStatementMessage(statement: AgencyNode, after: string): string {
+  if (/^with[ \t]/.test(after)) return WITH_NOT_ALLOWED_HERE_MESSAGE;
+  if (statement.type === "variableName") return NAME_BEFORE_STATEMENT_MESSAGE(statement.value);
+  return TEXT_AFTER_STATEMENT_MESSAGE;
 }
 
 /** One statement, which must be the last thing on its line. Wraps the
@@ -6259,10 +6282,11 @@ export function statementOnItsLine(statement: Parser<AgencyNode>): Parser<Agency
     const result = entry(input);
     if (!result.success) return result;
     const read = input.slice(0, input.length - result.rest.length);
-    if (endsItsLine(result.result, read, result.rest) || !readsAsStatements(entry, result.rest)) {
+    const after = pastBlockComments(result.rest);
+    if (endsItsLine(result.result, read, after) || !readsAsStatements(entry, after)) {
       return result;
     }
-    const declined = committedFailure(TEXT_AFTER_STATEMENT_MESSAGE, result.rest);
+    const declined = committedFailure(textAfterStatementMessage(result.result, after), after);
     getParseState().committedFailure = declined;
     return declined as ParserResult<AgencyNode>;
   };

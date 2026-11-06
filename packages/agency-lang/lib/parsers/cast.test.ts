@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAgency } from "../parser.js";
 import { formatSource } from "../formatter.js";
-import { TEXT_AFTER_STATEMENT_MESSAGE } from "./messages.js";
+import { NAME_BEFORE_STATEMENT_MESSAGE, TEXT_AFTER_STATEMENT_MESSAGE } from "./messages.js";
 
 /** The value of `const r = <expr>` inside a node, or the failure. */
 function parseValue(expr: string) {
@@ -181,7 +181,7 @@ describe("a cast on the next line", () => {
   it("does not attach across a comment line", () => {
     const parsed = parseValue("x\n    // note\n    as Person") as any;
     expect(parsed.success).toBe(false);
-    expect(parsed.message).toContain(TEXT_AFTER_STATEMENT_MESSAGE);
+    expect(parsed.message).toContain(NAME_BEFORE_STATEMENT_MESSAGE("as"));
   });
 });
 

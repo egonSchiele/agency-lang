@@ -15,6 +15,7 @@ import {
   NON_NULL_ASSERTION_MESSAGE,
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
+  WITH_NOT_ALLOWED_HERE_MESSAGE,
 } from "./messages.js";
 
 /** Pull the code example out of a message. `messages.ts` requires every example
@@ -235,6 +236,11 @@ node main(shape: Shape) {
     ["on _ not last", CATCH_ALL_NOT_LAST, `node main() {\n  %s\n}`],
     ["duplicate on clause", DUPLICATE_ON_CLAUSE("std::read"), `node main() {\n  %s\n}`],
     ["switch replacement", SWITCH_MESSAGE, `node main(x: string) {\n  %s\n}`],
+    [
+      "handle block in place of a stray with",
+      WITH_NOT_ALLOWED_HERE_MESSAGE,
+      `node main() {\n  %s\n}`,
+    ],
     [
       "C-style-for alternatives",
       C_STYLE_FOR_MESSAGE,

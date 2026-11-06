@@ -17,17 +17,18 @@ export type InstructionFile = {
 
 export def loadAgentsMd(dir: string): string {
   """
-  Read `AGENTS.md` from `dir` if it exists, else `CLAUDE.md`, and return
-  the raw contents; the caller wraps them in a <project_context> block.
-  Returns an empty string if neither exists or the read fails.
+  Read `AGENTS.md` from `dir`, or else `CLAUDE.md`, and return the raw
+  contents; the caller wraps them in a <project_context> block. A file
+  that is missing or cannot be read is passed over, so an `AGENTS.md`
+  that is a symlink to `CLAUDE.md` gives the `CLAUDE.md`. Returns an
+  empty string when neither can be read.
   """
   for (name in ["AGENTS.md", "CLAUDE.md"]) {
     if (exists(name, dir)) {
       const result = read(name, dir) with approve
-      if (isFailure(result)) {
-        return ""
+      if (isSuccess(result)) {
+        return result.value
       }
-      return result.value
     }
   }
   return ""

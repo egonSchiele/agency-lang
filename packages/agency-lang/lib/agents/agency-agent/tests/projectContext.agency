@@ -4,6 +4,7 @@
  * and after.
  */
 import { mkdir, remove } from "std::fs"
+import { bash } from "std::shell"
 
 import {
   InstructionFile,
@@ -65,6 +66,34 @@ node skipsFoldersWithNoFile(): boolean {
   clearTree()
   const texts = [file.text for file in files]
   return JSON.stringify(texts) == JSON.stringify(["root rules", "sub rules"])
+}
+
+// A project whose AGENTS.md is a symlink to its CLAUDE.md. The file layer
+// refuses to read through the link, so the CLAUDE.md is read by name.
+node linkedAgentsMdFallsBackToClaudeMd(): boolean {
+  clearTree()
+  const repo = tree() + "/linked"
+  mkdir(repo + "/.git") with approve
+  if (!addFile(repo, "CLAUDE.md", "linked rules")) {
+    return false
+  }
+  const linked = bash("ln -s CLAUDE.md AGENTS.md", cwd: repo) with approve
+  const files = load(repo)
+  clearTree()
+  const texts = [file.text for file in files]
+  return linked.exitCode == 0 && JSON.stringify(texts) == JSON.stringify(["linked rules"])
+}
+
+node aRejectingHandlerStopsTheReads(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  let files: InstructionFile[] = []
+  handle {
+    files = load(tree() + "/repo/sub/work")
+  } with reject
+  clearTree()
+  return files.length == 0
 }
 
 node textNamesEachFolder(): boolean {

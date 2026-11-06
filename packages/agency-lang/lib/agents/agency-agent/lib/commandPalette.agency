@@ -2,15 +2,24 @@ import { SkillCommand, commandsDir } from "std::skills"
 import { cwd } from "std::system"
 
 import { claudeSkillCommands } from "./claudeSkills.agency"
+import { instructionFolders } from "./projectContext.agency"
 
 export static const projectCommands = commandsDir("${cwd()}/.claude/commands") with approve
 
-static const INIT_PROMPT = """
-Write an AGENTS.md file for this project, in the working directory. A coding
-agent reads this file at the start of every session, so it should hold what
-an agent cannot work out quickly by itself.
+// A project's instructions belong at the repository root, where an agent
+// started in any folder of the project reads them.
+static const INIT_FILE = path.join(instructionFolders(cwd())[0], "AGENTS.md")
 
-First look at the project: the README, the build and package files, the
+static const INIT_PROMPT = """
+Write an instruction file for this project at ${INIT_FILE}. A coding agent
+reads this file at the start of every session, so it should hold what an
+agent cannot work out quickly by itself.
+
+First check what is there. If that folder has no AGENTS.md but has a
+CLAUDE.md, the agent is already reading the CLAUDE.md, and a new AGENTS.md
+would replace it. Say so and stop, unless I asked you to replace it.
+
+Then look at the project: the README, the build and package files, the
 test setup, the directory layout, and any existing instruction files
 (AGENTS.md, CLAUDE.md, .cursorrules). Then write the file. Cover:
 

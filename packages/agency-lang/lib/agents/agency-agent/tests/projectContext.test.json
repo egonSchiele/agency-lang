@@ -21,6 +21,26 @@
       ]
     },
     {
+      "nodeName": "linkedAgentsMdFallsBackToClaudeMd",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aRejectingHandlerStopsTheReads",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "textNamesEachFolder",
       "input": "",
       "expectedOutput": "true",

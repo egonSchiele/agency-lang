@@ -4,12 +4,16 @@
   and the code subagent for its own prompt.
 */
 import { today } from "std::date"
+import { checkPolicy } from "std::policy"
 import { getAgentCwd } from "std::index"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
 
 import { projectFolders } from "./claudeSkills.agency"
 import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
+
+// The files a folder's instructions come from, in the order they are tried.
+const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md"]
 
 export type InstructionFile = {
   dir: string;
@@ -24,7 +28,7 @@ export def loadAgentsMd(dir: string): string {
   that is a symlink to `CLAUDE.md` gives the `CLAUDE.md`. Returns an
   empty string when neither can be read.
   """
-  for (name in ["AGENTS.md", "CLAUDE.md"]) {
+  for (name in INSTRUCTION_FILES) {
     if (exists(name, dir)) {
       const result = read(name, dir) with approve
       if (isSuccess(result)) {
@@ -65,6 +69,37 @@ export def instructionsText(files: InstructionFile[]): string {
 // block is built.
 let _blockDir = ""
 
+// True while `projectContextText` reads the instruction files.
+let _readingInstructions = false
+
+/** True for the `std::read` of an instruction file that `projectContextText`
+  is making right now. */
+def isInstructionRead(intr: any): boolean {
+  if (!_readingInstructions || intr.effect != "std::read") {
+    return false
+  }
+  return INSTRUCTION_FILES.includes(intr.data.filename)
+}
+
+/** A policy handler that also approves the harness's own reads of the
+  instruction files, and hands every other interrupt to `policyHandler`.
+  The first block is read before the agent installs its policy handler,
+  so the user is never asked about it. A block built later (after the
+  working directory moves, or for a coder's first turn) is read inside the
+  handler, and without this the user would be asked to approve reading
+  `AGENTS.md` before the agent saw their message. Only the question goes
+  away: a `reject` rule in `rules` still rejects the read, and a root
+  policy is a separate handler that can reject it too. */
+export def approvingInstructionReads(policyHandler: any, rules: any, intr: any): any {
+  if (!isInstructionRead(intr)) {
+    return policyHandler(intr)
+  }
+  if (checkPolicy(rules, intr).type == "reject") {
+    return policyHandler(intr)
+  }
+  return approve()
+}
+
 /** The agent's working directory: the folder its file tools resolve paths
   against, which a coder can change with `setAgentCwd`. Before the agent
   has set one, it is the directory the run started in. */
@@ -86,7 +121,9 @@ export def projectContextText(): string {
   """
   const dir = projectDir()
   _blockDir = dir
+  _readingInstructions = true
   const files = loadProjectInstructions(instructionFolders(dir)) with approve
+  _readingInstructions = false
   const projectContext = instructionsText(files)
   return """
 

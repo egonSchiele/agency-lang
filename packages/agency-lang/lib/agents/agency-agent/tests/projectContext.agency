@@ -10,6 +10,7 @@ import { setAgentCwd } from "std::index"
 
 import {
   InstructionFile,
+  approvingInstructionReads,
   instructionFolders,
   instructionsText,
   loadProjectInstructions,
@@ -160,4 +161,53 @@ node movedDirectorySendsTheBlockAgain(): string {
 node noBlockYetSendsNothing(): boolean {
   setAgentCwd(tree() + "/repo/sub/empty")
   return withProjectContextIfMoved("only message") == "only message"
+}
+
+def rejectEverything(intr: any): any {
+  return reject()
+}
+
+// The block for a moved folder is read inside the agent's policy handler.
+// With no rule for the read, where the user would be asked, the harness's
+// own read of the instruction files is approved, and the same file read
+// any other way still goes to the handler, which here rejects it.
+node movedBlockIsReadUnderAPolicy(): string {
+  if (!buildTree()) {
+    return "could not build the tree"
+  }
+  setAgentCwd(tree() + "/repo/sub/work")
+  projectContextText()
+  setAgentCwd(tree() + "/repo/sub/empty")
+  const policy = approvingInstructionReads.partial(policyHandler: rejectEverything, rules: {})
+  let moved = ""
+  let direct: any = null
+  handle {
+    moved = withProjectContextIfMoved("second message")
+    direct = read("CLAUDE.md", tree() + "/repo/sub")
+  } with policy
+  clearTree()
+  const facts = [moved.includes("sub rules"), moved.includes("root rules"), direct is failure]
+  return JSON.stringify(facts)
+}
+
+// A rule that rejects reading one folder still wins: that folder's
+// instructions are left out, and the others are read.
+node rejectRuleStillStopsTheRead(): string {
+  if (!buildTree()) {
+    return "could not build the tree"
+  }
+  setAgentCwd(tree() + "/repo/sub/work")
+  projectContextText()
+  setAgentCwd(tree() + "/repo/sub/empty")
+  const rules = {
+    "std::read": [{ match: { dir: tree() + "/repo/sub" }, action: "reject" }]
+  }
+  const policy = approvingInstructionReads.partial(policyHandler: rejectEverything, rules: rules)
+  let moved = ""
+  handle {
+    moved = withProjectContextIfMoved("second message")
+  } with policy
+  clearTree()
+  const facts = [moved.includes("sub rules"), moved.includes("root rules")]
+  return JSON.stringify(facts)
 }

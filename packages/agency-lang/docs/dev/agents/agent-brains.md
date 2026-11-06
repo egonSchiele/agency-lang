@@ -89,11 +89,18 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 
   The reads are approved with `with approve`. The harness builds its
   grounding in `runSession` before it installs the policy handler, so no
-  rule in the agent policy can stop those reads. A coder started with
-  `--agent code` gets its block inside a turn, under the handler. There a
-  `reject` rule for `std::read` on one of the folders wins over the
-  `with approve`, and that folder's instructions are left out of the
-  coder's prompt.
+  rule in the agent policy can stop those reads. A block built later, for
+  a moved folder or for a coder started with `--agent code`, is read
+  inside a turn, under the handler, where an inner `with approve` does not
+  get past the policy. So the handler `runSession` installs is the policy
+  handler wrapped in `approvingInstructionReads`: while
+  `projectContextText` reads the instruction files, a `std::read` of
+  `AGENTS.md` or `CLAUDE.md` that no rule decides is approved instead of
+  asking the user. A `reject` rule still wins, and that folder's
+  instructions are left out. The wrapper checks the rules the session
+  started with, so a "reject always" answer given during the session does
+  not reach it. A root policy is a separate handler and can still reject
+  the read.
 - `lib/commandPalette.agency`: `promptCommands` holds the commands that
   ship with the agent and expand to a prompt, such as `/init`. They come
   last in `slashCommands()`, so a skill or command file of the same name

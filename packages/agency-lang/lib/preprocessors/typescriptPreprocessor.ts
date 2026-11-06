@@ -33,6 +33,7 @@ import { desugarAsyncInProgram } from "./asyncDesugar.js";
 import { desugarGuardsInBody } from "./guardDesugar.js";
 import { decoratorLookup, desugarDecorators } from "./decoratorDesugar.js";
 import { hoistCallsInProgram } from "./hoistCalls.js";
+import { desugarHandlerFunctionsInProgram } from "./handlerDesugar.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
 import { prunePreludeShadows } from "./prunePreludeShadows.js";
 
@@ -385,6 +386,10 @@ export class TypescriptPreprocessor {
     // before resolveVariableScopes so the __hoist temps get scopes like
     // hand-written statements.
     this.program = hoistCallsInProgram(this.program);
+
+    // After the hoist pass, so a handler function stays unhoisted as before;
+    // before scope resolution, so the block it becomes gets block scope.
+    desugarHandlerFunctionsInProgram(this.program);
 
     this.resolveVariableScopes();
     return this.program;

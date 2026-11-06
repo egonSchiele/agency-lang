@@ -463,12 +463,21 @@ them. PR 3 adds two raise surfaces and the join rule:
   (`<key>.retryGate.N`), and re-issues the request from the same thread
   state. The prompt push is its own idempotent `pushPrompt` step so
   re-issue never duplicates the user message.
-- **Settling at the block boundary:** when `_runGuarded` exits, the
-  Result is guard()'s answer; `stack.settleGuards(ids)` suspends the
-  owned guards for the one remaining step before `_popGuard`. Without
-  it, a clock crossing its limit after the work concluded would raise a
-  question about nothing, and a late timer fire could flip a computed
-  success into a failure.
+- **Holding the guards on both sides of the block:** only
+  `_runGuarded` turns a trip into guard()'s Result, and the stdlib
+  `_guard` has a runner step on each side of it: one between
+  `_pushGuard` and the block, and one between the block and `_popGuard`.
+  A trip noticed at either step would be raised in `_guard`'s own frame,
+  outside that boundary, and the guard() call would come back as an
+  abort that nothing converts. So `_pushGuard` ends with
+  `stack.holdGuards(ids)`, `_runGuarded` starts with
+  `stack.releaseGuards(ids)`, and it holds them again when the block
+  exits. A hold suspends the guards: the clock is paused and no trip is
+  raised. Two things follow. Time that passes before the block starts is
+  not charged to the guard. And after the block, a clock crossing its
+  limit cannot raise a question about work that is already done, and a
+  late timer cannot turn a computed success into a failure.
+
 ## The feedback channel (resumable guards, PR 4)
 
 `approve({message})` delivers reviewer feedback to the model. Two

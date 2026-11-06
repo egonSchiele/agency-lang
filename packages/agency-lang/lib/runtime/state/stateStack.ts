@@ -927,16 +927,32 @@ export class StateStack {
     );
   }
 
-  /** Settle the guards in `ids`: the boundary that owned them
-   *  (_runGuarded) has produced its result, so their trips are moot for
-   *  the one remaining step before _popGuard removes them. suspend()
-   *  is exactly the needed off-switch — it pauses the clock, cancels
-   *  the armed timer, and makes raisableTripAtStep and check() decline.
-   *  CostGuard.suspend() is a deliberate no-op, which is also correct:
-   *  cost guards are never step-raisable, and a SHARED cost guard must
-   *  keep metering sibling branches. */
-  settleGuards(ids: string[]): void {
+  /** Hold the guards in `ids`: they cannot trip until `releaseGuards`.
+   *  A guard()'s budget covers its block and nothing else, and only the
+   *  boundary around the block (_runGuarded) turns a trip into the
+   *  guard's Result. The stdlib `_guard` has a runner step on each side
+   *  of that boundary: one between `_pushGuard` and the block, and one
+   *  between the block and `_popGuard`. A trip noticed at either step
+   *  would be raised in `_guard`'s own frame, outside the boundary, and
+   *  leave the guard() call as an abort nobody converts. So the guards
+   *  are held for both steps.
+   *
+   *  suspend() is exactly the needed off-switch: it pauses the clock,
+   *  cancels the armed timer, and makes raisableTripAtStep and check()
+   *  decline. CostGuard.suspend() is a deliberate no-op, which is also
+   *  correct: cost guards are never step-raisable, and a SHARED cost
+   *  guard must keep metering sibling branches. */
+  holdGuards(ids: string[]): void {
     this.guards.filter((g) => ids.includes(g.guardId)).forEach((g) => g.suspend());
+    this.rebuildAbortSignal();
+  }
+
+  /** Undo `holdGuards` as the guarded block starts. The clock restarts
+   *  at the block's first step (Runner.beforeStep resumes every guard).
+   *  A hold is never serialized, so on a resume inside the block the
+   *  guards are already free and this does nothing. */
+  releaseGuards(ids: string[]): void {
+    this.guards.filter((g) => ids.includes(g.guardId)).forEach((g) => g.unsuspend());
     this.rebuildAbortSignal();
   }
 

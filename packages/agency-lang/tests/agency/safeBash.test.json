@@ -24,9 +24,20 @@
     },
     {
       "nodeName": "redirectsContribute",
-      "description": "A redirect writes a file whatever the verb is, so it contributes std::write independently. A variable target or any other redirect kind is unrecognized.",
+      "description": "A redirect writes a file whatever the verb is, so it contributes std::write independently. A variable target, an input redirect on echo, a descriptor other than 2, or two output redirects is unrecognized.",
       "input": "",
       "expectedOutput": "[[\"std::git::status\",\"std::write\"],[\"std::write\"],[\"std::write\"],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stderrAndDevNullRedirects",
+      "description": "A redirect of standard output or standard error to /dev/null writes no file, so it adds no effect. 2>file asks std::write for that file, with the same overwrite and append modes as >file, and descriptor 1 means the same as no descriptor. &>/dev/null is still broad. Any other descriptor, a second output file, or a variable target stays broad. The rebuilt text keeps the redirect.",
+      "input": "",
+      "expectedOutput": "[[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

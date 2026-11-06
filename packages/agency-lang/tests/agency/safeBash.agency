@@ -88,9 +88,35 @@ node redirectsContribute() {
     effectNamesFor("echo hi >> out.txt"),
     effectNamesFor("echo hi > $F"),
     effectNamesFor("echo hi < in.txt"),
-    effectNamesFor("echo hi 2> err.txt"),
+    effectNamesFor("echo hi 3> err.txt"),
     effectNamesFor("echo hi > a.txt > b.txt"),
   ]
+}
+
+node stderrAndDevNullRedirects() {
+  return [
+    planSummary("pnpm test 2>/dev/null"),
+    planSummary("pnpm test >/dev/null"),
+    planSummary("pnpm test >/dev/null 2>&1"),
+    planSummary("make 2>build.log"),
+    planSummary("make 2>>build.log"),
+    planSummary("make >out.log 2>/dev/null"),
+    planSummary("pnpm test 1>/dev/null"),
+    planSummary("make 1>out.log"),
+    planSummary("pnpm test &>/dev/null"),
+    planSummary("make 3>x"),
+    planSummary("make 3>/dev/null"),
+    planSummary("make >out.log 2>err.log"),
+    planSummary("make > $NULL"),
+    stderrWriteMode("make 2>build.log"),
+    stderrWriteMode("make 2>>build.log"),
+    executionCommand("pnpm test 2>/dev/null"),
+  ]
+}
+
+def stderrWriteMode(source: string): any {
+  const write: any = planFor(source, "/repo").effects[1]
+  return [write.payload.filename, write.payload.mode]
 }
 
 def planSummary(source: string): any {

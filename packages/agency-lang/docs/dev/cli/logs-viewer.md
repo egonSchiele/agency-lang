@@ -251,19 +251,45 @@ Imperative code lives in four places here: `server.ts` and `client.ts`
 (sockets), `registry.ts` (files), and the wiring in `run.ts`. Everything
 else in `session/` is a type or a pure function. To remove the feature:
 delete `session/`, `lib/cli/logsSession/` (moving `chooseLog` out first,
-since `lib/cli/logsQuery/` uses it), the `debug-logs` skill's session
+since `lib/cli/logsQuery/cliLog.ts` uses it), the `debug-logs` skill's session
 steps, and the `session` option with its call sites in `run.ts` and the
 two CLI routes. Comments, addresses, and `A` stay.
 
 ## The agent commands
 
-`agency logs traces`, `outline`, and `search` (`lib/cli/logsQuery/`) let an
-agent read a log without grepping it. Each command is a function from
-parsed options to `{ text, json, exitCode }`; `register.ts` is the only
-file that touches the process. They reuse the viewer's modules and add
-three small pure ones: `lib/runDirectory/traceSelection.ts` (which traces
-the flags pick), `lib/logsViewer/outlineText.ts` (a trace's rows as
-records), and `lib/logsViewer/rowSearch.ts` (the search over one trace).
+`agency logs traces`, `outline`, and `search` let an agent read a log
+without grepping it. Each command is a function from options to
+`{ text, json, exitCode }`, in `lib/logsQuery/`. Two callers share them:
+
+- The CLI, in `lib/cli/logsQuery/`. `register.ts` parses the flags and is
+  the only file that touches the process; `cliLog.ts` finds the log.
+- `std::statelog`'s `logTraces`, `logOutline`, `logSearch`, and `logRow`,
+  in `lib/stdlib/statelogReaders.ts`. `logRow` is `lib/logsQuery/row.ts`,
+  which has no CLI command: `session show` opens a row from the CLI.
+
+A change to what `agency logs traces` reports changes `logTraces` with it.
+The functions reuse the viewer's modules and add three small pure ones:
+`lib/runDirectory/traceSelection.ts` (which traces the options pick),
+`lib/logsViewer/outlineText.ts` (a trace's rows as records), and
+`lib/logsViewer/rowSearch.ts` (the search over one trace).
+
+**What differs between the two callers.** Three things, each one field of
+`QueryDeps`:
+
+| | CLI | `std::statelog` |
+| --- | --- | --- |
+| `loadLog` | `chooseLog`, then `readTraces` from disk | The one log the Agency wrapper named, took the real path of, and got approved under `std::read`. It is read through `host.files` under `fixedRoot` of its directory, up to the size it had when the read began, so a log another run is appending to still ends. |
+| `names` | `FLAG_NAMES_CLI`: `--last` | `FIELD_NAMES`: `last` |
+| `now` | `Date.now()` | The host's wall clock |
+
+`names` is how one set of rules gives two spellings of the same message:
+`--trace names one trace; drop --last, --since, and --all` from the CLI,
+`trace names one trace; drop last, since, and all` from Agency. Counts
+(`last`, `limit`, `context`) are checked once, by `countProblem`. A
+selection field set to `null` or `""` counts as left out, because a model
+calling a reader as a tool sends one of those for each field of `select`
+it does not use, and the runtime drops `null` only from top-level
+arguments.
 
 **Finding the log.** `chooseLog` in `lib/cli/logsSession/target.ts` is the
 one place any logs command finds its log: `--log`, else the one open
@@ -277,6 +303,25 @@ passed `--log`. An empty `logFile` counts as unset, because `--log stdout`
 writes `""` there to cancel a configured file. A directory with no
 `statelog.jsonl` that holds run directories is refused with a pointer to
 `--csv`.
+
+**What went wrong.** `TraceSummary` counts each trace's tool calls by
+status: `toolsFailed`, `toolsRejected`, and `toolsUnfinished`. Each status
+is `classifyTool(toolEvidence(...))` on the tool's own span, the same
+reading as the trace screen's tool rows, so the two agree. The counts do
+not build the story outline, which is too slow to run for every trace in
+a log.
+
+A failed tool call always logs an `error` event inside its span, so
+`hasError` is true for any trace with one. `otherErrors` is the trace's
+errors less the ones its failed tools own: errors outside any tool, and
+errors inside a tool that went on to complete. The marker column prints
+`error` when `otherErrors` is above zero, then the counts:
+`error, 2 failed, 1 rejected`. Every trace `--errors` keeps therefore
+shows something in the column.
+
+`TOOL_TROUBLE` is the one table of which statuses are trouble and the word
+each prints. A call awaiting approval belongs to a paused run and is in
+`toolCalls` only.
 
 **Picking traces.** `selectTraces` takes anything with a `traceId` and a
 `startedAt`, which `TraceSummary` has, so start time is computed once, in

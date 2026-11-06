@@ -1,11 +1,9 @@
 import * as fs from "fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { show, defaultCommandDeps } from "@/cli/logsSession/commands.js";
-import { liveSessions, resolveTarget } from "@/cli/logsSession/target.js";
-import type { CommentsStore } from "@/runDirectory/commentsStore.js";
+import { FIELD_NAMES } from "@/runDirectory/traceSelection.js";
 
-import { liveViewer, queryDeps, queryDir, writeLog } from "./queryFixture.js";
+import { queryDeps, queryDir, writeLog } from "./queryFixture.js";
 import { logsSearch } from "./search.js";
 
 const options = { json: false, regex: false, caseSensitive: false };
@@ -56,7 +54,7 @@ describe("logsSearch", () => {
 
   it("--limit cuts the hits and the footer counts the rest", async () => {
     const result = await logsSearch(
-      { ...options, pattern: "write a module", log: "log.jsonl", all: true, limit: "1" },
+      { ...options, pattern: "write a module", log: "log.jsonl", all: true, limit: 1 },
       queryDeps(dir),
     );
     expect(result.text).toContain("3 rows matched · showing 1");
@@ -65,12 +63,23 @@ describe("logsSearch", () => {
     );
   });
 
+  it("names the fields in its closing line when called with the library's spelling", async () => {
+    const result = await logsSearch(
+      { ...options, pattern: "write a module", log: "log.jsonl", all: true, limit: 1 },
+      queryDeps(dir, { names: FIELD_NAMES }),
+    );
+    expect(result.text).toContain(
+      "2 more rows matched. Narrow with trace, kinds, or a longer pattern, or raise limit.",
+    );
+  });
+
   it.each([
-    [{ limit: "0" }, "--limit needs a positive whole number"],
-    [{ context: "abc" }, "--context needs a positive whole number"],
+    [{ limit: 0 }, "--limit needs a positive whole number, not 0"],
+    [{ context: Number.NaN }, "--context needs a positive whole number"],
+    [{ context: 2.5 }, "--context needs a positive whole number, not 2.5"],
     [
-      { kind: "tool,interrupt" },
-      "--kind takes a comma-separated list of: user, call, tool, hosted, error (not interrupt)",
+      { kinds: ["tool", "interrupt"] },
+      "--kind takes these kinds: user, call, tool, hosted, error (not interrupt)",
     ],
     [{ regex: true, pattern: "(" }, "Invalid regular expression"],
   ])("refuses %o", async (bad, reason) => {
@@ -93,7 +102,7 @@ describe("logsSearch", () => {
 
   it("--json gives the counts and each hit's address, kind, header, and snippet", async () => {
     const result = await logsSearch(
-      { ...options, json: true, pattern: "handlers.md", log: "log.jsonl", kind: "tool" },
+      { ...options, json: true, pattern: "handlers.md", log: "log.jsonl", kinds: ["tool"] },
       queryDeps(dir),
     );
     expect(result.json).toEqual({
@@ -114,35 +123,5 @@ describe("logsSearch", () => {
         },
       ],
     });
-  });
-
-  it("reads the open viewer's log, the same one session show reads", async () => {
-    const viewed = writeLog(dir, "runs/today/statelog.jsonl", [
-      { traceId: "viewed-run", minutesAgo: 1 },
-    ]);
-    const record = liveViewer(viewed, "viewed-run");
-    const deps = queryDeps(dir, {
-      configuredLog: () => "log.jsonl",
-      probe: async () => liveSessions([record], () => ""),
-    });
-    const result = await logsSearch({ ...options, pattern: "write a module" }, deps);
-    expect(result.text.split("\n")[0]).toContain("runs/today/statelog.jsonl");
-    const address = result.text.split("\n")[2];
-    expect(address).toBe("viewed-run/round:L:0:user");
-
-    const target = resolveTarget({ row: address }, [record], {
-      ...deps,
-      socketPathFor: () => "",
-      openStore: (commentsPath) =>
-        ({ path: commentsPath, read: () => [] }) as unknown as CommentsStore,
-      author: { kind: "agent", id: "claude" },
-    });
-    expect(target).toMatchObject({ kind: "session", session: { record: { logPath: viewed } } });
-    const shown = show(
-      target,
-      defaultCommandDeps(async () => ({ ok: true }) as never),
-    );
-    expect(shown.exitCode).toBe(0);
-    expect(shown.text).toContain("User turn · write a module");
   });
 });

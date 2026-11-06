@@ -8,14 +8,20 @@ import { liveSessions } from "@/cli/logsSession/target.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { probeAll, recordPaths, sessionsDir } from "@/logsViewer/session/registry.js";
 import { childRunDirectories } from "@/runDirectory/findRuns.js";
-import { parseCount, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
+import { FLAG_NAMES_CLI, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import type { Command } from "@/vendor/commander/index.js";
 
-import { logsOutline } from "./outline.js";
-import { DEFAULT_SEARCH_LIMIT, DEFAULT_SNIPPET_CONTEXT, logsSearch } from "./search.js";
-import { refusal, type QueryDeps, type QueryResult } from "./shared.js";
-import { logsTraces } from "./traces.js";
+import { logsOutline } from "@/logsQuery/outline.js";
+import {
+  DEFAULT_SEARCH_LIMIT,
+  DEFAULT_SNIPPET_CONTEXT,
+  KINDS_LIST,
+  logsSearch,
+} from "@/logsQuery/search.js";
+import { cliLoadLog } from "./cliLog.js";
+import { refusal, type QueryDeps, type QueryResult } from "@/logsQuery/shared.js";
+import { logsTraces } from "@/logsQuery/traces.js";
 
 export type LogsQueryDeps = QueryDeps & { writeStdout(text: string): void };
 
@@ -23,15 +29,20 @@ export type LogsQueryDeps = QueryDeps & { writeStdout(text: string): void };
  *  disk, and `configuredLog`, which reads `log.logFile` when called. */
 export function defaultLogsQueryDeps(configuredLog: () => string | undefined): LogsQueryDeps {
   const dir = sessionsDir(nodeHost());
+  const cwd = process.cwd();
   return {
-    cwd: process.cwd(),
-    pathKind,
-    childRunDirectories,
-    configuredLog,
-    probe: async () =>
-      liveSessions(await probeAll(dir), (record) => recordPaths(dir, record.pid).sock),
-    readLog: (logPath) => readTraces(logPath).traces,
+    cwd,
+    loadLog: cliLoadLog({
+      cwd,
+      pathKind,
+      childRunDirectories,
+      configuredLog,
+      probe: async () =>
+        liveSessions(await probeAll(dir), (record) => recordPaths(dir, record.pid).sock),
+      readLog: (logPath) => readTraces(logPath).traces,
+    }),
     now: () => Date.now(),
+    names: FLAG_NAMES_CLI,
     writeStdout: (text) => {
       process.stdout.write(text);
     },
@@ -131,19 +142,32 @@ const QUERY_COMMANDS: QueryCommand[] = [
         description: `Characters of snippet on each side of the match (default ${DEFAULT_SNIPPET_CONTEXT})`,
       },
     ],
-    run: (common, own, pattern, deps) =>
-      logsSearch(
+    run: (common, own, pattern, deps) => {
+      const kinds = kindsFrom(textOf(own.kind));
+      const limit = countFrom("--limit", own.limit);
+      const context = countFrom("--context", own.context);
+      if ("error" in kinds) {
+        return Promise.resolve(refusal(kinds.error));
+      }
+      if ("error" in limit) {
+        return Promise.resolve(refusal(limit.error));
+      }
+      if ("error" in context) {
+        return Promise.resolve(refusal(context.error));
+      }
+      return logsSearch(
         {
           ...common,
           pattern: pattern ?? "",
-          kind: textOf(own.kind),
+          kinds: kinds.value,
           regex: own.regex === true,
           caseSensitive: own.caseSensitive === true,
-          limit: textOf(own.limit),
-          context: textOf(own.context),
+          limit: limit.value,
+          context: context.value,
         },
         deps,
-      ),
+      );
+    },
   },
 ];
 
@@ -151,9 +175,40 @@ function textOf(value: string | boolean | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+type Parsed<T> = { value: T } | { error: string };
+
+/** A count flag's text as a number, or a refusal that quotes text that is
+ *  not digits. Whether the number is a count is `countProblem`'s to say. */
+function countFrom(flag: string, value: string | boolean | undefined): Parsed<number | undefined> {
+  const text = textOf(value);
+  if (text === undefined) {
+    return { value: undefined };
+  }
+  if (!/^\d+$/.test(text.trim())) {
+    return { error: `${flag} needs a positive whole number, not "${text}"` };
+  }
+  return { value: Number(text) };
+}
+
+/** `--kind user,tool` as a list. A flag with no names in it is refused;
+ *  `logsSearch` checks the names. */
+function kindsFrom(text: string | undefined): Parsed<string[] | undefined> {
+  if (text === undefined) {
+    return { value: undefined };
+  }
+  const names = text
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name !== "");
+  if (names.length === 0) {
+    return { error: `--kind takes a comma-separated list of: ${KINDS_LIST}` };
+  }
+  return { value: names };
+}
+
 /** The shared options as the commands take them, or why not. */
 function commonFrom(options: ParsedOptions): CommonOptions | { error: string } {
-  const last = parseCount("--last", textOf(options.last));
+  const last = countFrom("--last", options.last);
   if ("error" in last) {
     return last;
   }

@@ -1,13 +1,47 @@
 // Which traces of a log a command reads, from `--trace`, `--last`,
 // `--since`, and `--all`. One function, so `agency logs traces`, `outline`,
-// and `search` cannot disagree about what `--last 2` means.
+// `search`, and the `std::statelog` readers cannot disagree about what
+// `--last 2` means.
 import { matchTraceId } from "./traces.js";
 
+/** A field set to `null` or `""` counts as left out: a model calling a
+ *  reader as a tool sends one or the other for each field of `select` it
+ *  does not use. */
 export type TraceSelectionFlags = {
-  trace?: string;
-  last?: number;
-  since?: string;
-  all?: boolean;
+  trace?: string | null;
+  last?: number | null;
+  since?: string | null;
+  all?: boolean | null;
+};
+
+export type OptionName =
+  "trace" | "last" | "since" | "all" | "limit" | "context" | "kind" | "maxChars";
+
+/** How the caller spells each option in a message: the CLI's flags, or the
+ *  fields of a `std::statelog` call. One set of rules and messages, two
+ *  spellings. */
+export type OptionNames = Record<OptionName, string>;
+
+export const FLAG_NAMES_CLI: OptionNames = {
+  trace: "--trace",
+  last: "--last",
+  since: "--since",
+  all: "--all",
+  limit: "--limit",
+  context: "--context",
+  kind: "--kind",
+  maxChars: "--max-chars",
+};
+
+export const FIELD_NAMES: OptionNames = {
+  trace: "trace",
+  last: "last",
+  since: "since",
+  all: "all",
+  limit: "limit",
+  context: "context",
+  kind: "kinds",
+  maxChars: "maxChars",
 };
 
 /** What the picker needs to know about a trace. `TraceSummary` has both
@@ -25,33 +59,38 @@ type FlagName = keyof TraceSelectionFlags;
  *  same object; only these are read. */
 const FLAG_NAMES: FlagName[] = ["trace", "last", "since", "all"];
 
-const TRACE_ALONE = "--trace names one trace; drop --last, --since, and --all";
-const ALL_AND_LAST = "--all and --last disagree about how many";
-const ALL_AND_SINCE =
-  "--all and --since disagree: --since alone already means every trace that matches";
+type Refusal = "traceAlone" | "allAndLast" | "allAndSince";
+
+const REFUSALS: Record<Refusal, (names: OptionNames) => string> = {
+  traceAlone: (names) =>
+    `${names.trace} names one trace; drop ${names.last}, ${names.since}, and ${names.all}`,
+  allAndLast: (names) => `${names.all} and ${names.last} disagree about how many`,
+  allAndSince: (names) =>
+    `${names.all} and ${names.since} disagree: ${names.since} alone already means every trace that matches`,
+};
 
 type Rule = "default" | "trace" | "last" | "since" | "lastSince" | "all";
 
 /** The spec's combinations table, one row for each set of the four flags.
  *  `given` lists a row's flags in `FLAG_NAMES` order, and a row matches
  *  when exactly those flags are given. */
-const COMBINATIONS: { given: FlagName[]; outcome: { rule: Rule } | { refused: string } }[] = [
+const COMBINATIONS: { given: FlagName[]; outcome: { rule: Rule } | { refused: Refusal } }[] = [
   { given: [], outcome: { rule: "default" } },
   { given: ["trace"], outcome: { rule: "trace" } },
   { given: ["last"], outcome: { rule: "last" } },
   { given: ["since"], outcome: { rule: "since" } },
   { given: ["last", "since"], outcome: { rule: "lastSince" } },
   { given: ["all"], outcome: { rule: "all" } },
-  { given: ["trace", "last"], outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "since"], outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "all"], outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "last", "since"], outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "last", "all"], outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "since", "all"], outcome: { refused: TRACE_ALONE } },
-  { given: ["trace", "last", "since", "all"], outcome: { refused: TRACE_ALONE } },
-  { given: ["last", "all"], outcome: { refused: ALL_AND_LAST } },
-  { given: ["last", "since", "all"], outcome: { refused: ALL_AND_LAST } },
-  { given: ["since", "all"], outcome: { refused: ALL_AND_SINCE } },
+  { given: ["trace", "last"], outcome: { refused: "traceAlone" } },
+  { given: ["trace", "since"], outcome: { refused: "traceAlone" } },
+  { given: ["trace", "all"], outcome: { refused: "traceAlone" } },
+  { given: ["trace", "last", "since"], outcome: { refused: "traceAlone" } },
+  { given: ["trace", "last", "all"], outcome: { refused: "traceAlone" } },
+  { given: ["trace", "since", "all"], outcome: { refused: "traceAlone" } },
+  { given: ["trace", "last", "since", "all"], outcome: { refused: "traceAlone" } },
+  { given: ["last", "all"], outcome: { refused: "allAndLast" } },
+  { given: ["last", "since", "all"], outcome: { refused: "allAndLast" } },
+  { given: ["since", "all"], outcome: { refused: "allAndSince" } },
 ];
 
 const SINCE_UNITS: Record<string, number> = {
@@ -73,19 +112,14 @@ export function parseSince(text: string, now: number): { at: number } | { error:
   return { at };
 }
 
-/** A flag's text as a positive whole number, or a refusal naming the flag.
- *  Undefined text is an absent flag. */
-export function parseCount(
-  flag: string,
-  text: string | undefined,
-): { value: number | undefined } | { error: string } {
-  if (text === undefined) {
-    return { value: undefined };
+/** Why `value` is not a count (a positive whole number), naming the
+ *  option as the caller spells it; undefined when it is one. */
+export function countProblem(name: string, value: number): string | undefined {
+  if (Number.isInteger(value) && value >= 1) {
+    return undefined;
   }
-  if (!/^\d+$/.test(text.trim()) || Number(text) < 1) {
-    return { error: `${flag} needs a positive whole number, not "${text}"` };
-  }
-  return { value: Number(text) };
+  const shown = Number.isNaN(value) ? "" : `, not ${value}`;
+  return `${name} needs a positive whole number${shown}`;
 }
 
 /**
@@ -98,16 +132,23 @@ export function parseCount(
 export function selectTraces<T extends Pickable>(
   traces: readonly T[],
   flags: TraceSelectionFlags,
-  options: { defaultLast: number; now: number },
+  options: { defaultLast: number; now: number; names: OptionNames },
 ): TraceSelection<T> {
-  const given = FLAG_NAMES.filter((name) => flags[name] !== undefined && flags[name] !== false);
+  const leftOut: unknown[] = [undefined, null, false, ""];
+  const given = FLAG_NAMES.filter((name) => !leftOut.includes(flags[name]));
   const row = COMBINATIONS.find((candidate) => candidate.given.join() === given.join());
   if (row === undefined) {
     // The table has a row for each of the sixteen sets of flags.
     throw new Error(`no selection rule for flags: ${given.join(", ")}`);
   }
   if ("refused" in row.outcome) {
-    return { kind: "refused", reason: row.outcome.refused };
+    return { kind: "refused", reason: REFUSALS[row.outcome.refused](options.names) };
+  }
+  if (typeof flags.last === "number") {
+    const problem = countProblem(options.names.last, flags.last);
+    if (problem !== undefined) {
+      return { kind: "refused", reason: problem };
+    }
   }
   const newestFirst = byStartTime(traces);
   const total = traces.length;

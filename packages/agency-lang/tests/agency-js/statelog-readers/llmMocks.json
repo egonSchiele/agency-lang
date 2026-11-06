@@ -1,0 +1,6 @@
+[
+  {"toolCall": {"name": "lookUp", "args": {"topic": "zephyrine"}}},
+  {"return": "done"},
+  {"toolCall": {"name": "lookUp", "args": {"topic": "zephyrine"}}},
+  {"return": "done"}
+]

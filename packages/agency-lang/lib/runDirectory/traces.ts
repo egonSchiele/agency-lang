@@ -1,6 +1,6 @@
 import * as fs from "fs";
 
-import { makeLineReader } from "@/statelog/lineReader.js";
+import { makeLineReader, makeLineSplitter } from "@/statelog/lineReader.js";
 import {
   parseStatelogLines,
   type ParsedEventLine,
@@ -53,16 +53,60 @@ export function readTraces(statelogPath: string): ReadTracesResult {
   // error here.
   fs.statSync(statelogPath);
   const reader = makeLineReader(statelogPath, 0);
+  const collector = makeTraceCollector();
+  reader.readToEnd(collector.addLines);
+  collector.addLines(reader.finish());
+  return collector.result();
+}
+
+/**
+ * `readTraces` over bytes from any source, such as `host.files.readChunks`,
+ * which `std::statelog` reads an approved log through. A chunk may end in
+ * the middle of a line or of a character; the splitter keeps the partial
+ * line for the next chunk. The lines are grouped and parsed exactly as
+ * `readTraces` does, and the partial last line follows the same rule.
+ *
+ * Reading stops after `byteLimit` bytes, and leaving the loop closes the
+ * source. A caller passes the file's size from before the read, so a log
+ * another run keeps appending to is read as it was then and the read ends.
+ */
+export async function readTracesFromChunks(
+  chunks: AsyncIterable<Uint8Array>,
+  byteLimit: number = Infinity,
+): Promise<ReadTracesResult> {
+  const splitter = makeLineSplitter();
+  const collector = makeTraceCollector();
+  let left = byteLimit;
+  for await (const chunk of chunks) {
+    const taken = chunk.byteLength <= left ? chunk : chunk.subarray(0, left);
+    collector.addLines(
+      splitter.push(Buffer.from(taken.buffer, taken.byteOffset, taken.byteLength)),
+    );
+    left -= taken.byteLength;
+    if (left <= 0) {
+      break;
+    }
+  }
+  collector.addLines(splitter.finish());
+  return collector.result();
+}
+
+/** What both readers share: parse each batch of lines, numbering them from
+ *  1 across batches, and group them by trace. */
+function makeTraceCollector(): {
+  addLines(lines: string[]): void;
+  result(): ReadTracesResult;
+} {
   const grouper = makeTraceGrouper();
   const errors: ParseError[] = [];
   let lineCount = 0;
-  const addLines = (lines: string[]): void => {
-    addParsedLines(parseStatelogLines(lines, lineCount + 1), grouper, errors);
-    lineCount += lines.length;
+  return {
+    addLines(lines: string[]): void {
+      addParsedLines(parseStatelogLines(lines, lineCount + 1), grouper, errors);
+      lineCount += lines.length;
+    },
+    result: () => ({ traces: grouper.traces(), errors }),
   };
-  reader.readToEnd(addLines);
-  addLines(reader.finish());
-  return { traces: grouper.traces(), errors };
 }
 
 /** For writers: a statelog with any unparseable line is refused whole, since a

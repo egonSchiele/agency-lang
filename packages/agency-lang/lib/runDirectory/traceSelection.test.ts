@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  parseCount,
+  countProblem,
+  FIELD_NAMES,
+  FLAG_NAMES_CLI,
   parseSince,
   selectTraces,
   type Pickable,
@@ -20,7 +22,7 @@ const traces: Pickable[] = [
   { traceId: "ddd-middle", startedAt: NOW - 30 * 60_000 },
   { traceId: "aab-older", startedAt: NOW - 9 * HOUR },
 ];
-const options = { defaultLast: 2, now: NOW };
+const options = { defaultLast: 2, now: NOW, names: FLAG_NAMES_CLI };
 
 function ids(selection: TraceSelection<Pickable>): string[] {
   if (selection.kind === "refused") {
@@ -131,16 +133,60 @@ describe("parseSince", () => {
   });
 });
 
-describe("parseCount", () => {
-  it("reads a positive whole number, and an absent flag as undefined", () => {
-    expect(parseCount("--last", "3")).toEqual({ value: 3 });
-    expect(parseCount("--last", undefined)).toEqual({ value: undefined });
+describe("countProblem", () => {
+  it("takes a positive whole number", () => {
+    expect(countProblem("--last", 3)).toBeUndefined();
   });
 
-  it.each(["0", "-1", "abc", "2.5", ""])("refuses %j, naming the flag", (text) => {
-    expect(parseCount("--limit", text)).toEqual({
-      error: `--limit needs a positive whole number, not "${text}"`,
+  it.each([
+    [0, "--limit needs a positive whole number, not 0"],
+    [-1, "--limit needs a positive whole number, not -1"],
+    [2.5, "--limit needs a positive whole number, not 2.5"],
+    [Number.NaN, "--limit needs a positive whole number"],
+  ])("refuses %d, naming the option", (value, message) => {
+    expect(countProblem("--limit", value)).toBe(message);
+  });
+});
+
+describe("option names", () => {
+  it.each([
+    [{ trace: "ddd", last: 1 }, "trace names one trace; drop last, since, and all"],
+    [{ last: 1, all: true }, "all and last disagree about how many"],
+    [
+      { since: "1h", all: true },
+      "all and since disagree: since alone already means every trace that matches",
+    ],
+  ])("spells the refusal for %o with the library's field names", (flags, reason) => {
+    expect(selectTraces(traces, flags, { ...options, names: FIELD_NAMES })).toEqual({
+      kind: "refused",
+      reason,
     });
+  });
+
+  it("spells it with the CLI's flags", () => {
+    expect(selectTraces(traces, { trace: "ddd", last: 1 }, options)).toEqual({
+      kind: "refused",
+      reason: "--trace names one trace; drop --last, --since, and --all",
+    });
+  });
+
+  it.each([0, -1, 2.5, Number.NaN])("refuses last of %d", (last) => {
+    expect(selectTraces(traces, { last }, { ...options, names: FIELD_NAMES })).toMatchObject({
+      kind: "refused",
+      reason: expect.stringMatching(/^last needs a positive whole number/),
+    });
+  });
+});
+
+describe("null fields", () => {
+  it("count as left out, the way a model sends unused fields", () => {
+    const flags = { trace: null, last: 2, since: null, all: null };
+    expect(ids(selectTraces(traces, flags, options))).toEqual(["bbb-newest", "ddd-middle"]);
+  });
+
+  it("an empty string counts as left out too", () => {
+    const flags = { trace: "", last: 2, since: "" };
+    expect(ids(selectTraces(traces, flags, options))).toEqual(["bbb-newest", "ddd-middle"]);
   });
 });
 

@@ -34,6 +34,37 @@ Enable observability and configure a log file to save eval annotations.
   person for the logs viewer. `emit` sends custom data to the host's
   `onEmit` callback.
 
+  ## Reading a log
+
+  A log file can hold many runs. Four functions read it the way the
+  `agency logs` commands do: `logTraces` lists the runs, `logOutline`
+  prints the rows of one, `logSearch` finds the rows that mention some
+  text, and `logRow` opens one row. Each returns the command's JSON, plus
+  `text`, which is what the command prints.
+
+  ```ts
+  import { logTraces, logOutline } from "std::statelog"
+
+  node main() {
+    const recent = logTraces("./statelog.jsonl", { since: "1d" }, errorsOnly: true)
+    if (isFailure(recent)) {
+      return recent
+    }
+    for (trace in recent.value.traces) {
+      const outline = logOutline("./statelog.jsonl", { trace: trace.traceId })
+      if (isSuccess(outline)) {
+        print(outline.value.text)
+      }
+    }
+  }
+  ```
+
+  Each one reads a file, so each one raises `std::read` with the log's
+  real directory and name. An empty `log` reads the log this run is
+  writing. To hand a reader to a model, fix the log first, so the model
+  cannot point it at another file:
+  `logTraces.partial(log: "./statelog.jsonl")`.
+
 ## Types
 
 ### StatelogEvalValue
@@ -50,7 +81,7 @@ export type StatelogEvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L94))
 
 ### StatelogEvalRecord
 
@@ -78,7 +109,199 @@ export type StatelogEvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L102))
+
+### StatelogTraceSelection
+
+Which traces of a log to read. Give at most one of `trace` and `all`;
+ `last` and `since` can go together. A field left out, or set to `null`
+ or `""`, does not count. With none, `logTraces` reads the 20 most recent traces and
+ the other readers read the most recent one.
+
+```ts
+/** Which traces of a log to read. Give at most one of `trace` and `all`;
+ *  `last` and `since` can go together. A field left out, or set to `null`
+ *  or `""`, does not count. With none, `logTraces` reads the 20 most recent traces and
+ *  the other readers read the most recent one. */
+export type StatelogTraceSelection = {
+  trace?: string;
+  last?: number;
+  since?: string;
+  all?: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L264))
+
+### StatelogTrace
+
+One run in a log, as `agency logs traces --json` describes it.
+
+```ts
+/** One run in a log, as `agency logs traces --json` describes it. */
+export type StatelogTrace = {
+  traceId: string;
+  startedAt?: string;
+  workingMs?: number;
+  costUsd: number;
+  tokens: number;
+  calls: number;
+  agentName?: string;
+  hasError: boolean;
+  otherErrors: number;
+  toolCalls: number;
+  toolsFailed: number;
+  toolsRejected: number;
+  toolsUnfinished: number;
+  ask?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L272))
+
+### StatelogTraceList
+
+The traces `logTraces` picked, newest first.
+
+```ts
+/** The traces `logTraces` picked, newest first. */
+export type StatelogTraceList = {
+  log: string;
+  total: number;
+  older: number;
+  traces: StatelogTrace[];
+  text: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L290))
+
+### StatelogRow
+
+One row of an outline. `address` is the value `logRow` takes.
+
+```ts
+/** One row of an outline. `address` is the value `logRow` takes. */
+export type StatelogRow = {
+  address: string;
+  rowId: string;
+  kind: string;
+  depth: number;
+  header: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L299))
+
+### StatelogRows
+
+A trace's rows.
+
+```ts
+/** A trace's rows. */
+export type StatelogRows = {
+  rows: StatelogRow[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L308))
+
+### StatelogOutlinedTrace
+
+A trace's fields with its rows beside them.
+
+```ts
+/** A trace's fields with its rows beside them. */
+export type StatelogOutlinedTrace = StatelogTrace & StatelogRows
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L313))
+
+### StatelogOutline
+
+What `logOutline` returns.
+
+```ts
+/** What `logOutline` returns. */
+export type StatelogOutline = {
+  log: string;
+  traces: StatelogOutlinedTrace[];
+  text: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L316))
+
+### StatelogHit
+
+One row that matched a search.
+
+```ts
+/** One row that matched a search. */
+export type StatelogHit = {
+  address: string;
+  traceId: string;
+  rowId: string;
+  kind: string;
+  header: string;
+  matches: number;
+  snippet: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L323))
+
+### StatelogSearchResult
+
+What `logSearch` returns.
+
+```ts
+/** What `logSearch` returns. */
+export type StatelogSearchResult = {
+  log: string;
+  pattern: string;
+  tracesSearched: number;
+  matched: number;
+  omitted: number;
+  hits: StatelogHit[];
+  text: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L334))
+
+### StatelogExpandedRow
+
+One row, expanded as the logs viewer shows it.
+
+```ts
+/** One row, expanded as the logs viewer shows it. */
+export type StatelogExpandedRow = {
+  address: string;
+  kind: string;
+  header: string;
+  text: string;
+  truncated: boolean;
+  events: Record<string, any>[];
+  providerItems?: Record<string, any>[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L345))
+
+## Effects
+
+### std::read
+
+```ts
+@alwaysUnder(dir)
+effect std::read {
+  dir: string;
+  filename: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L88))
 
 ## Functions
 
@@ -98,7 +321,7 @@ Use with the host's `onEmit` callback to deliver progress or other application e
 |---|---|---|---|
 | data | `any` |  | The payload the host's `onEmit` callback should receive. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L122))
 
 ### setAgentName
 
@@ -118,7 +341,7 @@ Call once near startup so the runs explorer and statelog's eval pages
 |---|---|---|---|
 | name | `string` |  | Use 1–200 ASCII letters, digits, ".", "_", "-", or "/", with no empty, ".", or ".." path segments. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L136))
 
 ### turnStart
 
@@ -142,7 +365,7 @@ Records a `turnStart` event. The logs viewer splits a session into turns
 |---|---|---|---|
 | message | `string` |  | The message the person sent. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L154))
 
 ### evalValue
 
@@ -167,7 +390,7 @@ Mark the actual input at the point your agent receives it, so evaluators
 |---|---|---|---|
 | value | `any` |  | A JSON-serializable value representing the input the user supplied. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L173))
 
 ### evalOutput
 
@@ -192,7 +415,7 @@ Use when the response to grade differs from the entry node's return
 |---|---|---|---|
 | value | `any` |  | A JSON-serializable value representing the response the user receives. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L192))
 
 ### evalRecord
 
@@ -219,7 +442,7 @@ Inspect a previous run from Agency code without invoking the CLI.
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L207))
 
 ### evalValues
 
@@ -244,7 +467,7 @@ Read the inputs used for evaluation without the full run record.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L221))
 
 ### evalOutputs
 
@@ -270,7 +493,7 @@ Read all outputs used for evaluation, preserving their order.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L188))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L236))
 
 ### finalEvalOutput
 
@@ -295,4 +518,147 @@ Select the last entry from `evalOutputs` for a judge that needs one answer.
 
 **Returns:** `StatelogEvalValue | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L250))
+
+### logTraces
+
+```ts
+logTraces(
+  log: string = "",
+  select: StatelogTraceSelection = {},
+  errorsOnly: boolean = false,
+): Result<StatelogTraceList> raises <std::read>
+```
+
+List the runs in a statelog file, newest first.
+
+List the traces in a log, newest first: when each started, how long it
+  worked, what it cost, and what went wrong. The same list as
+  `agency logs traces`.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| log | `string` | "" | The statelog file, relative to the working directory or absolute. Empty reads this run's own log. |
+| select | [StatelogTraceSelection](#statelogtraceselection) | {} | Which traces: trace (an id or unique prefix), last (how many), since (30m, 2h, 3d, or an ISO date), or all. |
+| errorsOnly | `boolean` | false | Keep only the traces that logged an error, which includes every failed tool call. |
+
+**Returns:** `Result<StatelogTraceList>`
+
+**Throws:** `std::read`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L380))
+
+### logOutline
+
+```ts
+logOutline(
+  log: string = "",
+  select: StatelogTraceSelection = {},
+  approvals: boolean = false,
+  admin: boolean = false,
+): Result<StatelogOutline> raises <std::read>
+```
+
+Print every row of a trace in a statelog file, with the address of each.
+
+Every row of a trace with its address, as `agency logs outline` prints
+  it. Pass an address to `logRow` to open that row.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| log | `string` | "" | The statelog file, relative to the working directory or absolute. Empty reads this run's own log. |
+| select | [StatelogTraceSelection](#statelogtraceselection) | {} | Which traces: trace (an id or unique prefix), last (how many), since (30m, 2h, 3d, or an ISO date), or all. With none, the most recent. |
+| approvals | `boolean` | false | Also show approved interrupts, which are hidden by default. |
+| admin | `boolean` | false | Also show the handler decisions under each interrupt. |
+
+**Returns:** `Result<StatelogOutline>`
+
+**Throws:** `std::read`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L404))
+
+### logSearch
+
+```ts
+logSearch(
+  pattern: string,
+  log: string = "",
+  select: StatelogTraceSelection = {},
+  kinds: string[] = [],
+  regex: boolean = false,
+  caseSensitive: boolean = false,
+  limit: number = 30,
+  context: number = 60,
+): Result<StatelogSearchResult> raises <std::read>
+```
+
+Find the rows of a statelog file that mention some text.
+
+Find the rows whose own text matches, as `agency logs search` does. A
+  word repeated in the history of every later LLM call is found once, on
+  the row where it first appeared.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| pattern | `string` |  | The text to find; a JavaScript regular expression when regex is true. |
+| log | `string` | "" | The statelog file, relative to the working directory or absolute. Empty reads this run's own log. |
+| select | [StatelogTraceSelection](#statelogtraceselection) | {} | Which traces: trace (an id or unique prefix), last (how many), since (30m, 2h, 3d, or an ISO date), or all. With none, the most recent. |
+| kinds | `string[]` | [] | Only these kinds of row: user, call, tool, hosted, error. Empty searches every kind. |
+| regex | `boolean` | false | Read the pattern as a regular expression. |
+| caseSensitive | `boolean` | false | Match case; by default case is ignored. |
+| limit | `number` | 30 | Return at most this many rows. |
+| context | `number` | 60 | Characters of snippet on each side of the match. |
+
+**Returns:** `Result<StatelogSearchResult>`
+
+**Throws:** `std::read`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L431))
+
+### logRow
+
+```ts
+logRow(
+  address: string,
+  log: string = "",
+  maxChars: number = 0,
+  events: boolean = true,
+): Result<StatelogExpandedRow> raises <std::read>
+```
+
+Open one row of a statelog file by its address.
+
+Open one row by the address `logOutline` or `logSearch` gave, as the logs
+  viewer shows it, with the statelog events behind it. `maxChars` bounds
+  `text`, the marker included. `events` is not capped, and for an LLM call
+  it holds the call's whole message history, so pass `events: false` when
+  a model calls this as a tool.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| address | `string` |  | A row address, `traceId/rowId`, as logOutline and logSearch return it. |
+| log | `string` | "" | The statelog file, relative to the working directory or absolute. Empty reads this run's own log. |
+| maxChars | `number` | 0 | Cut the text to at most this many characters, 0 for no cap or at least 100. |
+| events | `boolean` | true | Include the statelog events behind the row, and a hosted row's provider items. They can be very large. |
+
+**Returns:** `Result<StatelogExpandedRow>`
+
+**Throws:** `std::read`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L468))

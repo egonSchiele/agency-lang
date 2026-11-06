@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Command } from "@/vendor/commander/index.js";
 
-import { queryDeps, queryDir, writeLog } from "./queryFixture.js";
+import { queryDeps, queryDir, writeLog } from "@/logsQuery/queryFixture.js";
 import { addLogsQueryCommands } from "./register.js";
 
 describe("addLogsQueryCommands", () => {
@@ -98,6 +98,19 @@ describe("addLogsQueryCommands", () => {
   it("a bad --last is refused with exit code 1", async () => {
     await parse("outline", "--last", "0");
     expect(printed.at(-1)).toContain("--last needs a positive whole number");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("text that is not a number is refused for each count flag", async () => {
+    await parse("traces", "--last", "abc");
+    expect(printed.at(-1)).toBe('--last needs a positive whole number, not "abc"\n');
+    await parse("search", "module", "--limit", "2.5");
+    expect(printed.at(-1)).toBe('--limit needs a positive whole number, not "2.5"\n');
+  });
+
+  it("a --kind with no names in it is refused", async () => {
+    await parse("search", "module", "--kind", ",");
+    expect(printed.at(-1)).toContain("--kind takes a comma-separated list of: user, call");
     expect(process.exitCode).toBe(1);
   });
 });

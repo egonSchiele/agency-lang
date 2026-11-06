@@ -221,7 +221,10 @@ function interruptGroups(nodes: TreeNode[]): TreeNode[][] {
   }
   return Object.values(groups);
 }
-function toolEvidence(node: TreeNode, index: TreeIndex): ToolEvidence {
+/** What a tool's own span recorded about how it ended: a completion, its
+ *  errors, and its interrupts, leaving out the nodes of nested tools.
+ *  `classifyTool` turns it into a status. */
+export function toolEvidence(node: TreeNode, index: TreeIndex): ToolEvidence {
   const owned = ownedToolNodes(node, index);
   return {
     completed: owned.some((child) => child.event!.data.type === "toolCall"),

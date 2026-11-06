@@ -2,7 +2,7 @@
 // with the address `agency logs session show` opens. A row's own text is
 // what the transcript shows on it, so a word repeated in every later LLM
 // call's history is found once, where it first appeared.
-import { oneLine } from "@/cli/runDirectory/table.js";
+import { oneLine } from "@/runDirectory/table.js";
 import { formatAddress } from "@/logsViewer/address.js";
 import {
   matcherFor,
@@ -11,7 +11,11 @@ import {
   type Matcher,
   type SearchKind,
 } from "@/logsViewer/rowSearch.js";
-import { parseCount, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
+import {
+  countProblem,
+  type OptionNames,
+  type TraceSelectionFlags,
+} from "@/runDirectory/traceSelection.js";
 
 import { HEADER_CHARS } from "./outline.js";
 import {
@@ -33,11 +37,12 @@ export type SearchOptions = TraceSelectionFlags & {
   pattern: string;
   log?: string;
   json: boolean;
-  kind?: string;
+  /** Undefined searches every kind. */
+  kinds?: string[];
   regex: boolean;
   caseSensitive: boolean;
-  limit?: string;
-  context?: string;
+  limit?: number;
+  context?: number;
 };
 
 type PrintedHit = {
@@ -59,33 +64,28 @@ type SearchFlags = {
   matcher: Matcher;
 };
 
-function searchFlagsFrom(options: SearchOptions): SearchFlags | { error: string } {
-  const limit = parseCount("--limit", options.limit);
-  const context = parseCount("--context", options.context);
-  const kinds = kindsFrom(options.kind);
+function searchFlagsFrom(
+  options: SearchOptions,
+  names: OptionNames,
+): SearchFlags | { error: string } {
+  const limit = options.limit ?? DEFAULT_SEARCH_LIMIT;
+  const context = options.context ?? DEFAULT_SNIPPET_CONTEXT;
+  const problem =
+    countProblem(names.limit, limit) ??
+    countProblem(names.context, context) ??
+    kindsProblem(options.kinds, names);
+  if (problem !== undefined) {
+    return { error: problem };
+  }
   const matcher = matcherFor(options.pattern, options);
-  if ("error" in limit) {
-    return limit;
-  }
-  if ("error" in context) {
-    return context;
-  }
-  if ("error" in kinds) {
-    return kinds;
-  }
   if ("error" in matcher) {
     return matcher;
   }
-  return {
-    limit: limit.value ?? DEFAULT_SEARCH_LIMIT,
-    context: context.value ?? DEFAULT_SNIPPET_CONTEXT,
-    kinds: kinds.value,
-    matcher,
-  };
+  return { limit, context, kinds: options.kinds as SearchKind[] | undefined, matcher };
 }
 
 export async function logsSearch(options: SearchOptions, deps: QueryDeps): Promise<QueryResult> {
-  const flags = searchFlagsFrom(options);
+  const flags = searchFlagsFrom(options, deps.names);
   if ("error" in flags) {
     return refusal(flags.error);
   }
@@ -114,7 +114,7 @@ export async function logsSearch(options: SearchOptions, deps: QueryDeps): Promi
     if (omitted > 0) {
       lines.push(
         "",
-        `${countOf(omitted, "more row")} matched. Narrow with --trace, --kind, or a longer pattern, or raise --limit.`,
+        `${countOf(omitted, "more row")} matched. Narrow with ${deps.names.trace}, ${deps.names.kind}, or a longer pattern, or raise ${deps.names.limit}.`,
       );
     }
     return {
@@ -137,22 +137,14 @@ function hitLines(hit: PrintedHit): string[] {
   return [`${hit.address}${count}`, `  ${hit.header}`, `  ${hit.snippet}`];
 }
 
-/** `--kind user,tool` as a list, checked against the kinds search knows. */
-function kindsFrom(
-  text: string | undefined,
-): { value: SearchKind[] | undefined } | { error: string } {
-  if (text === undefined) {
-    return { value: undefined };
+/** Why the kinds are not all kinds search knows; undefined when they are. */
+function kindsProblem(kinds: string[] | undefined, names: OptionNames): string | undefined {
+  const unknown = (kinds ?? []).filter((name) => !(SEARCH_KINDS as string[]).includes(name));
+  if (unknown.length === 0) {
+    return undefined;
   }
-  const names = text
-    .split(",")
-    .map((name) => name.trim())
-    .filter((name) => name !== "");
-  const unknown = names.filter((name) => !(SEARCH_KINDS as string[]).includes(name));
-  if (names.length === 0 || unknown.length > 0) {
-    return {
-      error: `--kind takes a comma-separated list of: ${SEARCH_KINDS.join(", ")}${unknown.length > 0 ? ` (not ${unknown.join(", ")})` : ""}`,
-    };
-  }
-  return { value: names as SearchKind[] };
+  return `${names.kind} takes these kinds: ${KINDS_LIST} (not ${unknown.join(", ")})`;
 }
+
+/** The kinds search knows, for a message. */
+export const KINDS_LIST = SEARCH_KINDS.join(", ");

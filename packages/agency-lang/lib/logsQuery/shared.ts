@@ -1,14 +1,20 @@
-// What `agency logs traces`, `outline`, and `search` share: finding and
-// reading the log, picking traces, and the line every command prints first.
-// Each command is a function from parsed options to a `QueryResult`; only
-// `register.ts` touches the process.
+// What `agency logs traces`, `outline`, and `search` share: opening the
+// log, picking traces, and the line every command prints first. Each
+// command is a function from parsed options to a `QueryResult`, called by
+// the CLI (`lib/cli/logsQuery/register.ts`, the only part that touches the
+// process) and by `std::statelog` (`lib/stdlib/statelogReaders.ts`). Which
+// log a command reads, and how its bytes are read, is the caller's:
+// `QueryDeps.loadLog`.
 import * as path from "path";
 
-import { chooseLog, type LiveSession, type LogDeps } from "@/cli/logsSession/target.js";
-import { traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
+import { TOOL_TROUBLE, traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
 import { buildForest } from "@/logsViewer/tree.js";
 import type { TreeNode } from "@/logsViewer/types.js";
-import { selectTraces, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
+import {
+  selectTraces,
+  type OptionNames,
+  type TraceSelectionFlags,
+} from "@/runDirectory/traceSelection.js";
 import type { Trace } from "@/runDirectory/traces.js";
 
 /** `outline` and `search` read the most recent trace when no flag picks. */
@@ -21,8 +27,8 @@ export type QueryResult = { text: string; json: unknown; exitCode: number };
  *  address a command prints is one `show` resolves. */
 export type OpenedTrace = { traceId: string; root: TreeNode; summary: TraceSummary };
 
-/** The log a query reads, found by `chooseLog`. The first line of every
- *  command's text names `logPath`. */
+/** The log a query reads. The first line of every command's text names
+ *  `logPath`. */
 export type OpenedLog = {
   logPath: string;
   /** `logPath` relative to the current directory when it is inside it,
@@ -31,26 +37,32 @@ export type OpenedLog = {
   traces: OpenedTrace[];
 };
 
-export type QueryDeps = LogDeps & {
-  /** The open viewers, probed as the session commands probe them, so a
-   *  query reads the log the one open viewer has. A query never talks to
-   *  the viewer itself. */
-  probe(): Promise<LiveSession[]>;
-  readLog(logPath: string): Trace[];
+/** A log's absolute path and its traces, as `loadLog` read them. */
+export type LoadedLog = { logPath: string; traces: Trace[] };
+
+export type QueryDeps = {
+  /** The directory `shown` paths are relative to. */
+  cwd: string;
+  /** The log this `log` option names, read, or why there is none. The CLI
+   *  chooses it as the session commands do (`lib/cli/logsQuery/cliLog.ts`); the standard
+   *  library reads the one log the caller named and approved. */
+  loadLog(log: string | undefined): Promise<LoadedLog | { refused: string }>;
   now(): number;
+  /** How messages spell each option: `--last` for the CLI, `last` for
+   *  `std::statelog`. */
+  names: OptionNames;
 };
 
 export async function openQueryLog(
   log: string | undefined,
   deps: QueryDeps,
 ): Promise<OpenedLog | { refused: string }> {
-  const choice = chooseLog(log, log === undefined ? await deps.probe() : [], deps);
-  if (choice.kind === "refused") {
-    return { refused: choice.reason };
+  const loaded = await deps.loadLog(log);
+  if ("refused" in loaded) {
+    return loaded;
   }
-  const logPath =
-    choice.kind === "session" ? path.resolve(choice.session.record.logPath) : choice.logPath;
-  const traces = deps.readLog(logPath).map((trace): OpenedTrace => {
+  const { logPath } = loaded;
+  const traces = loaded.traces.map((trace): OpenedTrace => {
     const root = buildForest(trace.events)[0];
     return { traceId: trace.traceId, root, summary: traceSummaries([root], {})[0] };
   });
@@ -84,6 +96,7 @@ export async function withPickedTraces(
   const selection = selectTraces(pickable, options, {
     defaultLast: pick.defaultLast,
     now: deps.now(),
+    names: deps.names,
   });
   if (selection.kind === "refused") {
     return refusal(selection.reason);
@@ -116,6 +129,22 @@ export function traceRecord(summary: TraceSummary): Record<string, unknown> {
     calls: summary.rounds,
     agentName: summary.agentName ?? null,
     hasError: summary.hasError,
+    otherErrors: summary.otherErrors,
+    toolCalls: summary.toolCalls,
+    ...Object.fromEntries(TOOL_TROUBLE.map((trouble) => [trouble.field, summary[trouble.field]])),
     ask: summary.ask ?? null,
   };
+}
+
+/** What went wrong in a trace, for the marker column and the summary line:
+ *  `error, 2 failed, 1 rejected`. `error` is an error no failed tool call
+ *  accounts for; a failed tool's own error is in its count. A clean trace
+ *  gives "". */
+export function troubleText(summary: TraceSummary): string {
+  return [
+    ...(summary.otherErrors > 0 ? ["error"] : []),
+    ...TOOL_TROUBLE.filter((trouble) => summary[trouble.field] > 0).map(
+      (trouble) => `${summary[trouble.field]} ${trouble.word}`,
+    ),
+  ].join(", ");
 }

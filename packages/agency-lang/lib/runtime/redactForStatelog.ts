@@ -185,13 +185,48 @@ function carriesCheckpoint(value: unknown): value is Record<string, unknown> {
   return isInterrupt || isFailure;
 }
 
+/** Query parameter names whose values are secrets. Matched whole and without
+ *  regard to case. */
+const SECRET_QUERY_PARAMS = [
+  "api_key",
+  "apikey",
+  "access_token",
+  "token",
+  "key",
+  "client_secret",
+  "signature",
+];
+
+/** A secret parameter after `?` or `&`, up to the end of its value. */
+const SECRET_QUERY_VALUE = new RegExp(
+  `([?&](?:${SECRET_QUERY_PARAMS.join("|")})=)[^&#\\s"'<>]+`,
+  "gi",
+);
+
+/**
+ * Replace the value of a secret query parameter with the redaction marker:
+ * `series?id=GDP&api_key=abc123` is logged as
+ * `series?id=GDP&api_key=[REDACTED]`.
+ *
+ * Some services take their key only in the URL, and a fetch logs its URL in
+ * its interrupt payload. The string need not be a whole URL, because
+ * `std::http` takes the path and its query apart from the base URL.
+ */
+export const urlSecretRule: ScrubRule = (raw) => {
+  if (typeof raw !== "string" || !raw.includes("=")) {
+    return undefined;
+  }
+  const scrubbed = raw.replace(SECRET_QUERY_VALUE, `$1${REDACTED}`);
+  return scrubbed === raw ? undefined : scrubbed;
+};
+
 /** The rules every statelog event goes through, in order: the redact tag
  *  first, so a redacted picture shows its redaction marker, then binary data,
- *  then checkpoints. */
+ *  then secrets in a URL's query, then checkpoints. */
 export function statelogScrubRules(globals: GlobalStore | undefined): ScrubRule[] {
   return globals === undefined
-    ? [omitBinaryRule, omitCheckpointRule]
-    : [redactRule(globals), omitBinaryRule, omitCheckpointRule];
+    ? [omitBinaryRule, urlSecretRule, omitCheckpointRule]
+    : [redactRule(globals), omitBinaryRule, urlSecretRule, omitCheckpointRule];
 }
 
 /** The fields every statelog line has. The rules apply to `data` alone. */

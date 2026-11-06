@@ -171,7 +171,16 @@ place, or undefined to leave the value to the next rule.
    filler. The mime type comes from the `data:` header, or from a string
    `mimeType` on the object holding the bytes, which is where Agency's
    attachment shape `{ kind: "base64", base64, mimeType }` keeps it.
-3. `omitCheckpointRule` replaces the `checkpoint` of an interrupt
+3. `urlSecretRule` replaces the value of a secret query parameter with
+   `[REDACTED]`, so `series?id=GDP&api_key=abc123` is logged as
+   `series?id=GDP&api_key=[REDACTED]`. Some services take their key only in
+   the URL, and a fetch logs its URL in its interrupt payload. The names are
+   `api_key`, `apikey`, `access_token`, `token`, `key`, `client_secret`, and
+   `signature`, matched whole and without regard to case, after a `?` or an
+   `&`. The string does not have to be a whole URL, because `std::http` takes
+   the path and its query apart from the base URL. So prose that quotes
+   `?key=...` is rewritten in the log too.
+4. `omitCheckpointRule` replaces the `checkpoint` of an interrupt
    (`type: "interrupt"`) or of a failure result
    (`__type: "resultType", success: false`) with `[checkpoint 3]`. A
    checkpoint holds every frame's arguments and locals, so one paused run

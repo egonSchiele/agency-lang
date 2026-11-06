@@ -6,7 +6,9 @@ import {
   omitBinaryRule,
   omitCheckpointRule,
   redactRule,
+  statelogScrubRules,
   stringifyStatelogEvent,
+  urlSecretRule,
   type ScrubRule,
 } from "./redactForStatelog.js";
 import { DEFAULT_MAX_VALUE_CHARS } from "./trimStatelogEvent.js";
@@ -238,6 +240,64 @@ describe("stringifyStatelogEvent", () => {
     );
     expect(text).not.toContain(picture);
     expect(JSON.parse(text).data.args.picture).toBe("[base64: 6000 bytes omitted]");
+  });
+
+  it("redacts a secret in a URL query with or without a tag store", () => {
+    const event = envelope({
+      type: "handlerDecision",
+      interrupt: { data: { path: "s?api_key=SENTINEL" } },
+    });
+    for (const rules of [statelogScrubRules(new GlobalStore()), statelogScrubRules(undefined)]) {
+      const text = stringifyStatelogEvent(event, rules, DEFAULT_MAX_VALUE_CHARS);
+      expect(text).not.toContain("SENTINEL");
+      expect(JSON.parse(text).data.interrupt.data.path).toBe("s?api_key=[REDACTED]");
+    }
+  });
+});
+
+describe("urlSecretRule", () => {
+  const scrub = (body: unknown): unknown =>
+    JSON.parse(JSON.stringify(body, makeScrubReplacer([urlSecretRule])));
+
+  it("redacts a secret parameter in a path and keeps the other parameters", () => {
+    const interrupt = {
+      effect: "std::http::fetchJSON",
+      data: {
+        baseUrl: "https://api.stlouisfed.org/fred",
+        path: "series?series_id=GDP&api_key=SENTINEL&file_type=json",
+      },
+    };
+    expect(scrub(interrupt)).toEqual({
+      effect: "std::http::fetchJSON",
+      data: {
+        baseUrl: "https://api.stlouisfed.org/fred",
+        path: "series?series_id=GDP&api_key=[REDACTED]&file_type=json",
+      },
+    });
+  });
+
+  it.each(["api_key", "apikey", "access_token", "token", "key", "client_secret", "signature"])(
+    "redacts %s as the first parameter of a whole URL",
+    (name) => {
+      expect(scrub(`https://example.com/data?${name}=SENTINEL#top`)).toBe(
+        `https://example.com/data?${name}=[REDACTED]#top`,
+      );
+    },
+  );
+
+  it("redacts every secret parameter in one string, whatever its case", () => {
+    expect(scrub("see https://a.com/x?API_KEY=one&n=2 and https://b.com/y?n=1&Token=two")).toBe(
+      "see https://a.com/x?API_KEY=[REDACTED]&n=2 and https://b.com/y?n=1&Token=[REDACTED]",
+    );
+  });
+
+  it("leaves a parameter whose name only ends with a secret name", () => {
+    const url = "https://example.com/search?monkey=banana&sort_key=name&page=2";
+    expect(scrub(url)).toBe(url);
+  });
+
+  it("leaves text with no query parameter", () => {
+    expect(scrub({ note: "key=value", n: 1 })).toEqual({ note: "key=value", n: 1 });
   });
 });
 

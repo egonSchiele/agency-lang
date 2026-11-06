@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { _listSessions, _saveSession, _readCheckpointFile } from "./agentSessions.js";
+import {
+  _listSessions,
+  _saveSession,
+  _readCheckpointFile,
+  matchingMessages,
+  queryWords,
+  type TranscriptMessage,
+} from "./agentSessions.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 async function withDir(fn: (dir: string) => Promise<void>): Promise<void> {
@@ -46,4 +53,41 @@ describe("saved sessions", () => {
       expect(await _listSessions(dir)).toEqual([]);
       expect(await _readCheckpointFile(dir, "x")).toBeNull();
     }));
+});
+
+describe("session search", () => {
+  const said = (role: "user" | "assistant", content: string): TranscriptMessage => ({
+    role,
+    content,
+  });
+
+  it("splits a query into lower-cased words", () => {
+    expect(queryWords("  Grep   FLAGS ")).toEqual(["grep", "flags"]);
+  });
+
+  it("matches a message that holds every word, in any case and order", () => {
+    const messages = [
+      said("user", "What did we decide about the grep flags?"),
+      said("assistant", "The Flags for GREP are a rule table."),
+      said("user", "And the grep path?"),
+    ];
+    const contents = matchingMessages(messages, ["grep", "flags"]).map((m) => m.content);
+    expect(contents).toEqual([
+      "The Flags for GREP are a rule table.",
+      "What did we decide about the grep flags?",
+    ]);
+  });
+
+  it("matches nothing for an empty query", () => {
+    expect(matchingMessages([said("user", "anything")], [])).toEqual([]);
+  });
+
+  it("cuts a long message to the text around the first word", () => {
+    const long = `${"a".repeat(500)} needle ${"b".repeat(500)}`;
+    const [match] = matchingMessages([said("assistant", long)], ["needle"]);
+    expect(match.content.startsWith("…")).toBe(true);
+    expect(match.content.endsWith("…")).toBe(true);
+    expect(match.content).toContain(" needle ");
+    expect(match.content.length).toBeLessThan(420);
+  });
 });

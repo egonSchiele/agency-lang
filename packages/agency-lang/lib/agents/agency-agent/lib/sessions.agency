@@ -22,7 +22,9 @@ export type SessionRecord = {
   created: number;
   lastActive: number;
   turns: number;
-  title: string
+  title: string;
+  // The id of the session this one was forked from, when it is a fork.
+  forkedFrom?: string
 }
 
 export static const SESSIONS_DIR = path.join(POLICY_DIR, "sessions")
@@ -96,12 +98,24 @@ export def relativeAge(then: number, nowMs: number): string {
   return "${Math.floor(hours / 24)}d ago"
 }
 
+/** The title to show for a session. A fork is marked, and the mark comes
+  from the record, so a title refresh does not lose it. */
+export def displayTitle(record: SessionRecord): string {
+  if (record.forkedFrom == null || record.title == "") {
+    return record.title
+  }
+  return "${record.title} (fork)"
+}
+
 /** The picker row: `title · 3h ago · 12 turns`. An untitled session
-  shows its id instead. */
+  shows its id instead, and a fork is marked. */
 export def sessionLabel(record: SessionRecord, nowMs: number): string {
-  let title = record.title
+  let title = displayTitle(record)
   if (title == "") {
     title = record.id
+    if (record.forkedFrom != null) {
+      title = "${record.id} (fork)"
+    }
   }
   let turns = "${record.turns} turns"
   if (record.turns == 1) {

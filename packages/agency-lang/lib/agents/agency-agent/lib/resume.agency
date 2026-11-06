@@ -14,6 +14,7 @@ import { _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
 
 import {
   SessionRecord,
+  displayTitle,
   findSession,
   listSessions,
   mostRecentSession,
@@ -60,7 +61,7 @@ export def sessionTitle(): string {
   if (record == null) {
     return ""
   }
-  return record.title
+  return displayTitle(record)
 }
 
 export def markTurnDone() {
@@ -85,6 +86,51 @@ export def renameSession(title: string): string {
   _renamed = true
   _titlePinned = true
   return "Session renamed: ${clean}"
+}
+
+/** The id of the session this run writes to, or "" when it has none. */
+export def currentSessionId(): string {
+  const record = _current
+  if (record == null) {
+    return ""
+  }
+  return record.id
+}
+
+/** The session thread the brain keeps its conversation in. "" in an
+  --incognito run, which has no session. */
+export def conversationSession(): string {
+  return _conversation
+}
+
+/** `/fork`: from here on this run writes to a new session, a copy of the
+  one it was. The original stays on disk as it was last saved. Returns the
+  line to show. The REPL saves after this line. */
+export def forkSession(): string {
+  const record = _current
+  if (record == null && _incognito) {
+    return "Incognito sessions are not saved, so there is nothing to fork."
+  }
+  if (record == null) {
+    return "No session to fork."
+  }
+  if (record.turns == 0) {
+    return "This session has no turns yet, so there is nothing to fork."
+  }
+  const t = now()
+  _current = {
+    id: newSessionId(),
+    cwd: record.cwd,
+    brain: record.brain,
+    created: t,
+    lastActive: t,
+    turns: record.turns,
+    title: record.title,
+    forkedFrom: record.id
+  }
+  // Marks the record changed, so it is saved without a turn.
+  _renamed = true
+  return "Forked. This session is now a copy. The original is still saved; reopen it with: agency agent --resume ${record.id}"
 }
 
 /** An --incognito run has no session: nothing is saved and no title is

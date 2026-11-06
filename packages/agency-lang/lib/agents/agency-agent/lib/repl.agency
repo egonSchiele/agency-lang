@@ -59,6 +59,7 @@ import { configureLocalModel, getResolvedSlots, currentProvider } from "../share
 import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
 
 import {
+  forkSession,
   markTurnDone,
   recordTurn,
   renameSession,
@@ -297,7 +298,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /compact, /paste, /help. Start a line with ! to run a shell command yourself.",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /compact, /fork, /paste, /help. Start a line with ! to run a shell command yourself.",
       )
       return true
     }
@@ -317,6 +318,10 @@ def _runTurn(msg: string): boolean {
     "/rename" => renameSlashCommand("")
     "/image" => imageSlashCommand("")
     "/compact" => compactSlashCommand("")
+    "/fork" => {
+      pushMessage(forkSession())
+      return true
+    }
     _ => {
       if (isShellCommand(trimmed)) {
         return shellCommand(trimmed.slice(1).trim())

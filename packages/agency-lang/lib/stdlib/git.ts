@@ -71,13 +71,13 @@ export async function gitRunImpl(
   return res.stdout;
 }
 
-/** ALS-reading wrapper Agency calls; mirrors `_exec` in shell.ts. */
 /** The flags every git command starts with. safeBash puts the same list on
  *  the git commands it runs through bash, so the two paths cannot drift. */
 export function _gitHardeningFlags(): string[] {
   return [...GIT_HARDENING_FLAGS];
 }
 
+/** ALS-reading wrapper Agency calls; mirrors `_exec` in shell.ts. */
 export async function _gitRun(cwd: string, args: string[]): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
   return gitRunImpl(ctx.host, cwd, args, { signal: ctx.getAbortSignal(stack) });

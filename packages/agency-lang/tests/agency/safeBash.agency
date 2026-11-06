@@ -1953,6 +1953,10 @@ node gitStaysBroad() {
     planOutcome("git stash drop"),
     planOutcome("git stash -u"),
     planOutcome("git stash pop -m x"),
+    planOutcome("git stash -m a --message b"),
+    planOutcome("git add"),
+    planOutcome("git add ~/x"),
+    planOutcome("git log ~/x"),
     planOutcome("git show HEAD -- a.py"),
     planOutcome("git status src"),
     planOutcome("git switch -- main"),
@@ -2014,7 +2018,7 @@ node gitRunsWhatItAsked() {
     planOutcome("git diff -- a.py b.py"),
     gitPlan("git diff > out.patch"),
     executionCommand("git diff > out.patch"),
-    gitPlan("git log > /etc/hosts"),
+    outcomeAndNames("git log > /etc/hosts"),
     executionCommand("git log -n5"),
     executionCommand("git log -n 5"),
     executionCommand("git log -5"),
@@ -2092,6 +2096,9 @@ static const GIT_FIXTURE = __dirname + "/stdlib/__safebash_git__"
   repository above it. */
 static const GIT_NO_REPO = "/tmp/__safebash_git_norepo__"
 
+/** A bare repository: git sees a repository there, and no work tree. */
+static const GIT_BARE = __dirname + "/stdlib/__safebash_git_bare__"
+
 static const GIT_MARKER = "MARKER-ONLY-IN-THE-OUTSIDE-FILE"
 
 /** Run a command through safeBash in a folder, after checking the plan
@@ -2115,13 +2122,16 @@ def fileText(dir: string, name: string): string {
 
 // The claims the git rules rest on are claims about git: what it does
 // with a `--`, with a path outside the repository, with a pathspec, with
-// no repository at all. No plan test can check those, so this runs the
-// real thing in two folders it makes.
+// no repository at all, with a repository that has no work tree. No plan
+// test can check those, so this runs the real thing in folders it makes.
 node gitRunsSafely() {
   remove(GIT_FIXTURE) with approve
   mkdir(GIT_FIXTURE) with approve
   remove(GIT_NO_REPO) with approve
   mkdir(GIT_NO_REPO) with approve
+  remove(GIT_BARE) with approve
+  mkdir(GIT_BARE) with approve
+  bash("git init -q --bare", cwd: GIT_BARE) with approve
   bash("printf '" + GIT_MARKER + "\\n' > outside.txt", cwd: GIT_NO_REPO) with approve
   const setup = "git init -q -b main && printf 'a = 1\\n' > a.py && printf 'b = 1\\n' > b.py && git add a.py b.py && git -c user.name=Test -c user.email=test@example.com commit -q -m 'Add a and b' && printf 'a = 2\\n' > a.py && printf 'b = 2\\n' > b.py"
   bash(setup, cwd: GIT_FIXTURE) with approve
@@ -2133,6 +2143,8 @@ node gitRunsSafely() {
   const log = runNarrow("git log --oneline", GIT_FIXTURE)
   const redirected = runNarrow("git diff > out.patch", GIT_FIXTURE)
   const noRepository = runNarrow("git diff /dev/null " + outside, GIT_NO_REPO)
+  const bare = runNarrow("git diff /dev/null " + outside, GIT_BARE)
+  const gitFolder = runNarrow("git diff /dev/null " + outside, GIT_FIXTURE + "/.git")
 
   const seen = [
     // The pathspec failed, named the model's own text, and changed no file.
@@ -2153,8 +2165,17 @@ node gitRunsSafely() {
     noRepository[0],
     noRepository[1].includes("not a git repository"),
     noRepository[1].includes(GIT_MARKER),
+    // In a bare repository, and inside a `.git` folder, git sees a
+    // repository and no work tree, and the diff did not run either.
+    bare[0],
+    bare[1].includes("must be run in a work tree"),
+    bare[1].includes(GIT_MARKER),
+    gitFolder[0],
+    gitFolder[1].includes("must be run in a work tree"),
+    gitFolder[1].includes(GIT_MARKER),
   ]
   remove(GIT_FIXTURE) with approve
   remove(GIT_NO_REPO) with approve
+  remove(GIT_BARE) with approve
   return seen
 }

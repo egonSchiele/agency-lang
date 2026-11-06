@@ -1994,7 +1994,9 @@ static const SHOW_DEFAULT_REF = "HEAD"
 
 /** One of a git command's words: its text, for a payload, and the word
  the parser produced, for the command that runs. The word keeps the
- model's quoting, so a quoted `'~/x'` stays quoted. */
+ model's quoting, so a quoted `'~/x'` stays quoted. An unquoted `~/x` has
+ no rule: bash would expand it, and the payload would name a path the
+ command does not use. */
 type GitWord = {
   text: string;
   word: Word
@@ -2121,11 +2123,17 @@ def gitWordsCommand(words: Word[]): SimpleCommand {
 
 def gitWordsOf(words: Word[]): Result<GitWord[]> {
   """
-  Pair each word with its text, failing when a word is not fully literal.
+  Pair each word with its text, failing when a word is not fully literal or bash would expand it.
   """
   const texts = literalWords(words)?
   let paired: GitWord[] = []
   for (word, index in words) {
+    // Bash expands a leading `~` in an unquoted word, so the payload's
+    // `~/x` would not be the path git gets. The git tools read the same
+    // text as a folder named `~`.
+    if (tildeModeFor(word) == "expand" && texts[index].startsWith("~")) {
+      return failure("a git argument starts with `~`, which bash would expand")
+    }
     paired.push({ text: texts[index], word: word })
   }
   return success(paired)
@@ -2234,15 +2242,23 @@ def gitPayloads(args: GitArgs): Result<Effect[]> {
     "show" => success([gitShowEffect({ cwd: cwd, ref: firstText(args.refs, SHOW_DEFAULT_REF) })])
     "blame" => success([gitBlameEffect({ cwd: cwd, path: args.paths[0].text })])
     "remote" => success([gitRemoteListEffect({ cwd: cwd })])
-    "add" => success(
-      [gitAddEffect({ cwd: cwd, paths: textsOf(args.paths), all: hasAny(args.plain, ["A", "--all"]) })],
-    )
+    "add" => addEffects(args)
     "switch" => success(
       [gitSwitchEffect({ cwd: cwd, branch: args.names[0].text, create: hasAny(args.plain, ["c", "--create"]) })],
     )
     "restore" => restoreEffects(args)
     _ => failure("no rule for `git ${args.sub}`")
   }
+}
+
+// `git add` with no path and no `-A` stages nothing, so it would be an
+// approval for nothing.
+def addEffects(args: GitArgs): Result<Effect[]> {
+  const all = hasAny(args.plain, ["A", "--all"])
+  if (!all && args.paths.length == 0) {
+    return failure("`git add` with nothing to add")
+  }
+  return success([gitAddEffect({ cwd: args.cwd, paths: textsOf(args.paths), all: all })])
 }
 
 // Only the form that unstages has a rule. The refuse wall refuses every
@@ -2310,9 +2326,15 @@ def gitStashRule(words: Word[], cwd: string, redirects: Redirect[]): Result<Simp
   return success({ effects: effects, command: gitCommand(["stash", action], flagsOnly, "names", redirects) })
 }
 
+// The payload has one message. `-m a --message b` gives git two, and
+// `splitFlags` allows one of each spelling, so the count is checked here.
 def stashEffects(cwd: string, action: string, messages: string[]): Result<Effect[]> {
+  if (!countFits(messages.length, AT_MOST_ONE)) {
+    return failure("`git stash` takes one message")
+  }
   if (action == STASH_PUSH) {
-    return success([gitStashPushEffect({ cwd: cwd, message: messages.join("") })])
+    const message = if (messages.length == 0) then "" else messages[0]
+    return success([gitStashPushEffect({ cwd: cwd, message: message })])
   }
   if (messages.length > 0) {
     return failure("`git stash ${action}` takes no message")
@@ -2421,21 +2443,24 @@ def gitCommand(subcommand: string[], args: GitArgs, kind: GitWords, redirects: R
   }
 }
 
-// `(git rev-parse --is-inside-work-tree >/dev/null && git diff ...)`.
-// When git sees no repository, `rev-parse` fails with "not a git
-// repository" and the diff never runs. The check runs when the command
-// runs, and git answers it: looking for a `.git` folder while planning
-// would be a second guess about what git will do. The parentheses make
-// the pair one unit, so it can be a stage of a pipe.
+// `(git rev-parse --show-toplevel >/dev/null && git diff ...)`.
+// When git sees no work tree, `rev-parse` fails and the diff never runs:
+// "not a git repository" outside one, and "must be run in a work tree"
+// in a bare repository or inside a `.git` folder. `--is-inside-work-tree`
+// would not do, because it prints `false` and exits 0 in those two. The
+// check runs when the command runs, and git answers it: looking for a
+// `.git` folder while planning would be a second guess about what git
+// will do. The parentheses make the pair one unit, so it can be a stage
+// of a pipe.
 def insideRepository(diff: SimpleCommand): Command {
   """
-  Wrap a git diff so it runs only where git sees a repository.
+  Wrap a git diff so it runs only where git sees a work tree.
   """
   const check: SimpleCommand = {
     tag: "simpleCommand",
     assignments: [],
     command: GIT_WORD,
-    args: [...fixedFlagWords(), literalWordOf("rev-parse"), { tag: "flag", flagName: "--is-inside-work-tree" }],
+    args: [...fixedFlagWords(), literalWordOf("rev-parse"), { tag: "flag", flagName: "--show-toplevel" }],
     redirects: [{ tag: "redirect", op: ">", target: { tag: "path", text: "/dev/null" } }]
   }
   return { tag: "parens", command: { tag: "and", left: check, right: diff } }

@@ -81,8 +81,8 @@ chain of such commands joined by `;`, `&&`, or `||` runs them in process
 in order (see "Chains in process" below). An `agency <sub> <file>` line
 runs in-process through `std::agency`.
 
-`bash`: everything else. Narrow when every command was recognized (a git
-command with a rule (see "git" below), a grep of one named file, a read of named files, a listing of named folders, a find, a
+`bash`: everything else. Narrow when every command was recognized: a git
+command with a rule, see "git" below; a grep of one named file, a read of named files, a listing of named folders, a find, a
 program safeBash has no rule for (`std::exec`), a redirect contributing
 `std::write` or `std::read`), broad otherwise.
 
@@ -157,9 +157,12 @@ and the ones that name a program git runs or config it loads
 `GIT_CODE_ENV`). With `GIT_DIR` set, the `cwd` in a git payload would be
 false. The variables that name git's SSH program (`GIT_SSH_COMMAND`,
 `GIT_SSH`, `GIT_PROXY_COMMAND`) are kept, because a person sets those on
-purpose so that `git push` uses a particular key. The git lists live in
-`lib/host/gitEnvironment.ts`, and the git tools remove the same entries
-plus the SSH ones. The list is `SHELL_ENV_REMOVED` in
+purpose so that `git push` uses a particular key. `GIT_CONFIG_GLOBAL`
+and `GIT_CONFIG_NOSYSTEM` are removed with the rest of the prefix, so a
+person who keeps their git config where `GIT_CONFIG_GLOBAL` points will
+see git ignore it in the shell, as the git tools already do. The git
+lists live in `lib/host/gitEnvironment.ts`, and the git tools remove the
+same entries plus the SSH ones. The list is `SHELL_ENV_REMOVED` in
 `lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
 programs in the child read options anywhere on the line. No plan
 changes, because the flag tables that care set `optionsFirst`.
@@ -947,7 +950,7 @@ Writes:
 
 | Command | Effect |
 |---|---|
-| `add <paths>`, `add -A` | `add { cwd, paths, all }` |
+| `add <paths>`, `add -A` | `add { cwd, paths, all }`; a bare `git add` stages nothing and has no rule |
 | `commit -m <msg>` | `commit { cwd, message }` |
 | `commit -am <msg>` | `add { cwd, paths: [], all: true }`, then `commit` |
 | `checkout <ref>` | `checkout { cwd, target, force: false }` |
@@ -955,7 +958,7 @@ Writes:
 | `switch <name>` | `switch { cwd, branch, create: false }` |
 | `branch <name>` | `branchCreate { cwd, branch }` |
 | `branch -d <names>` | one `branchDelete { cwd, branch, force: false }` per name |
-| `stash`, `stash push`, with `-m` | `stashPush { cwd, message }` |
+| `stash`, `stash push`, with one `-m` | `stashPush { cwd, message }` |
 | `stash pop` | `stashPop { cwd }` |
 | `restore --staged <paths>` | `restore { cwd, paths, staged: true }` |
 
@@ -1008,7 +1011,10 @@ git <fixed flags> <subcommand> <flags> <refs> <names> -- <paths>
 3. The refs, names, and paths are the parser's own words, kept as
    `GitWord` beside their text. The text goes in the payload. The word
    goes in the command, so the model's quoting is kept and a quoted
-   `'~/x'` stays quoted.
+   `'~/x'` stays quoted. An unquoted word that starts with `~` has no
+   rule (`gitWordsOf`): bash would expand it, so the payload's `~/x`
+   would not be the path git gets, and the git tools read the same text
+   as a folder named `~`. `git add ~/x` asks `std::bash`.
 4. The `--` is written whenever the subcommand's words are refs or paths,
    including when there are no paths. `git checkout main` runs as `git
    ... checkout main --`. A subcommand whose words are names (`switch`,
@@ -1031,11 +1037,14 @@ model chooses the working directory with `cd`, so the `--` alone is not
 enough for `diff`. A recognized `git diff` runs as:
 
 ```
-(git <fixed flags> rev-parse --is-inside-work-tree > /dev/null && git <fixed flags> diff <flags> <refs> -- <paths>)
+(git <fixed flags> rev-parse --show-toplevel > /dev/null && git <fixed flags> diff <flags> <refs> -- <paths>)
 ```
 
-When git sees no repository, `rev-parse` fails with "not a git
-repository" and the diff never runs. The parentheses make the pair one
+When git sees no work tree, `rev-parse` fails and the diff never runs:
+"not a git repository" outside one, and "this operation must be run in
+a work tree" in a bare repository or inside a `.git` folder.
+`--is-inside-work-tree` would not do, because in those two it prints
+`false` and exits 0. The parentheses make the pair one
 unit, which the parser allows as a stage of a pipe, so `git diff main |
 head` works.
 
@@ -1043,7 +1052,9 @@ The check runs when the command runs, and git answers it. Looking for a
 `.git` folder while planning would be a second guess about what git will
 do: an empty folder named `.git` passes that check, and git still sees no
 repository. No other subcommand needs the check, because each fails by
-itself outside a repository.
+itself outside a repository. `gitRunsSafely` runs the guarded diff in a
+folder with no repository above it, in a bare repository, and inside a
+`.git` folder.
 
 `diff` takes at most one path, and that limit is a safety rule. Two
 paths after `--` is the one spelling that still compares files outside

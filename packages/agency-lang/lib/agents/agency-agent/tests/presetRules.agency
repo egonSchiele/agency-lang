@@ -1,5 +1,3 @@
-// Imported only so the inlined Preset schema can find it (#1283).
-import { LlmOptions } from "../lib/llmOptions.agency"
 import { checkPreset, presetProblems } from "../lib/presetRules.agency"
 
 // Each rule, one passing and one failing case. A node returns the list of

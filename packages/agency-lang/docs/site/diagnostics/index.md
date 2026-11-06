@@ -47,6 +47,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1032](types-aliases.md#ag1032) | `async` must be followed by a call, and `&#123;expr&#125;` is not a call. |
 | [AG1033](types-aliases.md#ag1033) | `&#123;keyword&#125;` runs beside `async &#123;expr&#125;`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `&#123;keyword&#125;`, or use its value before it. |
 | [AG1034](types-aliases.md#ag1034) | Type alias '&#123;alias&#125;' is declared in '&#123;module&#125;' but not imported here (referenced in '&#123;context&#125;'). Import it by name, or write the type out. |
+| [AG1035](types-aliases.md#ag1035) | Type alias '&#123;alias&#125;' lists itself as a member of its own union. It may refer to itself only inside an object, an array, or another structure. |
 
 ## Assignability and checking
 
@@ -184,6 +185,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6043](tools.md#ag6043) | '&#123;name&#125;' is declared as a decorator, but &#123;problem&#125; |
 | [AG6044](tools.md#ag6044) | '&#123;name&#125;' is not a decorator, so '@&#123;name&#125;' cannot go on '&#123;target&#125;'. Declare it as `decorator def &#123;name&#125;(...)`. |
 | [AG6045](tools.md#ag6045) | '&#123;name&#125;' has a decorator's parameters but is not declared as one: a parameter with a default comes before its last two, which only the call record and the block may follow. Declare it as `decorator def &#123;name&#125;(...)`, or put the defaulted parameter last. |
+| [AG6046](tools.md#ag6046) | This `return` leaves the enclosing function. It does not set '&#123;variable&#125;', which holds the thread block's list of messages. To keep a value from the block, assign it to a variable declared before the block. |
 
 ## Static init, config, and imports
 

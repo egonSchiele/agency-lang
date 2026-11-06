@@ -15,6 +15,9 @@ import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/e
 import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
 import { herdrReporter, type HerdrReporter } from "./herdr.js";
+import { buildCompleter, listDirUnder } from "./cliCompleter.js";
+import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
+import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -121,21 +124,23 @@ function saveHistory(
   }
 }
 
-/** Record a just-submitted `/paste` buffer into readline `history` for recall.
- *  A multi-line buffer is stored as a one-line preview (its full text kept in
- *  `expansions`) so readline never recalls a multi-line line buffer; a
- *  single-line buffer is stored verbatim. */
+/** Record a buffer the user wrote outside readline (in `/paste` or in their
+ *  editor) into readline `history` for recall. `command` is the line readline
+ *  recorded in its place, which is removed. A multi-line buffer is stored as
+ *  a one-line preview (its full text kept in `expansions`) so readline never
+ *  recalls a multi-line line buffer; a single-line buffer is stored verbatim. */
 function recordPasteEntry(
   history: string[],
   buffer: string,
   expansions: Record<string, string>,
+  command: string = "/paste",
 ): void {
   if (buffer.includes("\n")) {
     const preview = summarizeMultiline(buffer);
-    recordHistoryEntry(history, preview, "/paste");
+    recordHistoryEntry(history, preview, command);
     expansions[preview] = buffer;
   } else {
-    recordHistoryEntry(history, buffer, "/paste");
+    recordHistoryEntry(history, buffer, command);
   }
 }
 
@@ -936,23 +941,6 @@ function paletteEntries(paletteCommands: unknown): [string, string][] {
 }
 
 /**
- * Build a Node `readline` completer over the slash-command palette.
- * Activates only when the buffer starts with `/`; outside of that
- * we don't want Tab to suggest filenames or anything else. Standard
- * readline behavior: a single hit auto-completes inline; multiple
- * hits display the list. Pairs with the live popup below — the
- * popup is the discovery aid, Tab is the "do it now" mechanism.
- */
-function buildCompleter(entries: [string, string][]): (line: string) => [string[], string] {
-  const keys = entries.map(([k]) => k);
-  return (line: string): [string[], string] => {
-    if (!line.startsWith("/")) return [[], line];
-    const hits = keys.filter((k) => k.startsWith(line));
-    return [hits.length > 0 ? hits : keys, line];
-  };
-}
-
-/**
  * Open the `prompts.autocomplete` modal preloaded with the slash
  * palette. Returns the picked command key (e.g. `/cost`) on success,
  * or `null` if the user cancelled (Ctrl+C / Escape).
@@ -1235,6 +1223,16 @@ function fmtModels(models: string[]): string {
   return `${shown} +${pretty.length - FOOTER_MODEL_CAP} more`;
 }
 
+/** What one turn used, for the footer. */
+function turnStats(startMs: number, before: TokenSnapshot, after: TokenSnapshot): TurnStats {
+  return {
+    elapsedMs: Date.now() - startMs,
+    inputTokens: after.inputTokens - before.inputTokens,
+    outputTokens: after.outputTokens - before.outputTokens,
+    models: modelsUsedThisTurn(before, after),
+  };
+}
+
 async function printFooter(
   run: Run,
   status: unknown,
@@ -1284,14 +1282,19 @@ async function printFooter(
  *    std::policy (interruptChoice → _interruptChoice), reusing THIS readline.
  *    Herdr sees the agent as blocked while it is up.
  *  - `__agencyHerdrSession` — tell Herdr which saved session the pane holds
- *    and how to reopen it (`_sessionOnSubmit` calls it after each save). */
+ *    and how to reopen it (`_sessionOnSubmit` calls it after each save).
+ *  - `__agencyLineWasTyped` — whether the current line was typed and
+ *    entered by hand (`_lineWasTyped` reads it). */
 function installReplGlobals(
   rl: readline.Interface,
   expansions: Record<string, string>,
   stopActiveSpinner: () => void,
   herdr: HerdrReporter,
+  typedLine: TypedLine,
 ): () => void {
   const globalObj = globalThis as any;
+  const prevLineWasTyped = globalObj.__agencyLineWasTyped;
+  globalObj.__agencyLineWasTyped = typedLine.wasTyped;
   const prevStopSpinner = globalObj.__agencyStopSpinner;
   const prevClearHistory = globalObj.__agencyClearHistory;
   const prevInterruptPrompt = globalObj.__agencyInterruptPrompt;
@@ -1312,6 +1315,7 @@ function installReplGlobals(
   globalObj.__agencyHerdrSession = herdr.setSession;
 
   return () => {
+    globalObj.__agencyLineWasTyped = prevLineWasTyped;
     globalObj.__agencyStopSpinner = prevStopSpinner;
     globalObj.__agencyClearHistory = prevClearHistory;
     globalObj.__agencyInterruptPrompt = prevInterruptPrompt;
@@ -1345,11 +1349,10 @@ export async function _runLineRepl(
     // leaving ample time for a real escape sequence's bytes — which arrive
     // in one burst on a local TTY — to be parsed as a sequence.
     escapeCodeTimeout: 50,
-    // Tab completion fallback for the slash-command palette.
-    // Submitting a bare `/` opens the `prompts.autocomplete` picker
-    // (see `openSlashPalette`); the completer is the "Tab to fill"
-    // mechanism for users who prefer the shell idiom.
-    completer: buildCompleter(palette),
+    // Tab completes a slash command or an `@file` mention. Submitting a
+    // bare `/` opens the `prompts.autocomplete` picker (see
+    // `openSlashPalette`); Tab is the shell idiom for the same list.
+    completer: buildCompleter(palette, listDirUnder(run.ctx.host)),
   });
 
   // Color the prompt + everything the user types in bright blue. The
@@ -1406,7 +1409,14 @@ export async function _runLineRepl(
   // Install the process-global hooks this REPL exposes while it runs
   // (spinner-stop, clear-history, sticky interrupt prompt, Herdr session),
   // each bound to this session. Restored on exit via the returned fn.
-  const restoreReplGlobals = installReplGlobals(rl, expansions, stopActiveSpinner, herdr);
+  const typedLine = watchTypedLine(rl as never, useTTY, setImmediate);
+  const restoreReplGlobals = installReplGlobals(
+    rl,
+    expansions,
+    stopActiveSpinner,
+    herdr,
+    typedLine,
+  );
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal. The
@@ -1417,11 +1427,14 @@ export async function _runLineRepl(
     const h = (rl as unknown as { history?: string[] }).history;
     slashHistoryMark = h ? h.length : 0;
   });
+  // Ctrl+G at the prompt opens `$EDITOR` on what was typed.
+  const editorKey = installEditorKey(rl, useTTY);
   try {
     while (true) {
       let line: string;
       herdr.report("idle");
       try {
+        editorKey.atPrompt(true);
         line = await askLine(rl, coloredPrompt);
       } catch {
         // Ctrl+D (EOT) or Ctrl+C at idle: readline emits `close`,
@@ -1435,6 +1448,8 @@ export async function _runLineRepl(
       // Reset SGR so the agent's reply prints in the default color;
       // see comment on `USER_INPUT_COLOR` above for why.
       if (useColor) process.stdout.write(COLOR_RESET);
+      editorKey.atPrompt(false);
+      line = lineOrEdited(rl, editorKey, typedLine, line, expansions);
       let trimmed = line.trim();
       if (trimmed.length === 0) continue;
       // A recalled multi-line paste comes back as its one-line preview (that's
@@ -1470,17 +1485,11 @@ export async function _runLineRepl(
       // entering the editor would hang waiting for keys that never come,
       // so fall through and let `/paste` reach the agent verbatim.
       if (trimmed === "/paste" && useTTY && process.stdin.isTTY) {
-        const buffer = await readMultiline(rl, useColor);
-        if (buffer === null || buffer.trim().length === 0) continue;
+        typedLine.notTyped();
+        const buffer = await pastedBuffer(rl, useColor, expansions);
+        if (buffer === null) continue;
         line = buffer;
         trimmed = buffer;
-        // readline only saw the `/paste` keystrokes, not the buffer the editor
-        // produced — so add it to history ourselves (replacing the `/paste`
-        // command entry) for up-arrow recall and persistence. A multi-line
-        // buffer goes in as a one-line *preview*, with the full text kept in
-        // `expansions`, so readline never recalls a multi-line line buffer.
-        const rlHistory = (rl as unknown as { history?: string[] }).history;
-        if (rlHistory) recordPasteEntry(rlHistory, buffer, expansions);
       }
 
       const banner = line.includes("\n")
@@ -1533,12 +1542,8 @@ export async function _runLineRepl(
         }
         // Still print the footer so the user sees how long the turn ran
         // and whether tokens flowed (useful on both cancel and error).
-        await printFooter(run, status, useColor, {
-          elapsedMs: Date.now() - turnStartMs,
-          inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
-          outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
-          models: modelsUsedThisTurn(tokensBefore, tokensAfter),
-        });
+        const stats = turnStats(turnStartMs, tokensBefore, tokensAfter);
+        await printFooter(run, status, useColor, stats);
         continue;
       } finally {
         teardownCancelKey();
@@ -1560,15 +1565,14 @@ export async function _runLineRepl(
       // mid-sentence" report can be diagnosed at a glance: `↓0`
       // means our render pipeline ate it, non-zero means the LLM
       // actually streamed nothing further.
-      await printFooter(run, status, useColor, {
-        elapsedMs: Date.now() - turnStartMs,
-        inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
-        outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
-        models: modelsUsedThisTurn(tokensBefore, tokensAfter),
-      });
+      const stats = turnStats(turnStartMs, tokensBefore, tokensAfter);
+      await printFooter(run, status, useColor, stats);
     }
   } finally {
+    // Newest wrapper first: each restores the handler it wrapped.
+    editorKey.teardown();
     teardownSlashTrigger();
+    typedLine.teardown();
     replCtx.inputOverride = prevOverride;
     restoreReplGlobals();
     // Persist whatever entries readline accumulated. `rl.history` is
@@ -1584,6 +1588,55 @@ export async function _runLineRepl(
     rl.close();
     await herdr.release();
   }
+}
+
+/** Run the `/paste` editor and return its buffer, or null when the user
+ *  cancelled or entered nothing. The buffer is added to history here,
+ *  replacing the `/paste` entry, because readline only saw the `/paste`
+ *  keystrokes. A multi-line buffer goes in as a one-line preview, with the
+ *  full text kept in `expansions`, so readline never recalls a multi-line
+ *  line buffer. */
+async function pastedBuffer(
+  rl: readline.Interface,
+  useColor: boolean,
+  expansions: Record<string, string>,
+): Promise<string | null> {
+  const buffer = await readMultiline(rl, useColor);
+  if (buffer === null || buffer.trim().length === 0) {
+    return null;
+  }
+  const rlHistory = (rl as unknown as { history?: string[] }).history;
+  if (rlHistory) {
+    recordPasteEntry(rlHistory, buffer, expansions);
+  }
+  return buffer;
+}
+
+/** The line to run. When Ctrl+G submitted `line`, that is what the user
+ *  saved in their editor, or "" when they saved nothing. Otherwise it is
+ *  `line` unchanged. */
+function lineOrEdited(
+  rl: readline.Interface,
+  editorKey: EditorKey,
+  typedLine: TypedLine,
+  line: string,
+  expansions: Record<string, string>,
+): string {
+  const typed = editorKey.takeTyped();
+  if (typed === null) {
+    return line;
+  }
+  typedLine.notTyped();
+  const saved = editInEditor(rl, typed);
+  if (saved === null) {
+    return "";
+  }
+  // readline recorded the typed text, not what the editor saved.
+  const rlHistory = (rl as unknown as { history?: string[] }).history;
+  if (rlHistory) {
+    recordPasteEntry(rlHistory, saved, expansions, typed.trim());
+  }
+  return saved;
 }
 
 /** Promise-wrap `rl.question` + a one-shot `close` listener so a
@@ -1800,6 +1853,14 @@ export const _internal = {
   stickyInterruptPrompt,
   replyOutput,
 };
+
+/** True when the line the REPL is handling was typed and entered by hand
+ *  at its prompt. False for pasted text, a `/paste` buffer, text from the
+ *  editor, and outside a REPL. */
+export function _lineWasTyped(): boolean {
+  const wasTyped = (globalThis as any).__agencyLineWasTyped;
+  return typeof wasTyped === "function" && wasTyped() === true;
+}
 
 export function _clearScreen(): void {
   // ANSI escape code to clear the screen and move the cursor to the top-left.

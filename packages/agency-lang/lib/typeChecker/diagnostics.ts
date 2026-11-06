@@ -148,6 +148,12 @@ export const DIAGNOSTICS = {
     message:
       "Type alias '{alias}' is declared in '{module}' but not imported here (referenced in '{context}'). Import it by name, or write the type out.",
   },
+  typeAliasIsItsOwnMember: {
+    code: "AG1035",
+    severity: "error",
+    message:
+      "Type alias '{alias}' lists itself as a member of its own union. It may refer to itself only inside an object, an array, or another structure.",
+  },
   castUnrelatedTypes: {
     code: "AG1014",
     severity: "error",
@@ -1007,6 +1013,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message:
       "{kind} '{name}' raises effect '{effect}', which exceeds its declared 'raises {declared}'. It is raised by decorator '{decorator}'. Add '{effect}' to the clause.",
+  },
+  returnInThreadValue: {
+    code: "AG6046",
+    severity: "warning",
+    message:
+      "This `return` leaves the enclosing function. It does not set '{variable}', which holds the thread block's list of messages. To keep a value from the block, assign it to a variable declared before the block.",
   },
 } as const;
 

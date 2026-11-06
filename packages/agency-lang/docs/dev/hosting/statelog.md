@@ -163,7 +163,19 @@ place, or undefined to leave the value to the next rule.
    scrubs a redacted string **contained inside** a larger string
    (`GlobalStore.redactContainedStrings`), because a tagged string
    interpolated into a new string would otherwise log verbatim.
-2. `omitBinaryRule` replaces picture bytes, and any other binary data sent as
+2. `urlSecretRule` replaces the value of a secret query parameter with
+   `[REDACTED]`, so `series?id=GDP&api_key=abc123` is logged as
+   `series?id=GDP&api_key=[REDACTED]`. Some services take their key only in
+   the URL, and a fetch logs its URL in its interrupt payload. The names
+   are in `SECRET_QUERY_PARAMS`. They include `api_key`, `token`, `key`,
+   `password`, and the `X-Amz-Signature` and `X-Amz-Security-Token` of a
+   presigned S3 URL. A name is matched whole and without regard to case,
+   after a `?` or an `&`, so `sort_key` is left alone. The string does not
+   have to be a whole URL, because `std::http` takes the path and its query
+   apart from the base URL. So prose that quotes `?key=...` is rewritten in
+   the log too. This rule also runs on a string rule 1 has rewritten, so a
+   string that holds a tagged value and a secret parameter loses both.
+3. `omitBinaryRule` replaces picture bytes, and any other binary data sent as
    base64, with a marker such as `[image/png: 6000 bytes omitted]`. It matches
    a string over 4,096 characters that is a base64 `data:` URI, or that is
    all base64 or base64url characters with both upper- and lowercase letters
@@ -171,7 +183,7 @@ place, or undefined to leave the value to the next rule.
    filler. The mime type comes from the `data:` header, or from a string
    `mimeType` on the object holding the bytes, which is where Agency's
    attachment shape `{ kind: "base64", base64, mimeType }` keeps it.
-3. `omitCheckpointRule` replaces the `checkpoint` of an interrupt
+4. `omitCheckpointRule` replaces the `checkpoint` of an interrupt
    (`type: "interrupt"`) or of a failure result
    (`__type: "resultType", success: false`) with `[checkpoint 3]`. A
    checkpoint holds every frame's arguments and locals, so one paused run

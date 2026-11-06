@@ -478,3 +478,28 @@ A plain def has a decorator's parameters and breaks the parameter-order rule in 
 A parameter without a default may not follow one with a default, because arguments bind by position and an omitted argument can only be a trailing one. A decorator is the exception: its last two parameters, the call record and the block, are filled in by the compiler on every call, so they may come after a default. `def logged(tag: string | null = null, call: Call, block: () -> any)` has exactly that shape, which means it was almost certainly meant to be a decorator and is missing the keyword. Without the keyword it is a plain def, and a plain def with these parameters cannot be called correctly.
 
 **How to fix:** write `decorator def logged(tag: string | null = null, call, block)` if it is a decorator. If it is an ordinary function, move the defaulted parameter after the others.
+
+<a id="ag6046"></a>
+
+## AG6046 — This `return` leaves the enclosing function. It does not set '&#123;variable&#125;', which holds the thread block's list of messages. To keep a value from the block, assign it to a variable declared before the block.
+
+*Default severity: warning.*
+
+The value of a `thread` or `subthread` block is the list of messages the block exchanged. A `return` inside the block does not change that. It returns from the enclosing function or node, as a `return` in an `if` body does. So in
+
+```
+const reply = thread {
+  return llm("Say hello.")
+}
+```
+
+`reply` is never assigned, and the function ends with the model's reply as its own return value. This differs from a `guard` block, where `return` does give the block its value.
+
+**How to fix:** declare a variable before the block and assign it inside:
+
+```
+let reply = ""
+thread {
+  reply = llm("Say hello.")
+}
+```

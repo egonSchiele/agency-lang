@@ -19,6 +19,7 @@ import { projectContextText } from "../../lib/projectContext.agency"
 import { learnedExtras } from "../../lib/learned.agency"
 import { claudeSkillTools } from "../../lib/claudeSkills.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
+import { searchSessions } from "../../lib/sessionSearch.agency"
 import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "./learn.agency"
 import { checkBundledSkill } from "./lib/bundledSkills.agency"
 import { useLlmOptions } from "./llmOptionTools.agency"
@@ -126,6 +127,7 @@ export def turnTools(turnStart: any): any[] {
     ...getGeneratedTools(),
     learnTools.partial(turnStart: turnStart),
     whatIAmDoing,
+    searchSessions,
     question,
     elapsedTime.partial(since: turnStart),
   ]

@@ -1,0 +1,136 @@
+{
+  "tests": [
+    {
+      "nodeName": "plainReply",
+      "description": "try llm(...) gives a success that holds the reply",
+      "input": "",
+      "llmMocks": [
+        {
+          "return": "hello"
+        }
+      ],
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "valueField",
+      "description": "the reply is on the success's value field",
+      "input": "",
+      "llmMocks": [
+        {
+          "return": "hello"
+        }
+      ],
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "returnedFromDef",
+      "description": "return try llm(...) returns the reply from a def",
+      "input": "",
+      "llmMocks": [
+        {
+          "return": "hello"
+        }
+      ],
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "toolInterruptSurfaces",
+      "description": "return try llm(...) in a def: an interrupt raised by a tool the model calls comes out of the def, and after approval the reply comes back",
+      "input": "",
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "lookUp",
+            "args": {
+              "topic": "whales"
+            }
+          }
+        },
+        {
+          "return": "Whales are large."
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Look this up?"
+        }
+      ],
+      "expectedOutput": "\"Whales are large.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "toolInterruptApprovedInCode",
+      "description": "the same def under with approve returns the reply",
+      "input": "",
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "lookUp",
+            "args": {
+              "topic": "whales"
+            }
+          }
+        },
+        {
+          "return": "Whales are large."
+        }
+      ],
+      "expectedOutput": "\"Whales are large.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "toolInterruptInAnAssignment",
+      "description": "const result = try llm(...) in a node: the tool's interrupt surfaces and the reply is assigned after approval",
+      "input": "",
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "lookUp",
+            "args": {
+              "topic": "whales"
+            }
+          }
+        },
+        {
+          "return": "Whales are large."
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Look this up?"
+        }
+      ],
+      "expectedOutput": "\"Whales are large.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

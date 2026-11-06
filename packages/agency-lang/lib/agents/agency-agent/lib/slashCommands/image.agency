@@ -1,0 +1,26 @@
+/** @module
+  @summary `/image`: save the image on the clipboard to a file and attach
+  it to the user's next message.
+*/
+import { pushMessage } from "std::ui/cli"
+
+import { addNote } from "../pendingNotes.agency"
+import { _pasteImage } from "agency-lang/stdlib-lib/clipboard.js"
+
+/** The note that carries the image. The path is on a line of its own, where
+  the attachment scan finds it. */
+export def imageNote(path: string): string {
+  return "An image from my clipboard:\n${path}"
+}
+
+/** Save the clipboard image and note it. False when there was no image. */
+@capabilities(subprocess)
+export def attachClipboardImage(): boolean {
+  const saved: Result<string> = _pasteImage()
+  if (saved is failure(reason)) {
+    pushMessage(color.red(reason))
+    return false
+  }
+  addNote(imageNote(saved.value))
+  return true
+}

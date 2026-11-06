@@ -1,37 +1,75 @@
 /** @module
   @summary The project half of the grounding: date, working directory, and
-  the AGENTS.md block. A leaf module so both the harness (for every brain's
-  grounding) and the code subagent (for its own prompt) can import it.
+  the AGENTS.md block. The harness imports it for every brain's grounding,
+  and the code subagent for its own prompt.
 */
 import { today } from "std::date"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
 
+import { projectFolders } from "./claudeSkills.agency"
+import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
+
+export type InstructionFile = {
+  dir: string;
+  text: string
+}
+
 export def loadAgentsMd(dir: string): string {
   """
-  Read `AGENTS.md` from `dir` if it exists, else `CLAUDE.md`, and return
-  the raw contents; the caller wraps them in a <project_context> block.
-  Returns an empty string if neither exists or the read fails.
+  Read `AGENTS.md` from `dir`, or else `CLAUDE.md`, and return the raw
+  contents; the caller wraps them in a <project_context> block. A file
+  that is missing or cannot be read is passed over, so an `AGENTS.md`
+  that is a symlink to `CLAUDE.md` gives the `CLAUDE.md`. Returns an
+  empty string when neither can be read.
   """
   for (name in ["AGENTS.md", "CLAUDE.md"]) {
     if (exists(name, dir)) {
       const result = read(name, dir) with approve
-      if (isFailure(result)) {
-        return ""
+      if (isSuccess(result)) {
+        return result.value
       }
-      return result.value
     }
   }
   return ""
 }
 
+/** The folders whose instructions apply to `start`, outermost first: the
+  repository root down to `start`. Outside a repository only `start` counts. */
+@capabilities(fileRead)
+export def instructionFolders(start: string): string[] {
+  return [...projectFolders(start, _repositoryAncestors(start))].reverse()
+}
+
+export def loadProjectInstructions(folders: string[]): InstructionFile[] {
+  """
+  Read the instruction file of each folder, in the order given, and leave
+  out the folders that have none.
+  """
+  const loaded: InstructionFile[] = [{
+    dir: folder,
+    text: loadAgentsMd(folder)
+  } for folder in folders]
+  return [file for file in loaded if file.text.trim() != ""]
+}
+
+/** One block per instruction file, each under the folder it came from. The
+  nearest folder is last, so the model reads the most specific rules last. */
+export def instructionsText(files: InstructionFile[]): string {
+  const blocks: string[] = ["Instructions from ${file.dir}:\n${file.text}" for file in files]
+  return blocks.join("\n\n")
+}
+
 export def projectContextText(): string {
   """
   The part of the grounding that is about the project rather than the
-  agent: date, working directory, and the AGENTS.md block. A coder started
-  directly with `--agent code` gets it too.
+  agent: date, working directory, and the AGENTS.md block. The block holds
+  the instructions of the working directory and of each parent up to the
+  repository root. A coder started directly with `--agent code` gets it
+  too.
   """
-  const projectContext = loadAgentsMd(cwd()) with approve
+  const files = loadProjectInstructions(instructionFolders(cwd())) with approve
+  const projectContext = instructionsText(files)
   return """
 
   Current date: ${today()}

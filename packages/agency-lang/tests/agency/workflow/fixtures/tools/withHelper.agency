@@ -18,7 +18,7 @@ export def outer(): Result<Outer> {
 
 export def nested(): Result<Record<string, Outer>> {
   """
-  Return a value whose schema inlines `Outer` and so prints `Inner`, which this module does not import.
+  Return a value whose schema inlines `Outer`, whose body names `Inner`, which this module does not import.
   """
   return success({ first: { inner: { count: 1 } } })
 }

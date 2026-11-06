@@ -1,0 +1,56 @@
+/** @module
+  @summary `!command`: the user runs a shell command themselves. The output
+  is printed, and a note of it goes to the model with the next message.
+*/
+import { pushMessage } from "std::ui/cli"
+
+import { addNote } from "../pendingNotes.agency"
+import { _bash } from "agency-lang/stdlib-lib/shell.js"
+
+// A longer output is cut from the front, since the end of a build or test
+// log is the part that says what happened.
+static const MAX_NOTE_OUTPUT_CHARS = 20000
+
+/** The last `limit` characters of `output`, with a line saying it was cut. */
+export def tailOf(output: string, limit: number): string {
+  if (output.length <= limit) {
+    return output
+  }
+  return "[the first ${output.length - limit} characters are left out]\n${output.slice(output.length - limit)}"
+}
+
+/** What the model reads about a command the user ran. */
+export def shellNote(
+  command: string,
+  output: string,
+  exitCode: number,
+): string {
+  const body = if output.trim() == "" then "(no output)" else tailOf(output.trim(), MAX_NOTE_OUTPUT_CHARS)
+  return "I ran this shell command myself:\n$ ${command}\n${body}\n(exit code ${exitCode})"
+}
+
+// The user typed the command, so it is theirs and not the agent's: it runs
+// with no approval prompt, and the policy is not asked.
+@capabilities(fileRead, subprocess)
+export def shellCommand(command: string): boolean {
+  if (command == "") {
+    pushMessage("Type a shell command after the !, for example: !git status")
+    return true
+  }
+  // Nothing is printed until the command ends, and it has no time limit.
+  pushMessage(color.dim("Running. Press Esc to stop it."))
+  const result = _bash(command, "", 0, "", {
+    blockedCommands: [],
+    allowedPaths: []
+  })
+  const streams = [text for text in [result.stdout, result.stderr] if text.trim() != ""]
+  const output = streams.join("\n")
+  if (output.trim() != "") {
+    pushMessage(output.trimEnd())
+  }
+  if (result.exitCode != 0) {
+    pushMessage(color.dim("exit code ${result.exitCode}"))
+  }
+  addNote(shellNote(command, output, result.exitCode))
+  return true
+}

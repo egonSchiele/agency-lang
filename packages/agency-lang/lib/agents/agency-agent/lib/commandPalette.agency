@@ -2,13 +2,55 @@ import { SkillCommand, commandsDir } from "std::skills"
 import { cwd } from "std::system"
 
 import { claudeSkillCommands } from "./claudeSkills.agency"
+import { instructionFolders } from "./projectContext.agency"
 
 export static const projectCommands = commandsDir("${cwd()}/.claude/commands") with approve
 
+// A project's instructions belong at the repository root, where an agent
+// started in any folder of the project reads them.
+static const INIT_FILE = path.join(instructionFolders(cwd())[0], "AGENTS.md")
+
+static const INIT_PROMPT = """
+Write an instruction file for this project at ${INIT_FILE}. A coding agent
+reads this file at the start of every session, so it should hold what an
+agent cannot work out quickly by itself.
+
+First check what is there. If that folder has no AGENTS.md but has a
+CLAUDE.md, the agent is already reading the CLAUDE.md, and a new AGENTS.md
+would replace it. Say so and stop, unless I asked you to replace it.
+
+Then look at the project: the README, the build and package files, the
+test setup, the directory layout, and any existing instruction files
+(AGENTS.md, CLAUDE.md, .cursorrules). Then write the file. Cover:
+
+1. What the project is, in one or two sentences.
+2. The commands to build, test, lint, and run it, including how to run a
+   single test.
+3. The layout: which directories hold what.
+4. Conventions the code follows that a newcomer would get wrong.
+
+Keep it short. Leave out anything generic, and anything you did not find in
+the project. If AGENTS.md already exists, improve it in place and keep what
+is still correct.
+
+$ARGUMENTS
+"""
+
+/** Commands that ship with the agent and expand to a prompt. */
+export static const promptCommands: SkillCommand[] = [
+  {
+    name: "init",
+    description: "Write an AGENTS.md for this project",
+    argHint: "[what to focus on]",
+    body: INIT_PROMPT
+  },
+]
+
 /** Every `/name` command a turn can expand, in precedence order: the
-  user's Claude Code skills, then the project's `.claude/commands` files. */
+  user's Claude Code skills, then the project's `.claude/commands` files,
+  then the prompt commands that ship with the agent. */
 export def slashCommands(): SkillCommand[] {
-  return [...claudeSkillCommands(), ...projectCommands]
+  return [...claudeSkillCommands(), ...projectCommands, ...promptCommands]
 }
 
 export def builtinPalette(): Record<string, string> {
@@ -18,6 +60,8 @@ export def builtinPalette(): Record<string, string> {
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
     "/rename": "Give this session a title: /rename <title>",
+    "/compact": "Replace the older messages with a summary: /compact [what to keep]",
+    "/fork": "Continue in a copy of this session; the original stays saved",
     "/model": "Switch the model (bare to pick, or slot=model)",
     "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",
@@ -26,6 +70,7 @@ export def builtinPalette(): Record<string, string> {
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
     "/mcp": "List configured MCP servers and their tools",
+    "/image": "Attach the image on the clipboard (macOS)",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
   }

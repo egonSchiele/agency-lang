@@ -24,7 +24,7 @@ lib/eval/newTest/graders.ts    the questions per grader kind as tables; answers 
 lib/eval/newTest/formView.ts   renderForm, bodyLines, scrolledToCursor              (pure)
 lib/eval/newTest/write.ts      validateForm, testJsonFor, gradersJsonText, writeTest, TestWriteError, nextCommands
 lib/eval/gradersJson/schema.ts checkSpec and graderProblem, which the form validates a grader through
-lib/eval/newTest/editor.ts     editorCommand, withTerminalReleased, openInEditor
+lib/utils/editor.ts            editorCommand, withTerminalReleased, openInEditor
 lib/tui/lineEditor.ts          one-line editing keys, shared with the label screen
 lib/tui/untrusted.ts           sanitizeUntrusted and pastedText, shared the same way
 ```

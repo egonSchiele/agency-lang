@@ -12,6 +12,17 @@
       ]
     },
     {
+      "nodeName": "rejectedReadKeepsItsFlag",
+      "description": "a rejected read of a tool module comes back as a workflow problem that still carries the rejected flag",
+      "input": "",
+      "expectedOutput": "[true,null,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "badPathNamesStepAndArgument",
       "description": "a reference to a field the type does not have names the step and argument",
       "input": "",

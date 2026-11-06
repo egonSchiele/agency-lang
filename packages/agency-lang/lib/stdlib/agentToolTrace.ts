@@ -422,6 +422,9 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   remember: two("Remember", nothing),
   recall: one("Recall", (a) => [text(a.query)]),
 
+  // The agent's saved sessions
+  searchSessions: one("Search sessions", (a) => [text(a.query)]),
+
   // Nothing to show: the interrupt prompt or the tool's own print is the display
   saveDraft: silent,
   question: silent,

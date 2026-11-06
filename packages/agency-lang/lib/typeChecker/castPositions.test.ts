@@ -122,8 +122,8 @@ describe("AG1017: a checked cast that can pause, where it cannot be lifted out",
     ).toBe(0);
   });
 
-  it("refuses a tagged cast in a bare method-call statement, which the pass does not extract from", () => {
-    expect(count(`  const xs: any = []\n  xs.push(a as Positive!)`, "AG1017")).toBe(1);
+  it("allows a tagged cast as an argument of a bare method-call statement, which the pass lifts", () => {
+    expect(count(`  const xs: any = []\n  xs.push(a as Positive!)`, "AG1017")).toBe(0);
   });
 
   // AG1017 says "move it to its own line". These two already are, or have no

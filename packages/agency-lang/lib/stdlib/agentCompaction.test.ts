@@ -80,15 +80,22 @@ describe("planCompaction", () => {
     expect(planCompaction(oneLongTurn, 30)).toBeNull();
   });
 
+  it("is null when everything fits, whatever the conversation starts with", () => {
+    // What a compaction leaves when the kept part began mid-turn.
+    const startsMidTurn = [assistant("a1-call"), tool("t1"), assistant("a1"), user("u2")];
+    expect(planCompaction(startsMidTurn, 10000)).toBeNull();
+  });
+
   it("is null when everything fits", () => {
     expect(planCompaction([system, ...turns], 10000)).toBeNull();
   });
 
   it("replaces an earlier summary and hands its text to the next one", () => {
-    const earlier = systemMessage(`${SUMMARY_PREFIX}They fixed the parser.`);
+    const earlier = userMessage(`${SUMMARY_PREFIX}They fixed the parser.`);
     const plan = planCompaction([system, earlier, ...turns], 60);
     expect(labels(plan!.head)).toEqual(["You are an agent"]);
     expect(plan!.previousSummary).toBe("They fixed the parser.");
+    expect(labels(plan!.summarized)).toEqual(["u1", "a1", "u2", "a2-call", "t2", "a2"]);
   });
 
   it("keeps an expiring message in the thread and out of the summary", () => {
@@ -102,14 +109,44 @@ describe("planCompaction", () => {
 });
 
 describe("compactedMessages", () => {
-  it("puts the summary after the system messages and before the kept ones", () => {
+  it("puts the summary after the system messages, as a user message", () => {
     const plan = planCompaction(
       [systemMessage("sys"), user("u1"), assistant("a1"), user("u2")],
       30,
     );
     const messages = compactedMessages(plan!, "They said hello.");
-    expect(messages.map((message) => message.role)).toEqual(["system", "system", "user"]);
+    expect(messages.map((message) => message.role)).toEqual(["system", "user", "user"]);
     expect(messages[1].content).toBe(`${SUMMARY_PREFIX}They said hello.`);
+  });
+
+  it("starts the conversation with a user message when the kept part starts mid-turn", () => {
+    const oneLongTurn = [
+      systemMessage("sys"),
+      user("u1"),
+      assistant("a1-call"),
+      tool("t1"),
+      assistant("a1"),
+    ];
+    const messages = compactedMessages(planCompaction(oneLongTurn, 60)!, "Summary.");
+    expect(messages.map((message) => message.role)).toEqual(["system", "user", "assistant"]);
+  });
+
+  it("reports the new size, not the size the provider counted before", () => {
+    const counted = (label: string) =>
+      assistantMessage(label.padEnd(100, "."), {
+        usage: { inputTokens: 170000, outputTokens: 100 },
+      });
+    const before = [systemMessage("sys"), user("u1"), counted("a1"), user("u2"), counted("a2")];
+    expect(contextTokens(before)).toBe(170100);
+    const after = compactedMessages(planCompaction(before, 60)!, "Short.");
+    expect(labels(after.slice(2))).toEqual(["u2", "a2"]);
+    expect(contextTokens(after)).toBeLessThan(200);
+  });
+
+  it("leaves the original reply's count alone", () => {
+    const reply = assistantMessage("a1", { usage: { inputTokens: 5, outputTokens: 1 } });
+    compactedMessages(planCompaction([user("u0"), assistant("a0"), user("u1"), reply], 10)!, "S");
+    expect(reply.usage).toEqual({ inputTokens: 5, outputTokens: 1 });
   });
 
   it("is smaller than the thread it replaces", () => {

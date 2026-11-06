@@ -16,13 +16,19 @@ const CHARS_PER_TOKEN = 4;
 // reads. The summary needs what a tool found, and rarely the whole output.
 const MAX_TOOL_RESULT_CHARS = 2000;
 
+// The summary is a user message, the first one after the head. It is not a
+// system message: a model wrote it from a transcript that holds web pages
+// and file contents, so it has the standing of the conversation it
+// replaces. It also means the conversation starts with a user message even
+// when the kept part starts with an assistant message, which some
+// providers require.
 export const SUMMARY_PREFIX =
-  "Summary of the conversation so far. The earlier messages were removed to save space.\n\n";
+  "[Summary of the earlier conversation. The messages it covers were removed to save space.]\n\n";
 
 /** How to rewrite a thread: `head`, then a summary of `summarized`, then
  *  `kept`. */
 export type CompactionPlan = {
-  /** The system messages the thread starts with, without an old summary. */
+  /** The system messages the thread starts with. */
   head: smoltalk.Message[];
   /** The summary a previous compaction left, or null. */
   previousSummary: string | null;
@@ -40,8 +46,16 @@ function toolCallsText(message: smoltalk.Message): string {
   return calls.map((call) => `${call.name}(${JSON.stringify(call.arguments)})`).join("\n");
 }
 
+function contentText(message: smoltalk.Message): string {
+  return _contentToString(message.toJSON().content);
+}
+
+function isSummary(message: smoltalk.Message): boolean {
+  return message.role === "user" && contentText(message).startsWith(SUMMARY_PREFIX);
+}
+
 function messageText(message: smoltalk.Message): string {
-  const content = _contentToString(message.toJSON().content);
+  const content = contentText(message);
   return [content, toolCallsText(message)].filter((part) => part !== "").join("\n");
 }
 
@@ -72,7 +86,7 @@ export function contextTokens(messages: smoltalk.Message[]): number {
  *  `keepTokens` long. The kept part starts at a user message when one is
  *  close enough, and otherwise at an assistant message. It never starts at
  *  a tool result, which would be cut off from the call it answers. Returns
- *  0 when everything fits. */
+ *  0 when everything fits, or when no message can start the kept part. */
 function firstKeptIndex(conversation: smoltalk.Message[], keepTokens: number): number {
   let fits = conversation.length;
   let tokens = 0;
@@ -83,6 +97,9 @@ function firstKeptIndex(conversation: smoltalk.Message[], keepTokens: number): n
     }
     tokens = withNext;
     fits--;
+  }
+  if (fits === 0) {
+    return 0;
   }
   for (const role of ["user", "assistant"]) {
     const index = conversation.findIndex((message, at) => at >= fits && message.role === role);
@@ -101,11 +118,9 @@ export function planCompaction(
 ): CompactionPlan | null {
   const firstOther = messages.findIndex((message) => message.role !== "system");
   const headEnd = firstOther === -1 ? messages.length : firstOther;
-  const leading = messages.slice(0, headEnd);
-  const conversation = messages.slice(headEnd);
-  const isSummary = (message: smoltalk.Message) =>
-    _contentToString(message.toJSON().content).startsWith(SUMMARY_PREFIX);
-  const oldSummary = leading.find(isSummary);
+  const afterHead = messages.slice(headEnd);
+  const oldSummary = afterHead.length > 0 && isSummary(afterHead[0]) ? afterHead[0] : null;
+  const conversation = oldSummary === null ? afterHead : afterHead.slice(1);
 
   const cut = firstKeptIndex(conversation, keepTokens);
   const older = conversation.slice(0, cut);
@@ -117,11 +132,9 @@ export function planCompaction(
   }
   const expiring = older.filter((message) => expiryOf(message) !== null);
   return {
-    head: leading.filter((message) => !isSummary(message)),
+    head: messages.slice(0, headEnd),
     previousSummary:
-      oldSummary === undefined
-        ? null
-        : _contentToString(oldSummary.toJSON().content).slice(SUMMARY_PREFIX.length),
+      oldSummary === null ? null : contentText(oldSummary).slice(SUMMARY_PREFIX.length),
     summarized,
     kept: [...expiring, ...conversation.slice(cut)],
   };
@@ -139,9 +152,20 @@ export function transcriptText(messages: smoltalk.Message[]): string {
   return messages.map(transcriptLine).join("\n\n");
 }
 
+/** A kept reply without its token count. The count is what the provider
+ *  saw before the compaction, so `contextTokens` would report the old size
+ *  from it. A copy is made, because threads share message objects. */
+function withoutUsage(message: smoltalk.Message): smoltalk.Message {
+  if (message.role !== "assistant" || message.usage === undefined) {
+    return message;
+  }
+  return smoltalk.AssistantMessage.fromJSON({ ...message.toJSON(), usage: undefined });
+}
+
 /** The messages a plan leaves in the thread. */
 export function compactedMessages(plan: CompactionPlan, summary: string): smoltalk.Message[] {
-  return [...plan.head, smoltalk.systemMessage(`${SUMMARY_PREFIX}${summary}`), ...plan.kept];
+  const summaryMessage = smoltalk.userMessage(`${SUMMARY_PREFIX}${summary}`);
+  return [...plan.head, summaryMessage, ...plan.kept.map(withoutUsage)];
 }
 
 /** The thread `thread(session: name)` opens, or null before it exists. */

@@ -17,15 +17,12 @@ import {
   clearScreen,
  } from "std::ui/cli"
 
-import {
-  configureLocalModel,
-  getResolvedSlots,
-  currentProvider,
- } from "../shared.agency"
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import {
+  canCompact,
   compactConversation,
   compactionDue,
+  compactionFailed,
   contextStatus,
  } from "./compaction.agency"
 import { HISTORY_PATH } from "./config.agency"
@@ -33,19 +30,8 @@ import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
 import { noModelChoices } from "./modelRequest.agency"
 import { Resolved } from "./models.agency"
-import {
-  activePresetName,
-  presetListLines,
-  presetTable,
- } from "./presets.agency"
+import { activePresetName, presetListLines, presetTable } from "./presets.agency"
 import { diffResolved, Ctx } from "./resolution.agency"
-import {
-  markTurnDone,
-  recordTurn,
-  renameSession,
-  saveSeedTurn,
-  sessionTitle,
- } from "./resume.agency"
 import {
   configureSearch,
   setSearchBackend,
@@ -65,17 +51,26 @@ import {
   applySessionLlmOptions,
   takePendingLlmOptions,
  } from "./session.agency"
-import { policySlashCommand } from "./slashCommands/policy.agency"
-import { renderReply, renderUserLine } from "./transcript.agency"
-import { currentBrain, runTurn } from "./turn.agency"
 import { formatTurnFailure } from "./utils.agency"
-import { parseModelSpec } from "./utils.agency"
+import { configureLocalModel, getResolvedSlots, currentProvider } from "../shared.agency"
+
+
+import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
+
 import {
-  _installSessionHooks,
-  _sessionOnSubmit,
- } from "agency-lang/stdlib-lib/agentSessions.js"
+  markTurnDone,
+  recordTurn,
+  renameSession,
+  saveSeedTurn,
+  sessionTitle,
+ } from "./resume.agency"
+import { renderReply, renderUserLine } from "./transcript.agency"
+import { policySlashCommand } from "./slashCommands/policy.agency"
+import { currentBrain, runTurn } from "./turn.agency"
+import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = noModelChoices()
+
 
 def searchSlashCommand(): boolean {
   const opts = availableBackendItems()
@@ -86,7 +81,7 @@ def searchSlashCommand(): boolean {
     false,
     true,
   )
-  if (choice != "" && choice != null && choice != null) {
+  if (choice != "" && choice != null && choice != undefined) {
     setSearchBackend(choice)
     pushMessage("Web search backend set to: ${choice}")
   }
@@ -125,7 +120,9 @@ def costSlashCommand(): boolean {
     // Cache reads and writes are input tokens too. Counting only
     // inputTokens + outputTokens reports a fraction of a cached
     // conversation — on a long agent run, often under a tenth of it.
-    totalTokens = totalTokens + m.inputTokens + m.outputTokens + m.cachedInputTokens + m.cacheCreationInputTokens
+    totalTokens = totalTokens
+      + m.inputTokens + m.outputTokens
+      + m.cachedInputTokens + m.cacheCreationInputTokens
     totalCacheRead = totalCacheRead + m.cachedInputTokens
     totalCacheWrite = totalCacheWrite + m.cacheCreationInputTokens
   }
@@ -133,9 +130,7 @@ def costSlashCommand(): boolean {
   pushMessage("Tokens: ${totalTokens}")
   if (totalCacheRead > 0 || totalCacheWrite > 0) {
     pushMessage(
-      color.dim(
-        "        ${totalCacheWrite} written to cache, ${totalCacheRead} read back",
-      ),
+      color.dim("        ${totalCacheWrite} written to cache, ${totalCacheRead} read back"),
     )
   }
   if (byModel.length > 0) {
@@ -242,8 +237,8 @@ def localSlashCommand(): boolean {
   if (!localModelsSupported()) {
     pushMessage(
       color.yellow(
-        "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
-      ),
+      "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
+    ),
     )
     return true
   }
@@ -338,6 +333,7 @@ def _runTurn(msg: string): boolean {
   }
 }
 
+
 def renameSlashCommand(title: string): boolean {
   pushMessage(renameSession(title))
   return true
@@ -352,33 +348,38 @@ def conversationSession(): string {
   return brain.session
 }
 
-// `asked` is true for `/compact`, where "nothing to do" is worth saying.
-def reportCompaction(result: Result<number>, asked: boolean) {
+// Summarize the older messages and say what happened. False when the
+// summary could not be made.
+def compactAndReport(session: string, instructions: string): boolean {
+  pushMessage(color.dim("Compacting the conversation. Press Esc to stop."))
+  const result = compactConversation(session, instructions)
   if (result is failure(reason)) {
     pushMessage(color.yellow("Could not compact the conversation: ${reason}"))
-    return
+    return false
   }
-  if (result.value > 0) {
-    pushMessage(
-      color.dim("Compacted: a summary replaced ${result.value} earlier messages."),
-    )
-  } else if (asked) {
-    pushMessage("Nothing to compact yet.")
-  }
-}
-
-def compactSlashCommand(instructions: string): boolean {
-  reportCompaction(
-    compactConversation(conversationSession(), instructions),
-    true,
-  )
+  pushMessage(color.dim("Compacted: a summary replaced ${result.value} earlier messages."))
   return true
 }
 
+def compactSlashCommand(instructions: string): boolean {
+  const session = conversationSession()
+  if (!canCompact(session)) {
+    pushMessage("Nothing to compact yet.")
+    return true
+  }
+  compactAndReport(session, instructions)
+  return true
+}
+
+// Runs after the turn is marked done, so a compaction the user stops with
+// Escape does not keep the turn from being saved.
 def compactIfDue() {
   const session = conversationSession()
-  if (compactionDue(session)) {
-    reportCompaction(compactConversation(session), false)
+  if (!compactionDue(session) || !canCompact(session)) {
+    return
+  }
+  if (!compactAndReport(session, "")) {
+    compactionFailed(session)
   }
 }
 
@@ -386,8 +387,8 @@ def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
   renderAgentResponse(result)
   applyPendingLlmOptions()
-  compactIfDue()
   markTurnDone()
+  compactIfDue()
   return true
 }
 
@@ -421,8 +422,8 @@ export def runSeedTurn(target: string, msg: string) {
   const response = try runTurn(target, msg)
   renderAgentResponse(response)
   applyPendingLlmOptions()
-  compactIfDue()
   markTurnDone()
+  compactIfDue()
   saveSeedTurn(msg)
 }
 
@@ -445,11 +446,7 @@ export def installSessionHooks() {
 }
 
 // Runs inside runSession's policy handler; the REPL installs none of its own.
-export def startInteractive(
-  seedTarget: string,
-  seedPrompt: string,
-  saveHistory: boolean = true,
-) {
+export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory: boolean = true) {
   if (seedPrompt != "") {
     runSeedTurn(seedTarget, seedPrompt)
   }
@@ -465,3 +462,4 @@ export def startInteractive(
   )
   print(color.cyan("\nGoodbye!"))
 }
+

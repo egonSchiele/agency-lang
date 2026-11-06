@@ -164,6 +164,36 @@
       ],
       "useTestLLMProvider": true,
       "llmMocks": []
+    },
+    {
+      "nodeName": "retriesOnlyAfterTheConversationGrew",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "longConversationCanBeCompacted",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "promptTellsTheSummarizerNotToFollowTheTranscript",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

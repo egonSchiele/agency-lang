@@ -364,6 +364,12 @@ describe("bound names under --agency-only", () => {
       'def id(x) { return x }\nnode main() { let k = id("a")\n let f = k.constructor.constructor }',
     );
     refused('def id(x) { return x }\nnode main() { let k = id("a")\n let f = k["constructor"] }');
+    // The method-call spelling. The refusal must be the bound-names one, not
+    // a crash in the checker.
+    const errors = refused(
+      'def id(x) { return x }\nnode main() { let k = id("a")\n let f = k.constructor("x") }',
+    );
+    expect(errors.join("\n")).toContain("AG4011");
   });
 
   test("refuses capability names in tag arguments and default values", () => {

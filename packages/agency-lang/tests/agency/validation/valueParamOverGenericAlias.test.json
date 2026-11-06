@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"good\":true,\"bad\":false,\"goodList\":true,\"badList\":false,\"goodHolder\":true,\"badHolder\":false,\"parameter\":5,\"returned\":7}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A value-parameterized alias whose body is a generic alias compiles and validates as a local, an array, a property, a parameter, and a return type."
+    }
+  ]
+}

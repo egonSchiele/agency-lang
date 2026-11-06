@@ -1,0 +1,46 @@
+// A value-parameterized alias whose body is a generic alias. Its body is
+// written at each use, so the generic alias inside it has to be resolved
+// there. Before the fix, compiling any of these stopped with
+// "Unresolved generic type at codegen: Box".
+type Box<T> = {
+  v: T
+}
+
+type Sized(n: number) = Box<number>
+
+type Listed(n: number) = Box<string>[]
+
+type Holder = {
+  inner: Sized(3)
+}
+
+def asParameter(x: Sized(3)): number {
+  return x.v
+}
+
+export def asReturn(): Sized(3) {
+  return { v: 7 }
+}
+
+node main() {
+  // Typed any, so the checker lets the wrong values through to the schema.
+  const wrongBox: any = { v: "one" }
+  const wrongList: any = [{ v: 1 }]
+  const wrongHolder: any = { inner: { v: "two" } }
+  const good: Sized(3)! = { v: 1 }
+  const bad: Sized(3)! = wrongBox
+  const goodList: Listed(2)! = [{ v: "a" }, { v: "b" }]
+  const badList: Listed(2)! = wrongList
+  const goodHolder: Holder! = { inner: { v: 2 } }
+  const badHolder: Holder! = wrongHolder
+  return {
+    good: isSuccess(good),
+    bad: isSuccess(bad),
+    goodList: isSuccess(goodList),
+    badList: isSuccess(badList),
+    goodHolder: isSuccess(goodHolder),
+    badHolder: isSuccess(badHolder),
+    parameter: asParameter({ v: 5 }),
+    returned: asReturn().v
+  }
+}

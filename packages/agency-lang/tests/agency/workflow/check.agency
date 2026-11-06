@@ -57,6 +57,15 @@ node cleanWorkflowHasNoProblems(): boolean {
   return checked.value.length == 0
 }
 
+node rejectedReadKeepsItsFlag(): any {
+  const checked = checkWorkflow(twoSteps(goodNoteArgs(), goodTextArgs()), TOOLS, DIR) with reject
+  if (checked is success) {
+    return "no problems"
+  }
+  const first = checked.data.problems[0]
+  return [checked.rejected, first.step, first.message.includes("rejected")]
+}
+
 node badPathNamesStepAndArgument(): string {
   return firstProblem(twoSteps(goodNoteArgs(), { id: { "$ref": "steps.note[0].title2" } }))
 }

@@ -206,7 +206,7 @@ export def _compileWithRanges(workflow: Workflow, tools: any[], dir: string): Re
   const refs = _toolRefs(tools, dir)?
   const signatures = _signatures(refs, dir)
   if (signatures is failure) {
-    return _workflowFailure(signatures.error)
+    return _workflowFailure(signatures.error, signatures.rejected)
   }
   return _compileWorkflowSource(workflow, refs, signatures.value)
 }

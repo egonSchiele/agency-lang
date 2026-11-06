@@ -1444,12 +1444,32 @@ export class TypeScriptBuilder {
     return this.pipes.bind(left, node.right);
   }
 
+  /** The body of the function `__tryCall` runs. An `llm()` call compiles to
+   *  statements that store the reply in a local, so the body has to return
+   *  that local, or `__tryCall` wraps `undefined`. The reply is text: the
+   *  type checker gives `try llm(...)` the type `Result<string>`.
+   *
+   *  A call that paused on an interrupt returns the interrupts the same
+   *  way. `__tryCall` passes them through unwrapped, and the code after it
+   *  halts the scope, as it does for any tried call. */
+  private triedCallBody(node: TryExpression): TsNode {
+    if (node.call.type !== "functionCall" || node.call.functionName !== "llm") {
+      return this.processNode(node.call as AgencyNode);
+    }
+    return ts.statements([
+      this.processLlmCall(DEFAULT_PROMPT_NAME, undefined, node.call, "local", "return"),
+      ts.return(ts.scopedVar(DEFAULT_PROMPT_NAME, "local", this.moduleId)),
+    ]);
+  }
+
   private processTryExpression(node: TryExpression): TsNode {
     if (node.call.type === "functionCall" && node.call.functionName === "throw") {
       throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
     }
-    const callNode = this.processNode(node.call as AgencyNode);
-    const args: TsNode[] = [ts.raw("__run.log"), ts.arrowFn([], callNode, { async: true })];
+    const args: TsNode[] = [
+      ts.raw("__run.log"),
+      ts.arrowFn([], this.triedCallBody(node), { async: true }),
+    ];
     const scope = this.scopes.current();
     if (scope.type === "function") {
       const opts: Record<string, TsNode> = {
@@ -3851,6 +3871,10 @@ export class TypeScriptBuilder {
     variableType: VariableType | undefined,
     node: FunctionCall,
     scope: ScopeType,
+    // What the generated code does when the call paused on an interrupt:
+    // halt the scope here, or return the interrupts to the function that
+    // wraps the call (see triedCallBody).
+    onInterrupt: "halt" | "return" = "halt",
   ): TsNode {
     const _variableType = variableType || {
       type: "primitiveType" as const,
@@ -3963,6 +3987,8 @@ export class TypeScriptBuilder {
           ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
         ),
       );
+    } else if (onInterrupt === "return") {
+      stmts.push(ts.if(this.interruptCheck(varRef), ts.return(varRef)));
     } else {
       stmts.push(ts.comment("halt if this is an interrupt"));
       const isNodeContext = this.scopes.current().type === "node";

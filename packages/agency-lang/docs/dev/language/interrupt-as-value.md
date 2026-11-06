@@ -53,25 +53,30 @@ work. The type checker models it in `returnStatement` in
 flow, so the lines after it are still checked as reachable code.
 `return raise ...` behaves the same way.
 
-## Nested positions do not compile
+## Every other position does not compile
 
-Inside a call argument or a string, an interrupt parses and then compiles to
-broken JavaScript:
+Anywhere except the right side of an assignment, a match arm, and a `return`,
+an interrupt parses and then compiles to broken JavaScript:
 
 ```ts
 const labelled = label(interrupt feel("q"))
 const text = "x ${interrupt feel("q")}"
+if (interrupt feel("q")) { }
+const list = [interrupt feel("q")]
+const total = 1 + interrupt feel("q")
 ```
 
 The hoist pass lifts a nested call into a temporary but leaves a nested
 interrupt where it is (`walk` in `lib/preprocessors/hoistCalls.ts`), so the
-interrupt's generated statements land in the middle of an expression. Issue
-#1412 tracks this. Until it is fixed, assign the interrupt to a variable first.
+interrupt's generated statements land in the middle of an expression. The
+build fails in esbuild, so nothing runs. Issue #1412 tracks this. Until it is
+fixed, assign the interrupt to a variable first.
 
 ## A function named `raise` or `interrupt` cannot be called
 
-`raise(...)` and `interrupt(...)` are always interrupts. If a program imports
-or defines a function named `raise`, the text `raise()` does not call it:
+`raise(...)` and `interrupt(...)` are interrupts wherever an expression starts.
+If a program imports or defines a function named `raise`, the text `raise()`
+does not call it:
 
 ```ts
 import { raise } from "./helper.js"
@@ -84,19 +89,29 @@ node main() {
 Nothing refuses the import or the `def` today, so the program compiles and
 does something else. Issue #1413 tracks refusing those names.
 
-## The keyword and its effect name share a line
+There is one position where the text is still read as a call: straight after a
+string and `+`, as in `"x" + raise("q")`. `stringParser` reads that operand
+with `valueAccessParser`, which does not go through `baseAtom`. The call is to
+a function named `raise`, which a program does not have, so it fails when it
+runs. Issue #1412 lists this position with the others.
 
-After `raise` or `interrupt`, the parser reads spaces and tabs but not a line
-break (`sameLineSpaces` in `lib/parsers/parsers.ts`). Without that rule, a
-variable named like the keyword would swallow the next line:
+## An interrupt is written on one line
+
+`interrupt` or `raise` with nothing after it on its line is a parse error:
 
 ```ts
-const raise = 2
-const c = raise
-print(c)
+interrupt
+  deploy("Ship it?")
 ```
 
-The second and third lines would read as `const c = raise print(c)`, an
-interrupt with the effect `print`. With the rule they are two statements, which
-is what a statement ending at the end of its line means
-(`docs/dev/compiler/statement-boundaries.md`).
+Read as two statements, the first line is a bare name that does nothing and the
+second is a plain call to `deploy`. The interrupt that was meant to stand in
+front of the call would be gone, with no error. So the parser refuses the
+keyword when only a line break, a comment, or the end of the file follows it
+(`interruptKeywordAloneRefusal` in `lib/parsers/parsers.ts`). Both
+`_interruptExprParser` and `_raiseExprParser` ask it first, which covers the
+statement and the value position of each spelling.
+
+The refusal also means a variable named `raise` or `interrupt` cannot be the
+last thing on a line. Such a variable can still be declared; issue #1413 is
+about refusing the name.

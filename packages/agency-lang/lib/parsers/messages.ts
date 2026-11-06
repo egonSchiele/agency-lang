@@ -126,6 +126,14 @@ export const TEXT_AFTER_STATEMENT_MESSAGE =
 export const NAME_BEFORE_STATEMENT_MESSAGE = (name: string): string =>
   `\`${name}\` cannot start a statement here, so it was read as a name on its own, and this text as a second statement on its line. If \`${name}\` was meant as a keyword, remove it or check its spelling`;
 
+/** `interrupt` or `raise` with nothing after it on its line. The rest of the
+ *  interrupt is on the next line, or missing. Read as two statements, the
+ *  next line would run with no interrupt in front of it. */
+export const INTERRUPT_KEYWORD_ALONE_MESSAGE = (keyword: string): string =>
+  `\`${keyword}\` needs the rest of the interrupt on the same line. An interrupt cannot be split across two lines:
+
+  ${keyword} deploy("Ship it?", {})`;
+
 /** `with` after a statement that cannot take it: `foo() with myHandler`, or
  *  `with approve` after a `match` block. Without this the words after the
  *  statement were read as bare names and the statement ran with no handler. */

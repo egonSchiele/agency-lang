@@ -36,6 +36,7 @@ import {
   NAME_BEFORE_STATEMENT_MESSAGE,
   TEXT_AFTER_STATEMENT_MESSAGE,
   WITH_NOT_ALLOWED_HERE_MESSAGE,
+  INTERRUPT_KEYWORD_ALONE_MESSAGE,
   UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
 import {
@@ -4732,10 +4733,43 @@ const effectIdentifier: Parser<string> = (input: string) => {
   return bare;
 };
 
+/** A keyword with nothing after it on its line but a comment, or the end
+ *  of the file. */
+const aloneOnItsLine = (keyword: string): RegExp =>
+  new RegExp(`^${keyword}[ \\t]*(?:\\r?\\n|${BLANK_LINE_SENTINEL}|//|/\\*|$)`);
+
+const INTERRUPT_KEYWORD_ALONE = {
+  interrupt: aloneOnItsLine("interrupt"),
+  raise: aloneOnItsLine("raise"),
+};
+
+/** Refuses `interrupt` or `raise` alone on its line. Without this the
+ *  keyword reads as a bare name and the next line as a statement of its
+ *  own, so `interrupt` then `deploy("Ship it?")` would call `deploy` with no
+ *  interrupt in front of it. */
+const interruptKeywordAloneRefusal = (
+  keyword: keyof typeof INTERRUPT_KEYWORD_ALONE,
+  input: string,
+): ParserFailure | null => {
+  if (!INTERRUPT_KEYWORD_ALONE[keyword].test(input)) {
+    return null;
+  }
+  const declined = committedFailure(
+    INTERRUPT_KEYWORD_ALONE_MESSAGE(keyword),
+    input.slice(keyword.length),
+  );
+  getParseState().committedFailure = declined;
+  return declined;
+};
+
 // Core interrupt parser without trailing whitespace/semicolons (for use in expressions)
 // Handles both structured `interrupt std::read("msg")` and bare `interrupt("msg")` forms.
 // Bare form gets effect "unknown".
 const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
+  const alone = interruptKeywordAloneRefusal("interrupt", input);
+  if (alone) {
+    return alone as ParserResult<InterruptStatement>;
+  }
   // Try structured form first: interrupt <effect>(<args>)
   const structured = seqC(
     set("type", "interruptStatement"),
@@ -4785,9 +4819,13 @@ export const interruptStatementParser: Parser<InterruptStatement> = label(
 // and effect inference are unchanged); the `viaRaise` marker only drives
 // formatter output. NOTE: distinct from the `throw(...)` builtin (JS Error).
 const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
-  // `raise ` (keyword + at least one space) introduces the long forms. The
-  // space must stay on the line: with `spaces`, a variable named `raise` at
-  // the end of a line would join the call on the next line into one interrupt.
+  const alone = interruptKeywordAloneRefusal("raise", input);
+  if (alone) {
+    return alone as ParserResult<InterruptStatement>;
+  }
+  // `raise ` (keyword + at least one space) introduces the long forms. A
+  // line break after the keyword was refused above, so the space is on the
+  // keyword's own line.
   const head = seqC(str("raise"), sameLineSpaces)(input);
   if (head.success) {
     // `raise interrupt(...)` — wrap a full interrupt expression. This is why

@@ -16,6 +16,7 @@ import {
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
   WITH_NOT_ALLOWED_HERE_MESSAGE,
+  INTERRUPT_KEYWORD_ALONE_MESSAGE,
 } from "./messages.js";
 
 /** Pull the code example out of a message. `messages.ts` requires every example
@@ -241,6 +242,12 @@ node main(shape: Shape) {
       WITH_NOT_ALLOWED_HERE_MESSAGE,
       `node main() {\n  %s\n}`,
     ],
+    [
+      "interrupt on one line",
+      INTERRUPT_KEYWORD_ALONE_MESSAGE("interrupt"),
+      `node main() {\n  %s\n}`,
+    ],
+    ["raise on one line", INTERRUPT_KEYWORD_ALONE_MESSAGE("raise"), `node main() {\n  %s\n}`],
     [
       "C-style-for alternatives",
       C_STYLE_FOR_MESSAGE,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
+import { INTERRUPT_KEYWORD_ALONE_MESSAGE } from "./messages.js";
 
 /** The lines every test program starts with. */
 const PROGRAM_HEAD = [
@@ -9,11 +10,24 @@ const PROGRAM_HEAD = [
   "}",
 ];
 
+/** A program whose `node main` has the body `bodyLines`. */
+function programWith(bodyLines: string[]): string {
+  return [...PROGRAM_HEAD, "node main() {", ...bodyLines, "}", ""].join("\n");
+}
+
+/** The parse error for a program whose body is `bodyLines`. */
+function messageFor(bodyLines: string[]): string {
+  const parsed = parseAgency(programWith(bodyLines), {}, false, false);
+  if (parsed.success) {
+    throw new Error("expected a parse error");
+  }
+  return parsed.message ?? "";
+}
+
 /** The statements of `node main` in a program whose body is `bodyLines`. */
 function statementsOf(bodyLines: string[]): any[] {
-  const source = [...PROGRAM_HEAD, "node main() {", ...bodyLines, "}", ""].join("\n");
   // Not lowered, so a match is still a matchBlock.
-  const parsed = parseAgency(source, {}, false, false);
+  const parsed = parseAgency(programWith(bodyLines), {}, false, false);
   if (!parsed.success) {
     throw new Error(parsed.message ?? "parse failed");
   }
@@ -111,30 +125,45 @@ describe("raise as a value", () => {
     expect(statements[statements.length - 1].value.type).toBe(valueType);
   });
 
-  // A keyword and its effect name must be on one line. Otherwise a variable
-  // named like the keyword swallows the call on the next line.
+  // An interrupt cannot be split across two lines. Read as two statements,
+  // the second line would run with no interrupt in front of it.
   it.each([
     {
-      name: "a variable named raise, as a value",
-      lines: ["  const raise = 2", "  const answer = raise", "  print(answer)"],
-      types: ["assignment", "assignment", "functionCall"],
+      name: "interrupt, then its effect on the next line",
+      keyword: "interrupt",
+      lines: ["  interrupt", '    feel("Ship it?")'],
     },
     {
-      name: "a variable named interrupt, as a value",
-      lines: ["  const interrupt = 2", "  const answer = interrupt", "  print(answer)"],
-      types: ["assignment", "assignment", "functionCall"],
+      name: "raise, then its effect on the next line",
+      keyword: "raise",
+      lines: ["  raise", '    feel("Ship it?")'],
     },
     {
-      name: "a bare raise on its own line",
-      lines: ["  raise", "  raiseHand(1)"],
-      types: ["variableName", "functionCall"],
+      name: "raise interrupt, then its effect on the next line",
+      keyword: "interrupt",
+      lines: ["  raise interrupt", '    feel("Ship it?")'],
     },
     {
-      name: "a bare interrupt on its own line",
-      lines: ["  interrupt", "  raiseHand(1)"],
-      types: ["variableName", "functionCall"],
+      name: "interrupt as a value, then a call on the next line",
+      keyword: "interrupt",
+      lines: ["  const answer = interrupt", "  print(answer)"],
     },
-  ])("keeps $name apart from the call on the next line", ({ lines, types }) => {
-    expect(statementsOf(lines).map((statement) => statement.type)).toEqual(types);
+    {
+      name: "raise as a value, then a call on the next line",
+      keyword: "raise",
+      lines: ["  const answer = raise", "  print(answer)"],
+    },
+    {
+      name: "interrupt, then a comment",
+      keyword: "interrupt",
+      lines: ["  interrupt // ask first", '  feel("Ship it?")'],
+    },
+    {
+      name: "raise as the last thing in the body",
+      keyword: "raise",
+      lines: ["  raise"],
+    },
+  ])("refuses $name", ({ keyword, lines }) => {
+    expect(messageFor(lines)).toContain(INTERRUPT_KEYWORD_ALONE_MESSAGE(keyword));
   });
 });

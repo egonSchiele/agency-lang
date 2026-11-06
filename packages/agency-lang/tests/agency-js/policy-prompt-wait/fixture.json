@@ -1,0 +1,7 @@
+{
+  "returned": true,
+  "remainingAnswers": 0,
+  "answers": ["a", "text"],
+  "waitsAreNumbers": true,
+  "waitsHoldNoSecret": true
+}

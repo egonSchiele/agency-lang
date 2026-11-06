@@ -22,6 +22,9 @@ import {
   _setAgentName,
   _turnStart,
   _debug,
+  _promptOpened,
+  _logPromptWait,
+  promptAnswerKind,
   logReplTurn,
 } from "./statelog.js";
 
@@ -68,6 +71,7 @@ function spyClient(ctx: RuntimeContext<any>) {
   const agentName = vi.fn(async () => undefined);
   const turnStart = vi.fn(async () => undefined);
   const debug = vi.fn(async () => undefined);
+  const promptWait = vi.fn(async () => undefined);
   ctx.statelogClient = {
     ...ctx.statelogClient,
     evalValueRecorded,
@@ -75,8 +79,9 @@ function spyClient(ctx: RuntimeContext<any>) {
     agentName,
     turnStart,
     debug,
+    promptWait,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded, agentName, turnStart, debug };
+  return { evalValueRecorded, evalOutputRecorded, agentName, turnStart, debug, promptWait };
 }
 
 async function withFrame(
@@ -141,6 +146,32 @@ describe("std::statelog eval annotations", () => {
 
     expect(spies.turnStart).toHaveBeenCalledWith({ message: "do the same for modem.ai" });
     await expect(_turnStart("outside a frame")).resolves.toBeUndefined();
+  });
+
+  it("_logPromptWait posts how long a prompt was open, and the answer", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const spies = spyClient(ctx);
+    const WAIT_MS = 4000;
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      const openedAt = _promptOpened();
+      await _logPromptWait(openedAt - WAIT_MS, "approve", ["approve", "reject"]);
+    });
+
+    expect(spies.promptWait).toHaveBeenCalledOnce();
+    const logged = (spies.promptWait.mock.calls as any)[0][0];
+    expect(logged.answer).toBe("approve");
+    // The clock moved a little between the two calls, never backwards.
+    expect(logged.waitMs).toBeGreaterThanOrEqual(WAIT_MS);
+    expect(logged.waitMs).toBeLessThan(WAIT_MS + 1000);
+    await expect(_logPromptWait(0, "outside a frame", [])).resolves.toBeUndefined();
+  });
+
+  it("promptAnswerKind keeps an option key and hides typed text", () => {
+    expect(promptAnswerKind("approve", ["approve", "reject"])).toBe("approve");
+    expect(promptAnswerKind("sk-live-1234", ["approve", "reject"])).toBe("text");
+    expect(promptAnswerKind("", ["approve", "reject"])).toBe("");
   });
 
   it("_debug posts a debug event with the message and data it was given", async () => {

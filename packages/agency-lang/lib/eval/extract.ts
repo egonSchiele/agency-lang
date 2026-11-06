@@ -277,6 +277,14 @@ function findIncompleteInvocations(n: Normalized): WithWarnings<IncompleteInvoca
   return { result, warnings: [] };
 }
 
+/** Time a person spent at terminal prompts: the `promptWait` events' waits. */
+function promptWaitMs(n: Normalized): number {
+  const waits = (n.byType.promptWait ?? []).map((entry) => entry.raw.data.waitMs);
+  return waits
+    .filter((wait): wait is number => typeof wait === "number")
+    .reduce((total, wait) => total + wait, 0);
+}
+
 function computeMetrics(n: Normalized): WithWarnings<Metrics> {
   const proms = n.byType.promptCompletion ?? [];
   const starts = n.byType.toolCallStart ?? [];
@@ -302,6 +310,7 @@ function computeMetrics(n: Normalized): WithWarnings<Metrics> {
       contextTokensTotal,
       tokensOutTotal,
       costUsdTotal,
+      promptWaitMs: promptWaitMs(n),
       toolCounts,
     },
     warnings: [],

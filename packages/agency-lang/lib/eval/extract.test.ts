@@ -40,6 +40,20 @@ describe("extractEvalRecord", () => {
     expect(() => extractEvalRecord([a, b], "src")).toThrow(/multiple trace_ids/i);
   });
 
+  it("adds up the time spent waiting at approval prompts", () => {
+    resetClock();
+    const record = extractEvalRecord(
+      [
+        ev("promptCompletion", { threadId: "0" }),
+        ev("promptWait", { waitMs: 4000, answer: "approve" }),
+        ev("promptWait", { waitMs: 1500, answer: "reject" }),
+      ],
+      "src",
+      { warnMissingValue: false },
+    );
+    expect(record.metrics.promptWaitMs).toBe(5500);
+  });
+
   it("records full context beside fresh input tokens", () => {
     resetClock();
     const record = extractEvalRecord(

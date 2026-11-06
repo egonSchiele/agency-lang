@@ -11,6 +11,7 @@ import {
  } from "agency-lang/stdlib-lib/cli.js"
 
 import { _isTTY } from "agency-lang/stdlib-lib/system.js"
+import { _promptOpened, _logPromptWait } from "agency-lang/stdlib-lib/statelog.js"
 import {
   _promptsSelect,
   _promptsAutocomplete,
@@ -392,8 +393,15 @@ export def interruptChoice(
   @param allowCancel - Let Escape cancel the current request in a terminal
   @param expectsValue - Treat free text as an answer value instead of a rejection reason
   """
+  // The wait is logged here because this prompt usually runs inside a policy
+  // handler, and the log then says only that a handler answered.
+  const openedAt = _promptOpened()
+  let answer = ""
   if (_stickyInterruptAvailable()) {
-    return _interruptChoice(title, body, items, allowFreeText, allowCancel, expectsValue)
+    answer = _interruptChoice(title, body, items, allowFreeText, allowCancel, expectsValue)
+  } else {
+    answer = chooseOption(title, body, items, allowFreeText: allowFreeText, allowCancel: allowCancel)
   }
-  return chooseOption(title, body, items, allowFreeText: allowFreeText, allowCancel: allowCancel)
+  _logPromptWait(openedAt, answer, [item.key for item in items])
+  return answer
 }

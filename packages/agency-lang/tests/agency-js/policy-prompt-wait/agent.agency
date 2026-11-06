@@ -1,0 +1,13 @@
+import { cliPolicyHandler } from "std::policy"
+
+// Two prompts through the policy handler: one answered with an option key,
+// and one that asks for a value, answered with typed text.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let key = ""
+  handle {
+    interrupt myapp::deploy("Deploy?", { env: "prod" })
+    key = interrupt myapp::apiKey("Which API key?", {})
+  } with handler
+  return key
+}

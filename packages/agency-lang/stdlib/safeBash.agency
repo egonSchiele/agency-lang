@@ -257,6 +257,14 @@ def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
   if (redirect.fd != null) {
     return failure("redirect with an explicit file descriptor")
   }
+  return resolveRedirectWrite(redirect, cwd, content)
+}
+
+@capabilities(fileRead)
+def resolveRedirectWrite(redirect: Redirect, cwd: string, content: string): Result<WritePayload> {
+  """
+  Resolve an output redirect's target, whichever stream it redirects.
+  """
   if (redirect.op != ">" && redirect.op != ">>") {
     return failure("`${redirect.op}` is not an output redirect")
   }
@@ -287,7 +295,8 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   // prepareRedirectWrite stays strict on purpose: the shell-free write
   // path computes the bytes it writes, and a dup changes which stream
   // echo's output goes to.
-  const fileRedirects = [redirect for redirect in redirects if redirect.op != ">&"]
+  // A redirect to /dev/null writes no file either.
+  const fileRedirects = [redirect for redirect in redirects if redirect.op != ">&" && !discardsOutput(redirect)]
   const inputs = [redirect for redirect in fileRedirects if redirect.op == "<"]
   const outputs = [redirect for redirect in fileRedirects if redirect.op != "<"]
   if (inputs.length > 1) {
@@ -305,13 +314,41 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
     effects.push(readEffect(read.value))
   }
   for (redirect in outputs) {
-    const prepared = prepareRedirectWrite(redirect, cwd, "")
+    // `2>file` writes that file the way `>file` does. This path runs the
+    // command through bash, so it never computes the bytes written.
+    if (!redirectsStdoutOrStderr(redirect)) {
+      return failure("redirect with an explicit file descriptor")
+    }
+    const prepared = resolveRedirectWrite(redirect, cwd, "")
     if (isFailure(prepared)) {
       return prepared
     }
     effects.push(writeEffect(prepared.value))
   }
   return success(effects)
+}
+
+def redirectsStdoutOrStderr(redirect: Redirect): boolean {
+  """
+  Check that a redirect names no descriptor, or names standard error.
+  """
+  return redirect.fd == null || redirect.fd == 2
+}
+
+def discardsOutput(redirect: Redirect): boolean {
+  """
+  Check for an output redirect of standard output or standard error to /dev/null.
+  """
+  if (redirect.op != ">" && redirect.op != ">>") {
+    return false
+  }
+  if (!redirectsStdoutOrStderr(redirect)) {
+    return false
+  }
+  return match(literalTarget(redirect.target)) {
+    success(text) => text == "/dev/null"
+    failure(_) => false
+  }
 }
 
 @capabilities(fileRead)

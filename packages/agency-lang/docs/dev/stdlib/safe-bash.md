@@ -238,7 +238,24 @@ broad). A dup redirect
 (`2>&1`, op `>&`) moves a stream and writes no file, so `redirectEffect`
 skips it; `prepareRedirectWrite` stays strict, because the shell-free
 write path computes the bytes it writes and a dup changes which stream
-`echo`'s output goes to. A `glob` word is never a literal:
+`echo`'s output goes to.
+
+`redirectEffect` has two more rules for output redirects:
+
+1. A redirect of standard output or standard error to `/dev/null` writes
+   no file, so it contributes no effect. `pnpm test 2>/dev/null` asks one
+   `std::exec`.
+2. A redirect of standard error to a file contributes the same
+   `std::write` as `>` to that file, with the same mode. `make
+   2>build.log` asks `std::exec` and `std::write`.
+
+Any other explicit descriptor is unrecognized, so `make 3>x` is broad.
+Both rules live in `redirectEffect` only. `prepareRedirectWrite` still
+refuses every explicit descriptor, so `echo hi 2>err.txt` is never a
+shell-free write. It runs through bash and asks `std::write` for
+`err.txt`.
+
+A `glob` word is never a literal:
 `literalWordText` refuses it, so every rule that needs a literal (a
 redirect target, an `echo` argument, a git argument) treats a command
 with one as unrecognized until a later slice gives globs a meaning.

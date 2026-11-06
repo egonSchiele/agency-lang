@@ -13,7 +13,8 @@ export type TraceSelectionFlags = {
   all?: boolean | null;
 };
 
-export type OptionName = "trace" | "last" | "since" | "all" | "limit" | "context" | "kind";
+export type OptionName =
+  "trace" | "last" | "since" | "all" | "limit" | "context" | "kind" | "maxChars";
 
 /** How the caller spells each option in a message: the CLI's flags, or the
  *  fields of a `std::statelog` call. One set of rules and messages, two
@@ -28,6 +29,7 @@ export const FLAG_NAMES_CLI: OptionNames = {
   limit: "--limit",
   context: "--context",
   kind: "--kind",
+  maxChars: "--max-chars",
 };
 
 export const FIELD_NAMES: OptionNames = {
@@ -38,6 +40,7 @@ export const FIELD_NAMES: OptionNames = {
   limit: "limit",
   context: "context",
   kind: "kinds",
+  maxChars: "maxChars",
 };
 
 /** What the picker needs to know about a trace. `TraceSummary` has both

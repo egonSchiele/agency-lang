@@ -10,6 +10,7 @@ import {
   matchTrace,
   matchTraceId,
   readTraces,
+  readTracesFromChunks,
   resolveTraceIdArgument,
   traceDigest,
 } from "./traces.js";
@@ -89,6 +90,48 @@ describe("readTraces", () => {
 
   it("throws for a missing file", () => {
     expect(() => readTraces(path.join(os.tmpdir(), "no-such-statelog.jsonl"))).toThrow(/ENOENT/);
+  });
+});
+
+describe("readTracesFromChunks", () => {
+  /** The bytes of `text` in chunks of `size`, as a host would hand them over. */
+  async function* chunksOf(bytes: Uint8Array, size: number): AsyncIterable<Uint8Array> {
+    for (let start = 0; start < bytes.length; start += size) {
+      yield bytes.subarray(start, start + size);
+    }
+  }
+
+  const text =
+    [
+      line("aaa", "agentStart"),
+      line("bbb", "userMessage", { content: "café ☕ 日本語" }),
+      line("aaa", "agentStart"),
+      "not json",
+      line("aaa", "agentEnd", { note: "naïve" }),
+    ].join("\n") +
+    "\n" +
+    line("bbb", "agentEnd").slice(0, 30);
+
+  it.each([1, 3, 7, 64, 100_000])(
+    "matches readTraces when chunks are %d bytes, cutting lines and characters",
+    async (size) => {
+      const expected = readTraces(writeLog(text));
+      const bytes = new TextEncoder().encode(text);
+      expect(await readTracesFromChunks(chunksOf(bytes, size))).toEqual(expected);
+    },
+  );
+
+  it("cuts a chunk inside a multi-byte character", async () => {
+    const bytes = new TextEncoder().encode(text);
+    const inside = text.indexOf("☕");
+    // The byte offset of the cup's second byte.
+    const cut = new TextEncoder().encode(text.slice(0, inside)).length + 1;
+    async function* twoChunks(): AsyncIterable<Uint8Array> {
+      yield bytes.subarray(0, cut);
+      yield bytes.subarray(cut);
+    }
+    const { traces } = await readTracesFromChunks(twoChunks());
+    expect(traces[1].events[0].data.content).toBe("café ☕ 日本語");
   });
 });
 

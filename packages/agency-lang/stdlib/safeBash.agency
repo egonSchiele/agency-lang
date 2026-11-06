@@ -1126,10 +1126,10 @@ static const SHELL_FREE_REGEX_FLAGS = "u"
 static const SHELL_FREE_GREP_CAP = 1000
 
 // A grep that safeBash runs in process goes through the grep tool's own
-// search and not the grep program, so its approval means what the grep tool's approval means. This
-// applies only when every flag and every character of the pattern means
-// the same thing to grep and to the tool. A failure means "not this path",
-// and the general rules then decide.
+// search and not the grep program, so its approval means what the grep
+// tool's approval means. This applies only when every flag and every
+// character of the pattern means the same thing to grep and to the tool.
+// A failure means "not this path", and the general rules then decide.
 @capabilities(fileRead)
 def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   """
@@ -1837,10 +1837,10 @@ static const DEFAULT_LINE_COUNT = 10
 static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
 
 // A cat of one or more files, or a head or tail of one, that safeBash runs
-// in process goes through the read tool's own read and not the program, so its approval means what
-// the read tool's approval means. This applies only to the flags
-// `_renderReadView` prints exactly. A failure means "not this path", and
-// the general rules then decide.
+// in process goes through the read tool's own read and not the program,
+// so its approval means what the read tool's approval means. This applies
+// only to the flags `_renderReadView` prints exactly. A failure means
+// "not this path", and the general rules then decide.
 @capabilities(fileRead)
 def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   """

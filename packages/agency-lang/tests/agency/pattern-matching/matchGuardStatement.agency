@@ -1,0 +1,45 @@
+// A guarded arm in a match that is a statement, not a value. The match used
+// to be read as a call to `match` with the arms as its block, and the guard
+// then read as an `if` with no `{`.
+def sizeOf(y: number): string {
+  let size = "unset"
+  match(y) {
+    n if (n > 100) => {
+      size = "huge"
+    }
+    n if (n > 2) => {
+      size = "big"
+    }
+    _ => {
+      size = "small"
+    }
+  }
+  return size
+}
+
+def signOf(r: Result): string {
+  let sign = "unset"
+  match(r) {
+    success(v) if (v > 0) => {
+      sign = "positive"
+    }
+    success(v) => {
+      sign = "not positive"
+    }
+    failure(e) => {
+      sign = "failed"
+    }
+  }
+  return sign
+}
+
+node main() {
+  return [
+    sizeOf(500),
+    sizeOf(3),
+    sizeOf(1),
+    signOf(success(4)),
+    signOf(success(-4)),
+    signOf(failure("no"))
+  ]
+}

@@ -1,0 +1,27 @@
+node plainReply() {
+  const result = try llm("Say hello.")
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}
+
+node valueField() {
+  const result = try llm("Say hello.")
+  if (isFailure(result)) {
+    return "failed"
+  }
+  return result.value
+}
+
+def replyOrFailure(): Result<string> {
+  return try llm("Say hello.")
+}
+
+node returnedFromDef() {
+  const result = replyOrFailure()
+  if (result is success(reply)) {
+    return reply
+  }
+  return "failed"
+}

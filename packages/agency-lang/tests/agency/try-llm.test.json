@@ -1,0 +1,52 @@
+{
+  "tests": [
+    {
+      "nodeName": "plainReply",
+      "description": "try llm(...) gives a success that holds the reply",
+      "input": "",
+      "llmMocks": [
+        {
+          "return": "hello"
+        }
+      ],
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "valueField",
+      "description": "the reply is on the success's value field",
+      "input": "",
+      "llmMocks": [
+        {
+          "return": "hello"
+        }
+      ],
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "returnedFromDef",
+      "description": "return try llm(...) returns the reply from a def",
+      "input": "",
+      "llmMocks": [
+        {
+          "return": "hello"
+        }
+      ],
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

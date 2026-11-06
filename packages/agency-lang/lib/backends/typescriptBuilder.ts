@@ -1444,12 +1444,28 @@ export class TypeScriptBuilder {
     return this.pipes.bind(left, node.right);
   }
 
+  /** The body of the function `__tryCall` runs. An `llm()` call compiles to
+   *  statements that store the reply in a local, so the body has to return
+   *  that local, or `__tryCall` wraps `undefined`. The reply is text: the
+   *  type checker gives `try llm(...)` the type `Result<string>`. */
+  private triedCallBody(node: TryExpression): TsNode {
+    if (node.call.type !== "functionCall" || node.call.functionName !== "llm") {
+      return this.processNode(node.call as AgencyNode);
+    }
+    return ts.statements([
+      this.processLlmCall(DEFAULT_PROMPT_NAME, undefined, node.call, "local"),
+      ts.return(ts.scopedVar(DEFAULT_PROMPT_NAME, "local", this.moduleId)),
+    ]);
+  }
+
   private processTryExpression(node: TryExpression): TsNode {
     if (node.call.type === "functionCall" && node.call.functionName === "throw") {
       throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
     }
-    const callNode = this.processNode(node.call as AgencyNode);
-    const args: TsNode[] = [ts.raw("__run.log"), ts.arrowFn([], callNode, { async: true })];
+    const args: TsNode[] = [
+      ts.raw("__run.log"),
+      ts.arrowFn([], this.triedCallBody(node), { async: true }),
+    ];
     const scope = this.scopes.current();
     if (scope.type === "function") {
       const opts: Record<string, TsNode> = {

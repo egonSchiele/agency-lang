@@ -12,6 +12,7 @@ import {
   chooseOption,
   ChoiceItem,
   pushMessage,
+  lineWasTyped,
   repl,
   clearHistory,
   clearScreen,
@@ -58,7 +59,10 @@ import {
   sessionTitle,
  } from "./resume.agency"
 import { renderReply, renderUserLine } from "./transcript.agency"
+import { withPendingNotes } from "./pendingNotes.agency"
+import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
+import { shellCommand } from "./slashCommands/shell.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -286,7 +290,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /paste, /help. Start a line with ! to run a shell command yourself.",
       )
       return true
     }
@@ -304,7 +308,14 @@ def _runTurn(msg: string): boolean {
     "/preset" => presetSlashCommand(trimmed)
     "/policy" => policySlashCommand()
     "/rename" => renameSlashCommand("")
+    "/image" => imageSlashCommand("")
     _ => {
+      if (isShellCommand(trimmed)) {
+        return shellCommand(trimmed.slice(1).trim())
+      }
+      if (trimmed.startsWith("/image ")) {
+        return imageSlashCommand(trimmed.slice(7).trim())
+      }
       if (trimmed.startsWith("/rename ")) {
         return renameSlashCommand(trimmed.slice(8))
       }
@@ -328,8 +339,29 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
+// A `!` line is a shell command only when the user typed it and pressed
+// Enter at the prompt. Pasted text, a `/paste` buffer, and text written in
+// the editor go to the model as a message, however they start, because a
+// command here runs with no approval.
+def isShellCommand(trimmed: string): boolean {
+  return trimmed.startsWith("!") && !trimmed.includes("\n") && lineWasTyped()
+}
+
+// `/image` alone holds the image for the next message. With text after
+// it, that text is sent now, with the image.
+def imageSlashCommand(message: string): boolean {
+  if (!attachClipboardImage()) {
+    return true
+  }
+  if (message == "") {
+    pushMessage(color.dim("The image will go with your next message."))
+    return true
+  }
+  return renderUserTurn(message, message)
+}
+
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try runTurn("", msg)
+  const result = try runTurn("", withPendingNotes(msg))
   renderAgentResponse(result)
   applyPendingLlmOptions()
   markTurnDone()

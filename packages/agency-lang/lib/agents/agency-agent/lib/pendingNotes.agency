@@ -1,0 +1,22 @@
+/** @module
+  @summary Notes the user made between turns, such as the output of a `!`
+  shell command. They are added to the user's next message, so the model
+  reads them with it.
+*/
+
+let _notes: string[] = []
+
+export def addNote(note: string) {
+  _notes.push(note)
+}
+
+/** The user's message with every pending note above it. The notes are
+  removed, so each one is sent once. */
+export def withPendingNotes(message: string): string {
+  if (_notes.length == 0) {
+    return message
+  }
+  const notes = _notes
+  _notes = []
+  return [...notes, message].join("\n\n")
+}

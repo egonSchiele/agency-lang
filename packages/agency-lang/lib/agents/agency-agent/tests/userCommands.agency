@@ -1,0 +1,58 @@
+/*
+ * The commands a user runs themselves between turns: `!command` and the
+ * notes that carry its output to the model with the next message.
+ */
+import { addNote, withPendingNotes } from "../lib/pendingNotes.agency"
+import { imageNote } from "../lib/slashCommands/image.agency"
+import {
+  shellCommand,
+  shellNote,
+  tailOf,
+ } from "../lib/slashCommands/shell.agency"
+
+node noNotesLeavesTheMessageAlone(): boolean {
+  return withPendingNotes("hello") == "hello"
+}
+
+node notesGoAboveTheMessageInOrder(): boolean {
+  addNote("first")
+  addNote("second")
+  return withPendingNotes("hello") == "first\n\nsecond\n\nhello"
+}
+
+node notesAreSentOnce(): boolean {
+  addNote("first")
+  withPendingNotes("hello")
+  return withPendingNotes("again") == "again"
+}
+
+node shellNoteShowsCommandOutputAndExitCode(): boolean {
+  return shellNote("ls", "a.txt\n", 0) == "I ran this shell command myself:\n$ ls\na.txt\n(exit code 0)"
+}
+
+node shellNoteSaysWhenThereIsNoOutput(): boolean {
+  return shellNote("true", "", 0).includes("(no output)")
+}
+
+node longOutputKeepsItsEnd(): boolean {
+  const cut = tailOf("0123456789", 4)
+  return cut == "[the first 6 characters are left out]\n6789"
+}
+
+node shellCommandRunsAndLeavesANote(): boolean {
+  shellCommand("echo from-the-shell; exit 3")
+  const sent = withPendingNotes("what happened?")
+  const hasCommand = sent.includes("$ echo from-the-shell; exit 3")
+  const hasOutput = sent.includes("\nfrom-the-shell\n")
+  const hasExit = sent.includes("(exit code 3)")
+  return hasCommand && hasOutput && hasExit && sent.endsWith("what happened?")
+}
+
+node bareBangRunsNothing(): boolean {
+  shellCommand("")
+  return withPendingNotes("hello") == "hello"
+}
+
+node imageNotePutsThePathOnItsOwnLine(): boolean {
+  return imageNote("/tmp/a.png").split("\n")[1] == "/tmp/a.png"
+}

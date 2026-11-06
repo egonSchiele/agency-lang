@@ -1,6 +1,6 @@
 // The real terminal the test form draws on, and `$EDITOR` when set. Shared
 // by `eval new` and `eval edit`.
-import { editorCommand, openInEditor } from "@/eval/newTest/editor.js";
+import { editorCommand, openInEditor } from "@/utils/editor.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import type { InputSource } from "@/tui/input/types.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";

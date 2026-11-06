@@ -1319,8 +1319,15 @@ node cdMovesTheRestOfAnAndChain() {
     cdSummary("cd grep-fixtures && ls | head"),
     cdSummary("cd ./grep-fixtures/ && ls"),
     cdSummary("ls && cd grep-fixtures && ls"),
-    executionCommandIn("cd grep-fixtures && ls", STDLIB_TESTS),
+    rebuiltCdNamesTheResolvedFolder("cd grep-fixtures && ls"),
   ]
+}
+
+// The rebuilt `cd` names the absolute folder in single quotes. The path
+// differs by machine, so check its two ends.
+def rebuiltCdNamesTheResolvedFolder(source: string): boolean {
+  const command: string = executionCommandIn(source, STDLIB_TESTS)
+  return command.startsWith("cd '/") && command.endsWith("/stdlib/grep-fixtures' && ls")
 }
 
 node cdAnywhereElseIsBroad() {
@@ -1338,6 +1345,7 @@ node cdAnywhereElseIsBroad() {
     cdSummary("cd grep-fixtures read-fixtures && ls"),
     cdSummary("cd grep-fixtures > out.txt && ls"),
     cdSummary("cd grep-fixtures && cd ../read-fixtures && ls"),
+    cdSummary("ls || cd grep-fixtures && ls"),
   ]
 }
 
@@ -1360,6 +1368,44 @@ def executionCommandIn(source: string, cwd: string): any {
     { kind: "bash", command } => command
     _ => "NOT-BASH"
   }
+}
+
+/** A folder of its own for the cd tests that need a link and a folder
+  whose name starts with a dash. */
+static const CD_FIXTURE = __dirname + "/stdlib/__safebash_cd__"
+
+// Two cases where bash, given the word as written, goes somewhere other
+// than the folder the payload names. The rebuilt `cd` names the resolved
+// folder, so each command is run for real and must print the file in the
+// folder its payload named.
+//
+// `link` points at `real/deep`. Bash applies `..` to the path it came by,
+// so `cd link && (cd .. && cat x.txt)` as written reads the `x.txt` beside
+// the link. The classifier resolves `..` from the link's target, which is
+// `real`.
+//
+// `cd '-P'` as written is a flag to bash, which then goes to the home
+// folder. Unquoted, the parser reads `-P` as a flag, so that form is broad.
+node cdGoesWhereThePayloadSays() {
+  remove(CD_FIXTURE) with approve
+  mkdir(CD_FIXTURE) with approve
+  bash("mkdir -p real/deep ./-P && echo beside-link > x.txt && echo beside-target > real/x.txt && echo dash > ./-P/notes.txt && ln -s real/deep link", cwd: CD_FIXTURE) with approve
+  const linked = "cd link && (cd .. && cat x.txt)"
+  const dashed = "cd '-P' && cat notes.txt"
+  const linkedFolder = payloadFolder(planFor(linked, CD_FIXTURE).effects[0])
+  const dashedFolder = payloadFolder(planFor(dashed, CD_FIXTURE).effects[0])
+  const unquoted = outcomeOf(planFor("cd -P && cat notes.txt", CD_FIXTURE))
+  const linkedRan = safeBash(linked, cwd: CD_FIXTURE) with approve
+  const dashedRan = safeBash(dashed, cwd: CD_FIXTURE) with approve
+  remove(CD_FIXTURE) with approve
+  return [linkedFolder, printed(linkedRan), dashedFolder, printed(dashedRan), unquoted]
+}
+
+def printed(result: Result<string>): string {
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.trim()
 }
 
 node cdRunsInTheNewFolder() {

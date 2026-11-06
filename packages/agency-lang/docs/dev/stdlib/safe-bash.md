@@ -862,9 +862,30 @@ command like any other, and `execEffects` refuses it as a builtin. That
 covers `cd x` alone, a `cd` on the right of `&&`, and `cd x && cd y && a`,
 where the second `cd` is the right side of the inner `&&`.
 
-The rebuilt text keeps the `cd`, so bash makes the move the classifier
-assumed. `CDPATH` is among the variables removed from the shell's
-environment, so `cd x` can only mean `x` under the working directory.
+The rebuilt text does not keep the word the model wrote. Each recognized
+`cd` is rebuilt with the directory `cdTarget` resolved, as an absolute
+real path in single quotes (`cdTo`):
+
+```
+cd '/Users/me/proj/packages/agency-lang' && pnpm test
+```
+
+Bash would otherwise decide for itself where the word leads, and it can
+disagree with the classifier in two ways:
+
+1. Bash reads a word that starts with `-` as a flag, even in quotes. With
+   a folder named `-P`, `cd '-P'` goes to the home folder.
+2. Bash keeps its own record of the path it came by, symlinks included,
+   and applies `..` to that text. After `cd link`, a `cd ..` returns to
+   the folder that holds the link. The classifier resolves `..` from the
+   link's target. The same happens when `PWD` names a symlinked path for
+   the directory bash starts in.
+
+An absolute path starts with `/` and holds no `..`, so bash goes where
+the payloads say in both cases. A resolved path that holds a single
+quote cannot be written this way, so that `cd` is unrecognized. The
+`classify` functions return the rewritten command beside the effects,
+and `rebuild` renders that tree.
 
 ## Chains in process
 

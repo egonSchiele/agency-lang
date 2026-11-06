@@ -7,12 +7,15 @@ ended.
 
 **Spec:** `docs/superpowers/specs/2026-11-05-statelog-readers.md`.
 
-**Shape:** two PRs.
+**Shape:** one PR, on the `statelog-readers` branch, in two parts.
 
 1. **Count tool calls on a trace.** A change to the CLI and the trace
-   summary only. It is useful alone and can be reviewed alone.
-2. **The four readers.** Built on the first PR, so `logTraces` returns
+   summary only. Its commits come first, so they can be reviewed alone.
+2. **The four readers.** Built on the first part, so `logTraces` returns
    the counts from its first version.
+
+The parts were going to be two PRs, the second waiting for the first to
+merge. They ship as one PR so that nothing is stacked.
 
 **Tech stack:** the query functions in `lib/cli/logsQuery/`, the trace
 summary in `lib/logsViewer/traceSummaries.ts`, trace selection in
@@ -88,9 +91,7 @@ summary in `lib/logsViewer/traceSummaries.ts`, trace selection in
   (`_debug`) and `lib/stdlib/cli.ts` (`logReplTurn`), so anything it
   imports loads into every program that uses either.
 
-## PR 1: count tool calls on a trace
-
-Branch `trace-tool-counts`, from `main`.
+## Part 1: count tool calls on a trace
 
 ### 1a. The counts
 
@@ -201,10 +202,7 @@ Put both timings in the PR description.
 **Commits:** `Count tool calls on a trace summary`, then `Show failed
 tool calls in agency logs traces and outline`.
 
-## PR 2: the readers
-
-Branch `statelog-readers`, from `main` after PR 1 merges. The spec and
-this plan are already on that branch.
+## Part 2: the readers
 
 ### 2a. Separate choosing the log from reading it
 
@@ -573,15 +571,13 @@ The `.gitignore` ignores `**/*.js`. Add `test.js` with `git add -f`.
 
 ## Verification
 
-For each PR:
+For the PR:
 
 1. `pnpm vitest run` on the test files named above.
 2. `pnpm typecheck`, which covers the tests.
 3. `pnpm fmt:ts` before pushing.
 
-For PR 1 also: the timings from 1d.
-
-For PR 2 also:
+Also: the timings from 1d, and:
 
 1. `pnpm lint:structure`, and in it `scripts/lint-browser-reach.mjs` in
    its own right. That's the check that fails if a reader lands in a file
@@ -591,7 +587,7 @@ For PR 2 also:
    `node dist/scripts/agency.js test js tests/agency-js/statelog-readers`.
 3. Run `agency logs traces`, `outline`, and `search` once each on a
    real log and compare the text with `main`. Apart from the marker
-   column from PR 1, it should not differ.
+   column from part 1, it should not differ.
 
 ## Not in this plan
 

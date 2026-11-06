@@ -368,3 +368,15 @@ The statements after an `async` call, up to the first use of its value or the en
 A type name was used that the checker knows only through an import's signature: a function you imported takes or returns it, so the checker read its shape to type that call. The name itself was never imported, so the generated code has no binding for it, and a validation or schema built from the type fails at run time with `<Name> is not defined`.
 
 **How to fix:** add the alias to the import line of the module named in the message, or write the type's shape out where it is used.
+
+<a id="ag1035"></a>
+
+## AG1035 — Type alias '&#123;alias&#125;' lists itself as a member of its own union. It may refer to itself only inside an object, an array, or another structure.
+
+*Default severity: error.*
+
+A type alias may refer to itself inside a structure. `type Tree = { kids: Tree[] }` and `type Json = string | Json[]` are both fine, because each use of the name sits inside an object or an array. This fires when the alias is a plain member of its own union, as in `type A = number | A`, or reaches itself that way through other aliases. Such a type has no meaning: working out what `A` is means working out what `A` is first.
+
+The checker treats the alias as `any` for the rest of the file, so this is the only error it causes.
+
+**How to fix:** remove the alias from its own union, or put the self-reference inside a structure.

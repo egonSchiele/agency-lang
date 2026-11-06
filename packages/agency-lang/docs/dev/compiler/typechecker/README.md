@@ -218,6 +218,35 @@ This is what makes `type Tree = { children: Tree[] }` comparable to
 itself instead of a stack overflow. The public `isAssignable` signature
 still takes three arguments.
 
+The guard covers an alias that refers to itself inside a structure. It
+does not cover one that lists itself as a member of its own union:
+
+```
+type A = number | A
+```
+
+Resolving `A` never ends, in assignability and in every other walk that
+resolves a type. So the checker handles it once, before anything resolves
+a type. `neutralizeSelfMemberAliases` in `lib/typeChecker/index.ts` finds
+each such alias with `aliasIsItsOwnMember`
+(`lib/typeChecker/selfMemberAliases.ts`) and makes its body `any` in the
+checker's own copy of the alias table. `check` then reports AG1035 on the
+alias declaration. No later walk needs a cycle guard for this shape.
+
+A reference to a generic alias is followed with its type arguments put
+into the alias body. With `type Maybe<T> = T | null`, the alias
+`type A = number | Maybe<A>` is reported, because `Maybe<A>` is
+`A | null`. With `type List<T> = { items: T[] }`,
+`type Tree = number | List<Tree>` is not, because the parameter sits
+inside a structure.
+
+Codegen reads the unit's alias table, which still holds the original
+body, so this changes nothing when the checker is off, which is the
+default in a user's project. There the program compiles, and the schema
+for `A` is `z.union([z.number(), z.lazy(() => A)])`. A number validates.
+A value that matches no other member makes zod follow the lazy reference
+without end, and the run dies with a stack overflow.
+
 ### The `never` type
 
 `never` is Agency's bottom type, represented as `{ type: "primitiveType", value: "never" }` rather than as its own AST node. That mirrors how `any`, `unknown`, `void`, and `null` are modeled. Its rules:

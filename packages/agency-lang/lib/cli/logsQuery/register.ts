@@ -8,12 +8,12 @@ import { liveSessions } from "@/cli/logsSession/target.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { probeAll, recordPaths, sessionsDir } from "@/logsViewer/session/registry.js";
 import { childRunDirectories } from "@/runDirectory/findRuns.js";
-import { parseCount, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
+import { FLAG_NAMES_CLI, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import type { Command } from "@/vendor/commander/index.js";
 
 import { logsOutline } from "./outline.js";
-import { DEFAULT_SEARCH_LIMIT, DEFAULT_SNIPPET_CONTEXT, logsSearch } from "./search.js";
+import { DEFAULT_SEARCH_LIMIT, DEFAULT_SNIPPET_CONTEXT, KINDS_LIST, logsSearch } from "./search.js";
 import { cliLoadLog } from "./cliLog.js";
 import { refusal, type QueryDeps, type QueryResult } from "./shared.js";
 import { logsTraces } from "./traces.js";
@@ -37,6 +37,7 @@ export function defaultLogsQueryDeps(configuredLog: () => string | undefined): L
       readLog: (logPath) => readTraces(logPath).traces,
     }),
     now: () => Date.now(),
+    names: FLAG_NAMES_CLI,
     writeStdout: (text) => {
       process.stdout.write(text);
     },
@@ -136,19 +137,24 @@ const QUERY_COMMANDS: QueryCommand[] = [
         description: `Characters of snippet on each side of the match (default ${DEFAULT_SNIPPET_CONTEXT})`,
       },
     ],
-    run: (common, own, pattern, deps) =>
-      logsSearch(
+    run: (common, own, pattern, deps) => {
+      const kinds = kindsFrom(textOf(own.kind));
+      if ("error" in kinds) {
+        return Promise.resolve(refusal(kinds.error));
+      }
+      return logsSearch(
         {
           ...common,
           pattern: pattern ?? "",
-          kind: textOf(own.kind),
+          kinds: kinds.value,
           regex: own.regex === true,
           caseSensitive: own.caseSensitive === true,
-          limit: textOf(own.limit),
-          context: textOf(own.context),
+          limit: countFrom(own.limit),
+          context: countFrom(own.context),
         },
         deps,
-      ),
+      );
+    },
   },
 ];
 
@@ -156,17 +162,39 @@ function textOf(value: string | boolean | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/** The shared options as the commands take them, or why not. */
-function commonFrom(options: ParsedOptions): CommonOptions | { error: string } {
-  const last = parseCount("--last", textOf(options.last));
-  if ("error" in last) {
-    return last;
+/** A count flag's text as a number for `countProblem` to check: text that
+ *  is not digits becomes `NaN`, which it refuses. */
+function countFrom(value: string | boolean | undefined): number | undefined {
+  const text = textOf(value);
+  if (text === undefined) {
+    return undefined;
   }
+  return /^\d+$/.test(text.trim()) ? Number(text) : NaN;
+}
+
+/** `--kind user,tool` as a list. A flag with no names in it is refused;
+ *  `logsSearch` checks the names. */
+function kindsFrom(text: string | undefined): { value: string[] | undefined } | { error: string } {
+  if (text === undefined) {
+    return { value: undefined };
+  }
+  const names = text
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name !== "");
+  if (names.length === 0) {
+    return { error: `--kind takes a comma-separated list of: ${KINDS_LIST}` };
+  }
+  return { value: names };
+}
+
+/** The shared options as the commands take them. */
+function commonFrom(options: ParsedOptions): CommonOptions {
   return {
     log: textOf(options.log),
     json: options.json === true,
     trace: textOf(options.trace),
-    last: last.value,
+    last: countFrom(options.last),
     since: textOf(options.since),
     all: options.all === true ? true : undefined,
   };
@@ -187,11 +215,7 @@ export function addLogsQueryCommands(logs: Command, deps: () => LogsQueryDeps): 
       const options = args[args.length - 2] as ParsedOptions;
       const argument = query.argument === undefined ? undefined : (args[0] as string);
       const queryDeps = deps();
-      const common = commonFrom(options);
-      const result =
-        "error" in common
-          ? refusal(common.error)
-          : await query.run(common, options, argument, queryDeps);
+      const result = await query.run(commonFrom(options), options, argument, queryDeps);
       queryDeps.writeStdout(
         (options.json === true ? JSON.stringify(result.json, null, 2) : result.text) + "\n",
       );

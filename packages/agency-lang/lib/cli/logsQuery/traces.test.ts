@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { FIELD_NAMES } from "@/runDirectory/traceSelection.js";
+
 import { queryDeps, queryDir, writeLog, type FixtureTrace } from "./queryFixture.js";
 import { DEFAULT_TRACES_SHOWN, logsTraces } from "./traces.js";
 
@@ -41,6 +43,14 @@ describe("logsTraces", () => {
     expect(result.text).toContain("3 older traces. Pass --all to list them");
     expect(result.text).toContain("trace-00");
     expect(result.text).not.toContain("trace-22");
+
+    const fields = await logsTraces(
+      { ...flags, log: "log.jsonl" },
+      queryDeps(dir, { names: FIELD_NAMES }),
+    );
+    expect(fields.text).toContain(
+      "3 older traces. Pass all to list them, or since to pick by time.",
+    );
 
     const all = await logsTraces({ ...flags, log: "log.jsonl", all: true }, queryDeps(dir));
     expect(all.text).toContain("trace-22");

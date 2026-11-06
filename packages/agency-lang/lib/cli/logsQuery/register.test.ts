@@ -100,4 +100,17 @@ describe("addLogsQueryCommands", () => {
     expect(printed.at(-1)).toContain("--last needs a positive whole number");
     expect(process.exitCode).toBe(1);
   });
+
+  it("text that is not a number is refused for each count flag", async () => {
+    await parse("traces", "--last", "abc");
+    expect(printed.at(-1)).toBe("--last needs a positive whole number\n");
+    await parse("search", "module", "--limit", "2.5");
+    expect(printed.at(-1)).toBe("--limit needs a positive whole number\n");
+  });
+
+  it("a --kind with no names in it is refused", async () => {
+    await parse("search", "module", "--kind", ",");
+    expect(printed.at(-1)).toContain("--kind takes a comma-separated list of: user, call");
+    expect(process.exitCode).toBe(1);
+  });
 });

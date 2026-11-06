@@ -8,7 +8,11 @@ import * as path from "path";
 import { TOOL_TROUBLE, traceSummaries, type TraceSummary } from "@/logsViewer/traceSummaries.js";
 import { buildForest } from "@/logsViewer/tree.js";
 import type { TreeNode } from "@/logsViewer/types.js";
-import { selectTraces, type TraceSelectionFlags } from "@/runDirectory/traceSelection.js";
+import {
+  selectTraces,
+  type OptionNames,
+  type TraceSelectionFlags,
+} from "@/runDirectory/traceSelection.js";
 import type { Trace } from "@/runDirectory/traces.js";
 
 /** `outline` and `search` read the most recent trace when no flag picks. */
@@ -42,6 +46,9 @@ export type QueryDeps = {
    *  library reads the one log the caller named and approved. */
   loadLog(log: string | undefined): Promise<LoadedLog | { refused: string }>;
   now(): number;
+  /** How messages spell each option: `--last` for the CLI, `last` for
+   *  `std::statelog`. */
+  names: OptionNames;
 };
 
 export async function openQueryLog(
@@ -87,6 +94,7 @@ export async function withPickedTraces(
   const selection = selectTraces(pickable, options, {
     defaultLast: pick.defaultLast,
     now: deps.now(),
+    names: deps.names,
   });
   if (selection.kind === "refused") {
     return refusal(selection.reason);

@@ -6,6 +6,7 @@ import * as path from "path";
 import { errorEvent } from "@/logsViewer/traceFixture.js";
 import { loopEvents } from "@/logsViewer/storyFixture.js";
 import type { EventEnvelope } from "@/logsViewer/types.js";
+import { FLAG_NAMES_CLI } from "@/runDirectory/traceSelection.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import { tempDir } from "@/runDirectory/testFixtures.js";
 
@@ -101,6 +102,7 @@ export function queryDeps(cwd: string, overrides: Partial<QueryDeps> = {}): Quer
       return { logPath, traces: readTraces(logPath).traces };
     },
     now: () => FIXTURE_NOW,
+    names: FLAG_NAMES_CLI,
     ...overrides,
   };
 }

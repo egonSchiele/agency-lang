@@ -42,7 +42,7 @@ export function logsTraces(options: TracesOptions, deps: QueryDeps): Promise<Que
     if (older > 0) {
       lines.push(
         "",
-        `${countOf(older, "older trace")}. Pass --all to list them, or --since to pick by time.`,
+        `${countOf(older, "older trace")}. Pass ${deps.names.all} to list them, or ${deps.names.since} to pick by time.`,
       );
     }
     return {

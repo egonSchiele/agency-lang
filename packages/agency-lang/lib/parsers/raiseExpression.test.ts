@@ -159,6 +159,11 @@ describe("raise as a value", () => {
       lines: ["  interrupt // ask first", '  feel("Ship it?")'],
     },
     {
+      name: "interrupt, then a block comment on the same line",
+      keyword: "interrupt",
+      lines: ['  const answer = interrupt /* why */ feel("Ship it?")'],
+    },
+    {
       name: "raise as the last thing in the body",
       keyword: "raise",
       lines: ["  raise"],

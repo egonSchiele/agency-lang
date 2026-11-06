@@ -4733,8 +4733,9 @@ const effectIdentifier: Parser<string> = (input: string) => {
   return bare;
 };
 
-/** A keyword with nothing after it on its line but a comment, or the end
- *  of the file. */
+/** A keyword followed by a line break, a comment, or the end of the file.
+ *  Any block comment counts, even one that closes on the same line, because
+ *  a block comment can hide a line break. */
 const aloneOnItsLine = (keyword: string): RegExp =>
   new RegExp(`^${keyword}[ \\t]*(?:\\r?\\n|${BLANK_LINE_SENTINEL}|//|/\\*|$)`);
 

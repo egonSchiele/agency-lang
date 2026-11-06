@@ -92,8 +92,10 @@ does something else. Issue #1413 tracks refusing those names.
 There is one position where the text is still read as a call: straight after a
 string and `+`, as in `"x" + raise("q")`. `stringParser` reads that operand
 with `valueAccessParser`, which does not go through `baseAtom`. The call is to
-a function named `raise`, which a program does not have, so it fails when it
-runs. Issue #1412 lists this position with the others.
+a function named `raise`. If the program has no such function, it fails when
+it runs. If the program imports one, as in the example above, this is the one
+position where the import is called. Issue #1412 lists this position with the
+others.
 
 ## An interrupt is written on one line
 
@@ -110,7 +112,10 @@ front of the call would be gone, with no error. So the parser refuses the
 keyword when only a line break, a comment, or the end of the file follows it
 (`interruptKeywordAloneRefusal` in `lib/parsers/parsers.ts`). Both
 `_interruptExprParser` and `_raiseExprParser` ask it first, which covers the
-statement and the value position of each spelling.
+statement and the value position of each spelling. A block comment after the
+keyword is refused even when it closes on the same line, as in
+`interrupt /* why */ deploy("Ship it?")`, because a block comment can hide a
+line break.
 
 The refusal also means a variable named `raise` or `interrupt` cannot be the
 last thing on a line. Such a variable can still be declared; issue #1413 is

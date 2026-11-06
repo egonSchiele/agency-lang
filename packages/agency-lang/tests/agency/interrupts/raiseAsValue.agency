@@ -1,0 +1,25 @@
+// `raise` as a value: the answer to the interrupt becomes the value, in each
+// position where the `interrupt` spelling already works.
+effect feel { }
+
+def viaAssignment(): string {
+  const answer = raise feel("How do you feel?")
+  return "assigned: ${answer}"
+}
+
+def viaMatchArm(): string {
+  const answer = match (1) {
+    1 => raise feel("How do you feel?")
+    _ => "no"
+  }
+  return "arm: ${answer}"
+}
+
+node raiseAsValue() {
+  handle {
+    const parts = [viaAssignment(), viaMatchArm()]
+    return parts.join(", ")
+  } with (intr) {
+    return approve("happy")
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "raiseAsValue",
+      "description": "The answer to a raise used as a value becomes the value",
+      "input": "",
+      "expectedOutput": "\"assigned: happy, arm: happy\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

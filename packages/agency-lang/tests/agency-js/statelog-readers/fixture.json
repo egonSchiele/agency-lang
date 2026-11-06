@@ -1,0 +1,16 @@
+{
+  "failed": null,
+  "atLeastTwoTraces": true,
+  "workTraces": 2,
+  "toolCalls": 1,
+  "outlineHasToolRow": true,
+  "searchMatched": true,
+  "rowAddressMatches": true,
+  "rowTruncated": true,
+  "rowFitsCap": true,
+  "payloadFilenames": [
+    "statelog.log"
+  ],
+  "payloadDirIsAbsolute": true,
+  "rejectedReadFailed": true
+}

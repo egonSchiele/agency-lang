@@ -8,6 +8,15 @@ import {
   _setAgentName,
   _turnStart,
 } from "agency-lang/stdlib-lib/statelog.js"
+import {
+  _logToRead,
+  _logTraces,
+  _logOutline,
+  _logSearch,
+  _logRow,
+} from "agency-lang/stdlib-lib/statelogReaders.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
+import { dirname, basename } from "std::path"
 
 /** @module
   @summary Record agent inputs and outputs for evaluation, and inspect saved traces.
@@ -40,7 +49,46 @@ import {
   `setAgentName` groups runs by agent. `turnStart` marks messages from a
   person for the logs viewer. `emit` sends custom data to the host's
   `onEmit` callback.
+
+  ## Reading a log
+
+  A log file can hold many runs. Four functions read it the way the
+  `agency logs` commands do: `logTraces` lists the runs, `logOutline`
+  prints the rows of one, `logSearch` finds the rows that mention some
+  text, and `logRow` opens one row. Each returns the command's JSON, plus
+  `text`, which is what the command prints.
+
+  ```ts
+  import { logTraces, logOutline } from "std::statelog"
+
+  node main() {
+    const recent = logTraces("./statelog.jsonl", { since: "1d" }, errorsOnly: true)
+    if (isFailure(recent)) {
+      return recent
+    }
+    for (trace in recent.value.traces) {
+      const outline = logOutline("./statelog.jsonl", { trace: trace.traceId })
+      if (isSuccess(outline)) {
+        print(outline.value.text)
+      }
+    }
+  }
+  ```
+
+  Each one reads a file, so each one raises `std::read` with the log's
+  real directory and name. An empty `log` reads the log this run is
+  writing. To hand a reader to a model, fix the log first, so the model
+  cannot point it at another file:
+  `logTraces.partial(log: "./statelog.jsonl")`.
 */
+
+// `std::read` is also declared in the prelude. A module that raises an
+// effect declares it itself. The payload is `{ dir, filename }`.
+@alwaysUnder(dir)
+effect std::read {
+  dir: string;
+  filename: string
+}
 
 /** An eval input or output with its thread and time in milliseconds since trace start. */
 export type StatelogEvalValue = {
@@ -207,4 +255,229 @@ export def finalEvalOutput(statelogPath: string, allowedPaths: string[] = []): S
   @param allowedPaths - Restrict reads to these directories, or leave empty to allow any path.
   """
   return _finalEvalOutput(statelogPath, allowedPaths)
+}
+
+/** Which traces of a log to read. Give at most one of `trace` and `all`;
+ *  `last` and `since` can go together. A field left out or set to `null`
+ *  does not count. With none, `logTraces` reads the 20 most recent traces and
+ *  the other readers read the most recent one. */
+export type StatelogTraceSelection = {
+  trace?: string;
+  last?: number;
+  since?: string;
+  all?: boolean
+}
+
+/** One run in a log, as `agency logs traces --json` describes it. */
+export type StatelogTrace = {
+  traceId: string;
+  startedAt: string | null;
+  workingMs: number | null;
+  costUsd: number;
+  tokens: number;
+  calls: number;
+  agentName: string | null;
+  hasError: boolean;
+  otherErrors: number;
+  toolCalls: number;
+  toolsFailed: number;
+  toolsRejected: number;
+  toolsUnfinished: number;
+  ask: string | null
+}
+
+/** The traces `logTraces` picked, newest first. */
+export type StatelogTraceList = {
+  log: string;
+  total: number;
+  older: number;
+  traces: StatelogTrace[];
+  text: string
+}
+
+/** One row of an outline. `address` is the value `logRow` takes. */
+export type StatelogRow = {
+  address: string;
+  rowId: string;
+  kind: string;
+  depth: number;
+  header: string
+}
+
+/** A trace's rows. */
+export type StatelogRows = {
+  rows: StatelogRow[]
+}
+
+/** A trace's fields with its rows beside them. */
+export type StatelogOutlinedTrace = StatelogTrace & StatelogRows
+
+/** What `logOutline` returns. */
+export type StatelogOutline = {
+  log: string;
+  traces: StatelogOutlinedTrace[];
+  text: string
+}
+
+/** One row that matched a search. */
+export type StatelogHit = {
+  address: string;
+  traceId: string;
+  rowId: string;
+  kind: string;
+  header: string;
+  matches: number;
+  snippet: string
+}
+
+/** What `logSearch` returns. */
+export type StatelogSearchResult = {
+  log: string;
+  pattern: string;
+  tracesSearched: number;
+  matched: number;
+  omitted: number;
+  hits: StatelogHit[];
+  text: string
+}
+
+/** One row, expanded as the logs viewer shows it. */
+export type StatelogExpandedRow = {
+  address: string;
+  kind: string;
+  header: string;
+  text: string;
+  truncated: boolean;
+  events: Record<string, any>[];
+  providerItems?: Record<string, any>[]
+}
+
+/** Finds the log, takes its real path, and asks to read it. Every reader
+ *  goes through here, so the approval is in one place. */
+@capabilities(fileRead)
+def approvedLog(log: string): Result<string> raises <std::read> {
+  const named = try _logToRead(log)
+  if (isFailure(named)) {
+    return named
+  }
+  const real = try _realTarget(named.value)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::read("Are you sure you want to read this log?", {
+    dir: dirname(real.value),
+    filename: basename(real.value)
+  })
+  return real
+}
+
+/**
+  List the traces in a log, newest first: when each started, how long it
+  worked, what it cost, and what went wrong. The same list as
+  `agency logs traces`.
+*/
+@capabilities(fileRead)
+export idempotent def logTraces(
+  log: string = "",
+  select: StatelogTraceSelection = {},
+  errorsOnly: boolean = false,
+): Result<StatelogTraceList> raises <std::read> {
+  """
+  List the runs in a statelog file, newest first.
+
+  @param log - The statelog file, relative to the working directory or absolute. Empty reads this run's own log.
+  @param select - Which traces: trace (an id or unique prefix), last (how many), since (30m, 2h, 3d, or an ISO date), or all.
+  @param errorsOnly - Keep only the traces that logged an error, which includes every failed tool call.
+  """
+  const where = approvedLog(log)
+  if (isFailure(where)) {
+    return where
+  }
+  return try _logTraces(where.value, select, errorsOnly)
+}
+
+/**
+  Every row of a trace with its address, as `agency logs outline` prints
+  it. Pass an address to `logRow` to open that row.
+*/
+@capabilities(fileRead)
+export idempotent def logOutline(
+  log: string = "",
+  select: StatelogTraceSelection = {},
+  approvals: boolean = false,
+  admin: boolean = false,
+): Result<StatelogOutline> raises <std::read> {
+  """
+  Print every row of a trace in a statelog file, with the address of each.
+
+  @param log - The statelog file, relative to the working directory or absolute. Empty reads this run's own log.
+  @param select - Which traces: trace (an id or unique prefix), last (how many), since (30m, 2h, 3d, or an ISO date), or all. With none, the most recent.
+  @param approvals - Also show approved interrupts, which are hidden by default.
+  @param admin - Also show the handler decisions under each interrupt.
+  """
+  const where = approvedLog(log)
+  if (isFailure(where)) {
+    return where
+  }
+  return try _logOutline(where.value, select, approvals, admin)
+}
+
+/**
+  Find the rows whose own text matches, as `agency logs search` does. A
+  word repeated in the history of every later LLM call is found once, on
+  the row where it first appeared.
+*/
+@capabilities(fileRead)
+export idempotent def logSearch(
+  pattern: string,
+  log: string = "",
+  select: StatelogTraceSelection = {},
+  kinds: string[] = [],
+  regex: boolean = false,
+  caseSensitive: boolean = false,
+  limit: number = 30,
+  context: number = 60,
+): Result<StatelogSearchResult> raises <std::read> {
+  """
+  Find the rows of a statelog file that mention some text.
+
+  @param pattern - The text to find; a JavaScript regular expression when regex is true.
+  @param log - The statelog file, relative to the working directory or absolute. Empty reads this run's own log.
+  @param select - Which traces: trace (an id or unique prefix), last (how many), since (30m, 2h, 3d, or an ISO date), or all. With none, the most recent.
+  @param kinds - Only these kinds of row: user, call, tool, hosted, error. Empty searches every kind.
+  @param regex - Read the pattern as a regular expression.
+  @param caseSensitive - Match case; by default case is ignored.
+  @param limit - Return at most this many rows.
+  @param context - Characters of snippet on each side of the match.
+  """
+  const where = approvedLog(log)
+  if (isFailure(where)) {
+    return where
+  }
+  return try _logSearch(where.value, pattern, select, kinds, regex, caseSensitive, limit, context)
+}
+
+/**
+  Open one row by the address `logOutline` or `logSearch` gave, as the logs
+  viewer shows it, with the statelog events behind it. `maxChars` bounds
+  `text`, the marker included; `events` is not capped.
+*/
+@capabilities(fileRead)
+export idempotent def logRow(
+  address: string,
+  log: string = "",
+  maxChars: number = 0,
+): Result<StatelogExpandedRow> raises <std::read> {
+  """
+  Open one row of a statelog file by its address.
+
+  @param address - A row address, <trace id>/<row id>, as logOutline and logSearch return it.
+  @param log - The statelog file, relative to the working directory or absolute. Empty reads this run's own log.
+  @param maxChars - Cut the text to at most this many characters, 0 for no cap or at least 100.
+  """
+  const where = approvedLog(log)
+  if (isFailure(where)) {
+    return where
+  }
+  return try _logRow(where.value, address, maxChars)
 }

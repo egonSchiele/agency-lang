@@ -1,0 +1,78 @@
+// The std::statelog readers on this program's own log. test.js runs `work`
+// twice, so the log holds two traces with a tool call each, then runs
+// `inspect`, which reads them back, and `refused`, which is not allowed to.
+import { logTraces, logOutline, logSearch, logRow, StatelogTrace } from "std::statelog"
+
+def lookUp(topic: string): string {
+  """
+  Look up notes on a topic.
+
+  @param topic - The topic to look up
+  """
+  return "notes about ${topic}"
+}
+
+node work(question: string): string {
+  const answer: string = llm(question, { tools: [lookUp] })
+  return answer
+}
+
+/** A `work` trace, told apart from `inspect`'s own run by its question. */
+def asked(trace: StatelogTrace, word: string): boolean {
+  if (trace.ask == null) {
+    return false
+  }
+  return trace.ask.includes(word)
+}
+
+node inspect(word: string): any {
+  const dirs: string[] = []
+  const filenames: string[] = []
+  handle {
+    const list = logTraces("", { all: true })
+    if (isFailure(list)) {
+      return { failed: "logTraces: ${list.error}" }
+    }
+    const works = filter(list.value.traces, \trace -> asked(trace, word))
+    const outline = logOutline("", { trace: works[0].traceId })
+    if (isFailure(outline)) {
+      return { failed: "logOutline: ${outline.error}" }
+    }
+    const rows = outline.value.traces[0].rows
+    const tools = filter(rows, \row -> row.kind == "tool")
+    const users = filter(rows, \row -> row.kind == "user")
+    const found = logSearch(word, "", { trace: works[0].traceId, last: null, since: null, all: null })
+    if (isFailure(found)) {
+      return { failed: "logSearch: ${found.error}" }
+    }
+    const opened = logRow(users[0].address, "", maxChars: 100)
+    if (isFailure(opened)) {
+      return { failed: "logRow: ${opened.error}" }
+    }
+    return {
+      traceCount: list.value.total,
+      workTraces: works.length,
+      toolCalls: works[0].toolCalls,
+      toolRows: tools.length,
+      searchMatched: found.value.matched,
+      rowAddressMatches: opened.value.address == users[0].address,
+      rowTruncated: opened.value.truncated,
+      rowLength: opened.value.text.length,
+      dirs: dirs,
+      filenames: filenames
+    }
+  } with (intr) {
+    if (intr.effect == "std::read") {
+      dirs.push(intr.data.dir)
+      filenames.push(intr.data.filename)
+    }
+    return approve()
+  }
+}
+
+node refused(): boolean {
+  handle {
+    const list = logTraces("")
+    return isFailure(list)
+  } with reject
+}

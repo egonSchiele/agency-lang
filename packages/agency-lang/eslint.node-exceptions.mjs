@@ -74,6 +74,8 @@ export const NODE_ONLY = {
   "lib/stdlib/speech.ts": "std::speech records from a raw-mode terminal and probes ffmpeg",
   "lib/stdlib/statelog.ts":
     "std::statelog reads a statelog file through lib/eval/statelogParser.ts, which uses fs",
+  "lib/stdlib/statelogReaders.ts":
+    "std::statelog's log readers read a statelog through lib/runDirectory/traces.ts",
   "lib/stdlib/template.ts": "std::template fills a template, which runs the compiler",
   "lib/stdlib/prompts.ts": "the line-mode prompts read the terminal through the prompts package",
   "lib/stdlib/vision.ts": "std::vision runs through local models",

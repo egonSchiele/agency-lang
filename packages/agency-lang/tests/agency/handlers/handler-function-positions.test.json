@@ -1,0 +1,69 @@
+{
+  "tests": [
+    {
+      "nodeName": "insideBlockArgument",
+      "description": "A handler function inside a block argument reads the block parameter and writes a node variable. Same on main.",
+      "input": "",
+      "expectedOutput": "\"2,4 | x=1 n=1,x=2 n=2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "handlerInsideHandler",
+      "description": "A handler function inside a handler function. This one fails on main: the inner handle block is skipped on the outer handler's second run (outer=1 inner=11,inner=11,inner=0).",
+      "input": "",
+      "expectedOutput": "\"both approved | outer=1 inner=11,inner=11,outer=2 inner=12,inner=12\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "rejectsAndPasses",
+      "description": "An inner handler that rejects one interrupt and passes on the other, under an outer with approve. Same on main.",
+      "input": "",
+      "expectedOutput": "\"true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "onClauseForm",
+      "description": "The on-clause form of a handler function. Same on main.",
+      "input": "",
+      "expectedOutput": "\"both approved | n=1,n=2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "handlerThrows",
+      "description": "A JavaScript error thrown in a handler function travels up and `try` turns it into a failure. Same on main.",
+      "input": "",
+      "expectedOutput": "\"failed: Cannot read properties of null (reading 'name')\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

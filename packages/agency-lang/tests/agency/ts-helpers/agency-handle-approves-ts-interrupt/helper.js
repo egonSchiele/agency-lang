@@ -7,7 +7,7 @@ import { agency } from "agency-lang/runtime";
 //   "a TS function called from Agency code can have its
 //    agency.interrupt(...) caught by a handle block defined in the
 //    calling Agency code"
-export async function raise() {
+export async function raiseFromJs() {
   const resp = await agency.interrupt({
     kind: "test::ask",
     message: "needs approval",

@@ -1,8 +1,8 @@
-import { raise } from "./helper.js"
+import { raiseFromJs } from "./helper.js"
 
 node main() {
   handle {
-    return raise()
+    return raiseFromJs()
   } with (i) {
     return reject("blocked-by-agency")
   }

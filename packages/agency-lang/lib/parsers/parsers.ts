@@ -233,6 +233,9 @@ import {
 
 export const optionalSpacesOrNewline = many(space);
 export const optionalSpaces = many(oneOf(" \t"));
+/** One or more spaces or tabs. Unlike `spaces`, it does not cross a line
+ *  break, so a keyword and what follows it must share a line. */
+const sameLineSpaces = many1(oneOf(" \t"));
 export const backtick = char("`");
 export const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const plusSign = seqR(optionalSpaces, char("+"), optionalSpaces);
@@ -4239,6 +4242,7 @@ const baseAtom: Parser<Expression> = or(
   newExpressionParser,
   schemaAccessParser,
   schemaExpressionParser,
+  lazy(() => raiseExprParser),
   lazy(() => interruptExprParser),
   // MUST precede every other `[`-led parser (bracketAccessParser,
   // comprehensionParser, agencyArrayParser): `[|` is unambiguous after
@@ -4736,7 +4740,7 @@ const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
   const structured = seqC(
     set("type", "interruptStatement"),
     str("interrupt"),
-    spaces,
+    sameLineSpaces,
     capture(effectIdentifier, "effect"),
     captureCaptures(argumentListParser),
   )(input);
@@ -4770,7 +4774,8 @@ export const interruptStatementParser: Parser<InterruptStatement> = label(
   }),
 );
 
-// `raise` raises an interrupt as a statement. Accepted forms:
+// `raise` raises an interrupt. Like `interrupt`, it is accepted as a statement
+// and as a value. Accepted forms:
 //   raise interrupt("x")            — wraps an interrupt expression → effect "unknown"
 //   raise interrupt std::write("x") — wraps an interrupt expression → effect "std::write"
 //   raise std::write("x")           — effect shorthand → effect "std::write"
@@ -4780,8 +4785,10 @@ export const interruptStatementParser: Parser<InterruptStatement> = label(
 // and effect inference are unchanged); the `viaRaise` marker only drives
 // formatter output. NOTE: distinct from the `throw(...)` builtin (JS Error).
 const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
-  // `raise ` (keyword + at least one space) introduces the long forms.
-  const head = seqC(str("raise"), spaces)(input);
+  // `raise ` (keyword + at least one space) introduces the long forms. The
+  // space must stay on the line: with `spaces`, a variable named `raise` at
+  // the end of a line would join the call on the next line into one interrupt.
+  const head = seqC(str("raise"), sameLineSpaces)(input);
   if (head.success) {
     // `raise interrupt(...)` — wrap a full interrupt expression. This is why
     // `interrupt` is a reserved effect word: it routes here (effect "unknown"
@@ -4813,6 +4820,8 @@ const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
   if (!bare.success) return bare;
   return success(bare.result as InterruptStatement, bare.rest);
 };
+
+export const raiseExprParser: Parser<InterruptStatement> = withLoc(_raiseExprParser);
 
 export const raiseStatementParser: Parser<InterruptStatement> = label(
   "a raise statement",

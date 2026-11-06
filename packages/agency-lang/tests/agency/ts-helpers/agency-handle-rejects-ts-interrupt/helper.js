@@ -5,7 +5,7 @@ import { agency } from "agency-lang/runtime";
 // block in agent.agency intercepts it via `reject(...)`. Pins the
 // reject-from-agency-handle path of the cross-surface handler
 // stack documented in agencyInterrupt.ts.
-export async function raise() {
+export async function raiseFromJs() {
   const resp = await agency.interrupt({
     kind: "test::ask",
     message: "needs approval",

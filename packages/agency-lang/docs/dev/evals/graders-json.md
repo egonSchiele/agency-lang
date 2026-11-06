@@ -92,10 +92,10 @@ grader's name.
 
 ## Facts that are easy to miss
 
-- `agentSeconds` is `record.durationMs / 1000`, the run's wall time. Once
-  ADI-32 logs the time a person spends at an approval prompt, it will
-  subtract that; today nothing is subtracted, and in an eval run nobody is
-  at a prompt.
+- `agentSeconds` is the run's wall time less the time a person spent at a
+  terminal prompt: `(record.durationMs - record.metrics.promptWaitMs) / 1000`.
+  `promptWaitMs` is the sum of the `promptWait` events' waits. In an eval
+  run nobody is at a prompt, so the two are equal there.
 - `repeated` compares `tool` and `argsPreview`, the 200-character preview
   of the arguments. No row in the record carries the full arguments, so two
   calls that differ only after the preview count as one.

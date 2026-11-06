@@ -1,4 +1,5 @@
 import { currentRunOrNone, type Run } from "../runtime/asyncContext.js";
+import { realClock } from "../runtime/clock.js";
 import { StatelogParser } from "../eval/statelogParser.js";
 import type { EvalRecord, EvalValue } from "../eval/types.js";
 import type { StatelogClient } from "../statelogClient.js";
@@ -92,6 +93,21 @@ export async function _turnStart(message: string): Promise<void> {
   const frame = currentRunOrNone();
   if (!frame) return;
   await frame.log.turnStart({ message: String(message) });
+}
+
+/** The time a prompt opened, to hand back to `_logPromptWait`. */
+export function _promptOpened(): number {
+  return (currentRunOrNone()?.ctx.clock ?? realClock).wallTime();
+}
+
+/** Logs `promptWait` for a prompt that opened at `openedAt` and has just
+ *  been answered; a no-op outside an Agency frame. A test's stub client may
+ *  have no `promptWait`, as with `turnStart`. */
+export async function _logPromptWait(openedAt: number, answer: string): Promise<void> {
+  const frame = currentRunOrNone();
+  if (!frame) return;
+  const waitMs = Math.max(0, frame.ctx.clock.wallTime() - openedAt);
+  await frame.log.promptWait?.({ waitMs, answer: String(answer) });
 }
 
 /** Posts a `debug` event, the generic statelog event for anything a

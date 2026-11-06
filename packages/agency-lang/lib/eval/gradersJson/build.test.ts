@@ -89,6 +89,16 @@ describe("number graders", () => {
     expect(quick.score).toEqual({ kind: "binary", pass: true });
   });
 
+  // Time a person spent at an approval prompt is not the agent's time.
+  it("agentSeconds leaves out the time spent waiting at a prompt", async () => {
+    const waited = await gradeWith(
+      { kind: "number", name: "s", measure: "agentSeconds", max: 300 },
+      record({ durationMs: 360_000 }, { promptWaitMs: 100_000 }),
+    );
+    expect(waited.feedback).toBe("260s");
+    expect(waited.score).toEqual({ kind: "binary", pass: true });
+  });
+
   it("describes tokens in thousands", async () => {
     const tokensIn = await gradeWith(
       { kind: "number", name: "n", measure: "tokensIn", max: 100_000 },

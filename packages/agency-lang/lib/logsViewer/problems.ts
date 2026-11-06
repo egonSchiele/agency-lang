@@ -136,9 +136,24 @@ export type RunPause = {
   interruptId: string | undefined;
   pausedAt: number;
   resumedAt: number | undefined;
-  /** The `interruptResolved` event that paused the run. */
+  /** The event that marks the pause: the `interruptResolved` that sent the
+   *  interrupt up to a person, or the `promptWait` of a prompt a handler ran. */
   node: TreeNode;
 };
+
+/** A prompt that ran inside a handler, as a pause: the `promptWait` event is
+ *  logged when the person answers and carries how long the prompt was open. */
+function promptPauses(leaves: { node: TreeNode; at: number }[]): RunPause[] {
+  return leaves
+    .filter((entry) => entry.node.event!.data.type === "promptWait")
+    .filter((entry) => typeof entry.node.event!.data.waitMs === "number")
+    .map((entry) => ({
+      interruptId: undefined,
+      pausedAt: entry.at - entry.node.event!.data.waitMs,
+      resumedAt: entry.at,
+      node: entry.node,
+    }));
+}
 
 export function runPauses(trace: TreeNode): RunPause[] {
   const leaves = walkNodes(trace)
@@ -148,7 +163,7 @@ export function runPauses(trace: TreeNode): RunPause[] {
     .sort((first, second) => first.at - second.at);
   const starts = leaves.filter((entry) => entry.node.event!.data.type === "agentStart");
   const answers = leaves.filter((entry) => entry.node.event!.data.resolvedBy === "user");
-  return leaves
+  const surfaced = leaves
     .filter((entry) => {
       const data = entry.node.event!.data;
       return (
@@ -172,4 +187,6 @@ export function runPauses(trace: TreeNode): RunPause[] {
         node: entry.node,
       };
     });
+  const pauses = [...surfaced, ...promptPauses(leaves)];
+  return pauses.sort((first, second) => first.pausedAt - second.pausedAt);
 }

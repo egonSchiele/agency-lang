@@ -214,6 +214,10 @@ export type Metrics = {
   /** Sum of `data.cost.totalCost` across all promptCompletion events.
    *  Treated as USD — `lib/runtime/prompt.ts` records cost in dollars. */
   costUsdTotal: number;
+  /** Milliseconds a person spent at a terminal prompt, summed over the
+   *  `promptWait` events. Absent on records written before this field
+   *  existed. */
+  promptWaitMs?: number;
   /** Count of tool END events (`toolCall`) per tool name. Does NOT
    *  count incomplete `toolCallStart`s — those live in `incomplete`. */
   toolCounts: Record<string, number>;

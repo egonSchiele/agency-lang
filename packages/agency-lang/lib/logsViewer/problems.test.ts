@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runStatus, traceErrors } from "./problems.js";
+import { runPauses, runStatus, traceErrors } from "./problems.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
 
 describe("traceErrors", () => {
@@ -131,5 +131,56 @@ describe("runStatus", () => {
       runStatus(trace([span("toolExecution", [leaf("toolCallStart", 100)], { id: "t" })])),
     ).toBe("running");
     expect(runStatus(trace([leaf("promptCompletion", 100, { timeTaken: 10 })]))).toBe("done");
+  });
+});
+
+describe("runPauses", () => {
+  const start = (at: number) => leaf("agentStart", at, { entryNode: "main" });
+  const waits = (root: ReturnType<typeof trace>) =>
+    runPauses(root).map((pause) =>
+      pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
+    );
+
+  it("counts an interrupt every handler passed, from the pass to the person's answer", () => {
+    const root = trace([
+      start(0),
+      leaf("interruptResolved", 1000, { interruptId: "i1", outcome: "passed", resolvedBy: null }),
+      leaf("interruptResolved", 6000, {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "user",
+      }),
+    ]);
+    expect(waits(root)).toEqual([5000]);
+  });
+
+  // The agent's approval prompt runs inside its policy handler, so the log
+  // says a handler approved. The promptWait event is the only sign that a
+  // person was at the keyboard.
+  it("counts a prompt a handler opened, from when it opened to the answer", () => {
+    const root = trace([
+      start(0),
+      leaf("interruptResolved", 9000, {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "handler",
+      }),
+      leaf("promptWait", 9000, { waitMs: 7000, answer: "approve" }),
+    ]);
+    const pauses = runPauses(root);
+    expect(waits(root)).toEqual([7000]);
+    expect(pauses[0].pausedAt).toBe(2000);
+  });
+
+  it("has no pause when a handler answered with no prompt", () => {
+    const root = trace([
+      start(0),
+      leaf("interruptResolved", 10, {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "handler",
+      }),
+    ]);
+    expect(runPauses(root)).toEqual([]);
   });
 });

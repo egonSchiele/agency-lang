@@ -81,7 +81,8 @@ const MEASURES: Record<NumberSpec["measure"], Measure> = {
     describe: formatUsd,
   },
   agentSeconds: {
-    read: (record) => record.durationMs / MS_PER_SECOND,
+    // Time a person spent at a prompt is not the agent's time.
+    read: (record) => (record.durationMs - (record.metrics.promptWaitMs ?? 0)) / MS_PER_SECOND,
     describe: (value) => `${Math.round(value)}s`,
   },
   tokensIn: {

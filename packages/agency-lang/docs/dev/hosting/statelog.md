@@ -533,6 +533,15 @@ last event and the next `turnStart` as waiting for the person; a
 `threadResumed` is not a turn, since the runtime logs it whenever a named
 session thread is re-entered, with no person involved.
 
+Prompts: `promptWait` (`waitMs`, `answer`): a person was asked something at
+the terminal and answered. `interruptChoice` in `std::ui/cli` logs one, which
+covers the approval prompt `std::policy` uses. `waitMs` is how long the
+prompt was open and the event's timestamp is when it closed. It exists
+because that prompt runs inside a handler, so the interrupt's own events say
+only that a handler answered. The `agency run --interactive` prompt does not
+log one: it runs after every handler has passed, and the `interruptResolved`
+pair already records its wait.
+
 Subprocess: `subprocessStarted`, `subprocessEnd`.
 
 Salvage: `abortSalvage` — records how a `saveDraft` partial is handled as an

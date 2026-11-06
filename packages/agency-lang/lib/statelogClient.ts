@@ -1089,6 +1089,19 @@ export class StatelogClient {
     });
   }
 
+  /** A person was asked something at the terminal and answered. `waitMs`
+   *  is how long the prompt was open; the event's own timestamp is when it
+   *  closed. An approval prompt that runs inside a handler leaves no other
+   *  sign that the run was waiting on a person: its interrupt is logged as
+   *  resolved by the handler. */
+  async promptWait({ waitMs, answer }: { waitMs: number; answer: string }): Promise<void> {
+    await this.post({
+      type: "promptWait",
+      waitMs,
+      answer,
+    });
+  }
+
   async evalOutputRecorded({
     value,
     threadId,

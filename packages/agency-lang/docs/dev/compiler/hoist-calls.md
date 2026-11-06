@@ -31,7 +31,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 |---|---|---|
 | arguments, literals, interpolations, binary operands | hoist | unconditionally evaluated |
 | statement tail call | stays | it is the pending call itself; also node calls are control flow and throw in value position |
-| arguments of a bare method-call statement, `result.push(transform(item))` | hoist; the chain itself stays | the chain is the statement tail. A temp carries the post-call guard, so an argument that paused or was aborted stops the scope before the method runs. Without it a guard trip inside `transform` was lost and the guard returned a success |
+| arguments of a bare method-call statement, `result.push(transform(item))` | hoist; the chain itself stays | the chain is the statement tail. A temp carries the post-call guard, so an argument that paused or was aborted stops the scope before the method runs |
 | `if` conditions, `for` iterables, `match` scrutinees | hoist before the statement | single evaluation either way |
 | `while` conditions with calls | loop rewritten: `while (true) { temps; if (cond) { body } else { break } }` | conditions re-evaluate per iteration; pre-pass they re-ran once per completed iteration on resume |
 | `try` operands, `catch` expressions | opaque | the whole expression compiles into a runtime thunk; moving code out moves the error boundary |

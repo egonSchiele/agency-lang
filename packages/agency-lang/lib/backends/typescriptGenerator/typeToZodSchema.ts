@@ -226,9 +226,14 @@ function mapTypeToSchemaInner(
         variableType.valueArgs,
         variableType.aliasName,
       );
+      // The body is written here, not behind the alias's own const, so
+      // nothing has resolved a generic alias inside it yet (`G<number>`).
+      const body = typeAliasesFull
+        ? resolveTypeDeep(substituted.body, typeAliasesFull)
+        : substituted.body;
       const bodyWithAliasTags: VariableType = {
-        ...substituted.body,
-        tags: mergeTagSets(substituted.tags, substituted.body.tags),
+        ...body,
+        tags: mergeTagSets(substituted.tags, body.tags),
       };
       return mapTypeToSchema(
         bodyWithAliasTags,

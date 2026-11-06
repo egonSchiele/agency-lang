@@ -197,17 +197,8 @@ describe("keyword-as-variable statements still parse", () => {
     { input: "debugger", firstType: "variableName" },
     { input: "nodeCount()", firstType: "functionCall" },
     // Keyword followed by a word is the reason the probe requires a name
-    // AND a `(`. Both parse today, and a probe that stopped at
-    // "keyword, space, identifier" would decline them — which, being a
-    // committed failure, turns something that parses into a hard error.
-    // `node is string` is three bare-name statements, not an `is`
-    // expression; it is junk, but it is junk that parses, and this change
-    // is not the place to start rejecting it.
-    { input: "node is string", firstType: "variableName" },
-    // An `as` cast in a value position is a castExpression, but a bare one
-    // in statement position reads as three bare names, exactly like the
-    // `is` row above. Both are junk that parses.
-    { input: "node as Foo", firstType: "variableName" },
+    // AND a `(`: a probe that stopped at "keyword, space, identifier" would
+    // decline this, which parses.
     { input: "node in items", firstType: "binOpExpression" },
   ];
 
@@ -221,4 +212,10 @@ describe("keyword-as-variable statements still parse", () => {
       expect(result.rest.trim(), input).toBe("");
     });
   }
+
+  // Three bare names on one line. These parsed as three statements until a
+  // statement had to be the last thing on its line.
+  it.each(["node is string", "node as Foo"])("refuses `%s`", (input) => {
+    expect(bodyParser(input).success).toBe(false);
+  });
 });

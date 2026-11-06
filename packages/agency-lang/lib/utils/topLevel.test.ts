@@ -99,17 +99,12 @@ describe("isLegalAtTopLevel: template features are legal", () => {
 });
 
 describe("isLegalAtTopLevel: goto is not reachable at the top level", () => {
-  it("parses as two bare names, so it stays legal", () => {
-    // `goto other` at file scope is NOT a gotoStatement — the grammar
-    // yields `variableName("goto")` and `variableName("other")`. So the
-    // gotoStatement row is unobservable here, and this spelling keeps
-    // compiling. Pinned because it looks like a refusal and is not one.
+  it("does not parse, so the gotoStatement row is never reached", () => {
+    // `goto other` at file scope is NOT a gotoStatement. The grammar reads
+    // `goto` and `other` as two bare names, and two statements on one line
+    // are refused.
     const result = parseAgency("goto other\n\nnode main() { print(1) }\n", {}, false);
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    const types = result.result.nodes.map((n) => n.type);
-    expect(types.filter((t) => t === "variableName")).toHaveLength(2);
-    expect(types).not.toContain("gotoStatement");
+    expect(result.success).toBe(false);
   });
 });
 

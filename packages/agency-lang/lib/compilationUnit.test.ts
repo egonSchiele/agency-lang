@@ -215,12 +215,11 @@ describe("buildCompilationUnit: marker registries", () => {
   });
 
   it("the removed `safe` keyword is no longer a modifier", () => {
-    // `safe` is not a keyword anymore: in `safe def f()` it parses as a
-    // stray identifier and `f` is a plain unmarked def — absent from both
-    // marker registries.
-    const unit = unitFromSource("safe def f(): number { return 1 }");
-    expect(unit.idempotentFunctions["f"]).toBeUndefined();
-    expect(unit.destructiveFunctions["f"]).toBeUndefined();
+    // `safe` is not a keyword anymore: in `safe def f()` it is a stray name
+    // on the line of the def, which does not parse.
+    expect(() => unitFromSource("safe def f(): number { return 1 }")).toThrow(
+      "`safe` cannot start a statement here",
+    );
   });
 
   it("propagates destructive through a re-export chain", () => {

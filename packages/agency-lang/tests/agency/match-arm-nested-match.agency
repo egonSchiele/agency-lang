@@ -29,7 +29,7 @@ node outerFails() {
 def viaBlockArm(c: boolean): number {
   return match(c) {
     true => {
-      if (c) { const x = 41  return x + 1 } else { return 2 }
+      if (c) { const x = 41; return x + 1 } else { return 2 }
     }
     _ => 0
   }

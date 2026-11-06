@@ -637,6 +637,9 @@ export def _guard(
   the construct, not this function. Runs `block` under the given cost
   and/or time limits and returns a `Result` (see the guards guide).
   """
+  // tests/agency/guards/guard-time-trip-before-block.agency copies these
+  // four lines to put the clock between the push and the block. Change it
+  // when you change them.
   const ids = _pushGuard(cost, time, label)
   const result = _runGuarded(ids, block)
   _popGuard(ids)

@@ -314,6 +314,9 @@ exists (the A1 bind-check, and AG4004 before it); this is scoping a small
 subset of it to always-on. Cheap, independent of everything else, and it
 can ship first.
 
+Shipped as AG4014. See "Two names are refused in every program" in
+`docs/dev/compiler/agency-only-bound-names.md`.
+
 ### F2. The bind-check becomes the default, warning first (#992)
 
 A bare `fetch(...)` or `process.env.HOME` in Agency source is a problem for
@@ -401,7 +404,7 @@ it is what lets them become total denial rather than workdir-scoping.
 | C5 deny child OS capabilities (`--permission`) | #989 | open |
 | C6 network egress control for the child | #997 | open |
 | D statelog hosted execution | statelog #11 (containment only) | open |
-| F1 refuse `eval`/`Function` everywhere | #991 | open |
+| F1 refuse `eval`/`Function` everywhere | #991 | done |
 | F2 bind-check default-on (warning first) | #992 | open |
 | F3 hardening from purity; settle with B3 | #970 | open |
 | G child resource limits | #993 | open |

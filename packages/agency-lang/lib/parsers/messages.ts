@@ -117,6 +117,24 @@ export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, n
 export const UNREADABLE_STATEMENT_MESSAGE =
   "cannot read the statement that starts here. If the block is finished, close it with `}`";
 
+export const TEXT_AFTER_STATEMENT_MESSAGE =
+  "the statement before this has ended, and this text is still on its line. Put it on its own line, or put `;` before it";
+
+/** A bare name with a statement after it on the same line, such as
+ *  `global let x = 1` or `safe def f()`. The author meant the name as a
+ *  keyword, and Agency read it as a statement of its own. */
+export const NAME_BEFORE_STATEMENT_MESSAGE = (name: string): string =>
+  `\`${name}\` cannot start a statement here, so it was read as a name on its own, and this text as a second statement on its line. If \`${name}\` was meant as a keyword, remove it or check its spelling`;
+
+/** `with` after a statement that cannot take it: `foo() with myHandler`, or
+ *  `with approve` after a `match` block. Without this the words after the
+ *  statement were read as bare names and the statement ran with no handler. */
+export const WITH_NOT_ALLOWED_HERE_MESSAGE = `\`with\` cannot go here. After a call, an assignment, or a \`return\`, it takes \`approve\`, \`reject\`, or \`propagate\` and nothing else. To use a handler of your own, or to cover any other statement, write a \`handle\` block:
+
+  handle {
+    read("./notes.md")
+  } with myHandler`;
+
 export const DECLARATION_WITHOUT_VALUE_MESSAGE = `a \`let\` or \`const\` needs a value. Agency has no declaration without one:
 
   let subject: string = ""

@@ -73,7 +73,7 @@ export function checkSandboxNames(ctx: TypeCheckerContext): void {
 
 /** Names of top-level `const`/`let` declarations — the module scope a
  *  declaration-hanging expression can reference. */
-function moduleScopeNames(nodes: AgencyNode[]): string[] {
+export function moduleScopeNames(nodes: AgencyNode[]): string[] {
   const names: string[] = [];
   for (const node of nodes) {
     if (node.type === "assignment" && node.declKind && typeof node.variableName === "string") {
@@ -110,13 +110,20 @@ function checkForbiddenProperty(node: AgencyNode, ctx: TypeCheckerContext): void
 
 /** The forbidden property name a chain element names, or null. */
 function forbiddenPropertyName(element: ValueAccess["chain"][number]): string | null {
-  if (element.kind === "property" && SANDBOX_FORBIDDEN_PROPERTIES.includes(element.name)) {
-    return element.name;
+  const key = literalKeyOf(element);
+  return key !== null && SANDBOX_FORBIDDEN_PROPERTIES.includes(key) ? key : null;
+}
+
+/** The property a chain element reads when the source spells it out:
+ *  `.name`, `.name(...)`, or `["name"]`. Null for a computed key, a slice,
+ *  or a call. */
+export function literalKeyOf(element: ValueAccess["chain"][number]): string | null {
+  if (element.kind === "property") return element.name;
+  if (element.kind === "methodCall") {
+    const called = element.functionCall.functionName;
+    return typeof called === "string" ? called : null;
   }
-  if (element.kind === "index") {
-    const literal = stringLiteralValue(element.index);
-    if (literal !== null && SANDBOX_FORBIDDEN_PROPERTIES.includes(literal)) return literal;
-  }
+  if (element.kind === "index") return stringLiteralValue(element.index);
   return null;
 }
 
@@ -186,7 +193,7 @@ function checkDeclExpressionName(
  */
 type DeclHangingExpression = { expr: AgencyNode; scopeNames: string[] };
 
-function collectDeclHangingExpressions(
+export function collectDeclHangingExpressions(
   nodes: AgencyNode[],
   moduleScope: string[],
 ): DeclHangingExpression[] {

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"huge\",\"big\",\"small\",\"positive\",\"not positive\",\"failed\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A guard on a bare binding or a result pattern works in a match that is a statement"
+    }
+  ]
+}

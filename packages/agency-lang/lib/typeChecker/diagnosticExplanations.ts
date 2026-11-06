@@ -470,6 +470,22 @@ node main() {
 **How to fix:** write the block without \`as\`, e.g. the keyword followed immediately by its \`{ ... }\` body.`,
 
   sandboxForbiddenProperty: `Under \`--agency-only\` (\`typechecker.jsGlobals: "sandbox"\`), a program may not read \`constructor\`, \`prototype\`, or \`__proto__\` from a value, spelled or as a string-literal key. Those property names walk from any value to JavaScript's \`Function\` and the prototype chain, which is a way for pure Agency code to reach the host with no interrupt. This is a best-effort compile-time catch; the runtime backstop is code-generation-from-strings being disabled.`,
+  codeFromString: `Agency refuses the spelled-out ways to turn a string into running code, in every program, with or without \`--agency-only\`. Code built from a string at run time raises no interrupt, no policy sees it, and it is not split into steps, so a resume can run it again.
+
+\`\`\`ts
+const total = eval("1 + 2")                          // AG4014
+const add = new Function("a", "b", "return a + b")   // AG4014
+const run = globalThis.eval                          // AG4014
+const g = globalThis                                 // AG4014
+const make = total.constructor.constructor           // AG4014
+\`\`\`
+
+\`globalThis\` may only be used to read a member by name, such as \`globalThis.Math\`. \`.constructor.constructor\` on any value is \`Function\`.
+
+**How to fix:** write the code directly. To write code with code, use a splice (\`$( ... )\`) or a template, which run when the program is compiled. A function you define or import under the name \`eval\` or \`Function\` is not refused.
+
+This check reads what the source spells. It is not a security boundary: a property key built at run time gets past it. To run code you do not trust, use \`--agency-only\`.`,
+
   parameterRedeclared: `A \`let\` or \`const\` inside a function or node body reuses the name of one of its parameters. Parameters and locals live in different slots at runtime, and a read after the redeclare still resolves to the parameter slot, so the new value would silently never be seen.
 
 Assign to the parameter instead (\`u = { tag: "b", n: 1 }\`), or give the local a different name.`,

@@ -17,6 +17,7 @@ import { pathToFileURL } from "url";
 import { ImportPolicy, isImportAllowed, isStdlibImport, isPkgImport } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
 import { getAllImports } from "@/analysis/imports.js";
+import { codeFromStringRefusals, namesOwnedBy } from "@/typeChecker/codeFromStrings.js";
 
 type CompileSuccess = {
   success: true;
@@ -178,6 +179,15 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       };
     }
     const { program: liftedProgram, info } = prepared;
+
+    // `eval` and `Function` are refused whether or not the checker is on.
+    const codeFromStrings = codeFromStringRefusals(
+      liftedProgram.nodes,
+      namesOwnedBy(liftedProgram.nodes, info),
+    );
+    if (codeFromStrings.length > 0) {
+      return { success: false, errors: [formatErrors(codeFromStrings)] };
+    }
 
     // 5. Type check
     if (config.typechecker?.enabled || config.typechecker?.strict) {

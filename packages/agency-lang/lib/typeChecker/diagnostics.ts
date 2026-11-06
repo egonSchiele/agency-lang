@@ -629,6 +629,12 @@ export const DIAGNOSTICS = {
     message:
       "'{name}' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use.",
   },
+  codeFromString: {
+    code: "AG4014",
+    severity: "error",
+    message:
+      "'{name}' is a way to build code from a string at run time, which Agency does not allow. To write code with code, use a splice or a template.",
+  },
   parameterRedeclared: {
     code: "AG4012",
     severity: "error",

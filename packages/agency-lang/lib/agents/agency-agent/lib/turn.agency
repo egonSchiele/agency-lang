@@ -17,6 +17,7 @@ import { guardStopHandler } from "./budget.agency"
 import { slashCommands } from "./commandPalette.agency"
 import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
+import { withProjectContextIfMoved } from "./projectContext.agency"
 import { Settings } from "./settings.agency"
 
 export static const DEFAULT_BRAIN = "coordinator"
@@ -159,7 +160,9 @@ def dispatchToBrain(target: string, userMsg: string): string {
     throw(NO_BRAIN)
     return ""
   }
-  const expanded = expandSlash(userMsg, slashCommands())
+  // A coder may have changed the agent's working directory on an earlier
+  // turn. The model then needs that folder's instructions with this message.
+  const expanded = withProjectContextIfMoved(expandSlash(userMsg, slashCommands()))
   if (target != "") {
     return brain.runTurn(target, expanded)
   }

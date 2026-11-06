@@ -4,6 +4,7 @@
   and the code subagent for its own prompt.
 */
 import { today } from "std::date"
+import { getAgentCwd } from "std::index"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
 
@@ -60,23 +61,52 @@ export def instructionsText(files: InstructionFile[]): string {
   return blocks.join("\n\n")
 }
 
+// The folder the project block was last built for. Empty until the first
+// block is built.
+let _blockDir = ""
+
+/** The agent's working directory: the folder its file tools resolve paths
+  against, which a coder can change with `setAgentCwd`. Before the agent
+  has set one, it is the directory the run started in. */
+export def projectDir(): string {
+  const agentDir = getAgentCwd()
+  if (agentDir != "") {
+    return agentDir
+  }
+  return cwd()
+}
+
 export def projectContextText(): string {
   """
   The part of the grounding that is about the project rather than the
   agent: date, working directory, and the AGENTS.md block. The block holds
-  the instructions of the working directory and of each parent up to the
-  repository root. A coder started directly with `--agent code` gets it
-  too.
+  the instructions of the agent's working directory and of each parent up
+  to the repository root. A coder started directly with `--agent code` gets
+  it too.
   """
-  const files = loadProjectInstructions(instructionFolders(cwd())) with approve
+  const dir = projectDir()
+  _blockDir = dir
+  const files = loadProjectInstructions(instructionFolders(dir)) with approve
   const projectContext = instructionsText(files)
   return """
 
   Current date: ${today()}
-  Current working directory: ${cwd()}
+  Current working directory: ${dir}
 
   <project_context>
   ${projectContext}
   </project_context>
   """
+}
+
+/** The user's message, with the project block above it when the agent's
+  working directory has changed since the block was last built. The model
+  was given the old folder's instructions as authoritative, so it needs the
+  new folder's before it acts on the message. */
+export def withProjectContextIfMoved(message: string): string {
+  if (_blockDir == "" || projectDir() == _blockDir) {
+    return message
+  }
+  const block = projectContextText()
+  return "The working directory changed. This project block replaces the earlier one.${block}\n\n${message}"
 }

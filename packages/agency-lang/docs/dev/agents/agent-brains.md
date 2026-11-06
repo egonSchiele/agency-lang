@@ -71,13 +71,21 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
   The project block (date, cwd, project instructions) is
   `projectContextText` in `lib/projectContext.agency`. The coordinator
   gives the same block to a coder started directly with `--agent code`.
-  The instructions come from the
-  working directory and each parent up to the folder that holds `.git`,
+  The instructions come from the agent's
+  working directory (`projectDir`: the folder set with `setAgentCwd`, which
+  starts as the launch directory) and each parent up to the folder that holds `.git`,
   the same walk the Claude Code skills use (`projectFolders`). Each folder
   gives its `AGENTS.md`, or else its `CLAUDE.md`, also when the
   `AGENTS.md` cannot be read. The blocks are ordered root first, so the
   nearest folder's rules are read last. Outside a repository only the
   working directory is read.
+
+  A coder can change the agent's working directory with `setAgentCwd`. The
+  block was built for the old folder, and the prompts call it
+  authoritative, so `withProjectContextIfMoved` puts the new folder's block
+  above the next user message. The harness calls it in `dispatchToBrain`,
+  once per turn. A coder that changes folder and keeps working in the same
+  turn does not get the new block until the next message.
 
   The reads are approved with `with approve`. The harness builds its
   grounding in `runSession` before it installs the policy handler, so no

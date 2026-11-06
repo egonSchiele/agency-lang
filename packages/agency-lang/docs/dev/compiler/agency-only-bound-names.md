@@ -100,6 +100,73 @@ resolver, not to write a second rule. The security guarantee still does not
 rest here — it rests on layer 2 and, ultimately, on removing ambient
 authority (roadmap).
 
+## Two names are refused in every program
+
+`eval` and `Function` are refused with or without `--agency-only`
+(AG4014, roadmap F1). Code built from a string at run time raises no
+interrupt, no policy sees it, and it is not split into steps, so a resume
+can run it again. Agency has splices and templates for writing code with
+code, so no program needs these names.
+
+`codeFromStringRefusals` (`lib/typeChecker/codeFromStrings.ts`) reads only
+the tree. It refuses four forms:
+
+1. **Either name as a call, a bare name, or the class of a `new`.** A name
+   the program defines with `def` or imports is left alone. A local
+   variable is not, because it could hold the real `eval`. A method on a
+   value, `model.eval()`, is not the global and is left alone.
+2. **Either name read from the global object**: `globalThis.eval`,
+   `globalThis["eval"]`, and the same on `global`, `window`, and `self`.
+   The exemption in form 1 does not apply here. A program that defines
+   `def Function` has shadowed the bare name, and `globalThis.Function` is
+   still the real one.
+3. **`globalThis` as a value, or read with a computed key.** `const g =
+   globalThis` followed by `g.eval(...)` would carry form 2 past the
+   check, so `globalThis` may only be the base of an access whose first
+   key is spelled out, such as `globalThis.Math`.
+4. **`.constructor.constructor` on any value**, spelled or as string keys.
+   Every function's `constructor` is `Function`. One `constructor` is left
+   alone: `scanned["constructor"]` is how a program reads a data key with
+   that name.
+
+It walks the program with `walkNodes` and the declaration-hanging
+expressions with `collectDeclHangingExpressions`, the same two walks the
+sandbox check uses, and reads chain keys with the sandbox check's
+`literalKeyOf`.
+
+`window`, `self`, and `global` are ordinary names a program may give its
+own values. Reading `.eval` or `.Function` from one is refused anyway,
+because the check has no types and the real `window.eval` must not pass.
+
+### Where it runs
+
+The type checker is off by default, so reporting this from the checker
+alone would not stop a build. Three places call the function: the type
+checker, `checkTreeRefusalsOrExit` in `lib/compiler/buildSession.ts`
+(`agency run`, `compile`, `test`), and `compileSource` in
+`lib/compiler/compile.ts` (code compiled at run time). The last two run it
+whatever the checker settings are, as they do for the `?` refusals.
+
+### What it does not stop
+
+This is not a boundary. It stops an honest mistake, and a model that
+writes `eval` because that is what it would write in JavaScript. Someone
+trying to get past it can, without `--agency-only`:
+
+- build the key at run time: `x["ev" + "al"]`, or `globalThis` reached
+  through any value that holds it;
+- take `constructor` one statement at a time: `const c = n.constructor`,
+  then `c.constructor`;
+- copy `global`, `window`, or `self` to a local and read `eval` from
+  that. Those three are too common as local names to refuse as bare
+  values, which is what form 3 does for `globalThis`;
+- call an imported TypeScript function that does it for them.
+
+Under `--agency-only` the bind-check refuses every one of those names and
+all `constructor` access, and layer 2
+(`--disallow-code-generation-from-strings`) makes the call itself throw.
+That flag is the boundary. This check is not.
+
 ## Note on a pre-existing gap
 
 Template hygiene (AG8015) rides the same body walk and is likely blind to
@@ -116,6 +183,8 @@ here because a fix to either should consider both.
 - `lib/typeChecker/sandboxNameCheck.ts` — new-callee, forbidden-property, and
   declaration-hanging-expression checks.
 - `lib/compiler/compileValidatedClosure.ts` — sets `jsGlobals: "sandbox"`.
+- `lib/typeChecker/codeFromStrings.ts` — the always-on `eval` / `Function`
+  refusal, with `codeFromStrings.test.ts`.
 - Tests: `lib/typeChecker/sandboxRegistry.test.ts`,
   `lib/compiler/compileSandboxed.test.ts` (bound-names describe),
   `tests/agency-js/test-cli-agency-only`.

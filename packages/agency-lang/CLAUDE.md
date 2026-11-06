@@ -275,7 +275,7 @@ Other process docs:
 
 ### Compiler and type checker
 
-- `docs/dev/compiler/agency-only-bound-names.md` — The `--agency-only` JS-globals bind-check: the sandbox allowlist, the four capability positions it refuses, and why it is defense in depth rather than the boundary.
+- `docs/dev/compiler/agency-only-bound-names.md` — The `--agency-only` JS-globals bind-check: the sandbox allowlist, the four capability positions it refuses, and why it is defense in depth rather than the boundary, and the refusal of `eval` and `Function` in every program (AG4014), which the build runs even with the checker off.
 - `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
 - `docs/dev/compiler/codegen-run-parameter.md` — How generated code receives the run as `__run` and passes it on: the four rules, how runtime values are read, and what to do when adding a place that emits code.
 - `docs/dev/compiler/effect-propagation.md` — How the interrupt effects a function carries are computed and propagated through calls.

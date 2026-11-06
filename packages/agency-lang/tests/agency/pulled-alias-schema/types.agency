@@ -1,0 +1,8 @@
+// `Inner` is not exported, and no importer of `Outer` names it.
+type Inner = {
+  count: number
+}
+
+export type Outer = {
+  inner: Inner
+}

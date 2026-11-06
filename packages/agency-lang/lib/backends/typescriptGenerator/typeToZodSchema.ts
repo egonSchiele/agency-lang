@@ -3,6 +3,7 @@ import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
 import { applyValueArgs, isValueParamInstantiation } from "@/typeChecker/valueParamSubstitution.js";
+import { resolveTypeDeep } from "@/typeChecker/assignability.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
 
@@ -59,13 +60,24 @@ export function appendMeta(schemaExpr: string, tags: Tag[] | undefined): string 
  */
 type OptionalKeyMode = "required-nullable" | "optional-coalesce";
 
+/** Builds the schema for a `Result` type. `inlining` names the aliases
+ *  whose bodies are being written in place around it (see
+ *  `pulledAliasBody`), so a handler that maps the success type passes it
+ *  on. */
+type ResultHandler = (
+  vt: VariableType,
+  ta: Record<string, VariableType>,
+  inlining: readonly string[],
+) => string;
+
 function mapTypeToSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
-  resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
+  resultHandler: ResultHandler,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   optionalKeyMode: OptionalKeyMode = "required-nullable",
   pendingAliases?: Set<string>,
+  inlining: readonly string[] = [],
 ): string {
   return appendMeta(
     mapTypeToSchemaInner(
@@ -75,6 +87,7 @@ function mapTypeToSchema(
       typeAliasesFull,
       optionalKeyMode,
       pendingAliases,
+      inlining,
     ),
     variableType.tags,
   );
@@ -83,10 +96,11 @@ function mapTypeToSchema(
 function mapTypeToSchemaInner(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
-  resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
+  resultHandler: ResultHandler,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   optionalKeyMode: OptionalKeyMode = "required-nullable",
   pendingAliases?: Set<string>,
+  inlining: readonly string[] = [],
 ): string {
   const recurse = (vt: VariableType) =>
     appendMeta(
@@ -97,6 +111,7 @@ function mapTypeToSchemaInner(
         typeAliasesFull,
         optionalKeyMode,
         pendingAliases,
+        inlining,
       ),
       vt.tags,
     );
@@ -182,6 +197,7 @@ function mapTypeToSchemaInner(
           typeAliasesFull,
           optionalKeyMode,
           pendingAliases,
+          inlining,
         );
         // .describe(...) must come BEFORE .meta(...) — Zod requires
         // .meta() to be the final call in the chain or the metadata is
@@ -210,7 +226,7 @@ function mapTypeToSchemaInner(
       .join(", ");
     return `z.object({ ${props} })`;
   } else if (variableType.type === "resultType") {
-    return resultHandler(variableType, typeAliases);
+    return resultHandler(variableType, typeAliases, inlining);
   } else if (variableType.type === "typeAliasVariable") {
     // Value-parameterized alias reference (e.g. `Age(18)`): there is
     // no single top-level schema const for the alias, so we inline the
@@ -234,6 +250,21 @@ function mapTypeToSchemaInner(
         resultHandler,
         typeAliasesFull,
         optionalKeyMode,
+      );
+    }
+    // An alias this module neither declares nor imports by name has no
+    // schema const here, so its name would be unbound when the module
+    // loads. It reached the type table through the body of an imported
+    // type or an imported signature. Write its body in place.
+    if (aliasEntry?.pulledFrom !== undefined) {
+      return mapTypeToSchema(
+        pulledAliasBody(variableType.aliasName, aliasEntry, typeAliasesFull!, inlining),
+        typeAliases,
+        resultHandler,
+        typeAliasesFull,
+        optionalKeyMode,
+        pendingAliases,
+        [...inlining, variableType.aliasName],
       );
     }
     // A plain alias reference emits the alias schema const by name. When
@@ -264,6 +295,29 @@ function mapTypeToSchemaInner(
 }
 
 /**
+ * The body of an alias that has no schema const in this module, ready to be
+ * written in place of its name, with the alias's own tags on it.
+ *
+ * A recursive alias cannot be written in place, because its body names
+ * itself. That one needs a const, which a named import gives it.
+ */
+function pulledAliasBody(
+  name: string,
+  entry: TypeAliasEntry,
+  typeAliasesFull: Record<string, TypeAliasEntry>,
+  inlining: readonly string[],
+): VariableType {
+  if (inlining.includes(name)) {
+    throw new Error(
+      `The type ${name} refers to itself, and this module uses it without importing it. ` +
+        `Import it by name from ${entry.pulledFrom}.`,
+    );
+  }
+  const body = resolveTypeDeep(entry.body, typeAliasesFull);
+  return { ...body, tags: mergeTagSets(entry.tags, body.tags) };
+}
+
+/**
  * Maps Agency types to Zod schema strings for LLM structured output.
  * For Result types, returns only the success type schema (the LLM
  * doesn't return Result objects).
@@ -272,13 +326,16 @@ export function mapTypeToZodSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
+  inlining: readonly string[] = [],
 ): string {
   return mapTypeToSchema(
     variableType,
     typeAliases,
-    (vt, ta) => mapTypeToZodSchema((vt as any).successType, ta, typeAliasesFull),
+    (vt, ta, around) => mapTypeToZodSchema((vt as any).successType, ta, typeAliasesFull, around),
     typeAliasesFull,
     "required-nullable",
+    undefined,
+    inlining,
   );
 }
 
@@ -292,16 +349,18 @@ export function mapTypeToValidationSchema(
   typeAliases: Record<string, VariableType>,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   pendingAliases?: Set<string>,
+  inlining: readonly string[] = [],
 ): string {
   return mapTypeToSchema(
     variableType,
     typeAliases,
-    (vt, ta) => {
+    (vt, ta, around) => {
       const successSchema = mapTypeToValidationSchema(
         (vt as any).successType,
         ta,
         typeAliasesFull,
         pendingAliases,
+        around,
       );
       // The data slot checks only that it IS an object, not its shape. The
       // runtime turns absent data into `{}`, which no schema for a real `D`
@@ -313,5 +372,6 @@ export function mapTypeToValidationSchema(
     typeAliasesFull,
     "optional-coalesce",
     pendingAliases,
+    inlining,
   );
 }

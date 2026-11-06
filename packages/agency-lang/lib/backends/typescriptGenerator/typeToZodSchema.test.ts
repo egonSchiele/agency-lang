@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import { mapTypeToZodSchema, mapTypeToValidationSchema, appendMeta } from "./typeToZodSchema.js";
-import { VariableType } from "../../types.js";
+import { TypeAliasEntry, VariableType } from "../../types.js";
 import type { Tag } from "../../types/tag.js";
 
 describe("mapTypeToZodSchema", () => {
@@ -391,5 +391,74 @@ describe("property descriptions are written as escaped TypeScript strings", () =
     const schema = evaluate(mapTypeToValidationSchema(described(payload), {}));
     expect((globalThis as Record<string, unknown>).__descriptionEscapeProbe).toBe(undefined);
     expect(schema.shape.a.description).toBe(payload);
+  });
+});
+
+describe("an alias the module neither declares nor imports", () => {
+  const number: VariableType = { type: "primitiveType", value: "number" };
+  const named = (aliasName: string): VariableType => ({ type: "typeAliasVariable", aliasName });
+  const holds = (key: string, value: VariableType): VariableType => ({
+    type: "objectType",
+    properties: [{ key, value }],
+  });
+  const bodies = (entries: Record<string, TypeAliasEntry>) =>
+    Object.fromEntries(Object.entries(entries).map(([name, entry]) => [name, entry.body]));
+  const schemaFor = (type: VariableType, entries: Record<string, TypeAliasEntry>) =>
+    mapTypeToValidationSchema(type, bodies(entries), entries);
+
+  it("writes the alias body in place of its name", () => {
+    const entries = { Inner: { body: holds("count", number), pulledFrom: "types.agency" } };
+    expect(schemaFor(holds("inner", named("Inner")), entries)).toBe(
+      `z.object({ "inner": z.object({ "count": z.number() }) })`,
+    );
+  });
+
+  it("keeps the name of an alias that was imported or declared", () => {
+    const entries = { Inner: { body: holds("count", number), importedFrom: "types.agency" } };
+    expect(schemaFor(holds("inner", named("Inner")), entries)).toBe(`z.object({ "inner": Inner })`);
+  });
+
+  it("writes a chain of such aliases in place", () => {
+    const entries = {
+      Middle: { body: holds("inner", named("Inner")), pulledFrom: "types.agency" },
+      Inner: { body: holds("count", number), pulledFrom: "types.agency" },
+    };
+    expect(schemaFor(named("Middle"), entries)).toBe(
+      `z.object({ "inner": z.object({ "count": z.number() }) })`,
+    );
+  });
+
+  it("writes the same alias in place twice when it is named twice", () => {
+    const entries = { Inner: { body: number, pulledFrom: "types.agency" } };
+    const pair: VariableType = {
+      type: "objectType",
+      properties: [
+        { key: "a", value: named("Inner") },
+        { key: "b", value: named("Inner") },
+      ],
+    };
+    expect(schemaFor(pair, entries)).toBe(`z.object({ "a": z.number(), "b": z.number() })`);
+  });
+
+  it("refuses one that refers to itself, and says where to import it from", () => {
+    const tree: VariableType = {
+      type: "objectType",
+      properties: [{ key: "children", value: { type: "arrayType", elementType: named("Tree") } }],
+    };
+    const entries = { Tree: { body: tree, pulledFrom: "types.agency" } };
+    expect(() => schemaFor(named("Tree"), entries)).toThrow("Import it by name from types.agency");
+  });
+
+  it("refuses one that refers to itself through a Result", () => {
+    const step = holds("next", {
+      type: "resultType",
+      successType: named("Step"),
+      dataType: { type: "primitiveType", value: "any" },
+    } as VariableType);
+    const entries = { Step: { body: step, pulledFrom: "types.agency" } };
+    expect(() => schemaFor(named("Step"), entries)).toThrow("Import it by name from types.agency");
+    expect(() => mapTypeToZodSchema(named("Step"), bodies(entries), entries)).toThrow(
+      "Import it by name from types.agency",
+    );
   });
 });

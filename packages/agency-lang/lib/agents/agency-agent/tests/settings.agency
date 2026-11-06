@@ -1,5 +1,3 @@
-// Imported only so the inlined ModelSettings schema can find it (#1283).
-import { LlmOptions } from "../lib/llmOptions.agency"
 /*
  * Tests for the agent's settings.json persistence layer.
  *

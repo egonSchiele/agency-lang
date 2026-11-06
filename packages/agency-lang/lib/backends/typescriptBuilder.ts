@@ -2148,12 +2148,12 @@ export class TypeScriptBuilder {
    * or null. The schema prints a plain alias by name and leaves its body to
    * the module that declares it, so only the names it prints need a
    * binding: those left after `resolveTypeDeep` inlines generic aliases,
-   * plus the body of a value-parameterized alias, which the schema inlines
-   * at the use site. An alias that reached the type table through an
-   * imported signature or another alias's body (`pullTransitiveAliases`)
-   * has no const here and no JavaScript import, so naming it would fail at
-   * module load (#1371). A parameter schema has the same gap; this keeps a
-   * return schema from widening it.
+   * plus the body of every alias the schema writes in place. Those are a
+   * value-parameterized alias, and an alias that reached the type table
+   * through an imported signature or another alias's body
+   * (`pullTransitiveAliases`), which has no const here and no JavaScript
+   * import. One of the second kind that refers to itself cannot be written
+   * in place, so it is reported as unbound.
    */
   private unboundAliasIn(type: VariableType): string | null {
     const aliases = this.scopes.visibleTypeAliasesFull();
@@ -2168,16 +2168,43 @@ export class TypeScriptBuilder {
       }
       seen.push(name);
       const entry = aliases[name];
-      const inlined = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
-      if (inlined) {
+      const hasBinding = declaredHere.includes(name) || this.names.isAgencyImport(name);
+      const takesValues = entry !== undefined && (entry.valueParams?.length ?? 0) > 0;
+      const pulled = entry?.pulledFrom !== undefined && !hasBinding;
+      if (pulled && this.pulledAliasNamesItself(name)) {
+        return name;
+      }
+      if (takesValues || pulled) {
         collectAliasNames(entry.body, printed);
         continue;
       }
-      if (!declaredHere.includes(name) && !this.names.isAgencyImport(name)) {
+      if (!hasBinding) {
         return name;
       }
     }
     return null;
+  }
+
+  /** Whether the body of the pulled alias `name` reaches `name` again
+   *  through aliases that are also pulled. */
+  private pulledAliasNamesItself(name: string): boolean {
+    const aliases = this.scopes.visibleTypeAliasesFull();
+    const queue: string[] = [];
+    collectAliasNames(aliases[name].body, queue);
+    const seen: string[] = [];
+    while (queue.length > 0) {
+      const next = queue.shift()!;
+      if (next === name) {
+        return true;
+      }
+      const entry = aliases[next];
+      if (seen.includes(next) || entry?.pulledFrom === undefined) {
+        continue;
+      }
+      seen.push(next);
+      collectAliasNames(entry.body, queue);
+    }
+    return false;
   }
 
   /**

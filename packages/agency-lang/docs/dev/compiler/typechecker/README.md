@@ -249,6 +249,18 @@ Splat expressions (`...x`) in arrays and objects cause the type checker to bail 
 
 An imported Agency function gets a real `functionRefType` built from the signature the `CompilationUnit` resolved for it. A name from a plain JavaScript import, or one the compilation unit could not resolve, falls back to `ANY_T`. See `importedValueType` in `lib/typeChecker/scopes.ts`.
 
+An imported type brings the aliases its body names into the type table, so the checker can read through them (`pullTransitiveAliases` in `lib/compilationUnit.ts`). Each of these is marked `pulledFrom`. Take this module:
+
+```
+import { Outer } from "./types.agency"   // type Outer = { inner: Inner }
+
+type Bag = { items: Record<string, Outer> }
+```
+
+`Inner` is in the type table, marked `pulledFrom`. The module has no schema const for `Inner` and no JavaScript import of it, so naming it in the schema for `Bag` would fail when the module loads. The schema mapper writes `Inner`'s body in place of its name (`pulledAliasBody` in `lib/backends/typescriptGenerator/typeToZodSchema.ts`).
+
+A pulled alias that refers to itself cannot be written in place. Codegen stops with an error that names the file to import it from, and a named import gives it a const. `returnSchemaFor` emits no return schema for a function whose return type reaches one, so an exported def never causes that error by its return type alone.
+
 ### For loops
 
 For loop variables are inferred from the iterable:

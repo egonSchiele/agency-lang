@@ -155,7 +155,12 @@ def regenState(state: PlanState, gaps: string): PlanState {
 }
 
 def fallbackState(task: string, state: PlanState): PlanState {
-  const attempt = codingAgent(task: task)
+  // codingAgent runs on the caller's thread, and this fallback is a fresh
+  // attempt that should not read the planner's messages.
+  let attempt: Result<string> = failure("the fallback coding agent never ran")
+  thread(label: "codingAgent") {
+    attempt = codingAgent(task: task)
+  }
   const summary = if isFailure(attempt) then "Fallback coding agent failed: ${attempt.error}" else attempt.value
   return {
     summary: summary,

@@ -1,0 +1,101 @@
+import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
+import { githubTools, spillTools, ASK_USER_HINT } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
+import { ensureSystemMessage } from "std::thread"
+
+import { communicationTools } from "./lib/toolkits.agency"
+
+/** @module
+@summary Read and act on GitHub pull requests and issues.
+
+Give `githubAgent` to another agent as a tool. That agent then carries one
+tool in place of the eighteen GitHub tools, which are only sent to the model
+while `githubAgent` is working.
+
+```ts
+import { githubAgent } from "std::agents/github"
+
+node main() {
+  const answer: string = llm("Summarize the review comments on PR 12", { tools: [githubAgent] })
+  print(answer)
+}
+```
+
+When called as an LLM tool, `githubAgent` continues the caller's conversation,
+so it sees the diff and the discussion that came before it. From code, wrap
+the call in `thread { ... }` to keep its messages out of the current thread.
+*/
+
+static const systemPrompt = """
+You handle GitHub for the conversation above: reading pull requests, issues,
+checks, and comments, and posting reviews and comments.
+
+- The conversation above is your context. Use what it already holds, such as
+  the diff, the test output, and what the user asked for.
+- Read before you write. Look at the pull request or issue before posting to it.
+- Posting is visible to other people and cannot be taken back. Post only what
+  the task asks for, once.
+- Report what you found or did in a few lines, with the pull request or issue
+  number and a link when you have one.${ASK_USER_HINT}
+"""
+
+export def buildTools(): any[] {
+  """
+  Return the GitHub tools with the progress and question tools.
+  """
+  return [...githubTools(), ...spillTools(), ...communicationTools()]
+}
+
+def work(
+  task: string,
+  context: string,
+  model: string,
+  provider: string,
+  extraTools: any[],
+): string {
+  ensureSystemMessage(systemPrompt)
+  return llm(
+    withContext(task: task, context: context),
+    llmOptions(
+    model: model,
+    provider: provider,
+    tools: [...buildTools(), ...extraTools],
+    spillToolResultsOver: AGENT_SPILL_OVER,
+  ),
+  )
+}
+
+/** Called from code, this runs on the caller's thread like any function.
+  Wrap the call in `thread { ... }` to keep it apart. */
+@guarded(cost: maxCost, time: maxTime)
+export handoff def githubAgent(
+  task: string,
+  context: string = "",
+  maxCost: number = $5.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  extraTools: any[] = [],
+): Result<string> {
+  """
+  Read or act on GitHub pull requests and issues: look up a pull request, its
+  diff, checks, reviews, and comments; search, create, comment on, label, and
+  close issues; post a review or a review comment. It continues your
+  conversation, so it already sees the work above.
+
+  @param task - What to look up or post, with the pull request or issue number when known.
+  @param context - Extra material folded into the prompt, or "".
+  @param maxCost - Cost budget in USD.
+  @param maxTime - Time budget in milliseconds.
+  @param model - Model override, or "" for the ambient model.
+  @param provider - Provider for the model override, ignored when model is empty.
+  @param extraTools - Tools to add to the built-in GitHub tools.
+  """
+  return work(
+    task: task,
+    context: context,
+    model: model,
+    provider: provider,
+    extraTools: extraTools,
+  )
+}

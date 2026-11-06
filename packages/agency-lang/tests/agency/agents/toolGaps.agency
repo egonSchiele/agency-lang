@@ -5,6 +5,7 @@ import { buildTools as agencyVerifierTools } from "std::agents/agency/verifier"
 import { buildTools as agencyCodingTools } from "std::agents/agency/coding"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
 import { buildTools as explorerTools } from "std::agents/explorer"
+import { buildTools as githubAgentTools } from "std::agents/github"
 import { gitTools, readOnlyGitTools } from "std::agents/lib/toolkits"
 import { githubTools, githubReadTools } from "std::agents/lib/toolkits"
 
@@ -109,12 +110,28 @@ node githubBundlesSplitReadsFromWrites(): boolean {
   return readsLookRight && readsPostNothing && allPosts && readNames.length == 11 && writeNames.length == 7
 }
 
-// The coding agent can read and act on pull requests and issues. The agency
-// agent's code subagent builds its list from this one, so this is also what
-// `agency agent` gets.
-node codingHasGithubReadsAndWrites(): boolean {
+// The coding agent reaches GitHub through one handoff tool, not the
+// eighteen GitHub tools, whose schemas would ride on every request. The
+// agency agent's coders build their lists from this one, so this is also
+// what `agency agent` gets.
+node codingReachesGithubThroughTheHandoff(): boolean {
   const tools = codingTools()
-  return hasTool(tools, "ghPrGet") && hasTool(tools, "ghPrChecks") && hasTool(tools, "ghPrReview") && hasTool(tools, "ghIssueCreate")
+  const ownNames = map(githubTools(), \tool -> tool.name)
+  const carriesNone = every(ownNames, \name -> !hasTool(tools, name))
+  return hasTool(tools, "githubAgent") && carriesNone && ownNames.length > 0
+}
+
+// The handoff agent is where the reads and the writes live.
+node githubAgentHasReadsAndWrites(): boolean {
+  const tools = githubAgentTools()
+  return hasTool(tools, "ghPrGet") && hasTool(tools, "ghPrChecks") && hasTool(tools, "ghPrReview") && hasTool(tools, "ghIssueCreate") && hasTool(tools, "question")
+}
+
+// A general coder pays for no Agency tools. The agency agent's Agency
+// coder adds them at its call site.
+node codingHasNoAgencyTools(): boolean {
+  const tools = codingTools()
+  return !hasTool(tools, "agencyGuide") && !hasTool(tools, "agencyStdlib") && !hasTool(tools, "typecheck")
 }
 
 // The reviewer can read a pull request but still posts nothing: the write
@@ -129,7 +146,7 @@ node reviewerReadsGithubButCannotPost(): boolean {
   return canRead && cannotPost && writeNames.length > 0
 }
 
-// Only the coding and review agents carry GitHub tools. Handing them to
+// Only the GitHub and review agents carry GitHub tools. Handing them to
 // every agent is a deliberate change to this test, not a side effect.
 node explorerHasNoGithub(): boolean {
   return !hasTool(explorerTools(), "ghPrGet") && !hasTool(explorerTools(), "ghIssueGet")

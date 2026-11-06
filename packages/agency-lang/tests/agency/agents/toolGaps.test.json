@@ -100,8 +100,30 @@
       ]
     },
     {
-      "nodeName": "codingHasGithubReadsAndWrites",
-      "description": "the coding agent can read and act on pull requests and issues",
+      "nodeName": "codingReachesGithubThroughTheHandoff",
+      "description": "the coding agent carries the GitHub handoff and none of the GitHub tools",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "githubAgentHasReadsAndWrites",
+      "description": "the GitHub agent can read and act on pull requests and issues",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "codingHasNoAgencyTools",
+      "description": "the coding agent carries no Agency docs or typecheck tools",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

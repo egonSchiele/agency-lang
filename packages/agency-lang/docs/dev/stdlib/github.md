@@ -108,12 +108,20 @@ authenticated calls.
 
 `std::agents/lib/toolkits` has two bundles over this module, shaped like
 the git bundles: `githubReadTools()` holds the eleven reads and
-`githubTools()` adds the seven writes. The coding agent claims
-`githubTools()`, and the agency agent's code subagent builds its list from
-the coding agent, so `agency agent` carries all eighteen. The review agent
-claims `githubReadTools()` only, which keeps its no-writes rule. No other
-agent carries GitHub tools; `tests/agency/agents/toolGaps.agency` pins
-that.
+`githubTools()` adds the seven writes.
+
+`githubAgent` (`stdlib/agents/github.agency`) claims `githubTools()`. It is
+a `handoff def`, and the coding agent carries it as one tool. The eighteen
+schemas come to about 16,800 characters, and an agent that claimed them
+directly would send them on every request. Through the handoff they are
+sent only while GitHub work is running. The handoff continues the coder's
+conversation, so the GitHub agent sees the diff and the test output with
+nothing retold. The agency agent's two coders build their lists from the
+coding agent, so `agency agent` reaches all eighteen the same way.
+
+The review agent claims `githubReadTools()` directly, which keeps its
+no-writes rule. No other agent carries GitHub tools;
+`tests/agency/agents/toolGaps.agency` pins that.
 
 The recommended built-in policy (`lib/runtime/builtinPolicies.ts`) approves
 every read effect and has no rule for any write, so a write prompts the

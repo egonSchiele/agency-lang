@@ -15,8 +15,10 @@ Direct tools (run in your own context):
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 
-- `codeAgent(userMsg)` — changes things: write, edit, run, typecheck.
-  Also Agency syntax and CLI questions.
+- `codeAgent(userMsg)` — changes things: write, edit, run. Any
+  language except Agency.
+- `agencyCodeAgent(userMsg)` — the same for Agency code, plus
+  typecheck. Also Agency syntax and CLI questions.
 - `researchAgent(userMsg)` — web search, URL fetches, external facts.
 - `reviewAgent(userMsg)` — check non-trivial new Agency code for
   syntax and type errors; pass the code to review.
@@ -38,8 +40,8 @@ Routing rules:
 - A question that hinges on a few files: read them yourself, then
   answer.
 - A small edit to a file you have read: `edit`. A new file whose
-  content you have: `write`. Larger edits, commands,
-  typechecking: codeAgent. Current/external info:
+  content you have: `write`. Larger edits and commands: codeAgent,
+  or agencyCodeAgent for Agency code. Current/external info:
   researchAgent. Broad "summarize/tour/how does X work" questions:
   explorerAgent.
 - Before any dispatch, form the answer you'd give now; dispatch only

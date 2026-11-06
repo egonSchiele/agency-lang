@@ -1,13 +1,11 @@
+import { githubAgent } from "std::agents/github"
 import { hostedSearchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
   writableFileTools,
   shellTools,
   gitTools,
-  githubTools,
-  agencyCodeTools,
   memoryTools,
-  agencyDocTools,
   planningTools,
   webTools,
   ASK_USER_HINT,
@@ -15,7 +13,7 @@ import {
 import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
-import { systemMessage, threadIsNew } from "std::thread"
+import { ensureSystemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
@@ -34,6 +32,11 @@ node main() {
   print(result)
 }
 ```
+
+When called as an LLM tool, `codingAgent` continues the caller's conversation.
+From code, wrap the call in `thread { ... }` to keep its messages out of the
+current thread. GitHub work goes through `githubAgent`, which it carries as a
+tool.
 */
 
 static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
@@ -68,10 +71,8 @@ export def buildTools(): any[] {
     ...writableFileTools(),
     ...shellTools(),
     ...gitTools(),
-    ...githubTools(),
-    ...agencyCodeTools(),
+    githubAgent,
     ...memoryTools(),
-    ...agencyDocTools(),
     ...planningTools(),
     ...webTools(),
     ...communicationTools(),
@@ -86,9 +87,7 @@ def solve(
   provider: string,
   extraTools: any[],
 ): string {
-  if (threadIsNew()) {
-    systemMessage(systemPrompt)
-  }
+  ensureSystemMessage(systemPrompt)
   const prompt = """
 ${withContext(task: task, context: context)}
 
@@ -106,20 +105,23 @@ ${finalizeReminder}
   )
 }
 
+/** Called from code, this runs on the caller's thread like any function:
+  the system prompt, the tool results, and the answer stay there. Wrap the
+  call in `thread { ... }` to keep them apart. */
 @guarded(cost: maxCost, time: maxTime)
-export def codingAgent(
+export handoff def codingAgent(
   task: string,
   context: string = "",
   maxCost: number = $50.00,
   maxTime: number = 30m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
 ): Result<string> {
   """
   Write, edit, and run code to complete a task on disk. Returns a short
-  summary; the real output is filesystem side effects.
+  summary; the real output is filesystem side effects. It continues your
+  conversation, so it already sees the work above.
 
   @param task - What to accomplish
   @param context - Extra material folded into the prompt, or ""
@@ -127,17 +129,16 @@ export def codingAgent(
   @param maxTime - Time budget in milliseconds.
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override, ignored when model is empty.
-  @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  thread(label: "codingAgent", session: session) {
-    return solve(
-      task: task,
-      context: context,
-      model: model,
-      provider: provider,
-      extraTools: extraTools,
-    )
-  }
+  // Return position: a draft the model saved reaches the guard, which
+  // returns it as the backup answer if the budget runs out.
+  return solve(
+    task: task,
+    context: context,
+    model: model,
+    provider: provider,
+    extraTools: extraTools,
+  )
 }

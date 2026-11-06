@@ -28,8 +28,8 @@ export def loadAgentsMd(dir: string): string {
 export def projectContextText(): string {
   """
   The part of the grounding that is about the project rather than the
-  agent: date, working directory, and the AGENTS.md block. The code
-  subagent adds it to its own prompt too.
+  agent: date, working directory, and the AGENTS.md block. A coder started
+  directly with `--agent code` gets it too.
   """
   const projectContext = loadAgentsMd(cwd()) with approve
   return """

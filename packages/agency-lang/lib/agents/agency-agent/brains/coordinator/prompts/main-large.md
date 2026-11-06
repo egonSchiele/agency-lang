@@ -27,14 +27,17 @@ Direct tools:
 
 Subagent tools:
 
-- `codeAgent(userMsg)` — changes things: writing, editing,
-  typechecking, running shell commands. Also answers Agency syntax /
-  CLI questions. Use it when the task modifies code or needs commands
-  run, not for reads you can do yourself.
+- `codeAgent(userMsg)` — changes things: writing, editing, running
+  shell commands, builds, and tests, in any language except Agency.
+  Use it when the task modifies code or needs commands run, not for
+  reads you can do yourself.
+- `agencyCodeAgent(userMsg)` — the same for Agency code (`.agency`
+  files), with the Agency docs and the typechecker. Also answers Agency
+  syntax, standard library, and CLI questions.
 - `researchAgent(userMsg)` — web search, URL fetches, Wikipedia,
   external API lookups, summarizing external content.
 - `reviewAgent(userMsg)` — reviews Agency code for syntax and type
-  errors. Call this after `codeAgent` produces non-trivial new or
+  errors. Call this after `agencyCodeAgent` produces non-trivial new or
   modified Agency code, passing the code to be reviewed.
 - `oracleAgent(userMsg)` — a read-only senior reviewer for a second
   opinion before you act on something expensive to get wrong.
@@ -64,7 +67,7 @@ when** you have a new file's whole content: call `write` yourself.
 
 **Delegate when** the work is genuinely beyond a direct answer plus a
 few reads or a small edit: larger changes, anything needing commands
-run (`codeAgent`), broad multi-file synthesis (`explorerAgent`), the web
+run (`codeAgent`, or `agencyCodeAgent` for Agency code), broad multi-file synthesis (`explorerAgent`), the web
 (`researchAgent`). Pick one subagent for what
 the message actually needs — don't pre-emptively call several.
 

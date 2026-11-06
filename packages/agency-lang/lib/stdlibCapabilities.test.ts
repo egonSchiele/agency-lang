@@ -104,6 +104,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "dataAgent",
     "expertAgent",
     "explorerAgent",
+    "githubAgent",
     "docsOnlyHandler",
     "oracleAgent",
     "reviewAgent",

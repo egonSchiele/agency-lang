@@ -307,6 +307,8 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   todoList: { kind: "tasks", heading: { text: "Tasks", style: "heading" } },
   researchAgent: { kind: "agent", label: "Research" },
   codeAgent: { kind: "agent", label: "Code" },
+  agencyCodeAgent: { kind: "agent", label: "Agency code" },
+  githubAgent: { kind: "agent", label: "GitHub" },
   rewriteAgent: { kind: "agent", label: "Rewrite" },
   writingAgent: { kind: "agent", label: "Writing review" },
   reviewAgent: { kind: "agent", label: "Review" },

@@ -1569,9 +1569,10 @@ export async function _runLineRepl(
       await printFooter(run, status, useColor, stats);
     }
   } finally {
-    typedLine.teardown();
+    // Newest wrapper first: each restores the handler it wrapped.
     editorKey.teardown();
     teardownSlashTrigger();
+    typedLine.teardown();
     replCtx.inputOverride = prevOverride;
     restoreReplGlobals();
     // Persist whatever entries readline accumulated. `rl.history` is

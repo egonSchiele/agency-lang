@@ -622,8 +622,13 @@ function synthTryExpression(
 ): VariableType {
   const inner = synthType(expr.call, scope, ctx);
   if (isAnyType(inner)) return inner;
-  if (inner.type === "resultType") return inner;
-  return { type: "resultType", successType: inner, dataType: ANY_T };
+  const aliases = ctx.getTypeAliases();
+  if (safeResolveType(inner, aliases).type === "resultType") return inner;
+  return {
+    type: "resultType",
+    successType: passedThroughSuccessType(inner, aliases),
+    dataType: ANY_T,
+  };
 }
 
 const BOOLEAN_OPS = new Set([
@@ -858,11 +863,12 @@ function blockReturnType(
   return unionTypes(returnTypes);
 }
 
-/** What a guard's success carries when its block returns `element`. At run
- *  time a returned Result passes through unchanged and any other value is
- *  wrapped, so each Result among the returns, a type alias of one
- *  included, gives its success type, and every other return gives itself. */
-function guardSuccessType(
+/** What the success of a `guard` or a `try` carries when the guarded block
+ *  or the tried call returns `element`. At run time a returned Result
+ *  passes through unchanged and any other value is wrapped, so each Result
+ *  among the returns, a type alias of one included, gives its success
+ *  type, and every other return gives itself. */
+function passedThroughSuccessType(
   element: VariableType,
   aliases: Record<string, TypeAliasEntry>,
 ): VariableType {
@@ -871,7 +877,7 @@ function guardSuccessType(
     return resolved.successType;
   }
   if (resolved.type === "unionType") {
-    return unionTypes(resolved.types.map((member) => guardSuccessType(member, aliases)));
+    return unionTypes(resolved.types.map((member) => passedThroughSuccessType(member, aliases)));
   }
   return element;
 }
@@ -890,13 +896,13 @@ const BLOCK_CALL_RESULT: Record<
   // annotation is the generic Result, so parameterize it from the
   // block. A direct `_guard` call with a block gets the same, correct,
   // typing. A block that returns a Result<T> gives Result<T>, not
-  // Result<Result<T>> (guardSuccessType). The failure side stays `any`,
+  // Result<Result<T>> (passedThroughSuccessType). The failure side stays `any`,
   // the try-expression precedent, and because a trip fails with the
   // guard's own data: the err-side narrowing users rely on (`isFailure`,
   // `error.type`) is field-based, not type-based.
   _guard: (element, aliases) => ({
     type: "resultType",
-    successType: guardSuccessType(element, aliases),
+    successType: passedThroughSuccessType(element, aliases),
     dataType: ANY_T,
   }),
   // fork joins every branch into a list. The list shape is kept even

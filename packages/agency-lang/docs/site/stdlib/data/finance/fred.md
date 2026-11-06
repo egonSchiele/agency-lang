@@ -20,11 +20,6 @@ description: "Read FRED economic series and their metadata."
   Requires a free API key. Get one at https://fred.stlouisfed.org/docs/api/api_key.html and
   set it as the `FRED_API_KEY` environment variable.
 
-  > **Note:** FRED's API v1 accepts the key only as a URL query parameter, so when
-  > `observability` is enabled the key appears in statelog `fetchJSON` interrupt payloads
-  > (the URL is logged). This is a general property of any secret passed in a URL with
-  > `std::http`. Use a trusted statelog destination for runs that call FRED.
-
   ### Usage
 
   ```ts
@@ -52,7 +47,7 @@ export type FredObservation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L38))
 
 ### FredSeries
 
@@ -69,7 +64,7 @@ export type FredSeries = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L45))
 
 ### FredSeriesInfo
 
@@ -88,7 +83,7 @@ export type FredSeriesInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L52))
 
 ### FredUnits
 
@@ -108,7 +103,7 @@ export type FredUnits =
   | "log"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L68))
 
 ### FredFrequency
 
@@ -135,7 +130,7 @@ export type FredFrequency =
   | "wesun"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L72))
 
 ## Effects
 
@@ -147,7 +142,7 @@ effect std::fred {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L35))
 
 ## Functions
 
@@ -189,7 +184,7 @@ Set the observation start date when you want recent data. A limit takes
 
 **Needs:** `network`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L180))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L175))
 
 ### fredSeriesInfo
 
@@ -214,4 +209,4 @@ Fetch a FRED series' title, display units, frequency, and coverage dates.
 
 **Needs:** `network`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L202))

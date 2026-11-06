@@ -18,11 +18,6 @@ import { env } from "std::system"
   Requires a free API key. Get one at https://fred.stlouisfed.org/docs/api/api_key.html and
   set it as the `FRED_API_KEY` environment variable.
 
-  > **Note:** FRED's API v1 accepts the key only as a URL query parameter, so when
-  > `observability` is enabled the key appears in statelog `fetchJSON` interrupt payloads
-  > (the URL is logged). This is a general property of any secret passed in a URL with
-  > `std::http`. Use a trusted statelog destination for runs that call FRED.
-
   ### Usage
 
   ```ts

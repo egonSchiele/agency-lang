@@ -284,8 +284,16 @@ def resolveRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
   })
 }
 
-// Account for redirects independently of the verb. A Git read with an output
-// redirect also needs write approval. Unresolved targets require broad approval.
+// A redirect reads or writes a file whatever the command is, so it is
+// accounted for here, apart from the verb. Without this check,
+// `echo pwned >> .bashrc; git status` would be classified as a Git read,
+// and any rule that approves Git reads would approve the write.
+//
+// Each redirect contributes the effect of the file it reads or writes. One
+// that only moves a stream, such as `2>&1`, contributes nothing. A
+// redirect with no rule in the body, or a target that is not literal, is
+// a failure, which sends the whole string to std::bash. A variable target
+// cannot fill the payload unless safeBash expands it itself.
 def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   """
   Determine the file-read and file-write effects contributed by redirects.
@@ -505,6 +513,10 @@ static const NO_EXEC_PROGRAMS: string[] = [
   "which", "whereis"
 ]
 
+// A program no arm or table owns asks std::exec, the question the exec
+// tool asks for the same program and arguments. Bash builtins, programs
+// that run other programs, and a program whose stdin the payload cannot
+// describe ask std::bash.
 def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
   Build an execution approval for a program whose arguments and input can be described.
@@ -512,7 +524,9 @@ def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: b
   if (BUILTIN_VERBS.includes(verb)) {
     return failure("`${verb}` is a bash builtin, not a program")
   }
-  // Wrapper programs need the broad Bash question.
+  // safeBash has no rule for a wrapper program, so it asks std::bash. The
+  // rejection fixtures check this exact sentence, so rewording it breaks
+  // them.
   if (NO_EXEC_PROGRAMS.includes(verb)) {
     return failure("no rule for `${verb}`")
   }
@@ -578,7 +592,9 @@ def fileReadEffects(verb: string, found: FileRead, readsStdin: boolean, redirect
   }
 }
 
-// Unlisted flags require broad approval rather than an incomplete Git payload.
+// A flag with no rule is a failure, so the command asks std::bash.
+// Answering `git log --graph` with a plain std::git::log approval would
+// describe a different command from the one that runs.
 def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
   """
   Classify supported Git reads, rejecting arguments or flags without an exact rule.
@@ -950,6 +966,10 @@ static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
  its stdin when it names no path. */
 type GrepRead = { kind: "stdin" } | { kind: "search"; call: GrepCall }
 
+// A command that names no file and reads its stdin. Fed by a pipe, it reads
+// only the previous command's output, so it adds nothing beyond its
+// redirects. Anywhere else its stdin is safeBash's closed one, so the
+// command does nothing useful and stays unrecognized.
 def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
   Accept a command that reads no files only when a pipe supplies its input.
@@ -960,10 +980,11 @@ def stdinStage(verb: string, readsStdin: boolean, redirects: Effect[]): Result<E
   return failure("${verb} with no path reads stdin")
 }
 
-// A command that names no file and reads its stdin. Fed by a pipe, it reads
-// only the previous command's output, so it adds nothing beyond its
-// redirects. Anywhere else its stdin is safeBash's closed one, so the
-// command does nothing useful and stays unrecognized.
+// The counterpart of stdinStage for a program std::exec describes. The
+// payload's `stdin` is empty, so a program fed by a pipe or by `<` would be
+// described wrongly, and it stays unrecognized. The `<` is read from the
+// command's own redirects and not from the effects. By this point it has
+// become a std::read effect, which does not say which command it came from.
 def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Result {
   """
   Refuse program invocations whose input cannot be described by the execution payload.
@@ -1080,6 +1101,10 @@ def isDigits(text: string): boolean {
   return text != "" && others.length == 0
 }
 
+// The one place a grep command's flags become std::grep's fields. The bash
+// path and the shell-free path both call it, so both build the approval
+// the same way. They differ only in the pattern, its regex flags, and the
+// cap they pass.
 def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: number): GrepPayload {
   """
   Build an approval payload from a validated grep call.
@@ -1137,6 +1162,11 @@ static const SHELL_FREE_REGEX_FLAGS = "u"
 /** The most matches a shell-free grep returns; the output says so when it stops. */
 static const SHELL_FREE_GREP_CAP = 1000
 
+// A grep that safeBash runs in process goes through the grep tool's own
+// search and not the grep program, so its approval means what the grep
+// tool's approval means. This applies only when every flag and every
+// character of the pattern means the same thing to grep and to the tool.
+// A failure means "not this path", and the general rules then decide.
 @capabilities(fileRead)
 def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   """
@@ -1843,6 +1873,11 @@ static const DEFAULT_LINE_COUNT = 10
 /** The read verbs the shell-free path prints itself. */
 static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
 
+// A cat of one or more files, or a head or tail of one, that safeBash runs
+// in process goes through the read tool's own read and not the program,
+// so its approval means what the read tool's approval means. This applies
+// only to the flags `_renderReadView` prints exactly. A failure means
+// "not this path", and the general rules then decide.
 @capabilities(fileRead)
 def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   """
@@ -2165,7 +2200,10 @@ def pipelineCommands(stages: PipelineStage[]): FlatCommand[] {
   return out
 }
 
-// Run the classified tree after narrow approval so execution matches its payloads.
+// Used only when every command was recognized. The approval says the
+// command is, for example, `git status`, so safeBash runs the tree it
+// classified and not the original text. A parser bug can then run only
+// what the classifier thought it read.
 def rebuild(commands: Command[]): Result<string> {
   """
   Render the classified command tree back to Bash source.
@@ -2326,6 +2364,8 @@ def echoText(command: SimpleCommand): Result<string> {
   return success(words.value.join(" ") + end)
 }
 
+// This path builds a string and does nothing else. It cannot write a file
+// or reach the network, however wrong the classifier is.
 def echoPlan(command: SimpleCommand): Result<Plan> {
   """
   Plan a literal echo without redirects, returning its output without a shell.

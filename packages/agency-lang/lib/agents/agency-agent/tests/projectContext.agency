@@ -6,11 +6,16 @@
 import { mkdir, remove } from "std::fs"
 import { bash } from "std::shell"
 
+import { setAgentCwd } from "std::index"
+
 import {
   InstructionFile,
+  approvingInstructionReads,
   instructionFolders,
   instructionsText,
   loadProjectInstructions,
+  projectContextText,
+  withProjectContextIfMoved,
  } from "../lib/projectContext.agency"
 
 def tree(): string {
@@ -114,4 +119,95 @@ node textNamesEachFolder(): boolean {
 
 node noFilesIsEmptyText(): boolean {
   return instructionsText([]) == ""
+}
+
+// The block is built for the agent's working directory, which a coder can
+// change with `setAgentCwd`, and not for the directory the agent started in.
+node blockFollowsTheAgentDirectory(): boolean {
+  if (!buildTree()) {
+    return false
+  }
+  const work = tree() + "/repo/sub/work"
+  setAgentCwd(work)
+  const block = projectContextText()
+  clearTree()
+  return block.includes("Current working directory: ${work}") && block.includes("work rules")
+}
+
+// After the agent's directory changes, the next message carries the new
+// folder's block once. A message sent with no change is left alone.
+node movedDirectorySendsTheBlockAgain(): string {
+  if (!buildTree()) {
+    return "could not build the tree"
+  }
+  setAgentCwd(tree() + "/repo/sub/work")
+  projectContextText()
+  const unmoved = withProjectContextIfMoved("first message")
+  setAgentCwd(tree() + "/repo/sub/empty")
+  const moved = withProjectContextIfMoved("second message")
+  const afterwards = withProjectContextIfMoved("third message")
+  clearTree()
+  const facts = [
+    unmoved == "first message",
+    moved.includes("sub rules"),
+    !moved.includes("work rules"),
+    moved.endsWith("second message"),
+    afterwards == "third message",
+  ]
+  return JSON.stringify(facts)
+}
+
+// Before any block has been built there is nothing to replace.
+node noBlockYetSendsNothing(): boolean {
+  setAgentCwd(tree() + "/repo/sub/empty")
+  return withProjectContextIfMoved("only message") == "only message"
+}
+
+def rejectEverything(intr: any): any {
+  return reject()
+}
+
+// The block for a moved folder is read inside the agent's policy handler.
+// With no rule for the read, where the user would be asked, the harness's
+// own read of the instruction files is approved, and the same file read
+// any other way still goes to the handler, which here rejects it.
+node movedBlockIsReadUnderAPolicy(): string {
+  if (!buildTree()) {
+    return "could not build the tree"
+  }
+  setAgentCwd(tree() + "/repo/sub/work")
+  projectContextText()
+  setAgentCwd(tree() + "/repo/sub/empty")
+  const policy = approvingInstructionReads.partial(policyHandler: rejectEverything, rules: {})
+  let moved = ""
+  let direct: any = null
+  handle {
+    moved = withProjectContextIfMoved("second message")
+    direct = read("CLAUDE.md", tree() + "/repo/sub")
+  } with policy
+  clearTree()
+  const facts = [moved.includes("sub rules"), moved.includes("root rules"), direct is failure]
+  return JSON.stringify(facts)
+}
+
+// A rule that rejects reading one folder still wins: that folder's
+// instructions are left out, and the others are read.
+node rejectRuleStillStopsTheRead(): string {
+  if (!buildTree()) {
+    return "could not build the tree"
+  }
+  setAgentCwd(tree() + "/repo/sub/work")
+  projectContextText()
+  setAgentCwd(tree() + "/repo/sub/empty")
+  const rules = {
+    "std::read": [{ match: { dir: tree() + "/repo/sub" }, action: "reject" }]
+  }
+  const policy = approvingInstructionReads.partial(policyHandler: rejectEverything, rules: rules)
+  let moved = ""
+  handle {
+    moved = withProjectContextIfMoved("second message")
+  } with policy
+  clearTree()
+  const facts = [moved.includes("sub rules"), moved.includes("root rules")]
+  return JSON.stringify(facts)
 }

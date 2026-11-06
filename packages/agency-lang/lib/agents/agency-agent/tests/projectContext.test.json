@@ -59,6 +59,56 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "blockFollowsTheAgentDirectory",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "movedDirectorySendsTheBlockAgain",
+      "input": "",
+      "expectedOutput": "\"[true,true,true,true,true]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noBlockYetSendsNothing",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "movedBlockIsReadUnderAPolicy",
+      "input": "",
+      "expectedOutput": "\"[true,true,true]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectRuleStillStopsTheRead",
+      "input": "",
+      "expectedOutput": "\"[false,true]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

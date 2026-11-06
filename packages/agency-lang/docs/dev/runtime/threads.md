@@ -177,6 +177,16 @@ It has to be inside the callback, because `Runner.thread` pops the active stack 
 
 The variable receives a **deep clone** of the thread's accumulated messages (`smoltalk.Message[]` array). The thread itself is popped from the active stack and remains in the ThreadStore but is no longer active.
 
+The type checker gives the block's value the type `any[]` (the `messageThread` case of `synthType`). So this is a type error:
+
+```
+const reply: string = thread {
+  return llm("Say hello.")
+}
+```
+
+A `return` inside the block returns from the enclosing function. It does not set the block's value, which is the message list whatever the block holds.
+
 ---
 
 ## Prompts always use the active thread

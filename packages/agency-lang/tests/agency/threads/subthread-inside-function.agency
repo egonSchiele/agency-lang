@@ -1,6 +1,6 @@
 import { withoutReplyStats } from "../../helpers/withoutReplyStats.js"
 
-def nextTwo(): number[] {
+def nextTwo(): { foo: number[]; subMsgs: any[] } {
   const subMsgs = subthread {
     const foo: number[] = llm("What are the next 2 prime numbers after that?")
   }

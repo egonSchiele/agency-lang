@@ -842,6 +842,71 @@ covers every file named after them. `rg --pre=<program>` runs
 another program for each file, so a saved rule for `rg` covers that
 too.
 
+## `cd` on the left of `&&`
+
+```
+cd packages/agency-lang && pnpm test
+```
+
+This asks one `std::exec` whose `cwd` is the real `packages/agency-lang`.
+The `cd` raises nothing. Every path and every payload to its right is
+resolved against the new directory.
+
+The rule holds only for `&&`. When the `cd` fails, bash runs nothing to
+its right, so the commands there only ever run in the new directory, and
+a payload that names it is true. After `;` or `||` the next command runs
+whether or not the `cd` worked, in a directory that depends on which, so
+no payload for it would be true in both cases.
+
+`classifyAll` walks the command tree and carries the working directory
+with it. The refuse wall still reads the flat list from
+`flattenCommands`. Each tree node has a rule:
+
+- **`and`**: when the left side is a `cd`, `cdTarget` resolves its
+  directory and the right side is classified there. Otherwise the left
+  side is classified, and the directory it ends in is passed to the right
+  side. `&&` groups to the left, so `cd x && a && b` is
+  `(cd x && a) && b`, and that hand-over is how `b` is classified in `x`.
+- **`or`**: a left side that ends in another directory is unrecognized,
+  so `cd x && a || b` is broad.
+- **parentheses and pipeline stages**: each is a subshell, so the
+  directory after one is the directory before it. `(cd x && a) && b`
+  classifies `b` in the original directory.
+- **the top-level list**: a command that ends in another directory must
+  be the last one, so `cd x && a; b` is broad and `a; cd x && b` is not.
+
+`cdTarget` accepts one literal argument that resolves to a directory that
+exists. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
+an assignment is unrecognized. A `cd` in any other position is a simple
+command like any other, and `execEffects` refuses it as a builtin. That
+covers `cd x` alone, a `cd` on the right of `&&`, and `cd x && cd y && a`,
+where the second `cd` is the right side of the inner `&&`.
+
+The rebuilt text does not keep the word the model wrote. Each recognized
+`cd` is rebuilt with the directory `cdTarget` resolved, as an absolute
+real path in single quotes (`cdTo`):
+
+```
+cd '/Users/me/proj/packages/agency-lang' && pnpm test
+```
+
+Bash would otherwise decide for itself where the word leads, and it can
+disagree with the classifier in two ways:
+
+1. Bash reads a word that starts with `-` as a flag, even in quotes. With
+   a folder named `-P`, `cd '-P'` goes to the home folder.
+2. Bash keeps its own record of the path it came by, symlinks included,
+   and applies `..` to that text. After `cd link`, a `cd ..` returns to
+   the folder that holds the link. The classifier resolves `..` from the
+   link's target. The same happens when `PWD` names a symlinked path for
+   the directory bash starts in.
+
+An absolute path starts with `/` and holds no `..`, so bash goes where
+the payloads say in both cases. A resolved path that holds a single
+quote cannot be written this way, so that `cd` is unrecognized. The
+`classify` functions return the rewritten command beside the effects,
+and `rebuild` renders that tree.
+
 ## Chains in process
 
 `tryShellFreeChain` plans a line whose commands are joined by `;`, `&&`,

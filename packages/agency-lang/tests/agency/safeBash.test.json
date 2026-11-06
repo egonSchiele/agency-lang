@@ -983,6 +983,67 @@
       ]
     },
     {
+      "nodeName": "cdMovesTheRestOfAnAndChain",
+      "description": "cd <dir> on the left of && raises nothing, and every command to its right is classified in <dir>: a listing, a read, a program, a longer chain, and a pipeline. A cd that is the right side of an inner && is not recognized. The rebuilt cd names the resolved folder as an absolute path in single quotes.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::exec\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]],true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdAnywhereElseIsBroad",
+      "description": "cd alone, before ; or ||, last in a chain, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, followed by a second cd, or on the right of || asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdDoesNotLeakOutOfItsChain",
+      "description": "A cd inside parentheses ends with them, so the next command is classified in the original folder. A command after ; or || that follows a chain with a cd is broad, because its folder depends on whether the cd worked. A cd chain that comes last after ; is narrow.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"stdlib\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdGoesWhereThePayloadSays",
+      "description": "Bash, given cd's word as written, can go somewhere other than the folder the payloads name: a cd .. after a cd through a link, and a quoted folder name that starts with a dash. The rebuilt cd names the resolved folder, so each command prints the file in the folder its payload named. An unquoted cd -P is broad.",
+      "input": "",
+      "expectedOutput": "[\"real\",\"beside-target\",\"-P\",\"dash\",\"broad\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdRunsInTheNewFolder",
+      "description": "The rebuilt text runs through bash with the cd, so the read happens in the folder the approval named. One std::read is asked and no shell question.",
+      "input": "",
+      "expectedOutput": "true",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "listingsAskStdLs",
       "description": "ls, tree, and du ask std::ls for each folder they list, . when none is named. A file, a flag the table does not list, a late flag, a count that is not a number, or a path that is not literal asks std::bash. A listing ignores its stdin. A file given to ls or du asks for the folder that holds it, one question per folder.",
       "input": "",

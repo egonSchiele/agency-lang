@@ -101,7 +101,7 @@ calling it as it does now.
 In `lib/logsViewer/traceSummaries.ts`:
 
 1. Add `toolCalls`, `toolsFailed`, `toolsRejected`, `toolsUnfinished`,
-   and `errorsOutsideTools` to `TraceSummary`, all numbers.
+   and `otherErrors` to `TraceSummary`, all numbers.
 2. Add one table that says which statuses are trouble. Everything
    below reads it, so a new counted status is one new row:
 
@@ -125,9 +125,12 @@ In `lib/logsViewer/traceSummaries.ts`:
    - `toolCalls` is how many tool nodes there are.
    - Each field of `TOOL_TROUBLE` is how many have that status, from
      `classifyTool(evidence).status`.
-   - `errorsOutsideTools` is the trace's `error` events less the ones the
-     tools own (`evidence.errors.length`, summed). `ownedToolNodes` leaves
-     out a nested tool's nodes, so no error is counted twice.
+   - `otherErrors` is the trace's `error` events less the ones failed
+     tools own (`evidence.errors.length`, summed over the failed tools).
+     `ownedToolNodes` leaves out a nested tool's nodes, so no error is
+     counted twice. An error inside a tool that went on to complete is
+     counted, so a trace with `hasError` always shows something in the
+     marker column.
 
    It doesn't build the story outline. That would run `roundDeltas` and
    lay out every row, for every trace the CLI and the trace picker
@@ -142,7 +145,7 @@ Tests, added to the existing `lib/logsViewer/traceSummaries.test.ts`
    one each for failed, rejected, and unfinished.
 2. A tool call inside a subagent is counted.
 3. A trace with no tool calls gives five zeros.
-4. A failed tool's error is not in `errorsOutsideTools`. An error outside
+4. A failed tool's error is not in `otherErrors`. An error outside
    any tool is.
 5. On a real recorded log with a rejected tool call, that call counts as
    rejected and not as unfinished. `recordRejection` (`prompt.ts:937`)
@@ -155,9 +158,9 @@ Tests, added to the existing `lib/logsViewer/traceSummaries.test.ts`
 
 In `lib/cli/logsQuery/shared.ts`:
 
-1. `traceRecord` adds `toolCalls`, `errorsOutsideTools`, and each field
+1. `traceRecord` adds `toolCalls`, `otherErrors`, and each field
    of `TOOL_TROUBLE`.
-2. Add `troubleText(summary)`: `error` when `errorsOutsideTools` is above
+2. Add `troubleText(summary)`: `error` when `otherErrors` is above
    zero, then `<count> <word>` for each row of `TOOL_TROUBLE` whose count
    is above zero, joined with `, `. A clean trace gives `""`.
 

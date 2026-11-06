@@ -183,7 +183,7 @@ counts:
 | `toolsFailed` | Tool calls that logged an error and did not complete. |
 | `toolsRejected` | Tool calls whose interrupt was rejected. |
 | `toolsUnfinished` | Tool calls with no completion, no error, and no pending or rejected interrupt. |
-| `errorsOutsideTools` | `error` events that no tool call owns, such as a run that crashed. |
+| `otherErrors` | `error` events no failed tool call accounts for, such as a run that crashed, or an error inside a tool that went on to complete. |
 
 A tool call that is awaiting approval is in `toolCalls` only. It belongs
 to a paused run, and nothing has gone wrong with it.
@@ -195,7 +195,7 @@ get them:
    five fields on each trace.
 2. The marker column of the `agency logs traces` table, which reads
    `error` today, lists what went wrong, joined with commas: `error` when
-   `errorsOutsideTools` is above zero, then `2 failed`, `1 rejected`, and
+   `otherErrors` is above zero, then `2 failed`, `1 rejected`, and
    `1 unfinished`. A trace whose only trouble is two failed tools reads
    `2 failed`. It is empty for a clean trace.
 3. The summary line of `agency logs outline` gains the same words.
@@ -227,7 +227,7 @@ export type StatelogTrace = {
   calls: number;              // LLM calls
   agentName: string | null;
   hasError: boolean;
-  errorsOutsideTools: number;
+  otherErrors: number;
   toolCalls: number;
   toolsFailed: number;
   toolsRejected: number;
@@ -502,8 +502,8 @@ measures `agency logs traces --all` before and after on a large log.
 1. Unit tests for the tool counts: a trace with one completed, one
    failed, one rejected, one awaiting, and one unfinished tool call
    gives `5, 1, 1, 1`, and a tool call inside a subagent is counted. A
-   failed tool's error is not in `errorsOutsideTools`, and an error
-   outside any tool is.
+   failed tool's error is not in `otherErrors`; an error outside any
+   tool is, and so is one inside a tool that went on to complete.
 2. Unit tests for `agency logs traces`: the marker column for each kind
    of trouble. A trace with only failed tools reads `2 failed`, without
    `error`.

@@ -56,7 +56,7 @@ describe("tool counts", () => {
       toolsFailed: summary.toolsFailed,
       toolsRejected: summary.toolsRejected,
       toolsUnfinished: summary.toolsUnfinished,
-      errorsOutsideTools: summary.errorsOutsideTools,
+      otherErrors: summary.otherErrors,
     };
   };
 
@@ -76,7 +76,7 @@ describe("tool counts", () => {
       toolsFailed: 1,
       toolsRejected: 1,
       toolsUnfinished: 1,
-      errorsOutsideTools: 0,
+      otherErrors: 0,
     });
   });
 
@@ -95,15 +95,26 @@ describe("tool counts", () => {
       toolsFailed: 0,
       toolsRejected: 0,
       toolsUnfinished: 0,
-      errorsOutsideTools: 0,
+      otherErrors: 0,
     });
   });
 
-  it("leaves a failed tool's error out of errorsOutsideTools and counts one outside any tool", () => {
+  it("counts an error inside a tool that went on to complete", () => {
+    const events = tool(
+      "recovered",
+      0,
+      null,
+      ["error", { message: "retrying" }],
+      ["toolCall", { toolName: "recovered", output: "ok" }],
+    );
+    expect(countsOf(events)).toMatchObject({ toolCalls: 1, toolsFailed: 0, otherErrors: 1 });
+  });
+
+  it("leaves a failed tool's error out of otherErrors and counts one outside any tool", () => {
     const failedOnly = tool("failed", 0, null, ["error", { message: "boom" }]);
-    expect(countsOf(failedOnly).errorsOutsideTools).toBe(0);
+    expect(countsOf(failedOnly).otherErrors).toBe(0);
     const crashed = [...failedOnly, event("error", 10, null, null, { message: "crash" })];
-    expect(countsOf(crashed).errorsOutsideTools).toBe(1);
+    expect(countsOf(crashed).otherErrors).toBe(1);
   });
 
   it("counts an error in a nested tool once", () => {
@@ -115,7 +126,7 @@ describe("tool counts", () => {
       toolCalls: 2,
       toolsFailed: 1,
       toolsUnfinished: 1,
-      errorsOutsideTools: 0,
+      otherErrors: 0,
     });
   });
 });

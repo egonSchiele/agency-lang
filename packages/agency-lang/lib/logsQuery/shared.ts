@@ -129,7 +129,7 @@ export function traceRecord(summary: TraceSummary): Record<string, unknown> {
     calls: summary.rounds,
     agentName: summary.agentName ?? null,
     hasError: summary.hasError,
-    errorsOutsideTools: summary.errorsOutsideTools,
+    otherErrors: summary.otherErrors,
     toolCalls: summary.toolCalls,
     ...Object.fromEntries(TOOL_TROUBLE.map((trouble) => [trouble.field, summary[trouble.field]])),
     ask: summary.ask ?? null,
@@ -137,11 +137,12 @@ export function traceRecord(summary: TraceSummary): Record<string, unknown> {
 }
 
 /** What went wrong in a trace, for the marker column and the summary line:
- *  `error, 2 failed, 1 rejected`. `error` is an error no tool call owns; a
- *  failed tool's own error is in its count. A clean trace gives "". */
+ *  `error, 2 failed, 1 rejected`. `error` is an error no failed tool call
+ *  accounts for; a failed tool's own error is in its count. A clean trace
+ *  gives "". */
 export function troubleText(summary: TraceSummary): string {
   return [
-    ...(summary.errorsOutsideTools > 0 ? ["error"] : []),
+    ...(summary.otherErrors > 0 ? ["error"] : []),
     ...TOOL_TROUBLE.filter((trouble) => summary[trouble.field] > 0).map(
       (trouble) => `${summary[trouble.field]} ${trouble.word}`,
     ),

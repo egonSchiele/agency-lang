@@ -176,7 +176,7 @@ The column for what went wrong lists the parts that apply, such as
 
 | Word | Means |
 | --- | --- |
-| `error` | The run logged an error outside any tool call, such as a crash. |
+| `error` | The run logged an error that no failed tool call accounts for, such as a crash. |
 | `2 failed` | Two tool calls failed. The model may have carried on. |
 | `1 rejected` | A handler or a person rejected one tool call's interrupt. |
 | `1 unfinished` | One tool call has no result, no error, and no interrupt waiting. The run may still be going. |
@@ -184,7 +184,7 @@ The column for what went wrong lists the parts that apply, such as
 A tool call waiting for approval is not listed: it belongs to a paused
 run. `outline` prints the same words on each run's summary line. With
 `--json`, each run's record has `toolCalls`, `toolsFailed`,
-`toolsRejected`, `toolsUnfinished`, and `errorsOutsideTools` beside
+`toolsRejected`, `toolsUnfinished`, and `otherErrors` beside
 `hasError`.
 
 **`outline`** prints every row of a run, the rows the viewer's trace screen

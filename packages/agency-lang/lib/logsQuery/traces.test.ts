@@ -114,7 +114,7 @@ describe("logsTraces", () => {
           calls: 3,
           agentName: null,
           hasError: true,
-          errorsOutsideTools: 1,
+          otherErrors: 1,
           toolCalls: 2,
           toolsFailed: 0,
           toolsRejected: 1,

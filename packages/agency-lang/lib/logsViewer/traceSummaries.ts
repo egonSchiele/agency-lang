@@ -28,10 +28,12 @@ export type ToolCounts = {
   toolsFailed: number;
   toolsRejected: number;
   toolsUnfinished: number;
-  /** `error` events that no tool call owns, such as a run that crashed. A
-   *  failed tool call always logs an error inside its own span, so those
-   *  are left out here. */
-  errorsOutsideTools: number;
+  /** `error` events no failed tool call accounts for, such as a run that
+   *  crashed. A failed tool call always logs an error inside its own span,
+   *  and that one is in `toolsFailed`; an error inside a tool that went on
+   *  to complete is counted here, so a trace with `hasError` always has
+   *  `otherErrors` or `toolsFailed` above zero. */
+  otherErrors: number;
 };
 
 export type ToolTrouble = {
@@ -98,15 +100,17 @@ export function toolCountsOf(root: TreeNode): ToolCounts {
     toolsFailed: 0,
     toolsRejected: 0,
     toolsUnfinished: 0,
-    errorsOutsideTools: 0,
+    otherErrors: 0,
   };
   for (const trouble of TOOL_TROUBLE) {
     counts[trouble.field] = statuses.filter((status) => status === trouble.status).length;
   }
   // `toolEvidence` leaves out a nested tool's nodes, so no error is owned
   // twice.
-  const ownedErrors = evidence.reduce((sum, tool) => sum + tool.errors.length, 0);
+  const failedToolErrors = evidence
+    .filter((_, position) => statuses[position] === "failed")
+    .reduce((sum, tool) => sum + tool.errors.length, 0);
   const errors = nodes.filter((node) => node.event?.data.type === "error").length;
-  counts.errorsOutsideTools = errors - ownedErrors;
+  counts.otherErrors = errors - failedToolErrors;
   return counts;
 }

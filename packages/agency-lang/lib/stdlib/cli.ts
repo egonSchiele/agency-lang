@@ -15,6 +15,8 @@ import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/e
 import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
 import { herdrReporter, type HerdrReporter } from "./herdr.js";
+import { buildCompleter, listDirUnder } from "./cliCompleter.js";
+import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -121,21 +123,23 @@ function saveHistory(
   }
 }
 
-/** Record a just-submitted `/paste` buffer into readline `history` for recall.
- *  A multi-line buffer is stored as a one-line preview (its full text kept in
- *  `expansions`) so readline never recalls a multi-line line buffer; a
- *  single-line buffer is stored verbatim. */
+/** Record a buffer the user wrote outside readline (in `/paste` or in their
+ *  editor) into readline `history` for recall. `command` is the line readline
+ *  recorded in its place, which is removed. A multi-line buffer is stored as
+ *  a one-line preview (its full text kept in `expansions`) so readline never
+ *  recalls a multi-line line buffer; a single-line buffer is stored verbatim. */
 function recordPasteEntry(
   history: string[],
   buffer: string,
   expansions: Record<string, string>,
+  command: string = "/paste",
 ): void {
   if (buffer.includes("\n")) {
     const preview = summarizeMultiline(buffer);
-    recordHistoryEntry(history, preview, "/paste");
+    recordHistoryEntry(history, preview, command);
     expansions[preview] = buffer;
   } else {
-    recordHistoryEntry(history, buffer, "/paste");
+    recordHistoryEntry(history, buffer, command);
   }
 }
 
@@ -936,23 +940,6 @@ function paletteEntries(paletteCommands: unknown): [string, string][] {
 }
 
 /**
- * Build a Node `readline` completer over the slash-command palette.
- * Activates only when the buffer starts with `/`; outside of that
- * we don't want Tab to suggest filenames or anything else. Standard
- * readline behavior: a single hit auto-completes inline; multiple
- * hits display the list. Pairs with the live popup below — the
- * popup is the discovery aid, Tab is the "do it now" mechanism.
- */
-function buildCompleter(entries: [string, string][]): (line: string) => [string[], string] {
-  const keys = entries.map(([k]) => k);
-  return (line: string): [string[], string] => {
-    if (!line.startsWith("/")) return [[], line];
-    const hits = keys.filter((k) => k.startsWith(line));
-    return [hits.length > 0 ? hits : keys, line];
-  };
-}
-
-/**
  * Open the `prompts.autocomplete` modal preloaded with the slash
  * palette. Returns the picked command key (e.g. `/cost`) on success,
  * or `null` if the user cancelled (Ctrl+C / Escape).
@@ -1345,11 +1332,10 @@ export async function _runLineRepl(
     // leaving ample time for a real escape sequence's bytes — which arrive
     // in one burst on a local TTY — to be parsed as a sequence.
     escapeCodeTimeout: 50,
-    // Tab completion fallback for the slash-command palette.
-    // Submitting a bare `/` opens the `prompts.autocomplete` picker
-    // (see `openSlashPalette`); the completer is the "Tab to fill"
-    // mechanism for users who prefer the shell idiom.
-    completer: buildCompleter(palette),
+    // Tab completes a slash command or an `@file` mention. Submitting a
+    // bare `/` opens the `prompts.autocomplete` picker (see
+    // `openSlashPalette`); Tab is the shell idiom for the same list.
+    completer: buildCompleter(palette, listDirUnder(run.ctx.host.system.cwd())),
   });
 
   // Color the prompt + everything the user types in bright blue. The
@@ -1417,11 +1403,14 @@ export async function _runLineRepl(
     const h = (rl as unknown as { history?: string[] }).history;
     slashHistoryMark = h ? h.length : 0;
   });
+  // Ctrl+G at the prompt opens `$EDITOR` on what was typed.
+  const editorKey = installEditorKey(rl, useTTY);
   try {
     while (true) {
       let line: string;
       herdr.report("idle");
       try {
+        editorKey.atPrompt(true);
         line = await askLine(rl, coloredPrompt);
       } catch {
         // Ctrl+D (EOT) or Ctrl+C at idle: readline emits `close`,
@@ -1435,6 +1424,8 @@ export async function _runLineRepl(
       // Reset SGR so the agent's reply prints in the default color;
       // see comment on `USER_INPUT_COLOR` above for why.
       if (useColor) process.stdout.write(COLOR_RESET);
+      editorKey.atPrompt(false);
+      line = lineOrEdited(rl, editorKey, line, expansions);
       let trimmed = line.trim();
       if (trimmed.length === 0) continue;
       // A recalled multi-line paste comes back as its one-line preview (that's
@@ -1568,6 +1559,7 @@ export async function _runLineRepl(
       });
     }
   } finally {
+    editorKey.teardown();
     teardownSlashTrigger();
     replCtx.inputOverride = prevOverride;
     restoreReplGlobals();
@@ -1584,6 +1576,31 @@ export async function _runLineRepl(
     rl.close();
     await herdr.release();
   }
+}
+
+/** The line to run. When Ctrl+G submitted `line`, that is what the user
+ *  saved in their editor, or "" when they saved nothing. Otherwise it is
+ *  `line` unchanged. */
+function lineOrEdited(
+  rl: readline.Interface,
+  editorKey: EditorKey,
+  line: string,
+  expansions: Record<string, string>,
+): string {
+  const typed = editorKey.takeTyped();
+  if (typed === null) {
+    return line;
+  }
+  const saved = editInEditor(rl, typed);
+  if (saved === null) {
+    return "";
+  }
+  // readline recorded the typed text, not what the editor saved.
+  const rlHistory = (rl as unknown as { history?: string[] }).history;
+  if (rlHistory) {
+    recordPasteEntry(rlHistory, saved, expansions, typed.trim());
+  }
+  return saved;
 }
 
 /** Promise-wrap `rl.question` + a one-shot `close` listener so a

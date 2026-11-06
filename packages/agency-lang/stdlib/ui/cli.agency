@@ -54,6 +54,10 @@ The terminal supports line editing, history, slash-command completion, and
 a busy indicator. Escape cancels an active turn; Ctrl+D or Ctrl+C exits at
 an idle prompt. `/paste` opens a multi-line editor: Enter adds a newline,
 Ctrl+D submits, and Ctrl+C or Escape cancels the paste.
+
+Ctrl+G opens the text typed so far in `$EDITOR`, and submits what you save.
+Tab completes a file path in a last word that starts with `@`, such as
+`@lib/ma`.
 */
 @capabilities(terminal)
 export def repl(

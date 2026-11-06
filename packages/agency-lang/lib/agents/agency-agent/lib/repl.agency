@@ -17,14 +17,31 @@ import {
   clearScreen,
  } from "std::ui/cli"
 
+import {
+  configureLocalModel,
+  getResolvedSlots,
+  currentProvider,
+ } from "../shared.agency"
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
 import { noModelChoices } from "./modelRequest.agency"
 import { Resolved } from "./models.agency"
-import { activePresetName, presetListLines, presetTable } from "./presets.agency"
+import { withPendingNotes } from "./pendingNotes.agency"
+import {
+  activePresetName,
+  presetListLines,
+  presetTable,
+ } from "./presets.agency"
 import { diffResolved, Ctx } from "./resolution.agency"
+import {
+  markTurnDone,
+  recordTurn,
+  renameSession,
+  saveSeedTurn,
+  sessionTitle,
+ } from "./resume.agency"
 import {
   configureSearch,
   setSearchBackend,
@@ -44,26 +61,19 @@ import {
   applySessionLlmOptions,
   takePendingLlmOptions,
  } from "./session.agency"
-import { formatTurnFailure } from "./utils.agency"
-import { configureLocalModel, getResolvedSlots, currentProvider } from "../shared.agency"
-
-
-import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
-
-import {
-  markTurnDone,
-  recordTurn,
-  renameSession,
-  saveSeedTurn,
-  sessionTitle,
- } from "./resume.agency"
-import { renderReply, renderUserLine } from "./transcript.agency"
+import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
+import { shellCommand } from "./slashCommands/shell.agency"
+import { renderReply, renderUserLine } from "./transcript.agency"
 import { runTurn } from "./turn.agency"
+import { formatTurnFailure } from "./utils.agency"
 import { parseModelSpec } from "./utils.agency"
+import {
+  _installSessionHooks,
+  _sessionOnSubmit,
+ } from "agency-lang/stdlib-lib/agentSessions.js"
 
 let _session: Session = noModelChoices()
-
 
 def searchSlashCommand(): boolean {
   const opts = availableBackendItems()
@@ -74,7 +84,7 @@ def searchSlashCommand(): boolean {
     false,
     true,
   )
-  if (choice != "" && choice != null && choice != undefined) {
+  if (choice != "" && choice != null && choice != null) {
     setSearchBackend(choice)
     pushMessage("Web search backend set to: ${choice}")
   }
@@ -113,9 +123,7 @@ def costSlashCommand(): boolean {
     // Cache reads and writes are input tokens too. Counting only
     // inputTokens + outputTokens reports a fraction of a cached
     // conversation — on a long agent run, often under a tenth of it.
-    totalTokens = totalTokens
-      + m.inputTokens + m.outputTokens
-      + m.cachedInputTokens + m.cacheCreationInputTokens
+    totalTokens = totalTokens + m.inputTokens + m.outputTokens + m.cachedInputTokens + m.cacheCreationInputTokens
     totalCacheRead = totalCacheRead + m.cachedInputTokens
     totalCacheWrite = totalCacheWrite + m.cacheCreationInputTokens
   }
@@ -123,7 +131,9 @@ def costSlashCommand(): boolean {
   pushMessage("Tokens: ${totalTokens}")
   if (totalCacheRead > 0 || totalCacheWrite > 0) {
     pushMessage(
-      color.dim("        ${totalCacheWrite} written to cache, ${totalCacheRead} read back"),
+      color.dim(
+        "        ${totalCacheWrite} written to cache, ${totalCacheRead} read back",
+      ),
     )
   }
   if (byModel.length > 0) {
@@ -230,8 +240,8 @@ def localSlashCommand(): boolean {
   if (!localModelsSupported()) {
     pushMessage(
       color.yellow(
-      "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
-    ),
+        "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
+      ),
     )
     return true
   }
@@ -286,7 +296,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /image, /paste, /help. Start a line with ! to run a shell command yourself.",
       )
       return true
     }
@@ -304,7 +314,14 @@ def _runTurn(msg: string): boolean {
     "/preset" => presetSlashCommand(trimmed)
     "/policy" => policySlashCommand()
     "/rename" => renameSlashCommand("")
+    "/image" => imageSlashCommand("")
     _ => {
+      if (trimmed.startsWith("!")) {
+        return shellCommand(trimmed.slice(1).trim())
+      }
+      if (trimmed.startsWith("/image ")) {
+        return imageSlashCommand(trimmed.slice(7).trim())
+      }
       if (trimmed.startsWith("/rename ")) {
         return renameSlashCommand(trimmed.slice(8))
       }
@@ -322,14 +339,26 @@ def _runTurn(msg: string): boolean {
   }
 }
 
-
 def renameSlashCommand(title: string): boolean {
   pushMessage(renameSession(title))
   return true
 }
 
+// `/image` alone holds the image for the next message. With text after
+// it, that text is sent now, with the image.
+def imageSlashCommand(message: string): boolean {
+  if (!attachClipboardImage()) {
+    return true
+  }
+  if (message == "") {
+    pushMessage(color.dim("The image will go with your next message."))
+    return true
+  }
+  return renderUserTurn(message, message)
+}
+
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try runTurn("", msg)
+  const result = try runTurn("", withPendingNotes(msg))
   renderAgentResponse(result)
   applyPendingLlmOptions()
   markTurnDone()
@@ -389,7 +418,11 @@ export def installSessionHooks() {
 }
 
 // Runs inside runSession's policy handler; the REPL installs none of its own.
-export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory: boolean = true) {
+export def startInteractive(
+  seedTarget: string,
+  seedPrompt: string,
+  saveHistory: boolean = true,
+) {
   if (seedPrompt != "") {
     runSeedTurn(seedTarget, seedPrompt)
   }
@@ -405,4 +438,3 @@ export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory:
   )
   print(color.cyan("\nGoodbye!"))
 }
-

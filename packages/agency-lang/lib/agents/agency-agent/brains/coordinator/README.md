@@ -97,9 +97,11 @@ reply. That call is kept on purpose: the coordinator may follow a coder with
 wrapper would stop it. The researcher ends the turn because its answer is the
 reply.
 
-The coder's search tools follow the user's `/search` choice. `runCoder`
-passes the client tool or the hosted list from `withWebSearch` to the stdlib
-agent, which would otherwise pick hosted search by the model's provider.
+Every specialist's search tools follow the user's `/search` choice. The
+specialists do nothing for that themselves: `setActiveBackend` in
+`lib/search.agency` passes the choice to `setSearchMode` in
+`std::agents/lib/search`, and each stdlib agent takes its tools from that
+module's `searchTools()` and `hostedSearchTools()`.
 
 The coders have no expert, brainstorm, supervisor, or verifier
 around the coder, so one model works the task from real tool output. The

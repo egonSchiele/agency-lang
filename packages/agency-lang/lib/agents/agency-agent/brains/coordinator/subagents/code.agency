@@ -23,7 +23,7 @@ import { ensureSystemMessage } from "std::thread"
 
 import { AGENT_SOURCE_DIR } from "../../../lib/agentSource.agency"
 import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
-import { getSearchBackend, withWebSearch } from "../../../lib/search.agency"
+import { getSearchBackend } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
 
@@ -163,24 +163,18 @@ def dispatchContext(): string {
 }
 
 // Both coders are the stdlib coding agent. They differ in the tools they add.
-// The search backend the user picked with /search decides the search tools:
-// a client tool for Tavily or Brave, the provider's hosted search, or none.
-// Left to itself the stdlib agent would pick hosted search by the model's
-// provider and ignore the setting.
 def runCoder(
   userMsg: string,
   maxSeconds: number | null,
   maxDollars: number | null,
   extras: any[],
 ): Result<string> {
-  const search = withWebSearch({ tools: [] })
   return codingAgent(
     task: userMsg,
     context: dispatchContext(),
     maxCost: maxDollars ?? CODE_MAX_COST,
     maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
-    extraTools: [...extras, ...(search.tools ?? []), escalate.partial(task: userMsg)],
-    hostedTools: search.hostedTools ?? [],
+    extraTools: [...extras, escalate.partial(task: userMsg)],
   )
 }
 

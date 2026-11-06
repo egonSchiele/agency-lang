@@ -1,4 +1,4 @@
-import { searchTools, searchProviderNames, hostedSearchTools } from "std::agents/lib/search"
+import { searchTools, searchProviderNames, hostedSearchTools, setSearchMode } from "std::agents/lib/search"
 
 // Which keys a developer has set varies, so this pins the invariants that
 // hold either way: every name comes from the catalog, and the selected
@@ -24,4 +24,28 @@ node hostedSearchFollowsTheRoute(): boolean {
   const base = hostedSearchTools("gpt-4o-mini", "openai")
   const unknown = hostedSearchTools("some-local-model-nobody-shipped")
   return responses.includes("web_search") && base.length == 0 && unknown.includes("web_search")
+}
+
+// A search mode narrows both functions for the whole run. "off" offers
+// nothing whatever keys are set.
+node offModeOffersNoSearch(): boolean {
+  setSearchMode("off")
+  return searchTools().length == 0 && hostedSearchTools("gpt-4o-mini", "openai-responses").length == 0
+}
+
+// "hosted" drops the client tool and keeps the route check, so a model whose
+// provider has no hosted search is still sent none.
+node hostedModeKeepsTheRouteCheck(): boolean {
+  setSearchMode("hosted")
+  const responses = hostedSearchTools("gpt-4o-mini", "openai-responses")
+  const base = hostedSearchTools("gpt-4o-mini", "openai")
+  return searchTools().length == 0 && responses.includes("web_search") && base.length == 0
+}
+
+// A named client provider turns hosted search off. Which keys are set
+// varies, so this pins only that no other provider's tool is offered.
+node clientModeOffersNoHostedSearch(): boolean {
+  setSearchMode("tavily")
+  const names = searchProviderNames()
+  return hostedSearchTools("gpt-4o-mini", "openai-responses").length == 0 && every(names, \name -> name == "Tavily")
 }

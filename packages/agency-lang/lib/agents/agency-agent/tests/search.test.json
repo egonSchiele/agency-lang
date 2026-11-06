@@ -19,9 +19,8 @@
     { "nodeName": "nonTtyCloudBothKeysDefaultsToBrave", "input": "", "expectedOutput": "\"useWithNote|brave\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "savedOffIsRespected", "input": "", "expectedOutput": "\"use|off\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "unknownSavedBackendWarnsAndDisables", "input": "", "expectedOutput": "\"warnDisabled|off\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "hostedBackendSetsHostedToolsAndLeavesTools", "input": "", "expectedOutput": "\"web_search|0\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "tavilyBackendAppendsOneSearchTool", "input": "", "expectedOutput": "\"1|false\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "offBackendLeavesOptsUnchanged", "input": "", "expectedOutput": "\"0|false\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "tavilyDoesNotMutateTheCallersSharedToolsArray", "input": "", "expectedOutput": "\"0\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "backendBecomesTheStdlibSearchMode", "input": "", "expectedOutput": "\"tavily|off\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "hostedBackendKeepsTheProviderCheck", "input": "", "expectedOutput": "\"1|0|0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "offBackendOffersNoSearch", "input": "", "expectedOutput": "\"0|0\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

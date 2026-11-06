@@ -20,5 +20,11 @@
   "emptyTavily": {
     "providerNames": ["Brave"],
     "tools": [{ "name": "web_search_brave", "keyBound": true, "keyHidden": true }]
-  }
+  },
+  "tavilyModeBothKeys": {
+    "providerNames": ["Tavily"],
+    "tools": [{ "name": "web_search_tavily", "keyBound": true, "keyHidden": true }]
+  },
+  "braveModeTavilyOnly": { "providerNames": [], "tools": [] },
+  "offModeBothKeys": { "providerNames": [], "tools": [] }
 }

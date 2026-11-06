@@ -49,7 +49,6 @@ codingAgent(
   model: string = "",
   provider: string = "",
   extraTools: any[] = [],
-  hostedTools: string[] | null = null,
 ): Result<string>
 ```
 
@@ -72,7 +71,6 @@ Called from code, this runs on the caller's thread like any function:
 | model | `string` | "" | Model override, or "" for the ambient model |
 | provider | `string` | "" | Provider for the model override, ignored when model is empty. |
 | extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
-| hostedTools | `string[] \| null` | null | Provider-hosted tools to enable, or null to enable hosted web search when the model's provider offers it. Pass [] for none. |
 
 **Returns:** `Result<string>`
 

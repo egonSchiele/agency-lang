@@ -191,7 +191,10 @@ when present, knows more. One case where the two differ: an agent that throws
 does not crash the run, because Agency turns the error into a failure value
 and the entry node returns it. The trace ends `ok`, and `runAgent`
 (`lib/eval/run/runAgent.ts`) marks the run an `error` with the failure's
-message, so it grades 0 and its graders never see the failure as an output. `summarizeRuns(snapshot)` (`list.ts`) is one
+message, so it grades 0 and its graders never see the failure as an output.
+A rejected interrupt (a failure with `rejected: true`) is not an error: a
+policy refused an action, which a test may be checking for, so the run is a
+success and the graders get the rejection as the output. `summarizeRuns(snapshot)` (`list.ts`) is one
 `RunSummary` per trace for listings; its `hasNotes` is true when `notes.md`
 has non-blank text, and is the same for every trace the directory holds,
 because the note is about the run. `annotationSummaryText` renders the

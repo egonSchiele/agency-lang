@@ -109,6 +109,26 @@ describe("runAgent", () => {
     }
   });
 
+  // A policy that refused an action is an outcome a test may be checking
+  // for, so the graders see the rejection.
+  it("an entry node that returns a rejected interrupt is still a success", async () => {
+    const { agentPath } = makeAgentProject();
+    const runDir = path.join(tmp(), "run-1");
+    const returned = failure("interrupt rejected", null, { rejected: true });
+
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      { runDir, traceId: "trace-1", config: {} },
+      { runner: traceWritingRunner(JSON.parse(JSON.stringify(returned))) },
+    );
+
+    expect(run.status).toBe("success");
+    if (run.status === "success") {
+      expect(run.output).toMatchObject({ success: false, rejected: true });
+    }
+  });
+
   it("an output that only looks like a failure in part is still a success", async () => {
     const { agentPath } = makeAgentProject();
     const runDir = path.join(tmp(), "run-1");

@@ -77,7 +77,8 @@ export type AgentRun =
   | ({ status: "success"; output: unknown } & AgentRunArtifacts)
   /** Anything else: crashed, failed to seed/compile, the run left no
    *  statelog behind (a completed run always writes one, so its absence is a
-   *  failure too), or the entry node returned a failure value. */
+   *  failure too), or the entry node returned a failure value other than a
+   *  rejected interrupt. */
   | ({ status: "error"; errorMessage: string } & AgentRunArtifacts);
 
 const MAX_LISTED_SEEDED_FILES = 50;
@@ -150,7 +151,9 @@ class AgentRunner {
     // An agent that throws does not crash the run: Agency turns the error
     // into a failure value and the entry node returns it. That is a run
     // that did not work, so it is not handed to the graders as an answer.
-    if (isFailure(output)) {
+    // A rejected interrupt is the exception: the policy refused an action,
+    // which a test may be checking for, so the graders see it.
+    if (isFailure(output) && !output.rejected) {
       return this.fail(`the entry node returned a failure: ${output.error}`);
     }
     return { status: "success", output, ...this.artifacts() };

@@ -32,6 +32,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "offModeOffersNoSearch",
+      "description": "the off mode offers no client tool and no hosted search",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "hostedModeKeepsTheRouteCheck",
+      "description": "the hosted mode offers no client tool and still checks the model's provider",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "clientModeOffersNoHostedSearch",
+      "description": "a named client provider turns hosted search off",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

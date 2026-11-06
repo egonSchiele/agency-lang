@@ -1,5 +1,22 @@
-import { searchTools, searchProviderNames } from "std::agents/lib/search"
+import { searchTools, searchProviderNames, setSearchMode, SearchMode } from "std::agents/lib/search"
+
+def selected(mode: SearchMode) {
+  setSearchMode(mode)
+  return { tools: searchTools(), providerNames: searchProviderNames() }
+}
 
 node selectedSearch() {
-  return { tools: searchTools(), providerNames: searchProviderNames() }
+  return selected("auto")
+}
+
+node selectedSearchTavilyMode() {
+  return selected("tavily")
+}
+
+node selectedSearchBraveMode() {
+  return selected("brave")
+}
+
+node selectedSearchOffMode() {
+  return selected("off")
 }

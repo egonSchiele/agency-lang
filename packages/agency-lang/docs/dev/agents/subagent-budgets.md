@@ -10,18 +10,14 @@ not guard the turn.
   runtime installs them as a root budget before any Agency code runs
   (`installRootBudget`, `lib/runtime/node.ts`), and a root budget cannot
   be granted more.
-- `researchAgent`, `explorerAgent`, `oracleAgent`, and `codeAgent` take
+- `researchAgent`, `explorerAgent`, `oracleAgent`, `codeAgent`, and
+  `agencyCodeAgent` take
   `maxSeconds` and `maxDollars`. The coordinator fills them in from the user's words.
   Each wrapper (`brains/coordinator/subagents/*.agency`) passes
   `maxTime: timeBudget(maxSeconds, 30m)` (`brains/coordinator/lib/budgets.agency`,
   seconds to milliseconds) and `maxCost: maxDollars ?? $50.00` to the
   stdlib agent. Unset means the default the wrapper names, which is the
   stdlib agent's own default.
-
-`codeAgent` passes the budget to the stdlib coding agents in one-shot
-mode. In the interactive REPL its own `converse` runs the coder's tool
-loop, so `converse` carries the `@guarded` decorator itself, labelled
-`codeAgent`.
 
 ## The decorator
 

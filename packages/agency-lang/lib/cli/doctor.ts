@@ -20,7 +20,7 @@ export function buildDoctorPrompt(file: string, symptom?: string): string {
     "Agency has a number of parser and language gotchas that new users " +
       "frequently hit (for example, comments are not allowed inside object " +
       "literals). Before you conclude, read the bundled Troubleshooting " +
-      'guide\'s "Syntax gotchas" section (via `docSkill`) and check the file ' +
+      'guide\'s "Syntax gotchas" section (via `agencyGuide`) and check the file ' +
       "against those known gotchas.",
     "",
     "Report what you found. If you found a problem, explain the fix and " +
@@ -47,12 +47,14 @@ export function buildDoctorArgs(opts: {
     if (typeof opts.trace === "string") debug.push(opts.trace);
   }
   if (opts.logFile) debug.push("--log", opts.logFile);
-  return ["--interactive", "--agent", "code", ...debug, "--", prompt];
+  // The Agency coder: the prompt names the typecheck, parse, and docs tools,
+  // which the general coder does not carry.
+  return ["--interactive", "--agent", "agencyCode", ...debug, "--", prompt];
 }
 
 // `agency doctor <file> [--symptom <text>] [--trace [file]] [--log <path>]`
 // — launch the agency agent in interactive mode, seeded with a diagnosis prompt
-// routed to the code subagent. A thin wrapper over the generic
+// routed to the Agency coder. A thin wrapper over the generic
 // --interactive/--agent flags.
 export function doctor(
   config: AgencyConfig,

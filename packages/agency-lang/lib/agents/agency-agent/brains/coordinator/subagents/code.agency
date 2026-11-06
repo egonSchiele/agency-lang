@@ -1,37 +1,31 @@
 /*
- * Code subagent — handles anything that touches code or the file
- * system: writing, editing, typechecking, running shell commands.
+ * The two coders, as the coordinator sees them. Both are the stdlib coding
+ * agent (std::agents/coding) and both are handoffs: they continue the
+ * coordinator's conversation, so they see the request and whatever was read
+ * before it, and their edits and test output stay in its history.
  *
- * Exports `codeAgent` (registered as a coordinator tool in
- * `agent.agency`) plus `codeSysPrompt` / `codeTools`. The Workspace
- * state lives here (not in `shared.agency`) because only the code
- * subagent uses file-system tools. Relative paths resolve against the
- * agent working directory
+ * `codeAgent` is for every language but Agency. `agencyCodeAgent` adds the
+ * Agency prompt, the bundled docs tools, and the typecheck and test tools.
+ * The docstrings are written for routing, not for the agents' own behaviour.
+ *
+ * Relative paths resolve against the agent working directory
  * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
  * cwd at startup.
  */
-import { question } from "std::agent"
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
-import { agencyCodingAgent } from "std::agents/agency/coding"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
-import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { agencyCodeTools, agencyDocToolsBrief } from "std::agents/lib/toolkits"
 import { plannerAgent } from "std::agents/planner"
-import { guarded } from "std::decorators"
-import { setAgentCwd, getAgentCwd } from "std::index"
+import { getAgentCwd } from "std::index"
+import { exec } from "std::shell"
 import { skillsDir } from "std::skills"
+import { ensureSystemMessage } from "std::thread"
 
 import { AGENT_SOURCE_DIR } from "../../../lib/agentSource.agency"
-import { setMemoryId } from "std::memory"
-import { exec } from "std::shell"
-import { systemMessage } from "std::thread"
-
-import { projectContextText } from "../../../lib/projectContext.agency"
-import { addGlobalInstructions, globalInstructionsText } from "../../../lib/globalInstructions.agency"
-import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
+import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
+import { getSearchBackend } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
-import { oracleAgent } from "./oracle.agency"
-import { reviewWrittenFiles } from "../lib/autoReview.agency"
 
 
 // The name matches what prompts/code.md tells the model.
@@ -91,47 +85,22 @@ export def promptFile(filename: string): string {
   return contents.value
 }
 
-export static const codeSysPrompt = promptFile("code.md")
+// The Agency coder's system prompt. It expires with the handoff, as every
+// system message pushed during one does.
+export static const agencyCodePrompt = promptFile("code.md")
 
-// The file-system / shell tools are partially applied with
-// `useAgentCwd: true` so that, as agent tools, they resolve relative
-// paths against the agent working directory (pinned to the user's cwd at
-// startup, changeable via setAgentCwd). The base functions default this
-// to false, so non-agent callers are unaffected.
-export static const codeTools: any[] = [
-  ...codingAgentTools(),
-  agencyCli,
-  superpowersSkill,
-  // A handoff: the oracle continues the coder's thread, so it sees the
-  // actual diff and build output, and its reads stay in the coder's
-  // history.
-  oracleAgent,
-]
-
-// Appended to the system prompt only when a web-search backend is active
-static const WEB_SEARCH_NOTE = """
-You have **web search**. Use it directly whenever a task needs current or
-external information — a fact to verify, a library or API to check, a
-dataset or leaderboard to consult. Do NOT ask the user to look things up,
-and do NOT decline a task as "needs research / out of scope": search for
-what you need and keep going."""
-
-// Appended in one-shot / autonomous mode (`agency agent -p`)
+// Passed as context in one-shot / autonomous mode (`agency agent -p`)
 static const ONE_SHOT_NOTE = promptFile("oneShot.md")
 
-// Set by `agent.agency` (`setCodeOneShot`) before the first dispatch when the
-// run is non-interactive. Gates `ONE_SHOT_NOTE`.
+// Set by the coordinator (`setCodeOneShot`) before the first dispatch when
+// the run is non-interactive. Gates `ONE_SHOT_NOTE`.
 let _oneShot = false
 
 export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
 
-
-// only add system message the first time
-let _first = true
-
-// The default budget for one codeAgent call, and for escalate's planner.
+// The default budget for one coder dispatch, and for escalate's planner.
 static const CODE_MAX_COST = $20.00
 static const CODE_MAX_TIME = 15m
 
@@ -159,214 +128,97 @@ def escalate(task: string, reason: string, plan: string): string {
   return planned.value
 }
 
-/* Where generated Agency source should land: the file the task names, or
-   nowhere ("" — hand the source back as the reply). */
-type SaveTarget = {
-  filename: string
-}
+// What each coder is given on top of the stdlib coding agent's own tools.
+// `escalate` joins per dispatch, bound to the task.
+export static const codeExtras: any[] = [superpowersSkill]
 
-def saveTargetFor(task: string): string {
-  const prompt = """
-Does this task ask for code to be saved to a specific file? Reply with that filename (a relative path) in the filename field, or an empty string if the task does not name a file to save to.
+export static const agencyCodeExtras: any[] = [
+  ...codeExtras,
+  ...agencyDocToolsBrief(),
+  ...agencyCodeTools(),
+  agencyCli,
+]
 
-<task>
-${task}
-</task>
-"""
+// The full lists, for the tests that check tool names.
+export static const codeTools: any[] = [...codingAgentTools(), ...codeExtras]
 
-  const target: SaveTarget = llm(prompt)
-  return target.filename
-}
+export static const agencyCodeAgentTools: any[] = [...codingAgentTools(), ...agencyCodeExtras]
 
+static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown, and put code and command output in fenced code blocks."
 
-/* agencyCodingAgent returns source rather than writing files — its contract
-   ends at valid code. Placing that code is this caller's job: when the task
-   names a file, write the source there; otherwise hand it back as the reply
-   for the caller to place. */
-def solve(
-  task: string,
-  context: string,
-  agencyTask: boolean,
-  maxCost: number,
-  maxTime: number,
-): Result<string> {
-  if (agencyTask) {
-    // The target is decided BEFORE generation so the writer knows what kind
-    // of source to produce. Without this, "create fib.agency containing a
-    // fib function" reads as a task to perform, and the writer delivers a
-    // program that writes the file at runtime — which is then saved AS the
-    // file, instead of the module the task actually wanted.
-    const target = saveTargetFor(task)
-    let writerTask = task
-    if (target != "") {
-      writerTask = """
-${task}
+// The stdlib coding prompt tells the model it has web search.
+static const SEARCH_OFF_NOTE = "Web search is turned off for this session. Do not plan on searching the web."
 
-Deliverable: ONLY the Agency module source that will be saved as ${target}. The caller saves the file — do NOT write a program that creates files, runs shell commands, or performs the task at runtime. If the task asks for a function, produce the module that defines and exports that function.
-"""
-    }
-    const written = agencyCodingAgent(
-      task: writerTask,
-      context: context,
-      requireMain: target == "",
-      maxCost: maxCost,
-      maxTime: maxTime,
-      extraTools: [question],
-    )
-    if (isFailure(written)) {
-      return failure("could not write valid Agency code: ${written.error}")
-    }
-    if (target != "") {
-      const saved = write(target, written.value, useAgentCwd: true)
-      if (isFailure(saved)) {
-        return failure(
-          "wrote valid Agency source but could not save it to ${target}: ${saved.error}",
-        )
-      }
-      return success("Wrote the generated Agency program to ${target}:\n\n${written.value}")
-    }
-    return success(written.value)
+// An unattended run has no reader for a formatted reply and no next turn,
+// and oneShot.md holds the rules for working that way.
+def dispatchContext(): string {
+  let style = REPL_STYLE
+  if (_oneShot) {
+    style = ONE_SHOT_NOTE
   }
+  if (getSearchBackend() == "off") {
+    style = "${style}\n\n${SEARCH_OFF_NOTE}"
+  }
+  return "${style}\n\n${globalInstructionsText()}"
+}
+
+// Both coders are the stdlib coding agent. They differ in the tools they add.
+def runCoder(
+  userMsg: string,
+  maxSeconds: number | null,
+  maxDollars: number | null,
+  extras: any[],
+): Result<string> {
   return codingAgent(
-    task: task,
-    context: context,
-    maxCost: maxCost,
-    maxTime: maxTime,
+    task: userMsg,
+    context: dispatchContext(),
+    maxCost: maxDollars ?? CODE_MAX_COST,
+    maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
+    extraTools: [...extras, escalate.partial(task: userMsg)],
   )
 }
 
-export def codeAgent(
+export handoff def codeAgent(
   userMsg: string,
-  agencyTask: boolean = false,
   maxSeconds: number | null = null,
   maxDollars: number | null = null,
-) {
+): Result<string> {
   """
-  This agent can help with all coding-related tasks,
-  such as reading, writing, or editing code. It can also
-  respond to questions about the Agency language,
-  such as questions related to the Agency syntax or CLI tool.
+  Hand a coding task to the coder: reading, writing, and editing code,
+  running commands, builds, and tests. Use it for every language except
+  Agency. It continues this conversation, so it sees everything above, and
+  its edits and command output stay in your history.
 
-  @param userMsg - a message describing what help is needed.
-  @param agencyTask - true when the code in question is Agency code, which
-    routes to the agents that know the language. Leave it false for every
-    other language.
+  @param userMsg - what needs doing.
   @param maxSeconds - working-time cap in seconds, when the user gave a
     deadline; null for the default (15 minutes).
   @param maxDollars - spend cap in dollars, when the user gave one; null
     for the default ($20).
   """
   announce("codeAgent", userMsg)
-  const maxCost = maxDollars ?? CODE_MAX_COST
-  const maxTime = timeBudget(maxSeconds, CODE_MAX_TIME)
-  if (_oneShot) {
-    return solveUnattended(
-      task: userMsg,
-      agencyTask: agencyTask,
-      maxCost: maxCost,
-      maxTime: maxTime,
-    )
-  }
-  const replied = converse(
-    userMsg: userMsg,
-    agencyTask: agencyTask,
-    maxCost: maxCost,
-    maxTime: maxTime,
-  )
-  if (isFailure(replied)) {
-    return "The code agent stopped: ${replied.error}"
-  }
-  return replied.value
+  return runCoder(userMsg, maxSeconds, maxDollars, codeExtras)
 }
 
-/* `agency agent -p`: nobody is here to answer a question and there is no next
-   turn, which is what the stdlib coding agent already does. The rules for
-   working that way are the whole of ONE_SHOT_NOTE, so they travel as context
-   rather than as a second copy of the loop. */
-def solveUnattended(
-  task: string,
-  agencyTask: boolean,
-  maxCost: number,
-  maxTime: number,
-): string {
-  const solved = solve(
-    task: task,
-    context: "${ONE_SHOT_NOTE}\n\n${globalInstructionsText()}",
-    agencyTask: agencyTask,
-    maxCost: maxCost,
-    maxTime: maxTime,
-  )
-  if (isFailure(solved)) {
-    return "The task did not complete: ${solved.error}"
-  }
-  return solved.value
-}
-
-/* The interactive turn, which is the part that is genuinely this agent's own:
-   a conversation with the user, in their thread, formatted for the REPL.
-   The guard is the turn's only budget: the coder's tool loop runs here and
-   not inside a stdlib agent, so no other limit applies. */
-@guarded(cost: maxCost, time: maxTime, label: "codeAgent")
-def converse(
+export handoff def agencyCodeAgent(
   userMsg: string,
-  agencyTask: boolean,
-  maxCost: number,
-  maxTime: number,
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
 ): Result<string> {
-  const tools = [...codeTools]
-  tools.push(escalate.partial(task: userMsg))
-  let message = userMsg
-  let attemptsLeft = 3
-  let reply = ""
-  thread(label: "code", session: "code") {
-    setMemoryId("code")
-    if (_first) {
-      // The project block (date, cwd, AGENTS.md) goes in the system prompt
-      // rather than being left for the model to read on its own.
-      let sys = "${codeSysPrompt}${projectContextText()}"
-      if (getSearchBackend() != "off") {
-        sys = "${sys}\n\n${WEB_SEARCH_NOTE}"
-      }
-      systemMessage(sys)
-      _first = false
-    }
-    let done = false
-    while (!done && attemptsLeft > 0) {
-      attemptsLeft = attemptsLeft - 1
-      addGlobalInstructions()
-      reply = llm(message, withWebSearch({ memory: true, tools: tools }))
-      // Reviewing the .agency files just written only means something on the
-      // Agency path; elsewhere there are none and this is a no-op.
-      let feedback: Result<Feedback[]> = success([])
-      if (agencyTask) {
-        feedback = reviewWrittenFiles() with approve
-      }
-      if (feedbackHasErrors(feedback)) {
-        message = """
-        The last code had errors:
+  """
+  Hand a task about Agency code to the Agency coder: writing, editing,
+  typechecking, running, and testing `.agency` files, and questions about
+  Agency syntax, the standard library, or the `agency` CLI. It has the
+  Agency documentation and the typechecker, which the general coder does
+  not. It continues this conversation, so it sees everything above, and
+  its edits and command output stay in your history.
 
-        ${renderFeedback(feedback)}
-
-        Please fix the errors.
-        """
-      } else {
-        done = true
-      }
-    }
-    const formatPrompt = """
-   Please format this response so it correctly addresses the user's question. Remove any extra text such as "this code now typechecks correctly" or "this code doesn't have any errors now".
-
-   User message:
-   ```
-   ${userMsg}
-   ```
-
-   Code agent response:
-   ```
-   ${reply}
-   ```
-   """
-    reply = llm(formatPrompt)
-  }
-  return reply
+  @param userMsg - what needs doing.
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (15 minutes).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($20).
+  """
+  announce("agencyCodeAgent", userMsg)
+  ensureSystemMessage(agencyCodePrompt)
+  return runCoder(userMsg, maxSeconds, maxDollars, agencyCodeExtras)
 }

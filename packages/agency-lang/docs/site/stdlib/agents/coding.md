@@ -18,6 +18,11 @@ node main() {
 }
 ```
 
+When called as an LLM tool, `codingAgent` continues the caller's conversation.
+From code, wrap the call in `thread { ... }` to keep its messages out of the
+current thread. GitHub work goes through `githubAgent`, which it carries as a
+tool.
+
 ## Functions
 
 ### buildTools
@@ -30,7 +35,7 @@ Return the coding agent's built-in tools for inspection or extension.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L64))
 
 ### codingAgent
 
@@ -43,13 +48,17 @@ codingAgent(
   maxTime: number = 30m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
 ): Result<string>
 ```
 
 Write, edit, and run code to complete a task on disk. Returns a short
-  summary; the real output is filesystem side effects.
+  summary; the real output is filesystem side effects. It continues your
+  conversation, so it already sees the work above.
+
+Called from code, this runs on the caller's thread like any function:
+  the system prompt, the tool results, and the answer stay there. Wrap the
+  call in `thread { ... }` to keep them apart.
 
 **Parameters:**
 
@@ -61,11 +70,10 @@ Write, edit, and run code to complete a task on disk. Returns a short
 | maxTime | `number` | 30m | Time budget in milliseconds. |
 | model | `string` | "" | Model override, or "" for the ambient model |
 | provider | `string` | "" | Provider for the model override, ignored when model is empty. |
-| session | `string` | "" | Session name to share a thread across calls, or "" for isolated |
 | extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L113))

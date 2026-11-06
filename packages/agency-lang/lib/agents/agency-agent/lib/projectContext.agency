@@ -65,7 +65,8 @@ export def projectContextText(): string {
   The part of the grounding that is about the project rather than the
   agent: date, working directory, and the AGENTS.md block. The block holds
   the instructions of the working directory and of each parent up to the
-  repository root. The code subagent adds it to its own prompt too.
+  repository root. A coder started directly with `--agent code` gets it
+  too.
   """
   const files = loadProjectInstructions(instructionFolders(cwd())) with approve
   const projectContext = instructionsText(files)

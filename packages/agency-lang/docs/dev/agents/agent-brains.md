@@ -69,8 +69,9 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
   `runTurn` and never a brain directly.
 - `lib/grounding.agency`: builds the grounding text with `groundingText`.
   The project block (date, cwd, project instructions) is
-  `projectContextText` in `lib/projectContext.agency`. The code subagent
-  puts the same block in its own prompt. The instructions come from the
+  `projectContextText` in `lib/projectContext.agency`. The coordinator
+  gives the same block to a coder started directly with `--agent code`.
+  The instructions come from the
   working directory and each parent up to the folder that holds `.git`,
   the same walk the Claude Code skills use (`projectFolders`). Each folder
   gives its `AGENTS.md`, or else its `CLAUDE.md`, also when the
@@ -80,10 +81,11 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 
   The reads are approved with `with approve`. The harness builds its
   grounding in `runSession` before it installs the policy handler, so no
-  rule in the agent policy can stop those reads. The code subagent builds
-  its block inside a turn, under the handler. There a `reject` rule for
-  `std::read` on one of the folders wins over the `with approve`, and that
-  folder's instructions are left out of the subagent's prompt.
+  rule in the agent policy can stop those reads. A coder started with
+  `--agent code` gets its block inside a turn, under the handler. There a
+  `reject` rule for `std::read` on one of the folders wins over the
+  `with approve`, and that folder's instructions are left out of the
+  coder's prompt.
 - `lib/commandPalette.agency`: `promptCommands` holds the commands that
   ship with the agent and expand to a prompt, such as `/init`. They come
   last in `slashCommands()`, so a skill or command file of the same name
@@ -93,8 +95,7 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 - `lib/globalInstructions.agency`: reads optional `AGENTS.md` from
   `POLICY_DIR` at startup. This uses the same agent-home override as
   settings and history. Both brains add it before each LLM call with
-  `expires: "llmCall"`; code does the same inside its conversation loop.
-  Other subagents receive it through their context arguments, scoped to
+  `expires: "llmCall"`. Subagents receive it through their context arguments, scoped to
   the current request. Earlier request text remains in their conversation
   history. The static text reloads on restart, while the expiring system
   message leaves the thread before a completed turn is saved. Resumed

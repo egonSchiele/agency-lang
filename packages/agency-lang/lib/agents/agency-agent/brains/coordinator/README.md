@@ -13,8 +13,8 @@ Run it with `agency agent` (it is the default) or `agency agent --brain coordina
 
 One coordinator LLM reads each turn and either answers itself or calls a
 specialist. The specialists are ordinary Agency functions handed to the
-coordinator as tools, so "routing" is the model choosing a tool. The research,
-oracle, and explorer specialists are handoffs: they continue the coordinator's
+coordinator as tools, so "routing" is the model choosing a tool. The two
+coders and the research, oracle, and explorer specialists are handoffs: they continue the coordinator's
 conversation, so it sees their steps as well as their answer. The review,
 writing, and rewrite specialists run in a thread of their own, and the
 coordinator sees only their final answer.
@@ -34,7 +34,7 @@ tests/                  Agency execution tests for this brain
 `coordinatorBrain()` returns the record the registry hands to the harness:
 
 - `name: "coordinator"`, the `--brain` value.
-- `startTargets`: `code`, `research`, `oracle`, `explorer`, `review`, `writing`, `rewrite`. These
+- `startTargets`: `code`, `agencyCode`, `research`, `oracle`, `explorer`, `review`, `writing`, `rewrite`. These
   are the names `--agent <name>` may route the starting prompt to directly.
   `--agent main` (or no flag) goes through the coordinator.
 - `init(context)`: runs once per session, inside the harness policy handler.
@@ -68,7 +68,8 @@ and an inner `with approve` cannot get past an outer policy.
 
 | Tool | What it does | Where the agent really lives |
 |---|---|---|
-| `codeAgent` | Anything that touches code or the file system: reading, writing, editing, running commands, Agency questions. One coder works the task in the user's thread, and no other model advises or reviews it. The coder can call `escalate` to write and run a planned agent for a big multi-step task. | here (`code.agency`) |
+| `codeAgent` | Code in any language but Agency: reading, writing, editing, running commands. A handoff, so one coder works the task in the coordinator's conversation, and no other model advises or reviews it. The coder can call `escalate` to write and run a planned agent for a big multi-step task. | `std::agents/coding` |
+| `agencyCodeAgent` | The same coder for Agency code and Agency questions, with the Agency prompt (`prompts/code.md`), the bundled docs tools, and the typecheck and test tools. A handoff. | `std::agents/coding` |
 | `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. | `std::agents` |
 | `oracleAgent` | Deep-reasoning consult on the slow model slot. A handoff: it continues the coordinator's conversation, so repeated consults see each other. | `std::agents/oracle` |
 | `explorerAgent` | Surveys a codebase or topic on the slow model slot. A handoff, like the oracle. | `std::agents/explorer` |
@@ -79,18 +80,30 @@ and an inner `with approve` cannot get past an outer policy.
 Most specialists are thin wrappers over an agent that ships in the standard
 library, so users get the same agent in their own programs. A wrapper holds
 only what is the agency agent's business: the function the coordinator
-calls (a `handoff def` for the researcher, the oracle, and the explorer)
+calls (a `handoff def` for the two coders, the researcher, the oracle, and
+the explorer)
 with the parameters the model fills in (`userMsg`, `maxSeconds`, `maxDollars`,
 and a routing flag such as `agencyTopic`), the docstring the coordinator
 reads to decide when to call it, `announce`, `setMemoryId`, the model slot
 from `shared.agency`, the session name, the seconds-to-milliseconds line
 (`timeBudget` in `lib/budgets.agency`), and a REPL style text where the
-subagent has one. The code subagent is the exception and carries the most
-machinery: its own tools, its skill files, and the one-shot flag.
-`lib/autoReview.agency` is its check on the `.agency` files it wrote: a
-parse and typecheck, with no model call.
+subagent has one. The two coders share `code.agency`, which also holds the
+tools they add to the stdlib coding agent, the superpowers skill files, and
+the one-shot flag.
 
-The code subagent has no expert, brainstorm, supervisor, or verifier
+When a coder finishes, the coordinator's own call continues and writes the
+reply. That call is kept on purpose: the coordinator may follow a coder with
+`reviewAgent` or a second dispatch in the same turn, and `endTurn()` in the
+wrapper would stop it. The researcher ends the turn because its answer is the
+reply.
+
+Every specialist's search tools follow the user's `/search` choice. The
+specialists do nothing for that themselves: `setActiveBackend` in
+`lib/search.agency` passes the choice to `setSearchMode` in
+`std::agents/lib/search`, and each stdlib agent takes its tools from that
+module's `searchTools()` and `hostedSearchTools()`.
+
+The coders have no expert, brainstorm, supervisor, or verifier
 around the coder, so one model works the task from real tool output. The
 expert and the brainstorm were removed because they misled the coder.
 Given "write a skill for my `tv` command", the expert guessed `tv` was an

@@ -50,9 +50,10 @@ saves `settings.json`.
 
 With no saved search choice, startup selects Brave when `BRAVE_API_KEY`
 is set, otherwise Tavily when `TAVILY_API_KEY` is set. Explicit saved
-choices remain in effect. The shared `stdlib/agents/lib/search.agency`
-helper gives the other subagents at most one client tool using the same
-automatic preference.
+choices remain in effect. The choice reaches every subagent through
+`setSearchMode` in `stdlib/agents/lib/search.agency`: `setActiveBackend`
+passes it on, and each stdlib agent takes its client tool and its hosted
+search from that module. The agent has no search tool table of its own.
 
 The startup flags and `settings.model` are kept in `let` globals in
 `session.agency`. `/model` and `/preset` resolve with them, so flags stay

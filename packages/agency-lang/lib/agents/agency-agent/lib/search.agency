@@ -21,13 +21,19 @@
   // main()
   configureSearch(isLocal)               // resolves + persists at startup
 
-  // any subagent's llm() call
-  reply = llm(userMsg, withWebSearch({ memory: true, tools: tools }))
+  // any stdlib agent, at its own llm() call
+  tools: [...searchTools()], hostedTools: hostedSearchTools(model, provider)
   ```
+
+  This module decides the backend and saves it. It hands out no tools:
+  `setActiveBackend` passes the choice to `setSearchMode` in
+  `std::agents/lib/search`, and every stdlib agent takes its search tools
+  from there. That module holds the one rule for which tool a backend
+  offers, including the check that a model's provider has hosted search.
 */
 import { env, isTTY } from "std::system"
 import { ChoiceItem } from "std::ui/cli"
-import { search as braveSearch, tavilySearch } from "std::web/search"
+import { setSearchMode } from "std::agents/lib/search"
 import { loadSettings, saveSettings } from "./settings.agency"
 
 // --- Types ---------------------------------------------------------------
@@ -60,7 +66,7 @@ export type SearchPlan = {
 export type SearchBackend = "hosted" | "tavily" | "brave" | "off"
 
 // Runtime state for the active session. Set ONCE by configureSearch at
-// startup; read by withWebSearch and the /search handler. Collapsing
+// startup; read by the /search handler and the coders' prompt note. Collapsing
 // activeBackend + isLocalSession into one record (rather than two
 // independent module vars) closes the order-dependent-mutable-state hole
 // the earlier draft of this plan flagged.
@@ -97,28 +103,6 @@ type BackendDescriptor = {
   cloudOnly: boolean;
   unavailableMessage: string;
   firstRunNote: string;
-}
-
-// Mirror of the llm() thinking field — see lib/typechecker/builtins.ts.
-// Extracted instead of inlining as a nested object literal type (anti-pattern).
-export type ThinkingConfig = {
-  enabled: boolean;
-  budgetTokens?: number;
-}
-
-// The slice of llm() options that flows through withWebSearch. ONLY the
-// fields the subagents currently use are listed — we deliberately do NOT
-// expose an `extras: Record<string, any>` escape hatch, because that
-// would silently let typos through. Add fields here as new subagent call
-// sites need them.
-export type LlmOpts = {
-  tools?: any[];
-  hostedTools?: string[];
-  model?: string;
-  provider?: string;
-  memory?: boolean;
-  reasoningEffort?: "low" | "medium" | "high";
-  thinking?: ThinkingConfig;
 }
 
 // --- The backend catalog (single source of truth) ------------------------
@@ -250,8 +234,8 @@ export def planSearchSetup(ctx: SearchContext): SearchPlan {
 let session: SearchSession = { isLocal: false, activeBackend: "off" }
 
 /*
-  Read the active web-search backend. Subagent calls go through
-  `withWebSearch`, which calls this internally — direct callers are rare.
+  Read the active web-search backend. The stdlib agents do not call this:
+  they read the mode `setActiveBackend` passed to `std::agents/lib/search`.
 */
 export def getSearchBackend(): SearchBackend {
   """Return the active web-search backend: "hosted", "tavily", "brave", or "off"."""
@@ -281,6 +265,7 @@ export def setActiveBackend(backend: string, persist: boolean) {
   """
   const resolved = coerceBackend(backend)
   session.activeBackend = resolved
+  setSearchMode(resolved)
   if (persist) {
     const settings = loadSettings()
     settings.search = { backend: resolved }
@@ -295,73 +280,6 @@ export def setActiveBackend(backend: string, persist: boolean) {
 export def setSearchBackend(backend: string) {
   """Set + persist the active web-search backend."""
   setActiveBackend(backend, true)
-}
-
-// --- Backend application tables (used by withWebSearch) ----------------
-//
-// Each backend contributes EITHER a client-side search tool
-// (Tavily/Brave) OR a hosted-capability list (hosted) OR nothing (off).
-// Two lookup tables capture that data so `withWebSearch` is a single
-// table dispatch — no per-backend if/else-if chain. Adding a new
-// client-tool backend means one entry in CLIENT_SEARCH_TOOLS_BY_BACKEND;
-// adding a new hosted capability means one entry in
-// HOSTED_SEARCH_CAPS_BY_BACKEND; nothing else changes.
-//
-// Both Tavily and Brave are exposed under the name "web_search" so the
-// advertised tool name is stable across backends (subagent prompts can
-// refer to a single tool name) and distinct from std::wikipedia's
-// "wikipedia_search".
-
-static const CLIENT_SEARCH_TOOLS_BY_BACKEND: Record<string, any> = {
-  tavily: tavilySearch.rename("web_search"),
-  brave: braveSearch.rename("web_search")
-}
-
-static const HOSTED_SEARCH_CAPS_BY_BACKEND: Record<string, string[]> = {
-  hosted: ["web_search"]
-}
-
-/*
-  Append `tool` to `opts.tools` WITHOUT mutating the caller's array, which
-  may be a shared `static const` like `explorerTools`. Builds a fresh
-  array via array spread.
-*/
-def appendTool(opts: LlmOpts, tool: any) {
-  let base = opts.tools
-  if (base == null || base == undefined) {
-    base = []
-  }
-  opts.tools = [...base, tool]
-}
-
-/*
-  The one declarative interface every subagent uses to opt into web
-  search. Subagents say WHAT they want (these llm() options, with web
-  search); the active backend is looked up in the two contribution
-  tables (CLIENT_SEARCH_TOOLS_BY_BACKEND for client tools,
-  HOSTED_SEARCH_CAPS_BY_BACKEND for hosted capabilities). `off`
-  naturally falls through (it's in neither table) and returns `opts`
-  unchanged.
-*/
-export def withWebSearch(opts: LlmOpts): LlmOpts {
-  """
-  Apply the active web-search backend to an llm() options object and
-  return it. Subagents call this around every conversational llm()
-  invocation so a single backend switch (via /search) takes effect
-  everywhere with no per-callsite changes.
-
-  @param opts - The llm() options to augment.
-  """
-  const name = getSearchBackend()
-  const tool = CLIENT_SEARCH_TOOLS_BY_BACKEND[name]
-  if (tool != null && tool != undefined) {
-    appendTool(opts, tool)
-  }
-  const hosted = HOSTED_SEARCH_CAPS_BY_BACKEND[name]
-  if (hosted != null && hosted != undefined) {
-    opts.hostedTools = hosted
-  }
-  return opts
 }
 
 // --- Picker helper for the /search slash command -----------------------

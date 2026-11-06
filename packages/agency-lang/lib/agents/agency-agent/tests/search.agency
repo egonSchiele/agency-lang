@@ -4,19 +4,12 @@
  * saved-and-usable vs saved-and-unusable, first-run with zero/one/two
  * keys, and the non-TTY auto-resolution path.
  *
- * Also covers withWebSearch's application of the active backend (Task 5).
+ * Also covers setActiveBackend passing the choice to the stdlib search
+ * module.
  */
-import { planSearchSetup, withWebSearch, setActiveBackend } from "../lib/search.agency"
+import { hostedSearchTools, searchMode, searchTools } from "std::agents/lib/search"
 
-// `tools` is optional on the opts returned by withWebSearch, so reading
-// `.length` directly trips the checker (`any[] | null`). Narrow it here;
-// withWebSearch always sets tools in these tests, so the null branch is
-// defensive and never taken.
-def toolCount(opts: { tools?: any[] }): number {
-  const t = opts.tools
-  if (t == null) { return 0 }
-  return t.length
-}
+import { planSearchSetup, setActiveBackend } from "../lib/search.agency"
 
 def ctx(isLocal: boolean, isTty: boolean, tav: boolean, brave: boolean, saved: string): any {
   return { isLocal: isLocal, isTty: isTty, hasTavily: tav, hasBrave: brave, savedBackend: saved }
@@ -100,34 +93,29 @@ node unknownSavedBackendWarnsAndDisables(): string {
   return report(planSearchSetup(ctx(false, true, true, true, "bing")))
 }
 
-// --- withWebSearch -----------------------------------------------------
-// Each test sets the active backend WITHOUT persisting (`persist: false`)
-// so the test run never touches ~/.agency-agent/settings.json.
+// --- setActiveBackend ---------------------------------------------------
+// The agent hands out no search tools itself. Its choice has to reach the
+// stdlib module every agent takes its tools from. Each test sets the
+// backend WITHOUT persisting (`persist: false`) so the test run never
+// touches ~/.agency-agent/settings.json.
 
-node hostedBackendSetsHostedToolsAndLeavesTools(): string {
+node backendBecomesTheStdlibSearchMode(): string {
+  setActiveBackend("tavily", false)
+  const named = searchMode()
+  setActiveBackend("bing", false)
+  return "${named}|${searchMode()}"
+}
+
+// "hosted" still asks the catalog: gpt-4o-mini has hosted search through
+// "openai-responses" and none through the base "openai" client.
+node hostedBackendKeepsTheProviderCheck(): string {
   setActiveBackend("hosted", false)
-  const opts = withWebSearch({ memory: true, tools: [] })
-  // Pipe-delimited: "<first hostedTool>|<tools length>"
-  return "${opts.hostedTools[0]}|${toolCount(opts)}"
+  const responses = hostedSearchTools("gpt-4o-mini", "openai-responses")
+  const base = hostedSearchTools("gpt-4o-mini", "openai")
+  return "${responses.length}|${base.length}|${searchTools().length}"
 }
 
-node tavilyBackendAppendsOneSearchTool(): string {
-  setActiveBackend("tavily", false)
-  const opts = withWebSearch({ memory: true, tools: [] })
-  const hostedSet = opts.hostedTools != null && opts.hostedTools != undefined
-  return "${toolCount(opts)}|${hostedSet}"
-}
-
-node offBackendLeavesOptsUnchanged(): string {
+node offBackendOffersNoSearch(): string {
   setActiveBackend("off", false)
-  const opts = withWebSearch({ memory: true, tools: [] })
-  const hostedSet = opts.hostedTools != null && opts.hostedTools != undefined
-  return "${toolCount(opts)}|${hostedSet}"
-}
-
-node tavilyDoesNotMutateTheCallersSharedToolsArray(): string {
-  setActiveBackend("tavily", false)
-  const shared = []
-  withWebSearch({ tools: shared })
-  return "${shared.length}"
+  return "${searchTools().length}|${hostedSearchTools("gpt-4o-mini", "openai-responses").length}"
 }

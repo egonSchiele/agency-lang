@@ -15,6 +15,7 @@ import { Attachment, endTurn, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
+import { projectContextText } from "../../lib/projectContext.agency"
 import { learnedExtras } from "../../lib/learned.agency"
 import { claudeSkillTools } from "../../lib/claudeSkills.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
@@ -25,7 +26,7 @@ import { useLlmOptions } from "./llmOptionTools.agency"
 import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
-import { codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
+import { agencyCodeAgent, codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
@@ -37,6 +38,9 @@ import { writingAgent } from "./subagents/writing.agency"
 let _context: string = ""
 
 let first = true
+
+// The same flag for a coder started directly with --agent.
+let coderFirst = true
 
 // Bundled prompts are read at static-init, before the policy handler exists.
 // coordinatorInit only checks the reads succeeded.
@@ -63,6 +67,7 @@ static const coordinatorSkills = skillsDir(
 export static const mainAgentTools = [
   researchAgent,
   codeAgent,
+  agencyCodeAgent,
   reviewAgent,
   oracleAgent,
   explorerAgent,
@@ -108,8 +113,9 @@ def coordinatorInit(context: BrainContext) {
   exitIfBroken(checkBundledSkill(coordinatorSkills, "presets"))
   _context = context.grounding
   first = true
-  // One-shot autonomy: tell the code subagent there is no human to answer
-  // questions and no next turn, so it must drive to a finished artifact.
+  coderFirst = true
+  // One-shot autonomy: tell the coders there is no human to answer
+  // questions and no next turn, so they must drive to a finished artifact.
   setCodeOneShot(!context.interactive)
 }
 
@@ -216,11 +222,30 @@ def researchTurn(userMsg: string): string {
   return replyText("The researcher", researchAgent(userMsg))
 }
 
-// The oracle and explorer are handoffs: as tools they continue the
+// The coder, oracle, and explorer are handoffs: as tools they continue the
 // caller's thread. Called directly by --agent there is no caller thread
 // to continue, so give each its own. The thread is this brain's display
 // choice: if the stdlib agents opened it, every direct call from a user
-// program would get a labelled, summarized thread too.
+// program would get a labelled, summarized thread too. The coder's thread
+// is a session, so a later turn sees the files it read on earlier ones.
+// On its first turn it gets the project block the coordinator's own prompt
+// carries.
+def coderTurn(target: string, userMsg: string): string {
+  let reply = ""
+  thread(label: target, session: target) {
+    if (coderFirst) {
+      systemMessage(projectContextText())
+      coderFirst = false
+    }
+    if (target == "agencyCode") {
+      reply = replyText("The Agency coder", agencyCodeAgent(userMsg))
+    } else {
+      reply = replyText("The coder", codeAgent(userMsg))
+    }
+  }
+  return reply
+}
+
 def oracleTurn(userMsg: string): string {
   let reply = ""
   thread(label: "oracle", summarize: true) {
@@ -242,7 +267,8 @@ def coordinatorRunTurn(
   prompt: string | (string | Attachment)[],
 ): string {
   return match(target) {
-    "code" => codeAgent(promptText(prompt))
+    "code" => coderTurn("code", promptText(prompt))
+    "agencyCode" => coderTurn("agencyCode", promptText(prompt))
     "research" => researchTurn(promptText(prompt))
     "oracle" => oracleTurn(promptText(prompt))
     "explorer" => explorerTurn(promptText(prompt))
@@ -257,8 +283,8 @@ export def coordinatorBrain(): AgentBrain {
   return {
     name: "coordinator",
     session: "main",
-    description: "One coordinator LLM that routes to code, research, oracle, explorer, review, writing, and rewrite subagents",
-    startTargets: ["code", "research", "oracle", "explorer", "review", "writing", "rewrite"],
+    description: "One coordinator LLM that routes to code, Agency code, research, oracle, explorer, review, writing, and rewrite subagents",
+    startTargets: ["code", "agencyCode", "research", "oracle", "explorer", "review", "writing", "rewrite"],
     init: coordinatorInit,
     runTurn: coordinatorRunTurn
   }

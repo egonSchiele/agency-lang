@@ -37,6 +37,7 @@ import {
   TEXT_AFTER_STATEMENT_MESSAGE,
   WITH_NOT_ALLOWED_HERE_MESSAGE,
   INTERRUPT_KEYWORD_ALONE_MESSAGE,
+  INTERRUPT_KEYWORD_AS_NAME_MESSAGE,
   UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
 import {
@@ -1179,10 +1180,44 @@ function refuseReservedName(name: string, input: string): null {
   if (!isReservedInternalName(name)) {
     return null;
   }
-  const declined = committedFailure(reservedInternalNameMessage(name), input);
+  return refuseName(reservedInternalNameMessage(name), input);
+}
+
+function refuseName(message: string, input: string): never {
+  const declined = committedFailure(message, input);
   getParseState().committedFailure = declined;
   throw new TarsecError(getDiagnostics(declined, input, declined.message));
 }
+
+/**
+ * Refuses `raise` or `interrupt` as the name of something that is called,
+ * and returns null for any other name. `raise(...)` and `interrupt(...)` are
+ * always interrupts, so a function with either name would be declared and
+ * never called.
+ */
+function refuseInterruptKeywordName(name: string, input: string): null {
+  if (!RESERVED_EFFECT_WORDS.includes(name)) {
+    return null;
+  }
+  return refuseName(INTERRUPT_KEYWORD_AS_NAME_MESSAGE(name), input);
+}
+
+/**
+ * The name a `def`, a `node`, an import, or a re-export gives to something
+ * that is called.
+ *
+ * A variable or a parameter is not checked, because handlers are written
+ * `with (interrupt) { ... }`. That leaves one case open: a variable or a
+ * parameter named `raise` that holds a function. `raise("hi")` raises an
+ * interrupt and does not call it.
+ */
+const callableNameParser: Parser<string> = (input: string) => {
+  const result = identifierParser(input);
+  if (!result.success) {
+    return result;
+  }
+  return refuseInterruptKeywordName(result.result, input) ?? result;
+};
 
 /**
  * A name other than a variable in an expression: a function, type, parameter,
@@ -1418,7 +1453,10 @@ const declNameParserFor = (
     const name = raw.result.trimEnd();
     const words = name.split(/\s+/);
     if (words.length === 1) {
-      return refuseReservedName(name, input) ?? { ...raw, result: name };
+      return (
+        refuseReservedName(name, input) ??
+        refuseInterruptKeywordName(name, input) ?? { ...raw, result: name }
+      );
     }
     // Only `def handoff foo(` earns the reorder hint. With three or more
     // words the suggested line would itself still hold a spaced name.
@@ -5418,11 +5456,11 @@ const nameWithOptionalAlias: Parser<{ name: string | Hole; alias: string | undef
       spaces,
       str("as"),
       spaces,
-      capture(identifierParser, "alias"),
+      capture(callableNameParser, "alias"),
     ),
     (r) => ({ name: r.name as string | Hole, alias: r.alias as string }),
   ),
-  map(seqC(capture(identifierParser, "name")), (r) => ({
+  map(seqC(capture(callableNameParser, "name")), (r) => ({
     name: r.name as string | Hole,
     alias: undefined as string | undefined,
   })),
@@ -5510,14 +5548,14 @@ const namespaceImportParser: Parser<NamespaceImport> = memo(
     spaces,
     str("as"),
     spaces,
-    capture(identifierParser, "importedNames"),
+    capture(callableNameParser, "importedNames"),
     set("type", "namespaceImport"),
   ),
 );
 
 const defaultImportParser: Parser<DefaultImport> = memo(
   "defaultImportParser",
-  seqC(capture(identifierParser, "importedNames"), set("type", "defaultImport")),
+  seqC(capture(callableNameParser, "importedNames"), set("type", "defaultImport")),
 );
 
 const importNameTypeParser: Parser<ImportNameType[]> = sepBy(

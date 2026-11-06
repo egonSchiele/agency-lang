@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAgency } from "../parser.js";
 import { formatSource } from "../formatter.js";
+import { TEXT_AFTER_STATEMENT_MESSAGE } from "./messages.js";
 
 /** The value of `const r = <expr>` inside a node, or the failure. */
 function parseValue(expr: string) {
@@ -175,18 +176,12 @@ describe("a cast on the next line", () => {
     expect(parsed.value.type).toBe("castExpression");
   });
 
-  // A comment line ends the expression. What is left is the stray `as` and
-  // `Person` statements the parser has always produced, which the type
-  // checker refuses as undefined variables.
+  // A comment line ends the expression. The `as Person` after it is two bare
+  // names on one line, which is refused.
   it("does not attach across a comment line", () => {
     const parsed = parseValue("x\n    // note\n    as Person") as any;
-    expect(parsed.value).toEqualWithoutLoc(variable("x"));
-    expect(parsed.statements.map((statement: any) => statement.type)).toEqual([
-      "assignment",
-      "comment",
-      "variableName",
-      "variableName",
-    ]);
+    expect(parsed.success).toBe(false);
+    expect(parsed.message).toContain(TEXT_AFTER_STATEMENT_MESSAGE);
   });
 });
 
@@ -248,16 +243,12 @@ describe("is and as together", () => {
   });
 
   // `is` does not attach to a cast: the cast wraps atomWithIs, so by the time
-  // the cast is built the `is` has nothing left to bind to. What is left is
-  // stray statements, which the type checker refuses as undefined variables.
-  it("x as Person is Person leaves the is behind", () => {
+  // the cast is built the `is` has nothing left to bind to. The `is Person`
+  // left on the line is refused.
+  it("x as Person is Person is refused", () => {
     const parsed = parseValue("x as Person is Person") as any;
-    expect(parsed.value.type).toBe("castExpression");
-    expect(parsed.statements.map((statement: any) => statement.type)).toEqual([
-      "assignment",
-      "variableName",
-      "variableName",
-    ]);
+    expect(parsed.success).toBe(false);
+    expect(parsed.message).toContain(TEXT_AFTER_STATEMENT_MESSAGE);
   });
 });
 

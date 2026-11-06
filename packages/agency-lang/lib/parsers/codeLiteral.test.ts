@@ -400,7 +400,7 @@ describe("bodies whose kind must not change", () => {
     { body: "const x = 1", kind: "statements" },
     { body: "print(1)", kind: "expr" },
     { body: "type P = { n: number }", kind: "statements" },
-    { body: "effect Foo", kind: "statements" },
+    { body: "effect Foo { n: number }", kind: "statements" },
   ];
 
   for (const { body, kind } of cases) {

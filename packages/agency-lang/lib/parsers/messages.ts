@@ -117,6 +117,9 @@ export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, n
 export const UNREADABLE_STATEMENT_MESSAGE =
   "cannot read the statement that starts here. If the block is finished, close it with `}`";
 
+export const TEXT_AFTER_STATEMENT_MESSAGE =
+  "the statement before this has ended, and this text is still on its line. Put it on its own line, or put `;` before it";
+
 export const DECLARATION_WITHOUT_VALUE_MESSAGE = `a \`let\` or \`const\` needs a value. Agency has no declaration without one:
 
   let subject: string = ""

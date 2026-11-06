@@ -23,7 +23,7 @@ describe("a callback call contributes to the caller's inferred effects", () => {
   });
 
   it("does not double-count a named def callee", () => {
-    const src = `def reads(): string raises <std::read> { raise std::read("m", {}) return "" }\ndef g() raises <std::read> { reads() }`;
+    const src = `def reads(): string raises <std::read> { raise std::read("m", {}); return "" }\ndef g() raises <std::read> { reads() }`;
     expect(exceeds(src)).toBe(false);
   });
 

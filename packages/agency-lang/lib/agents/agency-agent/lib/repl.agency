@@ -290,7 +290,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /image, /paste, /help. Start a line with ! to run a shell command yourself.",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /paste, /help. Start a line with ! to run a shell command yourself.",
       )
       return true
     }

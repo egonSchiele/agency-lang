@@ -307,7 +307,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -500,7 +500,8 @@ return;
 ]);
 return runner.halted ? runner.haltResult : undefined;
 } finally {
-__forkBranchStack.pop();
+// This branch's own frame, by identity (StateStack.release).
+__forkBranchStack.release(__bstack);
 }
 
 }
@@ -555,7 +556,8 @@ return;
 ]);
 return runner.halted ? runner.haltResult : undefined;
 } finally {
-__forkBranchStack.pop();
+// This branch's own frame, by identity (StateStack.release).
+__forkBranchStack.release(__bstack);
 }
 
 

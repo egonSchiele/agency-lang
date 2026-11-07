@@ -759,7 +759,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   let lastStopReason: smoltalk.StopReason | undefined;
   let lastUsageKind: ProviderUsageKind | undefined;
 
-  let shouldPop = true;
+  let shouldRelease = true;
   // Open the single llmCall span before the round-trip loop. Done here
   // (not inside the idempotent `initialLlmCall` step) so a resumed run,
   // which skips completed steps, still opens the span the tool loop
@@ -1754,7 +1754,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
             "first",
           );
           if (firstResult.kind === "interrupts") {
-            shouldPop = false;
+            shouldRelease = false;
             return firstResult.interrupts;
           }
           // All tool calls complete — runBatch already popped branches on the
@@ -1794,7 +1794,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
             "handoff",
           );
           if (handoffResult.kind === "interrupts") {
-            shouldPop = false;
+            shouldRelease = false;
             return handoffResult.interrupts;
           }
           stack.popBranches();
@@ -1977,7 +1977,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     }
   } catch (error) {
     if (error instanceof PromptBailout) {
-      shouldPop = false;
+      shouldRelease = false;
       return error.interrupts;
     }
     if (isAbortError(error)) {
@@ -1999,11 +1999,13 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     ctx.beforeCheckpoint = ctx.beforeCheckpoint.filter((refresh) => refresh !== refreshMessages);
     // Every exit but a pause ends the call: a return, an endTurn, a cancel,
     // a failure. A paused call is resumed later and still needs its
-    // messages, so they expire only here. The frame is popped, so nothing
-    // replays this.
-    if (shouldPop) {
+    // messages, so they expire only here. The frame is released, so nothing
+    // replays this. It is released by identity: a handler run for a
+    // subprocess's interrupt may have pushed its own frame above this one
+    // (StateStack.release).
+    if (shouldRelease) {
       messages.expire("llmCall", self.llmCallKey);
-      stateStack.pop();
+      stateStack.release(stack);
     }
   }
 

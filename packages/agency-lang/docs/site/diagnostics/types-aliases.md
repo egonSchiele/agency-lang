@@ -380,3 +380,25 @@ A type alias may refer to itself inside a structure. `type Tree = { kids: Tree[]
 The checker treats the alias as `any` for the rest of the file, so this is the only error it causes.
 
 **How to fix:** remove the alias from its own union, or put the self-reference inside a structure.
+
+<a id="ag1036"></a>
+
+## AG1036 — `goto &#123;target&#125;` is inside a block. A block runs as its own function, so it cannot move its node to another node. Return a value from the block, and put the `goto` after the block.
+
+*Default severity: error.*
+
+A `goto` ends the current node and starts another one. Some bodies run as their own function: a block argument such as `map(xs) as x { ... }`, a `fork` branch, a `parallel` arm, a `guard` block, a `finalize` block, and the handler function in `handle { ... } with (intr) { ... }`. A `goto` in one of them would only end that function, and the node around it would keep running.
+
+**How to fix:** return a value from the block, and decide where to go after it:
+
+```agency
+node main() {
+  const results = fork(["a", "b"]) as item {
+    return check(item)
+  }
+  if (results.includes("bad")) {
+    goto review(results)
+  }
+  return results
+}
+```

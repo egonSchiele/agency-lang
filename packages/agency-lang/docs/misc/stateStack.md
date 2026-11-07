@@ -29,6 +29,53 @@ nodes of that file are part of the same graph, the state will get restored corre
 don't need to keep track of which node the interrupt is being returned from, and you don't
 need to import it from that particular file. Any one will do.
 
+## A scope releases its own frame
+
+Every scope pushes a frame with `getNewState()` when it starts. When it ends,
+it calls `release(frame)` with that same frame, and `release` removes the frame
+wherever it is on the stack. It does not pop the top.
+
+These are the scopes, and the places that release their frames:
+
+1. A `def` body: the def wrapper in `lib/backends/typescriptBuilder.ts`.
+2. A block argument: `blockSetup.mustache`.
+3. A fork branch: `forkBlockSetup.mustache`.
+4. A node, at a `goto`: `generateNodeCallExpression` in
+   `typescriptBuilder.ts`.
+5. An `llm()` call: the `finally` of `runPrompt` in `lib/runtime/prompt.ts`.
+   A call that pauses keeps its frame for the checkpoint.
+6. `withResumableScope`: `lib/runtime/resumableScope.ts`.
+
+The top is not always the scope's own frame. Two scopes can be running on one
+stack at the same time. The parent of a subprocess runs its handler chain for
+every interrupt the child forwards, each on a copy of the same branch run, and
+several can be in flight at once (`lib/runtime/ipc.ts`, `chainRun`). Callbacks
+fired for a child's events start the same way. If two handler runs each pushed
+a frame and the first to finish popped the top, it would take the other's
+frame, and until the other finished the top of the stack would be a dead frame
+(issue #1426).
+
+Every scope has to release by identity, including the runtime's own. An
+`llm()` call awaits the model between its push and its release. If it popped
+the top, it could take a frame that another handler run pushed in that time,
+and that run's `release` would later find its frame gone.
+`tests/agency/subprocess/concurrent-handled-llm.agency` covers this.
+
+A frame that is not on the stack when `release` is called is a desync, and
+`release` throws. The throw happens in a `finally`, so it replaces what the
+scope was returning: a def returns a failure, and a handler rejects. It is
+loud on purpose, because every scope releases by identity, so a missing frame
+means a bug.
+
+`pop()` remains for code compiled by an earlier version of Agency, such as a
+published package's checked-in `index.js`. Nothing the current compiler or
+runtime emits calls it.
+
+A `goto` releases the node's frame, `__stack`. That is right only in the
+node's own body. Inside a block, the block's frame sits above the node's, and
+the `goto` would end the block and leave the node running. The compiler
+refuses a `goto` inside a block (AG1036, `lib/typeChecker/gotoChecks.ts`).
+
 ## Serialization and deserialization
 ### Serialization
 All the state for a function or node is being tracked in one of the frames of the stack.

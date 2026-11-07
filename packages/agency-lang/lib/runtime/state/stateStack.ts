@@ -1227,8 +1227,33 @@ export class StateStack {
     this.mode = "serialize";
   }
 
+  /** Remove the top frame. Code compiled by an earlier version of Agency
+   *  removes its frames this way, so a published package keeps running on
+   *  this runtime. Nothing the current compiler emits calls it, and new
+   *  runtime code should call `release`. */
   pop(): State | undefined {
     return this.stack.pop();
+  }
+
+  /** Remove `frame` from the stack, wherever it is. Every scope releases the
+   *  frame it pushed this way: a def body, a block argument, a fork branch,
+   *  a node at a `goto`, an `llm()` call, and `withResumableScope`. A scope
+   *  does not pop the top, because two scopes can be running on one
+   *  stack at once: the parent's handlers for interrupts a subprocess
+   *  forwards, or callbacks fired from a child, each start on a copy of the
+   *  same run. The first to finish must take its own frame, not the other's.
+   *  A frame that is not on the stack is a desync, so that throws instead of
+   *  removing someone else's frame. */
+  release(frame: State): void {
+    const index = this.stack.lastIndexOf(frame);
+    if (index === -1) {
+      throw new Error(
+        `Tried to release a frame for scope "${frame.scopeName}" that is not on the stack. ` +
+          `Every scope removes the frame it pushed; a frame that is already gone means two ` +
+          `scopes released the same frame or the stack was replaced underneath a running scope.`,
+      );
+    }
+    this.stack.splice(index, 1);
   }
 
   lastFrame(): State {

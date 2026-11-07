@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A handler run's llm() call releases its own frame, not the frames another handler run pushed above it while the model call was out. If it took the top frame, branch b's check would fail and the handler would reject branch b.",
+      "input": "",
+      "expectedOutput": "\"branch-a\\n,branch-b\\n,branch-c\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [{ "return": "yes", "delayMs": 300 }]
+    }
+  ]
+}

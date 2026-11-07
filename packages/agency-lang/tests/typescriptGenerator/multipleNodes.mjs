@@ -232,7 +232,7 @@ if (hasInterrupts(__stack.locals.greeting)) {
           }
         });
         await runner.step(2, __run, async (runner, __run) => {
-__run.stack.pop()
+__run.stack.release(__stack)
 __functionCompleted = true;
 runner.halt(goToNode("processGreeting", {
             messages: __run.threads,
@@ -434,7 +434,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__run.stack.pop()
+__run.stack.release(__stack)
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
             messages: __run.threads,

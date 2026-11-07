@@ -344,7 +344,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -536,7 +536,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -697,16 +697,18 @@ if (__blockError instanceof AgencyAbort) {
 throw __blockError;
 } finally {
 __releaseRebind(__stack, 0);
-// Pop the SAME stack `setupFunction` pushed onto (the ALS-current
-// stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
+// Release this block's own frame from the SAME stack `setupFunction`
+// pushed onto (`__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
 // fired from `onToolCallEnd` during runPrompt's tool dispatch), the
-// ALS stack is the branch stack — distinct from `__ctx.stateStack`.
+// run's stack is the branch stack — distinct from `__ctx.stateStack`.
 // Popping `__ctx.stateStack` would corrupt the parent's frame chain
 // (the parent's runPrompt frame disappears, the next iteration's
 // `pr.parallel` reads `lastFrame()` as undefined, and crashes with
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
-__bsetup.stateStack.pop();
+// By identity, not a top-of-stack pop: another scope may be running on
+// this stack at the same time (StateStack.release).
+__bsetup.stateStack.release(__bstack);
 }
           }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         }))
@@ -764,7 +766,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -907,7 +909,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -1120,16 +1122,18 @@ if (__blockError instanceof AgencyAbort) {
 throw __blockError;
 } finally {
 __releaseRebind(__stack, 1);
-// Pop the SAME stack `setupFunction` pushed onto (the ALS-current
-// stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
+// Release this block's own frame from the SAME stack `setupFunction`
+// pushed onto (`__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
 // fired from `onToolCallEnd` during runPrompt's tool dispatch), the
-// ALS stack is the branch stack — distinct from `__ctx.stateStack`.
+// run's stack is the branch stack — distinct from `__ctx.stateStack`.
 // Popping `__ctx.stateStack` would corrupt the parent's frame chain
 // (the parent's runPrompt frame disappears, the next iteration's
 // `pr.parallel` reads `lastFrame()` as undefined, and crashes with
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
-__bsetup.stateStack.pop();
+// By identity, not a top-of-stack pop: another scope may be running on
+// this stack at the same time (StateStack.release).
+__bsetup.stateStack.release(__bstack);
 }
       }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
     }))
@@ -1147,16 +1151,18 @@ if (__blockError instanceof AgencyAbort) {
 throw __blockError;
 } finally {
 __releaseRebind(__stack, 0);
-// Pop the SAME stack `setupFunction` pushed onto (the ALS-current
-// stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
+// Release this block's own frame from the SAME stack `setupFunction`
+// pushed onto (`__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
 // fired from `onToolCallEnd` during runPrompt's tool dispatch), the
-// ALS stack is the branch stack — distinct from `__ctx.stateStack`.
+// run's stack is the branch stack — distinct from `__ctx.stateStack`.
 // Popping `__ctx.stateStack` would corrupt the parent's frame chain
 // (the parent's runPrompt frame disappears, the next iteration's
 // `pr.parallel` reads `lastFrame()` as undefined, and crashes with
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
-__bsetup.stateStack.pop();
+// By identity, not a top-of-stack pop: another scope may be running on
+// this stack at the same time (StateStack.release).
+__bsetup.stateStack.release(__bstack);
 }
           }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         }))
@@ -1214,7 +1220,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -1370,16 +1376,18 @@ if (__blockError instanceof AgencyAbort) {
 throw __blockError;
 } finally {
 __releaseRebind(__stack, 0);
-// Pop the SAME stack `setupFunction` pushed onto (the ALS-current
-// stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
+// Release this block's own frame from the SAME stack `setupFunction`
+// pushed onto (`__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
 // fired from `onToolCallEnd` during runPrompt's tool dispatch), the
-// ALS stack is the branch stack — distinct from `__ctx.stateStack`.
+// run's stack is the branch stack — distinct from `__ctx.stateStack`.
 // Popping `__ctx.stateStack` would corrupt the parent's frame chain
 // (the parent's runPrompt frame disappears, the next iteration's
 // `pr.parallel` reads `lastFrame()` as undefined, and crashes with
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
-__bsetup.stateStack.pop();
+// By identity, not a top-of-stack pop: another scope may be running on
+// this stack at the same time (StateStack.release).
+__bsetup.stateStack.release(__bstack);
 }
           }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         }))
@@ -1437,7 +1445,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",

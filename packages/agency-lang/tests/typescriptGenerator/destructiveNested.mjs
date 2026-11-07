@@ -290,7 +290,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",

@@ -337,7 +337,7 @@ return runtimeFailure(__error, {
 });
 
   } finally {
-    __run.stack.pop()
+    __run.stack.release(__stack)
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -556,7 +556,7 @@ if (isAborted(__funcResult)) {
 __stack.locals.age = 30;
         });
         await runner.step(3, __run, async (runner, __run) => {
-__run.stack.pop()
+__run.stack.release(__stack)
 __functionCompleted = true;
 runner.halt(goToNode("foo2", {
             messages: __run.threads,

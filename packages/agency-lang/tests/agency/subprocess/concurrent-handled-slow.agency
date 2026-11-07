@@ -1,0 +1,49 @@
+import { compile, run } from "std::agency"
+
+// Three concurrent child branches each interrupt, and the parent's handler
+// does slow work before it answers. The first raise to arrive waits the
+// longest, so the three handler runs finish in the reverse of the order
+// they started, each while the others are still in flight. Every run must
+// release its own frame from the shared branch stack, not the frame of a
+// run that has not finished (#1426).
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  const results = fork(["a", "b", "c"]) as item {
+    let r = bash("echo branch-" + item)
+    return r.stdout
+  }
+  return results
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  let finished = []
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return "${result.value.data} | finished ${finished}"
+    }
+    return "run failed"
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    // The three runs start in one tick and interleave step by step, so the
+    // wait is taken from the interrupt's own data, not from a shared counter.
+    const command = intr.data.command
+    let wait = 150
+    if (command == "echo branch-a") {
+      wait = 450
+    }
+    if (command == "echo branch-b") {
+      wait = 300
+    }
+    sleep(wait)
+    finished.push(command)
+    return approve()
+  }
+}

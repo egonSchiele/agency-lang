@@ -1231,6 +1231,26 @@ export class StateStack {
     return this.stack.pop();
   }
 
+  /** Remove `frame` from the stack, wherever it is. A compiled scope (a def
+   *  body, a block argument, a fork branch) releases its own frame at exit
+   *  this way rather than popping the top. Two scopes can be running on one
+   *  stack at once: the parent's handlers for interrupts a subprocess
+   *  forwards, or callbacks fired from a child, each start on a copy of the
+   *  same run. The first to finish must take its own frame, not the other's.
+   *  A frame that is not on the stack is a desync, so that throws instead of
+   *  removing someone else's frame. */
+  release(frame: State): void {
+    const index = this.stack.lastIndexOf(frame);
+    if (index === -1) {
+      throw new Error(
+        `Tried to release a frame for scope "${frame.scopeName}" that is not on the stack. ` +
+          `Every scope removes the frame it pushed; a frame that is already gone means two ` +
+          `scopes released the same frame or the stack was replaced underneath a running scope.`,
+      );
+    }
+    this.stack.splice(index, 1);
+  }
+
   lastFrame(): State {
     return this.stack[this.stack.length - 1];
   }

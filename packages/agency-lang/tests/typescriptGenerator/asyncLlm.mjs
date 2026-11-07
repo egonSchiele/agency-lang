@@ -349,7 +349,8 @@ return;
 ]);
 return runner.halted ? runner.haltResult : undefined;
 } finally {
-__forkBranchStack.pop();
+// This branch's own frame, by identity (StateStack.release).
+__forkBranchStack.release(__bstack);
 }
 
 }
@@ -404,7 +405,8 @@ return;
 ]);
 return runner.halted ? runner.haltResult : undefined;
 } finally {
-__forkBranchStack.pop();
+// This branch's own frame, by identity (StateStack.release).
+__forkBranchStack.release(__bstack);
 }
 
 

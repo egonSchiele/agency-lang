@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Three concurrent child interrupts answered by a parent handler that sleeps longest for the first to arrive, so the handler runs finish in reverse order while the others are still in flight. Each run releases its own frame.",
+      "input": "",
+      "expectedOutput": "\"branch-a\\n,branch-b\\n,branch-c\\n | finished echo branch-c,echo branch-b,echo branch-a\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -2654,12 +2654,11 @@ export class TypeScriptBuilder {
           }),
         ),
         "__error",
-        // finally block: pop state stack and conditionally fire onFunctionEnd.
-        // The optional chain handles the rare case where the finally
-        // runs outside any ALS frame (e.g. a function invoked as a tool
-        // without an outer agencyStore.run wrap).
+        // finally block: release this function's own frame and conditionally
+        // fire onFunctionEnd. By identity, not a top-of-stack pop: another
+        // scope may be running on the same stack (StateStack.release).
         ts.statements([
-          ts.raw("__run.stack.pop()"),
+          ts.raw("__run.stack.release(__stack)"),
           ts.if(
             ts.id("__functionCompleted"),
             ts.callHook("onFunctionEnd", {

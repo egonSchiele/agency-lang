@@ -3,6 +3,11 @@ import type { BlockArgument } from "../types/blockArgument.js";
 import type { HandleBlock } from "../types/handleBlock.js";
 import { walkNodesArray } from "../utils/node.js";
 
+/** A handle block whose handler is written inline. */
+type InlineHandleBlock = HandleBlock & {
+  handler: Extract<HandleBlock["handler"], { kind: "inline" }>;
+};
+
 /**
  * An inline handler function, `handle { } with (intr) { ... }`, compiles as
  * a block argument: the same shape as the `{ ... }` of `map(xs) as x { }`.
@@ -32,10 +37,12 @@ export function desugarHandlerFunctionsInProgram(program: AgencyProgram): void {
   // block the walk already found is still the same object.
   const inlineHandlers = walkNodesArray(program.nodes)
     .map(({ node }) => node)
-    .filter((node): node is HandleBlock => node.type === "handleBlock")
-    .filter((node) => node.handler.kind === "inline" && !handlerFunctionBlock(node.handler));
+    .filter(
+      (node): node is InlineHandleBlock =>
+        node.type === "handleBlock" && node.handler.kind === "inline",
+    )
+    .filter((node) => !handlerFunctionBlock(node.handler));
   for (const node of inlineHandlers) {
-    if (node.handler.kind !== "inline") continue;
     const body = node.handler.body;
     const block: BlockArgument = {
       type: "blockArgument",

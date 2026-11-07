@@ -340,8 +340,8 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
  *  - handleBlock's inline handler function: skipped. A handler never
  *    pauses (the runtime refuses it, #616), so no replay can re-run a
  *    call there, and handlers are safety infrastructure this pass has no
- *    license to restructure. The function later compiles as a block
- *    (handlerDesugar.ts), which runs after this pass on purpose.
+ *    license to restructure. The function compiles as a block
+ *    (handlerDesugar.ts, which runs after this pass).
  *  - lifted-block slots (a functionCall's block argument, standalone
  *    blockArgument): a NEW frame-owning scope — fresh counter, and
  *    temps land inside the block body, never the enclosing one.

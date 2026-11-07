@@ -73,7 +73,10 @@ describe("desugarHandlerFunctionsInProgram", () => {
     desugarHandlerFunctionsInProgram(program);
     expect(JSON.stringify(program)).toBe(once);
     const [block] = handleBlocks(program);
-    expect(block.handler.kind === "inline" && block.handler.body).toHaveLength(1);
+    expect(block.handler.kind).toBe("inline");
+    if (block.handler.kind === "inline") {
+      expect(block.handler.body).toHaveLength(1);
+    }
   });
 
   it("leaves a function reference alone", () => {

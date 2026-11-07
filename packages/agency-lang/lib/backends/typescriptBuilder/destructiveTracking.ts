@@ -111,9 +111,8 @@ export class DestructiveTracking {
 
   /** The flip for one statement of plain-mode code. Plain code has no
    *  steps, so a PRE flip runs first. A tracked call gets one too, because
-   *  plain code emits no post-flip. Nothing reaches this any more: an
-   *  inline handler function, the only plain-mode code, now compiles as a
-   *  block. It stays until the plain mode is removed. */
+   *  plain code emits no post-flip. Unused: an inline handler function, the
+   *  only plain-mode code, compiles as a block. */
   plainFlip(stmt: AgencyNode, inDestructiveFunction: boolean): TsNode | undefined {
     if (inDestructiveFunction || this.ownedCalls(stmt).length === 0) {
       return undefined;

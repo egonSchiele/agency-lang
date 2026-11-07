@@ -572,14 +572,6 @@ returns from the handler function. A named function used as a handler
 its own Runner and frame; an inline one now does too, with the one thing a
 block adds: it reads and writes the enclosing function's variables.
 
-Before this, a handler function compiled to a plain callback with no
-steps, closed over the enclosing function's `runner`. A nested `handle`,
-`with approve`, `thread`, or `parallel` inside it borrowed that Runner,
-read the counter at the raising statement's path, ran once, and marked it
-finished; every later run was skipped as if the program were resuming.
-Two runs at once shared one frame of variables, and a `return` inside a
-nested block exited only the step callback (issue #1373).
-
 **The pass.** `desugarHandlerFunctionsInProgram`
 (`lib/preprocessors/handlerDesugar.ts`) leaves the handler as `kind:
 "inline"` with its `param` and replaces its `body` with one `blockArgument`
@@ -607,28 +599,26 @@ the tree the user wrote.
 
 **Edges worth knowing.**
 
-- A `handle` statement at the top level of a file is refused by the parser
-  (`lib/utils/topLevel.ts`). A block value written at the top level,
+- A `handle` statement at the top level of a file is refused before
+  codegen (`isLegalAtTopLevel` in `lib/utils/topLevel.ts`, reported as
+  AG3017 by the type checker and checked again by the builder so the
+  refusal holds with the checker off). A block value written at the top level,
   `const xs = map([1]) as x { handle { } with (intr) { } }`, gets no block
   scopes, because `resolveBlockScopes` runs only per function or node body
-  and per docstring. That was so before this change and is unchanged.
-- A call in the handler that returns an unanswered interrupt now halts the
-  block's runner and returns the interrupt array as the handler's verdict,
-  which `runHandlerChain` rejects as an invalid verdict. The plain callback
-  threw "Cannot throw an interrupt inside a handler body" instead. Both are
-  errors; the message differs. The path should be unreachable, because
-  `renderVerdict` rejects any raise under a handler and the pause sites
-  above throw first.
-- An abort inside the handler (a guard trip, a cancel) now returns from the
+  and per docstring.
+- A call in the handler that returns an unanswered interrupt halts the
+  block's runner, and the block returns the interrupt array as the
+  handler's verdict, which `runHandlerChain` rejects as an invalid verdict.
+  The path should be unreachable: `renderVerdict` rejects any raise under
+  a handler, and the pause sites above throw first.
+- An abort inside the handler (a guard trip, a cancel) returns from the
   block as an `AbortedResult`, which `runHandlerChain` rethrows with
-  `result.toError()`, the path a compiled def used as a handler already
-  took. The plain callback let the abort propagate directly. The
-  `handler-guard-trip*.agency` tests check that the error arrives the same.
-- Not tested: a function called from a handler can create a pinned
-  checkpoint at its entry for `Result` error handling, and that checkpoint
-  now also holds the handler block's frame. A rewind to it would re-enter
-  the handler with its saved counters and skip to the call, where the plain
-  callback would have re-run every earlier statement in the handler.
+  `result.toError()`, as it does for a compiled def used as a handler. The
+  `handler-guard-trip*.agency` tests pin that the error arrives unchanged.
+- A function called from a handler can create a pinned checkpoint at its
+  entry for `Result` error handling, and that checkpoint holds the handler
+  block's frame. A rewind to it re-enters the handler with its saved
+  counters and skips to the call. No test covers this.
 
 ## Replay and helper calls: the hoistCalls pass
 

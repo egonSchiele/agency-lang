@@ -1,0 +1,108 @@
+{
+  "tests": [
+    {
+      "nodeName": "sameStatement",
+      "description": "One `with approve`, and the handler function runs for two interrupts from one statement. On main the second run skips the nested call and `seen` repeats `inner 1 ran`.",
+      "input": "",
+      "expectedOutput": "\"both approved | inner 1 ran,inner 2 ran\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "severalInOneRun",
+      "description": "Several nested handlers in one run of the handler function. On main only the first runs: the others leave their variables unset.",
+      "input": "",
+      "expectedOutput": "\"approved | inner 1 ran,inner 2 ran,inner 3 ran,inner 4 ran,inner 5 ran\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "threadRuns",
+      "description": "A `thread` block in a handler function runs on every run. On main it runs for the first interrupt only (threads=1).",
+      "input": "",
+      "expectedOutput": "\"both approved | threads=2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "parallelRuns",
+      "description": "A `parallel` block in a handler function runs on every run. On main it runs for the first interrupt only (total=8).",
+      "input": "",
+      "expectedOutput": "\"both approved | total=12\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "concurrentRuns",
+      "description": "Two interrupts raised at once: each run of the handler function reads back its own variable. On main the runs share it (wrong=1).",
+      "input": "",
+      "expectedOutput": "\"1 2 wrong=0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "concurrentNested",
+      "description": "Two interrupts raised at once, each run using a nested handler. On main the runs get each other's value or undefined.",
+      "input": "",
+      "expectedOutput": "\"1 2 1:inner 1 ran:inner 11 ran,2:inner 2 ran:inner 12 ran\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "returnInsideNested",
+      "description": "A `return reject()` inside a nested handle block returns from the handler function. On main the return exits only the step callback, the reject is lost, and the handler approves (false | reached).",
+      "input": "",
+      "expectedOutput": "\"true | not reached\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "outerKeepsItsValue",
+      "description": "A variable declared in the handler function is private to that run; the outer `label` keeps its value. On main the handler's `const label` overwrites it (approved / handler label).",
+      "input": "",
+      "expectedOutput": "\"approved / outer label\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

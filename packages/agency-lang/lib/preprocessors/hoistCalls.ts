@@ -337,10 +337,11 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
 /** Recurse into a statement's nested statement bodies via bodySlots —
  *  the drift-proof enumeration of which fields hold statements. Slot
  *  policy:
- *  - handleBlock's inline handler body: skipped. Handler bodies compile
- *    to plain JavaScript without steps and cannot pause (#616), and
- *    handlers are safety infrastructure this pass has no license to
- *    restructure.
+ *  - handleBlock's inline handler function: skipped. A handler never
+ *    pauses (the runtime refuses it, #616), so no replay can re-run a
+ *    call there, and handlers are safety infrastructure this pass has no
+ *    license to restructure. The function compiles as a block
+ *    (handlerDesugar.ts, which runs after this pass).
  *  - lifted-block slots (a functionCall's block argument, standalone
  *    blockArgument): a NEW frame-owning scope — fresh counter, and
  *    temps land inside the block body, never the enclosing one.

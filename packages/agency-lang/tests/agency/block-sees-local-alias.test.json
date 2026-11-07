@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A validated alias and a generic alias declared in the node are visible inside a block argument: the validator runs there.",
+      "input": "",
+      "expectedOutput": "\"ok 5 boxed 5,rejected 500: must be small\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

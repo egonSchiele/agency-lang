@@ -44,7 +44,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 | pipe stages | opaque | already memoized per step and failure-gated |
 | pipe input | hoist | evaluated inline at statement level, outside the memoization |
 | `with`/`static` wrapped statements | opaque, except a `with` statement containing `?`, which is rewritten inside a `handle` block with the same handler | hoisting out would cross the approval region; the slot holds exactly one statement |
-| handler (`with (data)`) bodies | never touched | compile to plain JS, cannot pause, safety infrastructure |
+| handler functions (`with (data) { }`) | never touched | a handler never pauses (the runtime refuses it), so no replay can re-run a call there; and handlers are safety infrastructure |
 | lifted block bodies (comprehensions, fork branches, `as x { }` blocks) | hoisted within, never across | they own their frame; a temp crossing out would change per-item evaluation to once |
 | module-level initializers | never touched | init-topsort owns them; they cannot pause |
 

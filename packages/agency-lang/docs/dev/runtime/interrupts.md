@@ -543,24 +543,82 @@ runtime.
 
 ## No pause inside handlers (issue #616)
 
-Handler functions compile to plain callbacks with no step counters, so
-there is no step address inside a handler for a resume to replay back
-to. That makes one rule absolute: an interrupt-pause checkpoint must
-never capture a moment when a handler is mid-flight, because that
-checkpoint could never be resumed. The enforcement has two carriers.
-`StateStack.executingHandlerEntries` is the loss-proof one: the
-dispatcher mirrors each executing handler entry onto the raising
-branch's stack, branch stacks inherit a snapshot of it through
-`runBatch`, and the guard-trip machinery refuses to surface (it throws
-the original trip error instead) while the list is non-empty. Every
-interrupt-pause checkpoint site calls
-`stack.assertNoExecutingHandlers()`, which walks the branch subtree and
-fails loudly if the impossible happens. The `executingHandlers.ts`
-AsyncLocalStorage remains, but only for what the stack cannot express:
-per-lineage precision, so self-exclusion and the `renderVerdict`
-refusal can tell a handler's OWN raises apart from concurrent sibling
-dispatches on the same branch. The design rationale lives in
-`docs/superpowers/specs/2026-07-19-issue-616-no-pause-inside-handlers-design.md`.
+A handler function never pauses. An interrupt-pause checkpoint must never
+capture a moment when a handler is mid-flight, because there would be no
+way to answer it: the raise that the handler was deciding is still
+unanswered, and resuming would have to re-enter the decision. The rule is
+enforced by the runtime, not by the shape of the compiled code. It has two
+carriers. `StateStack.executingHandlerEntries` is the loss-proof one: the
+dispatcher mirrors each executing handler entry onto the raising branch's
+stack, branch stacks inherit a snapshot of it through `runBatch`, and the
+guard-trip machinery refuses to surface (it throws the original trip error
+instead) while the list is non-empty. Every interrupt-pause checkpoint site
+calls `stack.assertNoExecutingHandlers()`, which walks the branch subtree
+and fails loudly if the impossible happens. The `executingHandlers.ts`
+frame list remains, but only for what the stack cannot express: per-lineage
+precision, so self-exclusion and the `renderVerdict` refusal can tell a
+handler's OWN raises apart from concurrent sibling dispatches on the same
+branch.
+
+## A handler function is a block
+
+An inline handler function, the `with (intr) { ... }` part of a `handle`
+statement, compiles as a block argument: the same shape as the `{ ... }`
+of `map(xs) as x { ... }`. A block gets its own `Runner` and its own frame
+on every call, so every statement in the handler function runs on every
+run, each run has its own variables, and a `return` anywhere in it
+returns from the handler function. A named function used as a handler
+(`handle { } with check`) already worked this way, because a function has
+its own Runner and frame; an inline one now does too, with the one thing a
+block adds: it reads and writes the enclosing function's variables.
+
+**The pass.** `desugarHandlerFunctionsInProgram`
+(`lib/preprocessors/handlerDesugar.ts`) leaves the handler as `kind:
+"inline"` with its `param` and replaces its `body` with one `blockArgument`
+whose params are the handler's parameter and whose body is the original
+statements. `handlerFunctionBlock` in the same file is the one function that
+knows this shape; the builder reads it in `processHandleBlockWithSteps`,
+compiles the block with `processBlockAsExpression`, and registers it with
+the same `__call` arrow a named function handler gets
+(`handlerArrowCalling`). Every tree walker already descends into
+`handler.body`, and the scope resolver already treats a `blockArgument`
+ancestor as a block scope, so no walker changed.
+
+**Where it runs, and why there.** In `TypescriptPreprocessor.preprocess`,
+after `hoistCallsInProgram` and before `resolveVariableScopes`. After the
+hoist pass, so a handler function stays unhoisted as it always was (a
+handler never pauses, so no replay can re-run a call there; the diagnostics
+that rely on that, AG1020 for casts, AG1023 for `?`, and AG1028 for
+`async`, stay correct as written). Before scope resolution, so the block
+gets block scope: the parameter resolves as `blockArgs`, a `let` or `const`
+in the handler as `block`, and an assignment to an outer name as the
+enclosing function's `local`. Every other consumer of a handler's body (the
+type checker, the formatter, `bodyFacts`, `interruptAnalysis`, the symbol
+table, the LSP) runs before `preprocess()` or on a fresh parse, so they see
+the tree the user wrote.
+
+**Edges worth knowing.**
+
+- A `handle` statement at the top level of a file is refused before
+  codegen (`isLegalAtTopLevel` in `lib/utils/topLevel.ts`, reported as
+  AG3017 by the type checker and checked again by the builder so the
+  refusal holds with the checker off). A block value written at the top level,
+  `const xs = map([1]) as x { handle { } with (intr) { } }`, gets no block
+  scopes, because `resolveBlockScopes` runs only per function or node body
+  and per docstring.
+- A call in the handler that returns an unanswered interrupt halts the
+  block's runner, and the block returns the interrupt array as the
+  handler's verdict, which `runHandlerChain` rejects as an invalid verdict.
+  The path should be unreachable: `renderVerdict` rejects any raise under
+  a handler, and the pause sites above throw first.
+- An abort inside the handler (a guard trip, a cancel) returns from the
+  block as an `AbortedResult`, which `runHandlerChain` rethrows with
+  `result.toError()`, as it does for a compiled def used as a handler. The
+  `handler-guard-trip*.agency` tests pin that the error arrives unchanged.
+- A function called from a handler can create a pinned checkpoint at its
+  entry for `Result` error handling, and that checkpoint holds the handler
+  block's frame. A rewind to it re-enters the handler with its saved
+  counters and skips to the call. No test covers this.
 
 ## Replay and helper calls: the hoistCalls pass
 

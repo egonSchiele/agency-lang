@@ -45,9 +45,9 @@ node main() {
     expect(out).toContain(FLIP);
   });
 
-  it("an if inside a handle inside an inline handler body", () => {
-    // The handler body compiles to plain JS, and so does the if inside the
-    // nested handle: the if's statements need flips of their own.
+  it("an if inside a handle inside an inline handler function", () => {
+    // The handler function compiles as a block, so the if inside the
+    // nested handle is stepped code: its statements need flips of their own.
     const out = gen(`
 def g(c: boolean): number {
   handle {

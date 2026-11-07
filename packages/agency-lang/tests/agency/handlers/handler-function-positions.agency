@@ -1,0 +1,146 @@
+// Handler functions in nested positions. All but handlerInsideHandler
+// pass on main and must keep passing when a handler function compiles
+// as a block; handlerInsideHandler is one more case of the skipped
+// nested handler (#1373).
+effect test::outer { n: number }
+
+def ask(n: number): number {
+  interrupt test::outer("ok?", { n: n })
+  return n
+}
+
+def asksTwice(): string {
+  interrupt test::outer("first?", { n: 1 })
+  interrupt test::outer("second?", { n: 2 })
+  return "both approved"
+}
+
+// A handler function inside a block argument reads the block's
+// parameter and writes a variable of the node.
+node insideBlockArgument() {
+  let seen = []
+  const doubled = map([1, 2]) as x {
+    let got = 0
+    handle {
+      got = ask(x)
+    } with (intr) {
+      seen.push("x=${x} n=${intr.data.n}")
+      return approve()
+    }
+    return got * 2
+  }
+  return "${doubled} | ${seen}"
+}
+
+// A handler function inside another handler function reads the outer
+// parameter and writes a variable of the node.
+node handlerInsideHandler() {
+  let seen = []
+  let out = "unset"
+  handle {
+    out = asksTwice()
+  } with (outer) {
+    let inner = 0
+    handle {
+      inner = ask(outer.data.n + 10)
+    } with (intr) {
+      seen.push("outer=${outer.data.n} inner=${intr.data.n}")
+      return approve()
+    }
+    seen.push("inner=${inner}")
+    return approve()
+  }
+  return "${out} | ${seen}"
+}
+
+// An inner handler that rejects one interrupt and says nothing about
+// the other, under an outer `with approve`.
+node rejectsAndPasses() {
+  let out = "unset"
+  handle {
+    handle {
+      out = asksTwice()
+    } with (intr) {
+      if (intr.data.n == 2) {
+        return reject("no to 2")
+      }
+    }
+  } with approve
+  return "${isFailure(out)}"
+}
+
+// The on-clause form of a handler function.
+node onClauseForm() {
+  let seen = []
+  let out = "unset"
+  handle {
+    out = asksTwice()
+  } with {
+    on test::outer(data) {
+      seen.push("n=${data.n}")
+      approve()
+    }
+  }
+  return "${out} | ${seen}"
+}
+
+def isSmall(value: number): Result<number> {
+  if (value < 100) {
+    return success(value)
+  }
+  return failure("must be small")
+}
+
+def asksSmallAndLarge(): string {
+  ask(5)
+  ask(500)
+  return "done"
+}
+
+// A validated alias and a generic alias declared in the enclosing
+// function are visible in the handler function, as in any block.
+node localAliases() {
+  type Box<T> = { value: T }
+  @validate(isSmall)
+  type Small = number
+  let notes = []
+  handle {
+    asksSmallAndLarge()
+  } with (intr) {
+    const checked: Small! = intr.data.n
+    const boxed: Box<number> = { value: intr.data.n }
+    if (checked is failure(why)) {
+      notes.push("rejected ${boxed.value}: ${why}")
+    } else {
+      notes.push("ok ${checked.value} boxed ${boxed.value}")
+    }
+    return approve()
+  }
+  return "${notes}"
+}
+
+def throwsInHandler(): string {
+  let out = "unset"
+  handle {
+    out = asksTwice()
+  } with (intr) {
+    const nothing = null
+    const size = nothing.name.length
+    return approve()
+  }
+  return out
+}
+
+// A handler function that throws a JavaScript error. The test is about
+// the error travelling up through `try`, not about the engine's wording,
+// so the message is reduced to a stable marker.
+node handlerThrows() {
+  const r = try throwsInHandler()
+  if (isFailure(r)) {
+    if (r.error.includes("null")) {
+      return "failed: null read"
+    }
+    return "failed: ${r.error}"
+  }
+  return "ok: ${r.value}"
+}

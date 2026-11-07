@@ -2,6 +2,7 @@
 import { readAlwaysScope } from "../typeChecker/alwaysTag.js";
 import { readCapabilities } from "../typeChecker/capabilitiesTag.js";
 import { declaredName } from "../types/hole.js";
+import { handlerFunctionBlock } from "../preprocessors/handlerDesugar.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { walkNodesArray } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
@@ -4256,17 +4257,10 @@ export class TypeScriptBuilder {
       );
     }
 
-    const args = [ts.id("__data")];
-
     // User-defined function handler: use __call. Resolve the callee
     // through scopedVar when scope info is available so locals
     // (`__stack.locals.NAME`), globals, statics, etc. are dereferenced
     // correctly instead of being emitted as bare JS identifiers.
-    const descriptor = ts.obj({
-      type: ts.str("positional"),
-      args: ts.arr(args),
-    });
-    const configObj = this.buildStateConfig();
     const handlerBlockFrameVar =
       handlerScope === "block" || handlerScope === "blockArgs"
         ? this.scopes.blockFrameVar(handlerBlockDepth ?? 0)
@@ -4274,6 +4268,18 @@ export class TypeScriptBuilder {
     const callee = handlerScope
       ? ts.scopedVar(handlerName, handlerScope, this.moduleId, handlerBlockFrameVar)
       : ts.id(handlerName);
+    return this.handlerArrowCalling(callee);
+  }
+
+  /** The handler function the runtime calls, `async (__run, __data) =>
+   *  __call(__run, callee, [__data])`, for a callee that is a named
+   *  function or the block an inline handler function compiles to. */
+  private handlerArrowCalling(callee: TsNode): TsNode {
+    const descriptor = ts.obj({
+      type: ts.str("positional"),
+      args: ts.arr([ts.id("__data")]),
+    });
+    const configObj = this.buildStateConfig();
     const callArgs: TsNode[] = [ts.runtime.run, callee, descriptor];
     if (configObj) callArgs.push(configObj);
     const callExpr = ts.call(ts.id("__call"), callArgs);
@@ -4292,28 +4298,21 @@ export class TypeScriptBuilder {
     const subKey = this.steps.joined();
     const handlerName = `__handler_${subKey}`;
 
-    // Build handler arrow function
+    // An inline handler function was lowered to a block argument by
+    // desugarHandlerFunctionsInProgram (lib/preprocessors/handlerDesugar.ts).
+    // It is compiled like any block and called like a named function
+    // handler, so each run of it has its own steps and its own frame.
     let handler: TsNode;
     if (node.handler.kind === "inline") {
-      const prevInsideHandlerBody = this.insideHandlerBody;
-      this.insideHandlerBody = true;
-      const handlerBody = node.handler.body.map((stmt) =>
-        this.withPlainFlip(stmt, this.processStatement(stmt)),
-      );
-      this.insideHandlerBody = prevInsideHandlerBody;
-      const paramType = node.handler.param.typeHint
-        ? formatTypeHintTs(node.handler.param.typeHint)
-        : "any";
-      // A handler function takes the run it is called under, then the
-      // interrupt.
-      handler = ts.arrowFn(
-        [
-          { name: "__run", typeAnnotation: "__Run" },
-          { name: node.handler.param.name, typeAnnotation: paramType },
-        ],
-        ts.statements(handlerBody),
-        { async: true },
-      );
+      const block = handlerFunctionBlock(node.handler);
+      if (block === undefined) {
+        // The builder has one caller, typescriptGenerator.ts, which runs
+        // preprocess() first; reaching here is a compiler bug.
+        throw new Error(
+          "Internal error: an inline handler function reached codegen without being lowered; desugarHandlerFunctionsInProgram did not run.",
+        );
+      }
+      handler = this.handlerArrowCalling(this.processBlockAsExpression(block));
     } else {
       handler = this.buildHandlerArrow(
         node.handler.functionName,

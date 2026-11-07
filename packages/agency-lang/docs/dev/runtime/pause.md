@@ -68,8 +68,9 @@ Every catch site that must let these signals through tests the base class:
 The flag stays set in each of these cases, and the next statement that can take
 the pause does.
 
-- A handler body is executing (`StateStack.hasExecutingHandlers()`). Handlers
-  have no step address, so a checkpoint taken inside one cannot be resumed.
+- A handler function is executing (`StateStack.hasExecutingHandlers()`). A
+  handler never pauses, so a checkpoint taken inside one could never be
+  resumed; the runtime refuses it here, whatever shape the code has.
 - A callback body is executing (`isInsideCallback()` in `hooks.ts`), for the
   same reason.
 - The runner is on a branch stack, or inside a tool call. Tool calls, forks,

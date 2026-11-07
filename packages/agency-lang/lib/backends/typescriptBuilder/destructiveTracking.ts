@@ -109,10 +109,10 @@ export class DestructiveTracking {
     };
   }
 
-  /** The flip for one statement of plain-mode code: an inline handler body,
-   *  or an `if`, loop, or `match` compiled inside one. Plain code has no
+  /** The flip for one statement of plain-mode code. Plain code has no
    *  steps, so a PRE flip runs first. A tracked call gets one too, because
-   *  plain code emits no post-flip. */
+   *  plain code emits no post-flip. Unused: an inline handler function, the
+   *  only plain-mode code, compiles as a block. */
   plainFlip(stmt: AgencyNode, inDestructiveFunction: boolean): TsNode | undefined {
     if (inDestructiveFunction || this.ownedCalls(stmt).length === 0) {
       return undefined;
@@ -188,8 +188,8 @@ export class DestructiveTracking {
 
   /** The destructive calls `stmt` owns: the ones in its own expressions.
    *  A call inside one of its statement bodies belongs to the statement in
-   *  that body, and every body flips its own statements, stepped
-   *  (`processBodyAsParts`) or plain (`plainFlip`).
+   *  that body, and every body flips its own statements
+   *  (`processBodyAsParts`).
    *  docs/dev/language/destructive-regions.md. */
   private ownedCalls(stmt: AgencyNode): AgencyNode[] {
     return walkNodesArray([stmt])

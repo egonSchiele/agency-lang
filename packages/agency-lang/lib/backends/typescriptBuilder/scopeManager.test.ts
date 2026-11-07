@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ScopeManager } from "./scopeManager.js";
+import { ScopedTypeAliases } from "../../compilationUnit.js";
 
 // CompilationUnit is only used for type-alias/return-type queries, which
 // blockFrameVar does not touch, so a cast-through empty object is safe here.
@@ -72,5 +73,40 @@ describe("ScopeManager.enclosingDeclaredReturnType — stamped blocks (#580)", (
     m.push({ type: "node", nodeName: "main" });
     m.push({ type: "block", blockName: "b1", declaredYieldType: STR });
     expect(m.enclosingDeclaredReturnType()).toEqual(STR);
+  });
+});
+
+describe("ScopeManager.visibleTypeAliasesFull", () => {
+  const unitWith = (aliases: ScopedTypeAliases) =>
+    new ScopeManager({ typeAliases: aliases } as any);
+  const num = { type: "number" } as any;
+  const str = { type: "string" } as any;
+
+  it("a block sees the aliases of the function it is written in", () => {
+    const aliases = new ScopedTypeAliases();
+    aliases.add("global", "G", num);
+    aliases.add("function:f", "Local", num);
+    const m = unitWith(aliases);
+    m.push({ type: "function", functionName: "f" });
+    m.push({ type: "block", blockName: "__block_0" });
+    expect(Object.keys(m.visibleTypeAliasesFull()).sort()).toEqual(["G", "Local"]);
+  });
+
+  it("an inner declaration wins over an outer one", () => {
+    const aliases = new ScopedTypeAliases();
+    aliases.add("global", "T", num);
+    aliases.add("function:f", "T", str);
+    const m = unitWith(aliases);
+    m.push({ type: "function", functionName: "f" });
+    m.push({ type: "block", blockName: "__block_0" });
+    expect(m.visibleTypeAliasesFull().T.body).toEqual(str);
+  });
+
+  it("a sibling function's aliases are not visible", () => {
+    const aliases = new ScopedTypeAliases();
+    aliases.add("function:other", "Hidden", num);
+    const m = unitWith(aliases);
+    m.push({ type: "function", functionName: "f" });
+    expect(m.visibleTypeAliasesFull().Hidden).toBeUndefined();
   });
 });

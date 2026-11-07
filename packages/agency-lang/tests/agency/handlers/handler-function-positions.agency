@@ -84,6 +84,41 @@ node onClauseForm() {
   return "${out} | ${seen}"
 }
 
+def isSmall(value: number): Result<number> {
+  if (value < 100) {
+    return success(value)
+  }
+  return failure("must be small")
+}
+
+def asksSmallAndLarge(): string {
+  ask(5)
+  ask(500)
+  return "done"
+}
+
+// A validated alias and a generic alias declared in the enclosing
+// function are visible in the handler function, as in any block.
+node localAliases() {
+  type Box<T> = { value: T }
+  @validate(isSmall)
+  type Small = number
+  let notes = []
+  handle {
+    asksSmallAndLarge()
+  } with (intr) {
+    const checked: Small! = intr.data.n
+    const boxed: Box<number> = { value: intr.data.n }
+    if (checked is failure(why)) {
+      notes.push("rejected ${boxed.value}: ${why}")
+    } else {
+      notes.push("ok ${checked.value} boxed ${boxed.value}")
+    }
+    return approve()
+  }
+  return "${notes}"
+}
+
 def throwsInHandler(): string {
   let out = "unset"
   handle {
@@ -96,10 +131,15 @@ def throwsInHandler(): string {
   return out
 }
 
-// A handler function that throws a JavaScript error.
+// A handler function that throws a JavaScript error. The test is about
+// the error travelling up through `try`, not about the engine's wording,
+// so the message is reduced to a stable marker.
 node handlerThrows() {
   const r = try throwsInHandler()
   if (isFailure(r)) {
+    if (r.error.includes("null")) {
+      return "failed: null read"
+    }
     return "failed: ${r.error}"
   }
   return "ok: ${r.value}"

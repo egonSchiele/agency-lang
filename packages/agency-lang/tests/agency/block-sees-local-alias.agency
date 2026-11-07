@@ -1,0 +1,24 @@
+// A type alias declared in a function is visible inside a block argument
+// written in that function: a validated alias runs its validator there,
+// and a generic alias compiles.
+def isSmall(value: number): Result<number> {
+  if (value < 100) {
+    return success(value)
+  }
+  return failure("must be small")
+}
+
+node main() {
+  type Box<T> = { value: T }
+  @validate(isSmall)
+  type Small = number
+  const notes = map([5, 500]) as x {
+    const checked: Small! = x
+    const boxed: Box<number> = { value: x }
+    if (checked is failure(why)) {
+      return "rejected ${boxed.value}: ${why}"
+    }
+    return "ok ${checked.value} boxed ${boxed.value}"
+  }
+  return "${notes}"
+}

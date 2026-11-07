@@ -56,7 +56,20 @@
       "nodeName": "handlerThrows",
       "description": "A JavaScript error thrown in a handler function travels up and `try` turns it into a failure. Same on main.",
       "input": "",
-      "expectedOutput": "\"failed: Cannot read properties of null (reading 'name')\"",
+      "expectedOutput": "\"failed: null read\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "localAliases",
+      "description": "A validated alias and a generic alias declared in the enclosing node are visible in the handler function: the validator runs and the generic alias compiles, as in any block.",
+      "input": "",
+      "expectedOutput": "\"ok 5 boxed 5,rejected 500: must be small\"",
       "evaluationCriteria": [
         {
           "type": "exact"

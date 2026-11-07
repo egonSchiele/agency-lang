@@ -43,9 +43,10 @@
  *    to avoid colliding with codegen-emitted keys (`__substep_*`,
  *    `__scope_step_*`, etc.) and with user-chosen TS variable names
  *    elsewhere on the frame.
- *  - `stateStack.pop()` runs unconditionally in `finally`, mirroring
- *    the generated function-body emission in
- *    `lib/backends/typescriptBuilder.ts`.
+ *  - `stateStack.release(stack)` runs unconditionally in `finally`,
+ *    mirroring the generated function-body emission in
+ *    `lib/backends/typescriptBuilder.ts`. It removes this scope's own
+ *    frame, which may not be the top one (StateStack.release).
  */
 import { currentRun, freshState, lineageOf, withRun, type Run } from "./asyncContext.js";
 import { setupFunction } from "./node.js";
@@ -200,6 +201,6 @@ export async function withResumableScope<T>(
     const bodyResult = await withRun(bodyRun, () => body(scope));
     return runner.halted ? (runner.haltResult as T) : bodyResult;
   } finally {
-    stateStack.pop();
+    stateStack.release(stack);
   }
 }

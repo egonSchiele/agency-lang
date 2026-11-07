@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Three concurrent child interrupts answered by a parent handler that sleeps longest for the first to arrive, so the handler runs finish in reverse order while the others are still in flight. Each run releases its own frame.",
+      "description": "Three concurrent child interrupts answered by a parent handler whose runs finish in the order they started, each while the later ones are still in flight. Each run finds its own frame still on the shared stack after its wait.",
       "input": "",
-      "expectedOutput": "\"branch-a\\n,branch-b\\n,branch-c\\n | finished echo branch-c,echo branch-b,echo branch-a\"",
+      "expectedOutput": "\"branch-a\\n,branch-b\\n,branch-c\\n | finished echo branch-a: true,echo branch-b: true,echo branch-c: true\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

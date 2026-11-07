@@ -1,0 +1,55 @@
+import { compile, run } from "std::agency"
+
+// Three concurrent child interrupts reach one parent handler, and its runs
+// share one stack. The run for branch a calls llm() at once; the mock takes
+// 300 ms. The run for branch b waits 100 ms, then calls slowCheck, so the
+// frames of slowCheck and its sleep sit above the llm() frame. When the
+// model call returns, llm() must release its own frame. If it removed the
+// top frame instead, sleep's frame would be gone when sleep finished,
+// slowCheck would return a failure, and the handler would reject branch b
+// (#1426).
+def slowCheck(command: string): string {
+  sleep(500)
+  return command
+}
+
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  const results = fork(["a", "b", "c"]) as item {
+    let r = bash("echo branch-" + item)
+    return r.stdout
+  }
+  return results
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isSuccess(result)) {
+      return "${result.value.data}"
+    }
+    return "run failed"
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    const command = intr.data.command
+    if (command == "echo branch-a") {
+      const verdict = llm("Is this command safe? ${command}")
+      return approve()
+    }
+    if (command == "echo branch-b") {
+      sleep(100)
+      const checked = slowCheck(command)
+      if (checked != command) {
+        return reject()
+      }
+    }
+    return approve()
+  }
+}

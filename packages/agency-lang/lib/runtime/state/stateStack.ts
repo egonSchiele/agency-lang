@@ -1227,13 +1227,18 @@ export class StateStack {
     this.mode = "serialize";
   }
 
+  /** Remove the top frame. Code compiled by an earlier version of Agency
+   *  removes its frames this way, so a published package keeps running on
+   *  this runtime. Nothing the current compiler emits calls it, and new
+   *  runtime code should call `release`. */
   pop(): State | undefined {
     return this.stack.pop();
   }
 
-  /** Remove `frame` from the stack, wherever it is. A compiled scope (a def
-   *  body, a block argument, a fork branch) releases its own frame at exit
-   *  this way rather than popping the top. Two scopes can be running on one
+  /** Remove `frame` from the stack, wherever it is. Every scope releases the
+   *  frame it pushed this way: a def body, a block argument, a fork branch,
+   *  a node at a `goto`, an `llm()` call, and `withResumableScope`. A scope
+   *  does not pop the top, because two scopes can be running on one
    *  stack at once: the parent's handlers for interrupts a subprocess
    *  forwards, or callbacks fired from a child, each start on a copy of the
    *  same run. The first to finish must take its own frame, not the other's.

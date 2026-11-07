@@ -1,11 +1,13 @@
 import { compile, run } from "std::agency"
+import { frameHoldsCommand } from "./frame-check.js"
 
 // Three concurrent child branches each interrupt, and the parent's handler
-// does slow work before it answers. The first raise to arrive waits the
-// longest, so the three handler runs finish in the reverse of the order
-// they started, each while the others are still in flight. Every run must
-// release its own frame from the shared branch stack, not the frame of a
-// run that has not finished (#1426).
+// does slow work before it answers. Its three runs share one stack. The
+// first raise to arrive waits the shortest, so the runs finish in the order
+// they started, each while the later ones are still in flight. After its
+// wait, each run checks that its own frame is still on the stack. If a run
+// removed the top frame when it finished, instead of its own, the last run's
+// frame would be gone before its check (#1426).
 node main() {
   const source = """
 import { bash } from "std::shell"
@@ -35,15 +37,16 @@ node main() {
     // The three runs start in one tick and interleave step by step, so the
     // wait is taken from the interrupt's own data, not from a shared counter.
     const command = intr.data.command
-    let wait = 150
+    let wait = 450
     if (command == "echo branch-a") {
-      wait = 450
+      wait = 150
     }
     if (command == "echo branch-b") {
       wait = 300
     }
     sleep(wait)
-    finished.push(command)
+    const ownFrame = frameHoldsCommand(command)
+    finished.push("${command}: ${ownFrame}")
     return approve()
   }
 }

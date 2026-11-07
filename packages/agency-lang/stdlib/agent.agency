@@ -25,12 +25,12 @@ effect std::question {
   prompt: string
 }
 
-export def todoAdd(todo: Todo): Todo[] {
+export def todoAdd(todo: Todo!): Result<Todo[]> {
   """
   Add a new todo to the list.
   """
   _todos.push(todo)
-  return _todos
+  return success(_todos)
 }
 
 export def todoUpdate(
@@ -49,12 +49,12 @@ export def todoUpdate(
   return _todos
 }
 
-export def todoWrite(todos: Todo[]): Todo[] {
+export def todoWrite(todos: Todo[]!): Result<Todo[]> {
   """
   Replace the current todo list.
   """
   _todos = todos
-  return _todos
+  return success(_todos)
 }
 
 export def todoList(): Todo[] {

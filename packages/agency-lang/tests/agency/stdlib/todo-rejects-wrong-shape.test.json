@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"error\":\"Argument \\\"todos\\\" of todoWrite must be Todo[], but received a list. Problems: 0.id: Invalid input: expected string, received undefined; 0.text: Invalid input: expected string, received undefined; 0.status: expected one of \\\"pending\\\", \\\"in_progress\\\", \\\"completed\\\".\",\"todos\":[{\"id\":\"1\",\"text\":\"read the spec\",\"status\":\"pending\"}]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoWrite refuses a list whose items lack the declared fields, and keeps the old list"
+    },
+    {
+      "nodeName": "listAsText",
+      "input": "",
+      "expectedOutput": "\"Argument \\\"todos\\\" of todoWrite must be Todo[], but received the text \\\"[{\\\\\\\"id\\\\\\\": \\\\\\\"1\\\\\\\", \\\\\\\"text\\\\\\\": \\\\\\\"read the spec\\\\\\\", \\\\\\\"status\\\\\\\": \\\\\\\"pending\\\\\\\"}]\\\".\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoWrite refuses a list sent as a JSON string"
+    },
+    {
+      "nodeName": "addWrongShape",
+      "input": "",
+      "expectedOutput": "{\"error\":\"Argument \\\"todo\\\" of todoAdd must be Todo, but received an object. Problems: id: Invalid input: expected string, received undefined; text: Invalid input: expected string, received undefined; status: expected one of \\\"pending\\\", \\\"in_progress\\\", \\\"completed\\\".\",\"todos\":[{\"id\":\"1\",\"text\":\"read the spec\",\"status\":\"pending\"}]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoAdd refuses a todo that lacks the declared fields, and keeps the old list"
+    },
+    {
+      "nodeName": "addValid",
+      "input": "",
+      "expectedOutput": "[{\"id\":\"1\",\"text\":\"read the spec\",\"status\":\"pending\"},{\"id\":\"2\",\"text\":\"write tests\",\"status\":\"in_progress\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoAdd returns a success holding the updated list"
+    }
+  ]
+}

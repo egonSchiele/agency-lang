@@ -1,0 +1,43 @@
+import { todoAdd, todoWrite, todoList } from "std::agent"
+
+node main() {
+  todoWrite([{ id: "1", text: "read the spec", status: "pending" }])
+  // The shape glm-5.3-flash sent: none of the declared fields.
+  const wrongShape: any = [
+    { title: "Search the web", activeForm: "Searching the web", value: "search" }
+  ]
+  const result = todoWrite(wrongShape)
+  if (isFailure(result)) {
+    return { error: result.error, todos: todoList() }
+  }
+  return "todoWrite accepted a list with the wrong fields"
+}
+
+node listAsText() {
+  // glm-5.3-flash also sent the whole list as one JSON string.
+  const asText: any = "[{\"id\": \"1\", \"text\": \"read the spec\", \"status\": \"pending\"}]"
+  const result = todoWrite(asText)
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "todoWrite accepted a string in place of a list"
+}
+
+node addWrongShape() {
+  todoWrite([{ id: "1", text: "read the spec", status: "pending" }])
+  const wrongShape: any = { title: "Search the web", value: "search" }
+  const result = todoAdd(wrongShape)
+  if (isFailure(result)) {
+    return { error: result.error, todos: todoList() }
+  }
+  return "todoAdd accepted a todo with the wrong fields"
+}
+
+node addValid() {
+  todoWrite([{ id: "1", text: "read the spec", status: "pending" }])
+  const result = todoAdd({ id: "2", text: "write tests", status: "in_progress" })
+  if (isSuccess(result)) {
+    return result.value
+  }
+  return "todoAdd refused a valid todo"
+}

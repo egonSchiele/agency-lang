@@ -33,7 +33,7 @@ effect std::question {
 ### todoAdd
 
 ```ts
-todoAdd(todo: Todo): Todo[]
+todoAdd(todo: Todo!): Result<Todo[]>
 ```
 
 Add a new todo to the list.
@@ -44,7 +44,7 @@ Add a new todo to the list.
 |---|---|---|
 | todo | `Todo` |  |
 
-**Returns:** `Todo[]`
+**Returns:** `Result<Todo[]>`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L28))
 
@@ -70,7 +70,7 @@ Update the status of a todo by id.
 ### todoWrite
 
 ```ts
-todoWrite(todos: Todo[]): Todo[]
+todoWrite(todos: Todo[]!): Result<Todo[]>
 ```
 
 Replace the current todo list.
@@ -81,7 +81,7 @@ Replace the current todo list.
 |---|---|---|
 | todos | `Todo[]` |  |
 
-**Returns:** `Todo[]`
+**Returns:** `Result<Todo[]>`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L52))
 

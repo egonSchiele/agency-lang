@@ -44,8 +44,7 @@ let coderFirst = true
 
 // Bundled prompts are read at static-init, before the policy handler exists.
 // coordinatorInit only checks the reads succeeded.
-static const MAIN_PROMPT_LARGE = read("./prompts/main-large.md", __dirname) with approve
-static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with approve
+static const MAIN_PROMPT = read("./prompts/main.md", __dirname) with approve
 
 // Skills about the agent itself. The folder ships with the agent, so the
 // scan is approved here, as the prompt reads above are. An outer handler
@@ -97,16 +96,8 @@ def exitIfBroken(checked: Result<boolean>) {
 }
 
 def coordinatorInit(context: BrainContext) {
-  if (isFailure(MAIN_PROMPT_LARGE)) {
-    print(
-      color.red("Failed to read prompts/main-large.md: ${MAIN_PROMPT_LARGE.error}"),
-    )
-    _exit(1)
-  }
-  if (isFailure(MAIN_PROMPT_SMALL)) {
-    print(
-      color.red("Failed to read prompts/main-small.md: ${MAIN_PROMPT_SMALL.error}"),
-    )
+  if (isFailure(MAIN_PROMPT)) {
+    print(color.red("Failed to read prompts/main.md: ${MAIN_PROMPT.error}"))
     _exit(1)
   }
   exitIfBroken(checkBundledSkill(superpowersSkill, "brainstorming"))
@@ -183,11 +174,7 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
   thread(label: "main", session: "main") {
     setMemoryId("main")
     if (first) {
-      const promptSize = getCapabilities().prompt
-      const sysPrompt = match(promptSize) {
-        "small" => MAIN_PROMPT_SMALL catch ""
-        _ => MAIN_PROMPT_LARGE catch ""
-      }
+      const sysPrompt = MAIN_PROMPT catch ""
       systemMessage("${sysPrompt}${_context}")
       first = false
     }

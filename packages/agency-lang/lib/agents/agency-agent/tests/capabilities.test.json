@@ -4,7 +4,7 @@
     {
       "nodeName": "unknownModelGetsDefaults",
       "input": "",
-      "expectedOutput": "\"large/true/true/20000/default\"",
+      "expectedOutput": "\"true/true/20000/default\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -14,7 +14,7 @@
     {
       "nodeName": "unknownLocalModelGetsProviderProfile",
       "input": "",
-      "expectedOutput": "\"small/false/2000/provider\"",
+      "expectedOutput": "\"false/2000/provider\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -44,7 +44,7 @@
     {
       "nodeName": "userProviderBeatsUserGlobal",
       "input": "",
-      "expectedOutput": "\"large/user-provider\"",
+      "expectedOutput": "\"400/user-provider\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -54,7 +54,7 @@
     {
       "nodeName": "userModelBeatsUserProvider",
       "input": "",
-      "expectedOutput": "\"large/user-model\"",
+      "expectedOutput": "\"400/user-model\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -74,7 +74,7 @@
     {
       "nodeName": "anthropicMemoryOff",
       "input": "",
-      "expectedOutput": "\"false/true/large\"",
+      "expectedOutput": "\"false/true/20000\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -104,7 +104,7 @@
     {
       "nodeName": "mergePreservesSiblings",
       "input": "",
-      "expectedOutput": "\"large/true\"",
+      "expectedOutput": "\"512/true\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -114,7 +114,7 @@
     {
       "nodeName": "removeDeletesOneField",
       "input": "",
-      "expectedOutput": "\"large/null/2000/provider\"",
+      "expectedOutput": "\"true/null/2000/provider\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -124,7 +124,7 @@
     {
       "nodeName": "refreshCachesProfile",
       "input": "",
-      "expectedOutput": "\"false/small/qwen3.5-2b\"",
+      "expectedOutput": "\"false/2000/qwen3.5-2b\"",
       "evaluationCriteria": [
         {
           "type": "exact"

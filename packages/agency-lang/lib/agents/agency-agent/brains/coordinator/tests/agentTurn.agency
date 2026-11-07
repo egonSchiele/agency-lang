@@ -27,7 +27,7 @@ import { setEnv } from "std::system"
 import { applyResolved, demoteProvider, getResolvedSlots, promoteAll } from "../../../shared.agency"
 
 // The grounding marker proves init reached the system prompt; the phrase
-// shared by main-large.md and main-small.md proves the bundled prompt itself
+// from main.md proves the bundled prompt itself
 // was read and used (a bad prompt path is caught as "" and would fail here).
 node respondsToAMessage(): string {
   // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).

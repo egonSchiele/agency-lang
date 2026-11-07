@@ -277,13 +277,11 @@ export def memoryConfigFor(
 // kept so /settings knows what scope "this model" means.
 let _capabilities: ResolvedCapabilities = {
   values: {
-    prompt: "large",
     summarize: true,
     memory: true,
     maxTokens: 20000
   },
   sources: {
-    prompt: "default",
     summarize: "default",
     memory: "default",
     maxTokens: "default"

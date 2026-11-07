@@ -23,8 +23,8 @@ coordinator sees only their final answer.
 
 ```
 coordinator.agency      the brain record: init, the main LLM call, routing
-prompts/                system prompts (main-large.md, main-small.md, and the
-                        Agency coder's agency-code.md and oneShot.md)
+prompts/                system prompts (main.md, and the Agency coder's
+                        agency-code.md and oneShot.md)
 subagents/              the specialists (one file each) plus their helpers
 tests/                  Agency execution tests for this brain
 ```
@@ -54,13 +54,12 @@ coordinator already has, or a small change to a file never costs a
 subagent dispatch), any MCP tools the harness connected, `whatIAmDoing`
 (progress reporting), and `elapsedTime` anchored to the turn start.
 
-The system prompt is chosen by the `prompt` capability: `main-large.md` by
-default, `main-small.md` for the compact profile.
+The system prompt is `main.md`, for every model.
 
-**Statics rule.** The two prompt reads are `static const ... with approve`.
-They run when the module is imported, before the policy handler exists,
+**Statics rule.** The prompt read is a `static const ... with approve`. It
+runs when the module is imported, before the policy handler exists,
 which is what lets `--policy minimal` start without prompting about the
-agent's own files. `init` only checks that they succeeded. Do not move
+agent's own files. `init` only checks that it succeeded. Do not move
 bundled reads into `init` or `runTurn`: those run inside the policy handler,
 and an inner `with approve` cannot get past an outer policy.
 

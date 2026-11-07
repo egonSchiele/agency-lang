@@ -60,9 +60,6 @@ def capabilityRow(fieldKey: string): string {
   const resolved = getCapabilitiesResolved()
   const values = resolved.values
   const sources = resolved.sources
-  if (fieldKey == "prompt") {
-    return "${values.prompt}   (${capabilitySourceLabel(sources.prompt)})"
-  }
   if (fieldKey == "summarize") {
     return "${values.summarize}   (${capabilitySourceLabel(sources.summarize)})"
   }
@@ -185,33 +182,6 @@ export def editCapabilities() {
   }
 
   let patch: CapabilityPatch = {}
-  if (fieldKey == "prompt") {
-    let promptItems: ChoiceItem[] = []
-    promptItems.push(
-      {
-      key: "large",
-      label: "large — full coordinator prompt"
-    },
-    )
-    promptItems.push(
-      {
-      key: "small",
-      label: "small — compact prompt for small-context models"
-    },
-    )
-    const picked = chooseOption(
-      "prompt",
-      "System prompt size.",
-      promptItems,
-      allowCancel: true,
-    )
-    if (picked == "" || picked == null) {
-      return
-    }
-    patch = {
-      prompt: picked
-    }
-  }
   if (fieldKey == "summarize" || fieldKey == "memory") {
     let onOffItems: ChoiceItem[] = []
     onOffItems.push({
@@ -320,13 +290,6 @@ export def editCapabilities() {
   }
   if (fieldKey == "maxTokens") {
     applyLiveMaxTokens()
-  }
-  if (fieldKey == "prompt") {
-    pushMessage(
-      color.dim(
-      "Prompt change applies on next agent start (this session's system message is already sent).",
-    ),
-    )
   }
   pushMessage("Saved.")
   showCapabilities()

@@ -120,7 +120,7 @@ node roundTripsCapabilities(): string {
     capabilities: {
       models: {
         "test-caps-model": {
-          prompt: "large"
+          maxTokens: 512
         }
       }
     }
@@ -131,11 +131,11 @@ node roundTripsCapabilities(): string {
   if (models == null) {
     return "missing"
   }
-  const prompt = models["test-caps-model"].prompt
-  if (prompt == null) {
-    return "missing-prompt"
+  const maxTokens = models["test-caps-model"].maxTokens
+  if (maxTokens == null) {
+    return "missing-maxTokens"
   }
-  return prompt
+  return "${maxTokens}"
 }
 
 node capabilitiesSanitizedOnLoad(): string {
@@ -146,7 +146,7 @@ node capabilitiesSanitizedOnLoad(): string {
   // exactly what a hand-edited settings.json can contain.
   write(
     SETTINGS_FILE,
-    "{\"capabilities\":{\"global\":{\"prompt\":\"gigantic\",\"summarize\":false,\"maxTokens\":\"2000\",\"frobnicate\":true}}}",
+    "{\"capabilities\":{\"global\":{\"memory\":\"gigantic\",\"summarize\":false,\"maxTokens\":\"2000\",\"frobnicate\":true}}}",
     POLICY_DIR,
   ) with approve
   const loaded = loadSettings() with approve
@@ -155,7 +155,7 @@ node capabilitiesSanitizedOnLoad(): string {
   if (globalPatch == null) {
     return "no-global"
   }
-  return "${globalPatch.prompt}/${globalPatch.summarize}/${globalPatch.maxTokens}"
+  return "${globalPatch.memory}/${globalPatch.summarize}/${globalPatch.maxTokens}"
 }
 
 node missingCapabilitiesIsEmpty(): string {
@@ -180,7 +180,7 @@ node nullEntryAndReservedKeySurviveLoad(): string {
     return "not sandboxed"
   }
   // A hand-edited file with a null entry used to throw inside
-  // loadSettings (sanitizePatch read .prompt off null); a __proto__ key
+  // loadSettings (sanitizePatch read .summarize off null); a __proto__ key
   // would reparent the record on assignment instead of storing. Both
   // must be dropped with the valid sibling kept.
   write(

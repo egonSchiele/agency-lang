@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"error\":\"Argument \\\"todos\\\" of todoWrite must be Todo[], but received a list. Problems: 0.id: Invalid input: expected string, received undefined; 0.text: Invalid input: expected string, received undefined; 0.status: expected one of \\\"pending\\\", \\\"in_progress\\\", \\\"completed\\\".\",\"todos\":[{\"id\":\"1\",\"text\":\"read the spec\",\"status\":\"pending\"}]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoWrite refuses a list whose items lack the declared fields, and keeps the old list"
+    },
+    {
+      "nodeName": "listAsText",
+      "input": "",
+      "expectedOutput": "\"Argument \\\"todos\\\" of todoWrite must be Todo[], but received the text \\\"[{\\\\\\\"id\\\\\\\": \\\\\\\"1\\\\\\\", \\\\\\\"text\\\\\\\": \\\\\\\"read the spec\\\\\\\", \\\\\\\"status\\\\\\\": \\\\\\\"pending\\\\\\\"}]\\\".\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "todoWrite refuses a list sent as a JSON string"
+    }
+  ]
+}

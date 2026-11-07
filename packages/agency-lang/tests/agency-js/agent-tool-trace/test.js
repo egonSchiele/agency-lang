@@ -94,8 +94,10 @@ for (const [name, mode] of Object.entries(modes)) {
 
 const taskBlock =
   "✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ Verify rankings\n  │ › Check availability · in progress\n  │ ○ Compare hardware\n";
-const booleanTaskBlock =
-  '✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ Identify what "Fable 5.1" is and who publishes it\n  │ › Read the announcement · in progress\n  │ ○ Summarize the findings\n';
+// todoWrite checks its argument, so a list that is not Todo[] is refused
+// with a message the model can correct from, not drawn as a checklist.
+const offSchemaRefusal =
+  '✗ Tasks failed  todoWrite\n  │ Argument "todos" of todoWrite must be Todo[], but received a list.';
 function blockWith(output, heading) {
   return output.split("\n\n").find((block) => block.split("\n").includes(heading)) ?? "";
 }
@@ -103,7 +105,7 @@ function blockWith(output, heading) {
 function detailed(output) {
   return {
     oneTaskSnapshot: output.split(taskBlock).length === 2,
-    oneBooleanTaskSnapshot: output.split(booleanTaskBlock).length === 2,
+    offSchemaTodosRefused: output.includes(offSchemaRefusal),
     noFallbackTodo: !output.includes("· Task result  todoWrite"),
     noGenericTodo: !/Tool (call|returned|finished|failed)  todoWrite/.test(output),
     failedTodoVisible: output.includes("✗ Tasks failed  todoWrite\n"),

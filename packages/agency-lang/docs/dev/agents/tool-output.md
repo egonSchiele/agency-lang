@@ -160,6 +160,12 @@ flag marks a task completed even when `active` is also true.
 Empty lists show `0/0 complete` and `No tasks`. Failures show a named
 `Tasks failed` block; malformed returned lists show `Task result`.
 
+`todoWrite` and `todoAdd` in `std::agent` check their arguments (`Todo[]!`,
+`Todo!`), so a model that sends other fields, such as `title` in place of
+`text`, gets a `Tasks failed` block whose message names the missing fields.
+Without the check, the tool saved the wrong list and returned it, and the
+model copied that shape for the rest of the session.
+
 Hosted searches print when `onLLMCallEnd` receives their records. Their
 neutral heading does not claim successful retrieval. Each nonblank query
 string gets its own row. Missing queries show `Queries not reported`, and

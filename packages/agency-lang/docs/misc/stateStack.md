@@ -29,6 +29,29 @@ nodes of that file are part of the same graph, the state will get restored corre
 don't need to keep track of which node the interrupt is being returned from, and you don't
 need to import it from that particular file. Any one will do.
 
+## A scope releases its own frame
+
+A compiled scope (a `def` body, a block argument, a fork branch) pushes a frame
+with `getNewState()` when it starts. When it ends, it calls `release(frame)`
+with that same frame, and `release` removes the frame wherever it is on the
+stack. It does not pop the top.
+
+The top is not always the scope's own frame. Two scopes can be running on one
+stack at the same time. The parent of a subprocess runs its handler chain for
+every interrupt the child forwards, each on a copy of the same branch run, and
+several can be in flight at once (`lib/runtime/ipc.ts`, `chainRun`). Callbacks
+fired for a child's events start the same way. If two handler runs each pushed
+a frame and the first to finish popped the top, it would take the other's
+frame, and until the other finished the top of the stack would be a dead frame
+(issue #1426).
+
+A frame that is not on the stack when `release` is called is a desync, and
+`release` throws rather than removing another scope's frame. The three places
+that emit the call are the def wrapper in `lib/backends/typescriptBuilder.ts`,
+`blockSetup.mustache`, and `forkBlockSetup.mustache`. `pop()` remains for
+runtime code that pushes and pops in one sequential path, such as
+`resumableScope.ts`.
+
 ## Serialization and deserialization
 ### Serialization
 All the state for a function or node is being tracked in one of the frames of the stack.

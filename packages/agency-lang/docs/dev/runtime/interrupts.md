@@ -619,6 +619,11 @@ the tree the user wrote.
   entry for `Result` error handling, and that checkpoint holds the handler
   block's frame. A rewind to it re-enters the handler with its saved
   counters and skips to the call. No test covers this.
+- Two runs of one handler can be in flight on one stack at once, when a
+  subprocess forwards several interrupts together. Each run releases its own
+  frame by identity at exit (`StateStack.release`), so the first to finish
+  never takes the other's frame. `docs/misc/stateStack.md`, "A scope
+  releases its own frame", and `tests/agency/subprocess/concurrent-handled-slow.agency`.
 
 ## Replay and helper calls: the hoistCalls pass
 

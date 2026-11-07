@@ -23,8 +23,8 @@ coordinator sees only their final answer.
 
 ```
 coordinator.agency      the brain record: init, the main LLM call, routing
-prompts/                system prompts (main-large.md, main-small.md, and the
-                        code subagent's code.md, plan.md, design.md, oneShot.md)
+prompts/                system prompts (main.md, and the Agency coder's
+                        agency-code.md and oneShot.md)
 subagents/              the specialists (one file each) plus their helpers
 tests/                  Agency execution tests for this brain
 ```
@@ -54,13 +54,12 @@ coordinator already has, or a small change to a file never costs a
 subagent dispatch), any MCP tools the harness connected, `whatIAmDoing`
 (progress reporting), and `elapsedTime` anchored to the turn start.
 
-The system prompt is chosen by the `prompt` capability: `main-large.md` by
-default, `main-small.md` for the compact profile.
+The system prompt is `main.md`, for every model.
 
-**Statics rule.** The two prompt reads are `static const ... with approve`.
-They run when the module is imported, before the policy handler exists,
+**Statics rule.** The prompt read is a `static const ... with approve`. It
+runs when the module is imported, before the policy handler exists,
 which is what lets `--policy minimal` start without prompting about the
-agent's own files. `init` only checks that they succeeded. Do not move
+agent's own files. `init` only checks that it succeeded. Do not move
 bundled reads into `init` or `runTurn`: those run inside the policy handler,
 and an inner `with approve` cannot get past an outer policy.
 
@@ -69,7 +68,7 @@ and an inner `with approve` cannot get past an outer policy.
 | Tool | What it does | Where the agent really lives |
 |---|---|---|
 | `codeAgent` | Code in any language but Agency: reading, writing, editing, running commands. A handoff, so one coder works the task in the coordinator's conversation, and no other model advises or reviews it. The coder can call `escalate` to write and run a planned agent for a big multi-step task. | `std::agents/coding` |
-| `agencyCodeAgent` | The same coder for Agency code and Agency questions, with the Agency prompt (`prompts/code.md`), the bundled docs tools, and the typecheck and test tools. A handoff. | `std::agents/coding` |
+| `agencyCodeAgent` | The same coder for Agency code and Agency questions, with the Agency prompt (`prompts/agency-code.md`), the bundled docs tools, and the typecheck and test tools. A handoff. | `std::agents/coding` |
 | `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. | `std::agents` |
 | `oracleAgent` | Deep-reasoning consult on the slow model slot. A handoff: it continues the coordinator's conversation, so repeated consults see each other. | `std::agents/oracle` |
 | `explorerAgent` | Surveys a codebase or topic on the slow model slot. A handoff, like the oracle. | `std::agents/explorer` |

@@ -64,7 +64,7 @@
     {
       "nodeName": "roundTripsCapabilities",
       "input": "",
-      "expectedOutput": "\"large\"",
+      "expectedOutput": "\"512\"",
       "evaluationCriteria": [
         {
           "type": "exact"

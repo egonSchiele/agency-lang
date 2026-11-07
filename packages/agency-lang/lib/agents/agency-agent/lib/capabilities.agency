@@ -1,7 +1,7 @@
 /** @module Declarative per-model capability profiles for the agency agent.
   Pure data + resolution; no I/O. A capability profile answers "what should
-  the agent enable for THIS model?" — small local models get a small prompt,
-  no summarizer, no memory, and a token cap. Resolution is per-field across
+  the agent enable for THIS model?" — small local models get no summarizer,
+  no memory, and a token cap. Resolution is per-field across
   six layers: user model > user provider > user global > built-in model >
   built-in provider > built-in default. See
   docs/superpowers/specs/2026-07-09-model-capabilities-design.md.
@@ -14,7 +14,6 @@
 
 /** The total, resolved profile. Every field has a value after resolution. */
 export type Capabilities = {
-  prompt: string;
   summarize: boolean;
   memory: boolean;
   maxTokens?: number
@@ -22,7 +21,6 @@ export type Capabilities = {
 
 /** A partial entry: states only what it changes. */
 export type CapabilityPatch = {
-  prompt?: string;
   summarize?: boolean;
   memory?: boolean;
   maxTokens?: number
@@ -40,7 +38,6 @@ export type CapabilitySettings = {
   for memory only, "embedding-override" (see withMemoryFromEmbeddingOverride).
   A concrete type (not Record) so the /settings renderer is exhaustive. */
 export type CapabilitySources = {
-  prompt: string;
   summarize: string;
   memory: string;
   maxTokens: string
@@ -62,11 +59,6 @@ export type CapabilityField = {
 }
 
 export static const CAPABILITY_FIELDS: CapabilityField[] = [
-  {
-  key: "prompt",
-  label: "prompt",
-  description: "large or small system prompt"
-},
   {
   key: "summarize",
   label: "summarize",
@@ -91,7 +83,6 @@ export static const CAPABILITY_FIELDS: CapabilityField[] = [
   on thinking and return an empty reply. 20000 also stays under the
   Anthropic non-streaming cutoff, which refuses maxTokens above 21333. */
 export static const CAPABILITY_DEFAULT: Capabilities = {
-  prompt: "large",
   summarize: true,
   memory: true,
   maxTokens: 20000
@@ -113,14 +104,13 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
   // memory: off for lack of embeddings. --model embedding=llama-cpp/nomic-embed-text
   // turns it on (memoryEnablePlan); the other three lines stay.
   "llama-cpp": {
-    prompt: "small",
     summarize: false,
     memory: false,
     maxTokens: 2000
   },
   // No embeddings endpoint of its own. Naming an embedding model in the
   // embedding slot (--model embedding=mlx/<model>) turns memory on; see
-  // memoryEnablePlan. The models are large enough for the full prompt.
+  // memoryEnablePlan.
   mlx: {
     memory: false
   }
@@ -129,7 +119,7 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
 /** Curated per-model exceptions, keyed by the curated short name for local
   models and the canonical model name for hosted ones. Grown over time. */
 export static const MODEL_CAPABILITIES: Record<string, CapabilityPatch> = {
-  // 8K context; even the small prompt + a modest reply must fit.
+  // 8K context; the system prompt and a modest reply must fit.
   "smollm2-135m": {
     maxTokens: 1000
   }
@@ -158,10 +148,6 @@ def applyPatch(
   }
   let sources = {
     ...current.sources
-  }
-  if (patch.prompt != null) {
-    values.prompt = patch.prompt
-    sources.prompt = source
   }
   if (patch.summarize != null) {
     values.summarize = patch.summarize
@@ -204,7 +190,6 @@ export def resolveCapabilities(
       ...CAPABILITY_DEFAULT
     },
     sources: {
-      prompt: "default",
       summarize: "default",
       memory: "default",
       maxTokens: "default"
@@ -231,15 +216,6 @@ export def resolveCapabilities(
   names the entry in warnings, e.g. "models.qwen3.5-2b". */
 def sanitizePatch(patch: CapabilityPatch, label: string): CapabilityPatch {
   let kept: CapabilityPatch = {}
-  if (patch.prompt != null) {
-    if (patch.prompt == "large" || patch.prompt == "small") {
-      kept.prompt = patch.prompt
-    } else {
-      print(
-        "Warning: settings.json capabilities ${label} has invalid prompt '${patch.prompt}'; ignoring it.",
-      )
-    }
-  }
   if (patch.summarize != null) {
     if (typeof patch.summarize == "boolean") {
       kept.summarize = patch.summarize
@@ -328,7 +304,7 @@ export def sanitizeCapabilitySettings(
 
 /** Merge one patch into the user settings at a scope. Pure: returns a new
   CapabilitySettings. Other fields in the same entry survive, so writing a
-  summarize override never eats a prompt override written earlier. */
+  summarize override never eats a maxTokens override written earlier. */
 export def mergeCapabilityOverride(
   user: CapabilitySettings,
   scope: string,
@@ -394,9 +370,6 @@ def patchFieldToNull(patch: CapabilityPatch, field: string): CapabilityPatch {
   let out = {
     ...patch
   }
-  if (field == "prompt") {
-    out.prompt = null
-  }
   if (field == "summarize") {
     out.summarize = null
   }
@@ -411,7 +384,7 @@ def patchFieldToNull(patch: CapabilityPatch, field: string): CapabilityPatch {
 
 /** True when every field of the patch is null or absent. */
 def patchIsEmpty(patch: CapabilityPatch): boolean {
-  return patch.prompt == null && patch.summarize == null && patch.memory == null && patch.maxTokens == null
+  return patch.summarize == null && patch.memory == null && patch.maxTokens == null
 }
 
 /** Copy a record without one key. Rebuilds the record because keys,

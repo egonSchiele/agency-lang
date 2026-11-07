@@ -1,13 +1,19 @@
-import test { promptFile } from "../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
+import test { promptFile, agencyCodePrompt, agencyTutorial } from "../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
 
 // The coordinator loads its prompts through the contained read wrapper,
 // and promptFile falls back to "" on failure — a SILENT empty system
 // prompt. These two nodes are the guard: each prompt must load
 // independently, so one healthy prompt cannot hide the other's failure.
 node codePromptLoads(): boolean {
-  return promptFile("code.md") != ""
+  return promptFile("agency-code.md") != ""
 }
 
 node oneShotPromptLoads(): boolean {
   return promptFile("oneShot.md") != ""
+}
+
+// The Agency coder learns the language from the tutorial. A tutorial that
+// did not ship reads as "", which would leave the prompt with an empty block.
+node codePromptHasTutorial(): boolean {
+  return agencyTutorial != "" && agencyCodePrompt.includes(agencyTutorial)
 }

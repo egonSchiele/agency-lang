@@ -19,6 +19,18 @@ the tutorial could not be read, so a file missing from the published
 package is an error on the first run. `package.json` ships
 `stdlib/agents/prompts`.
 
+The coordinator's `agencyCodeAgent` gets the tutorial too. That agent is
+the general stdlib coder, and `subagents/code.agency` in the coordinator
+brain builds its prompt: the rules in `prompts/agency-code.md`, then the
+tutorial in an `<agency_tutorial>` block. The prompt is added when
+`agencyCodeAgent` is called and expires with the handoff, so no other
+request carries the tutorial. `agency-code.md` holds no syntax rules of
+its own. A tutorial that did not ship leaves that block empty, and
+`tests/agency/agency-agent-code-prompt.agency` fails.
+
+The scores under "Measuring a change" are for the writer. Nobody has
+measured the tutorial's effect on `agencyCodeAgent`.
+
 Rules for editing the tutorial:
 
 - Every code sample must parse. Extract the fenced blocks and run

@@ -996,6 +996,12 @@ export const DIAGNOSTICS = {
     message:
       "`{keyword}` runs beside `async {expr}`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `{keyword}`, or use its value before it.",
   },
+  gotoInBlock: {
+    code: "AG1036",
+    severity: "error",
+    message:
+      "`goto {target}` is inside a block. A block runs as its own function, so it cannot move its node to another node. Return a value from the block, and put the `goto` after the block.",
+  },
   unwrapNonResult: {
     code: "AG2023",
     severity: "error",

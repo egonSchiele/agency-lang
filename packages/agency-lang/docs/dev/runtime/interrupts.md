@@ -622,8 +622,14 @@ the tree the user wrote.
 - Two runs of one handler can be in flight on one stack at once, when a
   subprocess forwards several interrupts together. Each run releases its own
   frame by identity at exit (`StateStack.release`), so the first to finish
-  never takes the other's frame. `docs/misc/stateStack.md`, "A scope
-  releases its own frame", and `tests/agency/subprocess/concurrent-handled-slow.agency`.
+  never takes the other's frame. So does every scope inside the run,
+  including an `llm()` call. See `docs/misc/stateStack.md`, "A scope
+  releases its own frame". `tests/agency/subprocess/concurrent-handled-slow.agency`
+  checks that each run's frame is still on the stack after the earlier runs
+  finish, and `concurrent-handled-llm.agency` covers an `llm()` call in one
+  run while another run is inside a def.
+- A `goto` in a handler function is refused (AG1036), like a `goto` in any
+  other block.
 
 ## Replay and helper calls: the hoistCalls pass
 

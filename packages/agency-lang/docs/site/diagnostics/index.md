@@ -48,6 +48,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1033](types-aliases.md#ag1033) | `&#123;keyword&#125;` runs beside `async &#123;expr&#125;`, in a separate branch, and cannot leave the enclosing block from there. Start the `async` call after the `&#123;keyword&#125;`, or use its value before it. |
 | [AG1034](types-aliases.md#ag1034) | Type alias '&#123;alias&#125;' is declared in '&#123;module&#125;' but not imported here (referenced in '&#123;context&#125;'). Import it by name, or write the type out. |
 | [AG1035](types-aliases.md#ag1035) | Type alias '&#123;alias&#125;' lists itself as a member of its own union. It may refer to itself only inside an object, an array, or another structure. |
+| [AG1036](types-aliases.md#ag1036) | `goto &#123;target&#125;` is inside a block. A block runs as its own function, so it cannot move its node to another node. Return a value from the block, and put the `goto` after the block. |
 
 ## Assignability and checking
 

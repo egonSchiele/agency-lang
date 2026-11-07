@@ -3276,9 +3276,10 @@ export class TypeScriptBuilder {
     });
 
     return ts.statements([
-      // Pop the current node's frame before transitioning — it won't be re-entered on resume.
-      // Optional chain defends against the rare goto reached outside any ALS frame.
-      ts.raw("__run.stack.pop()"),
+      // Release the node's own frame before transitioning, since the node is
+      // not re-entered on resume. `__stack` is the node's frame because a
+      // `goto` inside a block is refused (AG1036).
+      ts.raw("__run.stack.release(__stack)"),
       ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
   }

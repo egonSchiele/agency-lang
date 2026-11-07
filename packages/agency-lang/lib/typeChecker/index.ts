@@ -28,6 +28,7 @@ import { decoratorLookup, desugarDecorators } from "../preprocessors/decoratorDe
 import { checkCastPositions } from "./castPositions.js";
 import { checkUnwraps } from "./unwrapChecks.js";
 import { asyncRefusals } from "./asyncChecks.js";
+import { gotoRefusals } from "./gotoChecks.js";
 import { buildFlowGraphs } from "./flowBuilder.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
@@ -412,6 +413,8 @@ export class TypeChecker {
     // Where `async f()` cannot go (AG1026 to AG1033). Tree-only, like the
     // unwrap refusals, and called from the compile path too.
     ctx.errors.push(...asyncRefusals(ctx.programNodes));
+    // A `goto` inside a block (AG1036). Tree-only too.
+    ctx.errors.push(...gotoRefusals(ctx.programNodes));
 
     // Defaulted parameters must come last (positional binding makes a
     // required-after-defaulted parameter silently unfillable).

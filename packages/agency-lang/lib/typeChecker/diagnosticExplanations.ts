@@ -979,6 +979,22 @@ def greet(): Result {
 
 **How to fix:** start the \`async\` call after the \`goto\`, \`break\`, or \`continue\`, or read the call's value before it so the branch ends there.`,
 
+  gotoInBlock: `A \`goto\` ends the current node and starts another one. Some bodies run as their own function: a block argument such as \`map(xs) as x { ... }\`, a \`fork\` branch, a \`parallel\` arm, a \`guard\` block, a \`finalize\` block, and the handler function in \`handle { ... } with (intr) { ... }\`. A \`goto\` in one of them would only end that function, and the node around it would keep running.
+
+**How to fix:** return a value from the block, and decide where to go after it:
+
+\`\`\`agency
+node main() {
+  const results = fork(["a", "b"]) as item {
+    return check(item)
+  }
+  if (results.includes("bad")) {
+    goto review(results)
+  }
+  return results
+}
+\`\`\``,
+
   unwrapNonResult: `The \`?\` operator reads a \`Result\`: it gives the success value, and if the Result is a failure it returns that failure from the enclosing function. The expression before this \`?\` is not a \`Result\`, so there is nothing to unwrap. The usual causes are a function that returns a plain value, or JavaScript-style optional chaining (\`obj?.name\`), which Agency does not have.
 
 **How to fix:** remove the \`?\` if the value is already plain. If you meant to tolerate a null, check for it with \`if\` or \`??\` instead.`,

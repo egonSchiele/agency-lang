@@ -303,7 +303,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__run.stack.pop()
+__run.stack.release(__stack)
 __functionCompleted = true;
 runner.halt(goToNode("foo", {
             messages: __run.threads,

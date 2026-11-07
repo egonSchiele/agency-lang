@@ -1,4 +1,4 @@
-import { todoWrite, todoList } from "std::agent"
+import { todoAdd, todoWrite, todoList } from "std::agent"
 
 node main() {
   todoWrite([{ id: "1", text: "read the spec", status: "pending" }])
@@ -21,4 +21,23 @@ node listAsText() {
     return result.error
   }
   return "todoWrite accepted a string in place of a list"
+}
+
+node addWrongShape() {
+  todoWrite([{ id: "1", text: "read the spec", status: "pending" }])
+  const wrongShape: any = { title: "Search the web", value: "search" }
+  const result = todoAdd(wrongShape)
+  if (isFailure(result)) {
+    return { error: result.error, todos: todoList() }
+  }
+  return "todoAdd accepted a todo with the wrong fields"
+}
+
+node addValid() {
+  todoWrite([{ id: "1", text: "read the spec", status: "pending" }])
+  const result = todoAdd({ id: "2", text: "write tests", status: "in_progress" })
+  if (isSuccess(result)) {
+    return result.value
+  }
+  return "todoAdd refused a valid todo"
 }

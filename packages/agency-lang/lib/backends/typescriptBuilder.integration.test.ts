@@ -288,7 +288,7 @@ def viaCondition(id: string, b: boolean): string {
     expect(flip).toBeLessThan(ifElse);
   });
 
-  it("a destructive call in an inline handler body is flipped inside the handler, before the call", () => {
+  it("a destructive call in an inline handler function gets the outcome flip inside the handler, after the call", () => {
     const output = generateWithBuilder(`
 destructive def rm(id: string): string {
   return id
@@ -304,14 +304,15 @@ def viaHandler(id: string): string {
 }
 `);
     const body = bodyOf(output, "viaHandler");
-    // The handler body is plain code, so its statement carries its own
-    // flip, and the handle statement carries none.
-    const flip = body.indexOf("__activation.__destructiveRan = true");
+    // The handler function is a block, so its tracked assignment gets the
+    // same outcome flip any stepped body gets, after the call and inside
+    // the handler; it marks the enclosing function's activation.
     const handle = body.indexOf("runner.handle(");
-    const call = body.indexOf("__call(__run, rm,");
+    const call = body.search(/__call\(__run\d*, rm,/);
+    const flip = body.indexOf("__activation.__destructiveRan = __activation.__destructiveRan ||");
     expect(handle).toBeGreaterThan(-1);
-    expect(flip).toBeGreaterThan(handle);
-    expect(flip).toBeLessThan(call);
+    expect(call).toBeGreaterThan(handle);
+    expect(flip).toBeGreaterThan(call);
   });
 
   it("an unmarked caller of a destructive fn emits the outcome flip on the result", () => {

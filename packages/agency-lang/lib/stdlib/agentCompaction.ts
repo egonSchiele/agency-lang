@@ -7,6 +7,7 @@ import * as smoltalk from "smoltalk";
 import { agency } from "../runtime/agency.js";
 import { expiryOf } from "../runtime/state/messageMetadata.js";
 import type { MessageThread } from "../runtime/state/messageThread.js";
+import { reasoningChars } from "../runtime/reasoningSize.js";
 import { _contentToString } from "./threads.js";
 
 // A rough size for text the provider has not counted yet.
@@ -59,8 +60,13 @@ function messageText(message: smoltalk.Message): string {
   return [content, toolCallsText(message)].filter((part) => part !== "").join("\n");
 }
 
+/** Counts each message's text, tool calls, and reasoning record, which goes
+ *  back to the model. The summarizer's transcript leaves the reasoning out. */
 export function estimateTokens(messages: smoltalk.Message[]): number {
-  const chars = messages.reduce((total, message) => total + messageText(message).length, 0);
+  const chars = messages.reduce(
+    (total, message) => total + messageText(message).length + reasoningChars(message),
+    0,
+  );
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 

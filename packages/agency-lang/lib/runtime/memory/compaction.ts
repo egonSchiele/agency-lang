@@ -1,5 +1,6 @@
 import type * as smoltalk from "smoltalk";
 import compactionTemplate from "../../templates/prompts/memory/compaction.js";
+import { reasoningChars } from "../reasoningSize.js";
 import mergeSummaryTemplate from "../../templates/prompts/memory/mergeSummary.js";
 
 export type CompactionConfig = {
@@ -11,7 +12,7 @@ function estimateTokens(messages: smoltalk.Message[]): number {
   let chars = 0;
   for (const msg of messages) {
     const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
-    chars += content.length;
+    chars += content.length + reasoningChars(msg);
   }
   // rough estimate: 1 token ≈ 4 characters
   return Math.ceil(chars / 4);

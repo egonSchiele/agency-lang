@@ -41,7 +41,11 @@ read. Subagent threads are not compacted.
 `contextTokens` in `lib/stdlib/agentCompaction.ts` takes the token count
 the provider reported on the thread's last reply. Cached input tokens are
 part of it. Messages added after that reply are estimated at four
-characters a token. A thread with no counted reply is estimated whole.
+characters a token. A thread with no counted reply is estimated whole. An
+estimate counts a message's text, its tool calls, and its reasoning record,
+which smoltalk sends back to the model that made it (`reasoningChars` in
+`lib/runtime/reasoningSize.ts`). The same estimate decides how much of the
+thread is kept, so a turn heavy with reasoning is not kept whole by mistake.
 
 The window is the smaller of the context windows of the `main` and
 `reasoning` slots (`conversationWindow` in `lib/compaction.agency`), since

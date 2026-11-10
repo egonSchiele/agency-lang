@@ -181,3 +181,29 @@ describe("transcriptText", () => {
     expect(transcriptText([calling])).toContain('read({"filename":"a.ts"})');
   });
 });
+
+describe("reasoning in the size estimates", () => {
+  // 400 characters of reasoning is 100 estimated tokens.
+  const thinking = (label: string) =>
+    assistantMessage(label.padEnd(100, "."), {
+      reasoning: { provider: "openrouter", model: "m", text: "r".repeat(400), format: "reasoning" },
+    });
+
+  it("estimateTokens counts a reply's reasoning record, which goes back to the model", () => {
+    expect(estimateTokens([thinking("a1")])).toBe(25 + 100);
+  });
+
+  it("planCompaction summarizes older turns when their reasoning fills the keep budget", () => {
+    const turns = [user("u1"), thinking("a1"), user("u2"), thinking("a2")];
+    // Text alone is 100 tokens and fits a keep budget of 200; with the
+    // reasoning, the turns are 300 tokens and the older one must go.
+    const plan = planCompaction(turns, 200);
+    expect(plan).not.toBeNull();
+    expect(labels(plan!.summarized)).toEqual(["u1", "a1"]);
+  });
+
+  it("keeps reasoning out of the summarizer's transcript", () => {
+    const plan = planCompaction([user("u1"), thinking("a1"), user("u2"), thinking("a2")], 200);
+    expect(transcriptText(plan!.summarized)).not.toContain("rrrr");
+  });
+});

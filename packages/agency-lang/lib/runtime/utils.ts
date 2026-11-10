@@ -12,7 +12,8 @@ export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
-/** Keep a value only when it round-trips through the given schema. The reply
+/** Keep a JSON copy of a value only when it round-trips through JSON and the
+ *  given schema. The reply
  *  message's usage, cost, thinking, and logprobs are validated by smoltalk's fromJSON
  *  on restore (checkpoint resume, rewind, subthread clone), which throws on a
  *  bad shape, so a value that would not pass is dropped here instead — the
@@ -28,9 +29,20 @@ export function serializableExtra<T>(
   if (value === undefined) {
     return undefined;
   }
-  const parsed = schema.safeParse(value);
+  // The thread is written to checkpoints as JSON, and a schema field typed
+  // as unknown would accept a value JSON cannot encode, such as a circular
+  // object or a bigint. So the value kept is a JSON copy, checked against
+  // the schema.
+  let copy: T;
+  try {
+    copy = JSON.parse(JSON.stringify(value));
+  } catch (error) {
+    onInvalid?.(error);
+    return undefined;
+  }
+  const parsed = schema.safeParse(copy);
   if (parsed.success) {
-    return value;
+    return copy;
   }
   onInvalid?.(parsed.error);
   return undefined;

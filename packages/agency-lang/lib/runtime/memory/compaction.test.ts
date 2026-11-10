@@ -26,6 +26,20 @@ describe("shouldCompact", () => {
     const messages = [userMessage("a".repeat(4000))];
     expect(shouldCompact(messages, { trigger: "token", threshold: 500 })).toBe(true);
   });
+
+  it("counts a reply's reasoning record toward the token trigger", () => {
+    const messages = [
+      assistantMessage("short", {
+        reasoning: {
+          provider: "openrouter",
+          model: "m",
+          text: "r".repeat(4000),
+          format: "reasoning",
+        },
+      }),
+    ];
+    expect(shouldCompact(messages, { trigger: "token", threshold: 500 })).toBe(true);
+  });
 });
 
 describe("buildCompactionPrompt", () => {

@@ -8,14 +8,21 @@
 */
 import { filterEntries } from "std::object"
 
-import { localModelOf, ModelRequest, requestEffort, requestLayers, requestLlmOptions, requestProvider } from "./modelRequest.agency"
+import { demoteProvider } from "../shared.agency"
+import {
+  localModelOf,
+  ModelRequest,
+  requestEffort,
+  requestLayers,
+  requestLlmOptions,
+  requestProvider,
+ } from "./modelRequest.agency"
 import { Resolved } from "./models.agency"
 import { Preset } from "./presetRules.agency"
 import { flattenLayers, RawLayer } from "./resolution.agency"
 import { isChatSlot } from "./slots.agency"
 import { LimitFlags } from "./toolLimits.agency"
 import { isPlainObject } from "./utils.agency"
-import { demoteProvider } from "../shared.agency"
 
 /** The preset fields `/preset save` reports, in the order it prints them.
   A nested field is a dotted path. */
@@ -61,7 +68,10 @@ def namesAChatModel(flat: RawLayer): boolean {
 // a bare model name in a saved preset could be resolved on another
 // provider at the next start. So the chat slots are written with their
 // provider, both of them, so neither falls back to a key-dependent default.
-def detectedProviderFields(flat: RawLayer, resolved: Record<string, Resolved>): ModelFields {
+def detectedProviderFields(
+  flat: RawLayer,
+  resolved: Record<string, Resolved>,
+): ModelFields {
   let slots: Record<string, string> = filterEntries(flat.slots, \(model, slot) -> !isChatSlot(slot))
   if (namesAChatModel(flat)) {
     slots = {
@@ -78,7 +88,10 @@ def detectedProviderFields(flat: RawLayer, resolved: Record<string, Resolved>): 
   }
 }
 
-def modelFields(request: ModelRequest, resolved: Record<string, Resolved>): ModelFields {
+def modelFields(
+  request: ModelRequest,
+  resolved: Record<string, Resolved>,
+): ModelFields {
   const local = localModelOf(request)
   if (local != null) {
     return {
@@ -132,16 +145,18 @@ export def sessionPreset(
   """
   const models = modelFields(request, resolved)
   const preset: Preset = request.preset ?? {}
-  return withoutEmpty({
-    provider: models.provider,
-    pin: models.pin,
-    slots: withoutEmpty(models.slots),
-    local: models.local,
-    maxToolCallRounds: limits.maxToolCallRounds ?? preset.maxToolCallRounds ?? null,
-    maxToolResultChars: limits.maxToolResultChars ?? preset.maxToolResultChars ?? null,
-    effort: requestEffort(request),
-    llmOptions: requestLlmOptions(request, {})
-  })
+  return withoutEmpty(
+    {
+      provider: models.provider,
+      pin: models.pin,
+      slots: withoutEmpty(models.slots),
+      local: models.local,
+      maxToolCallRounds: limits.maxToolCallRounds ?? preset.maxToolCallRounds ?? null,
+      maxToolResultChars: limits.maxToolResultChars ?? preset.maxToolResultChars ?? null,
+      effort: requestEffort(request),
+      llmOptions: requestLlmOptions(request, {})
+    },
+  )
 }
 
 def fieldValue(preset: Preset, path: string): any {

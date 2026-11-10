@@ -2,10 +2,18 @@
 // presetChangeLines must name exactly the fields that differ.
 import { setEnv } from "std::system"
 
-import { ModelChoices, ModelFlags, ModelRequest, noModelChoices, noModelFlags, requestEffort, requestLlmOptions } from "../lib/modelRequest.agency"
+import {
+  ModelChoices,
+  ModelFlags,
+  ModelRequest,
+  noModelChoices,
+  noModelFlags,
+  requestEffort,
+  requestLlmOptions,
+ } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
-import { presetChangeLines, sessionPreset } from "../lib/presetSnapshot.agency"
 import { Preset } from "../lib/presetRules.agency"
+import { presetChangeLines, sessionPreset } from "../lib/presetSnapshot.agency"
 import { LimitFlags } from "../lib/toolLimits.agency"
 import { resolveHostedModels } from "../shared.agency"
 
@@ -13,7 +21,13 @@ static const GLM: Preset = {
   provider: "openrouter",
   pin: "z-ai/glm-5.3-flash",
   effort: "low",
-  llmOptions: { openRouter: { provider: { only: ["baseten/fp8"] } } }
+  llmOptions: {
+    openRouter: {
+      provider: {
+        only: ["baseten/fp8"]
+      }
+    }
+  }
 }
 
 static const NO_LIMITS: LimitFlags = {
@@ -34,7 +48,11 @@ def onlyKey(name: string) {
   }
 }
 
-def req(flags: ModelFlags, preset: Preset | null, choices: ModelChoices): ModelRequest {
+def req(
+  flags: ModelFlags,
+  preset: Preset | null,
+  choices: ModelChoices,
+): ModelRequest {
   return {
     flags: flags,
     preset: preset,
@@ -92,7 +110,9 @@ node sameAfterNoChange(): string {
 
 node sameAfterARouterChoice(): string {
   onlyKey("OPENROUTER_API_KEY")
-  return sameSession(req(noModelFlags(), GLM, withSlotChoice("router", "openrouter/jev-1.14")))
+  return sameSession(
+    req(noModelFlags(), GLM, withSlotChoice("router", "openrouter/jev-1.14")),
+  )
 }
 
 node sameAfterAChatModelChoice(): string {
@@ -104,7 +124,9 @@ node sameAfterAPinOverAPresetSlot(): string {
   onlyKey("OPENROUTER_API_KEY")
   const preset: Preset = {
     provider: "openrouter",
-    slots: { main: "z-ai/glm-5.3-flash" }
+    slots: {
+      main: "z-ai/glm-5.3-flash"
+    }
   }
   return sameSession(req(noModelFlags(), preset, withPinChoice("z-ai/glm-5.3")))
 }
@@ -116,26 +138,47 @@ node sameAfterABarePinWithADetectedProvider(): string {
 
 node sameAfterAOneSlotChoiceWithADetectedProvider(): string {
   onlyKey("ANTHROPIC_API_KEY")
-  return sameSession(req(noModelFlags(), null, withSlotChoice("reasoning", "claude-opus-4-8")))
+  return sameSession(
+    req(noModelFlags(), null, withSlotChoice("reasoning", "claude-opus-4-8")),
+  )
 }
 
 node sameAfterAModelFlag(): string {
   onlyKey("ANTHROPIC_API_KEY")
-  return sameSession(req({ ...noModelFlags(), pin: "claude-opus-4-8" }, GLM, noModelChoices()))
+  return sameSession(
+    req(
+      {
+        ...noModelFlags(),
+        pin: "claude-opus-4-8"
+      },
+      GLM,
+      noModelChoices(),
+    ),
+  )
 }
 
 node unchangedSessionGivesThePresetBack(): string {
-  return JSON.stringify(sessionPreset(req(noModelFlags(), GLM, noModelChoices()), NO_LIMITS, NONE))
+  return JSON.stringify(
+    sessionPreset(req(noModelFlags(), GLM, noModelChoices()), NO_LIMITS, NONE),
+  )
 }
 
 node routerOffIsSaved(): string {
-  const saved = sessionPreset(req(noModelFlags(), GLM, withSlotChoice("router", "off")), NO_LIMITS, NONE)
+  const saved = sessionPreset(
+    req(noModelFlags(), GLM, withSlotChoice("router", "off")),
+    NO_LIMITS,
+    NONE,
+  )
   const slots = saved.slots ?? {}
   return slots.router ?? "missing"
 }
 
 node chatModelChoiceDropsTheEffort(): boolean {
-  const saved = sessionPreset(req(noModelFlags(), GLM, withPinChoice("z-ai/glm-5.3")), NO_LIMITS, NONE)
+  const saved = sessionPreset(
+    req(noModelFlags(), GLM, withPinChoice("z-ai/glm-5.3")),
+    NO_LIMITS,
+    NONE,
+  )
   return saved.effort == null
 }
 
@@ -145,12 +188,39 @@ node modelFlagDropsThePresetsModelFields(): string {
     provider: "anthropic",
     via: "cli:global-pin"
   }
-  const request = req({ ...noModelFlags(), pin: "claude-opus-4-8" }, GLM, noModelChoices())
-  return JSON.stringify(sessionPreset(request, NO_LIMITS, { main: opus, reasoning: opus }))
+  const request = req(
+    {
+      ...noModelFlags(),
+      pin: "claude-opus-4-8"
+    },
+    GLM,
+    noModelChoices(),
+  )
+  return JSON.stringify(
+    sessionPreset(
+      request,
+      NO_LIMITS,
+      {
+        main: opus,
+        reasoning: opus
+      },
+    ),
+  )
 }
 
 node effortFlagIsSaved(): string {
-  const saved = sessionPreset(req({ ...noModelFlags(), effort: "high" }, GLM, noModelChoices()), NO_LIMITS, NONE)
+  const saved = sessionPreset(
+    req(
+      {
+        ...noModelFlags(),
+        effort: "high"
+      },
+      GLM,
+      noModelChoices(),
+    ),
+    NO_LIMITS,
+    NONE,
+  )
   return saved.effort ?? "missing"
 }
 
@@ -166,21 +236,27 @@ node limitFlagIsSaved(): number {
 node sessionOptionsReplaceThePresets(): string {
   const choices: ModelChoices = {
     ...noModelChoices(),
-    llmOptions: { temperature: 0 }
+    llmOptions: {
+      temperature: 0
+    }
   }
   const saved = sessionPreset(req(noModelFlags(), GLM, choices), NO_LIMITS, NONE)
   return JSON.stringify(saved.llmOptions)
 }
 
 node settingsAreNotCopied(): string {
-  return JSON.stringify(sessionPreset(req(noModelFlags(), null, noModelChoices()), NO_LIMITS, NONE))
+  return JSON.stringify(
+    sessionPreset(req(noModelFlags(), null, noModelChoices()), NO_LIMITS, NONE),
+  )
 }
 
 node localRequestSavesLocal(): string {
   const flags: ModelFlags = {
     ...noModelFlags(),
     local: "qwen",
-    slots: { router: "openrouter/jev-1.14" }
+    slots: {
+      router: "openrouter/jev-1.14"
+    }
   }
   return JSON.stringify(sessionPreset(req(flags, null, noModelChoices()), NO_LIMITS, NONE))
 }
@@ -188,7 +264,9 @@ node localRequestSavesLocal(): string {
 node changeLinesForARouter(): string[] {
   const after: Preset = {
     ...GLM,
-    slots: { router: "openrouter/jev-1.14" }
+    slots: {
+      router: "openrouter/jev-1.14"
+    }
   }
   return presetChangeLines(GLM, after)
 }

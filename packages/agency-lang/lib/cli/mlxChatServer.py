@@ -1143,8 +1143,8 @@ def cache_arrays(caches):
     collector runs, so every step's list, and every array in it, stayed
     alive until then. For a Qwen3.5-family model the arrays include each
     linear-attention layer's recurrent state, about 150 MB per request,
-    so 16 requests decoding at once grew the server by gigabytes a second:
-    a 27B model reached 212 GB."""
+    so with 8 requests decoding together the server grew by about 1.6 GB
+    per step. A 27B model sent 16 requests at once reached 212 GB."""
     found = []
     pending = []
     for cache in caches:

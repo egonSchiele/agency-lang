@@ -993,6 +993,17 @@ class ConnectionQueue(unittest.TestCase):
     def test_a_burst_of_connections_waits_instead_of_being_reset(self):
         self.assertGreaterEqual(m.ChatHTTPServer.request_queue_size, 64)
 
+    def test_the_server_is_started_with_that_class(self):
+        provider = mock.Mock()
+        with (
+            mock.patch.object(m, "refuse_draft_if_unusable"),
+            mock.patch.object(m.server, "LRUPromptCache"),
+            mock.patch.object(m, "Generator"),
+            mock.patch.object(m.server, "_run_http_server") as run_http_server,
+        ):
+            m.run("127.0.0.1", 8080, provider)
+        self.assertIs(run_http_server.call_args.kwargs.get("server_class"), m.ChatHTTPServer)
+
 
 if __name__ == "__main__":
     unittest.main()

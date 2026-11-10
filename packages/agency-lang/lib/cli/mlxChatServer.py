@@ -1129,7 +1129,8 @@ def file_tool_call_on_stop(last_state, response):
 # tokens; the generation thread then dies with
 # `[metal::malloc] Resource limit (499000) exceeded` and the server answers
 # every later request with a 404 (ml-explore/mlx-lm #1641, #1332, #1672;
-# fixed upstream in #1642, unreleased as of 0.31.3). Evaluating the
+# fixed upstream by #1632, merged after 0.31.3; #1642 was closed in its
+# favor). Evaluating the
 # counters, and the state beside them, after each step collapses the
 # chain. They are already computed by the step, so this costs a
 # synchronisation, not work.
@@ -1170,7 +1171,7 @@ def original_of(function):
     return getattr(function, "__cache_leak_original__", function)
 
 
-# Remove this shim once a released mlx_lm carries the upstream fix (#1642);
+# Remove this shim once a released mlx_lm carries the upstream fix (#1632);
 # the extra per-step eval is redundant after that.
 original_batch_step = original_of(GenerationBatch._step)
 
@@ -1214,18 +1215,20 @@ GenerationBatch._step = settled_step
 # entry as its own 157 MB, so its size limit never stepped in. 16 requests
 # at once to a 27B model passed 40 GB before half had finished.
 #
-# 3. mlx_lm clears MLX's cache of freed buffers only while it processes
-#    prompts, never while generating. With 1 and 2 fixed, the freed buffers
-#    piled up there instead (19 GB for the same 16 requests), because the
-#    batch shrinks by one each time a request finishes and the next arrays
-#    have new sizes that the freed buffers do not fit.
+# 3. mlx_lm clears MLX's cache of freed buffers while it processes prompts
+#    and every 512 generation steps. With 1 and 2 fixed, the freed buffers
+#    piled up there between clears (19 GB for the same 16 requests),
+#    because the batch shrinks by one each time a request finishes and the
+#    next arrays have new sizes that the freed buffers do not fit. Requests
+#    finish far more often than every 512 steps.
 #
 # So: copy the slices, evaluate a finished request's rows when they are
 # taken out, and after the batch is rebuilt, evaluate it and clear MLX's
-# cache. With all three, the same 16 requests peaked at 29.6 GB, and memory
+# cache. With all three, the same 16 requests peaked at 28.7 GB, and memory
 # fell as requests finished. Remove 1 and 2 when a released mlx_lm copies
-# and evaluates extracted caches, and 3 when it clears the cache while
-# generating; docs/dev/llm/upstream-workarounds.md tracks this.
+# and evaluates extracted caches, and 3 when it releases the old batch's
+# buffers and clears the cache each time the batch shrinks;
+# docs/dev/llm/upstream-workarounds.md tracks this.
 
 
 def copying_extract(self, idx):

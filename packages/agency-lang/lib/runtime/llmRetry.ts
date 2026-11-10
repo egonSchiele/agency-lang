@@ -10,7 +10,8 @@ export type LLMRetryReason =
   | "rateLimit"
   | "serverError"
   | "overloaded"
-  | "invalidStructuredOutput";
+  | "invalidStructuredOutput"
+  | "cutOff";
 
 export type Classification =
   | { kind: "retryable"; reason: LLMRetryReason; detail: string; retryAfterMs?: number }
@@ -346,5 +347,48 @@ export function decideValidationRetry(
     feedback: buildValidationRetryMessage(error),
     reason: "invalidStructuredOutput",
     detail: truncate(error, 500),
+  };
+}
+
+/** How many times one `llm()` call re-sends a request whose reply the
+ *  output limit cut off before it held any text or tool call. */
+export const CUT_OFF_RETRIES = 2;
+
+/** The user message sent with a cut-off retry. It lasts for that one request. */
+export const CUT_OFF_NOTE =
+  "Your last reply reached the output limit before it contained any text or tool call. " +
+  "Reason more briefly, then reply or call a tool.";
+
+export type CutOffDecision =
+  | { kind: "accept" }
+  | { kind: "warn"; message: string }
+  | { kind: "retry" }
+  | { kind: "surfaceFailure"; message: string };
+
+export type FinalReply = {
+  stopReason: string | undefined;
+  content: string | null;
+  /** Cut-off retries already sent in this llm() call. */
+  attempt: number;
+};
+
+/** What to do with the reply that ended the tool loop, which asked for no
+ *  tool calls. A reasoning model can spend its whole output budget thinking
+ *  and return nothing: that reply is retried, and a reply with some text is
+ *  kept with a warning. See docs/dev/agents/tool-loop-guards.md. */
+export function decideCutOff(reply: FinalReply): CutOffDecision {
+  if (reply.stopReason !== "length") return { kind: "accept" };
+  if ((reply.content ?? "").trim().length > 0) {
+    return {
+      kind: "warn",
+      message: "The model's reply reached the output limit and may be incomplete.",
+    };
+  }
+  if (reply.attempt < CUT_OFF_RETRIES) return { kind: "retry" };
+  return {
+    kind: "surfaceFailure",
+    message:
+      `The model reached its output limit ${CUT_OFF_RETRIES + 1} times in a row without writing ` +
+      `any text or tool call. Lower reasoningEffort, or raise maxTokens.`,
   };
 }

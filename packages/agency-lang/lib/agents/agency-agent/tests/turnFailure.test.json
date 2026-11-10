@@ -35,6 +35,12 @@
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "cutOffLabel",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

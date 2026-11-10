@@ -42,3 +42,7 @@ node unknownFailureEchoesRawError(): boolean {
 node invalidOutputLabel(): boolean {
   return retryReasonLabel("invalidStructuredOutput") == "Output failed validation"
 }
+
+node cutOffLabel(): boolean {
+  return retryReasonLabel("cutOff") == "Reply cut off by the output limit"
+}

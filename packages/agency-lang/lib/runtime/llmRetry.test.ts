@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyLlmError,
+  CUT_OFF_RETRIES,
+  decideCutOff,
   decideRetry,
   decideValidationRetry,
   DEFAULT_RETRY_POLICY,
@@ -279,5 +281,34 @@ describe("decideValidationRetry", () => {
     } else {
       throw new Error("expected retry");
     }
+  });
+});
+
+describe("decideCutOff", () => {
+  it("accepts any reply that did not stop on the length limit", () => {
+    expect(decideCutOff({ stopReason: "stop", content: "", attempt: 0 })).toEqual({
+      kind: "accept",
+    });
+  });
+  it("retries a cut-off reply with no text", () => {
+    expect(decideCutOff({ stopReason: "length", content: "  \n", attempt: 0 })).toEqual({
+      kind: "retry",
+    });
+    expect(decideCutOff({ stopReason: "length", content: null, attempt: 1 })).toEqual({
+      kind: "retry",
+    });
+  });
+  it("fails after CUT_OFF_RETRIES retries", () => {
+    const decision = decideCutOff({
+      stopReason: "length",
+      content: null,
+      attempt: CUT_OFF_RETRIES,
+    });
+    expect(decision.kind).toBe("surfaceFailure");
+    expect((decision as any).message).toContain("output limit 3 times");
+  });
+  it("warns about a cut-off reply with text", () => {
+    const decision = decideCutOff({ stopReason: "length", content: "Partial ans", attempt: 0 });
+    expect(decision.kind).toBe("warn");
   });
 });

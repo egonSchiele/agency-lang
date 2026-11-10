@@ -60,6 +60,9 @@ export def retryReasonLabel(reason: string): string {
   if (reason == "invalidStructuredOutput") {
     return "Output failed validation"
   }
+  if (reason == "cutOff") {
+    return "Reply cut off by the output limit"
+  }
   return reason
 }
 

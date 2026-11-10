@@ -338,12 +338,21 @@ describe("usageKindOf / decisionOf", () => {
     expect(decisionOf(ev({ type: "promptCompletion", decision: { state: [] } }))).toBeUndefined();
   });
 
+  it("reads an answer that leaves out confidence and probabilities", () => {
+    const bare = { ...decision, answers: { answer: { type: "choice", choice: "billing" } } };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: bare }))).toEqual(bare);
+  });
+
   it("drops a record whose answers or questions lack the fields a reader uses", () => {
-    const noProbabilities = {
+    const badProbabilities = {
       ...decision,
-      answers: { answer: { type: "choice", choice: "billing", confidence: 0.9 } },
+      answers: { answer: { type: "choice", choice: "billing", probabilities: "0.9" } },
     };
-    expect(decisionOf(ev({ type: "promptCompletion", decision: noProbabilities }))).toBeUndefined();
+    expect(
+      decisionOf(ev({ type: "promptCompletion", decision: badProbabilities })),
+    ).toBeUndefined();
+    const noChoice = { ...decision, answers: { answer: { type: "choice", confidence: 0.9 } } };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: noChoice }))).toBeUndefined();
     const unknownType = { ...decision, answers: { answer: { type: "ranking", order: [] } } };
     expect(decisionOf(ev({ type: "promptCompletion", decision: unknownType }))).toBeUndefined();
     const noInstructions = { ...decision, questions: { answer: { type: "choice", criteria: {} } } };

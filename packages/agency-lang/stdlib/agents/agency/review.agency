@@ -6,7 +6,7 @@ import { agencyDocTools, webTools, spillTools } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { ensureSystemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 
 /** @module
 @summary Check Agency source and optionally review it against a task.
@@ -192,7 +192,7 @@ def judgeAgainstTask(
   provider: string,
   extraTools: any[],
 ): Feedback[] {
-  ensureSystemMessage(systemPrompt)
+  systemMessage(systemPrompt, expires: "llmCall")
   const prompt = judgePrompt(source, task, context)
   // Return position so a model saveDraft propagates as partial findings.
   return llm(

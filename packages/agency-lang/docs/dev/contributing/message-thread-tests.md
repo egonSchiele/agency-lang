@@ -31,7 +31,7 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
   - a failure return hands back with the error (`failureInside`), and a rejected handoff call hands back with the rejection (`rejectHandoff`)
   - a handoff inside a handoff (`nested`), and a pause inside a nested handoff (`nestedPause`)
   - a pause after the body pushed a persona, which needs the start index to survive the checkpoint (`pauseWithPersona`)
-  - the same agent dispatched twice pushes its persona fresh each time through `ensureSystemMessage` (`twoDispatches`)
+  - the same agent dispatched twice pushes its persona fresh each time, because the hand-back strips it, and `ensureSystemMessage` never pushes it twice within one dispatch (`twoDispatches`)
   - two handoffs in one round, and a handoff beside an intrinsic `saveDraft` call, are both refused (`twoHandoffs`, `handoffWithDraft`)
   - a structured return value is stringified into the resume message (`objectResult`)
   - a handoff inside an `async` prompt lands on the prompt's subthread, and one inside a prompt with explicit `messages` lands on that thread; the active thread sees neither (`asyncHandoff`, `explicitMessages`)
@@ -39,7 +39,7 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
   - two async prompts each dispatch a handoff at the same time and neither disturbs the other's thread (`twoAsyncHandoffs`)
   - a race-loser cancellation inside a handoff removes the body's persona and leaves the marker (`cancelledHandoff`)
   - every request in every scenario is checked for provider-valid shape: tool calls paired with tool results, never ending on an assistant message
-- A handoff function called from code runs on the caller's thread: tests/agency/agents/oracleExplorer.agency (`twoOracleCallsShareTheCallerThread`, `explorerFromCodeLandsOnTheCallerThread`)
+- A handoff function called from code runs on the caller's thread, and a stdlib agent's persona does not stay there: tests/agency/agents/oracleExplorer.agency (`twoOracleCallsShareTheCallerThread`, `explorerFromCodeLandsOnTheCallerThread`)
 
 - Expiring messages (docs/dev/runtime/expiring-messages.md):
   - a message pushed with `expires: "llmCall"` is in the next `llm()` call's request and gone from the thread for the call after it: tests/agency/threads/expires-llm-call.agency
@@ -48,6 +48,13 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
   - the round warning: once each at 3 left and at 1 left, gone from the thread when the call returns, and the per-option cases: lib/runtime/prompt.toolRounds.test.ts (`the round warning`)
   - a round warning sent inside a handoff body expires with the body's call, before the caller's next request (`warningInsideHandoff` in tests/agency-js/handoff)
   - a pause between the first and final warnings sends neither twice after the resume, and the next call on the thread sees neither: tests/agency-js/round-warning
+  - a persona pushed with `expires: "llmCall"` in a handoff body, the stdlib agents' shape. Cases, all in tests/agency-js/expiring-persona:
+    - called from code, the agent's request holds the caller's system message and the persona, and the caller's next request holds neither the persona nor anything but the caller's message, the agent's prompt, and its reply (`fromCode`)
+    - called as a tool, the final thread matches a persona removed by the hand-back (`asTool`)
+    - a pause keeps the persona in the checkpoint, the resumed request holds it once, and the caller's next request has none (`pauseFromCode`)
+    - a failed call removes it (`failureFromCode`)
+    - two calls on one thread push and remove it each time (`twiceFromCode`)
+  - the general researcher pushes its persona again before the follow-up to an empty answer: tests/agency/agents/researcher.agency (`followUpHoldsThePersona`)
 - If I do want to transfer message history to another node, how would I do that?
 
 - We also need to test messages being returned from an agent to JavaScript

@@ -47,8 +47,8 @@ node neitherHasDuplicateToolNames(): boolean {
 }
 
 // From code the agents run on the caller's thread like any function.
-// Two calls push one persona and leave both replies where the caller
-// can read them.
+// Two calls leave both replies where the caller can read them. Each
+// pushes the persona for its own model call, and neither leaves it.
 const WHOLE_THREAD = 1000
 
 node twoOracleCallsShareTheCallerThread(): boolean {
@@ -57,7 +57,7 @@ node twoOracleCallsShareTheCallerThread(): boolean {
   const messages = getThread(currentThreadId(), 0, WHOLE_THREAD) catch []
   const personas = filter(messages, \message -> message.role == "system")
   const replies = filter(messages, \message -> message.role == "assistant")
-  return personas.length == 1 && replies.length == 2
+  return personas.length == 0 && replies.length == 2
 }
 
 node explorerFromCodeLandsOnTheCallerThread(): boolean {

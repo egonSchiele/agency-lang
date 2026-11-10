@@ -13,7 +13,7 @@ import {
 import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
-import { ensureSystemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
@@ -91,7 +91,7 @@ def solve(
   provider: string,
   extraTools: any[],
 ): string {
-  ensureSystemMessage(systemPrompt)
+  systemMessage(systemPrompt, expires: "llmCall")
   const prompt = """
 ${withContext(task: task, context: context)}
 
@@ -110,8 +110,9 @@ ${finalizeReminder}
 }
 
 /** Called from code, this runs on the caller's thread like any function:
-  the system prompt, the tool results, and the answer stay there. Wrap the
-  call in `thread { ... }` to keep them apart. */
+  the tool results and the answer stay there, and the system prompt is
+  removed when the agent finishes. Wrap the call in `thread { ... }` to
+  keep them apart. */
 @guarded(cost: maxCost, time: maxTime)
 export handoff def codingAgent(
   task: string,

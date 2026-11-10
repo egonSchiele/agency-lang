@@ -1,0 +1,23 @@
+[
+  { "return": "terse answer" },
+  { "return": "then done" },
+
+  { "toolCall": { "name": "personaAgent", "args": { "question": "q6" } } },
+  { "return": "terse answer" },
+  { "return": "tool done" },
+
+  { "toolCall": { "name": "legacyAgent", "args": { "question": "q6" } } },
+  { "return": "terse answer" },
+  { "return": "tool done" },
+
+  { "toolCall": { "name": "pauseMe", "args": { "id": "p1" } } },
+  { "return": "patient answer" },
+  { "return": "then done" },
+
+  { "return": "not a number" },
+  { "return": "then done" },
+
+  { "return": "first answer" },
+  { "return": "second answer" },
+  { "return": "then done" }
+]

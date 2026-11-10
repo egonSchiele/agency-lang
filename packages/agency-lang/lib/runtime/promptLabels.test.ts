@@ -175,6 +175,22 @@ describe("withMessageLabels (the promptCompletion dump)", () => {
     expect("metadata" in dumped).toBe(false);
   });
 
+  it("the thread dump leaves out reasoning", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("go"));
+    const call = new smoltalk.ToolCall("c1", "ping", {});
+    t.push(
+      smoltalk.assistantMessage("checking", {
+        toolCalls: [call],
+        reasoning: { provider: "openrouter", model: "m", text: "plan", format: "reasoning" },
+      }),
+    );
+    const dumped = (withMessageLabels(t) as any[])[1];
+    expect("reasoning" in dumped).toBe(false);
+    expect(dumped.content).toBe("checking");
+    expect(dumped.toolCalls).toEqual([expect.objectContaining({ id: "c1", name: "ping" })]);
+  });
+
   it("is byte-identical to the plain dump when nothing is labeled", () => {
     const t = new MessageThread();
     t.push(smoltalk.systemMessage("sys"));

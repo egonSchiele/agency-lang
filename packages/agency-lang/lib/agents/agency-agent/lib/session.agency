@@ -35,7 +35,7 @@ import {
  } from "./modelRequest.agency"
 import {
   parseModelFlag,
-  embeddingSpecHasProvider,
+  slotValueHasProvider,
   missingProviderEnvVar,
   Resolved,
  } from "./models.agency"
@@ -51,7 +51,7 @@ import {
   getModelSettings,
   loadSettings,
  } from "./settings.agency"
-import { SLOTS } from "./slots.agency"
+import { chatSlots, needsProviderForm, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
 import { ToolLimits, applyToolLimits } from "./toolLimits.agency"
 import {
   demoteProvider,
@@ -115,7 +115,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   """
   const local = localModelOf(request)
   if (local != null) {
-    configureLocalModel(local.model, local.embedding)
+    configureLocalModel(local.model, local.embedding, local.router)
     applyRequestOptions(request, settings)
     return success(true)
   }
@@ -133,7 +133,7 @@ def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
   const options = requestLlmOptions(request, settings)
   applyLlmOptions(options)
   const slots = getResolvedSlots()
-  const providers = [slotProvider(slots[slot]) for slot in Object.keys(slots) if slot != "embedding" && slots[slot] != null]
+  const providers = [slotProvider(slots[slot]) for slot in chatSlots(Object.keys(slots)) if slots[slot] != null]
   const warning = mixedProviderWarning(options, providers)
   if (warning != "") {
     pushMessage(color.yellow("Warning: ${warning}"))
@@ -261,12 +261,12 @@ export def switchModel(
       changes: []
     }
   }
-  if (parsed.slot == "embedding" && !embeddingSpecHasProvider(parsed.model)) {
-    // The embedding slot exists to point AWAY from the chat provider, so
-    // the provider can never be inferred. Require the explicit form.
+  if (needsProviderForm(parsed.slot) && !slotValueHasProvider(parsed.slot, parsed.model)) {
+    // A derived slot exists to point AWAY from the chat provider, so the
+    // provider can never be inferred. Require the explicit form.
     pushMessage(
       color.red(
-      "Embedding models need the provider/model form, e.g. embedding=openai/text-embedding-3-small.",
+      "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. ${parsed.slot}=${providerFormExample(parsed.slot)}.",
     ),
     )
     return {

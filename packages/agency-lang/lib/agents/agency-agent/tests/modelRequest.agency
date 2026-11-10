@@ -205,3 +205,87 @@ node aModelFlagDropsThePresetOptions(): string {
 node aLocalPresetKeepsItsOptions(): string {
   return optionsFor(noModelFlags(), { local: "qwen3.5-2b", llmOptions: WARM }, noModelChoices(), {})
 }
+
+def flagsFor(flags: Record<string, any>): Result<ModelFlags> {
+  return modelFlagsFromArgs({
+    flags: flags,
+    positionals: []
+  })
+}
+
+node routerFlagSetsTheSlot(): string {
+  const req = request(unwrapFlags(flagsFor({ model: "router=openrouter/jev-1.14" })), null, noModelChoices())
+  return resolvedSlot(req, {}, "router")
+}
+
+node routerFlagWithoutProviderIsRefused(): string {
+  const parsed = flagsFor({ model: "router=jev-1.14" })
+  if (parsed is failure(reason)) {
+    return reason
+  }
+  return "accepted"
+}
+
+// typesafe and laya are not chat providers, but the router accepts them.
+node routerAcceptsTypesafeAndLaya(): string {
+  const typesafe = request(unwrapFlags(flagsFor({ model: "router=typesafe/jev-1.14" })), null, noModelChoices())
+  const laya = request(unwrapFlags(flagsFor({ model: "router=laya/laya" })), null, noModelChoices())
+  return "${resolvedProvider(typesafe, "router")}|${resolvedProvider(laya, "router")}"
+}
+
+// A chat slot still does not take typesafe as a provider: the whole value
+// stays the model name, on the session's provider.
+node mainSlotDoesNotTakeTypesafe(): string {
+  const req = request(unwrapFlags(flagsFor({ model: "main=typesafe/jev-1.14" })), null, noModelChoices())
+  return resolvedProvider(req, "main")
+}
+
+node aBareModelLeavesTheRouterUnset(): string {
+  return resolvedSlot(request(withPin("claude-opus-4-8"), null, noModelChoices()), {}, "router")
+}
+
+node aPresetSetsTheRouter(): string {
+  const preset = { slots: { router: "openrouter/jev-1.14" } }
+  return resolvedSlot(request(noModelFlags(), preset, noModelChoices()), {}, "router")
+}
+
+node localWithRouterFlagIsFine(): string {
+  const parsed = flagsFor({ local: "qwen3.5-2b", model: "router=openrouter/jev-1.14" })
+  if (parsed is failure(reason)) {
+    return reason
+  }
+  const local = localModelOf(request(parsed.value, null, noModelChoices()))
+  if (local == null) {
+    return "hosted"
+  }
+  return "${local.model}|${local.router}"
+}
+
+node localPresetCarriesTheRouter(): string {
+  const preset = {
+    local: "qwen3.5-2b",
+    slots: { router: "openrouter/jev-1.14" }
+  }
+  const local = localModelOf(request(noModelFlags(), preset, noModelChoices()))
+  if (local == null) {
+    return "hosted"
+  }
+  return "${local.model}|${local.router}"
+}
+
+def unwrapFlags(parsed: Result<ModelFlags>): ModelFlags {
+  if (isFailure(parsed)) {
+    return noModelFlags()
+  }
+  return parsed.value
+}
+
+def resolvedProvider(req: ModelRequest, slot: string): string {
+  const layers = buildLayers(requestLayers(req, {}), knownProviders(), false)
+  const all = resolveAll(layers, CTX)
+  if (isFailure(all)) {
+    return "failed: ${all.error}"
+  }
+  const resolved: Resolved = all.value[slot]
+  return "${resolved.provider}:${resolved.model}"
+}

@@ -3,7 +3,7 @@
   a CLOSED enum so consumers switch on the kind, not the raw name; adding a slot
   whose semantics match an existing kind is a one-line data edit. Pure. */
 
-export static const SLOTS = ["main", "reasoning", "embedding"]
+export static const SLOTS = ["main", "reasoning", "embedding", "router"]
 export static const SLOT_ALIASES: Record<string, string> = {
   fast: "main",
   slow: "reasoning"
@@ -14,7 +14,32 @@ export type SlotKind = "fast" | "slow" | "derived"
 export static const SLOT_KIND: Record<string, SlotKind> = {
   main: "fast",
   reasoning: "slow",
-  embedding: "derived"
+  embedding: "derived",
+  router: "derived"
+}
+
+/** The providers smoltalk's decide() answers through. The router slot
+  takes only these. */
+export static const DECISION_PROVIDERS: string[] = ["typesafe", "laya", "openai", "openrouter", "llama-cpp"]
+
+/** Slots whose value may name only these providers. Every other slot
+  takes the chat providers (`knownProviders()` in models.agency). Kept
+  apart so `typesafe` and `laya` never reach a chat slot. */
+static const SLOT_PROVIDERS: Record<string, string[]> = {
+  router: DECISION_PROVIDERS
+}
+
+/** A derived slot points away from the chat model, so its value must name
+  its provider. What a message calls the slot, and the form it shows. */
+static const PROVIDER_FORM: Record<string, { title: string; example: string }> = {
+  embedding: {
+    title: "Embedding",
+    example: "openai/text-embedding-3-small"
+  },
+  router: {
+    title: "Router",
+    example: "openrouter/jev-1.14"
+  }
 }
 
 export def canonicalSlot(name: string): string {
@@ -30,4 +55,31 @@ export def isKnownSlot(name: string): boolean {
 
 export def slotKind(name: string): SlotKind {
   return SLOT_KIND[canonicalSlot(name)]
+}
+
+/** The providers a value in this slot may name. */
+export def providersFor(name: string, chatProviders: string[]): string[] {
+  return SLOT_PROVIDERS[canonicalSlot(name)] ?? chatProviders
+}
+
+/** True when the slot's value must be in the provider/model form. */
+export def needsProviderForm(name: string): boolean {
+  return slotKind(name) == "derived"
+}
+
+/** How a message names the slot ("Embedding"), and an example value in
+  the provider/model form. Only for a slot that needs the form. */
+export def providerFormTitle(name: string): string {
+  return PROVIDER_FORM[canonicalSlot(name)].title
+}
+
+export def providerFormExample(name: string): string {
+  return PROVIDER_FORM[canonicalSlot(name)].example
+}
+
+/** The slots an llmOptions block reaches: the chat slots. A derived slot
+  calls no chat model, so a router on another provider than the main
+  model is no reason to warn about options a provider may reject. */
+export def chatSlots(names: string[]): string[] {
+  return [name for name in names if !needsProviderForm(name)]
 }

@@ -120,3 +120,16 @@ node presetLlmOptionsNotAnObject(): string[] {
 node localPresetWithLlmOptions(): string[] {
   return presetProblems("offline", { local: "qwen3.5-2b", llmOptions: { replyLimits: { hedgeLimit: 4 } } }, false)
 }
+
+node routerWithoutProvider(): string[] {
+  return presetProblems("x", { slots: { router: "jev-1.14" } }, true)
+}
+
+node routerWithADecisionProvider(): string[] {
+  return presetProblems("x", { slots: { router: "laya/laya" } }, true)
+}
+
+// A local preset may route with a hosted decision model.
+node localWithRouter(): string[] {
+  return presetProblems("x", { local: "qwen3.5-2b", slots: { router: "openrouter/jev-1.14" } }, true)
+}

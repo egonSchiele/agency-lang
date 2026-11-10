@@ -18,11 +18,14 @@ Set only the fields the user asked for.
 - `pin`: one model for normal work and deep reasoning.
 - `slots`: a model per purpose. `main` is normal work, `reasoning` is deep
   reasoning, `embedding` is memory embeddings and must be written
-  `provider/model`, such as `openai/text-embedding-3-small`.
+  `provider/model`, such as `openai/text-embedding-3-small`. `router` is a
+  decision model that sends a turn straight to the researcher or the
+  coder, and must be written `provider/model`, such as
+  `openrouter/jev-1.14`.
 - `local`: a local model name, `hf:` URI, `.gguf` path, `mlx:` URI, or
   model directory. With `local`, do not set `provider`, `pin`,
-  `slots.main`, or `slots.reasoning`. `slots.embedding`, the tool limits,
-  and `llmOptions` may be set with it.
+  `slots.main`, or `slots.reasoning`. `slots.embedding`, `slots.router`,
+  the tool limits, and `llmOptions` may be set with it.
 - `maxToolCallRounds`: the most tool-call rounds in one turn, a whole number above zero.
 - `maxToolResultChars`: the most characters of one tool result you see.
   `0` means no cap.

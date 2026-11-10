@@ -202,6 +202,14 @@ by the provider. The `maxToolResultChars` option on the `llm()` call that
 ran the tool is what bounds a result, since it cuts the result before it
 enters the thread.
 
+A decision call can go to a different provider from the one that ran the
+tools: the `typesafe` servers by default, or OpenRouter. So a tool result
+can leave the machine through a decision call even when every call that ran
+a tool went to a local model. For example, a tool that read `.env` puts the
+file's text in the thread, and a later decision call on that thread sends
+that text to the decision provider. Make the decision call in a `thread` of
+its own when the thread holds results that should stay local.
+
 Because the reply is appended to the thread, a later `llm()` call sees it.
 In the example, the follow-up question "should a manager call the customer
 today?" reads the triage from the thread and answers `true`. That

@@ -20,7 +20,8 @@ export type EventEnvelope = {
 
 /** On a `promptCompletion` from a decision model: what the model was sent
  *  and what it answered. The state is the thread as the model read it
- *  (role and text only), the questions are what the response type became,
+ *  (each message's text and each tool result), the questions are what the
+ *  response type became,
  *  and the answers are the model's reply before it was turned back into a
  *  value. Absent on a text call. The three parts reuse smoltalk's decision
  *  types so the log and the wire protocol cannot drift apart. */

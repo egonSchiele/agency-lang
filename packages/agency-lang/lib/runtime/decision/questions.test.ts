@@ -261,15 +261,9 @@ describe("messagesToState", () => {
       smoltalk.toolMessage([{ id: 7 }], { tool_call_id: "", name: "rows" }),
       smoltalk.toolMessage("", { tool_call_id: "", name: "save" }),
     ];
-    const state = messagesToState(messages);
-    expect(state).toEqual([
-      {
-        role: "tool",
-        name: "rows",
-        content: smoltalk.toolMessage([{ id: 7 }], { tool_call_id: "", name: "rows" }).content,
-      },
+    expect(messagesToState(messages)).toEqual([
+      { role: "tool", name: "rows", content: '[{"id":7}]' },
       { role: "tool", name: "save", content: "" },
     ]);
-    expect(state[0].content).toContain("7");
   });
 });

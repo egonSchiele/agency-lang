@@ -230,7 +230,7 @@ export function answersToValue(
 /** One entry of a decision model's state: a message's text, or what a tool
  *  returned. */
 export type StateEntry =
-  | { role: string; content: string }
+  | { role: Exclude<Message["role"], "tool">; content: string }
   | { role: "tool"; name: string; arguments?: Record<string, unknown>; content: string };
 
 /** The arguments of every tool call in the thread, by call id. */

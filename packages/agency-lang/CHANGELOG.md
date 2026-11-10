@@ -1,3 +1,62 @@
+## Nov 10 2026 — v0.39.0
+
+Highlights: `async` keyword, lots of bugs fixed, better support for decision models, Agency agent uses Jev to route messages quicker.
+
+### Breaking
+
+- **The to-do tools are gone.** `todoAdd`, `todoUpdate`, `todoWrite`, and `todoList` are removed from `std::agent`, and `whatIAmDoing` and `planningTools` from `std::agents/lib/toolkits`. This should make the agency agent faster.
+- **A decision answer's `confidence`, `probabilities`, and `legend` may be `null`.**
+- **`eval` and `Function` are a compile error in every program** (AG4014), not only under `--agency-only`.
+- **A statement must be the last thing on its line.** Text after a complete statement, as in `const x = 1.2.3`, is now a parse error.
+- **A `def`, a `node`, or an import named `raise` or `interrupt` is a parse error.** A call to such a function used to compile to an interrupt.
+- **The `sync` and `await` prefixes are gone.** Write `x` where you wrote `await x`.
+- **A type alias that a module uses without importing it is an error** (AG1034).
+- **`agency eval run` treats an entry node that returns a failure as an error,** and graders no longer receive the failure as the agent's output.
+
+### Language
+
+- **`async f()` runs the call beside the statements after it,** and the block waits for it at the first use of its value or at the end of the block. An interrupt inside the call pauses and resumes like one in a `fork`.
+- **`raise` can be written as a value, like `interrupt`,** as in `const msg = raise interrupt("How do you feel?")`.
+- **An interrupt nested inside a larger expression now works,** as in `const labelled = label(interrupt ask("How do you feel?"))`.
+- **`llm()` takes `type: "decision"` or `type: "text"` per call,** so a model the catalog does not list as a decision model can answer a typed question.
+- **`try llm(...)` returns the reply in its success.** It used to return `undefined`.
+- **Every statement inside a handler function now runs,** including a nested `with approve` and a second interrupt from the same statement. Before, some were skipped, which could approve a file without reading it.
+- **A guard's time budget covers only its block,** which fixes a rare `Guard exceeded its time budget` error before the block started.
+- **A guard that trips inside a call in a bare method call, such as `out.push(summarize(d))`, now stops the block.** It used to return the partial result as a success.
+- **A handler that does slow work while a subprocess raises no longer corrupts the run's stack.**
+- **The type checker catches more mistakes:** a `thread` block's value assigned to a `string`, a type alias that lists itself in its own union (AG1035), and `try f()` where `f` returns an alias of `Result`.
+- **A postfix `!` on a value gets a message that shows the null check to write.**
+- **Fixed several compiler errors:** a guarded `match` arm in a statement, a value-parameterized alias over a generic alias, a method named `constructor`, and an alias used in a schema without an import.
+
+### Agent
+
+- **A router sends a plain-text turn straight to the researcher or the coder.** With `OPENROUTER_API_KEY` set, it routes with `openrouter/jev-1.14` by default, one-shot runs included. Turn it off with `--model router=off`.
+- **`/preset save [name]` saves the session's models, effort, options, and tool limits to a preset.** A preset can also set `effort`, and `--effort default` sends no level.
+- **The agent compacts its conversation between turns** when the next request would fill 80% of the context window. `/compact` does it by hand, and the footer shows how full the window is.
+- **`/fork` copies the running session,** and a new tool searches saved sessions.
+- **New ways to give input:** Ctrl+G opens your editor, `@` and Tab complete a file path, `!command` runs a shell command, and `/image` attaches the clipboard image.
+- **The agent reads `AGENTS.md` from parent folders up to the repository root,** follows the folder the agent moved to, and adds `/init`.
+- **Fewer wasted rounds:** the agent has no status or to-do tools, and the text a model writes beside its tool calls prints as a progress line.
+- **The code subagent sends fewer tools,** with a separate Agency coder that gets a shorter prompt and the language tutorial.
+
+### Safe Bash
+
+- **Git commands ask the git tools' approvals,** such as `std::git::log` for `git log`, instead of the broad `std::bash` question.
+- **`cd dir && command` asks one `std::exec` in that folder.**
+- **`2>/dev/null` adds no approval, and `2>file` asks `std::write` for that file.**
+
+### Workflows
+
+- **`draftWorkflow` gives each attempt its own thread** and avoids type names the generated program cannot see.
+- **A rejected read of a tool module keeps its rejected flag.**
+
+### Logs
+
+- **Statelog files are much smaller.** Checkpoints are left out, a run's return value is logged once, and `log.maxValueChars` caps each value.
+- **Secret query parameters are redacted from logged URLs.**
+- **New `std::statelog` readers** let a program read a log of many runs. `agency logs traces` counts tool calls and says what went wrong.
+- **Time spent at an approval prompt is logged,** so it no longer counts as the agent's time.
+
 ## Nov 3 2026 — v0.38.0
 
 ### Breaking

@@ -90,11 +90,11 @@ describe("_setLlmOptions", () => {
     expect(stack.other.llmDefaults.maxToolCallRounds).toBe(3);
   });
 
-  it("refuses decision, which is set per llm() call", () => {
+  it("refuses type, which is set per llm() call", () => {
     const stack = { other: {} as any };
     expect(() =>
-      withStack(stack, () => callHelper(_setLlmOptions, { decision: true } as any)),
-    ).toThrow("decision is set per llm() call, not with setLlmOptions.");
+      withStack(stack, () => callHelper(_setLlmOptions, { type: "decision" } as any)),
+    ).toThrow("llm()'s type option is set per call, not with setLlmOptions.");
     expect(stack.other.llmDefaults).toBeUndefined();
   });
 

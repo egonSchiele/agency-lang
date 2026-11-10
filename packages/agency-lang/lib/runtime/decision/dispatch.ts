@@ -39,12 +39,12 @@ function registryRecord(config: PromptConfig): smoltalk.ModelType | undefined {
   });
 }
 
-/** In order: the call's `decision` option; else the registry entry's type;
+/** In order: the call's `type` option; else the registry entry's type;
  * else, for a model the registry does not know, the "typesafe" provider.
  * See docs/dev/llm/decision-models.md, "Which calls are decision calls". */
 export function isDecisionCall(config: PromptConfig): boolean {
-  if (config.decision !== undefined) {
-    return config.decision;
+  if (config.type !== undefined) {
+    return config.type === "decision";
   }
   const known = registryRecord(config);
   if (known !== undefined) {

@@ -3,19 +3,19 @@ import { mergeLlmConfig } from "./llmConfig.js";
 
 const anthropicDefaults = { model: "claude-sonnet-4-5", provider: "anthropic" };
 
-describe("mergeLlmConfig with decision: true", () => {
+describe('mergeLlmConfig with type: "decision"', () => {
   it("switches to the provider of the model's decision entry when the first entry is text", () => {
-    const merged = mergeLlmConfig(anthropicDefaults, { model: "gpt-6-luna", decision: true });
+    const merged = mergeLlmConfig(anthropicDefaults, { model: "gpt-6-luna", type: "decision" });
     expect(merged.provider).toBe("openai");
   });
 
   it("takes the first decision entry in catalog order when several providers list the name", () => {
-    const merged = mergeLlmConfig(anthropicDefaults, { model: "jev-1.14", decision: true });
+    const merged = mergeLlmConfig(anthropicDefaults, { model: "jev-1.14", type: "decision" });
     expect(merged.provider).toBe("typesafe");
   });
 
   it("keeps the default provider for a model with no decision entry", () => {
-    const merged = mergeLlmConfig(anthropicDefaults, { model: "new-decider", decision: true });
+    const merged = mergeLlmConfig(anthropicDefaults, { model: "new-decider", type: "decision" });
     expect(merged.provider).toBe("anthropic");
   });
 
@@ -23,7 +23,7 @@ describe("mergeLlmConfig with decision: true", () => {
     const merged = mergeLlmConfig(anthropicDefaults, {
       model: "jev-1.14",
       provider: "openrouter",
-      decision: true,
+      type: "decision",
     });
     expect(merged.provider).toBe("openrouter");
   });
@@ -31,7 +31,7 @@ describe("mergeLlmConfig with decision: true", () => {
   it("keeps the default provider when the call names the default model", () => {
     const merged = mergeLlmConfig(anthropicDefaults, {
       model: "claude-sonnet-4-5",
-      decision: true,
+      type: "decision",
     });
     expect(merged.provider).toBe("anthropic");
   });

@@ -34,7 +34,7 @@ const answers = [
       probabilities: { billing: 0.3, support: 0.6, sales: 0.1 },
     },
   },
-  // Call 4: a text model asked with decision: true. No confidence, as some
+  // Call 4: a text model asked with type: "decision". No confidence, as some
   // decision models leave it out.
   { answer: { type: "choice", choice: "sales" } },
   // Call 5: a local Laya server.

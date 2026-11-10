@@ -109,7 +109,7 @@ describe("dispatchWithRetry with a decision call", () => {
   });
 });
 
-describe("dispatchWithRetry with decision: true", () => {
+describe('dispatchWithRetry with type: "decision"', () => {
   const sent = {
     success: true as const,
     value: {
@@ -123,7 +123,7 @@ describe("dispatchWithRetry with decision: true", () => {
     const decide = vi.fn(async () => sent);
     const { usageKind } = await dispatch({
       ctx: ctxWith({ decide }),
-      promptConfig: config({ model: "gpt-4o-mini", decision: true }),
+      promptConfig: config({ model: "gpt-4o-mini", type: "decision" }),
       prompt: "Which department?",
       stream: false,
       retryPolicy: { ...DEFAULT_RETRY_POLICY, retries: 0 },
@@ -141,7 +141,7 @@ describe("dispatchWithRetry with decision: true", () => {
     );
     const failed = dispatch({
       ctx: ctxWith({ decide }),
-      promptConfig: config({ model: "new-decider", provider: "anthropic", decision: true }),
+      promptConfig: config({ model: "new-decider", provider: "anthropic", type: "decision" }),
       prompt: "Which department?",
       stream: false,
       retryPolicy: { ...DEFAULT_RETRY_POLICY, retries: 2 },

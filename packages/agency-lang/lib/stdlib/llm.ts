@@ -83,11 +83,12 @@ const MERGED_FIELD_BY_FIELD: string[] = ["replyLimits", "warnAtRoundsLeft"];
  * `llm({...})` option.
  */
 export function _setLlmOptions(opts: LlmDefaults): void {
-  // `LlmDefaults` has no `decision` key, but a value typed `any` or a
-  // TypeScript caller can still pass one. As a default it would turn every
-  // later call into a decision call, and a call with tools would fail.
-  if ((opts as { decision?: unknown }).decision !== undefined) {
-    throw new Error("decision is set per llm() call, not with setLlmOptions.");
+  // `LlmDefaults` has no `type` key, but a value typed `any` or a
+  // TypeScript caller can still pass one. As a default, `type: "decision"`
+  // would turn every later call into a decision call, and a call with tools
+  // would fail.
+  if ((opts as { type?: unknown }).type !== undefined) {
+    throw new Error("llm()'s type option is set per call, not with setLlmOptions.");
   }
   const { ctx, stack } = getRuntimeContext();
   if (!stack) return;

@@ -2,7 +2,7 @@
 // dispatch branch; the test's client answers. The registry knows jev-1.13,
 // so the first call needs no provider. The second names an unknown model
 // and marks it with provider: "typesafe". The fourth asks a model the
-// registry lists as text, with decision: true. The fifth names a local
+// registry lists as text, with type: "decision". The fifth names a local
 // Laya server by its provider and base URL.
 import { getCost } from "std::thread"
 
@@ -27,15 +27,15 @@ node main() {
     return again
   } with reject
 
-  // The catalog lists gpt-4o-mini as a text model. decision: true sends the
+  // The catalog lists gpt-4o-mini as a text model. type: "decision" sends the
   // call to the decision API anyway.
-  const chosen: Dept = llm("Which department, asked of a text model?", { model: "gpt-4o-mini", decision: true })
+  const chosen: Dept = llm("Which department, asked of a text model?", { model: "gpt-4o-mini", type: "decision" })
 
   // A local Laya server, named by its own provider and base URL.
   const local: boolean = llm("Is this urgent?", {
     model: "laya",
     provider: "laya",
-    decision: true,
+    type: "decision",
     baseUrl: { laya: "http://127.0.0.1:9000" }
   })
 

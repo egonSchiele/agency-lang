@@ -71,18 +71,18 @@ describe("isDecisionCall", () => {
   });
 });
 
-describe("isDecisionCall with the decision option", () => {
-  it("is a decision call when the option is true, even for a text catalog entry", () => {
-    expect(isDecisionCall(base({ model: "gpt-4o-mini", decision: true }))).toBe(true);
+describe("isDecisionCall with the type option", () => {
+  it("is a decision call when the type is decision, even for a text catalog entry", () => {
+    expect(isDecisionCall(base({ model: "gpt-4o-mini", type: "decision" }))).toBe(true);
   });
 
-  it("is a text call when the option is false, even for a decision catalog entry", () => {
-    expect(isDecisionCall(base({ model: "jev-1.13", decision: false }))).toBe(false);
+  it("is a text call when the type is text, even for a decision catalog entry", () => {
+    expect(isDecisionCall(base({ model: "jev-1.13", type: "text" }))).toBe(false);
   });
 
-  it("is a decision call for an unknown model under any provider when the option is true", () => {
+  it("is a decision call for an unknown model under any provider when the type is decision", () => {
     expect(
-      isDecisionCall(base({ model: "new-decider", provider: "anthropic", decision: true })),
+      isDecisionCall(base({ model: "new-decider", provider: "anthropic", type: "decision" })),
     ).toBe(true);
   });
 
@@ -369,8 +369,8 @@ describe("questionCapFor", () => {
   });
 
   it("is the decision entry's cap for a name that also has a text entry", () => {
-    expect(questionCapFor(base({ model: "gpt-6-luna", provider: "openai", decision: true }))).toBe(
-      400,
-    );
+    expect(
+      questionCapFor(base({ model: "gpt-6-luna", provider: "openai", type: "decision" })),
+    ).toBe(400);
   });
 });

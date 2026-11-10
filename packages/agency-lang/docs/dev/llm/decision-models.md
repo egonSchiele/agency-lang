@@ -16,9 +16,10 @@ output. Run it with `--model typesafe/jev-1.13` and it goes to Jev. The file
 does not change. `packages/examples/decision-triage.agency` runs unchanged
 against Jev, a local Laya server, and the default model.
 
-The `decision` option is the switch. `decision: true` sends a typed call
-to the model's decision API, and `decision: false` sends it to the chat
-API. Without the option, the registry decides: a model whose entry has
+The `type` option is the switch. `type: "decision"` sends a typed call
+to the model's decision API, and `type: "text"` sends it to the chat API.
+These are the words smoltalk's registry uses for a model's kind. Without
+the option, the registry decides: a model whose entry has
 `type: "decision"` is a decision call, and an unknown model is one when
 its provider is `typesafe`.
 
@@ -72,8 +73,8 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
 `isDecisionCall` (`lib/runtime/decision/dispatch.ts`) applies three rules
 in order:
 
-1. `decision: true` on the call: a decision call.
-2. `decision: false` on the call: a text call.
+1. `type: "decision"` on the call: a decision call.
+2. `type: "text"` on the call: a text call.
 3. No option: the registry. The model is looked up under the selected
    provider, then by its name alone. A known entry is a decision call when
    its type is `decision`. An unknown name is a decision call when its
@@ -88,17 +89,17 @@ Three cases need the option:
 
 ```ts
 // gpt-6-luna under openai has both entries. With no option it is a chat call.
-const a: Dept = llm(q, { model: "gpt-6-luna", provider: "openai", decision: true })
+const a: Dept = llm(q, { model: "gpt-6-luna", provider: "openai", type: "decision" })
 
 // A local chat model, answering decisions in process through smoltalk-llama-cpp.
-const b: Dept = llm(q, { model: "/models/qwen3-4b.gguf", provider: "llama-cpp", decision: true })
+const b: Dept = llm(q, { model: "/models/qwen3-4b.gguf", provider: "llama-cpp", type: "decision" })
 
 // A decision model the registry does not list yet, on any provider.
-const c: Dept = llm(q, { model: "new-decider", provider: "openrouter", decision: true })
+const c: Dept = llm(q, { model: "new-decider", provider: "openrouter", type: "decision" })
 ```
 
 The option is per call. `setLlmOptions` does not take it: a branch default
-of `decision: true` would turn every later call into a decision call, and
+of `type: "decision"` would turn every later call into a decision call, and
 a call with tools or with no type annotation would fail. The type checker
 refuses the key there, and `_setLlmOptions` throws when a value typed
 `any` carries it. To send every call to a decision model the registry
@@ -126,7 +127,7 @@ so `model: "jev-1.13"` in a run using OpenRouter stays on OpenRouter.
 Model-only changes between text models keep the existing provider.
 `setModel`, `setLlmOptions`, and per-call options follow these rules.
 
-A call with `decision: true`, a model, and no provider switches to the
+A call with `type: "decision"`, a model, and no provider switches to the
 provider of the model's first decision entry in registry order. For
 `gpt-6-luna`, whose first entry is a text entry, that is `openai`. For
 `jev-1.14`, listed under both `typesafe` and `openrouter`, it is `typesafe`,
@@ -242,7 +243,7 @@ name is not in the registry, so the call needs `provider: "typesafe"`.
 needs the option:
 
 ```ts
-const dept: Dept = llm(q, { model: "gpt-6-luna", decision: true })
+const dept: Dept = llm(q, { model: "gpt-6-luna", type: "decision" })
 ```
 
 **Laya locally.** Install and serve, then use the `laya` provider. It
@@ -257,7 +258,7 @@ LAYA_PRELOAD=1 laya-serve          # port 8000, Metal on Apple silicon
 ```
 
 ```ts
-const dept: Dept = llm(q, { model: "english", provider: "laya", decision: true })
+const dept: Dept = llm(q, { model: "english", provider: "laya", type: "decision" })
 ```
 
 Laya also speaks the TypeSafe protocol, so `provider: "typesafe"` with
@@ -270,7 +271,7 @@ The model is a path to a `.gguf` file. This needs `smoltalk-llama-cpp`
 0.9.0 or later; an older plugin fails with "has no decision support".
 
 ```ts
-const dept: Dept = llm(q, { model: "/models/qwen3-4b.gguf", provider: "llama-cpp", decision: true })
+const dept: Dept = llm(q, { model: "/models/qwen3-4b.gguf", provider: "llama-cpp", type: "decision" })
 ```
 
 **The default model.** Run the same file with no flag. It goes through
@@ -283,9 +284,9 @@ structured output.
 - `lib/runtime/decision/dispatch.test.ts`: the three rules, the question
   cap, the completion shape, the key-merge rule, the four refusals, and the
   HTTP status carried on a failed request so a 429 or 5xx retries.
-- `lib/runtime/llmConfig.test.ts`: the provider a `decision: true` call
-  switches to.
-- `lib/stdlib/llm.test.ts`: `setLlmOptions` refuses `decision`.
+- `lib/runtime/llmConfig.test.ts`: the provider a `type: "decision"`
+  call switches to.
+- `lib/stdlib/llm.test.ts`: `setLlmOptions` refuses `type`.
 - `lib/runtime/llmDispatch.decision.test.ts`: a refusal happens before any
   metered attempt, a sent call is metered under the `decision` kind, and a
   provider that cannot answer decisions fails once, unretried.
@@ -294,7 +295,7 @@ structured output.
 - `tests/agency-js/decision-model/`: the compiled path end to end. The test
   uses a client of its own that records what the runtime sent, so the
   fixture pins the state, the questions, and the config for a bare call, an
-  object call, a call under a cost guard, a `decision: true` call on a
+  object call, a call under a cost guard, a `type: "decision"` call on a
   text model, and a call to the `laya` provider with its base URL.
 
 ## Batching inside `parallel`

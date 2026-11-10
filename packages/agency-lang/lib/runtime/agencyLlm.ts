@@ -53,9 +53,10 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
   model?: string;
   /** Provider for this call, such as "openai-compat" or "typesafe". */
   provider?: string;
-  /** `true` sends this call to a decision model's API, `false` to the chat
-   *  API, whatever the registry lists the model as. */
-  decision?: boolean;
+  /** `"decision"` sends this call to a decision model's API, `"text"` to
+   *  the chat API, whatever the registry lists the model as. The same words
+   *  as the `type` on a smoltalk registry entry. */
+  type?: "decision" | "text";
   /** Override only the named providers' URLs for this call. */
   baseUrl?: LlmBaseUrls;
   /** Cap on generated output tokens for this call. Maps to the
@@ -98,7 +99,7 @@ export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {})
   const clientConfig: CallConfig = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
   if (opts.provider !== undefined) clientConfig.provider = opts.provider;
-  if (opts.decision !== undefined) clientConfig.decision = opts.decision;
+  if (opts.type !== undefined) clientConfig.type = opts.type;
   if (opts.baseUrl !== undefined) clientConfig.baseUrl = opts.baseUrl;
   if (opts.maxTokens !== undefined) clientConfig.maxTokens = opts.maxTokens;
 

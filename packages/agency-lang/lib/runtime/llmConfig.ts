@@ -16,9 +16,9 @@ export type LlmBaseUrls = NonNullable<SmolConfig["baseUrl"]> &
   Pick<NonNullable<DecideConfig["baseUrl"]>, "typesafe" | "laya">;
 
 /** One layer of an `llm()` call's options as the merge sees them:
- *  smoltalk's config plus the per-call `decision` flag, which picks a
- *  decision call (`isDecisionCall`) and is never sent to smoltalk. */
-export type CallConfig = Partial<SmolConfig> & { decision?: boolean };
+ *  smoltalk's config plus the per-call `type`, which picks a decision or a
+ *  text call (`isDecisionCall`) and is never sent to smoltalk. */
+export type CallConfig = Partial<SmolConfig> & { type?: "decision" | "text" };
 
 /** The first decision entry for a model name, in catalog order. A name can
  *  have several (`jev-1.14` under `typesafe` and `openrouter`) and a text
@@ -45,7 +45,7 @@ export function modelRecord(config: Partial<SmolConfig>): ModelType | undefined 
 
 /** Switching between text and decision models selects the new model's provider.
  * An explicit provider or a repeated model keeps the selected route. A call
- * with `decision: true` switches to the provider of the model's first
+ * with `type: "decision"` switches to the provider of the model's first
  * decision entry, and keeps the route when the model has none. */
 export function modelProviderOverride(
   defaults: Partial<SmolConfig>,
@@ -80,7 +80,7 @@ export function mergeLlmConfig(defaults: CallConfig, override: CallConfig): Call
   if (override.baseUrl !== undefined) {
     merged.baseUrl = { ...defaults.baseUrl, ...override.baseUrl };
   }
-  const provider = modelProviderOverride(defaults, override, override.decision === true);
+  const provider = modelProviderOverride(defaults, override, override.type === "decision");
   if (provider !== undefined) {
     merged.provider = provider;
   }

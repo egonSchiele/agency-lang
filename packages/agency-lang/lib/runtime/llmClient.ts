@@ -39,9 +39,10 @@ export type PromptConfig = {
   apiKey?: SmolConfig["apiKey"];
   model?: string;
   provider?: string;
-  /** `true` makes this a decision call and `false` a text call, whatever
-   *  the registry says. Read by `isDecisionCall`; never sent to smoltalk. */
-  decision?: boolean;
+  /** `"decision"` makes this a decision call and `"text"` a text call,
+   *  whatever the registry says. Read by `isDecisionCall`; never sent to
+   *  smoltalk. */
+  type?: "decision" | "text";
   metadata?: Record<string, any>;
   /** The module of the Agency code making the call. The runtime sets it.
    *  The deterministic test client picks its mock queue by it; a real
@@ -475,8 +476,8 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
   } = config;
 
   const metaApiKey = (metadata as { apiKey?: SmolConfig["apiKey"] } | undefined)?.apiKey;
-  // `decision` picks the dispatch path and is not a smoltalk option.
-  const { decision: _decision, ...forwarded } = metadata ?? {};
+  // `type` picks the dispatch path and is not a smoltalk option.
+  const { type: _type, ...forwarded } = metadata ?? {};
   return {
     ...forwarded,
     messages,

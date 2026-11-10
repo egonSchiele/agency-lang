@@ -116,9 +116,9 @@ const openRouterObject: VariableType = {
 const llmOptionProperties: { key: string; value: VariableType }[] = [
   { key: "model", value: optional(string) },
   { key: "provider", value: optional(string) },
-  // `true` sends a typed call to the model's decision API, `false` to its
+  // "decision" sends a typed call to the model's decision API, "text" to its
   // chat API. Per call only: not in `setLlmOptions`. See `isDecisionCall`.
-  { key: "decision", value: optional(boolean) },
+  { key: "type", value: optional(stringLiterals("decision", "text")) },
   // Per-provider key map only (see `apiKeyObject`) — no bare-string
   // shorthand, so a key is never silently routed to the wrong provider.
   // Runtime: `toSmolConfig`.

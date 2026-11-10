@@ -236,27 +236,27 @@ describe("llm() validationRetries option", () => {
   });
 });
 
-describe("builtin named-arg validation (the decision option)", () => {
-  it("accepts decision: true in an options object and as a named argument", () => {
-    for (const options of [`{ decision: true }`, `decision: false`]) {
+describe("builtin named-arg validation (the type option)", () => {
+  it("accepts type in an options object and as a named argument", () => {
+    for (const options of [`{ type: "decision" }`, `type: "text"`]) {
       const source = `node main() {\n  const spam: boolean = llm("Is this spam?", ${options})\n  print(spam)\n}`;
       expect(errorsFrom(source)).toEqual([]);
     }
   });
 
-  it("refuses a decision value that is not a boolean", () => {
-    const errors = errorsFrom(`node main() { let r = llm("hi", { decision: "yes" }) }`);
+  it("refuses a type that is neither decision nor text", () => {
+    const errors = errorsFrom(`node main() { let r = llm("hi", { type: "yes" }) }`);
     expect(errors.map((e) => e.message)).toEqual([
-      expect.stringContaining(`Argument type '{ decision: "yes" }' is not assignable`),
+      expect.stringContaining(`Argument type '{ type: "yes" }' is not assignable`),
     ]);
   });
 
-  it("refuses decision on setLlmOptions, where it would turn every later call into one", () => {
+  it("refuses type on setLlmOptions, where it would turn every later call into one", () => {
     const errors = errorsFrom(
-      `import { setLlmOptions } from "std::llm"\nnode main() {\n  setLlmOptions({ decision: true })\n}`,
+      `import { setLlmOptions } from "std::llm"\nnode main() {\n  setLlmOptions({ type: "decision" })\n}`,
     );
     expect(errors.map((e) => e.message)).toEqual([
-      "Unknown property 'decision' on type 'LlmDefaults' (call to 'setLlmOptions').",
+      "Unknown property 'type' on type 'LlmDefaults' (call to 'setLlmOptions').",
     ]);
   });
 });

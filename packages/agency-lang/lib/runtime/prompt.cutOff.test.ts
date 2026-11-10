@@ -29,13 +29,18 @@ function setup(mocks: LLMMock[]) {
 
 type Setup = ReturnType<typeof setup>;
 
-function call(s: Setup, thread: MessageThread, responseFormat?: z.ZodType): Promise<any> {
+function call(
+  s: Setup,
+  thread: MessageThread,
+  responseFormat?: z.ZodType,
+  extraConfig: Record<string, unknown> = {},
+): Promise<any> {
   return runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
     runPrompt(run, {
       prompt: "go",
       messages: thread,
       responseFormat,
-      clientConfig: { tools: [s.ping], maxRepeatedToolCalls: 0 } as any,
+      clientConfig: { tools: [s.ping], maxRepeatedToolCalls: 0, ...extraConfig } as any,
     }),
   );
 }
@@ -100,6 +105,35 @@ describe("a reply cut off by the output limit", () => {
     const s = setup([{ return: "", stopReason: "stop" }]);
     expect(await call(s, new MessageThread())).toBe("");
     expect(s.client.requests).toHaveLength(1);
+  });
+
+  it("reports the retry to the onLLMRetry hook with the cutOff reason", async () => {
+    const s = setup([EMPTY_CUT_OFF, { return: "done" }]);
+    const retries: any[] = [];
+    s.ctx.callbacks.onLLMRetry = (data: any) => {
+      retries.push(data);
+    };
+    await call(s, new MessageThread());
+    expect(retries).toEqual([
+      expect.objectContaining({ reason: "cutOff", attempt: 1, maxRetries: 2 }),
+    ]);
+  });
+
+  it("a retry of the first request carries the recalled memory facts again", async () => {
+    const s = setup([EMPTY_CUT_OFF, { return: "done" }]);
+    vi.spyOn(s.ctx, "getActiveMemoryManager").mockReturnValue({
+      recallForInjection: async () => "the user likes tea",
+      onTurn: async () => {},
+      compactIfNeeded: async () => null,
+    } as any);
+    const thread = new MessageThread();
+    expect(await call(s, thread, undefined, { memory: true })).toBe("done");
+    const facts = "Relevant context from memory:\nthe user likes tea";
+    const factsIn = (messages: smoltalk.Message[]) =>
+      messages.filter((message) => textOf(message) === facts).length;
+    expect(factsIn(s.client.requests[0])).toBe(1);
+    expect(factsIn(s.client.requests[1])).toBe(1);
+    expect(factsIn(thread.getMessages())).toBe(0);
   });
 
   it("an empty cut-off reply in a schema call is retried before validation", async () => {

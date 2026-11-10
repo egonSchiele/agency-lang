@@ -223,7 +223,6 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // desync: a replayed helper stole it and runPrompt restarted blank.
   claimFrameForScope(stack, "runPrompt", "", run.log);
   const self = stack.locals;
-  // The fields of the frame the cut-off retry reads and writes.
   const cutOffFrame = self as CutOffFrame;
 
   // Frame-backed locals (survive checkpoint/restore)
@@ -591,7 +590,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     which: { validationRetry: number } | { cutOffRetry: number },
     editThread: () => Promise<void>,
     advanceCounter: () => void,
-    pushForRequest?: () => void,
+    pushForRequest?: () => Promise<void>,
   ): Promise<void> => {
     const prefix =
       "validationRetry" in which
@@ -607,7 +606,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     const expiryKey = requestExpiryKey(which);
     await requestStepWithTripRetry(which, async () => {
       try {
-        pushForRequest?.();
+        await pushForRequest?.();
         await sendRequest(atRoundCap());
       } finally {
         messages.expire("request", expiryKey);
@@ -620,16 +619,48 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
   };
+  /** Recall memory facts for the prompt and push them to expire with the
+   *  request that `expiryKey` names. Only the first request of a call gets
+   *  them, and a cut-off retry that replaces the first request. */
+  const pushRecalledFacts = async (expiryKey: string): Promise<void> => {
+    const recallManager = ctx.getActiveMemoryManager(run.stack);
+    if (!memoryOption || !recallManager) {
+      return;
+    }
+    try {
+      const facts = await recallManager.recallForInjection(run, promptText(prompt));
+      if (facts) {
+        messages.push(smoltalk.systemMessage(`Relevant context from memory:\n${facts}`), null, {
+          at: "request",
+          key: expiryKey,
+        });
+      }
+    } catch (err) {
+      // Guard trips are signals, not best-effort failures — let
+      // them bubble to the surrounding `withCostGuard` scope.
+      if (isGuardExceededError(err)) throw err;
+      ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
+    }
+  };
+
   /** Remove the empty cut-off reply and send the request again, with a
    *  note that lasts for that one request. */
   const retryCutOffReply = async (): Promise<void> => {
     const attempt: number = self.cutOffPending ?? self.cutOffAttempt;
     const which = { cutOffRetry: attempt };
+    const expiryKey = requestExpiryKey(which);
+    // No tool round has run, so this retry replaces the first request.
+    const replacesFirstRequest = self.toolCallRound === 0;
     await resendRequest(
       which,
       () => removeCutOffReply(run, messages, cutOffFrame, attempt),
       () => advanceCutOffAttempt(cutOffFrame, attempt),
-      () => pushCutOffNote(messages, requestExpiryKey(which)),
+      async () => {
+        if (replacesFirstRequest) {
+          await pushRecalledFacts(expiryKey);
+        }
+        pushCutOffNote(messages, expiryKey);
+      },
     );
   };
 
@@ -656,23 +687,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     await requestStepWithTripRetry({ first: true }, async () => {
       // The recalled facts expire with this one request.
       const factsKey = requestExpiryKey({ first: true });
-      const recallManager = ctx.getActiveMemoryManager(run.stack);
-      if (memoryOption && recallManager) {
-        try {
-          const facts = await recallManager.recallForInjection(run, promptText(prompt));
-          if (facts) {
-            messages.push(smoltalk.systemMessage(`Relevant context from memory:\n${facts}`), null, {
-              at: "request",
-              key: factsKey,
-            });
-          }
-        } catch (err) {
-          // Guard trips are signals, not best-effort failures — let
-          // them bubble to the surrounding `withCostGuard` scope.
-          if (isGuardExceededError(err)) throw err;
-          ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
-        }
-      }
+      await pushRecalledFacts(factsKey);
       // The llmCall span is already open (before the loop). On error,
       // the outer `finally` closes it. The injected-facts removal is a
       // finally so a GuardTripRetry unwind cannot leave the recall

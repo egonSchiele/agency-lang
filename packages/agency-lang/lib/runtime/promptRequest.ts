@@ -49,14 +49,6 @@ export type RunPromptResult = {
   usageKind?: ProviderUsageKind;
 };
 
-/** In-flight visibility: record the request SHAPE before dispatch, so a
- *  call that never completes (hang, kill, runaway generation) still
- *  leaves a trace. Pairs with promptCompletion/llmError/promptCancelled
- *  by span + order. Un-awaited like promptCompletion (post() detaches
- *  the remote send; the file sink is a sync append). Called inside the
- *  same idempotent pr.step as the completion, so resumed runs do not
- *  double-emit for replayed steps. Retries inside dispatchWithRetry
- *  share the one start. */
 /** The runtime's logger for a run: its level, writing to its host. */
 export function ctxLogger(ctx: RuntimeContext<any>): Logger {
   return createLogger(ctx.logLevel, ctx.host.settings);

@@ -297,21 +297,22 @@ an assistant message with no content and no tool calls, and the reply's
 usage and cost were recorded when it arrived. The retry then sends the
 request again with a user message, `CUT_OFF_NOTE`, that asks the model to
 reason more briefly. The note expires when that request returns, so the
-model sees it once and the thread does not keep it.
+model sees it once and the thread does not keep it. When no tool round
+has run yet, the retry replaces the call's first request, so it also
+carries the memory facts recalled for the prompt, which expire with it in
+the same way.
 
 The limit is the constant `CUT_OFF_RETRIES` (2), counted per `llm()`
 call, not per round. A retry costs a full request, so a model that always
 overruns its budget stops after three requests. When the third reply is
 also cut off empty, the call returns a failure that names the output
 limit and suggests a lower `reasoningEffort` or a higher `maxTokens`, and
-logs an error event with `errorType: "replyCutOff"`. An `llm()` option for
-the limit would need option types and user docs; add one only when
-someone needs a different number.
+logs an error event with `errorType: "replyCutOff"`.
 
 The decision and the steps of the retry live in
 `lib/runtime/cutOffRetry.ts`. The validation retry and the cut-off retry
-share one helper, `resendRequest` in `prompt.ts`. It runs three durable steps: a
-`<prefix>.feedback` step that edits the thread, the guard gate, and the
+share one helper, `resendRequest` in `prompt.ts`. It runs three durable
+steps: a `<prefix>.feedback` step that edits the thread, the guard gate, and the
 request step, which advances the attempt counter. The prefix is
 `validation.<n>` or `cutOff.<n>`.
 

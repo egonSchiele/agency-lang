@@ -1,0 +1,289 @@
+{
+  "sourceFile": "routedTurn.agency",
+  "tests": [
+    {
+      "nodeName": "slotUnsetAsksNoRouter",
+      "description": "with the router slot unset no decision request is made",
+      "input": "",
+      "expectedOutput": "\"coordinator answer|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "coordinator answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "confidentResearchGoesToTheResearcher",
+      "description": "a confident research route runs the researcher on the user's message, and the coordinator model is not asked",
+      "input": "",
+      "expectedOutput": "\"research answer (https://example.com/node)|2|true|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "research",
+              "confidence": 0.9,
+              "probabilities": {
+                "research": 0.9,
+                "code": 0.05,
+                "coordinator": 0.05
+              }
+            }
+          }
+        },
+        {
+          "return": "research answer (https://example.com/node)"
+        }
+      ]
+    },
+    {
+      "nodeName": "confidentCodeGoesToTheCoder",
+      "description": "a confident code route runs the coder on the user's message, on the main thread",
+      "input": "",
+      "expectedOutput": "\"code answer|2|true|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "code",
+              "confidence": 0.9,
+              "probabilities": {
+                "code": 0.9,
+                "research": 0.05,
+                "coordinator": 0.05
+              }
+            }
+          }
+        },
+        {
+          "return": "code answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "coordinatorRouteRunsTheCoordinator",
+      "description": "a coordinator route runs the turn as before, after one decision request",
+      "input": "",
+      "expectedOutput": "\"coordinator answer|2|1|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "coordinator",
+              "confidence": 0.9,
+              "probabilities": {
+                "coordinator": 0.9,
+                "research": 0.05,
+                "code": 0.05
+              }
+            }
+          }
+        },
+        {
+          "return": "coordinator answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "anAttachmentIsNotRouted",
+      "description": "a prompt with an attachment goes to the coordinator without asking the router",
+      "input": "",
+      "expectedOutput": "\"saw it|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "saw it"
+        }
+      ]
+    },
+    {
+      "nodeName": "aLongMessageIsNotRouted",
+      "description": "a prompt over ROUTE_MAX_CHARS goes to the coordinator without asking the router",
+      "input": "",
+      "expectedOutput": "\"long answer|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "long answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "aRewrittenMessageIsNotRouted",
+      "description": "a message the harness rewrote goes to the coordinator without asking the router",
+      "input": "",
+      "expectedOutput": "\"coordinator answer|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "coordinator answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "theQuestionNamesTheCoordinatorsTools",
+      "description": "the question lists the coordinator's other tools and not the routed subagents",
+      "input": "",
+      "expectedOutput": "\"true|false|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "coordinator",
+              "confidence": 0.9,
+              "probabilities": {
+                "coordinator": 0.9,
+                "research": 0.05,
+                "code": 0.05
+              }
+            }
+          }
+        },
+        {
+          "return": "coordinator answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "theNextTurnSeesTheRoutedTurn",
+      "description": "the coordinator's next request holds the routed turn's prompt and reply and no persona",
+      "input": "",
+      "expectedOutput": "\"coordinator answer|true|1|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "research",
+              "confidence": 0.9,
+              "probabilities": {
+                "research": 0.9,
+                "code": 0.05,
+                "coordinator": 0.05
+              }
+            }
+          }
+        },
+        {
+          "return": "research answer (https://example.com/node)"
+        },
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "coordinator",
+              "confidence": 0.9,
+              "probabilities": {
+                "coordinator": 0.9,
+                "research": 0.05,
+                "code": 0.05
+              }
+            }
+          }
+        },
+        {
+          "return": "coordinator answer"
+        }
+      ]
+    },
+    {
+      "nodeName": "aResumedTurnDoesNotAskAgain",
+      "description": "a routed turn that pauses and resumes through its checkpoint asks the router once",
+      "input": "",
+      "expectedOutput": "\"notes summary (https://example.com/notes)|1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": {
+            "answer": {
+              "type": "choice",
+              "choice": "research",
+              "confidence": 0.9,
+              "probabilities": {
+                "research": 0.9,
+                "code": 0.05,
+                "coordinator": 0.05
+              }
+            }
+          }
+        },
+        {
+          "toolCall": {
+            "name": "read",
+            "args": {
+              "filename": "notes.md"
+            }
+          }
+        },
+        {
+          "return": "notes summary (https://example.com/notes)"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

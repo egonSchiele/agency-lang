@@ -8,14 +8,15 @@ import { filterEntries } from "std::object"
 
 import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
 import { checkLlmOptions, LlmOptions } from "./llmOptions.agency"
-import { embeddingSpecHasProvider } from "./models.agency"
-import { canonicalSlot, isKnownSlot, slotKind } from "./slots.agency"
+import { lacksProviderForm } from "./models.agency"
+import { canonicalSlot, isKnownSlot, providerFormExample, slotKind } from "./slots.agency"
 import { isPlainObject } from "./utils.agency"
 
 export type PresetSlots = {
   main?: string;
   reasoning?: string;
-  embedding?: string
+  embedding?: string;
+  router?: string
 }
 
 /** What savePreset accepts. It has no `default`: setDefaultPreset owns that. */
@@ -128,15 +129,11 @@ def slotProblems(slots: Record<string, any>): string[] {
   const unknown = ["has an unknown slot '${slot}'" for slot in names if !isKnownSlot(slot)]
   const known = [slot for slot in names if isKnownSlot(slot)]
   const notText = ["slots.${slot} must be a non-empty string" for slot in known if !kindHolds("text", slots[slot])]
-  const embeddings = [
-    slot
-    for slot in known
-    if canonicalSlot(slot) == "embedding" && kindHolds("text", slots[slot])
-  ]
+  const textSlots = [slot for slot in known if kindHolds("text", slots[slot])]
   const noProvider = [
-    "slots.embedding needs the provider/model form, e.g. openai/text-embedding-3-small"
-    for slot in embeddings
-    if !embeddingSpecHasProvider(slots[slot])
+    "slots.${canonicalSlot(slot)} needs the provider/model form, e.g. ${providerFormExample(slot)}"
+    for slot in textSlots
+    if lacksProviderForm(slot, slots[slot])
   ]
   return [...unknown, ...notText, ...noProvider]
 }

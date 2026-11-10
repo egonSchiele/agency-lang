@@ -240,6 +240,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "localWithRouter",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

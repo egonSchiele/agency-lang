@@ -17,6 +17,7 @@ import {
   resolveBrainName,
   resolveStartTarget,
  } from "../lib/turn.agency"
+import { messageWasRewritten } from "../lib/rewrittenMessage.agency"
 import { applyResolved } from "../shared.agency"
 import {
   recordingBrain,
@@ -50,19 +51,20 @@ def auditReadBinary(intr: any): any {
 }
 
 // A plain message reaches the brain on the main target, as the array form
-// with zero attachments.
+// with zero attachments, and is not marked rewritten.
 node plainMessageReachesBrain(): string {
   setBrain(recordingBrain())
   const reply = runTurn("", "hello there") with approve
-  return "${reply}|${lastTarget() == ""}|${lastPromptKind()}|${lastAttachmentCount()}"
+  return "${reply}|${lastTarget() == ""}|${lastPromptKind()}|${lastAttachmentCount()}|${messageWasRewritten()}"
 }
 
-// A project slash command is expanded by the harness before the brain sees it.
+// A project slash command is expanded by the harness before the brain sees
+// it, and marked rewritten so the router leaves it alone.
 node slashCommandExpands(): string {
   setBrain(recordingBrain())
   runTurn("", "/check-tests") with approve
   const text = lastText()
-  return "${text.startsWith("/")}|${text.includes("Please review the tests you have written")}"
+  return "${text.startsWith("/")}|${text.includes("Please review the tests you have written")}|${messageWasRewritten()}"
 }
 
 // An image path on the main target is detected, read, and attached by the

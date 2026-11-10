@@ -280,6 +280,46 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "routerFlagWithoutProviderIsRefused",
+      "input": "",
+      "expectedOutput": "\"Router models need the provider/model form, e.g. --model router=openrouter/jev-1.14.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "routerAcceptsTypesafeAndLaya",
+      "input": "",
+      "expectedOutput": "\"typesafe:jev-1.14|laya:laya\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "mainSlotDoesNotTakeTypesafe",
+      "input": "",
+      "expectedOutput": "\"anthropic:typesafe/jev-1.14\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithRouterFlagIsFine",
+      "input": "",
+      "expectedOutput": "\"qwen3.5-2b|openrouter/jev-1.14\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

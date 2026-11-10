@@ -1,0 +1,25 @@
+/** @module
+  @summary Whether the harness rewrote this turn's message before the brain
+  saw it. It does that for a slash command, which becomes its skill's text,
+  and after a coder changed folders, when the folder's project block goes
+  above the message. The router does not route such a turn: it was measured
+  on messages as the user typed them.
+*/
+
+let rewritten: boolean = false
+
+export def setMessageRewritten(value: boolean) {
+  """
+  Record whether the harness changed this turn's message.
+
+  @param value - True when the brain gets text the user did not type
+  """
+  rewritten = value
+}
+
+export def messageWasRewritten(): boolean {
+  """
+  True when the harness changed this turn's message before the brain saw it.
+  """
+  return rewritten
+}

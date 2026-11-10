@@ -1,0 +1,139 @@
+/** @module
+  @summary Given the user's message, which of research, code, or the
+  coordinator should handle it. One decision call on a thread of its own;
+  every doubt goes to the coordinator. See docs/dev/agents/agent-router.md.
+*/
+import { lastReply, userMessage } from "std::thread"
+
+export type Route = "research" | "code" | "coordinator"
+
+/** The route to take, and a line to show the user, "" for none. The line
+  reports a failed router call, once per router model. */
+export type RouteChoice = {
+  route: Route;
+  notice: string
+}
+
+type RoutePick = {
+  route: Route;
+  confidence: number
+}
+
+// At 0.7, none of the 60 logged turns the router was measured on went to a
+// wrong subagent.
+static const ROUTE_MIN_CONFIDENCE = 0.7
+
+// The measured question. Do not reword these without measuring again.
+static const QUESTION = "Which agent should handle the user's latest message?"
+static const RESEARCH_DESCRIPTION = "Answer a question that needs reading rather than writing: looking something up on the web, fetching a URL, summarizing a document, gathering background, or recalling a stored fact."
+static const CODE_DESCRIPTION = "A coding task in any language except Agency: reading, writing, and editing code, running commands, builds, and tests."
+static const COORDINATOR_DESCRIPTION = "Anything small enough to handle directly: a short answer or a follow-up about the conversation so far, a few file reads, searches, or edits, running a saved skill or learned tool, or saving a skill. Also any question about the Agency language."
+
+// A router call that takes longer than this fails, and the turn goes to
+// the coordinator.
+static const ROUTER_TIMEOUT = 3s
+
+// The router reads the first this many of the coordinator's other tools.
+static const MAX_TOOL_NAMES = 30
+
+// The router model whose failure was last reported, so a router that fails
+// on every turn is reported once, and a new router model is reported anew.
+let reportedFor: string = ""
+
+export def routeQuestion(toolNames: string[]): string {
+  """
+  The question the router asks: one line per option, the coordinator's
+  line naming its other tools.
+
+  @param toolNames - The coordinator's tools that are not routed subagents, the ones to keep first
+  """
+  let coordinator = COORDINATOR_DESCRIPTION
+  const names = toolNames.slice(0, MAX_TOOL_NAMES)
+  if (names.length > 0) {
+    coordinator = "${coordinator} Its other tools: ${names.join(", ")}."
+  }
+  return "${QUESTION}\n\nresearch: ${RESEARCH_DESCRIPTION}\ncode: ${CODE_DESCRIPTION}\ncoordinator: ${coordinator}"
+}
+
+// One decision call on a fresh thread that holds only the user's message.
+// A pick with no confidence is no pick.
+def askRouter(
+  text: string,
+  question: string,
+  model: string,
+  provider: string,
+): RoutePick {
+  let pick: RoutePick = {
+    route: "coordinator",
+    confidence: 0
+  }
+  thread(label: "route") {
+    userMessage(text)
+    const route: Route = llm(
+      question,
+      {
+        model: model,
+        provider: provider,
+        type: "decision",
+        retries: 0,
+        timeout: ROUTER_TIMEOUT
+      },
+    )
+    const reply = lastReply()
+    if (reply != null && reply.answers != null) {
+      const answer = reply.answers["answer"]
+      if (answer.type == "choice" && answer.confidence != null) {
+        pick = {
+          route: route,
+          confidence: answer.confidence
+        }
+      }
+    }
+  }
+  return pick
+}
+
+// The failure line for this router model, or "" when it was reported already.
+def failureNotice(error: string, model: string, provider: string): string {
+  const key = "${provider}/${model}"
+  if (reportedFor == key) {
+    return ""
+  }
+  reportedFor = key
+  return "Routing skipped: the router model ${key} failed: ${error}"
+}
+
+export def pickRoute(
+  text: string,
+  toolNames: string[],
+  model: string,
+  provider: string,
+): RouteChoice {
+  """
+  Ask the router model which agent should handle the message. Anything
+  short of a confident answer is the coordinator, and a failed call never
+  fails the turn. A cancel is not a failure: `try` passes it through.
+
+  @param text - The user's message
+  @param toolNames - The coordinator's tools that are not routed subagents
+  @param model - The router model
+  @param provider - The router model's provider
+  """
+  const asked = try askRouter(text, routeQuestion(toolNames), model, provider)
+  if (isFailure(asked)) {
+    return {
+      route: "coordinator",
+      notice: failureNotice(asked.error, model, provider)
+    }
+  }
+  if (asked.value.confidence < ROUTE_MIN_CONFIDENCE) {
+    return {
+      route: "coordinator",
+      notice: ""
+    }
+  }
+  return {
+    route: asked.value.route,
+    notice: ""
+  }
+}

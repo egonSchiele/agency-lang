@@ -25,8 +25,8 @@ import { exists } from "std::shell"
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
 import { CapabilitySettings, sanitizeCapabilitySettings } from "./capabilities.agency"
 import { LlmOptions, checkLlmOptions } from "./llmOptions.agency"
-import { embeddingSpecHasProvider } from "./models.agency"
-import { isKnownSlot, canonicalSlot } from "./slots.agency"
+import { lacksProviderForm } from "./models.agency"
+import { isKnownSlot, canonicalSlot, providerFormExample } from "./slots.agency"
 
 
 export type SearchSettings = {
@@ -89,11 +89,11 @@ def sanitizeSlots(settings: ModelSettings): ModelSettings {
       continue
     }
     const canonical = canonicalSlot(key)
-    if (canonical == "embedding" && !embeddingSpecHasProvider(slots[key])) {
-      // The embedding slot points away from the chat provider, so its
+    if (lacksProviderForm(canonical, slots[key])) {
+      // A derived slot points away from the chat provider, so its
       // provider can never be inferred. Require the explicit form.
       print(
-        "Warning: settings.json model.slots.embedding needs the provider/model form, e.g. openai/text-embedding-3-small; ignoring it.",
+        "Warning: settings.json model.slots.${canonical} needs the provider/model form, e.g. ${providerFormExample(canonical)}; ignoring it.",
       )
       continue
     }

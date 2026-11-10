@@ -31,7 +31,7 @@ import { ModelRequest, detectionInputs, requestLayers, requestProvider } from ".
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
 import { resolveAgentHome } from "./lib/config.agency"
 import { ModelSettings, getCapabilitySettings, loadSettings } from "./lib/settings.agency"
-import { slotKind } from "./lib/slots.agency"
+import { providersFor, slotKind } from "./lib/slots.agency"
 
 
 // One-shot runs (--print / piped / a positional query) have no REPL for the
@@ -120,6 +120,25 @@ export def getSlowModel(): string {
 
 export def getSlowProvider(): string {
   return slowProvider
+}
+
+/** The router slot's model, or "" when it is unset. A derived slot has no
+  module global of its own (`applyResolved` skips it), so read the slot. */
+export def getRouterModel(): string {
+  const router = _resolved["router"]
+  if (router == null) {
+    return ""
+  }
+  return router.model
+}
+
+/** The router slot's provider, or "" when it is unset. */
+export def getRouterProvider(): string {
+  const router = _resolved["router"]
+  if (router == null) {
+    return ""
+  }
+  return router.provider
 }
 
 // Cache of the last applied assignment, for getResolvedSlots() (the explain
@@ -481,6 +500,17 @@ export def resolveLocalEmbedding(spec: string): Result<Resolved> {
   })
 }
 
+// The router slot in a local session, from its provider/model value. The
+// flag check already refused a value with no provider.
+def localRouterSlot(spec: string): Resolved {
+  const parsed = parseModelSpec(spec, false, providersFor("router", knownProviders()))
+  return {
+    model: parsed.model,
+    provider: parsed.provider,
+    via: "local"
+  }
+}
+
 /** A local provider in the embedding slot names a catalog entry or a served
  *  repo id. Resolve it to the served name, whichever path set the slot. */
 export def resolveLocalEmbeddingSlot(
@@ -508,8 +538,11 @@ export def resolveLocalEmbeddingSlot(
  *  so a fully-local run needs no hosted-provider key. A GGUF model: register
  *  the llama-cpp provider and download if needed. An MLX model: point every
  *  slot at the mlx_lm.server the user started. `embeddingSpec` is the
- *  `--model embedding=` value, or "" for none. */
-export def configureLocalModel(value: string, embeddingSpec: string = "") {
+ *  `--model embedding=` value, and `routerSpec` the `--model router=` value,
+ *  or "" for none. The router keeps the provider it names: a local session
+ *  may route with a hosted decision model. */
+export def configureLocalModel(value: string, embeddingSpec: string = "", routerSpec: string = "") {
+  const router = localRouterSlot(routerSpec)
   let embedding: Resolved = {
     model: "",
     provider: "mlx",
@@ -542,7 +575,8 @@ export def configureLocalModel(value: string, embeddingSpec: string = "") {
       {
       main: m,
       reasoning: m,
-      embedding: embedding
+      embedding: embedding,
+      router: router
     },
     )
     refreshCapabilities(value, "mlx")
@@ -579,7 +613,8 @@ export def configureLocalModel(value: string, embeddingSpec: string = "") {
     {
     main: r,
     reasoning: r,
-    embedding: embedding
+    embedding: embedding,
+    router: router
   },
   )
   // applyResolved keyed capabilities by the resolved .gguf path. Re-key

@@ -1,0 +1,81 @@
+// The router module under a scripted decision model. Mocks for the router's
+// calls sit in the "router" scope, the module's name.
+import { currentThreadId, getThread, userMessage } from "std::thread"
+
+import { pickRoute, routeQuestion } from "../brains/coordinator/router.agency"
+
+static const MODEL = "jev-1.14"
+static const PROVIDER = "openrouter"
+static const WHOLE_THREAD = 1000
+
+// What each model request held, in order.
+let requests: any[] = []
+
+callback("onLLMCallStart") as data {
+  requests = [...requests, data.messages]
+}
+
+def route(text: string): string {
+  const choice = pickRoute(text, [], MODEL, PROVIDER)
+  return choice.route
+}
+
+node lowConfidenceGoesToTheCoordinator(): string {
+  return route("find the release date of node 24")
+}
+
+node noConfidenceGoesToTheCoordinator(): string {
+  return route("find the release date of node 24")
+}
+
+// The router queue is empty, so every call fails. The first is reported,
+// the second, for the same router model, is not, and the third, for a new
+// router model, is.
+node failedCallIsReportedOnce(): string {
+  const first = pickRoute("hi", [], MODEL, PROVIDER)
+  const second = pickRoute("hi again", [], MODEL, PROVIDER)
+  const third = pickRoute("hi", [], "laya", "laya")
+  return "${first.route}|${first.notice != ""}|${second.notice != ""}|${third.notice != ""}"
+}
+
+// A time guard cancels the router call while it waits. A cancel is not a
+// doubt: it stops the router, so the guard's result is its own failure and
+// not the coordinator route. Nor is it a failure to report, so the next
+// failure, which finds no mock left, is still the first one reported. A
+// guard and not a race: a race branch writes to its own copy of the
+// module's globals, and the report-once state is one of them.
+node aCancelIsNotAFailure(): string {
+  // The trip raises std::guard; rejecting it stops the work.
+  const guarded = guard(time: 200ms) {
+    return pickRoute("slow", [], MODEL, PROVIDER)
+  } with reject
+  const after = pickRoute("hi", [], MODEL, PROVIDER)
+  return "${isFailure(guarded)}|${after.notice != ""}"
+}
+
+// The model reads only the user's message, then the question.
+node theRequestHoldsTheMessageAndTheQuestion(): string {
+  const picked = route("find the release date of node 24")
+  const messages = requests[0]
+  return "${messages.length}|${messages[0].content}"
+}
+
+node toolNamesGoOnTheCoordinatorLine(): string {
+  return routeQuestion(["learned_tv", "mcp_linear_list_issues"])
+}
+
+node atMostThirtyToolNames(): string {
+  let names: string[] = []
+  for (i in range(1, 32)) {
+    names = [...names, "tool${i}"]
+  }
+  const question = routeQuestion(names)
+  return "${question.includes("tool30.")}|${question.includes("tool31")}"
+}
+
+node theCallersThreadIsUnchanged(): number {
+  userMessage("before routing")
+  const picked = route("find the release date of node 24")
+  const messages = getThread(currentThreadId(), 0, WHOLE_THREAD) catch []
+  return messages.length
+}

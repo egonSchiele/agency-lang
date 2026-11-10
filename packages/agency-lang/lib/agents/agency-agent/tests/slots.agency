@@ -1,4 +1,4 @@
-import { canonicalSlot, isKnownSlot, slotKind } from "../lib/slots.agency"
+import { canonicalSlot, chatSlots, isKnownSlot, providersFor, slotKind } from "../lib/slots.agency"
 
 node aliasFastToMain(): string {
   return canonicalSlot("fast")
@@ -20,3 +20,15 @@ node kindOfEmbedding(): string {
   return slotKind("embedding")
 }
 
+// The router takes only the providers that answer decisions; every other
+// slot takes the chat providers it is given.
+node routerTakesTheDecisionProviders(): string {
+  const router = providersFor("router", ["anthropic"]).join(",")
+  const main = providersFor("main", ["anthropic"]).join(",")
+  return "${router}|${main}"
+}
+
+// An llmOptions block reaches the chat slots only.
+node optionsReachTheChatSlots(): string {
+  return chatSlots(["main", "reasoning", "embedding", "router"]).join(",")
+}

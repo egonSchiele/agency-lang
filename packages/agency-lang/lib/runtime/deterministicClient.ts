@@ -72,6 +72,10 @@ export type MultiToolCallMock = {
  *  annotation, the field names for an object annotation. */
 export type DecideMock = {
   decide: Record<string, DecisionAnswer>;
+  /** Milliseconds the answer takes, honoring the abort signal the way
+   *  `ReturnMock.delayMs` does, so a test can cancel a decision call in
+   *  flight. */
+  delayMs?: number;
 };
 
 export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock | DecideMock;
@@ -362,11 +366,16 @@ export class DeterministicClient implements LLMClient {
   ): Promise<Result<DecideResult>> {
     throwIfAborted(signal);
     const answers: Record<string, DecisionAnswer> = {};
+    let delayMs = 0;
     for (const call of splitMergedQuestions(questions)) {
       const mock = this.nextDecideMock(call.questions, config.moduleId);
-      for (const name of Object.keys(mock)) {
-        answers[call.prefix + name] = mock[name];
+      for (const name of Object.keys(mock.decide)) {
+        answers[call.prefix + name] = mock.decide[name];
       }
+      delayMs = Math.max(delayMs, mock.delayMs ?? 0);
+    }
+    if (delayMs > 0) {
+      await abortableDelay(delayMs, signal);
     }
     return {
       success: true,
@@ -379,11 +388,11 @@ export class DeterministicClient implements LLMClient {
     };
   }
 
-  /** The next mock as one llm() call's answers, checked against its questions. */
+  /** The next mock for one llm() call, its answers checked against its questions. */
   private nextDecideMock(
     questions: Record<string, DecisionQuestion>,
     moduleId: string | undefined,
-  ): Record<string, DecisionAnswer> {
+  ): DecideMock {
     const { scope, queue } = this.resolveQueue(moduleId);
     queue.callIndex++;
     const where = this.scoped ? ` in scope "${scope}"` : "";
@@ -406,7 +415,7 @@ export class DeterministicClient implements LLMClient {
         `DeterministicClient: the { decide } mock for llm() call #${queue.callIndex}${where} ${problem}`,
       );
     }
-    return mock.decide;
+    return mock;
   }
 
   async embed(

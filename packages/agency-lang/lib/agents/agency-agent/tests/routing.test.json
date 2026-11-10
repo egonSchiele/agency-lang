@@ -1,0 +1,192 @@
+{
+  "sourceFile": "routing.agency",
+  "tests": [
+    {
+      "nodeName": "lowConfidenceGoesToTheCoordinator",
+      "description": "below the 0.7 floor, the coordinator handles it",
+      "input": "",
+      "expectedOutput": "\"coordinator\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": [
+          {
+            "decide": {
+              "answer": {
+                "type": "choice",
+                "choice": "research",
+                "confidence": 0.6,
+                "probabilities": {
+                  "research": 0.6,
+                  "code": 0.2,
+                  "coordinator": 0.2
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "noConfidenceGoesToTheCoordinator",
+      "description": "an answer with no confidence is no pick",
+      "input": "",
+      "expectedOutput": "\"coordinator\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": [
+          {
+            "decide": {
+              "answer": {
+                "type": "choice",
+                "choice": "research"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "failedCallIsReportedOnce",
+      "description": "a failed call goes to the coordinator and is reported once per router model",
+      "input": "",
+      "expectedOutput": "\"coordinator|true|false|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": []
+      }
+    },
+    {
+      "nodeName": "aCancelIsNotAFailure",
+      "description": "a router call cancelled by a guard stops the router, and is not reported as a failure",
+      "input": "",
+      "expectedOutput": "\"true|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": [
+          {
+            "decide": {
+              "answer": {
+                "type": "choice",
+                "choice": "research",
+                "confidence": 0.9,
+                "probabilities": {
+                  "research": 0.9,
+                  "code": 0.05,
+                  "coordinator": 0.05
+                }
+              }
+            },
+            "delayMs": 5000
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "theRequestHoldsTheMessageAndTheQuestion",
+      "input": "",
+      "expectedOutput": "\"2|find the release date of node 24\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": [
+          {
+            "decide": {
+              "answer": {
+                "type": "choice",
+                "choice": "research",
+                "confidence": 0.9,
+                "probabilities": {
+                  "research": 0.9,
+                  "code": 0.05,
+                  "coordinator": 0.05
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "toolNamesGoOnTheCoordinatorLine",
+      "input": "",
+      "expectedOutput": "\"Which agent should handle the user's latest message?\\n\\nresearch: Answer a question that needs reading rather than writing: looking something up on the web, fetching a URL, summarizing a document, gathering background, or recalling a stored fact.\\ncode: A coding task in any language except Agency: reading, writing, and editing code, running commands, builds, and tests.\\ncoordinator: Anything small enough to handle directly: a short answer or a follow-up about the conversation so far, a few file reads, searches, or edits, running a saved skill or learned tool, or saving a skill. Also any question about the Agency language. Its other tools: learned_tv, mcp_linear_list_issues.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": []
+      }
+    },
+    {
+      "nodeName": "atMostThirtyToolNames",
+      "input": "",
+      "expectedOutput": "\"true|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": []
+      }
+    },
+    {
+      "nodeName": "theCallersThreadIsUnchanged",
+      "description": "the router's question and answer stay on its own thread",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "router": [
+          {
+            "decide": {
+              "answer": {
+                "type": "choice",
+                "choice": "research",
+                "confidence": 0.9,
+                "probabilities": {
+                  "research": 0.9,
+                  "code": 0.05,
+                  "coordinator": 0.05
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

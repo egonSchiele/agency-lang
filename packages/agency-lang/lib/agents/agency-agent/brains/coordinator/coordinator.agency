@@ -16,6 +16,7 @@ import { Attachment, endTurn, systemMessage } from "std::thread"
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 import { projectContextText } from "../../lib/projectContext.agency"
+import { messageWasRewritten } from "../../lib/rewrittenMessage.agency"
 import { learnedExtras } from "../../lib/learned.agency"
 import { claudeSkillTools } from "../../lib/claudeSkills.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
@@ -24,7 +25,13 @@ import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "
 import { checkBundledSkill } from "./lib/bundledSkills.agency"
 import { useLlmOptions } from "./llmOptionTools.agency"
 import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
-import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
+import {
+  getCapabilities,
+  getRouterModel,
+  getRouterProvider,
+  getSlowModel,
+  getSlowProvider,
+ } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
 import { agencyCodeAgent, codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -32,6 +39,7 @@ import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
 import { reviewAgent } from "./subagents/review.agency"
 import { rewriteAgent } from "./subagents/rewrite.agency"
+import { Route, pickRoute } from "./router.agency"
 import { writingAgent } from "./subagents/writing.agency"
 
 // Per-run grounding, from BrainContext. Spliced into the system prompt.
@@ -110,16 +118,28 @@ def coordinatorInit(context: BrainContext) {
   setCodeOneShot(!context.interactive)
 }
 
-// The tools one turn offers. The learned ones are read from the agent
-// home on every turn, not once at startup, so a tool the user saves in
-// this session is callable on the next turn.
-export def turnTools(turnStart: any): any[] {
+// The tools that differ per user, each kind read once per turn. The
+// learned ones are read from the agent home on every turn, not once at
+// startup, so a tool the user saves in this session is callable on the
+// next turn.
+type UserTools = {
+  mcp: any[];
+  learned: any[];
+  skills: any[];
+  generated: any[]
+}
+
+def userTools(): UserTools {
+  return {
+    mcp: getMcpTools(),
+    learned: learnedExtras(),
+    skills: claudeSkillTools(),
+    generated: getGeneratedTools()
+  }
+}
+
+def turnBuiltIns(turnStart: any): any[] {
   return [
-    ...mainAgentTools,
-    ...getMcpTools(),
-    ...learnedExtras(),
-    ...claudeSkillTools(),
-    ...getGeneratedTools(),
     learnTools.partial(turnStart: turnStart),
     searchSessions,
     question,
@@ -127,8 +147,44 @@ export def turnTools(turnStart: any): any[] {
   ]
 }
 
-def mainOptions(turnStart: any): any {
-  const options: any = { memory: true, tools: turnTools(turnStart) }
+def offeredTools(user: UserTools, turnStart: any): any[] {
+  return [
+    ...mainAgentTools,
+    ...user.mcp,
+    ...user.learned,
+    ...user.skills,
+    ...user.generated,
+    ...turnBuiltIns(turnStart),
+  ]
+}
+
+// The tools one turn offers.
+export def turnTools(turnStart: any): any[] {
+  return offeredTools(userTools(), turnStart)
+}
+
+// The tools a turn can be routed to, one per arm of the `match` in
+// mainAgent. Each is an option of its own in the router's question, so
+// the coordinator's line leaves them out.
+static const ROUTED_TOOLS = ["researchAgent", "codeAgent"]
+
+// The names the router reads on the coordinator's line, which keeps the
+// first 30: the tools that differ per user first, since they are what the
+// router cannot otherwise know about, then the built-in ones.
+def routerToolNames(user: UserTools, turnStart: any): string[] {
+  const tools = [
+    ...user.learned,
+    ...user.generated,
+    ...user.skills,
+    ...user.mcp,
+    ...mainAgentTools,
+    ...turnBuiltIns(turnStart),
+  ]
+  return [tool.name for tool in tools if !ROUTED_TOOLS.includes(tool.name)]
+}
+
+def mainOptions(tools: any[]): any {
+  const options: any = { memory: true, tools: tools }
   const slowModel = getSlowModel()
   if (slowModel != "") {
     options.model = slowModel
@@ -159,16 +215,68 @@ handoff def learnTools(
   const learned = learnSessionTools(source, names, namespace, offeredNames)?
   const answer = llm(
     "The tools ${learned.join(", ")} are now available for this conversation. Continue the user's request using them as needed.",
-    mainOptions(turnStart),
+    mainOptions(turnTools(turnStart)),
   )
   endTurn()
   return success(answer)
+}
+
+// A message longer than this is not routed. The REPL puts pending notes,
+// which can be a whole `!` command's output, above the message in one
+// string, and the router was not measured on such messages.
+static const ROUTE_MAX_CHARS = 8000
+
+type TurnRoute = {
+  route: Route;
+  text: string
+}
+
+// The message when the prompt is plain text, else "". The harness sends the
+// main target [message, ...attachments], so one part is a plain message.
+def plainText(prompt: string | (string | Attachment)[]): string {
+  return match(prompt) {
+    plain: string => plain
+    parts: (string | Attachment)[] => {
+      if (parts.length == 1) {
+        return "${parts[0]}"
+      }
+      return ""
+    }
+  }
+}
+
+// Which agent takes the turn. Only a plain-text message of a routable
+// length, as the user typed it, is asked about, and only when the router
+// slot is set. See docs/dev/agents/agent-router.md.
+def routeFor(
+  prompt: string | (string | Attachment)[],
+  user: UserTools,
+  turnStart: any,
+): TurnRoute {
+  const text = plainText(prompt)
+  const model = getRouterModel()
+  if (model == "" || text == "" || text.length > ROUTE_MAX_CHARS || messageWasRewritten()) {
+    return {
+      route: "coordinator",
+      text: text
+    }
+  }
+  const choice = pickRoute(text, routerToolNames(user, turnStart), model, getRouterProvider())
+  if (choice.notice != "") {
+    print(color.dim(choice.notice))
+  }
+  return {
+    route: choice.route,
+    text: text
+  }
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
   // The prompt tells the model to watch the clock (elapsedTime), so it must
   // be in its tool list. elapsedTime is anchored to this turn's start.
   const turnStart = now()
+  const user = userTools()
+  const routed = routeFor(prompt, user, turnStart)
   thread(label: "main", session: "main") {
     setMemoryId("main")
     if (first) {
@@ -181,7 +289,17 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     // strongest model the user configured. High-volume work still runs on
     // the subagents' own slots.
     addGlobalInstructions()
-    const result = llm(prompt, mainOptions(turnStart))
+    // A routed subagent runs here from code, on the main thread. Its persona
+    // expires with its llm() call; its prompt and reply stay.
+    // Not coderTurn: it opens a `code` thread of its own, and a routed coder
+    // stays on the main thread so the next turn sees its work.
+    const result = match(routed.route) {
+      "research" => researchTurn(routed.text)
+      "code" => replyText("The coder", codeAgent(routed.text))
+      _ => llm(prompt, mainOptions(offeredTools(user, turnStart)))
+    }
+    // The researcher sets its own memory id; the main thread keeps "main".
+    setMemoryId("main")
   }
   return result
 }

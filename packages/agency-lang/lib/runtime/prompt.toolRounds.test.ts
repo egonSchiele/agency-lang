@@ -1,10 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
-import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import { AgencyFunction } from "./agencyFunction.js";
 import { runInTestContext, type Run } from "./asyncContext.js";
-import { DeterministicClient, type LLMMock } from "./deterministicClient.js";
-import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
+import type { LLMMock } from "./deterministicClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
@@ -16,77 +14,11 @@ import { AgencyCancelledError } from "./errors.js";
 import { interrupt } from "./interrupts.js";
 import { DEFAULT_ROUND_WARNING, type WarnAtRoundsLeft } from "./roundWarning.js";
 import { labelOf } from "./state/messageMetadata.js";
+import { makeCtx, pingTool, RecordingClient } from "./promptTestHelpers.js";
 
 /** The round cap, `maxToolCallRounds`: where its value comes from, and
  *  what happens at the cap. See "The round cap" in
  *  docs/dev/agents/tool-loop-guards.md. */
-
-function makeCtx(): RuntimeContext<any> {
-  return new RuntimeContext({
-    statelogConfig: {
-      host: "https://example.com",
-      apiKey: "test-api-key",
-      projectId: "test-project",
-      debugMode: false,
-    },
-    smoltalkDefaults: { model: "default-model" },
-    dirname: "/tmp",
-  });
-}
-
-/** A deterministic client that also records which tools, and which
- *  hosted tools, each request offered, so a test can see the request
- *  after the cap carry none of either. */
-class RecordingClient implements LLMClient {
-  readonly offered: string[][] = [];
-  readonly hosted: string[][] = [];
-  /** The messages each request carried, copied when it was sent. */
-  readonly requests: smoltalk.Message[][] = [];
-  private readonly inner: DeterministicClient;
-
-  constructor(mocks: LLMMock[]) {
-    this.inner = new DeterministicClient(mocks);
-  }
-
-  private record(config: PromptConfig): void {
-    this.offered.push((config.tools ?? []).map((tool) => tool.name));
-    this.hosted.push(config.hostedTools ?? []);
-    this.requests.push([...config.messages]);
-  }
-
-  async text(config: PromptConfig): Promise<Result<PromptResult>> {
-    this.record(config);
-    return this.inner.text(config);
-  }
-
-  textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
-    this.record(config);
-    return this.inner.textStream(config);
-  }
-
-  async embed(
-    _input: string | string[],
-    _config?: Partial<EmbedConfig>,
-  ): Promise<Result<EmbedResult>> {
-    return { success: false, error: "not used" };
-  }
-}
-
-/** A tool that counts how many times it ran. */
-function pingTool(): { ping: AgencyFunction; runs: () => number } {
-  let count = 0;
-  const ping = new AgencyFunction({
-    name: "ping",
-    module: "test.agency",
-    fn: () => {
-      count += 1;
-      return "pong";
-    },
-    params: [],
-    toolDefinition: { name: "ping", description: "Returns pong.", schema: z.object({}) },
-  });
-  return { ping, runs: () => count };
-}
 
 /** `n` replies that each call `ping`, then a text reply. */
 function pingMocks(n: number): LLMMock[] {

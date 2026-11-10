@@ -755,9 +755,6 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // let the initialLlmCall step populate it.
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
-  // Not on `self`: it only decorates an error message, and a resume re-runs
-  // the round that would set it.
-  let lastStopReason: smoltalk.StopReason | undefined;
   let lastUsageKind: ProviderUsageKind | undefined;
 
   let shouldRelease = true;
@@ -841,6 +838,62 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       }
     }
   };
+  /** The key of the messages that expire when this request returns. */
+  const requestExpiryKey = (which: WhichLlmCall): string =>
+    `${self.llmCallKey}:${llmCallKey(which)}`;
+
+  /** Re-send the current request: edit the thread once, run the guard gate,
+   *  then send the request and advance its counter, each as a durable step.
+   *  `pushForRequest` adds messages that last for exactly this request. It
+   *  runs inside the request body, so a guard trip that sends the body again
+   *  pushes them again, and the `finally` removes them after every attempt. */
+  const resendRequest = async (
+    which: { validationRetry: number } | { cutOffRetry: number },
+    editThread: () => Promise<void>,
+    advanceCounter: () => void,
+    pushForRequest?: () => void,
+  ): Promise<void> => {
+    const prefix =
+      "validationRetry" in which
+        ? `validation.${which.validationRetry}`
+        : `cutOff.${which.cutOffRetry}`;
+    await pr.step(`${prefix}.feedback`, async () => {
+      await editThread();
+      self.messagesJSON = snapshotThread();
+    });
+    // A re-sent request is the same turn: gate and feedback only,
+    // deliberately NOT a queuedMessages delivery point.
+    await runGateAndFeedback(`${prefix}.guardGate`, `${prefix}.guardFeedback`, boundaryCtx());
+    const expiryKey = requestExpiryKey(which);
+    await requestStepWithTripRetry(which, async () => {
+      try {
+        pushForRequest?.();
+        const nextResult = await _runPrompt({
+          run,
+          messages,
+          tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
+          prompt,
+          responseFormat,
+          clientConfig: configOffered(clientConfig, atRoundCap()),
+          stateStack,
+          retryPolicy,
+          callLabel,
+        });
+        messages = nextResult.messages;
+        toolCalls = nextResult.toolCalls;
+        self.lastStopReason = nextResult.stopReason ?? null;
+        lastUsageKind = nextResult.usageKind;
+      } finally {
+        messages.expire("request", expiryKey);
+      }
+      // Advance ONLY here, like nextLlmCall advances toolCallRound: a
+      // bailout before this step completes leaves the counter unchanged,
+      // so resume re-enters the SAME attempt with the same step keys.
+      advanceCounter();
+      self.messagesJSON = snapshotThread();
+      self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+    });
+  };
   try {
     // The call-entry boundary: queueMessage entries queued before this
     // llm() call, then the gate, then feedback queued by the gate or by
@@ -863,7 +916,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // (re-entries after a later tool-batch bailout skip it).
     await requestStepWithTripRetry({ first: true }, async () => {
       // The recalled facts expire with this one request.
-      const factsKey = `${self.llmCallKey}:${llmCallKey({ first: true })}`;
+      const factsKey = requestExpiryKey({ first: true });
       const recallManager = ctx.getActiveMemoryManager(run.stack);
       if (memoryOption && recallManager) {
         try {
@@ -899,7 +952,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         });
         messages = result.messages;
         toolCalls = result.toolCalls;
-        lastStopReason = result.stopReason;
+        self.lastStopReason = result.stopReason ?? null;
         lastUsageKind = result.usageKind;
       } finally {
         messages.expire("request", factsKey);
@@ -1860,7 +1913,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           });
           messages = nextResult.messages;
           toolCalls = nextResult.toolCalls;
-          lastStopReason = nextResult.stopReason;
+          self.lastStopReason = nextResult.stopReason ?? null;
           lastUsageKind = nextResult.usageKind;
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
@@ -1897,7 +1950,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         lastAssistant?.content,
         validationAttempt,
         validationPolicy,
-        lastStopReason,
+        self.lastStopReason ?? undefined,
       );
 
       if (decision.kind === "accept") {
@@ -1920,59 +1973,33 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         return failure(decision.message);
       }
 
-      // decision.kind === "retry". Steps mirror attachReplies/nextLlmCall:
-      // keys derive from the PERSISTED counter, and the counter only
-      // advances inside the dispatch step, so a resume re-entry recomputes
-      // identical keys and skips completed steps instead of double-pushing
-      // feedback or double-counting the attempt.
-      await pr.step(`validation.${validationAttempt}.feedback`, async () => {
-        // Same hook transport retries fire (the agent renders it as a
-        // "retrying" line). Inside the step so a resume replay does not
-        // re-emit it. No backoff sleep: the provider is healthy, the
-        // content was just wrong.
-        await callHook(run, {
-          name: "onLLMRetry",
-          data: {
-            attempt: validationAttempt + 1,
-            maxRetries: retryPolicy.validationRetries,
-            delayMs: 0,
-            reason: decision.reason,
-            detail: decision.detail,
-          },
-        });
-        messages.push(smoltalk.userMessage(decision.feedback));
-        self.messagesJSON = snapshotThread();
-      });
-      // Validation retries are the same turn re-sent: gate and feedback
-      // only, deliberately NOT a queuedMessages delivery point.
-      await runGateAndFeedback(
-        `validation.${validationAttempt}.guardGate`,
-        `validation.${validationAttempt}.guardFeedback`,
-        boundaryCtx(),
+      // decision.kind === "retry". Keys derive from the PERSISTED counter,
+      // and the counter only advances inside the request step, so a resume
+      // re-entry recomputes identical keys and skips completed steps instead
+      // of double-pushing feedback or double-counting the attempt.
+      await resendRequest(
+        { validationRetry: validationAttempt },
+        async () => {
+          // Same hook transport retries fire (the agent renders it as a
+          // "retrying" line). Inside the step so a resume replay does not
+          // re-emit it. No backoff sleep: the provider is healthy, the
+          // content was just wrong.
+          await callHook(run, {
+            name: "onLLMRetry",
+            data: {
+              attempt: validationAttempt + 1,
+              maxRetries: retryPolicy.validationRetries,
+              delayMs: 0,
+              reason: decision.reason,
+              detail: decision.detail,
+            },
+          });
+          messages.push(smoltalk.userMessage(decision.feedback));
+        },
+        () => {
+          self.validationAttempt = validationAttempt + 1;
+        },
       );
-      await requestStepWithTripRetry({ validationRetry: validationAttempt }, async () => {
-        const nextResult = await _runPrompt({
-          run,
-          messages,
-          tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
-          prompt,
-          responseFormat,
-          clientConfig: configOffered(clientConfig, atRoundCap()),
-          stateStack,
-          retryPolicy,
-          callLabel,
-        });
-        messages = nextResult.messages;
-        toolCalls = nextResult.toolCalls;
-        lastStopReason = nextResult.stopReason;
-        lastUsageKind = nextResult.usageKind;
-        // Advance ONLY here, like nextLlmCall advances toolCallRound: a
-        // bailout before this step completes leaves the counter unchanged,
-        // so resume re-enters the SAME attempt with the same step keys.
-        self.validationAttempt = validationAttempt + 1;
-        self.messagesJSON = snapshotThread();
-        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-      });
       // Loop: the retry response may itself contain tool calls; the inner
       // loop drains them before validation runs again.
     }

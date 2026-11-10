@@ -571,7 +571,8 @@ export def saveSessionPreset(name: string, choices: ModelChoices): string[] {
   if (movedByLocalCommand(request)) {
     return ["Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save."]
   }
-  const checked = checkPreset(target, sessionPreset(request, startupLimitFlags(), getResolvedSlots()), false)
+  const preset = sessionPreset(request, startupLimitFlags(), getResolvedSlots())
+  const checked = checkPreset(target, preset, false)
   if (checked is failure(reason)) {
     return ["Not saved: ${reason}"]
   }

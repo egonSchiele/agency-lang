@@ -13,12 +13,13 @@ Paths are relative to `lib/agents/agency-agent/`.
 | File | What it owns |
 |---|---|
 | `lib/presetRules.agency` | The `Preset` types and the rule table. `checkPreset` is the one definition of a valid preset. |
-| `lib/presets.agency` | The in-memory preset table, the startup choice, the active preset, the listing, and `applyPresetEdit`. |
+| `lib/presets.agency` | The in-memory preset table, the startup choice, the active preset, the listing, `applyPresetEdit`, and `editPresets`, the only code that writes presets to disk. |
+| `lib/presetSnapshot.agency` | `sessionPreset`, which builds a preset from the session for `/preset save`, and `presetChangeLines`, which lists what a save changes. |
 | `lib/modelRequest.agency` | `ModelRequest`: startup flags, active preset, `/model` choices. Pure helpers that turn it into layers. |
 | `lib/toolLimits.agency` | The two tool limits and where each value comes from. |
 | `lib/effort.agency` | The reasoning effort choices, the built-in default per model, and the level a run sends. |
-| `lib/session.agency` | `applyModelRequest`, `pickModelsForAgent`, `switchModel`, `switchPreset`. |
-| `brains/coordinator/presetTools.agency` | The four tools and `editPresets`, the only code that writes presets to disk. |
+| `lib/session.agency` | `applyModelRequest`, `pickModelsForAgent`, `switchModel`, `switchPreset`, `saveSessionPreset`. |
+| `brains/coordinator/presetTools.agency` | The four tools. |
 | `brains/coordinator/skills/presets.md` | The skill that tells the model how to use the tools. |
 
 ## How a run picks its models
@@ -30,8 +31,10 @@ Every model decision goes through a `ModelRequest`:
 ```
 
 `requestLayers` turns it into four layers, most immediate first:
-`in-session` (the `/model` choices), `cli`, `preset`, `settings`. The
-resolver takes the first layer that sets a slot. `/model` prints the layer
+`in-session` (the `/model` choices), `cli`, `preset`, `settings`.
+`resolveRequestAgainst` adds a fifth, `default`, which holds the default
+router when its key is set (`docs/dev/agents/agent-router.md`, "The
+default router"). The resolver takes the first layer that sets a slot. `/model` prints the layer
 name, so a slot a preset set shows `(preset:per-slot)` or
 `(preset:global-pin)`.
 
@@ -46,7 +49,7 @@ preset, or `settings.model.slots.router`. Both are derived slots: the value
 must name its provider, a bare `--model` never sets them, and they get no
 `llmOptions`. The router accepts only the providers that answer decisions
 (`DECISION_PROVIDERS` in `lib/slots.agency`), and it may be set beside
-`local`.
+`local`. The router also accepts `off`, which turns routing off.
 
 A preset with `local` runs `configureLocalModel`, the same call `--local`
 makes. A local model that fails to load ends the process, from startup or
@@ -64,10 +67,10 @@ choices remain in effect. The choice reaches every subagent through
 passes it on, and each stdlib agent takes its client tool and its hosted
 search from that module. The agent has no search tool table of its own.
 
-The startup flags and `settings.model` are kept in `let` globals in
-`session.agency`. `/model` and `/preset` resolve with them, so flags stay
-above the preset all session, and neither command reads `settings.json`
-inside a turn.
+The startup flags, `settings.model`, and the default slots are kept in
+`let` globals in `session.agency`. `/model` and `/preset` resolve with
+them, so flags stay above the preset all session, and neither command
+reads `settings.json` or checks the default router's key inside a turn.
 
 ## Options beside the model
 
@@ -256,6 +259,88 @@ A preset may be named `constructor`, so every lookup by name goes through
 parameter becomes a JSON schema that OpenAI and Anthropic reject.
 Replacing the default preset keeps its `default` flag.
 
+## Saving the session to a preset
+
+`/preset save` writes the session's models, effort, options, and tool
+limits to the active preset. `/preset save <name>` writes them to that
+name, and creates the preset when it is new. With no name and no active
+preset, the command asks for a name. `parsePresetCommand` in
+`lib/session.agency` reads the command line, and `saveSessionPreset` does
+the save.
+
+The rule is that the saved preset, loaded in a fresh session with no
+flags and no `/model` choices, resolves the same models, effort,
+options, and tool limits this session has. Two consequences:
+
+- A preset's `effort` that the session dropped, because `/model`
+  changed a chat model, is dropped from the saved preset too.
+- After `agency agent --preset glm --model claude-opus-4-8`, a save to
+  `glm` replaces its model fields, effort, and options with the Opus
+  session's, because the flag emptied the preset layer for this session.
+
+`sessionPreset` in `lib/presetSnapshot.agency` builds the preset from the
+session's `ModelRequest` and its resolved slots. The model fields have
+three cases:
+
+| Request | Model fields written |
+|---|---|
+| Local (`localModelOf` is not null) | `local`, and `slots.embedding` and `slots.router` from the request. |
+| Hosted, with a provider from `--provider` or the preset | `provider`, and the `pin` and `slots` of the flattened layers. |
+| Hosted, with the provider detected from API keys | No `provider` and no `pin`. The derived slots from the flattened layers. If those layers name a chat model, both `slots.main` and `slots.reasoning` as `provider/model`, from the resolved slots. |
+
+The third case exists because a bare model name resolves differently at
+the next start. A session that detected `anthropic` and then ran
+`/model claude-opus-4-8` runs Opus on Anthropic, because `/model`
+resolves against the session's current provider. A preset holding only
+`pin: "claude-opus-4-8"` would start on `openai`: with every chat model
+named, `resolveDetected` picks `openai` (see "Known limits"). So the
+chat slots are written with their provider. Both are written, so neither
+falls back to a built-in default that depends on which keys are set.
+
+`flattenLayers` in `lib/resolution.agency` folds the `in-session`,
+`cli`, and `preset` layers into one layer that resolves every slot the
+same way. A field-by-field merge gets one case wrong: the preset has
+`slots.main`, and the user types `/model x`. The session runs `x` in
+`main`, because a pin in a more immediate layer beats a named slot below
+it. A merge would write `pin: x` beside `slots.main`, and in one layer a
+named slot beats the pin, so the saved preset would run the old main
+model. `flattenLayers` drops a chat slot that sits below a pin.
+
+These are not copied:
+
+- Values from `settings.model`. Every helper is called with empty
+  settings, and the settings layer stays below the preset at the next
+  start, so the saved preset resolves the same way without them.
+- The default router. `requestLayers` has no `default` layer.
+- The `default` flag. `applyPresetEdit` keeps it on the saved entry.
+
+A session that `/local` moved is refused. `/local` calls
+`configureLocalModel` directly and leaves the `ModelRequest` as it was, so
+the request no longer describes the models the session runs.
+`saveSessionPreset` compares the `main` slot's `via` (`"local"` after
+`configureLocalModel`) with `requestIsLocal`, and refuses when they
+disagree.
+
+The save prints one line per field it changes, such as
+`  slots.router: (none) → off`, under `Saved the 'glm' preset:` or
+`Created the 'fast' preset:`. When nothing changes, it prints "Nothing to
+save" and writes nothing. It does not switch the session to the saved
+preset or clear the `/model` choices. The session resolves the same
+models either way.
+
+The write goes through `editPresets` with `with approve`. The user typed
+the command, so this handler does not object, the same as `saveSettings`
+for a preference the user just changed. The policy in the chain still
+decides. The `recommended` policy approves reading `settings.json` and
+has no rule for writing it, so under `recommended` the user sees one
+`std::write` prompt for `settings.json`. That prompt is correct: the
+file decides what the next agent start runs.
+
+The command raises no `agent::llmServer` question for a `baseUrl.mlx`
+address, as `savePreset` does. An address in the session's block was
+approved when `useLlmOptions` set it, and an address in the preset's own
+block is already in the file.
+
 ## The coordinator's skills folder
 
 `brains/coordinator/skills/` holds skills about the agent itself, read
@@ -269,6 +354,12 @@ same way.
 ## Known limits
 
 - A `pin` with no `provider` resolves to `openai`, as `--model` does.
+- A preset named `save` cannot be reached with `/preset save`, which
+  saves to the active preset. It still loads with `--preset save`.
+- `/preset save` compares against the presets read at startup. If another
+  agent session saved the same preset since this one started, the printed
+  lines describe the wrong change, and "Nothing to save" can skip a write
+  that was needed.
 - `--max-cost` and `--max-time` cannot be in a preset: the launcher reads
   them before the agent process starts and does not read `settings.json`.
 - A preset's `baseUrl.mlx` reaches only `llm()` calls. The speech, image,

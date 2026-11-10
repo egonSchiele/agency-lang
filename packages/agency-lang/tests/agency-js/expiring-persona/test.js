@@ -48,8 +48,8 @@ const results = {};
 }
 
 // Case 3. A model calls the agent as a tool. The final thread has the
-// same roles and text as with the old persona, which the hand-back
-// removed.
+// same roles and text as legacyAgent's, whose persona the hand-back
+// removes.
 {
   const now = makeCapture();
   await asTool({ callbacks: now.callbacks });

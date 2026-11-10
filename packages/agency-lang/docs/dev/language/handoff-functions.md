@@ -45,9 +45,7 @@ the body's messages can land on the caller's thread as valid history.
    code pushes it, expires with the dispatch: its metadata carries
    `expires: { at: "handoff", key }`. A message pushed with its own
    expiry keeps it and is removed by that owner, not by the hand-back.
-   The stdlib agents push their persona with `expires: "llmCall"`, so it
-   leaves when the agent's `llm()` call returns, a moment before the
-   hand-back. The key is the tool name, the
+   The key is the tool name, the
    call id, and the nesting depth. The depth matters because a
    provider that sends no call ids leaves a handoff nested inside
    itself with the same name and the same empty id.

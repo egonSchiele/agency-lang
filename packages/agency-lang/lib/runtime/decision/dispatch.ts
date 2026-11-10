@@ -69,9 +69,6 @@ function promptText(config: PromptConfig): string {
   return typeof content === "string" ? content : "";
 }
 
-/** Everything that can refuse a decision call before a request exists: the
- *  tools check, the schema mapping, and the client capability. Runs before
- *  metering so a refusal is never counted as an attempt. */
 /** The most questions one request to this call's model may carry: the
  *  registry's `maxQuestions` for a known decision model, else Jev's cap.
  *  The decision entry is looked up first, because a name can also have a
@@ -92,6 +89,9 @@ function decisionRecord(config: PromptConfig): smoltalk.DecisionModel | undefine
   return smoltalk.getDecisionModelForProvider(config.provider, config.model, maps.modelData);
 }
 
+/** Everything that can refuse a decision call before a request exists: the
+ *  tools check, the schema mapping, and the client capability. Runs before
+ *  metering so a refusal is never counted as an attempt. */
 export function prepareDecision(
   ctx: RuntimeContext<GraphState>,
   config: PromptConfig,

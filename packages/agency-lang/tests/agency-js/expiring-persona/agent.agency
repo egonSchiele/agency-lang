@@ -14,8 +14,8 @@ handoff def personaAgent(question: string): string {
   return llm("brief: ${question}")
 }
 
-// The persona as the stdlib agents pushed it before they used an expiry:
-// a plain system message, removed when the handoff hands back.
+// A persona with no expiry of its own, which the hand-back removes. The
+// asTool case compares its final thread with this one's.
 handoff def legacyAgent(question: string): string {
   systemMessage("persona: be terse")
   return llm("brief: ${question}")

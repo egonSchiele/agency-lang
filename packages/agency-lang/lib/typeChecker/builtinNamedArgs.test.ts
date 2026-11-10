@@ -246,13 +246,17 @@ describe("builtin named-arg validation (the decision option)", () => {
 
   it("refuses a decision value that is not a boolean", () => {
     const errors = errorsFrom(`node main() { let r = llm("hi", { decision: "yes" }) }`);
-    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.map((e) => e.message)).toEqual([
+      expect.stringContaining(`Argument type '{ decision: "yes" }' is not assignable`),
+    ]);
   });
 
   it("refuses decision on setLlmOptions, where it would turn every later call into one", () => {
     const errors = errorsFrom(
       `import { setLlmOptions } from "std::llm"\nnode main() {\n  setLlmOptions({ decision: true })\n}`,
     );
-    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.map((e) => e.message)).toEqual([
+      "Unknown property 'decision' on type 'LlmDefaults' (call to 'setLlmOptions').",
+    ]);
   });
 });

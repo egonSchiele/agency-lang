@@ -79,12 +79,10 @@ in order:
    its type is `decision`. An unknown name is a decision call when its
    provider is `typesafe`.
 
-Rule 3 is what every program written before the option relies on, so it
-does not change. It reads the first entry the lookup finds. A name can
-have a text entry and a decision entry under one provider, and rule 3
-must not prefer the decision entry: `gpt-6-luna` is a chat model that many
-programs call with no option, and an untyped call to it would fail on the
-decision path.
+Rule 3 reads the first entry the lookup finds. A name can have a text
+entry and a decision entry under one provider, and then the call is a text
+call. `gpt-6-luna` under `openai` is listed that way, so an untyped call
+to it stays a chat call.
 
 Three cases need the option:
 
@@ -101,9 +99,10 @@ const c: Dept = llm(q, { model: "new-decider", provider: "openrouter", decision:
 
 The option is per call. `setLlmOptions` does not take it: a branch default
 of `decision: true` would turn every later call into a decision call, and
-a call with tools or with no type annotation would fail. A branch that
-runs every call against a decision model is served by rule 3 when the
-model is in the registry.
+a call with tools or with no type annotation would fail. The type checker
+refuses the key there, and `_setLlmOptions` throws when a value typed
+`any` carries it. To send every call to a decision model the registry
+lists, set the model; rule 3 covers it.
 
 `toSmolConfig` drops the key, since smoltalk's chat config has no such
 field. `questionCapFor` looks for the decision entry under the selected
@@ -261,9 +260,9 @@ LAYA_PRELOAD=1 laya-serve          # port 8000, Metal on Apple silicon
 const dept: Dept = llm(q, { model: "english", provider: "laya", decision: true })
 ```
 
-The older way still works: Laya speaks the TypeSafe protocol, so
-`provider: "typesafe"` with `TYPESAFE_BASE_URL` pointing at the server and
-any value in `TYPESAFE_API_KEY` reaches it too, with no option.
+Laya also speaks the TypeSafe protocol, so `provider: "typesafe"` with
+`TYPESAFE_BASE_URL` pointing at the server and any value in
+`TYPESAFE_API_KEY` reaches it too, with no option.
 
 **A local chat model.** The `llama-cpp` provider answers decisions in
 process with a small chat model, through the `smoltalk-llama-cpp` plugin.
@@ -286,6 +285,7 @@ structured output.
   HTTP status carried on a failed request so a 429 or 5xx retries.
 - `lib/runtime/llmConfig.test.ts`: the provider a `decision: true` call
   switches to.
+- `lib/stdlib/llm.test.ts`: `setLlmOptions` refuses `decision`.
 - `lib/runtime/llmDispatch.decision.test.ts`: a refusal happens before any
   metered attempt, a sent call is metered under the `decision` kind, and a
   provider that cannot answer decisions fails once, unretried.

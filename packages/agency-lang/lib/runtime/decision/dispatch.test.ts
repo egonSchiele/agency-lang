@@ -87,7 +87,7 @@ describe("isDecisionCall with the decision option", () => {
   });
 
   it("keeps the catalog's answer for a model with both entries when the option is absent", () => {
-    // gpt-6-luna is a chat model many programs use; with no option it stays one.
+    // gpt-6-luna's first entry under openai is text, so with no option it is a chat call.
     expect(isDecisionCall(base({ model: "gpt-6-luna", provider: "openai" }))).toBe(false);
   });
 

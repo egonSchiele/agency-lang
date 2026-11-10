@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mergeLlmConfig } from "./llmConfig.js";
 
-// A program's defaults almost always name a provider, so these start from
-// one, the way a real run does.
 const anthropicDefaults = { model: "claude-sonnet-4-5", provider: "anthropic" };
 
 describe("mergeLlmConfig with decision: true", () => {

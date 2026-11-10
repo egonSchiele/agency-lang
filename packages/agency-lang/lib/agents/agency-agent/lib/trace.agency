@@ -76,6 +76,10 @@ callback("onLLMCallEnd") as data {
     pushMessage(
       color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
     )
+  } else if (isTraceEnabled() && (data.result.toolCalls ?? []).length > 0) {
+    // Text written beside tool calls is the model's progress report. A
+    // response with no tool calls is the answer, which the REPL prints.
+    _printAgentTrace({ kind: "narration", text: data.result.output ?? "" })
   }
 }
 

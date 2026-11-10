@@ -6,6 +6,7 @@ import {
   webTools,
   spillTools,
   SAVE_DRAFT_HINT,
+  PROGRESS_NOTE,
   ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
@@ -23,6 +24,10 @@ that span many files. Its built-in tools read files and sources. Use
 
 When called as an LLM tool, the explorer continues the caller's conversation.
 From code, wrap the call in `thread { ... }` when you want an isolated survey.
+
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
 */
 
 static const skills = agentSkill("explorer")
@@ -109,7 +114,7 @@ summary, which is the fastest way to answer "what exists".
   question or apologies for length. Get to the substance.
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
+${PROGRESS_NOTE}${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 
 """
 

@@ -23,6 +23,10 @@ From code, wrap the call in `thread { ... }` to keep its messages out of the
 current thread. GitHub work goes through `githubAgent`, which it carries as a
 tool.
 
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
+
 ## Functions
 
 ### buildTools
@@ -35,7 +39,7 @@ Return the coding agent's built-in tools for inspection or extension.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L68))
 
 ### codingAgent
 
@@ -76,4 +80,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L116))

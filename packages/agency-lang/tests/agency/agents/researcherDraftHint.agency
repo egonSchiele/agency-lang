@@ -1,0 +1,38 @@
+// The instruction to save drafts goes with the saveDraft tool, and it
+// leaves the thread with the call that offered the tool. A second call on
+// the same thread with offerSaveDraft: false is not told to use a tool it
+// does not have.
+import { researcherAgent } from "std::agents/researcher"
+
+let seen: string = ""
+
+callback("onLLMCallStart") as data {
+  let hint = "no hint"
+  for (msg in data.messages) {
+    const text: string = "${msg.content}"
+    if (msg.role == "system" && text.includes("call `saveDraft`")) {
+      hint = "hint"
+    }
+  }
+  let tool = "no tool"
+  for (offered in data.tools) {
+    if (offered.name == "saveDraft") {
+      tool = "tool"
+    }
+  }
+  seen = "${seen}${hint}, ${tool}|"
+}
+
+def rejectEverything(intr) {
+  return reject()
+}
+
+node hintLeavesWithTheTool(): string {
+  thread {
+    handle {
+      researcherAgent(task: "Where is the Eiffel Tower?", maxCost: $1.00, maxTime: 1m)
+      researcherAgent(task: "How tall is it?", maxCost: $1.00, maxTime: 1m, offerSaveDraft: false)
+    } with rejectEverything
+  }
+  return seen
+}

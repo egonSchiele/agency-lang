@@ -2,31 +2,19 @@ import { main, __setLLMClient } from "./agent.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { ToolCall } from "smoltalk";
 
-const todos = [
-  { id: "1", text: "Verify rankings", status: "completed" },
-  { id: "2", text: "Check availability", status: "in_progress" },
-  { id: "3", text: "Compare hardware", status: "pending" },
-];
-const booleanTodos = [
-  { active: false, done: true, text: 'Identify what "Fable 5.1" is and who publishes it' },
-  { active: true, done: false, text: "Read the announcement" },
-  { active: false, done: false, text: "Summarize the findings" },
-];
+const narration = "Checking the release notes and both search providers.";
 const calls = [
-  ["todoWrite", {}],
-  ["todoWrite", { todos }],
   ["echo", { value: "first result" }],
   ["echo", { value: "second result" }],
   ["successful", {}],
   ["failedFixture", {}],
-  ["whatIAmDoing", {}],
   ["read", { filename: "a.md", offset: 1, limit: 20 }],
   ["researchAgent", { userMsg: "Find the original model announcement" }],
   ["web_search_tavily", {}],
   ["web_search_tavily", { query: 'site.example.com "quoted phrase"' }],
   ["web_search_brave", { query: "another query" }],
 ];
-const callRounds = [calls, [["todoWrite", { todos: booleanTodos }]], []];
+const callRounds = [calls, []];
 const hostedToolResults = [
   {
     tool: "web_search",
@@ -49,7 +37,7 @@ function makeClient() {
       return {
         success: true,
         value: {
-          output: requests === callRounds.length ? "done" : null,
+          output: requests === callRounds.length ? "done" : narration,
           toolCalls: callRounds[requests - 1].map(
             ([name, args], index) => new ToolCall(`call-${requests}-${index}`, name, args),
           ),
@@ -92,22 +80,13 @@ for (const [name, mode] of Object.entries(modes)) {
   outputs[name] = printed.join("\n").replace(/\x1b\[[\d;]*m/g, "");
 }
 
-const taskBlock =
-  "✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ Verify rankings\n  │ › Check availability · in progress\n  │ ○ Compare hardware\n";
-const booleanTaskBlock =
-  '✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ Identify what "Fable 5.1" is and who publishes it\n  │ › Read the announcement · in progress\n  │ ○ Summarize the findings\n';
 function blockWith(output, heading) {
   return output.split("\n\n").find((block) => block.split("\n").includes(heading)) ?? "";
 }
 
 function detailed(output) {
   return {
-    oneTaskSnapshot: output.split(taskBlock).length === 2,
-    oneBooleanTaskSnapshot: output.split(booleanTaskBlock).length === 2,
-    noFallbackTodo: !output.includes("· Task result  todoWrite"),
-    noGenericTodo: !/Tool (call|returned|finished|failed)  todoWrite/.test(output),
-    failedTodoVisible: output.includes("✗ Tasks failed  todoWrite\n"),
-    noTodoArgumentRows: !output.includes("  │ todos:"),
+    narrationOnce: output.split(narration).length === 2,
     twoHostedSearches:
       output.split("\n").filter((line) => line === "⌕ Web search  web_search").length === 2,
     hostedQueries: output.includes(
@@ -124,7 +103,6 @@ function detailed(output) {
     unwrappedSuccess: output.includes("✓ Tool finished  successful\n  │ wrapped-ok"),
     unwrappedFailure: output.includes("✗ Tool failed  failedFixture\n  │ fixture failure"),
     failedToolNeverSucceeded: !output.includes("✓ Tool finished  failedFixture"),
-    suppressedWhatIAmDoing: !/Tool (call|returned|finished)  whatIAmDoing/.test(output),
     summaryLine: output.includes("✓ Read a.md lines 1–20"),
     noSummaryStart: !output.includes("● Tool call  read"),
     malformedSearchStaysCustom: output.includes(
@@ -169,9 +147,10 @@ writeFileSync(
       results,
       interactive: detailed(outputs.interactive),
       quietHasNoTraces:
-        !/Tool call|Tool returned|Tool finished|Tool failed|Tasks updated|Tasks failed|Web search|Searching web|→ Research|Research finished|→ researchAgent:|⏺/.test(
+        !/Tool call|Tool returned|Tool finished|Tool failed|Web search|Searching web|→ Research|Research finished|→ researchAgent:|⏺/.test(
           outputs.quiet,
-        ),
+        ) && !outputs.quiet.includes(narration),
+      interactiveNarrationOwnLine: outputs.interactive.split("\n").includes(narration),
       verbose: detailed(outputs.verbose),
       debug: detailed(outputs.debug),
       debugDiagnostics: outputs.debug.includes("💬 [test]"),

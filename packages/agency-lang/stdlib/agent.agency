@@ -1,67 +1,22 @@
 /** @module
-@summary Ask the user questions and track an agent's todo list.
+@summary Ask the user a question and wait for the reply.
 
 Give `question` to an LLM when it needs information only the user can
 provide. Its interrupt lets a terminal, an application, or a handler supply
-the reply. Use `todoWrite` to set a plan and `todoUpdate` to track progress.
+the reply.
 
 ```ts
-import { todoWrite, todoUpdate } from "std::agent"
+import { question } from "std::agent"
 
-todoWrite([{ id: "review", text: "Review the draft", status: "pending" }])
-todoUpdate("review", "completed")
+node main() {
+  const name = question("What should the report be called?")
+  print(name)
+}
 ```
 */
 
-type Todo = {
-  id: string;
-  text: string;
-  status: "pending" | "in_progress" | "completed"
-}
-
-let _todos: Todo[] = []
-
 effect std::question {
   prompt: string
-}
-
-export def todoAdd(todo: Todo): Todo[] {
-  """
-  Add a new todo to the list.
-  """
-  _todos.push(todo)
-  return _todos
-}
-
-export def todoUpdate(
-  id: string,
-  status: "pending" | "in_progress" | "completed",
-): Todo[] {
-  """
-  Update the status of a todo by id.
-  """
-  for (todo in _todos) {
-    if (todo.id == id) {
-      todo.status = status
-      break
-    }
-  }
-  return _todos
-}
-
-export def todoWrite(todos: Todo[]): Todo[] {
-  """
-  Replace the current todo list.
-  """
-  _todos = todos
-  return _todos
-}
-
-export def todoList(): Todo[] {
-  """
-  Return the current todo list.
-  """
-  return _todos
 }
 
 /** Use this for user input in terminal, hosted, or embedded runs.

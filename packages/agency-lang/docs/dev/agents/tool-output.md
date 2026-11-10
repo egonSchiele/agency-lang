@@ -9,11 +9,7 @@
 ✗ Grep "registers" in docs/dev/llm
   │ Tool call rejected: policy
 
-✓ Tasks updated  todoWrite
-  │ 1/3 complete
-  │ ✓ Verify rankings
-  │ › Check availability · in progress
-  │ ○ Compare hardware
+Checking the release notes before searching.
 
 ⌕ Web search  web_search
   │ openai-responses · 1 query
@@ -61,7 +57,7 @@ argument has the statelog log and `--debug`.
    tools, Claude skill tools) use it by design.
 10. **Hand-written display code is the last resort.** A tool gets a custom
     describe function only when its output has a shape the summary row
-    cannot express. Today those are todo lists, searches, and subagents.
+    cannot express. Today those are searches and subagents.
 
 Adding a tool to an agent toolkit means adding a row to
 `TOOL_PRESENTATIONS` in `lib/stdlib/agentToolTrace.ts`. The test
@@ -102,12 +98,12 @@ rails, and ANSI styling. Tool-specific functions do not calculate widths
 or emit ANSI codes.
 
 A presentation owns both start and end behavior. `TOOL_PRESENTATIONS` maps
-a tool's model-facing name (after any `.rename()`) to one of four kinds:
-`tasks` and `agent` are the hand-written todo and subagent displays,
-`silent` prints nothing (`question`, `saveDraft`, `whatIAmDoing`), and
-`summary` is the one most tools use. Provider labels select the search
-presentation. Generic formatting applies only when no presentation matches.
-Malformed custom data stays in its custom block.
+a tool's model-facing name (after any `.rename()`) to one of three kinds:
+`agent` is the hand-written subagent display, `silent` prints nothing
+(`question`, `saveDraft`), and `summary` is the one most tools use.
+Provider labels select the search presentation. Generic formatting
+applies only when no presentation matches. Malformed custom data stays in
+its custom block.
 
 A `summary` row is data: a `label`, a `show` function that builds the parts
 after the label from the call's arguments, `twoLines`, and a `result`
@@ -129,7 +125,7 @@ renderer never pairs them with starts in code; a reader pairs them by eye.
 
 Summary lines carry no tool name. Under `--debug`, `trace.agency` passes
 `toolNames` and the registered name is appended in dim text, which is how a
-reader finds the call in the log. The generic, todo, search, and subagent
+reader finds the call in the log. The generic, search, and subagent
 headings keep the name always, since it is their only label.
 
 `readSpill` and `grepSpill` show `output of <source>` in place of the saved
@@ -149,16 +145,18 @@ after it. The Agency bridge reads `currentHost()` before delegating.
 
 ## Display rules
 
-The four todo operations print no start block. A successful result containing
-a valid list prints
-every task in its original order, including repeated snapshots.
-Completed tasks have a green check and dim strikethrough text. Active tasks
-use blue text and an explicit status label. Plain output keeps the markers
-and words. The renderer accepts the declared `id`/`text`/`status` fields and
-model-supplied lists with `text`, `done`, and `active` fields. A true `done`
-flag marks a task completed even when `active` is also true.
-Empty lists show `0/0 complete` and `No tasks`. Failures show a named
-`Tasks failed` block; malformed returned lists show `Task result`.
+A narration event is the text a model wrote in the same response as its
+tool calls, such as "Checking the release notes before searching." It is
+how the agents report progress. `trace.agency` sends one from
+`onLLMCallEnd` when the response has tool calls, and prints it as one dim
+block before the calls' own lines. A response with no tool calls is the
+answer, which the REPL prints. Under `--verbose` or `--debug` the whole
+response is already printed as a diagnostic, so no narration event is sent.
+
+No agent has a status tool. A model calls a status tool alone in a
+response often enough that the rounds add up, and each one costs a full
+model call for one line of status. Text beside a tool call costs nothing
+extra.
 
 Hosted searches print when `onLLMCallEnd` receives their records. Their
 neutral heading does not claim successful retrieval. Each nonblank query

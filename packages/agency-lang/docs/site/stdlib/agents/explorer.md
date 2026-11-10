@@ -12,6 +12,10 @@ that span many files. Its built-in tools read files and sources. Use
 When called as an LLM tool, the explorer continues the caller's conversation.
 From code, wrap the call in `thread { ... }` when you want an isolated survey.
 
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
+
 ## Functions
 
 ### buildTools
@@ -24,7 +28,7 @@ Return the explorer's file, source, and web lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L123))
 
 ### explorerAgent
 
@@ -66,4 +70,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L164))

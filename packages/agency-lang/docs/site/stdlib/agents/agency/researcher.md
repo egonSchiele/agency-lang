@@ -30,7 +30,7 @@ Return bundled documentation, project lookup, and Agency source-checking tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L43))
 
 ### agencyResearcherAgent
 
@@ -45,6 +45,7 @@ agencyResearcherAgent(
   provider: string = "",
   extraTools: any[] = [],
   keepDraft: boolean = true,
+  offerSaveDraft: boolean = true,
 ): Result<string>
 ```
 
@@ -63,9 +64,10 @@ Answer a question about the Agency language from the bundled documentation,
 | provider | `string` | "" | Provider for the model override, ignored when model is empty. |
 | extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
 | keepDraft | `boolean` | true | False returns a budget failure even when a draft was saved. |
+| offerSaveDraft | `boolean` | true | False keeps `saveDraft` out of the model's tools, for a caller that never reads the draft. |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L70))

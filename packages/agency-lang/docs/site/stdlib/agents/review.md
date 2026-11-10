@@ -14,6 +14,10 @@ the time or cost budget cut short returns the findings it saved. Pass
 `failOpen: false` when either outcome must be reported as a failure. The
 saved findings are then in the failure's data as `draft`.
 
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
+
 ## Functions
 
 ### buildTools
@@ -26,7 +30,7 @@ Return the reviewer's web and GitHub lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L41))
 
 ### reviewAgent
 
@@ -66,4 +70,4 @@ Review a work product against a task and return satisfied points and problems.
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L81))

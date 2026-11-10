@@ -40,15 +40,21 @@ export type AgentStartEvent = {
   message: string;
 };
 export type SessionSaveFailureEvent = { kind: "sessionSaveFailure"; message: string };
+/** Text a model wrote in the same response as its tool calls. */
+export type NarrationEvent = { kind: "narration"; text: string };
 export type AgentTraceEvent =
-  ToolStartEvent | ToolEndEvent | HostedSearchEvent | AgentStartEvent | SessionSaveFailureEvent;
+  | ToolStartEvent
+  | ToolEndEvent
+  | HostedSearchEvent
+  | AgentStartEvent
+  | SessionSaveFailureEvent
+  | NarrationEvent;
 
-type TraceStyle = "heading" | "muted" | "completed" | "active" | "success" | "error" | "warning";
+type TraceStyle = "heading" | "muted" | "active" | "success" | "error" | "warning";
 type TraceSpan = { text: string; style?: TraceStyle; bold?: boolean; limit?: number };
 type TraceRow = { spans: TraceSpan[]; marker?: TraceSpan };
 type TraceBlock = { heading: TraceSpan[]; rows: TraceRow[] };
 type ToolEvent = ToolStartEvent | ToolEndEvent;
-type TaskPresentation = { kind: "tasks"; heading: TraceSpan };
 type AgentPresentation = { kind: "agent"; label: string };
 /** A tool that prints nothing: its interrupt prompt or its own output is the display. */
 type SilentPresentation = { kind: "silent" };
@@ -80,8 +86,7 @@ type SummaryPresentation = {
   result: ResultSummary;
   failure?: FailureSummary;
 };
-type ToolPresentation =
-  TaskPresentation | AgentPresentation | SilentPresentation | SummaryPresentation;
+type ToolPresentation = AgentPresentation | SilentPresentation | SummaryPresentation;
 type SearchSource = { url: string; title?: string };
 type SearchPhase = "started" | "completed" | "reported" | "failed";
 type SearchDescription = {
@@ -101,6 +106,8 @@ const KILOBYTE = 1000;
 const SPILL_NOTICE_PREFIX = "[Output";
 const ARGUMENT_PREVIEW_LENGTH = 50;
 const RESULT_PREVIEW_LENGTH = 100;
+/** A model sometimes drafts its whole answer beside a last tool call. */
+const NARRATION_PREVIEW_LENGTH = 300;
 const SOURCE_PREVIEW_COUNT = 5;
 const TAB_WIDTH = 4;
 const BODY_PREFIX = "  │ ";
@@ -301,10 +308,6 @@ const silent: SilentPresentation = { kind: "silent" };
 // row gets the generic display: every argument at start, a preview at end.
 // See docs/dev/agents/tool-output.md for the rules behind each row.
 const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
-  todoWrite: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
-  todoAdd: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
-  todoUpdate: { kind: "tasks", heading: { text: "✓ Tasks updated", style: "success" } },
-  todoList: { kind: "tasks", heading: { text: "Tasks", style: "heading" } },
   researchAgent: { kind: "agent", label: "Research" },
   codeAgent: { kind: "agent", label: "Code" },
   agencyCodeAgent: { kind: "agent", label: "Agency code" },
@@ -428,7 +431,6 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   // Nothing to show: the interrupt prompt or the tool's own print is the display
   saveDraft: silent,
   question: silent,
-  whatIAmDoing: silent,
 
   // Images
   generateImageFile: two("Generate image", (a) => [prefixed("→ ", a.path)]),
@@ -462,18 +464,6 @@ const SEARCH_HEADINGS: Record<SearchPhase, TraceSpan> = {
   completed: { text: "✓ Web search", style: "success" },
   reported: { text: "⌕ Web search", style: "muted" },
   failed: { text: "✗ Web search", style: "error" },
-};
-type TodoStatus = "pending" | "in_progress" | "completed";
-type Todo = { text: string; status: TodoStatus };
-type TodoPresentation = { marker: TraceSpan; style?: TraceStyle; suffix: string };
-const TODO_STATUSES: Record<TodoStatus, TodoPresentation> = {
-  pending: { marker: { text: "○", style: "muted" }, suffix: "" },
-  in_progress: {
-    marker: { text: "›", style: "active" },
-    style: "active",
-    suffix: " · in progress",
-  },
-  completed: { marker: { text: "✓", style: "success" }, style: "completed", suffix: "" },
 };
 
 function columnsOrDefault(columns: number | undefined): number {
@@ -535,7 +525,23 @@ function describeEvent(event: AgentTraceEvent, options: TraceOptions): TraceBloc
         heading: [{ text: "! Session not saved", style: "warning", bold: true }],
         rows: [{ spans: [{ text: event.message }] }],
       };
+    case "narration":
+      return describeNarration(event.text);
   }
+}
+
+/** The first paragraph, cut to a preview; `--verbose` prints the whole response. */
+function describeNarration(text: string): TraceBlock | null {
+  const paragraphs = text.trim().split(/\n\s*\n/);
+  const first = paragraphs[0];
+  if (first === "") {
+    return null;
+  }
+  const shown = paragraphs.length > 1 ? `${first} …` : first;
+  return {
+    heading: [{ text: shown, style: "muted", limit: NARRATION_PREVIEW_LENGTH }],
+    rows: [],
+  };
 }
 
 function presentationFor(toolName: string): ToolPresentation | undefined {
@@ -558,15 +564,6 @@ function describeToolEvent(event: ToolEvent, options: TraceOptions): TraceBlock 
   }
   if (event.kind === "toolStart") {
     return null;
-  }
-  if (presentation.kind === "tasks") {
-    if (event.outcome === "failure") {
-      return describeToolEnd(event, { text: "✗ Tasks failed", style: "error" });
-    }
-    const todos = readTodos(event.value);
-    return todos !== null
-      ? describeTodos(event.toolName, todos, presentation.heading)
-      : describeToolEnd(event, { text: "· Task result", style: "muted" });
   }
   const elapsed = elapsedText(event.timeTaken);
   const finished = elapsed === null ? "finished" : `finished · ${elapsed}`;
@@ -665,62 +662,6 @@ function describeSummary(
     ],
     rows:
       settled.detail === null ? [] : [{ spans: [{ text: settled.detail, style: detailStyle }] }],
-  };
-}
-
-function readTodos(value: unknown): Todo[] | null {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-  const todos = Array.from(value, readTodo);
-  return todos.every((todo) => todo !== null) ? todos : null;
-}
-
-function readTodo(value: unknown): Todo | null {
-  if (!isPlainObject(value) || typeof value.text !== "string") {
-    return null;
-  }
-  if (
-    typeof value.id === "string" &&
-    typeof value.status === "string" &&
-    Object.hasOwn(TODO_STATUSES, value.status)
-  ) {
-    return { text: value.text, status: value.status as TodoStatus };
-  }
-  // Model-supplied lists can use done/active flags instead of the declared status.
-  if (typeof value.done !== "boolean" || typeof value.active !== "boolean") {
-    return null;
-  }
-  let status: TodoStatus;
-  if (value.done) {
-    status = "completed";
-  } else if (value.active) {
-    status = "in_progress";
-  } else {
-    status = "pending";
-  }
-  return { text: value.text, status };
-}
-
-function describeTodos(toolName: string, todos: Todo[], heading: TraceSpan): TraceBlock {
-  const complete = todos.filter((todo) => todo.status === "completed").length;
-  const rows: TraceRow[] = todos.map((todo) => {
-    const presentation = TODO_STATUSES[todo.status];
-    return {
-      marker: presentation.marker,
-      spans: [
-        { text: todo.text, style: presentation.style },
-        { text: presentation.suffix, style: "muted" },
-      ],
-    };
-  });
-  const taskRows = todos.length === 0 ? [{ spans: [{ text: "No tasks" }] }] : rows;
-  return {
-    heading: toolHeading(heading, toolName),
-    rows: [
-      { spans: [{ text: `${complete}/${todos.length} complete`, style: "muted" }] },
-      ...taskRows,
-    ],
   };
 }
 
@@ -898,7 +839,6 @@ function renderSpan(span: TraceSpan, options: TraceOptions): string {
   const styles = {
     heading: palette.bold,
     muted: palette.dim,
-    completed: palette.dim.strikethrough,
     active: palette.blue,
     success: palette.green,
     error: palette.red,

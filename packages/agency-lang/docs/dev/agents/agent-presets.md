@@ -16,6 +16,7 @@ Paths are relative to `lib/agents/agency-agent/`.
 | `lib/presets.agency` | The in-memory preset table, the startup choice, the active preset, the listing, and `applyPresetEdit`. |
 | `lib/modelRequest.agency` | `ModelRequest`: startup flags, active preset, `/model` choices. Pure helpers that turn it into layers. |
 | `lib/toolLimits.agency` | The two tool limits and where each value comes from. |
+| `lib/effort.agency` | The reasoning effort choices, the built-in default per model, and the level a run sends. |
 | `lib/session.agency` | `applyModelRequest`, `pickModelsForAgent`, `switchModel`, `switchPreset`. |
 | `brains/coordinator/presetTools.agency` | The four tools and `editPresets`, the only code that writes presets to disk. |
 | `brains/coordinator/skills/presets.md` | The skill that tells the model how to use the tools. |
@@ -108,8 +109,8 @@ or a plain file write, so the header is the one place every path shows
 up. A one-shot run prints no header, so it does not show the line.
 
 Keys with another owner are refused. `model`, `provider`, and the two tool
-limits have fields of their own, `reasoningEffort` comes from `--effort`,
-and `maxTokens` comes from the capabilities settings. `rawAttributes` is
+limits have fields of their own, `reasoningEffort` comes from the effort
+rule below, and `maxTokens` comes from the capabilities settings. `rawAttributes` is
 refused until smoltalk stops it from replacing the model (smoltalk#73).
 
 `requestLlmOptions` picks the block: the session's, then the preset's, then
@@ -125,7 +126,7 @@ models. They call `setLlmOptions` with every key in `LLM_OPTION_KEYS` set to
 defaults, so switching from a preset with an `openRouter` block to one
 without leaves no `openRouter` behind. The nulls stop at `LLM_OPTION_KEYS`,
 which is why a key with another owner cannot be in the block: every switch
-would undo `--effort` or the token cap.
+would undo the effort or the token cap.
 
 `setLlmOptions` sets defaults for every `llm()` call, so the block reaches
 every model the agent calls, the coordinator's and the subagents'. Most keys
@@ -143,6 +144,45 @@ and a branch's defaults are dropped when it joins. It records a request with
 `requestSessionLlmOptions` instead, and the REPL applies it after the turn
 with `applySessionLlmOptions`. `savePreset` takes the same block through
 `PresetInput`.
+
+## Reasoning effort
+
+A reasoning model takes a level that says how hard to think. One level
+goes out with every `llm()` call of the session, as `reasoningEffort`.
+`effortToSend` in `lib/effort.agency` picks it from three sources, first
+one set wins:
+
+1. `--effort`, kept on `ModelFlags.effort`.
+2. The active preset's `effort` field.
+3. The built-in default for the session's models.
+
+The flag and the preset take `low`, `medium`, `high`, or `default`.
+`default` sends no level, so the provider uses its own. It is the only
+way to get a level Agency cannot name, such as GLM 5.3's `max`.
+
+`--effort` is not a model flag. `hasModelFlags` ignores it, so
+`--preset glm --effort low` keeps the preset's models. A real model flag
+drops the preset's effort along with its models and its `llmOptions`,
+because the effort was chosen for those models.
+
+The built-in default is the table `DEFAULT_EFFORT_RULES`. Each row names a
+provider, a model id prefix, and a level. The table holds the models whose
+provider thinks at its top level when no level is sent: GLM 5.3 and
+Kimi K3 on OpenRouter, which both default to `max`. Their row says `high`.
+In a replay of 18 logged agent calls on GLM 5.3 Flash, `high` took 43% less
+time than `max`, and Z.ai's coding benchmark puts `high` 3 points below
+`max`. OpenRouter lists each model's levels and its default at
+`https://openrouter.ai/api/v1/models`, under `reasoning`.
+
+`defaultEffort` returns a level only when every chat model of the session
+matches a row with the same level. The level is one setting for all calls,
+so a session that pairs GLM 5.3 with a model outside the table gets no
+default, and each provider uses its own.
+
+`applyRequestOptions` in `lib/session.agency` sets the level, right after
+the `llmOptions` block. Startup, `/model`, and `/preset` all go through it,
+so the level follows the models: switching from GLM 5.3 to a model with no
+row sets `reasoningEffort` to `null`, which removes it.
 
 ## Why the presets are read once
 

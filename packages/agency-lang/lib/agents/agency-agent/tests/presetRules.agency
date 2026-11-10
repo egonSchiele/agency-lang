@@ -120,3 +120,11 @@ node presetLlmOptionsNotAnObject(): string[] {
 node localPresetWithLlmOptions(): string[] {
   return presetProblems("offline", { local: "qwen3.5-2b", llmOptions: { replyLimits: { hedgeLimit: 4 } } }, false)
 }
+
+node presetWithEffort(): string[] {
+  return presetProblems("glm", { provider: "openrouter", pin: "z-ai/glm-5.3-flash", effort: "default" }, true)
+}
+
+node presetWithUnknownEffort(): string[] {
+  return presetProblems("glm", { pin: "z-ai/glm-5.3-flash", effort: "max" }, true)
+}

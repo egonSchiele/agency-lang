@@ -8,6 +8,7 @@ import {
   noModelChoices,
   noModelFlags,
   presetModelSettings,
+  requestEffort,
   requestLayers,
   requestLlmOptions,
   requestProvider,
@@ -204,4 +205,37 @@ node aModelFlagDropsThePresetOptions(): string {
 
 node aLocalPresetKeepsItsOptions(): string {
   return optionsFor(noModelFlags(), { local: "qwen3.5-2b", llmOptions: WARM }, noModelChoices(), {})
+}
+
+def effortFor(flags: ModelFlags, preset: any): string {
+  return "${requestEffort(request(flags, preset, noModelChoices()))}"
+}
+
+node effortFlagBeatsThePreset(): string {
+  return effortFor({ ...noModelFlags(), effort: "low" }, { pin: "p", effort: "high" })
+}
+
+node presetEffortWhenThereIsNoFlag(): string {
+  return effortFor(noModelFlags(), { pin: "p", effort: "high" })
+}
+
+// The preset's effort was chosen for its models, so it goes with them.
+node aModelFlagDropsThePresetEffort(): string {
+  return effortFor(withPin("claude-opus-4-8"), { pin: "p", effort: "high" })
+}
+
+node noEffortAnywhere(): string {
+  return effortFor(noModelFlags(), { pin: "p" })
+}
+
+node effortFromArgs(): string {
+  const parsed = modelFlagsFromArgs({ flags: { effort: "High" }, positionals: [] })
+  if (isFailure(parsed)) {
+    return "failed"
+  }
+  return "${parsed.value.effort}"
+}
+
+node badEffortIsAnError(): boolean {
+  return isFailure(modelFlagsFromArgs({ flags: { effort: "max" }, positionals: [] }))
 }

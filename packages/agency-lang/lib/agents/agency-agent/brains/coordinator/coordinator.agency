@@ -227,6 +227,20 @@ type TurnRoute = {
   text: string
 }
 
+// The message when the prompt is plain text, else "". The harness sends the
+// main target [message, ...attachments], so one part is a plain message.
+def plainText(prompt: string | (string | Attachment)[]): string {
+  return match(prompt) {
+    plain: string => plain
+    parts: (string | Attachment)[] => {
+      if (parts.length == 1) {
+        return "${parts[0]}"
+      }
+      return ""
+    }
+  }
+}
+
 // Which agent takes the turn. Only a plain-text message of a routable
 // length is asked about, and only when the router slot is set. See
 // docs/dev/agents/agent-router.md.
@@ -235,10 +249,7 @@ def routeFor(
   user: UserTools,
   turnStart: any,
 ): TurnRoute {
-  const text = match(prompt) {
-    plain: string => plain
-    _ => ""
-  }
+  const text = plainText(prompt)
   const model = getRouterModel()
   if (model == "" || text == "" || text.length > ROUTE_MAX_CHARS) {
     return {

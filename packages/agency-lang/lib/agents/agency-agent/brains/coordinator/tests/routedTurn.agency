@@ -78,6 +78,8 @@ def mainThread(): any[] {
   return []
 }
 
+// Each turn sends what the harness sends the main target:
+// [message, ...attachments] (dispatchToBrain in lib/turn.agency).
 // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).
 def startBrain(): any {
   const brain = coordinatorBrain()
@@ -91,7 +93,7 @@ def startBrain(): any {
 
 node slotUnsetAsksNoRouter(): string {
   const turn = startBrain()
-  const reply = turn("", "find the release date of node 24") with approve
+  const reply = turn("", ["find the release date of node 24"]) with approve
   return "${reply}|${routerRequests()}"
 }
 
@@ -101,7 +103,7 @@ node slotUnsetAsksNoRouter(): string {
 node confidentResearchGoesToTheResearcher(): string {
   const turn = startBrain()
   setRouter()
-  const reply = turn("", "find the release date of node 24") with approve
+  const reply = turn("", ["find the release date of node 24"]) with approve
   const second = requests[1]
   const isResearcher = countStarting(second, RESEARCHER_PERSONA) == 1
   const taskIsTheMessage = includesText(lastMessage(second), "find the release date of node 24")
@@ -111,7 +113,7 @@ node confidentResearchGoesToTheResearcher(): string {
 node confidentCodeGoesToTheCoder(): string {
   const turn = startBrain()
   setRouter()
-  const reply = turn("", "add a --verbose flag to the build script") with approve
+  const reply = turn("", ["add a --verbose flag to the build script"]) with approve
   const taskIsTheMessage = includesText(
     lastMessage(requests[1]),
     "add a --verbose flag to the build script",
@@ -122,7 +124,7 @@ node confidentCodeGoesToTheCoder(): string {
 node coordinatorRouteRunsTheCoordinator(): string {
   const turn = startBrain()
   setRouter()
-  const reply = turn("", "hello there") with approve
+  const reply = turn("", ["hello there"]) with approve
   return "${reply}|${requests.length}|${routerRequests()}|${isRouterRequest(requests[1])}"
 }
 
@@ -140,7 +142,7 @@ node aLongMessageIsNotRouted(): string {
   for (i in range(0, 900)) {
     long = "${long}0123456789"
   }
-  const reply = turn("", long) with approve
+  const reply = turn("", [long]) with approve
   return "${reply}|${routerRequests()}"
 }
 
@@ -149,7 +151,7 @@ node aLongMessageIsNotRouted(): string {
 node theQuestionNamesTheCoordinatorsTools(): string {
   const turn = startBrain()
   setRouter()
-  const reply = turn("", "hello there") with approve
+  const reply = turn("", ["hello there"]) with approve
   const question = contentOf(lastMessage(requests[0]))
   const toolsLine = question.substring(question.indexOf("Its other tools:"))
   return "${toolsLine.includes("oracleAgent")}|${toolsLine.includes("researchAgent")}|${toolsLine.includes("codeAgent,")}"
@@ -161,7 +163,7 @@ node theQuestionNamesTheCoordinatorsTools(): string {
 node aRoutedTurnLeavesNoPersona(): string {
   const turn = startBrain()
   setRouter()
-  const reply = turn("", "find the release date of node 24") with approve
+  const reply = turn("", ["find the release date of node 24"]) with approve
   const messages = mainThread()
   const systems = [message for message in messages if message.role == "system"]
   const personas = countStarting(messages, RESEARCHER_PERSONA)
@@ -174,8 +176,8 @@ node aRoutedTurnLeavesNoPersona(): string {
 node theNextTurnSeesTheRoutedTurn(): string {
   const turn = startBrain()
   setRouter()
-  const first = turn("", "find the release date of node 24") with approve
-  const second = turn("", "and the one before it?") with approve
+  const first = turn("", ["find the release date of node 24"]) with approve
+  const second = turn("", ["and the one before it?"]) with approve
   const coordinator = requests[requests.length - 1]
   const sawPrompt = countIncluding(coordinator, "find the release date of node 24") > 0
   const sawReply = ([message for message in coordinator if message.content == first]).length
@@ -189,6 +191,6 @@ node theNextTurnSeesTheRoutedTurn(): string {
 node aResumedTurnDoesNotAskAgain(): string {
   const turn = startBrain()
   setRouter()
-  const reply = turn("", "summarize the notes file")
+  const reply = turn("", ["summarize the notes file"])
   return "${reply}|${routerRequests()}"
 }

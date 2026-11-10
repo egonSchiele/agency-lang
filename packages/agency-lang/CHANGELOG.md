@@ -1,3 +1,6 @@
+## Nov 10 2026 — v0.39.1
+- Fix memory leak in local models hosting: stop cache_arrays from keeping each step's arrays alive.
+
 ## Nov 10 2026 — v0.39.0
 
 Highlights: `async` keyword, lots of bugs fixed, better support for decision models, Agency agent uses Jev to route messages quicker.

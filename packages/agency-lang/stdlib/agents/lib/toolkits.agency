@@ -70,6 +70,20 @@ node main() {
   print(answer)
 }
 ```
+
+No bundle has a status tool. An agent whose prompt includes
+`PROGRESS_NOTE` reports progress in a sentence it writes beside each tool
+call, and nothing prints that sentence by default. To show it, register an
+`onLLMCallEnd` callback. `agency agent` does this in its trace.
+
+```ts
+callback("onLLMCallEnd") as data {
+  const calls = data.result.toolCalls ?? []
+  if (calls.length > 0 && data.result.output != null && data.result.output != "") {
+    print(data.result.output)
+  }
+}
+```
 */
 
 // Every bundle is a function rather than a constant, matching searchTools()
@@ -314,7 +328,7 @@ export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budge
 
 // A model often calls `saveDraft` alone in a response, and each such call
 // costs a model round. When nothing reads the draft, the round buys nothing.
-// These two give the tool and the instruction to use it together, or neither.
+// An agent that offers the tool also gives the model SAVE_DRAFT_HINT.
 export def draftTools(offer: boolean): any[] {
   """
   Return the `saveDraft` tool, or no tools when `offer` is false.
@@ -325,16 +339,4 @@ export def draftTools(offer: boolean): any[] {
     return [saveDraft]
   }
   return []
-}
-
-export def draftHint(offer: boolean): string {
-  """
-  Return the prompt text that tells a model to save drafts, or "" when `offer` is false.
-
-  @param offer - Whether a caller reads the agent's draft when its budget runs out.
-  """
-  if (offer) {
-    return SAVE_DRAFT_HINT
-  }
-  return ""
 }

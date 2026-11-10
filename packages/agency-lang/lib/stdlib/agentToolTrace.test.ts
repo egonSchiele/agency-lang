@@ -187,6 +187,19 @@ describe("narration", () => {
     expect(formatAgentTrace({ kind: "narration", text: " \n " }, plain)).toBe("");
   });
 
+  it("shows only the first paragraph, marked as cut", () => {
+    const output = formatAgentTrace(
+      { kind: "narration", text: "Checking the sources.\n\nHere is a draft of the answer." },
+      plain,
+    );
+    expect(output).toBe("Checking the sources. …");
+  });
+
+  it("cuts a long first paragraph to 300 characters", () => {
+    const output = formatAgentTrace({ kind: "narration", text: "a".repeat(5000) }, plain);
+    expect(output.replace(/\n\s*/g, "")).toBe("a".repeat(300) + "…");
+  });
+
   it("wraps a long plan to the terminal width and strips control sequences", () => {
     const text = "1. Read the parser.\n2. " + "step ".repeat(30) + "\x1b[2J";
     const output = formatAgentTrace({ kind: "narration", text }, { columns: 40, color: false });

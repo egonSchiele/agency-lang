@@ -79,7 +79,7 @@
     },
     {
       "nodeName": "draftToolsFollowOffer",
-      "description": "draftTools and draftHint give saveDraft and its hint together, or neither",
+      "description": "draftTools gives saveDraft when offered and no tools otherwise",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

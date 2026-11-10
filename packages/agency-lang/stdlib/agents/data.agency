@@ -37,6 +37,10 @@ node main() {
   print(dataAgent("Find the latest reported US unemployment rate and cite its series"))
 }
 ```
+
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
 */
 
 static const systemPrompt = """You answer questions using structured public-data APIs.

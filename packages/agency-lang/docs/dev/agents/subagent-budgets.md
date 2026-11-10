@@ -193,11 +193,13 @@ above carries the draft in its data, and nothing in the agent reads it:
 `replyText` and the tool loop show only the message. A model often calls
 `saveDraft` alone in a response, so each call would be a model round that
 buys nothing. `researchAgent` passes `offerSaveDraft: false` to both
-researchers, which then build their tools and prompt with
-`draftTools(offerSaveDraft)` and `draftHint(offerSaveDraft)`
-(`stdlib/agents/lib/toolkits.agency`). Those give the tool and the
-instruction to use it together, or neither. A caller that reads
-`draft` from the failure leaves `offerSaveDraft` at its default, true.
+researchers, which then leave `saveDraft` out of their tools
+(`draftTools(offerSaveDraft)` in `stdlib/agents/lib/toolkits.agency`).
+A caller that reads `draft` from the failure leaves `offerSaveDraft` at
+its default, true. The researcher then adds `SAVE_DRAFT_HINT` as a system
+message with `expires: "llmCall"`, so the instruction leaves the thread
+with the call that offered the tool. A second call on the same thread
+with `offerSaveDraft: false` is not told to use a tool it lacks.
 
 **Known gap: a trip during `sleep()` bypasses the handler** (ticket
 ADI-137). A time guard that fires while `sleep()` is running cancels the

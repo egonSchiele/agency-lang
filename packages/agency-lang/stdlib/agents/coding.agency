@@ -37,6 +37,10 @@ When called as an LLM tool, `codingAgent` continues the caller's conversation.
 From code, wrap the call in `thread { ... }` to keep its messages out of the
 current thread. GitHub work goes through `githubAgent`, which it carries as a
 tool.
+
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
 */
 
 static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.

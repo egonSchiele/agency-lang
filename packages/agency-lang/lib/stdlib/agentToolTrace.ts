@@ -106,6 +106,8 @@ const KILOBYTE = 1000;
 const SPILL_NOTICE_PREFIX = "[Output";
 const ARGUMENT_PREVIEW_LENGTH = 50;
 const RESULT_PREVIEW_LENGTH = 100;
+/** A model sometimes drafts its whole answer beside a last tool call. */
+const NARRATION_PREVIEW_LENGTH = 300;
 const SOURCE_PREVIEW_COUNT = 5;
 const TAB_WIDTH = 4;
 const BODY_PREFIX = "  │ ";
@@ -523,11 +525,23 @@ function describeEvent(event: AgentTraceEvent, options: TraceOptions): TraceBloc
         heading: [{ text: "! Session not saved", style: "warning", bold: true }],
         rows: [{ spans: [{ text: event.message }] }],
       };
-    case "narration": {
-      const text = event.text.trim();
-      return text === "" ? null : { heading: [{ text, style: "muted" }], rows: [] };
-    }
+    case "narration":
+      return describeNarration(event.text);
   }
+}
+
+/** The first paragraph, cut to a preview; `--verbose` prints the whole response. */
+function describeNarration(text: string): TraceBlock | null {
+  const paragraphs = text.trim().split(/\n\s*\n/);
+  const first = paragraphs[0];
+  if (first === "") {
+    return null;
+  }
+  const shown = paragraphs.length > 1 ? `${first} …` : first;
+  return {
+    heading: [{ text: shown, style: "muted", limit: NARRATION_PREVIEW_LENGTH }],
+    rows: [],
+  };
 }
 
 function presentationFor(toolName: string): ToolPresentation | undefined {

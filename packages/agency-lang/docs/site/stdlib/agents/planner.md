@@ -13,6 +13,10 @@ A source-generation failure invokes `codingAgent` directly.
 Use `codingAgent` for a task that does not need a generated orchestration
 program. An optional `plan` skips the initial planning call.
 
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
+
 ## Effects
 
 ### std::agents::planApprove
@@ -28,7 +32,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L40))
 
 ## Functions
 
@@ -42,7 +46,7 @@ Return the planner's project lookup, skill, and communication tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L32))
 
 ### planCodePrompt
 
@@ -61,7 +65,7 @@ Build an instruction to generate an Agency program for a task and plan.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L79))
 
 ### renderEffects
 
@@ -79,7 +83,7 @@ Render detected interrupt effects for approval, or explain that analysis failed.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L108))
 
 ### runApproved
 
@@ -109,7 +113,7 @@ Show a generated plan and source for approval, then run and verify it if approve
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L197))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L201))
 
 ### plannerAgent
 
@@ -151,4 +155,4 @@ Generate an Agency program that composes agents to solve a complex task,
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L240))

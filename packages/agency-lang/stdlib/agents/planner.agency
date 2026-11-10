@@ -21,6 +21,10 @@ A source-generation failure invokes `codingAgent` directly.
 
 Use `codingAgent` for a task that does not need a generated orchestration
 program. An optional `plan` skips the initial planning call.
+
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
 */
 
 static const skills = agentSkill("planner")

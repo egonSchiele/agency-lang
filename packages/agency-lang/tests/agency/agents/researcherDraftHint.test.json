@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "hintLeavesWithTheTool",
+      "description": "a second call on the same thread with offerSaveDraft: false sees neither the saveDraft tool nor the instruction to use it",
+      "input": "",
+      "expectedOutput": "\"hint, tool|no hint, no tool|\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "researcher": [
+          { "return": "It is in Paris, on the Champ de Mars (https://example.com/eiffel)." },
+          { "return": "It is 330 metres tall, antennas included (https://example.com/height)." }
+        ]
+      }
+    }
+  ]
+}

@@ -11,7 +11,6 @@ import {
   memoryTools,
   spillTools,
   draftTools,
-  draftHint,
  } from "std::agents/lib/toolkits"
 import { buildTools as codingTools } from "std::agents/coding"
 import { buildTools as researcherTools } from "std::agents/researcher"
@@ -169,13 +168,11 @@ node noBundleHasDuplicateNames(): boolean {
   return true
 }
 
-// An agent whose draft nobody reads offers no saveDraft and no prompt text
-// asking for one; any other agent gets both.
+// An agent whose draft nobody reads offers no saveDraft.
 node draftToolsFollowOffer(): boolean {
   const offered = map(draftTools(true), \tool -> tool.name)
-  const offeredBoth = offered.length == 1 && offered[0] == "saveDraft" && draftHint(true) != ""
-  const offeredNeither = draftTools(false).length == 0 && draftHint(false) == ""
-  return offeredBoth && offeredNeither
+  const offeredOne = offered.length == 1 && offered[0] == "saveDraft"
+  return offeredOne && draftTools(false).length == 0
 }
 
 // The wikipedia tools must not advertise a bare `search`, which collides with

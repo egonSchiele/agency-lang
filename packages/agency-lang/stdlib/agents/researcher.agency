@@ -1,6 +1,6 @@
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools, spillTools, draftHint, draftTools, ASK_USER_HINT, PROGRESS_NOTE } from "std::agents/lib/toolkits"
+import { webTools, spillTools, draftTools, ASK_USER_HINT, PROGRESS_NOTE, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
@@ -8,6 +8,7 @@ import {
   ThreadMessage,
   assistantMessage,
   ensureSystemMessage,
+  systemMessage,
   threadIsNew,
   userMessage,
  } from "std::thread"
@@ -24,7 +25,12 @@ if that follow-up is blank. No separate reviewer checks the answer.
 As an LLM tool, this handoff continues the caller's conversation. From code,
 use a `thread` block to isolate the research. `keepDraft: false` makes a
 budget stop a failure even when a draft is available. The draft is then in
-the failure's data as `draft`.
+the failure's data as `draft`. Pass `offerSaveDraft: false` as well when
+nothing reads that draft, so the model spends no rounds saving one.
+
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
 */
 
 static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
@@ -88,7 +94,7 @@ def research(
   const fresh = threadIsNew()
   // A handoff runs on the caller's thread, which may already hold the
   // persona; the push is skipped when it does.
-  ensureSystemMessage(systemPrompt + draftHint(offerSaveDraft))
+  ensureSystemMessage(systemPrompt)
   if (fresh) {
     // The conversation so far, so the question is read in its context. A
     // shared session already holds its history and is not seeded again.
@@ -99,6 +105,12 @@ def research(
         userMessage(message.content)
       }
     }
+  }
+  // The instruction goes with the tool. It expires with this llm() call,
+  // so a later call on the same thread that does not offer saveDraft is
+  // not told to use it.
+  if (offerSaveDraft) {
+    systemMessage(SAVE_DRAFT_HINT.trim(), label: "save-draft-hint", expires: "llmCall")
   }
   const question = withContext(task: task, context: context)
   let answer: any = llm(
@@ -204,6 +216,9 @@ node evalMain(input: ResearchEvalInput): string {
       history: history,
       maxCost: $3.00,
       maxTime: 6m,
+      // The configuration agency agent runs, so the suite scores it.
+      keepDraft: false,
+      offerSaveDraft: false,
     )
   } with researchOnlyHandler
   if (answer is failure(err)) {

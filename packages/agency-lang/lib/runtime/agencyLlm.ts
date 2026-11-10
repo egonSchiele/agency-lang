@@ -38,6 +38,7 @@ import { runPrompt } from "./prompt.js";
 import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";
 import { getRuntimeContext } from "./asyncContext.js";
+import type { ResultFailure } from "./result.js";
 
 /**
  * Options for `agency.llm`. Extends `RetryConfig` (single source of truth for
@@ -83,12 +84,19 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
  *  Overloads: when `opts.schema` is provided the return type is
  *  `z.infer<S>`; otherwise it's `string`. Order matters — the
  *  schema-bearing overload must come first so TS picks it over the
- *  string-returning fallback. */
+ *  string-returning fallback.
+ *
+ *  Either form can return a failure instead: a reply that did not match
+ *  the schema, or replies the output limit cut off before they held
+ *  anything. Check with `isFailure` before using the value. */
 export function llm<S extends z.ZodSchema>(
   prompt: string | UserContentInput,
   opts: LlmOpts<S> & { schema: S },
-): Promise<z.infer<S>>;
-export function llm(prompt: string | UserContentInput, opts?: LlmOpts): Promise<string>;
+): Promise<z.infer<S> | ResultFailure>;
+export function llm(
+  prompt: string | UserContentInput,
+  opts?: LlmOpts,
+): Promise<string | ResultFailure>;
 export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {}): Promise<any> {
   const run = getRuntimeContext();
   const thread = opts.thread ?? run.threads.getOrCreateActive();

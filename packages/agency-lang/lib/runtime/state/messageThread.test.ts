@@ -127,6 +127,14 @@ describe("MessageThread edits keep each message's metadata", () => {
     expect(t.labelAt(1)).toBe("coder");
   });
 
+  it("removeAt refuses an index outside the thread", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("q"));
+    expect(() => t.removeAt(-1)).toThrow();
+    expect(() => t.removeAt(1)).toThrow();
+    expect(t.getMessages().map((message) => message.content)).toEqual(["q"]);
+  });
+
   it("adoptFrom takes the other thread's messages with their metadata", () => {
     const restored = new MessageThread();
     restored.push(smoltalk.userMessage("a"), "seed", { at: "llmCall", key: "k1" });

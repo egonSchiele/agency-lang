@@ -11,6 +11,7 @@ import { _setLlmOptions } from "../stdlib/llm.js";
 import { runPrompt } from "./prompt.js";
 import { toSmolConfig } from "./llmClient.js";
 import { asRootRun, callHelper } from "./__tests__/testHelpers.js";
+import { isFailure } from "./result.js";
 
 function makeCtx(
   smoltalkDefaults: Partial<SmolConfig> = { model: "default-model" },
@@ -131,6 +132,18 @@ describe("agency.llm — basic behavior", () => {
     const r = await inFrame(ctx, threads, () => agency.llm("extract", { schema }));
     expect(r).toEqual({ name: "ada", age: 36 });
   });
+
+  it("returns a failure, and says so in its type, when every reply is cut off empty", async () => {
+    const ctx = makeCtx();
+    const cutOff = { return: "", stopReason: "length" as const };
+    ctx.setLLMClient(new DeterministicClient([cutOff, cutOff, cutOff]));
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const r = await inFrame(ctx, threads, () => agency.llm("go"));
+    expect(isFailure(r)).toBe(true);
+    // @ts-expect-error a failure has no trim(): the caller must check first
+    const unchecked = () => r.trim();
+    expect(typeof unchecked).toBe("function");
+  });
 });
 
 describe("agency.llm — options mapping", () => {
@@ -225,8 +238,12 @@ describe("agency.llm — return type", () => {
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     await inFrame(ctx, threads, async () => {
       const r = await agency.llm("p");
-      // Type-level assertion: r must be string here. If the overload
-      // ever loses the no-schema branch this becomes a TS error.
+      if (isFailure(r)) {
+        throw new Error(r.error);
+      }
+      // Type-level assertion: r must be string once the failure is ruled
+      // out. If the overload ever loses the no-schema branch this becomes
+      // a TS error.
       const _s: string = r;
       expect(typeof _s).toBe("string");
     });
@@ -239,6 +256,9 @@ describe("agency.llm — return type", () => {
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     await inFrame(ctx, threads, async () => {
       const r = await agency.llm("extract", { schema });
+      if (isFailure(r)) {
+        throw new Error(r.error);
+      }
       // Type-level assertion: r is `{ first: string; last: string }`.
       const first: string = r.first;
       const last: string = r.last;

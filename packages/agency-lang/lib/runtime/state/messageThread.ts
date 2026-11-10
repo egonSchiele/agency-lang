@@ -124,7 +124,12 @@ export class MessageThread {
     this.messages = messages;
   }
 
+  /** Refuses an index outside the thread: `splice(-1, 1)` would remove the
+   *  last message, whatever it is. */
   removeAt(index: number): void {
+    if (index < 0 || index >= this.messages.length) {
+      throw new Error(`removeAt: index ${index} is outside a thread of ${this.messages.length}`);
+    }
     this.messages.splice(index, 1);
   }
 

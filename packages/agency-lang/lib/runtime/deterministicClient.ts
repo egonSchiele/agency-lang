@@ -1,4 +1,4 @@
-import type { PromptResult, StreamChunk, Result } from "smoltalk";
+import type { PromptResult, StreamChunk, Result, StopReason } from "smoltalk";
 import { ToolCall } from "smoltalk";
 import { questionCallId, unprefixedQuestionName } from "./decision/collector.js";
 import type {
@@ -37,7 +37,13 @@ export type DeterministicClientOptions = {
   speechDelayMs?: number;
 };
 
-export type ReturnMock = {
+/** Fields any scripted reply may set beyond its text or tool calls. */
+export type MockExtras = {
+  /** Why the scripted reply ended, as smoltalk reports it. */
+  stopReason?: StopReason;
+};
+
+export type ReturnMock = MockExtras & {
   return: any;
   /** Milliseconds this mock "generates" before returning, honoring the
    *  request's abort signal like a real provider: if the signal fires
@@ -49,7 +55,7 @@ export type ReturnMock = {
   delayMs?: number;
 };
 
-export type ToolCallMock = {
+export type ToolCallMock = MockExtras & {
   toolCall: {
     name: string;
     args?: Record<string, any>;
@@ -63,7 +69,7 @@ export type ToolCallMock = {
  *  Pass `id: ""` to reproduce providers (notably Google Gemini) whose
  *  function-calling protocol returns no tool-call id — smoltalk defaults
  *  the missing id to "". */
-export type MultiToolCallMock = {
+export type MultiToolCallMock = MockExtras & {
   toolCalls: Array<{ name: string; args?: Record<string, any>; id?: string }>;
 };
 
@@ -92,6 +98,15 @@ export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock | DecideMock
 export type ScopedLLMMocks = Record<string, LLMMock[]>;
 
 const FALLBACK_SCOPE = "*";
+
+/** Copies a mock's extras onto the result it scripted. A mock with no
+ *  extras leaves the result as it was. */
+function applyMockExtras(value: PromptResult, mock: MockExtras): PromptResult {
+  if (mock.stopReason !== undefined) {
+    value.stopReason = mock.stopReason;
+  }
+  return value;
+}
 
 // Synthetic non-zero usage/cost so tests that only assert "value is
 // nonzero" still pass under the deterministic client. Tests that assert
@@ -277,20 +292,27 @@ export class DeterministicClient implements LLMClient {
       );
     }
 
+    const value = await this.scriptedResult(mock, callIndex, config);
+    return { success: true, value: applyMockExtras(value, mock) };
+  }
+
+  /** The reply a text mock scripts, before its extras are applied. */
+  private async scriptedResult(
+    mock: ReturnMock | ToolCallMock | MultiToolCallMock,
+    callIndex: number,
+    config: PromptConfig,
+  ): Promise<PromptResult> {
     if ("return" in mock) {
       if (mock.delayMs) {
         await abortableDelay(mock.delayMs, config.abortSignal);
       }
       const output = typeof mock.return === "string" ? mock.return : JSON.stringify(mock.return);
       return {
-        success: true,
-        value: {
-          output,
-          toolCalls: [],
-          model: "deterministic",
-          usage: SYNTHETIC_USAGE,
-          cost: SYNTHETIC_COST,
-        },
+        output,
+        toolCalls: [],
+        model: "deterministic",
+        usage: SYNTHETIC_USAGE,
+        cost: SYNTHETIC_COST,
       };
     }
 
@@ -304,14 +326,11 @@ export class DeterministicClient implements LLMClient {
           new ToolCall(tc.id ?? `mock-tool-${callIndex}-${i}`, tc.name, tc.args ?? {}),
       );
       return {
-        success: true,
-        value: {
-          output: null,
-          toolCalls: calls,
-          model: "deterministic",
-          usage: SYNTHETIC_USAGE,
-          cost: SYNTHETIC_COST,
-        },
+        output: null,
+        toolCalls: calls,
+        model: "deterministic",
+        usage: SYNTHETIC_USAGE,
+        cost: SYNTHETIC_COST,
       };
     }
 
@@ -320,14 +339,11 @@ export class DeterministicClient implements LLMClient {
     // for tools that take no arguments.
     const { name, args } = mock.toolCall;
     return {
-      success: true,
-      value: {
-        output: null,
-        toolCalls: [new ToolCall(`mock-tool-${callIndex}`, name, args ?? {})],
-        model: "deterministic",
-        usage: SYNTHETIC_USAGE,
-        cost: SYNTHETIC_COST,
-      },
+      output: null,
+      toolCalls: [new ToolCall(`mock-tool-${callIndex}`, name, args ?? {})],
+      model: "deterministic",
+      usage: SYNTHETIC_USAGE,
+      cost: SYNTHETIC_COST,
     };
   }
 

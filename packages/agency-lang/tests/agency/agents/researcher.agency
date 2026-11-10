@@ -70,3 +70,14 @@ node followUpHoldsThePersona(): string {
   const answer = research("what did he study")
   return personaCounts.join(",")
 }
+
+// Three replies cut off by the output limit, each empty, are a failure
+// from llm() itself. The researcher passes it on: it does not read it as
+// an empty answer and ask again.
+node threeCutOffRepliesAreAFailure(): string {
+  const answer = research("what did he study")
+  if (answer is failure(err)) {
+    return "failed: ${err}"
+  }
+  return "answered: ${answer.value}"
+}

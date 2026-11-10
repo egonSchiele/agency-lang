@@ -46,6 +46,14 @@ export function redactPromptForLog(p: string | UserContentInput): string | UserC
   return redactAttachments(p) as string | UserContentInput;
 }
 
+/** In-flight visibility: record the request SHAPE before dispatch, so a
+ *  call that never completes (hang, kill, runaway generation) still
+ *  leaves a trace. Pairs with promptCompletion/llmError/promptCancelled
+ *  by span + order. Un-awaited like promptCompletion (post() detaches
+ *  the remote send; the file sink is a sync append). Called inside the
+ *  same idempotent pr.step as the completion, so resumed runs do not
+ *  double-emit for replayed steps. Retries inside dispatchWithRetry
+ *  share the one start. */
 export function emitPromptStart({
   run,
   messages,

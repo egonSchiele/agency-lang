@@ -123,11 +123,19 @@ def research(
       maxToolCallRounds: 30
     ),
   )
+  // A failed call, such as replies the output limit kept cutting off, is
+  // passed on. It is not an empty answer to ask for again.
+  if (isFailure(answer)) {
+    return answer
+  }
   if (answerIsEmpty(answer)) {
     // Keep the sources in context and remove tools so the follow-up writes an
     // answer. The persona expired with the first call, so push it again.
     systemMessage(systemPrompt, expires: "llmCall")
     answer = llm(NO_ANSWER_FOLLOWUP, llmOptions(model: model, provider: provider))
+    if (isFailure(answer)) {
+      return answer
+    }
     if (answerIsBlank(answer)) {
       return failure("the model returned no answer twice")
     }

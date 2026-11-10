@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PromptRunner, PromptBailout, type BranchRunner } from "./promptRunner.js";
+import { PromptRunner, PromptBailout, llmCallKey, type BranchRunner } from "./promptRunner.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { runInTestContext, type Run } from "./asyncContext.js";
@@ -608,6 +608,7 @@ describe("PromptRunner.llmCall and beforeToolCall", () => {
       };
       await labelOf(() => runner.llmCall({ afterToolRound: 0 }, async () => undefined));
       await labelOf(() => runner.llmCall({ validationRetry: 1 }, async () => undefined));
+      await labelOf(() => runner.llmCall({ cutOffRetry: 0 }, async () => undefined));
       await labelOf(() =>
         runner.beforeToolCall("round.0.tool.0_abc", {
           name: "search",
@@ -618,6 +619,7 @@ describe("PromptRunner.llmCall and beforeToolCall", () => {
     expect(labels).toEqual([
       "round 2",
       "validation retry 2",
+      "cut-off retry 1",
       `search(query: "grant", notes: "${"x".repeat(39)}…)`,
     ]);
   });
@@ -643,5 +645,12 @@ describe("PromptRunner.llmCall and beforeToolCall", () => {
       });
     });
     expect(bodyRuns).toBe(1);
+  });
+});
+
+describe("llmCallKey", () => {
+  it("names a cut-off retry request by its attempt", () => {
+    expect(llmCallKey({ cutOffRetry: 0 })).toBe("cutOff.0.llmCall");
+    expect(llmCallKey({ cutOffRetry: 1 })).toBe("cutOff.1.llmCall");
   });
 });

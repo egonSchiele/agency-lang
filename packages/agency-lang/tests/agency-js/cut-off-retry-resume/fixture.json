@@ -1,0 +1,19 @@
+{
+  "toolPausePaused": true,
+  "toolPauseResult": "done",
+  "toolPauseRequests": 3,
+  "toolPauseRetryCarriesNoteOnce": true,
+  "toolPauseLastRequestClean": true,
+  "gatePausePaused": true,
+  "gatePauseRequestsBeforeResume": 1,
+  "gatePauseResult": {
+    "inner": "done",
+    "after": "after"
+  },
+  "gatePauseRequests": 3,
+  "gatePauseRetryCarriesNoteOnce": true,
+  "gatePauseThreadClean": true,
+  "tripResult": "done",
+  "tripRequests": 3,
+  "tripEveryAttemptCarriesNoteOnce": true
+}

@@ -9,6 +9,26 @@ import type { DecisionAnswer, DecisionQuestion, DecisionState } from "smoltalk";
 // module (a peer of the viewer, not a dependent) can import these
 // types without pulling in viewer internals. The viewer's
 // `lib/logsViewer/types.ts` re-exports these.
+/** The kinds of `error` event `StatelogClient.error` writes. */
+export type StatelogErrorType =
+  | "toolError"
+  | "llmError"
+  | "runtimeError"
+  | "validationError"
+  | "limitExceeded"
+  | "structuredOutput"
+  | "replyCutOff"
+  | "finalizeError";
+
+/** The kinds of `warn` event `StatelogClient.warn` writes. */
+export type StatelogWarnType =
+  | "failurePropagation"
+  | "toolSchemaSize"
+  | "failureData"
+  | "decisionBatchCap"
+  | "endTurn"
+  | "replyCutOff";
+
 export type EventEnvelope = {
   format_version: number;
   trace_id: string;

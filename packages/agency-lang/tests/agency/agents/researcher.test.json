@@ -106,6 +106,17 @@
           }
         ]
       }
+    },
+    {
+      "nodeName": "threeCutOffRepliesAreAFailure",
+      "description": "three empty replies cut off by the output limit are the failure from llm(), passed on unchanged",
+      "input": "",
+      "expectedOutput": "\"failed: The model reached its output limit 3 times in a row without writing any text or tool call. Lower reasoningEffort, or raise maxTokens.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "researcher": [{ "return": "", "stopReason": "length" }, { "return": "", "stopReason": "length" }, { "return": "", "stopReason": "length" }]
+      }
     }
   ]
 }

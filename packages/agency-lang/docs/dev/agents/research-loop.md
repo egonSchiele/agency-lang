@@ -20,6 +20,12 @@ second reply is `failure("the model returned no answer twice")`, and
 `@guarded` passes that failure to the caller unchanged, so the caller sees
 why there is no answer.
 
+A failed `llm()` call is not an empty answer. The researcher returns the
+failure as it is, after either call. For example, when the output limit
+cuts off three replies in a row, `llm()` returns a failure that names the
+limit (`docs/dev/agents/tool-loop-guards.md`), and the caller sees that
+failure. Asking again would hide it.
+
 The answer is saved with `saveDraft` before it is returned, so a budget
 that runs out after the pass still has it.
 
@@ -62,3 +68,6 @@ answer goes.
   under the 20-character floor, and it is the answer.
 - `twoEmptyAnswersAreAFailure`: two blank replies are the failure naming
   the cause.
+- `threeCutOffRepliesAreAFailure`: three empty replies cut off by the
+  output limit are the failure from `llm()`, passed on unchanged, with no
+  follow-up call.

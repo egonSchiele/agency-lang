@@ -27,8 +27,11 @@ concurrency:
 
 jobs:
   mlx-server-tests:
-    # macos-14 is Apple silicon (arm64) with a Metal device, which the tests need.
-    runs-on: macos-14
+    # macos-15 is Apple silicon (arm64) with a Metal device, which the tests
+    # need. GitHub retired the macos-14 image: from November 1, 2026 every run
+    # on it was cancelled before a runner started ("The configuration
+    # 'macos-14-arm64-us-default' is not supported").
+    runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

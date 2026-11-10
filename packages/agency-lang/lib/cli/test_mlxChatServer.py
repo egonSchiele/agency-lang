@@ -10,8 +10,10 @@ are zeros. `apply_token_bitmask` is the real one, so a Metal device is used
 for the masking.
 """
 
+import gc
 import sys
 import unittest
+import weakref
 from pathlib import Path
 from unittest import mock
 
@@ -962,8 +964,34 @@ class CacheLeak(unittest.TestCase):
         found = m.cache_arrays([KV(), Arrays(), Empty()])
         self.assertEqual(sorted(a.shape[0] for a in found), [1, 2, 3, 4, 5, 6])
 
+    def test_the_arrays_are_freed_as_soon_as_the_caller_drops_them(self):
+        # A reference cycle inside cache_arrays would keep each step's
+        # arrays alive until Python's cycle collector ran. With the
+        # collector off, the array must die when the last plain
+        # reference to it goes.
+        class Arrays:
+            def __init__(self):
+                self.state = [[mx.zeros((1,))]]
+
+        cache = Arrays()
+        alive = weakref.ref(cache.state[0][0])
+        gc.disable()
+        try:
+            found = m.cache_arrays([cache])
+            self.assertEqual(len(found), 1)
+            del found
+            cache.state = None
+            self.assertIsNone(alive(), "cache_arrays kept the array alive")
+        finally:
+            gc.enable()
+
     def test_the_batched_step_is_the_settled_one(self):
         self.assertIs(m.GenerationBatch._step, m.settled_step)
+
+
+class ConnectionQueue(unittest.TestCase):
+    def test_a_burst_of_connections_waits_instead_of_being_reset(self):
+        self.assertGreaterEqual(m.ChatHTTPServer.request_queue_size, 64)
 
 
 if __name__ == "__main__":

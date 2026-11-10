@@ -106,6 +106,7 @@ import sys
 import time
 from collections import Counter
 from dataclasses import dataclass, replace
+from http.server import ThreadingHTTPServer
 from queue import Empty as QueueEmpty
 from queue import Queue
 
@@ -1133,20 +1134,29 @@ def file_tool_call_on_stop(last_state, response):
 
 def cache_arrays(caches):
     """Every array a cache keeps: its state, however nested, and the
-    padding and length counters an `ArraysCache` advances lazily."""
-    found = []
+    padding and length counters an `ArraysCache` advances lazily.
 
-    def collect(value):
+    This walks the nesting with a list of values still to look at, not a
+    nested function that calls itself. Such a function refers to itself
+    through its own closure, a reference cycle, and the cycle holds the
+    list of arrays it fills. Python frees a cycle only when its cycle
+    collector runs, so every step's list, and every array in it, stayed
+    alive until then. For a Qwen3.5-family model the arrays include each
+    linear-attention layer's recurrent state, about 150 MB per request,
+    so 16 requests decoding at once grew the server by gigabytes a second:
+    a 27B model reached 212 GB."""
+    found = []
+    pending = []
+    for cache in caches:
+        pending.append(getattr(cache, "state", None))
+        pending.append(getattr(cache, "left_padding", None))
+        pending.append(getattr(cache, "lengths", None))
+    while pending:
+        value = pending.pop()
         if isinstance(value, mx.array):
             found.append(value)
         elif isinstance(value, (list, tuple)):
-            for item in value:
-                collect(item)
-
-    for cache in caches:
-        collect(getattr(cache, "state", None))
-        collect(getattr(cache, "left_padding", None))
-        collect(getattr(cache, "lengths", None))
+            pending.extend(value)
     return found
 
 
@@ -1432,11 +1442,22 @@ def refuse_draft_if_unusable(model_provider):
     sys.exit(2)
 
 
+class ChatHTTPServer(ThreadingHTTPServer):
+    """mlx_lm's server class with a longer queue of waiting connections.
+    Python's socketserver queues 5 by default, and the operating system
+    resets any connection past that before the server accepts it. A
+    program that sends 16 requests at once, which the server batches,
+    would see most of them fail at once with ECONNRESET, which
+    `agency local serve` answers with a 502."""
+
+    request_queue_size = 128
+
+
 def run(host, port, model_provider):
     refuse_draft_if_unusable(model_provider)
     prompt_cache = server.LRUPromptCache(model_provider.cli_args.prompt_cache_size)
     generator = Generator(model_provider, prompt_cache)
-    server._run_http_server(host, port, generator, handler_class=Handler)
+    server._run_http_server(host, port, generator, server_class=ChatHTTPServer, handler_class=Handler)
 
 
 def split_own_flags(argv):

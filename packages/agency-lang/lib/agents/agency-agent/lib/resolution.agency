@@ -3,7 +3,7 @@
   falls to `priceDefault`. Pure: layers are read-only inputs. See spec 3.2/3.3. */
 import { keys } from "std::object"
 import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
-import { canonicalSlot, providersFor, slotKind, SLOTS } from "./slots.agency"
+import { canonicalSlot, isChatSlot, providersFor, slotCanBeOff, slotKind, SLOT_OFF, SLOTS } from "./slots.agency"
 
 export type SlotValue = {
   model: string;
@@ -49,6 +49,15 @@ export def resolveSlot(
   for (layer in layers) {
     const perSlotValue = layer.perSlot[slot]
     if (perSlotValue != null) {
+      if (slotCanBeOff(slot) && perSlotValue.provider == "" && perSlotValue.model == SLOT_OFF) {
+        return success(
+          {
+          model: "",
+          provider: "",
+          via: "${layer.name}:off"
+        },
+        )
+      }
       return success(
         {
         model: perSlotValue.model,

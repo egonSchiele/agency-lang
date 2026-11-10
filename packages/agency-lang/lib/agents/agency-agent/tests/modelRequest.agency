@@ -317,3 +317,20 @@ node aModelChoiceKeepsTheFlagEffort(): string {
   const flags = { ...noModelFlags(), effort: "low" }
   return "${requestEffort(request(flags, null, { ...noModelChoices(), pin: "claude-opus-4-8" }))}"
 }
+
+node routerOffFlagIsAccepted(): string {
+  const parsed = flagsFor({ model: "router=off" })
+  if (parsed is failure(reason)) {
+    return reason
+  }
+  return parsed.value.slots["router"] ?? "missing"
+}
+
+// The embedding slot has no default, so there is nothing to turn off.
+node embeddingOffFlagIsRefused(): boolean {
+  const parsed = flagsFor({ model: "embedding=off" })
+  if (parsed is failure(reason)) {
+    return reason.includes("Embedding models need the provider/model form")
+  }
+  return false
+}

@@ -320,6 +320,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "routerOffFlagIsAccepted",
+      "input": "",
+      "expectedOutput": "\"off\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "embeddingOffFlagIsRefused",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -53,7 +53,7 @@ import {
   takePendingLlmOptions,
  } from "./session.agency"
 import { formatTurnFailure } from "./utils.agency"
-import { configureLocalModel, getResolvedSlots, getRouterModel, getRouterProvider, currentProvider } from "../shared.agency"
+import { configureLocalModel, explicitRouterSpec, getResolvedSlots, currentProvider } from "../shared.agency"
 
 
 import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
@@ -265,10 +265,9 @@ def localSlashCommand(): boolean {
     return true
   }
   const before = getResolvedSlots()
-  // A local model can still route with the decision model already set.
-  const router = getRouterModel()
-  const routerSpec = if router == "" then "" else "${getRouterProvider()}/${router}"
-  configureLocalModel(choice, "", routerSpec)
+  // A local model can still route with the decision model the user set.
+  // The default router stays out of a local session.
+  configureLocalModel(choice, "", explicitRouterSpec())
   configureSearch(true)
   for (change in diffResolved(before, getResolvedSlots())) {
     reactToSlotChange(change)

@@ -60,6 +60,7 @@ import {
   applyResolved,
   overrideFromResolved,
   configureLocalModel,
+  defaultSlots,
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
@@ -90,10 +91,18 @@ export def markMemoryEmbeddingsPinned(pinned: boolean) {
 // reading settings.json inside a turn.
 let _startupFlags: ModelFlags = noModelFlags()
 let _startupModelSettings: ModelSettings = {}
+// The default slots whose provider had its key at startup. Reading the
+// key inside a turn would become an env prompt, so it is read once.
+let _startupDefaultSlots: Record<string, string> = {}
 
-export def setStartupModelFlags(flags: ModelFlags, settings: ModelSettings) {
+export def setStartupModelFlags(
+  flags: ModelFlags,
+  settings: ModelSettings,
+  defaults: Record<string, string> = {},
+) {
   _startupFlags = flags
   _startupModelSettings = settings
+  _startupDefaultSlots = defaults
 }
 
 /** The request for this session's startup flags, active preset, and these /model choices. */
@@ -121,7 +130,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     applyRequestOptions(request, settings)
     return success(true)
   }
-  const resolved = resolveHostedModels(request, settings)
+  const resolved = resolveHostedModels(request, settings, _startupDefaultSlots)
   if (isFailure(resolved)) {
     return resolved
   }
@@ -302,7 +311,7 @@ export def switchModel(
   const request = currentModelRequest(next)
   const settings = _startupModelSettings
   const established = requestProvider(request, settings) != ""
-  const all = resolveRequestAgainst(request, settings, ctx2, established)
+  const all = resolveRequestAgainst(request, settings, ctx2, established, _startupDefaultSlots)
   if (all is failure(reason)) {
     pushMessage(color.red("Could not switch model: ${reason}"))
     return {
@@ -480,7 +489,9 @@ export def pickModelsForAgent(args: Record<string, any>) {
     _exit(1)
     return
   }
-  setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()))
+  // A one-shot run gets the default slots too: this runs before the
+  // agent branches on one-shot.
+  setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()), defaultSlots())
   const request = currentModelRequest(noModelChoices())
   const applied = applyModelRequest(request, _startupModelSettings)
   if (applied is failure(reason)) {

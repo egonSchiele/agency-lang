@@ -5,6 +5,7 @@ import {
   buildLayers,
   Layer,
   Ctx,
+  RawLayer,
  } from "../lib/resolution.agency"
 
 static const CTX: Ctx = {
@@ -221,4 +222,39 @@ node pinSkipsDerivedSlot(): string {
   const main = unwrapResolved(resolveSlot("main", [cliLayer], CTX))
   const embedding = unwrapResolved(resolveSlot("embedding", [cliLayer], CTX))
   return "${main.model}/${embedding.model}|${embedding.via}"
+}
+
+static const PROVIDERS = ["anthropic", "openai", "google"]
+
+def resolveFrom(slot: string, raw: RawLayer[]): Resolved {
+  return unwrapResolved(resolveSlot(slot, buildLayers(raw, PROVIDERS, false), CTX))
+}
+
+node defaultLayerSetsTheRouter(): Resolved {
+  return resolveFrom("router", [{ name: "default", pin: "", slots: { router: "openrouter/jev-1.14" } }])
+}
+
+node aPresetBeatsTheDefault(): Resolved {
+  return resolveFrom(
+    "router",
+    [
+      { name: "preset", pin: "", slots: { router: "openrouter/jev-1.13" } },
+      { name: "default", pin: "", slots: { router: "openrouter/jev-1.14" } },
+    ],
+  )
+}
+
+node offBeatsTheDefault(): Resolved {
+  return resolveFrom(
+    "router",
+    [
+      { name: "preset", pin: "", slots: { router: "off" } },
+      { name: "default", pin: "", slots: { router: "openrouter/jev-1.14" } },
+    ],
+  )
+}
+
+// `off` means something only in a slot with a default.
+node offInTheMainSlotIsAModelName(): Resolved {
+  return resolveFrom("main", [{ name: "preset", pin: "", slots: { main: "off" } }])
 }

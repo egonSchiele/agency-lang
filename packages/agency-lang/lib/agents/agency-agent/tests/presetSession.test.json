@@ -120,6 +120,56 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "storedDefaultSetsTheRouter",
+      "input": "",
+      "expectedOutput": "\"jev-1.14|openrouter|default:per-slot\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noStoredDefaultNoRouter",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "routerOffChoiceTurnsItOff",
+      "input": "",
+      "expectedOutput": "\"||in-session:off\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "defaultRouterIsNotExplicit",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chosenRouterIsExplicit",
+      "input": "",
+      "expectedOutput": "\"openrouter/jev-1.13\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

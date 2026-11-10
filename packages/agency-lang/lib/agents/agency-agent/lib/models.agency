@@ -15,7 +15,7 @@ import { pickProvider, envVarFor } from "std::llm"
 import { keys } from "std::object"
 import { env } from "std::system"
 
-import { slotKind, canonicalSlot, needsProviderForm, providersFor } from "./slots.agency"
+import { slotKind, canonicalSlot, needsProviderForm, providersFor, slotCanBeOff, SLOT_OFF } from "./slots.agency"
 
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
@@ -116,6 +116,9 @@ def checkProviderEnv(provider: string): Result<string> {
  *  name a provider that slot accepts. */
 export def lacksProviderForm(slot: string, value: string): boolean {
   if (!needsProviderForm(slot)) {
+    return false
+  }
+  if (slotCanBeOff(slot) && value == SLOT_OFF) {
     return false
   }
   return parseModelSpec(value, false, providersFor(slot, knownProviders())).provider == ""

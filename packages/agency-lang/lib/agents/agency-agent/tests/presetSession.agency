@@ -13,6 +13,7 @@ import {
   switchPreset,
  } from "../lib/session.agency"
 import { setStartupLimitFlags } from "../lib/toolLimits.agency"
+import { explicitRouterSpec } from "../shared.agency"
 
 static const CTX: Ctx = {
   provider: "anthropic",
@@ -152,4 +153,54 @@ node anEmptyBlockFallsBackToThePreset(): string {
   const set = applySessionLlmOptions(noModelChoices(), { temperature: 0.7 })
   const cleared = applySessionLlmOptions(set, {})
   return "${JSON.stringify(cleared)} ${JSON.stringify(requestLlmOptions(currentModelRequest(cleared), {}))}"
+}
+
+static const DEFAULTS: Record<string, string> = {
+  router: "openrouter/jev-1.14"
+}
+
+// A hosted session with no presets, holding these default slots the way
+// startup keeps them.
+def useDefaults(defaults: Record<string, string>) {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setPresetTable(readPresetTable({}))
+  setStartupModelFlags(noModelFlags(), {}, defaults)
+}
+
+def routerOf(resolved: Record<string, Resolved>): string {
+  const router: Resolved = resolved["router"]
+  return "${router.model}|${router.provider}|${router.via}"
+}
+
+node storedDefaultSetsTheRouter(): string {
+  useDefaults(DEFAULTS)
+  const out = switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  return routerOf(out.resolved)
+}
+
+node noStoredDefaultNoRouter(): string {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setPresetTable(readPresetTable({}))
+  setStartupModelFlags(noModelFlags(), {})
+  const out = switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  const router: Resolved = out.resolved["router"]
+  return router.model
+}
+
+node routerOffChoiceTurnsItOff(): string {
+  useDefaults(DEFAULTS)
+  const out = switchModel(noModelChoices(), "router=off", CTX, {})
+  return routerOf(out.resolved)
+}
+
+node defaultRouterIsNotExplicit(): string {
+  useDefaults(DEFAULTS)
+  switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  return explicitRouterSpec()
+}
+
+node chosenRouterIsExplicit(): string {
+  useDefaults(DEFAULTS)
+  switchModel(noModelChoices(), "router=openrouter/jev-1.13", CTX, {})
+  return explicitRouterSpec()
 }

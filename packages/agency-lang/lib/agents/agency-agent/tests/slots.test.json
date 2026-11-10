@@ -7,6 +7,9 @@
     { "nodeName": "kindOfReasoning", "input": "", "expectedOutput": "\"slow\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "kindOfEmbedding", "input": "", "expectedOutput": "\"derived\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "routerTakesTheDecisionProviders", "input": "", "expectedOutput": "\"typesafe,laya,openai,openrouter,llama-cpp|anthropic\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "optionsReachTheChatSlots", "input": "", "expectedOutput": "\"main,reasoning\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "optionsReachTheChatSlots", "input": "", "expectedOutput": "\"main,reasoning\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "routerCanBeOff", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "embeddingCannotBeOff", "input": "", "expectedOutput": "false", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "mainCannotBeOff", "input": "", "expectedOutput": "false", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

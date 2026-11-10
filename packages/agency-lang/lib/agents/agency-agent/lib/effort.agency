@@ -1,26 +1,133 @@
-/** @module The --effort flag: a reasoning model's thinking level, sent to
-  the provider with every call. Pure parsing so the flag's rule is
-  testable without a run. */
-/** What a --effort value means: the level to send, or null for an absent
-  flag, and an error naming the choices when the value is not a level,
-  so a typo never silently becomes the provider's default. */
+/** @module A reasoning model's thinking level: what --effort and a
+  preset's `effort` field may say, the level the agent picks when
+  neither says anything, and the level a run sends to the provider. Pure
+  functions, so each rule is testable without a run. */
+/** A level sent to the provider with every call. */
+export type EffortLevel = "low" | "medium" | "high"
+
+/** What a flag or a preset may ask for: a level, or "default" for the
+  provider's own level, which sends nothing. */
+export type EffortChoice = EffortLevel | "default"
+
+export static const EFFORT_CHOICES: string[] = ["low", "medium", "high", "default"]
+
+/** What a --effort value means: the choice, or null for an absent flag,
+  and an error naming the choices when the value is not one, so a typo
+  never silently becomes the provider's default. */
 export type Effort = {
-  level: "low" | "medium" | "high" | null;
+  level: EffortChoice | null;
   error: string
 }
+
+/** One chat model of the session. */
+export type EffortModel = {
+  provider: string;
+  model: string
+}
+
+type EffortRule = {
+  provider: string;
+  modelPrefix: string;
+  level: EffortLevel
+}
+
+// Models whose provider thinks at its top level, max, when no effort is
+// sent. docs/dev/agents/agent-presets.md has the measurements.
+static const DEFAULT_EFFORT_RULES: EffortRule[] = [
+  {
+    provider: "openrouter",
+    modelPrefix: "z-ai/glm-5.3",
+    level: "high"
+  },
+  {
+    provider: "openrouter",
+    modelPrefix: "moonshotai/kimi-k3",
+    level: "high"
+  }
+]
+
 export def parseEffort(value: string | null): Effort {
   if (value == null) {
     return { level: null, error: "" }
   }
-  const level = value.trim().toLowerCase()
-  if (level == "low") {
-    return { level: "low", error: "" }
+  const choice = value.trim().toLowerCase()
+  if (EFFORT_CHOICES.includes(choice)) {
+    return { level: choice as EffortChoice, error: "" }
   }
-  if (level == "medium") {
-    return { level: "medium", error: "" }
+  return { level: null, error: "--effort must be low, medium, high, or default; got '${value}'." }
+}
+
+def ruleLevel(model: EffortModel): EffortLevel | null {
+  const rule = find(
+    DEFAULT_EFFORT_RULES,
+    \rule -> rule.provider == model.provider && model.model.startsWith(rule.modelPrefix),
+  )
+  if (rule == null) {
+    return null
   }
-  if (level == "high") {
-    return { level: "high", error: "" }
+  return rule.level
+}
+
+/** One level is sent with every call, so a session whose models do not
+  all have the same rule gets no default. */
+export def defaultEffort(models: EffortModel[]): EffortLevel | null {
+  """
+  The level the agent picks when neither --effort nor the preset names
+  one: the level every chat model's rule agrees on, or null.
+
+  @param models - The session's chat models
+  """
+  const levels = [ruleLevel(model) for model in models]
+  if (levels.length == 0 || levels[0] == null) {
+    return null
   }
-  return { level: null, error: "--effort must be low, medium, or high; got '${value}'." }
+  const differing = [level for level in levels if level != levels[0]]
+  if (differing.length > 0) {
+    return null
+  }
+  return levels[0]
+}
+
+export def noDefaultWarning(asked: EffortChoice | null, models: EffortModel[]): string {
+  """
+  A warning when some chat model has a default level and the session gets
+  none, because another model has a different one or no rule. "" when
+  --effort or the preset named a level, or when there is nothing to warn
+  about.
+
+  @param asked - What --effort or the preset asked for, or null
+  @param models - The session's chat models
+  """
+  if (asked != null || defaultEffort(models) != null) {
+    return ""
+  }
+  const withRule = find(models, \model -> ruleLevel(model) != null)
+  if (withRule == null) {
+    return ""
+  }
+  const level = ruleLevel(withRule)
+  const other = find(models, \model -> ruleLevel(model) != level)
+  if (other == null) {
+    return ""
+  }
+  const otherLevel = ruleLevel(other)
+  const otherHas = if otherLevel == null then "has no default" else "would use ${otherLevel}"
+  return "No default effort: ${withRule.model} would use ${level}, but ${other.model} ${otherHas}. Pass --effort to set one."
+}
+
+export def effortToSend(asked: EffortChoice | null, models: EffortModel[]): EffortLevel | null {
+  """
+  The level to send with every call, or null to send none and leave the
+  provider at its own default.
+
+  @param asked - What --effort or the preset asked for, or null
+  @param models - The session's chat models
+  """
+  if (asked == null) {
+    return defaultEffort(models)
+  }
+  if (asked == "default") {
+    return null
+  }
+  return asked as EffortLevel
 }

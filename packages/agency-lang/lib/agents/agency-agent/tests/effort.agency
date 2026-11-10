@@ -1,11 +1,16 @@
-import { parseEffort } from "../lib/effort.agency"
-// An absent flag means the provider's default: nothing is sent.
+import { defaultEffort, effortToSend, noDefaultWarning, parseEffort } from "../lib/effort.agency"
+
+static const GLM = { provider: "openrouter", model: "z-ai/glm-5.3-flash" }
+static const KIMI = { provider: "openrouter", model: "moonshotai/kimi-k3" }
+static const OPUS = { provider: "anthropic", model: "claude-opus-4-8" }
+
+// An absent flag names nothing: the preset or the agent's default decides.
 node absent(): string {
   return "${parseEffort(null).level == null}|${parseEffort(null).error}"
 }
-// The three levels, in any case and with stray spaces.
+// The four choices, in any case and with stray spaces.
 node levels(): string {
-  return "${parseEffort("high").level}|${parseEffort("Medium").level}|${parseEffort(" low ").level}"
+  return "${parseEffort("high").level}|${parseEffort("Medium").level}|${parseEffort(" low ").level}|${parseEffort("default").level}"
 }
 // Anything else is an error that names the choices, and sends nothing.
 node unknown(): string {
@@ -16,4 +21,30 @@ node unknown(): string {
 node empty(): string {
   const r = parseEffort("")
   return "${r.level == null}|${r.error}"
+}
+// A model whose provider defaults to its top level gets high.
+node defaultForGlm(): string {
+  return "${defaultEffort([GLM, GLM])}|${defaultEffort([GLM, KIMI])}"
+}
+// One level goes out with every call, so a session with a model outside
+// the rules gets none, and so does a session with no chat model.
+node noDefaultWhenMixed(): string {
+  return "${defaultEffort([GLM, OPUS])}|${defaultEffort([OPUS])}|${defaultEffort([])}"
+}
+// The same model id on another provider is not the model the rule names.
+node noDefaultOnAnotherProvider(): string {
+  return "${defaultEffort([{ provider: "zai", model: "z-ai/glm-5.3-flash" }])}"
+}
+// A named level beats the default, and "default" sends nothing.
+node askedWins(): string {
+  return "${effortToSend("low", [GLM])}|${effortToSend("default", [GLM])}|${effortToSend(null, [GLM])}|${effortToSend(null, [OPUS])}"
+}
+// The default turns off when one chat model has no rule, and the user is told.
+node warnsWhenTheDefaultIsLost(): string {
+  return noDefaultWarning(null, [GLM, OPUS])
+}
+// Nothing to say when a level was named, when the default applies, or
+// when no model has one.
+node noWarningOtherwise(): string {
+  return "${noDefaultWarning("low", [GLM, OPUS])}|${noDefaultWarning(null, [GLM, KIMI])}|${noDefaultWarning(null, [OPUS])}"
 }

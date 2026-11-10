@@ -220,6 +220,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "presetWithEffort",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetWithUnknownEffort",
+      "input": "",
+      "expectedOutput": "[\"effort must be low, medium, high, or default\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

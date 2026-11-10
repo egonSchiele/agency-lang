@@ -6,6 +6,7 @@
 */
 import { filterEntries } from "std::object"
 
+import { EffortChoice, parseEffort } from "./effort.agency"
 import { LlmOptions } from "./llmOptions.agency"
 import { embeddingSpecHasProvider, parseModelFlag } from "./models.agency"
 import { Preset, PresetSlots } from "./presetRules.agency"
@@ -15,12 +16,13 @@ import { SLOTS } from "./slots.agency"
 
 /** The startup model flags. `pin` is a bare --model. `slots` holds
   --model slot=, --fastmodel, and --slowmodel. `local` is null when
-  --local was not given. */
+  --local was not given, and `effort` is null when --effort was not. */
 export type ModelFlags = {
   pin: string;
   slots: Record<string, string>;
   provider: string;
-  local: string | null
+  local: string | null;
+  effort: EffortChoice | null
 }
 
 /** The /model choices of this session, and the llm() options it set
@@ -54,7 +56,8 @@ export def noModelFlags(): ModelFlags {
     pin: "",
     slots: {},
     provider: "",
-    local: null
+    local: null,
+    effort: null
   }
 }
 
@@ -104,8 +107,8 @@ def modelFlagProblem(parsed: ParsedModelFlag, hasChatModel: boolean, local: stri
 export def modelFlagsFromArgs(args: Record<string, any>): Result<ModelFlags> {
   """
   Read the model flags from parsed agent args. Fails on an unknown
-  --model slot, an embedding model without a provider, or --local with a
-  chat model flag.
+  --model slot, an embedding model without a provider, --local with a
+  chat model flag, or an --effort that is not one of its choices.
 
   @param args - The result of parseAgentArgs
   """
@@ -120,15 +123,22 @@ export def modelFlagsFromArgs(args: Record<string, any>): Result<ModelFlags> {
   if (problem != "") {
     return failure(problem)
   }
+  const effort = parseEffort(args.flags.effort ?? null)
+  if (effort.error != "") {
+    return failure(effort.error)
+  }
   const pin = if parsed.slot == "" then parsed.model else ""
   return success({
     pin: pin,
     slots: flagSlots(parsed, fast, slow),
     provider: args.flags.provider ?? "",
-    local: local
+    local: local,
+    effort: effort.level
   })
 }
 
+// --effort is not a model flag: it names no model, so it leaves the
+// preset's models in place.
 export def hasModelFlags(flags: ModelFlags): boolean {
   const namesAModel = flags.pin != "" || Object.keys(flags.slots).length > 0
   return namesAModel || flags.provider != "" || flags.local != null
@@ -213,6 +223,32 @@ export def requestLlmOptions(request: ModelRequest, settings: ModelSettings): Ll
   @param settings - settings.model
   """
   return request.choices.llmOptions ?? presetLlmOptions(request) ?? settings.llmOptions ?? {}
+}
+
+def choosesAChatModel(choices: ModelChoices): boolean {
+  const chatSlots = [slot for slot in Object.keys(choices.slots) if slot != "embedding"]
+  return choices.pin != "" || chatSlots.length > 0
+}
+
+// A preset's effort was chosen for its models, so a model flag or a
+// /model choice of a chat model drops it.
+def presetEffort(request: ModelRequest): EffortChoice | null {
+  const preset = request.preset
+  if (preset == null || hasModelFlags(request.flags) || choosesAChatModel(request.choices)) {
+    return null
+  }
+  return preset.effort ?? null
+}
+
+export def requestEffort(request: ModelRequest): EffortChoice | null {
+  """
+  The reasoning effort the request asks for: --effort, then the
+  preset's. A model flag or a /model choice of a chat model drops the
+  preset's. null means neither named one.
+
+  @param request - The model request
+  """
+  return request.flags.effort ?? presetEffort(request)
 }
 
 export def requestProvider(request: ModelRequest, settings: ModelSettings): string {

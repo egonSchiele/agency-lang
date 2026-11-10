@@ -1,0 +1,59 @@
+import { setEnv } from "std::system"
+
+import { noModelChoices, noModelFlags } from "../../../lib/agents/agency-agent/lib/modelRequest.agency"
+import { readPresetTable, setPresetTable } from "../../../lib/agents/agency-agent/lib/presets.agency"
+import { Ctx } from "../../../lib/agents/agency-agent/lib/resolution.agency"
+import {
+  applyModelRequest,
+  currentModelRequest,
+  setStartupModelFlags,
+  switchModel,
+  switchPreset,
+} from "../../../lib/agents/agency-agent/lib/session.agency"
+import { setStartupLimitFlags } from "../../../lib/agents/agency-agent/lib/toolLimits.agency"
+
+static const CTX: Ctx = {
+  provider: "openrouter",
+  price: "standard"
+}
+
+static const GLM = "z-ai/glm-5.3-flash"
+
+// One model call. test.js records the effort the client was sent.
+def ask(label: string) {
+  llm(label, { retries: 0 })
+}
+
+// Each step changes the session's models the way startup, /model, or
+// /preset does, then makes one call.
+node main() {
+  setEnv("OPENROUTER_API_KEY", "test-key") with approve
+  setStartupLimitFlags({ maxToolCallRounds: null, maxToolResultChars: null })
+  setPresetTable(readPresetTable({
+    slow: { provider: "openrouter", pin: GLM, effort: "low" },
+    plain: { provider: "openrouter", pin: GLM },
+    maxed: { provider: "openrouter", pin: GLM, effort: "default" }
+  }))
+
+  setStartupModelFlags({ ...noModelFlags(), provider: "openrouter", pin: GLM }, {})
+  applyModelRequest(currentModelRequest(noModelChoices()), {})
+  ask("startup on GLM")
+  switchModel(noModelChoices(), "anthropic/claude-opus-4-8", CTX, {})
+  ask("/model to a model with no default")
+
+  setStartupModelFlags(noModelFlags(), {})
+  switchPreset("slow")
+  ask("preset with low")
+  switchPreset("plain")
+  ask("preset with no effort")
+  switchPreset("maxed")
+  ask("preset with default")
+  switchPreset("slow")
+  switchModel(noModelChoices(), "moonshotai/kimi-k3", CTX, {})
+  ask("/model after a preset with low")
+
+  setStartupModelFlags({ ...noModelFlags(), effort: "medium" }, {})
+  switchPreset("slow")
+  ask("flag over the preset")
+  return "done"
+}

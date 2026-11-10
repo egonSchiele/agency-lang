@@ -177,6 +177,21 @@ describe("_lastReply", () => {
     });
   });
 
+  it("passes on a choice answer with no confidence and no probabilities", async () => {
+    // Some decision models leave both out. Agency reads a missing field as
+    // null, so the answer must reach the program without them.
+    const decision: DecideResult = {
+      answers: { answer: { type: "choice", choice: "billing" } },
+      usage: { inputTokens: 5, outputTokens: 0 },
+      model: "gpt-6-luna",
+    };
+    const threads = threadsWith([
+      smoltalk.assistantMessage(JSON.stringify({ response: "billing" }), { rawData: decision }),
+    ]);
+    const reply = await lastReplyOn(threads);
+    expect(reply?.answers).toEqual({ answer: { type: "choice", choice: "billing" } });
+  });
+
   it("gives null and empty values for a reply that carried nothing extra", async () => {
     const reply = await lastReplyOn(threadsWith([smoltalk.assistantMessage("plain")]));
     expect(reply).toEqual({

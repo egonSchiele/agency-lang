@@ -51,8 +51,9 @@ Survey a codebase or documentation and return an organized answer with sources.
   question tightly.
 
 Called from code, this runs on the caller's thread like any function:
-  the system prompt, the reads, and the answer stay there. Wrap the call
-  in `thread { ... }` for an isolated survey.
+  the reads and the answer stay there, and the system prompt is removed
+  when the agent finishes. Wrap the call in `thread { ... }` for an
+  isolated survey.
 
 **Parameters:**
 
@@ -70,4 +71,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L165))

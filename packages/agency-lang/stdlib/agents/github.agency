@@ -1,7 +1,7 @@
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import { githubTools, spillTools, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
-import { ensureSystemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
@@ -53,7 +53,7 @@ def work(
   provider: string,
   extraTools: any[],
 ): string {
-  ensureSystemMessage(systemPrompt)
+  systemMessage(systemPrompt, expires: "llmCall")
   return llm(
     withContext(task: task, context: context),
     llmOptions(
@@ -65,8 +65,10 @@ def work(
   )
 }
 
-/** Called from code, this runs on the caller's thread like any function.
-  Wrap the call in `thread { ... }` to keep it apart. */
+/** Called from code, this runs on the caller's thread like any function:
+  the reads and the answer stay there, and the system prompt is removed
+  when the agent finishes. Wrap the call in `thread { ... }` to keep it
+  apart. */
 @guarded(cost: maxCost, time: maxTime)
 export handoff def githubAgent(
   task: string,

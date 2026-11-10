@@ -61,8 +61,9 @@ Write, edit, and run code to complete a task on disk. Returns a short
   conversation, so it already sees the work above.
 
 Called from code, this runs on the caller's thread like any function:
-  the system prompt, the tool results, and the answer stay there. Wrap the
-  call in `thread { ... }` to keep them apart.
+  the tool results and the answer stay there, and the system prompt is
+  removed when the agent finishes. Wrap the call in `thread { ... }` to
+  keep them apart.
 
 **Parameters:**
 
@@ -80,4 +81,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L117))

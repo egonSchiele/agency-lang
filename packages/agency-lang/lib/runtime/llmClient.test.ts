@@ -88,6 +88,14 @@ describe("toSmolConfig — metadata pass-through", () => {
   });
 });
 
+describe("toSmolConfig — the type option", () => {
+  it("does not forward type to smoltalk", () => {
+    const clientConfig = { model: "gpt-6-luna", provider: "openai", type: "text" as const };
+    const promptConfig = { ...clientConfig, messages: [], metadata: clientConfig } as any;
+    expect(toSmolConfig(promptConfig)).not.toHaveProperty("type");
+  });
+});
+
 describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
   // prompt.ts builds the PromptConfig as `{ ...clientConfig, metadata: clientConfig }`,
   // so the nested apiKey/baseUrl maps arrive via metadata. toSmolConfig must

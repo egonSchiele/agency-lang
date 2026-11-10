@@ -41,9 +41,11 @@ the body's messages can land on the caller's thread as valid history.
    has its own active stack, so two prompts running at once cannot
    disturb each other. For the duration of the body the thread holds
    the dispatch's scope key (`MessageThread.enterHandoffScope`). Every
-   system message pushed meanwhile, whichever code pushes it, expires
-   with the dispatch: its metadata carries
-   `expires: { at: "handoff", key }`. The key is the tool name, the
+   system message pushed meanwhile with no expiry of its own, whichever
+   code pushes it, expires with the dispatch: its metadata carries
+   `expires: { at: "handoff", key }`. A message pushed with its own
+   expiry keeps it and is removed by that owner, not by the hand-back.
+   The key is the tool name, the
    call id, and the nesting depth. The depth matters because a
    provider that sends no call ids leaves a handoff nested inside
    itself with the same name and the same empty id.
@@ -236,13 +238,16 @@ belongs in an ordinary tool.
 A handoff function called from code, not by a model, is an ordinary
 function call. Functions are transparent to threads, so the body's
 `llm()` calls append to the caller's active thread, and nothing is
-stripped or handed back afterwards. A from-code call to the stdlib
-oracle or explorer leaves the persona, the reads, and the answer on the
-caller's thread. A caller who wants isolation writes
-`thread { oracleAgent(...) }`. The
-agents push their persona through `ensureSystemMessage` from
-`std::thread`, which skips the push when the active thread already holds
-it.
+handed back afterwards. A from-code call to the stdlib oracle or
+explorer leaves the reads and the answer on the caller's thread. The
+persona does not stay: the stdlib agents push it with
+`systemMessage(systemPrompt, expires: "llmCall")`, so it is removed when
+the agent's `llm()` call returns, whoever called the agent. An agent that
+makes a second call, as the general researcher does after an empty
+answer, pushes it again before that call. Any other system message a
+handoff body pushes with no expiry of its own stays on the caller's
+thread when code calls it. A caller who wants isolation writes
+`thread { oracleAgent(...) }`.
 
 ## Resume
 

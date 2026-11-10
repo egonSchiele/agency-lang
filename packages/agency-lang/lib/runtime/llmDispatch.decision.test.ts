@@ -108,3 +108,46 @@ describe("dispatchWithRetry with a decision call", () => {
     expect(vi.mocked(meteredDispatch).mock.calls[0][2]).toBe("decision");
   });
 });
+
+describe('dispatchWithRetry with type: "decision"', () => {
+  const sent = {
+    success: true as const,
+    value: {
+      answers: { answer: { type: "choice", choice: "billing" } },
+      usage: { inputTokens: 1, outputTokens: 0 },
+      model: "gpt-4o-mini",
+    },
+  };
+
+  it("meters a decision call on a model the catalog lists as text under the decision kind", async () => {
+    const decide = vi.fn(async () => sent);
+    const { usageKind } = await dispatch({
+      ctx: ctxWith({ decide }),
+      promptConfig: config({ model: "gpt-4o-mini", type: "decision" }),
+      prompt: "Which department?",
+      stream: false,
+      retryPolicy: { ...DEFAULT_RETRY_POLICY, retries: 0 },
+      parentSignal: undefined,
+    });
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(usageKind).toBe("decision");
+    expect(vi.mocked(meteredDispatch).mock.calls[0][2]).toBe("decision");
+  });
+
+  it("fails once, unretried, with smoltalk's message naming a provider that cannot answer", async () => {
+    // The real smoltalk decide() refuses a chat provider before it sends.
+    const decide = vi.fn((state, questions, cfg, signal) =>
+      smoltalk.decide(state, questions, { ...cfg, abortSignal: signal }),
+    );
+    const failed = dispatch({
+      ctx: ctxWith({ decide }),
+      promptConfig: config({ model: "new-decider", provider: "anthropic", type: "decision" }),
+      prompt: "Which department?",
+      stream: false,
+      retryPolicy: { ...DEFAULT_RETRY_POLICY, retries: 2 },
+      parentSignal: undefined,
+    });
+    await expect(failed).rejects.toThrow('Provider "anthropic" does not answer decisions.');
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+});

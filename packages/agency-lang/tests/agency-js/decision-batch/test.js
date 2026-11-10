@@ -16,6 +16,8 @@ const byInstructions = {
   "Will the customer leave?": { type: "noul", noul: 0.8 },
   "Is it urgent?": { type: "noul", noul: 0.7 },
   "Escalate? Urgent was true": { type: "noul", noul: 0.2 },
+  "Which department, asked of a text model?": { type: "choice", choice: "support" },
+  "Will the customer leave, asked of a text model?": { type: "noul", noul: 0.1 },
 };
 
 const calls = [];
@@ -71,5 +73,6 @@ const out = {
   requests: calls.length,
   first: round(calls[0]),
   second: calls[1] ? round(calls[1]) : null,
+  textModel: calls[2] ? { model: calls[2].config.model, ...round(calls[2]) } : null,
 };
 writeFileSync("__result.json", JSON.stringify(out, null, 2));

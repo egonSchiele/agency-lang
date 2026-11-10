@@ -195,6 +195,8 @@ export interface AgencyConfig {
       mlx?: string;
       /** Where a decision model answers: TypeSafe, a gateway, or a local Laya server. */
       typesafe?: string;
+      /** Where a local Laya server listens. Default `http://127.0.0.1:8000`. */
+      laya?: string;
     };
     /**
      * Max characters of a single tool result fed back to the LLM.
@@ -656,6 +658,7 @@ export const AgencyConfigSchema = z
             openAiCompat: z.string(),
             mlx: z.string(),
             typesafe: z.string(),
+            laya: z.string(),
           })
           .partial(),
         maxToolResultChars: z.number(),

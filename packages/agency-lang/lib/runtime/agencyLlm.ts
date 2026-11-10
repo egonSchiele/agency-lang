@@ -32,8 +32,8 @@
  * wrapped explicitly with `agency.withTestContext` in unit tests).
  */
 import type { z } from "zod";
-import type { SmolConfig, UserContentInput } from "smoltalk";
-import type { LlmBaseUrls } from "./llmConfig.js";
+import type { UserContentInput } from "smoltalk";
+import type { CallConfig, LlmBaseUrls } from "./llmConfig.js";
 import { runPrompt } from "./prompt.js";
 import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";
@@ -53,6 +53,10 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
   model?: string;
   /** Provider for this call, such as "openai-compat" or "typesafe". */
   provider?: string;
+  /** `"decision"` sends this call to a decision model's API, `"text"` to
+   *  the chat API, whatever the registry lists the model as. The same words
+   *  as the `type` on a smoltalk registry entry. */
+  type?: "decision" | "text";
   /** Override only the named providers' URLs for this call. */
   baseUrl?: LlmBaseUrls;
   /** Cap on generated output tokens for this call. Maps to the
@@ -92,9 +96,10 @@ export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {})
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge
   // with smoltalkDefaults pick up the default, but being explicit keeps
   // the contract obvious: omit means "don't touch the model".
-  const clientConfig: Partial<SmolConfig> = {};
+  const clientConfig: CallConfig = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
   if (opts.provider !== undefined) clientConfig.provider = opts.provider;
+  if (opts.type !== undefined) clientConfig.type = opts.type;
   if (opts.baseUrl !== undefined) clientConfig.baseUrl = opts.baseUrl;
   if (opts.maxTokens !== undefined) clientConfig.maxTokens = opts.maxTokens;
 

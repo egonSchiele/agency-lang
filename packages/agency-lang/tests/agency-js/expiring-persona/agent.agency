@@ -1,0 +1,72 @@
+// A handoff that pushes its persona with expires: "llmCall", the shape of
+// the stdlib agents. The persona is on the thread while the agent's one
+// llm() call runs, whoever called the agent, and gone afterwards.
+import { systemMessage } from "std::thread"
+
+// Raises with no handler in scope, so the run pauses inside the handoff.
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+handoff def personaAgent(question: string): string {
+  systemMessage("persona: be terse", expires: "llmCall")
+  return llm("brief: ${question}")
+}
+
+// A persona with no expiry of its own, which the hand-back removes. The
+// asTool case compares its final thread with this one's.
+handoff def legacyAgent(question: string): string {
+  systemMessage("persona: be terse")
+  return llm("brief: ${question}")
+}
+
+handoff def pausingAgent(question: string): string {
+  systemMessage("persona: be patient", expires: "llmCall")
+  return llm("brief: ${question}", {
+    tools: [pauseMe]
+  })
+}
+
+// The typed call fails when the reply is not a number.
+handoff def failingAgent(question: string): number {
+  systemMessage("persona: be numeric", expires: "llmCall")
+  const n: number = llm("brief: ${question}")
+  return n
+}
+
+// Code calls the agent on a thread it keeps using, then asks its own
+// question on that thread.
+node fromCode() {
+  systemMessage("caller rules")
+  const answer = personaAgent("q1")
+  return llm("And then?")
+}
+
+node asTool() {
+  return llm("Answer with the persona agent.", {
+    tools: [personaAgent]
+  })
+}
+
+node asToolLegacy() {
+  return llm("Answer with the persona agent.", {
+    tools: [legacyAgent]
+  })
+}
+
+node pauseFromCode() {
+  const answer = pausingAgent("q2")
+  return llm("And then?")
+}
+
+node failureFromCode() {
+  const answer = try failingAgent("q3")
+  return llm("And then?")
+}
+
+node twiceFromCode() {
+  const first = personaAgent("q4")
+  const second = personaAgent("q5")
+  return llm("And then?")
+}

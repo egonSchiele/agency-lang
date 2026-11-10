@@ -39,6 +39,10 @@ export type PromptConfig = {
   apiKey?: SmolConfig["apiKey"];
   model?: string;
   provider?: string;
+  /** `"decision"` makes this a decision call and `"text"` a text call,
+   *  whatever the registry says. Read by `isDecisionCall`; never sent to
+   *  smoltalk. */
+  type?: "decision" | "text";
   metadata?: Record<string, any>;
   /** The module of the Agency code making the call. The runtime sets it.
    *  The deterministic test client picks its mock queue by it; a real
@@ -472,8 +476,10 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
   } = config;
 
   const metaApiKey = (metadata as { apiKey?: SmolConfig["apiKey"] } | undefined)?.apiKey;
+  // `type` picks the dispatch path and is not a smoltalk option.
+  const { type: _type, ...forwarded } = metadata ?? {};
   return {
-    ...metadata,
+    ...forwarded,
     messages,
     // Never `strict`. With smoltalk's default of strict off, a provider
     // accepts an argument key that is not in the schema, and the runtime

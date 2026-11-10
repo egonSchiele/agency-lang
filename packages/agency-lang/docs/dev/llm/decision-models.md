@@ -16,10 +16,12 @@ output. Run it with `--model typesafe/jev-1.13` and it goes to Jev. The file
 does not change. `packages/examples/decision-triage.agency` runs unchanged
 against Jev, a local Laya server, and the default model.
 
-A known model is a decision call when its registry entry has
-`type: "decision"`. The selected provider can be TypeSafe, OpenRouter, or
-another provider serving a decision model. An unknown model opts into the
-TypeSafe protocol with `provider: "typesafe"`.
+The `type` option is the switch. `type: "decision"` sends a typed call
+to the model's decision API, and `type: "text"` sends it to the chat API.
+These are the words smoltalk's registry uses for a model's kind. Without
+the option, the registry decides: a model whose entry has
+`type: "decision"` is a decision call, and an unknown model is one when
+its provider is `typesafe`.
 
 ## The lifecycle of one call
 
@@ -68,12 +70,45 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
 
 ## Which calls are decision calls
 
-`isDecisionCall` first looks up the model under the selected provider. If
-that entry is absent, it looks up the unqualified model name. A known
-entry selects the decision path only when its type is `decision`. This
-lets providers define different capabilities for the same model name.
-An unknown name selects the decision path when its provider is `typesafe`,
-as needed for a local Laya server.
+`isDecisionCall` (`lib/runtime/decision/dispatch.ts`) applies three rules
+in order:
+
+1. `type: "decision"` on the call: a decision call.
+2. `type: "text"` on the call: a text call.
+3. No option: the registry. The model is looked up under the selected
+   provider, then by its name alone. A known entry is a decision call when
+   its type is `decision`. An unknown name is a decision call when its
+   provider is `typesafe`.
+
+Rule 3 reads the first entry the lookup finds. A name can have a text
+entry and a decision entry under one provider, and then the call is a text
+call. `gpt-6-luna` under `openai` is listed that way, so an untyped call
+to it stays a chat call.
+
+Three cases need the option:
+
+```ts
+// gpt-6-luna under openai has both entries. With no option it is a chat call.
+const a: Dept = llm(q, { model: "gpt-6-luna", provider: "openai", type: "decision" })
+
+// A local chat model, answering decisions in process through smoltalk-llama-cpp.
+const b: Dept = llm(q, { model: "/models/qwen3-4b.gguf", provider: "llama-cpp", type: "decision" })
+
+// A decision model the registry does not list yet, on any provider.
+const c: Dept = llm(q, { model: "new-decider", provider: "openrouter", type: "decision" })
+```
+
+The option is per call. `setLlmOptions` does not take it: a branch default
+of `type: "decision"` would turn every later call into a decision call, and
+a call with tools or with no type annotation would fail. The type checker
+refuses the key there, and `_setLlmOptions` throws when a value typed
+`any` carries it. To send every call to a decision model the registry
+lists, set the model; rule 3 covers it.
+
+`toSmolConfig` drops the key, since smoltalk's chat config has no such
+field. `questionCapFor` looks for the decision entry under the selected
+provider first and falls back to the plain lookup, so `gpt-6-luna` gets
+its decision entry's cap of 400 and not the default of 64.
 
 `dispatchDecision` preserves the resolved provider. If none is set, it uses
 the registry entry's provider, then `typesafe` for an unknown model. Thus
@@ -91,6 +126,19 @@ An explicit provider wins. Repeating the current model keeps its provider,
 so `model: "jev-1.13"` in a run using OpenRouter stays on OpenRouter.
 Model-only changes between text models keep the existing provider.
 `setModel`, `setLlmOptions`, and per-call options follow these rules.
+
+A call with `type: "decision"`, a model, and no provider switches to the
+provider of the model's first decision entry in registry order. For
+`gpt-6-luna`, whose first entry is a text entry, that is `openai`. For
+`jev-1.14`, listed under both `typesafe` and `openrouter`, it is `typesafe`,
+the same provider the rule above picks. A model with no decision entry
+keeps the provider it would have had. In a program whose default provider
+is `anthropic`, that sends the request to `anthropic`, and smoltalk's
+`decide()` refuses it before sending: `Provider "anthropic" does not answer
+decisions. Use one of: ...`. smoltalk does not export its list of decision
+providers, so Agency cannot refuse earlier. The failure has no HTTP status
+and matches no transport message, so the retry classifier treats it as
+terminal and the call fails once.
 
 ## Validation
 
@@ -146,6 +194,13 @@ bare annotation's answer is `answers.answer`; an object annotation's are
 `answers.<field>`. Check `type` before reading a field, and the checker
 refuses a typo.
 
+Some models leave out part of an answer. A choice answer's `confidence`
+and `probabilities`, and a score answer's `confidence`, `legend`, and
+`probabilities`, can be missing, and Agency reads a missing field as
+`null`, so the types say `number | null` and a program checks before
+reading. The statelog reader accepts an answer without them, and the logs
+viewer prints a missing confidence as nothing.
+
 `rawData` stays on the record as the untyped original.
 `lib/stdlib/thread.test.ts` builds its fixture as smoltalk's `DecideResult`,
 so a shape change there fails here. Agency annotations do not produce
@@ -183,15 +238,40 @@ Vercel AI Gateway also serves it, at base URL
 `https://ai-gateway.vercel.sh/typesafe` with model `typesafe-ai/jev`. That
 name is not in the registry, so the call needs `provider: "typesafe"`.
 
-**Laya locally.** Install and serve, then point the base URL at it. Laya
-needs no key, but the provider requires one, so any value works:
+**OpenAI.** `gpt-6-luna` answers decisions through OpenAI's own API, with
+`OPENAI_API_KEY`. The registry lists it as a text model first, so the call
+needs the option:
+
+```ts
+const dept: Dept = llm(q, { model: "gpt-6-luna", type: "decision" })
+```
+
+**Laya locally.** Install and serve, then use the `laya` provider. It
+needs no key. Its address is `baseUrl.laya` (in `agency.json` or on the
+call), then `LAYA_BASE_URL`, then `http://127.0.0.1:8000`. A Laya model is
+not in the registry, so the call needs the option:
 
 ```bash
 uv venv laya && source laya/bin/activate
 uv pip install "laya[serve]"
 LAYA_PRELOAD=1 laya-serve          # port 8000, Metal on Apple silicon
-TYPESAFE_API_KEY=unused TYPESAFE_BASE_URL="http://localhost:8000" \
-  agency run --model typesafe/laya decision-triage.agency
+```
+
+```ts
+const dept: Dept = llm(q, { model: "english", provider: "laya", type: "decision" })
+```
+
+Laya also speaks the TypeSafe protocol, so `provider: "typesafe"` with
+`TYPESAFE_BASE_URL` pointing at the server and any value in
+`TYPESAFE_API_KEY` reaches it too, with no option.
+
+**A local chat model.** The `llama-cpp` provider answers decisions in
+process with a small chat model, through the `smoltalk-llama-cpp` plugin.
+The model is a path to a `.gguf` file. This needs `smoltalk-llama-cpp`
+0.9.0 or later; an older plugin fails with "has no decision support".
+
+```ts
+const dept: Dept = llm(q, { model: "/models/qwen3-4b.gguf", provider: "llama-cpp", type: "decision" })
 ```
 
 **The default model.** Run the same file with no flag. It goes through
@@ -201,17 +281,22 @@ structured output.
 
 - `lib/runtime/decision/questions.test.ts`: every accepted shape and every
   refused shape, the answer mapping, and the state.
-- `lib/runtime/decision/dispatch.test.ts`: the routing rule, the completion
-  shape, the key-merge rule, the four refusals, and the HTTP status carried
-  on a failed request so a 429 or 5xx retries.
+- `lib/runtime/decision/dispatch.test.ts`: the three rules, the question
+  cap, the completion shape, the key-merge rule, the four refusals, and the
+  HTTP status carried on a failed request so a 429 or 5xx retries.
+- `lib/runtime/llmConfig.test.ts`: the provider a `type: "decision"`
+  call switches to.
+- `lib/stdlib/llm.test.ts`: `setLlmOptions` refuses `type`.
 - `lib/runtime/llmDispatch.decision.test.ts`: a refusal happens before any
-  metered attempt, and a sent call is metered under the `decision` kind.
+  metered attempt, a sent call is metered under the `decision` kind, and a
+  provider that cannot answer decisions fails once, unretried.
 - `lib/runtime/llmClient.decide.test.ts` and the `DeterministicClient.decide`
   cases in `deterministicClient.test.ts`: the client contract.
 - `tests/agency-js/decision-model/`: the compiled path end to end. The test
   uses a client of its own that records what the runtime sent, so the
   fixture pins the state, the questions, and the config for a bare call, an
-  object call, and a call under a cost guard.
+  object call, a call under a cost guard, a `type: "decision"` call on a
+  text model, and a call to the `laya` provider with its base URL.
 
 ## Batching inside `parallel`
 
@@ -278,9 +363,9 @@ before asking, since their states differ.
 
 Nothing here is specific to Jev. The collector works over smoltalk's
 `DecisionState`, `DecisionQuestion`, and `DecideResult` types, which any
-decision model in the registry shares; a call is a decision call when its
-registry entry has `type: "decision"`, whichever provider serves it, and
-the per-request cap comes from that entry. The two Jev-shaped numbers are
+decision model shares; a call is a decision call when `isDecisionCall` says
+so, whichever provider serves it, and the per-request cap comes from the
+model's decision entry. The two Jev-shaped numbers are
 the default cap of 64 for a model the registry does not know and the
 `typesafe` provider name for such a model.
 

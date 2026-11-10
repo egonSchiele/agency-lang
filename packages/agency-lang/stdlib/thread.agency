@@ -310,9 +310,8 @@ export idempotent def threadIsNew(): boolean {
   return _threadIsNew()
 }
 
-/** For an agent's persona. An agent called twice from code on one thread
-  keeps one persona; a handoff, whose system messages are removed when it
-  hands back, pushes the persona fresh on every dispatch. */
+/** Push a system message unless the active thread already holds one with
+  the same text, so code that runs twice on one thread adds it once. */
 export def ensureSystemMessage(msg: string) {
   """
   Push `msg` as a system message unless the active thread already holds it.
@@ -381,23 +380,27 @@ export type NoulAnswer = {
 
 /** A decision model's answer to a pick-one question: the option picked,
   a provider-specific confidence score, and the probability of every option.
-  Read `probabilities[choice]` for the selected option's probability. */
+  Read `probabilities[choice]` for the selected option's probability. Some
+  models leave out `confidence` and `probabilities`, so check each for
+  `null` before reading it. */
 export type ChoiceAnswer = {
   type: "choice";
   choice: string;
-  confidence: number;
-  probabilities: Record<string, number>
+  confidence: number | null;
+  probabilities: Record<string, number> | null
 }
 
 /** A decision model's answer on an ordered scale. `score` is the expected
   level and may be fractional; `legend` maps each level to its description.
-  No Agency annotation produces a score question yet. */
+  No Agency annotation produces a score question yet. Some models leave
+  out `confidence`, `legend`, and `probabilities`, so check each for `null`
+  before reading it. */
 export type ScoreAnswer = {
   type: "score";
   score: number;
-  confidence: number;
-  legend: Record<string, string>;
-  probabilities: Record<string, number>
+  confidence: number | null;
+  legend: Record<string, string> | null;
+  probabilities: Record<string, number> | null
 }
 
 /** One answer from a decision model. Check `type` before reading the rest:

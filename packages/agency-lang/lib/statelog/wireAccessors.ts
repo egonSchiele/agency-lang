@@ -101,23 +101,31 @@ function isQuestion(value: unknown): boolean {
   }
 }
 
-/** An answer carries the fields of its type that a reader uses. */
+/** An answer carries the fields of its type that a reader uses. Some
+ *  models leave out `confidence`, `probabilities`, and `legend`, so those
+ *  are checked only when present. */
 function isAnswer(value: unknown): boolean {
   if (!isRecord(value)) {
     return false;
   }
   switch (value.type) {
     case "choice":
-      return typeof value.choice === "string" && isRecord(value.probabilities);
+      return typeof value.choice === "string" && isOptionalRecord(value.probabilities);
     case "noul":
       return typeof value.noul === "number";
     case "score":
       return (
-        typeof value.score === "number" && isRecord(value.probabilities) && isRecord(value.legend)
+        typeof value.score === "number" &&
+        isOptionalRecord(value.probabilities) &&
+        isOptionalRecord(value.legend)
       );
     default:
       return false;
   }
+}
+
+function isOptionalRecord(value: unknown): boolean {
+  return value === undefined || isRecord(value);
 }
 
 /** Tool name on a toolCall / toolCallStart. */

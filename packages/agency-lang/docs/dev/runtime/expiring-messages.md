@@ -8,8 +8,10 @@ same way.
 
 There are three today:
 
-1. The persona and any other system message a handoff body pushes. It is
-   removed when the body returns.
+1. A system message a handoff body pushes with no expiry of its own. It
+   is removed when the body returns. The stdlib agents push their persona
+   with `expires: "llmCall"` instead, so it leaves with the agent's
+   `llm()` call whether a model or code called the agent.
 2. The "Relevant context from memory" system message that `llm(…, {
    memory: true })` adds. It is removed when the request it was recalled
    for returns.

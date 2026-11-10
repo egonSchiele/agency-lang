@@ -1,0 +1,64 @@
+{
+  "fromCode": {
+    "result": "then done",
+    "personaPerRequest": [
+      1,
+      0
+    ],
+    "agentRequestRoles": [
+      "system",
+      "system",
+      "user"
+    ],
+    "callerRequestRoles": [
+      "system",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "callerRequestTexts": [
+      "caller rules",
+      "brief: q1",
+      "terse answer",
+      "And then?"
+    ]
+  },
+  "asTool": {
+    "personaPerRequest": [
+      0,
+      1,
+      0
+    ],
+    "finalRoles": [
+      "user",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "sameAsLegacy": true
+  },
+  "pauseFromCode": {
+    "result": "then done",
+    "checkpointHoldsPersona": true,
+    "personaPerRequest": [
+      1,
+      1,
+      0
+    ]
+  },
+  "failureFromCode": {
+    "result": "then done",
+    "personaPerRequest": [
+      1,
+      0
+    ]
+  },
+  "twiceFromCode": {
+    "result": "then done",
+    "personaPerRequest": [
+      1,
+      1,
+      0
+    ]
+  }
+}

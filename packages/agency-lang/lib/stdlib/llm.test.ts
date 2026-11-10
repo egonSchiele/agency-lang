@@ -90,6 +90,14 @@ describe("_setLlmOptions", () => {
     expect(stack.other.llmDefaults.maxToolCallRounds).toBe(3);
   });
 
+  it("refuses type, which is set per llm() call", () => {
+    const stack = { other: {} as any };
+    expect(() =>
+      withStack(stack, () => callHelper(_setLlmOptions, { type: "decision" } as any)),
+    ).toThrow("llm()'s type option is set per call, not with setLlmOptions.");
+    expect(stack.other.llmDefaults).toBeUndefined();
+  });
+
   it("ignores undefined fields (no overwrite with undefined)", () => {
     const stack = { other: { llmDefaults: { model: "keep" } } as any };
     withStack(stack, () => callHelper(_setLlmOptions, { temperature: 0.5 }));

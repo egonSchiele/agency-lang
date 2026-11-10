@@ -34,6 +34,11 @@ const answers = [
       probabilities: { billing: 0.3, support: 0.6, sales: 0.1 },
     },
   },
+  // Call 4: a text model asked with type: "decision". No confidence, as some
+  // decision models leave it out.
+  { answer: { type: "choice", choice: "sales" } },
+  // Call 5: a local Laya server.
+  { answer: { type: "noul", noul: 0.9 } },
 ];
 
 const client = {
@@ -62,9 +67,9 @@ const client = {
 __setLLMClient(client);
 
 const result = await main();
-if (calls.length !== 3) throw new Error(`expected 3 decision calls, got ${calls.length}`);
+if (calls.length !== 5) throw new Error(`expected 5 decision calls, got ${calls.length}`);
 
-const [first, second] = calls;
+const [first, second, , fourth, fifth] = calls;
 
 // Call 1 is the first message on the thread, so the state is only the prompt:
 // the one case where the prompt stays in the state, rather than moving into
@@ -89,6 +94,9 @@ const out = {
     questions: second.questions,
     config: { model: second.config.model, provider: second.config.provider },
   },
+  // Reaching decide() at all is the check: text() throws.
+  textModelCall: { model: fourth.config.model, questionNames: Object.keys(fourth.questions) },
+  layaCall: { provider: fifth.config.provider, layaBaseUrl: fifth.config.baseUrl?.laya },
 };
 
 writeFileSync("__result.json", JSON.stringify(out, null, 2));

@@ -56,8 +56,10 @@ Read or act on GitHub pull requests and issues: look up a pull request, its
   close issues; post a review or a review comment. It continues your
   conversation, so it already sees the work above.
 
-Called from code, this runs on the caller's thread like any function.
-  Wrap the call in `thread { ... }` to keep it apart.
+Called from code, this runs on the caller's thread like any function:
+  the reads and the answer stay there, and the system prompt is removed
+  when the agent finishes. Wrap the call in `thread { ... }` to keep it
+  apart.
 
 **Parameters:**
 
@@ -75,4 +77,4 @@ Called from code, this runs on the caller's thread like any function.
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/github.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/github.agency#L73))

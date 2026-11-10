@@ -84,6 +84,28 @@
           }
         ]
       }
+    },
+    {
+      "nodeName": "followUpHoldsThePersona",
+      "description": "the persona expires with the first call and is pushed again for the follow-up, so each request holds it once",
+      "input": "",
+      "expectedOutput": "\"1,1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "researcher": [
+          {
+            "return": ""
+          },
+          {
+            "return": "He studied fine art at Exeter (https://example.com/exeter)."
+          }
+        ]
+      }
     }
   ]
 }

@@ -7,7 +7,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
-import { ensureSystemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 
 /** @module
 @summary Answer Agency-language questions using bundled documentation and source.
@@ -55,7 +55,7 @@ def answer(
   extraTools: any[],
   offerSaveDraft: boolean,
 ): string {
-  ensureSystemMessage(systemPrompt)
+  systemMessage(systemPrompt, expires: "llmCall")
   return llm(
     withContext(task: question, context: context),
     llmOptions(

@@ -74,7 +74,15 @@ describe("a record from another version", () => {
       ...expression,
       answers: { response: { type: "choice", choice: "curious" } },
     } as unknown as DecisionLog;
-    expect(decisionSummary(bare)).toBe("curious 0%");
+    expect(decisionSummary(bare)).toBe("curious");
+  });
+
+  it("prints the confidence when a choice answer has no probabilities", () => {
+    const confidenceOnly = {
+      ...expression,
+      answers: { response: { type: "choice", choice: "curious", confidence: 0.5 } },
+    } as unknown as DecisionLog;
+    expect(decisionSummary(confidenceOnly)).toBe("curious 50%");
   });
 });
 

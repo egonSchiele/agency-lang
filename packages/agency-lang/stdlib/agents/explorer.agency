@@ -11,7 +11,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
-import { ensureSystemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
@@ -142,7 +142,7 @@ def survey(
   provider: string,
   extraTools: any[],
 ): string {
-  ensureSystemMessage(systemPrompt)
+  systemMessage(systemPrompt, expires: "llmCall")
   return llm(
     withContext(task: question, context: context),
     llmOptions(
@@ -158,8 +158,9 @@ def survey(
 }
 
 /** Called from code, this runs on the caller's thread like any function:
-  the system prompt, the reads, and the answer stay there. Wrap the call
-  in `thread { ... }` for an isolated survey. */
+  the reads and the answer stay there, and the system prompt is removed
+  when the agent finishes. Wrap the call in `thread { ... }` for an
+  isolated survey. */
 @guarded(cost: maxCost, time: maxTime)
 export handoff def explorerAgent(
   question: string,

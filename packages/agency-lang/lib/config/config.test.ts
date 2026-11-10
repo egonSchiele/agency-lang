@@ -46,6 +46,15 @@ describe("AgencyConfigSchema", () => {
     expect(result.data.client?.baseUrl?.typesafe).toBe("http://localhost:8000");
   });
 
+  it("keeps the laya base URL, for a local Laya server", () => {
+    const result = AgencyConfigSchema.safeParse({
+      client: { baseUrl: { laya: "http://127.0.0.1:9000" } },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.client?.baseUrl?.laya).toBe("http://127.0.0.1:9000");
+  });
+
   it("keeps client.openRouter, and rejects an unknown sort", () => {
     const good = AgencyConfigSchema.safeParse({
       client: { openRouter: { provider: { ignore: ["open-inference"], sort: "price" } } },

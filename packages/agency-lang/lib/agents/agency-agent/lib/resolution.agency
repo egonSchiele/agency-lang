@@ -3,7 +3,7 @@
   falls to `priceDefault`. Pure: layers are read-only inputs. See spec 3.2/3.3. */
 import { keys } from "std::object"
 import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
-import { canonicalSlot, providersFor, slotKind, SLOTS } from "./slots.agency"
+import { canonicalSlot, isChatSlot, providersFor, slotCanBeOff, slotKind, SLOT_OFF, SLOTS } from "./slots.agency"
 
 export type SlotValue = {
   model: string;
@@ -49,6 +49,15 @@ export def resolveSlot(
   for (layer in layers) {
     const perSlotValue = layer.perSlot[slot]
     if (perSlotValue != null) {
+      if (slotCanBeOff(slot) && perSlotValue.provider == "" && perSlotValue.model == SLOT_OFF) {
+        return success(
+          {
+          model: "",
+          provider: "",
+          via: "${layer.name}:off"
+        },
+        )
+      }
       return success(
         {
         model: perSlotValue.model,
@@ -165,6 +174,32 @@ export def buildLayers(
   providerEstablished: boolean,
 ): Layer[] {
   return [parseLayer(layer, providers, providerEstablished) for layer in raw]
+}
+
+/** Fold several raw layers, most immediate first, into one that resolves
+  every slot the same way. A layer's named slots are read before its pin
+  is recorded, because within one layer a named slot beats the pin. */
+export def flattenLayers(layers: RawLayer[]): RawLayer {
+  let pin = ""
+  let slots: Record<string, string> = {}
+  for (layer in layers) {
+    for (key in Object.keys(layer.slots)) {
+      const slot = canonicalSlot(key)
+      // A pin in a more immediate layer hides every chat slot below it.
+      const hidden = pin != "" && isChatSlot(slot)
+      if (slots[slot] == null && !hidden) {
+        slots[slot] = layer.slots[key]
+      }
+    }
+    if (pin == "") {
+      pin = layer.pin
+    }
+  }
+  return {
+    name: "flat",
+    pin: pin,
+    slots: slots
+  }
 }
 
 /** Slots whose (model, provider) changed between two assignments. */

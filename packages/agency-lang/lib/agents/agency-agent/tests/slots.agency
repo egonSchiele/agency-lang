@@ -1,4 +1,4 @@
-import { canonicalSlot, chatSlots, isKnownSlot, providersFor, slotKind } from "../lib/slots.agency"
+import { canonicalSlot, chatSlots, isKnownSlot, providersFor, slotCanBeOff, slotKind } from "../lib/slots.agency"
 
 node aliasFastToMain(): string {
   return canonicalSlot("fast")
@@ -31,4 +31,17 @@ node routerTakesTheDecisionProviders(): string {
 // An llmOptions block reaches the chat slots only.
 node optionsReachTheChatSlots(): string {
   return chatSlots(["main", "reasoning", "embedding", "router"]).join(",")
+}
+
+// Only a slot with a default can be turned off.
+node routerCanBeOff(): boolean {
+  return slotCanBeOff("router")
+}
+
+node embeddingCannotBeOff(): boolean {
+  return slotCanBeOff("embedding")
+}
+
+node mainCannotBeOff(): boolean {
+  return slotCanBeOff("main")
 }

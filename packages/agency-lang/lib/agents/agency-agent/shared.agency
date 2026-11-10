@@ -31,7 +31,7 @@ import { ModelRequest, detectionInputs, requestLayers, requestProvider } from ".
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
 import { resolveAgentHome } from "./lib/config.agency"
 import { ModelSettings, getCapabilitySettings, loadSettings } from "./lib/settings.agency"
-import { providersFor, slotKind } from "./lib/slots.agency"
+import { providersFor, slotKind, SLOT_DEFAULTS, SLOT_OFF } from "./lib/slots.agency"
 
 
 // One-shot runs (--print / piped / a positional query) have no REPL for the
@@ -139,6 +139,31 @@ export def getRouterProvider(): string {
     return ""
   }
   return router.provider
+}
+
+/** The router as `provider/model` when the user set it, or "" when it is
+  unset or came from the default layer. */
+export def explicitRouterSpec(): string {
+  const router = _resolved["router"]
+  if (router == null || router.model == "" || router.via == "default:per-slot") {
+    return ""
+  }
+  return "${router.provider}/${router.model}"
+}
+
+/** The rows of SLOT_DEFAULTS whose provider has its key in the
+  environment. It reads the environment, so only startup calls it: inside
+  the policy handler the read would become a prompt. */
+export def defaultSlots(): Record<string, string> {
+  let output: Record<string, string> = {}
+  for (slot in Object.keys(SLOT_DEFAULTS)) {
+    const spec = SLOT_DEFAULTS[slot]
+    const parsed = parseModelSpec(spec, false, providersFor(slot, knownProviders()))
+    if (missingProviderEnvVar(parsed.provider) == "") {
+      output[slot] = spec
+    }
+  }
+  return output
 }
 
 // Cache of the last applied assignment, for getResolvedSlots() (the explain
@@ -423,8 +448,13 @@ export def resolveRequestAgainst(
   settings: ModelSettings,
   ctx: Ctx,
   providerEstablished: boolean,
+  defaults: Record<string, string> = {},
 ): Result<Record<string, Resolved>> {
-  const raw = requestLayers(request, settings)
+  // The default layer comes last, so every way to set a slot wins over it.
+  const raw = [
+    ...requestLayers(request, settings),
+    { name: "default", pin: "", slots: defaults }
+  ]
   const layers = buildLayers(raw, knownProviders(), providerEstablished)
   const all = resolveAll(layers, ctx)
   if (isFailure(all)) {
@@ -436,6 +466,7 @@ export def resolveRequestAgainst(
 export def resolveHostedModels(
   request: ModelRequest,
   settings: ModelSettings,
+  defaults: Record<string, string> = {},
 ): Result<Record<string, Resolved>> {
   """
   Resolve a hosted run's models: pick the provider (the request's, else
@@ -444,6 +475,7 @@ export def resolveHostedModels(
 
   @param request - What the run asked for
   @param settings - settings.model
+  @param defaults - The default slots startup kept, from defaultSlots()
   """
   const provider = requestProvider(request, settings)
   const inputs = detectionInputs(request)
@@ -455,7 +487,7 @@ export def resolveHostedModels(
     provider: detected.value,
     price: "standard"
   }
-  return resolveRequestAgainst(request, settings, ctx, provider != "")
+  return resolveRequestAgainst(request, settings, ctx, provider != "", defaults)
 }
 
 /** Turn an embedding slot value for a local provider into the model name
@@ -501,9 +533,11 @@ export def resolveLocalEmbedding(spec: string): Result<Resolved> {
 }
 
 // The router slot in a local session, from its provider/model value. The
-// flag check already refused a value with no provider.
+// flag check already refused a value with no provider, and `off` is no
+// router.
 def localRouterSlot(spec: string): Resolved {
-  const parsed = parseModelSpec(spec, false, providersFor("router", knownProviders()))
+  const value = if spec == SLOT_OFF then "" else spec
+  const parsed = parseModelSpec(value, false, providersFor("router", knownProviders()))
   return {
     model: parsed.model,
     provider: parsed.provider,

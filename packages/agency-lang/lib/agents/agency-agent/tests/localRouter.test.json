@@ -6,6 +6,30 @@
       "input": "",
       "expectedOutput": "\"openrouter/jev-1.14\"",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "keySetGivesADefaultRouter",
+      "input": "",
+      "expectedOutput": "\"openrouter/jev-1.14\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "emptyKeyGivesNoDefault",
+      "input": "",
+      "expectedOutput": "\"{}\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localStartGetsNoDefaultRouter",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localRouterOffIsEmpty",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

@@ -35,22 +35,85 @@ Otherwise the coordinator takes the turn.
 ## The slot
 
 `router` is a slot of the `derived` kind, beside `embedding`
-(`lib/agents/agency-agent/lib/slots.agency`). It has no default, so routing
-is off until it is set:
+(`lib/agents/agency-agent/lib/slots.agency`). It is set with
 
 ```
 agency agent --model router=openrouter/jev-1.14
 ```
 
-or `slots.router` in a preset, or `settings.model.slots.router`. The value
-must be in the `provider/model` form. The provider must be one that answers
-decisions (`DECISION_PROVIDERS`: `typesafe`, `laya`, `openai`,
-`openrouter`, `llama-cpp`). That list is used only to parse this slot, so
-`typesafe` and `laya` never reach a chat slot. A local session (`--local`,
-a local preset, `/local`) keeps the router: it may route with a hosted
-decision model. `getRouterModel()` and `getRouterProvider()` in
-`shared.agency` read the resolved slot. `docs/dev/agents/agent-presets.md`
-covers the layers.
+or `slots.router` in a preset, or `settings.model.slots.router`, or
+`/model router=...` in a session. With none of these, the default below
+applies. The value must be in the `provider/model` form. The provider must
+be one that answers decisions (`DECISION_PROVIDERS`: `typesafe`, `laya`,
+`openai`, `openrouter`, `llama-cpp`). That list is used only to parse this
+slot, so `typesafe` and `laya` never reach a chat slot. A local session
+(`--local`, a local preset, `/local`) keeps a router the user set: it may
+route with a hosted decision model. `getRouterModel()` and
+`getRouterProvider()` in `shared.agency` read the resolved slot.
+`docs/dev/agents/agent-presets.md` covers the layers.
+
+The startup header prints a `Router` line under the main and reasoning
+models when the slot is set, so the user can see where their messages go.
+
+## The default router
+
+When nothing sets the router, a hosted session routes with
+`openrouter/jev-1.14`, but only when `OPENROUTER_API_KEY` is set. The
+chat provider does not matter: an Anthropic session with an OpenRouter key
+routes too.
+
+The default is the `router` row of `SLOT_DEFAULTS` in `lib/slots.agency`.
+It reaches the resolver as a fifth layer, named `default`, after
+`settings`. Because it is last, every other way of setting the router wins
+over it. A slot it fills shows `(default:per-slot)` in `/model`. It is a
+layer, not a value from `priceDefault`, because `priceDefault` is pure and
+its tests assert exact values: a key check inside it would make those
+tests depend on the shell.
+
+The key is checked once, at startup. `pickModelsForAgent` calls
+`defaultSlots()` in `shared.agency`, which keeps the rows of
+`SLOT_DEFAULTS` whose provider has its key, and stores the result with
+`setStartupModelFlags`. `applyModelRequest` and `switchModel` pass the
+stored rows to the resolver. Reading the key later would happen inside
+the policy handler, where the `std::env` read becomes a prompt under the
+`recommended` policy, and under a handler that rejects, `env()` returns a
+failure that `missingProviderEnvVar` reads as a key that is set. So
+nothing `/model` or `/preset` calls may call `defaultSlots()`.
+
+A one-shot run (`agency agent -p "..."`, or a prompt on stdin) gets the
+default too, because `pickModelsForAgent` runs before the agent branches
+on one-shot. A one-shot run prints no header, so nothing in its output
+shows the router. A script that should not route passes
+`--model router=off`.
+
+A local session gets no default. Its slots are built by
+`configureLocalModel`, which never sees the `default` layer. `/local`
+carries the hosted session's router into the local one only when the user
+set it: `explicitRouterSpec()` returns `""` for a router that came from
+the default layer.
+
+A resumed session uses the default slots it was saved with. The restore
+runs after `pickModelsForAgent` and replaces every `let` global,
+including the stored rows (`docs/dev/agents/agent-sessions.md`, "How a
+resume works"). A session saved before the default existed has no stored
+rows. The restore sets the global to null, because it does not run the
+initializer again, so `startupDefaultSlots()` in `lib/session.agency`
+reads null as `{}`. That session gets no default router until a fresh
+start.
+
+## Turning the router off
+
+`off` is a router value that means no router. It works in every place a
+router value goes: `--model router=off`, `/model router=off`, a preset's
+`slots.router`, and `settings.model.slots.router`. `lacksProviderForm` in
+`lib/models.agency` is the one check behind all four, and it lets `off`
+through for a slot that has a default. `resolveSlot` turns `off` into an
+empty model and provider, with a `via` such as `in-session:off`, and the
+rest of the agent reads an empty model as no router. In a local session,
+`localRouterSlot` reads `off` the same way as no value.
+
+`off` means nothing in a slot with no default. `embedding=off` is refused
+with the provider-form message, and `main=off` names a model called `off`.
 
 ## The question
 
@@ -185,4 +248,11 @@ name to `ROUTED_TOOLS`, which keeps it off the coordinator's line.
 - `lib/agents/agency-agent/tests/turn.agency`: `dispatchToBrain` marks a
   slash command rewritten and a plain message not.
 - `lib/agents/agency-agent/tests/modelRequest.agency`, `presetRules.agency`,
-  `slots.agency`, `localRouter.agency`: the slot.
+  `slots.agency`, `localRouter.agency`: the slot, `off`, the key check in
+  `defaultSlots`, and no default in a local start.
+- `lib/agents/agency-agent/tests/resolution.agency`: the `default` layer
+  under every other layer, and `off` over it.
+- `lib/agents/agency-agent/tests/presetSession.agency`: the stored
+  default through `switchModel`, and `explicitRouterSpec`.
+- `lib/agents/agency-agent/brains/coordinator/tests/agentTurn.agency`: the
+  header's `Router` line.

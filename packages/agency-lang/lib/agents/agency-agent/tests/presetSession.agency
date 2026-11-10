@@ -1,18 +1,22 @@
 import { setEnv } from "std::system"
 
+import { POLICY_DIR, SETTINGS_FILE, usingDefaultAgentHome } from "../lib/config.agency"
 import { noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
 import { Ctx } from "../lib/resolution.agency"
 import { activePresetName, readPresetTable, setPresetTable } from "../lib/presets.agency"
 import {
+  Session,
   applySessionLlmOptions,
   currentModelRequest,
-  parsePresetName,
+  parsePresetCommand,
+  saveSessionPreset,
   setStartupModelFlags,
   switchModel,
   switchPreset,
  } from "../lib/session.agency"
 import { setStartupLimitFlags } from "../lib/toolLimits.agency"
+import { applyResolved, explicitRouterSpec, getResolvedSlots } from "../shared.agency"
 
 static const CTX: Ctx = {
   provider: "anthropic",
@@ -92,7 +96,7 @@ node unresolvablePresetChangesNothing(): string {
 }
 
 node presetNameFromCommand(): string {
-  return "[${parsePresetName("/preset")}] [${parsePresetName("/preset   cheap ")}]"
+  return "[${parsePresetCommand("/preset").name}] [${parsePresetCommand("/preset   cheap ").name}]"
 }
 
 def optionsNow(): string {
@@ -152,4 +156,190 @@ node anEmptyBlockFallsBackToThePreset(): string {
   const set = applySessionLlmOptions(noModelChoices(), { temperature: 0.7 })
   const cleared = applySessionLlmOptions(set, {})
   return "${JSON.stringify(cleared)} ${JSON.stringify(requestLlmOptions(currentModelRequest(cleared), {}))}"
+}
+
+static const DEFAULTS: Record<string, string> = {
+  router: "openrouter/jev-1.14"
+}
+
+// A hosted session with no presets, holding these default slots the way
+// startup keeps them.
+def useDefaults(defaults: Record<string, string>) {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setPresetTable(readPresetTable({}))
+  setStartupModelFlags(noModelFlags(), {}, defaults)
+}
+
+def routerOf(resolved: Record<string, Resolved>): string {
+  const router: Resolved = resolved["router"]
+  return "${router.model}|${router.provider}|${router.via}"
+}
+
+node storedDefaultSetsTheRouter(): string {
+  useDefaults(DEFAULTS)
+  const out = switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  return routerOf(out.resolved)
+}
+
+node noStoredDefaultNoRouter(): string {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setPresetTable(readPresetTable({}))
+  setStartupModelFlags(noModelFlags(), {})
+  const out = switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  const router: Resolved = out.resolved["router"]
+  return router.model
+}
+
+node routerOffChoiceTurnsItOff(): string {
+  useDefaults(DEFAULTS)
+  const out = switchModel(noModelChoices(), "router=off", CTX, {})
+  return routerOf(out.resolved)
+}
+
+node defaultRouterIsNotExplicit(): string {
+  useDefaults(DEFAULTS)
+  switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  return explicitRouterSpec()
+}
+
+node chosenRouterIsExplicit(): string {
+  useDefaults(DEFAULTS)
+  switchModel(noModelChoices(), "router=openrouter/jev-1.13", CTX, {})
+  return explicitRouterSpec()
+}
+
+def presetCommand(cmd: string): string {
+  return JSON.stringify(parsePresetCommand(cmd))
+}
+
+node presetCommandLists(): string {
+  return presetCommand("/preset")
+}
+
+node presetCommandSwitches(): string {
+  return presetCommand("/preset glm")
+}
+
+node presetCommandSavesToTheActive(): string {
+  return presetCommand("/preset save")
+}
+
+node presetCommandSavesToAName(): string {
+  return presetCommand("/preset save fast")
+}
+
+node presetCommandSwitchesToAPresetNamedLikeSave(): string {
+  return presetCommand("/preset saved")
+}
+
+static const SAVED_PRESETS = {
+  big: { provider: "anthropic", pin: "claude-opus-4-8", maxToolResultChars: 20000 },
+  small: { provider: "anthropic", pin: "claude-sonnet-4-6" }
+}
+
+static const ROUTER_CHOICE = "router=openrouter/jev-1.14"
+
+// Write settings.json with these presets, load them the way startup does,
+// and switch to `small`. False when the agent home is the real one.
+def useSavedPresets(presets: any): boolean {
+  if (usingDefaultAgentHome()) {
+    return false
+  }
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags(noModelFlags(), {})
+  setStartupLimitFlags({ maxToolCallRounds: null, maxToolResultChars: null })
+  write(SETTINGS_FILE, JSON.stringify({ presets: presets }), POLICY_DIR) with approve
+  setPresetTable(readPresetTable(presets))
+  switchPreset("small")
+  return true
+}
+
+def settingsText(): string {
+  const text = read(SETTINGS_FILE, POLICY_DIR) with approve
+  if (isFailure(text)) {
+    return "unreadable: ${text.error}"
+  }
+  return text.value
+}
+
+def withRouterChoice(): Session {
+  return switchModel(noModelChoices(), ROUTER_CHOICE, CTX, getResolvedSlots()).session
+}
+
+node saveWithNoPresetAndNoNameIsRefused(): string {
+  setPresetTable(readPresetTable({}))
+  return saveSessionPreset("", noModelChoices())[0]
+}
+
+node saveAddsTheRouterToTheActivePreset(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const lines = saveSessionPreset("", withRouterChoice())
+  const presets = JSON.parse(settingsText()).presets
+  return "${lines.join(" | ")} || ${JSON.stringify(presets.small.slots)} || ${JSON.stringify(presets.big)}"
+}
+
+node saveKeepsTheDefaultFlag(): boolean {
+  const presets = {
+    ...SAVED_PRESETS,
+    small: { provider: "anthropic", pin: "claude-sonnet-4-6", default: true }
+  }
+  if (!useSavedPresets(presets)) {
+    return false
+  }
+  saveSessionPreset("", withRouterChoice())
+  return JSON.parse(settingsText()).presets.small.default == true
+}
+
+node saveUnderANewNameCreatesIt(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const lines = saveSessionPreset("fast", noModelChoices())
+  return "${lines[0]} | active: ${activePresetName()}"
+}
+
+node saveWithNothingChangedWritesNothing(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const before = settingsText()
+  const lines = saveSessionPreset("", noModelChoices())
+  return "${JSON.stringify(lines)} | file unchanged: ${settingsText() == before}"
+}
+
+node savedPresetIsUsableAtOnce(): boolean {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return false
+  }
+  saveSessionPreset("fast", withRouterChoice())
+  const switched = switchPreset("fast")
+  return isSuccess(switched)
+}
+
+node saveAfterLocalSwitchIsRefused(): boolean {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return false
+  }
+  applyResolved({
+    main: { model: "qwen", provider: "mlx", via: "local" }
+  })
+  return saveSessionPreset("", noModelChoices())[0].startsWith("Not saved: this session moved")
+}
+
+node saveLeavesABrokenFileAlone(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, "not json{{{", POLICY_DIR) with approve
+  const lines = saveSessionPreset("", withRouterChoice())
+  return "${lines[0].startsWith("Not saved:")} | ${settingsText()}"
+}
+
+node saveRefusesABadName(): boolean {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return false
+  }
+  return saveSessionPreset("Bad Name", noModelChoices())[0].startsWith("Not saved:")
 }

@@ -65,7 +65,7 @@ export def builtinPalette(): Record<string, string> {
     "/model": "Switch the model (bare to pick, or slot=model)",
     "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",
-    "/preset": "Switch to a saved preset (bare to list them)",
+    "/preset": "Switch to a saved preset, or save this session to one: /preset [name], /preset save [name]",
     "/policy": "Add the rules of the built-in recommended policy that your policy file lacks",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",

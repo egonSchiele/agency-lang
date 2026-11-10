@@ -110,6 +110,86 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "defaultLayerSetsTheRouter",
+      "input": "",
+      "expectedOutput": "{\"model\":\"jev-1.14\",\"provider\":\"openrouter\",\"via\":\"default:per-slot\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aPresetBeatsTheDefault",
+      "input": "",
+      "expectedOutput": "{\"model\":\"jev-1.13\",\"provider\":\"openrouter\",\"via\":\"preset:per-slot\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "offBeatsTheDefault",
+      "input": "",
+      "expectedOutput": "{\"model\":\"\",\"provider\":\"\",\"via\":\"preset:off\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "offInTheMainSlotIsAModelName",
+      "input": "",
+      "expectedOutput": "{\"model\":\"off\",\"provider\":\"anthropic\",\"via\":\"preset:per-slot\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flatKeepsAPinOverALowerSlot",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flatKeepsASlotOverALowerPin",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flatKeepsALowerRouterUnderAPin",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flatKeepsTheFirstPin",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

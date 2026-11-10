@@ -1,16 +1,52 @@
 // A local session keeps the router slot: it may route with a hosted
 // decision model. An MLX model needs no download, so the real setup runs.
+import { setEnv } from "std::system"
+
+import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
+import { applyModelRequest, currentModelRequest, setStartupModelFlags } from "../lib/session.agency"
 import {
   configureLocalModel,
+  defaultSlots,
   getRouterModel,
   getRouterProvider,
  } from "../shared.agency"
 
+static const LOCAL_MODEL = "mlx:mlx-community/Qwen3-4B-4bit"
+static const DEFAULTS: Record<string, string> = {
+  router: "openrouter/jev-1.14"
+}
+
 node localSessionKeepsTheRouter(): string {
   configureLocalModel(
-    "mlx:mlx-community/Qwen3-4B-4bit",
+    LOCAL_MODEL,
     "",
     "openrouter/jev-1.14",
   )
   return "${getRouterProvider()}/${getRouterModel()}"
+}
+
+node keySetGivesADefaultRouter(): string {
+  setEnv("OPENROUTER_API_KEY", "test-key") with approve
+  return defaultSlots()["router"] ?? "missing"
+}
+
+node emptyKeyGivesNoDefault(): string {
+  setEnv("OPENROUTER_API_KEY", "") with approve
+  return JSON.stringify(defaultSlots())
+}
+
+// A real local start goes through applyModelRequest, so this node does
+// too. One that called configureLocalModel directly could not fail.
+node localStartGetsNoDefaultRouter(): string {
+  setStartupModelFlags({ ...noModelFlags(), local: LOCAL_MODEL }, {}, DEFAULTS)
+  const applied = applyModelRequest(currentModelRequest(noModelChoices()), {})
+  if (applied is failure(reason)) {
+    return reason
+  }
+  return getRouterModel()
+}
+
+node localRouterOffIsEmpty(): string {
+  configureLocalModel(LOCAL_MODEL, "", "off")
+  return getRouterModel()
 }

@@ -1,0 +1,215 @@
+{
+  "sourceFile": "presetSnapshot.agency",
+  "tests": [
+    {
+      "nodeName": "sameAfterNoChange",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterARouterChoice",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterAChatModelChoice",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterAPinOverAPresetSlot",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterABarePinWithADetectedProvider",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterAOneSlotChoiceWithADetectedProvider",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterAModelFlag",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameAfterAPinWithAProviderFromSettings",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unchangedSessionGivesThePresetBack",
+      "input": "",
+      "expectedOutput": "\"{\\\"provider\\\":\\\"openrouter\\\",\\\"pin\\\":\\\"z-ai/glm-5.3-flash\\\",\\\"effort\\\":\\\"low\\\",\\\"llmOptions\\\":{\\\"openRouter\\\":{\\\"provider\\\":{\\\"only\\\":[\\\"baseten/fp8\\\"]}}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "routerOffIsSaved",
+      "input": "",
+      "expectedOutput": "\"off\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chatModelChoiceDropsTheEffort",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelFlagDropsThePresetsModelFields",
+      "input": "",
+      "expectedOutput": "\"{\\\"slots\\\":{\\\"main\\\":\\\"anthropic/claude-opus-4-8\\\",\\\"reasoning\\\":\\\"anthropic/claude-opus-4-8\\\"}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "effortFlagIsSaved",
+      "input": "",
+      "expectedOutput": "\"high\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "limitFlagIsSaved",
+      "input": "",
+      "expectedOutput": "40",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sessionOptionsReplaceThePresets",
+      "input": "",
+      "expectedOutput": "\"{\\\"temperature\\\":0}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "settingsAreNotCopied",
+      "input": "",
+      "expectedOutput": "\"{}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localRequestSavesLocal",
+      "input": "",
+      "expectedOutput": "\"{\\\"slots\\\":{\\\"router\\\":\\\"openrouter/jev-1.14\\\"},\\\"local\\\":\\\"qwen\\\"}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "changeLinesForARouter",
+      "input": "",
+      "expectedOutput": "[\"  slots.router: (none) → openrouter/jev-1.14\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "changeLinesForADroppedEffort",
+      "input": "",
+      "expectedOutput": "[\"  effort: low → (none)\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noChangeLines",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "changeLinesIgnoreDefault",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

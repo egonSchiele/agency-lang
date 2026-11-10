@@ -11,7 +11,7 @@ import { SETTINGS_PATH } from "./config.agency"
 import { serverUrlOf } from "./llmOptions.agency"
 import { Preset, checkPreset } from "./presetRules.agency"
 import { isPlainObject } from "./utils.agency"
-import { Settings } from "./settings.agency"
+import { Settings, readSettingsFile, writeSettingsFile } from "./settings.agency"
 
 /** The saved presets that pass the rules, a message per preset that does
   not, and a message when `presets` itself is not an object. */
@@ -397,4 +397,28 @@ export def applyPresetEdit(settings: Settings, edit: PresetEdit): Result<Setting
     ...settings,
     presets: editedPresets(presets, edit)
   })
+}
+
+export def editPresets(edit: PresetEdit): Result<PresetEditOutcome> {
+  """
+  Make one change to the saved presets: read settings.json, apply the
+  change, write the file, and refresh the in-memory presets. The policy
+  handler decides the read and the write.
+
+  @param edit - The change
+  """
+  const loaded = readSettingsFile()
+  if (isFailure(loaded)) {
+    return loaded
+  }
+  const edited = applyPresetEdit(loaded.value, edit)
+  if (isFailure(edited)) {
+    return edited
+  }
+  const written = writeSettingsFile(edited.value)
+  if (isFailure(written)) {
+    return written
+  }
+  setPresetTable(readPresetTable(edited.value.presets))
+  return success(editOutcome(loaded.value, edit.name))
 }

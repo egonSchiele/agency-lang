@@ -18,6 +18,22 @@ export static const SLOT_KIND: Record<string, SlotKind> = {
   router: "derived"
 }
 
+/** The model a slot gets when no layer sets it, for the slots that have
+  one. It applies only in a hosted session whose environment has the
+  provider's key: startup checks the key once (`defaultSlots` in
+  shared.agency) and keeps the rows that pass. */
+export static const SLOT_DEFAULTS: Record<string, string> = {
+  router: "openrouter/jev-1.14"
+}
+
+/** The value that turns off a slot that has a default. */
+export static const SLOT_OFF = "off"
+
+/** True when the slot has a default, so `off` means something in it. */
+export def slotCanBeOff(name: string): boolean {
+  return SLOT_DEFAULTS[canonicalSlot(name)] != null
+}
+
 /** The providers smoltalk's decide() answers through. The router slot
   takes only these. */
 export static const DECISION_PROVIDERS: string[] = ["typesafe", "laya", "openai", "openrouter", "llama-cpp"]

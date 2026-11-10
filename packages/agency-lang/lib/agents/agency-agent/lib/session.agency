@@ -41,7 +41,9 @@ import {
   missingProviderEnvVar,
   Resolved,
  } from "./models.agency"
-import { activePreset, findPreset, setActivePreset } from "./presets.agency"
+import { activePreset, activePresetName, editPresets, findPreset, setActivePreset } from "./presets.agency"
+import { checkPreset, Preset } from "./presetRules.agency"
+import { presetChangeLines, sessionPreset } from "./presetSnapshot.agency"
 import { configureSearch, getSearchSession } from "./search.agency"
 import {
   diffResolved,
@@ -54,12 +56,13 @@ import {
   loadSettings,
  } from "./settings.agency"
 import { chatSlots, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
-import { ToolLimits, applyToolLimits } from "./toolLimits.agency"
+import { ToolLimits, applyToolLimits, startupLimitFlags } from "./toolLimits.agency"
 import {
   demoteProvider,
   applyResolved,
   overrideFromResolved,
   configureLocalModel,
+  defaultSlots,
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
@@ -90,10 +93,24 @@ export def markMemoryEmbeddingsPinned(pinned: boolean) {
 // reading settings.json inside a turn.
 let _startupFlags: ModelFlags = noModelFlags()
 let _startupModelSettings: ModelSettings = {}
+// The default slots whose provider had its key at startup. Reading the
+// key inside a turn would become an env prompt, so it is read once.
+let _startupDefaultSlots: Record<string, string> = {}
 
-export def setStartupModelFlags(flags: ModelFlags, settings: ModelSettings) {
+export def setStartupModelFlags(
+  flags: ModelFlags,
+  settings: ModelSettings,
+  defaults: Record<string, string> = {},
+) {
   _startupFlags = flags
   _startupModelSettings = settings
+  _startupDefaultSlots = defaults
+}
+
+// A session saved before the default router existed restores this global
+// as null: a resume does not run the initializer again.
+def startupDefaultSlots(): Record<string, string> {
+  return _startupDefaultSlots ?? {}
 }
 
 /** The request for this session's startup flags, active preset, and these /model choices. */
@@ -121,7 +138,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     applyRequestOptions(request, settings)
     return success(true)
   }
-  const resolved = resolveHostedModels(request, settings)
+  const resolved = resolveHostedModels(request, settings, startupDefaultSlots())
   if (isFailure(resolved)) {
     return resolved
   }
@@ -302,7 +319,7 @@ export def switchModel(
   const request = currentModelRequest(next)
   const settings = _startupModelSettings
   const established = requestProvider(request, settings) != ""
-  const all = resolveRequestAgainst(request, settings, ctx2, established)
+  const all = resolveRequestAgainst(request, settings, ctx2, established, startupDefaultSlots())
   if (all is failure(reason)) {
     pushMessage(color.red("Could not switch model: ${reason}"))
     return {
@@ -480,7 +497,9 @@ export def pickModelsForAgent(args: Record<string, any>) {
     _exit(1)
     return
   }
-  setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()))
+  // A one-shot run gets the default slots too: this runs before the
+  // agent branches on one-shot.
+  setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()), defaultSlots())
   const request = currentModelRequest(noModelChoices())
   const applied = applyModelRequest(request, _startupModelSettings)
   if (applied is failure(reason)) {
@@ -508,13 +527,80 @@ def followLocality(isLocal: boolean) {
   }
 }
 
-/** The preset name in a `/preset [name]` command line, or "". */
-export def parsePresetName(cmd: string): string {
+/** A `/preset` command line: list the presets, switch to one, or save
+  the session to one. `name` is "" for a list, and for a save to the
+  active preset. */
+export type PresetCommand = {
+  kind: "list" | "switch" | "save";
+  name: string
+}
+
+export def parsePresetCommand(cmd: string): PresetCommand {
   const prefix = "/preset"
-  if (!cmd.startsWith(prefix)) {
-    return ""
+  const rest = if cmd.startsWith(prefix) then cmd.substring(prefix.length).trim() else ""
+  if (rest == "") {
+    return { kind: "list", name: "" }
   }
-  return cmd.substring(prefix.length).trim()
+  if (rest == "save") {
+    return { kind: "save", name: "" }
+  }
+  const savePrefix = "save "
+  if (rest.startsWith(savePrefix)) {
+    return { kind: "save", name: rest.substring(savePrefix.length).trim() }
+  }
+  return { kind: "switch", name: rest }
+}
+
+// /local moves the session to a local model without changing its request,
+// so the request no longer describes the models the session runs.
+def movedByLocalCommand(request: ModelRequest): boolean {
+  const main = getResolvedSlots()["main"]
+  const runsLocal = main != null && main.via == "local"
+  return runsLocal != requestIsLocal(request)
+}
+
+export def saveSessionPreset(name: string, choices: ModelChoices): string[] {
+  """
+  Save this session's models, effort, options, and tool limits to a
+  preset, and return the lines to print: a heading and one line per
+  field that changed. Does not switch to the preset or clear the /model
+  choices.
+
+  @param name - The preset to write, or "" for the active one
+  @param choices - This session's /model choices
+  """
+  const target = if name == "" then activePresetName() else name
+  if (target == "") {
+    return ["No preset is active. Name one: /preset save <name>"]
+  }
+  const request = currentModelRequest(choices)
+  if (movedByLocalCommand(request)) {
+    return ["Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save."]
+  }
+  const settingsFixProvider = (_startupModelSettings.provider ?? "") != ""
+  const preset = sessionPreset(request, startupLimitFlags(), getResolvedSlots(), settingsFixProvider)
+  const checked = checkPreset(target, preset, false)
+  if (checked is failure(reason)) {
+    return ["Not saved: ${reason}"]
+  }
+  // A new name, or a saved preset that is not valid: every field prints.
+  let before: Preset | null = null
+  const found = findPreset(target)
+  if (found is success(saved)) {
+    before = saved
+  }
+  const changes = presetChangeLines(before, checked.value)
+  if (changes.length == 0 && before != null) {
+    return ["Nothing to save: this session matches the '${target}' preset."]
+  }
+  // The user asked for this write, so this handler does not object. A
+  // policy in the chain still decides.
+  const edited = editPresets({ kind: "save", name: target, preset: checked.value }) with approve
+  if (edited is failure(reason)) {
+    return ["Not saved: ${reason}"]
+  }
+  const heading = if edited.value.existed then "Saved the '${target}' preset:" else "Created the '${target}' preset:"
+  return [heading, ...changes]
 }
 
 export def switchPreset(name: string): Result<PresetSwitch> {

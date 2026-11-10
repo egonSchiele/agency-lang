@@ -1,0 +1,208 @@
+/** @module
+  @summary Build a preset from the session, for `/preset save`. The rule:
+  the saved preset, loaded in a fresh session with no flags, resolves the
+  same models, effort, options, and tool limits this session has. Values
+  from settings.model and from the default layer are not copied, so a
+  preset stays as small as the user wrote it. Pure: no globals, no
+  environment, no files.
+*/
+import { filterEntries } from "std::object"
+
+import { demoteProvider } from "../shared.agency"
+import {
+  localModelOf,
+  ModelRequest,
+  requestEffort,
+  requestLayers,
+  requestLlmOptions,
+  requestProvider,
+ } from "./modelRequest.agency"
+import { Resolved } from "./models.agency"
+import { Preset } from "./presetRules.agency"
+import { flattenLayers, RawLayer } from "./resolution.agency"
+import { isChatSlot } from "./slots.agency"
+import { LimitFlags } from "./toolLimits.agency"
+import { isPlainObject } from "./utils.agency"
+
+/** The preset fields `/preset save` reports, in the order it prints them.
+  A nested field is a dotted path. */
+static const CHANGE_FIELDS = [
+  "provider",
+  "pin",
+  "local",
+  "slots.main",
+  "slots.reasoning",
+  "slots.embedding",
+  "slots.router",
+  "effort",
+  "maxToolCallRounds",
+  "maxToolResultChars",
+  "llmOptions",
+]
+
+type ModelFields = {
+  provider: string;
+  pin: string;
+  local: string;
+  slots: Record<string, string>
+}
+
+// A resolved slot as a value a preset with no provider can hold:
+// `provider/model`, or the bare model when the provider is unknown.
+def qualified(resolved: Resolved | null): string {
+  if (resolved == null || resolved.model == "") {
+    return ""
+  }
+  const provider = demoteProvider(resolved.provider)
+  if (provider == "") {
+    return resolved.model
+  }
+  return "${provider}/${resolved.model}"
+}
+
+def namesAChatModel(flat: RawLayer): boolean {
+  return flat.pin != "" || flat.slots["main"] != null || flat.slots["reasoning"] != null
+}
+
+// With no provider fixed, the session's provider came from API keys, and
+// a bare model name in a saved preset could be resolved on another
+// provider at the next start. So the chat slots are written with their
+// provider, both of them, so neither falls back to a key-dependent default.
+def detectedProviderFields(
+  flat: RawLayer,
+  resolved: Record<string, Resolved>,
+): ModelFields {
+  let slots: Record<string, string> = filterEntries(flat.slots, \(model, slot) -> !isChatSlot(slot))
+  if (namesAChatModel(flat)) {
+    slots = {
+      ...slots,
+      main: qualified(resolved["main"]),
+      reasoning: qualified(resolved["reasoning"])
+    }
+  }
+  return {
+    provider: "",
+    pin: "",
+    local: "",
+    slots: slots
+  }
+}
+
+def modelFields(
+  request: ModelRequest,
+  resolved: Record<string, Resolved>,
+  settingsFixProvider: boolean,
+): ModelFields {
+  const local = localModelOf(request)
+  if (local != null) {
+    return {
+      provider: "",
+      pin: "",
+      local: local.model,
+      slots: {
+        embedding: local.embedding,
+        router: local.router
+      }
+    }
+  }
+  // Empty settings: nothing from settings.model is copied, and
+  // requestLayers has no default layer, so a default router is not either.
+  const flat = flattenLayers(requestLayers(request, {}))
+  const provider = requestProvider(request, {})
+  if (provider == "" && !settingsFixProvider) {
+    return detectedProviderFields(flat, resolved)
+  }
+  // With settings.model.provider set, a value is read whole at the next
+  // start, so it is copied as the user typed it. The provider stays in
+  // settings and is not written here.
+  return {
+    provider: provider,
+    pin: flat.pin,
+    local: "",
+    slots: flat.slots
+  }
+}
+
+def isEmpty(value: any): boolean {
+  if (value == null || value == "") {
+    return true
+  }
+  return isPlainObject(value) && Object.keys(value).length == 0
+}
+
+def withoutEmpty(record: Record<string, any>): any {
+  return filterEntries(record, \(value, field) -> !isEmpty(value))
+}
+
+export def sessionPreset(
+  request: ModelRequest,
+  limits: LimitFlags,
+  resolved: Record<string, Resolved>,
+  settingsFixProvider: boolean = false,
+): Preset {
+  """
+  The preset that, loaded with no flags and no /model choices, gives
+  this request's models, options, effort, and tool limits.
+
+  @param request - The session's model request
+  @param limits - The startup limit flags
+  @param resolved - The session's resolved slots
+  @param settingsFixProvider - Whether settings.model.provider is set
+  """
+  const models = modelFields(request, resolved, settingsFixProvider)
+  const preset: Preset = request.preset ?? {}
+  return withoutEmpty(
+    {
+      provider: models.provider,
+      pin: models.pin,
+      slots: withoutEmpty(models.slots),
+      local: models.local,
+      maxToolCallRounds: limits.maxToolCallRounds ?? preset.maxToolCallRounds ?? null,
+      maxToolResultChars: limits.maxToolResultChars ?? preset.maxToolResultChars ?? null,
+      effort: requestEffort(request),
+      llmOptions: requestLlmOptions(request, {})
+    },
+  )
+}
+
+def fieldValue(preset: Preset, path: string): any {
+  let value: any = preset
+  for (part in path.split(".")) {
+    if (value == null) {
+      return null
+    }
+    value = value[part]
+  }
+  return value ?? null
+}
+
+def shown(value: any): string {
+  if (value == null) {
+    return "(none)"
+  }
+  if (isPlainObject(value)) {
+    return JSON.stringify(value)
+  }
+  return "${value}"
+}
+
+export def presetChangeLines(before: Preset | null, after: Preset): string[] {
+  """
+  One line per preset field that differs, such as
+  `  slots.router: (none) → openrouter/jev-1.14`. A null `before` is a new
+  preset, so every set field prints. The `default` flag is ignored.
+
+  @param before - The saved preset, or null for a new one
+  @param after - The preset about to be saved
+  """
+  const old: Preset = before ?? {}
+  let lines: string[] = []
+  for (field in CHANGE_FIELDS) {
+    const was = fieldValue(old, field)
+    const now = fieldValue(after, field)
+    if (JSON.stringify(was) != JSON.stringify(now)) {
+      lines.push("  ${field}: ${shown(was)} → ${shown(now)}")
+    }
+  }
+  return lines
+}

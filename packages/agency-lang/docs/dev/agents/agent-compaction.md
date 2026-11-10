@@ -73,7 +73,10 @@ The kept part starts at a user message when one is close enough, so it
 starts at the beginning of a turn. When one turn is longer than the kept
 part, it starts at an assistant message. It never starts at a tool
 result, because the call that result answers would be gone. When no such
-start exists, there is no compaction.
+start exists, there is no compaction. The one exception is the newest
+message being over the budget on its own, as a reply with long reasoning
+can be: then the kept part starts at the last user or assistant message,
+so everything older can still be summarized.
 
 A summary from an earlier compaction is the first message after the head.
 It is given to the summarizer and replaced, so a thread never holds two

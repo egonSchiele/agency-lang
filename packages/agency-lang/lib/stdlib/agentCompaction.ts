@@ -92,7 +92,11 @@ export function contextTokens(messages: smoltalk.Message[]): number {
  *  `keepTokens` long. The kept part starts at a user message when one is
  *  close enough, and otherwise at an assistant message. It never starts at
  *  a tool result, which would be cut off from the call it answers. Returns
- *  0 when everything fits, or when no message can start the kept part. */
+ *  0 when everything fits, or when no message can start the kept part.
+ *  When the newest message alone is over the budget, as a reply with long
+ *  reasoning can be, the kept part starts at the last user or assistant
+ *  message, so a tool result keeps the call it answers and everything older
+ *  can still be summarized. */
 function firstKeptIndex(conversation: smoltalk.Message[], keepTokens: number): number {
   let fits = conversation.length;
   let tokens = 0;
@@ -106,6 +110,12 @@ function firstKeptIndex(conversation: smoltalk.Message[], keepTokens: number): n
   }
   if (fits === 0) {
     return 0;
+  }
+  if (fits === conversation.length) {
+    const start = conversation.findLastIndex(
+      (message) => message.role === "user" || message.role === "assistant",
+    );
+    return Math.max(start, 0);
   }
   for (const role of ["user", "assistant"]) {
     const index = conversation.findIndex((message, at) => at >= fits && message.role === role);

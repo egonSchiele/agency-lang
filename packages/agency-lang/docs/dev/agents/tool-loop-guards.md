@@ -308,8 +308,9 @@ logs an error event with `errorType: "replyCutOff"`. An `llm()` option for
 the limit would need option types and user docs; add one only when
 someone needs a different number.
 
-The validation retry and the cut-off retry share one helper,
-`resendRequest` in `prompt.ts`. It runs three durable steps: a
+The decision and the steps of the retry live in
+`lib/runtime/cutOffRetry.ts`. The validation retry and the cut-off retry
+share one helper, `resendRequest` in `prompt.ts`. It runs three durable steps: a
 `<prefix>.feedback` step that edits the thread, the guard gate, and the
 request step, which advances the attempt counter. The prefix is
 `validation.<n>` or `cutOff.<n>`.

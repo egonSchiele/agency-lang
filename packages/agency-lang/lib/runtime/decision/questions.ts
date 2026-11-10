@@ -227,11 +227,44 @@ export function answersToValue(
   return success(value);
 }
 
-/** The thread as a decision model's state: role and text only. Tool calls,
- *  tool results, and attachments are not part of what it reads. */
-export function messagesToState(messages: Message[]): Array<{ role: string; content: string }> {
-  return messages
-    .filter((message) => message.role !== "tool")
-    .filter((message) => typeof message.content === "string" && message.content !== "")
-    .map((message) => ({ role: message.role, content: message.content as string }));
+/** One entry of a decision model's state: a message's text, or what a tool
+ *  returned. */
+export type StateEntry =
+  | { role: Exclude<Message["role"], "tool">; content: string }
+  | { role: "tool"; name: string; arguments?: Record<string, unknown>; content: string };
+
+/** The arguments of every tool call in the thread, by call id. */
+function callArguments(messages: Message[]): Record<string, Record<string, unknown>> {
+  const byId: Record<string, Record<string, unknown>> = {};
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const call of message.toolCalls ?? []) {
+      byId[call.id] = call.arguments;
+    }
+  }
+  return byId;
+}
+
+/** The thread as a decision model's state: each message's text, and each
+ *  tool result with the name and arguments of the call it answers. The
+ *  arguments ride on the result so the entry reads on its own, whatever
+ *  order the results arrived in. An assistant message that carried only
+ *  tool calls has no entry, and attachments are not part of the state. */
+export function messagesToState(messages: Message[]): StateEntry[] {
+  const argumentsById = callArguments(messages);
+  return messages.flatMap((message): StateEntry[] => {
+    if (message.role === "tool") {
+      const entry: StateEntry = { role: "tool", name: message.name, content: message.content };
+      if (Object.hasOwn(argumentsById, message.tool_call_id)) {
+        entry.arguments = argumentsById[message.tool_call_id];
+      }
+      return [entry];
+    }
+    if (typeof message.content === "string" && message.content !== "") {
+      return [{ role: message.role, content: message.content }];
+    }
+    return [];
+  });
 }

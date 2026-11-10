@@ -171,12 +171,44 @@ fail before any request is sent.
 
 ## The state
 
-The state is the thread's messages before the prompt, as a JSON array of
-`{ role, content }`. A thread that holds only the prompt sends it as the
-state, so the model never sees an empty state. Only text goes in. Tool
-result messages are left out, and so is an assistant message that carried
-only tool calls. A user message with several text parts arrives joined with
-newlines, which is smoltalk's content getter. Attachments are not sent.
+The state is the thread's messages before the prompt, as a JSON array. A
+thread that holds only the prompt sends it as the state, so the model never
+sees an empty state. `messagesToState` (`lib/runtime/decision/questions.ts`)
+writes two kinds of entry:
+
+- A message's text is `{ role, content }`. A user message with several text
+  parts arrives joined with newlines, which is smoltalk's content getter.
+- A tool result is `{ role: "tool", name, arguments, content }`. `arguments`
+  are those of the call the result answers, found by the call's id.
+
+```json
+[
+  { "role": "user", "content": "Where is order 123?" },
+  { "role": "tool", "name": "lookup", "arguments": { "order": 123 }, "content": "shipped on Tuesday" }
+]
+```
+
+The arguments ride on the result, and the call has no entry of its own. A
+result then reads on its own: "lookup of order 123 returned this". Two
+results from the same tool stay apart even when they arrive in another
+order than their calls, and the call ids, which are long random strings,
+stay out of the request. A result whose call is no longer in the thread
+has no `arguments`. An assistant message that carried only tool calls has
+no entry, and attachments are not sent.
+
+A tool result is sent whole. A decision model's window is small (Jev takes
+64K tokens a request), so a thread that holds a long result can be refused
+by the provider. The `maxToolResultChars` option on the `llm()` call that
+ran the tool is what bounds a result, since it cuts the result before it
+enters the thread.
+
+A decision call can go to a different provider from the one that ran the
+tools: the `typesafe` servers by default, or OpenRouter. So a tool result
+can leave the machine through a decision call even when every call that ran
+a tool went to a local model. For example, a tool that read `.env` puts the
+file's text in the thread, and a later decision call on that thread sends
+that text to the decision provider. Make the decision call in a `thread` of
+its own when the thread holds results that should stay local.
 
 Because the reply is appended to the thread, a later `llm()` call sees it.
 In the example, the follow-up question "should a manager call the customer

@@ -204,7 +204,7 @@ describe("answersToValue", () => {
 });
 
 describe("messagesToState", () => {
-  it("keeps role and text, joins text parts, and drops tool traffic", () => {
+  it("keeps role and text, joins text parts, and keeps a tool result with its call", () => {
     const messages: smoltalk.Message[] = [
       smoltalk.systemMessage("You triage tickets."),
       smoltalk.userMessage([
@@ -212,7 +212,7 @@ describe("messagesToState", () => {
         { type: "text", text: "I am leaving." },
       ]),
       smoltalk.assistantMessage(null, {
-        toolCalls: [{ id: "1", name: "lookup", arguments: {} }],
+        toolCalls: [{ id: "1", name: "lookup", arguments: { order: 123 } }],
       }),
       smoltalk.toolMessage("found it", { tool_call_id: "1", name: "lookup" }),
       smoltalk.assistantMessage("Noted."),
@@ -222,8 +222,48 @@ describe("messagesToState", () => {
       { role: "system", content: "You triage tickets." },
       // smoltalk joins a user message's text parts with a newline.
       { role: "user", content: "Refund not received. \nI am leaving." },
+      // The assistant message that only called the tool has no entry.
+      { role: "tool", name: "lookup", arguments: { order: 123 }, content: "found it" },
       { role: "assistant", content: "Noted." },
       { role: "user", content: "Which department?" },
+    ]);
+  });
+
+  it("pairs each result with its own call when results arrive out of order", () => {
+    const messages: smoltalk.Message[] = [
+      smoltalk.assistantMessage("Checking both.", {
+        toolCalls: [
+          { id: "a", name: "lookup", arguments: { order: 1 } },
+          { id: "b", name: "lookup", arguments: { order: 2 } },
+        ],
+      }),
+      smoltalk.toolMessage("second", { tool_call_id: "b", name: "lookup" }),
+      smoltalk.toolMessage("first", { tool_call_id: "a", name: "lookup" }),
+    ];
+    expect(messagesToState(messages)).toEqual([
+      { role: "assistant", content: "Checking both." },
+      { role: "tool", name: "lookup", arguments: { order: 2 }, content: "second" },
+      { role: "tool", name: "lookup", arguments: { order: 1 }, content: "first" },
+    ]);
+  });
+
+  it("keeps a result whose call is not in the thread, with no arguments", () => {
+    const messages: smoltalk.Message[] = [
+      smoltalk.toolMessage("found it", { tool_call_id: "gone", name: "lookup" }),
+    ];
+    expect(messagesToState(messages)).toEqual([
+      { role: "tool", name: "lookup", content: "found it" },
+    ]);
+  });
+
+  it("sends a result that is not text as text, and keeps an empty one", () => {
+    const messages: smoltalk.Message[] = [
+      smoltalk.toolMessage([{ id: 7 }], { tool_call_id: "", name: "rows" }),
+      smoltalk.toolMessage("", { tool_call_id: "", name: "save" }),
+    ];
+    expect(messagesToState(messages)).toEqual([
+      { role: "tool", name: "rows", content: '[{"id":7}]' },
+      { role: "tool", name: "save", content: "" },
     ]);
   });
 });

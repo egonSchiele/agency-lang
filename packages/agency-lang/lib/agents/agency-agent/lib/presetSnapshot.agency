@@ -91,6 +91,7 @@ def detectedProviderFields(
 def modelFields(
   request: ModelRequest,
   resolved: Record<string, Resolved>,
+  settingsFixProvider: boolean,
 ): ModelFields {
   const local = localModelOf(request)
   if (local != null) {
@@ -108,9 +109,12 @@ def modelFields(
   // requestLayers has no default layer, so a default router is not either.
   const flat = flattenLayers(requestLayers(request, {}))
   const provider = requestProvider(request, {})
-  if (provider == "") {
+  if (provider == "" && !settingsFixProvider) {
     return detectedProviderFields(flat, resolved)
   }
+  // With settings.model.provider set, a value is read whole at the next
+  // start, so it is copied as the user typed it. The provider stays in
+  // settings and is not written here.
   return {
     provider: provider,
     pin: flat.pin,
@@ -134,6 +138,7 @@ export def sessionPreset(
   request: ModelRequest,
   limits: LimitFlags,
   resolved: Record<string, Resolved>,
+  settingsFixProvider: boolean = false,
 ): Preset {
   """
   The preset that, loaded with no flags and no /model choices, gives
@@ -142,8 +147,9 @@ export def sessionPreset(
   @param request - The session's model request
   @param limits - The startup limit flags
   @param resolved - The session's resolved slots
+  @param settingsFixProvider - Whether settings.model.provider is set
   """
-  const models = modelFields(request, resolved)
+  const models = modelFields(request, resolved, settingsFixProvider)
   const preset: Preset = request.preset ?? {}
   return withoutEmpty(
     {

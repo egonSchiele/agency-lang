@@ -107,6 +107,12 @@ export def setStartupModelFlags(
   _startupDefaultSlots = defaults
 }
 
+// A session saved before the default router existed restores this global
+// as null: a resume does not run the initializer again.
+def startupDefaultSlots(): Record<string, string> {
+  return _startupDefaultSlots ?? {}
+}
+
 /** The request for this session's startup flags, active preset, and these /model choices. */
 export def currentModelRequest(choices: ModelChoices): ModelRequest {
   return {
@@ -132,7 +138,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     applyRequestOptions(request, settings)
     return success(true)
   }
-  const resolved = resolveHostedModels(request, settings, _startupDefaultSlots)
+  const resolved = resolveHostedModels(request, settings, startupDefaultSlots())
   if (isFailure(resolved)) {
     return resolved
   }
@@ -313,7 +319,7 @@ export def switchModel(
   const request = currentModelRequest(next)
   const settings = _startupModelSettings
   const established = requestProvider(request, settings) != ""
-  const all = resolveRequestAgainst(request, settings, ctx2, established, _startupDefaultSlots)
+  const all = resolveRequestAgainst(request, settings, ctx2, established, startupDefaultSlots())
   if (all is failure(reason)) {
     pushMessage(color.red("Could not switch model: ${reason}"))
     return {
@@ -571,7 +577,8 @@ export def saveSessionPreset(name: string, choices: ModelChoices): string[] {
   if (movedByLocalCommand(request)) {
     return ["Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save."]
   }
-  const preset = sessionPreset(request, startupLimitFlags(), getResolvedSlots())
+  const settingsFixProvider = (_startupModelSettings.provider ?? "") != ""
+  const preset = sessionPreset(request, startupLimitFlags(), getResolvedSlots(), settingsFixProvider)
   const checked = checkPreset(target, preset, false)
   if (checked is failure(reason)) {
     return ["Not saved: ${reason}"]

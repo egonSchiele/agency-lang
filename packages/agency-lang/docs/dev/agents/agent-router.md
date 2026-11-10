@@ -95,7 +95,11 @@ the default layer.
 A resumed session uses the default slots it was saved with. The restore
 runs after `pickModelsForAgent` and replaces every `let` global,
 including the stored rows (`docs/dev/agents/agent-sessions.md`, "How a
-resume works").
+resume works"). A session saved before the default existed has no stored
+rows. The restore sets the global to null, because it does not run the
+initializer again, so `startupDefaultSlots()` in `lib/session.agency`
+reads null as `{}`. That session gets no default router until a fresh
+start.
 
 ## Turning the router off
 

@@ -262,82 +262,58 @@ Replacing the default preset keeps its `default` flag.
 ## Saving the session to a preset
 
 `/preset save` writes the session's models, effort, options, and tool
-limits to the active preset. `/preset save <name>` writes them to that
-name, and creates the preset when it is new. With no name and no active
-preset, the command asks for a name. `parsePresetCommand` in
-`lib/session.agency` reads the command line, and `saveSessionPreset` does
-the save.
+limits to the active preset, and `/preset save <name>` writes them to
+that name. `saveSessionPreset` in `lib/session.agency` does the save, and
+`sessionPreset` in `lib/presetSnapshot.agency` builds the preset.
 
 The rule is that the saved preset, loaded in a fresh session with no
-flags and no `/model` choices, resolves the same models, effort,
-options, and tool limits this session has. Two consequences:
+flags and no `/model` choices, resolves to the same models, effort,
+options, and tool limits. So a preset's `effort` that the session
+dropped, because `/model` changed a chat model, is dropped from the
+saved preset too.
 
-- A preset's `effort` that the session dropped, because `/model`
-  changed a chat model, is dropped from the saved preset too.
-- After `agency agent --preset glm --model claude-opus-4-8`, a save to
-  `glm` replaces its model fields, effort, and options with the Opus
-  session's, because the flag emptied the preset layer for this session.
+The model fields depend on where the session's provider came from:
 
-`sessionPreset` in `lib/presetSnapshot.agency` builds the preset from the
-session's `ModelRequest` and its resolved slots. The model fields have
-three cases:
-
-| Request | Model fields written |
+| Provider | Model fields written |
 |---|---|
-| Local (`localModelOf` is not null) | `local`, and `slots.embedding` and `slots.router` from the request. |
-| Hosted, with a provider from `--provider` or the preset | `provider`, and the `pin` and `slots` of the flattened layers. |
-| Hosted, with the provider detected from API keys | No `provider` and no `pin`. The derived slots from the flattened layers. If those layers name a chat model, both `slots.main` and `slots.reasoning` as `provider/model`, from the resolved slots. |
+| None: a local request | `local`, and `slots.embedding` and `slots.router` from the request. |
+| `--provider` or the preset | `provider`, and the `pin` and `slots` of the flattened layers. |
+| `settings.model.provider` | The `pin` and `slots` of the flattened layers. No `provider`: it stays in settings. |
+| Detected from API keys | The derived slots of the flattened layers. If those layers name a chat model, `slots.main` and `slots.reasoning` as `provider/model`, from the resolved slots. No `provider` and no `pin`. |
 
-The third case exists because a bare model name resolves differently at
-the next start. A session that detected `anthropic` and then ran
-`/model claude-opus-4-8` runs Opus on Anthropic, because `/model`
-resolves against the session's current provider. A preset holding only
-`pin: "claude-opus-4-8"` would start on `openai`: with every chat model
-named, `resolveDetected` picks `openai` (see "Known limits"). So the
-chat slots are written with their provider. Both are written, so neither
-falls back to a built-in default that depends on which keys are set.
+The last two rows differ because of how a value is read at the next
+start. Under a fixed provider, `parseModelSpec` reads the whole value as
+the model name, so `openrouter/z-ai/glm-5.3` would name a model that does
+not exist. With a detected provider, a bare name is resolved again: a
+session that detected `anthropic` and ran `/model claude-opus-4-8` runs
+Opus on Anthropic, but a preset holding only `pin: "claude-opus-4-8"`
+starts on `openai` (see "Known limits"). So those slots carry their
+provider. Both chat slots are written, so neither falls back to a
+built-in default that depends on which keys are set.
 
 `flattenLayers` in `lib/resolution.agency` folds the `in-session`,
 `cli`, and `preset` layers into one layer that resolves every slot the
-same way. A field-by-field merge gets one case wrong: the preset has
-`slots.main`, and the user types `/model x`. The session runs `x` in
-`main`, because a pin in a more immediate layer beats a named slot below
-it. A merge would write `pin: x` beside `slots.main`, and in one layer a
-named slot beats the pin, so the saved preset would run the old main
-model. `flattenLayers` drops a chat slot that sits below a pin.
+same way. Merging the layers field by field gets one case wrong. If the
+preset has `slots.main` and the user types `/model x`, the session runs
+`x`, because a pin beats a named slot in a less immediate layer. A merge
+would write `pin: x` beside `slots.main`, and within one layer the named
+slot wins, so the saved preset would run the old model. `flattenLayers`
+drops a chat slot that sits below a pin.
 
-These are not copied:
-
-- Values from `settings.model`. Every helper is called with empty
-  settings, and the settings layer stays below the preset at the next
-  start, so the saved preset resolves the same way without them.
-- The default router. `requestLayers` has no `default` layer.
-- The `default` flag. `applyPresetEdit` keeps it on the saved entry.
+These are not copied: values from `settings.model`, which still apply at
+the next start; the default router, which is not in `requestLayers`; and
+the `default` flag, which `applyPresetEdit` keeps on the saved entry.
 
 A session that `/local` moved is refused. `/local` calls
-`configureLocalModel` directly and leaves the `ModelRequest` as it was, so
-the request no longer describes the models the session runs.
-`saveSessionPreset` compares the `main` slot's `via` (`"local"` after
-`configureLocalModel`) with `requestIsLocal`, and refuses when they
-disagree.
+`configureLocalModel` without changing the `ModelRequest`, so the request
+no longer describes the models the session runs. The check compares the
+`main` slot's `via` (`"local"`) with `requestIsLocal`.
 
-The save prints one line per field it changes, such as
-`  slots.router: (none) → off`, under `Saved the 'glm' preset:` or
-`Created the 'fast' preset:`. When nothing changes, it prints "Nothing to
-save" and writes nothing. It does not switch the session to the saved
-preset or clear the `/model` choices. The session resolves the same
-models either way.
-
-The write goes through `editPresets` with `with approve`. The user typed
-the command, so this handler does not object, the same as `saveSettings`
-for a preference the user just changed. The policy in the chain still
-decides. The `recommended` policy approves reading `settings.json` and
-has no rule for writing it, so under `recommended` the user sees one
-`std::write` prompt for `settings.json`. That prompt is correct: the
-file decides what the next agent start runs.
-
-The command raises no `agent::llmServer` question for a `baseUrl.mlx`
-address, as `savePreset` does. An address in the session's block was
+The write uses `with approve`, as `saveSettings` does for a preference
+the user just changed, and the policy in the chain still decides. The
+`recommended` policy has no rule for writing `settings.json`, so the user
+sees one `std::write` prompt. Unlike `savePreset`, the command raises no
+`agent::llmServer` question: an address in the session's block was
 approved when `useLlmOptions` set it, and an address in the preset's own
 block is already in the file.
 
@@ -356,6 +332,9 @@ same way.
 - A `pin` with no `provider` resolves to `openai`, as `--model` does.
 - A preset named `save` cannot be reached with `/preset save`, which
   saves to the active preset. It still loads with `--preset save`.
+- The first save of a preset with no `provider` and a detected provider
+  reports changes even when the session changed nothing: a bare `pin`
+  is rewritten as two `provider/model` slots. Later saves are stable.
 - `/preset save` compares against the presets read at startup. If another
   agent session saved the same preset since this one started, the printed
   lines describe the wrong change, and "Nothing to save" can skip a write

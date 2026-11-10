@@ -13,9 +13,9 @@ def sample(arr: any[]): any {
 }
 
 // Human-readable "model (provider)" for one resolved slot, or "" when the
-// slot is unset or turned off. Local models resolve to a `.gguf` path, so show just the
-// filename; the internal `openai-responses` promotion is demoted back to the
-// public `openai` for display.
+// slot is unset or turned off. Local models resolve to a `.gguf` path, so
+// show just the filename; the internal `openai-responses` promotion is
+// demoted back to the public `openai` for display.
 def slotModelLabel(resolved: Resolved | null): string {
   if (resolved == null || resolved.model == "") {
     return ""

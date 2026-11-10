@@ -72,6 +72,16 @@
       ]
     },
     {
+      "nodeName": "sameAfterAPinWithAProviderFromSettings",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "unchangedSessionGivesThePresetBack",
       "input": "",
       "expectedOutput": "\"{\\\"provider\\\":\\\"openrouter\\\",\\\"pin\\\":\\\"z-ai/glm-5.3-flash\\\",\\\"effort\\\":\\\"low\\\",\\\"llmOptions\\\":{\\\"openRouter\\\":{\\\"provider\\\":{\\\"only\\\":[\\\"baseten/fp8\\\"]}}}}\"",

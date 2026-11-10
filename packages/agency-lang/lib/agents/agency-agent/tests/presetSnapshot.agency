@@ -14,6 +14,7 @@ import {
 import { Resolved } from "../lib/models.agency"
 import { Preset } from "../lib/presetRules.agency"
 import { presetChangeLines, sessionPreset } from "../lib/presetSnapshot.agency"
+import { ModelSettings } from "../lib/settings.agency"
 import { LimitFlags } from "../lib/toolLimits.agency"
 import { resolveHostedModels } from "../shared.agency"
 
@@ -76,14 +77,14 @@ def withSlotChoice(slot: string, model: string): ModelChoices {
 
 // Resolve the request, save it, load the save in a fresh session, and
 // compare. Returns "same" or the first thing that differs.
-def sameSession(request: ModelRequest): string {
-  const before = resolveHostedModels(request, {})
+def sameSession(request: ModelRequest, settings: ModelSettings = {}): string {
+  const before = resolveHostedModels(request, settings)
   if (before is failure(reason)) {
     return "before failed: ${reason}"
   }
-  const saved = sessionPreset(request, NO_LIMITS, before.value)
+  const saved = sessionPreset(request, NO_LIMITS, before.value, (settings.provider ?? "") != "")
   const loaded = req(noModelFlags(), saved, noModelChoices())
-  const after = resolveHostedModels(loaded, {})
+  const after = resolveHostedModels(loaded, settings)
   if (after is failure(reason)) {
     return "after failed: ${reason}"
   }
@@ -154,6 +155,17 @@ node sameAfterAModelFlag(): string {
       GLM,
       noModelChoices(),
     ),
+  )
+}
+
+// settings.model.provider fixes the provider, so "z-ai/glm-5.3" is read
+// whole. A save that wrote "openrouter/z-ai/glm-5.3" would load as a
+// model of that name.
+node sameAfterAPinWithAProviderFromSettings(): string {
+  onlyKey("OPENROUTER_API_KEY")
+  return sameSession(
+    req(noModelFlags(), null, withPinChoice("z-ai/glm-5.3")),
+    { provider: "openrouter" },
   )
 }
 

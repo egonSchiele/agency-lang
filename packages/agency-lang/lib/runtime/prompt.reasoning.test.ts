@@ -90,6 +90,7 @@ describe("reasoning records on the thread", () => {
       }),
     } as any);
     await call(s, thread);
+    expect(thread.getMessages().some((message) => message.content === "summary")).toBe(true);
     const kept = thread
       .getMessages()
       .find((message) => message.content === "first answer") as smoltalk.AssistantMessage;

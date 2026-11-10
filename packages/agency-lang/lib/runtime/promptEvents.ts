@@ -127,8 +127,11 @@ export function emitPromptCompletion({
     // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
     // A decision call's rawData is its answers, which `decision` carries
     // explicitly, so the echo leaves it out rather than logging them twice.
+    // The reasoning record is left out too: `reasoning` already logs the
+    // text, and a Responses record holds encrypted items no reader can use.
     completion: {
       ...completion,
+      reasoningRecord: undefined,
       usage: projectedUsage,
       ...(decision === undefined ? {} : { rawData: undefined }),
     },

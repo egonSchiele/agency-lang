@@ -133,6 +133,7 @@ Agency keeps the record and smoltalk decides who receives it:
 - **The reply message.** `buildReplyMessage` copies the record onto the reply as its `reasoning`. Like the other extras, it goes through `serializableExtra`, so a record that does not match `ReasoningRecordSchema` is dropped and cannot break a checkpoint.
 - **A model switch.** A `/model` switch, preset slots, and the router leave records in place. The next request goes to the new model, and smoltalk leaves out the old model's records. If the conversation switches back, they are sent again.
 - **The statelog.** `withMessageLabels` (`lib/runtime/promptEvents.ts`) leaves `reasoning` out of the thread it dumps on every `promptCompletion` event. Each call's reasoning is already on that call's own event, and dumping it with the whole thread on every call would grow a long run's log with the square of its reasoning.
+- **Who else can read it.** The record is an ordinary field of the message, so the `onLLMCallStart`, `onLLMCallEnd`, and `onThreadEnd` callbacks see it, and so do `agency.threads.list()` and `agency.threads.get()` in TypeScript and `listThreads` in Agency code. That includes a Responses record's encrypted items. Nothing sends them to a model except smoltalk's own rule.
 - **A cut-off reply.** The cut-off retry (`docs/dev/agents/tool-loop-guards.md`) removes an empty reply that the output limit cut off, and its record goes with it. That reasoning stopped in the middle, so it should not go back.
 
 Records stay on the thread for as long as the thread exists, so they ride in every checkpoint and saved agent session. On the SWE-bench run on GLM 5.3 Flash on 2026-11-10, before reasoning was sent back:
@@ -144,7 +145,7 @@ Records stay on the thread for as long as the thread exists, so they ride in eve
 | `pytest-10356` | 50 | 3,938 characters | about 197,000 characters |
 | the other seven | 11 to 50 | 130 to 770 characters | under 40,000 characters |
 
-These fit under hosted resume's 10 MB request limit (`MAX_BODY_BYTES` in `lib/serve/constants.ts`). The larger cost is input tokens: every request carries all of the same model's earlier reasoning, and the provider bills it. If that costs too much, the fallback is to keep only the newest records up to a size budget. Dropping a call's records when the call returns would not help the coding agent, whose whole task is one `llm()` call.
+A hosted resume request (`MAX_BODY_BYTES`, 10 MB, in `lib/serve/constants.ts`) holds more than one copy of this. A checkpoint taken during a tool loop holds the thread twice, once in the thread store and once as `messagesJSON` on the `runPrompt` frame (`docs/dev/runtime/checkpoint-patch.md`). The `/resume` body sends back every interrupt, and each one carries the whole checkpoint. On a run as long as `astropy-13398`, about 557,000 characters of reasoning is about 1.2 MB once escaped and stored twice, so 9 interrupts at once would pass the limit before any message text is counted. The other cost is input tokens: every request carries all of the same model's earlier reasoning, and the provider bills it. If either the size or the cost is too much, the fallback is to keep only the newest records up to a size budget. Dropping a call's records when the call returns would not help the coding agent, whose whole task is one `llm()` call.
 
 Two other places grow with the reasoning:
 

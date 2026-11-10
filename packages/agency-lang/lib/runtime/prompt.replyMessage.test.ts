@@ -129,6 +129,9 @@ describe("an OpenRouter reply's servedBy and reasoning", () => {
     const event = logged.mock.calls[0][0];
     expect(event.completion.servedBy).toBe("OpenInference");
     expect(event.completion.reasoning).toBe("Let me search");
+    // The text is logged once. The record would repeat it, and a Responses
+    // record holds encrypted items that are no use in a log.
+    expect(event.completion.reasoningRecord).toBeUndefined();
   });
 
   it("keeps the reasoning record on the reply message, apart from thinking blocks", async () => {

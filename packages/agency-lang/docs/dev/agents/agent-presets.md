@@ -40,6 +40,14 @@ Any model flag (`--model`, `--fastmodel`, `--slowmodel`, `--provider`,
 The preset's model fields are dropped as a group, so a provider from one
 source is never paired with a model from another.
 
+The `router` slot (`docs/dev/agents/agent-router.md`) is set the way the
+embedding slot is: `--model router=<provider>/<model>`, `slots.router` in a
+preset, or `settings.model.slots.router`. Both are derived slots: the value
+must name its provider, a bare `--model` never sets them, and they get no
+`llmOptions`. The router accepts only the providers that answer decisions
+(`DECISION_PROVIDERS` in `lib/slots.agency`), and it may be set beside
+`local`.
+
 A preset with `local` runs `configureLocalModel`, the same call `--local`
 makes. A local model that fails to load ends the process, from startup or
 from `/preset`.

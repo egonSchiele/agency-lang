@@ -3,7 +3,7 @@
   falls to `priceDefault`. Pure: layers are read-only inputs. See spec 3.2/3.3. */
 import { keys } from "std::object"
 import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
-import { canonicalSlot, slotKind, SLOTS } from "./slots.agency"
+import { canonicalSlot, providersFor, slotKind, SLOTS } from "./slots.agency"
 
 export type SlotValue = {
   model: string;
@@ -128,7 +128,7 @@ def slotMapToValues(
     // established provider describes the CHAT session, and the whole
     // point of a derived slot is to point somewhere else.
     const established = providerEstablished && slotKind(canonical) != "derived"
-    output[canonical] = parseSlotValue(slots[key], providers, established)
+    output[canonical] = parseSlotValue(slots[key], providersFor(canonical, providers), established)
   }
   return output
 }

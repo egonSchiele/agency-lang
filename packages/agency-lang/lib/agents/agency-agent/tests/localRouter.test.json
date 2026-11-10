@@ -1,0 +1,17 @@
+{
+  "sourceFile": "localRouter.agency",
+  "tests": [
+    {
+      "nodeName": "localSessionKeepsTheRouter",
+      "input": "",
+      "expectedOutput": "\"openrouter/jev-1.14\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localSessionWithNoRouter",
+      "input": "",
+      "expectedOutput": "\"[/]\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

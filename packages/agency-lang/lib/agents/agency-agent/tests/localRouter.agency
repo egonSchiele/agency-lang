@@ -1,0 +1,21 @@
+// A local session keeps the router slot: it may route with a hosted
+// decision model. An MLX model needs no download, so the real setup runs.
+import {
+  configureLocalModel,
+  getRouterModel,
+  getRouterProvider,
+ } from "../shared.agency"
+
+node localSessionKeepsTheRouter(): string {
+  configureLocalModel(
+    "mlx:mlx-community/Qwen3-4B-4bit",
+    "",
+    "openrouter/jev-1.14",
+  )
+  return "${getRouterProvider()}/${getRouterModel()}"
+}
+
+node localSessionWithNoRouter(): string {
+  configureLocalModel("mlx:mlx-community/Qwen3-4B-4bit")
+  return "[${getRouterProvider()}/${getRouterModel()}]"
+}

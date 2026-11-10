@@ -15,7 +15,7 @@ import { pickProvider, envVarFor } from "std::llm"
 import { keys } from "std::object"
 import { env } from "std::system"
 
-import { slotKind, canonicalSlot } from "./slots.agency"
+import { slotKind, canonicalSlot, providersFor } from "./slots.agency"
 
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
@@ -112,11 +112,11 @@ def checkProviderEnv(provider: string): Result<string> {
   )
 }
 
-/** True when an embedding slot value carries its required provider
- *  prefix. The rule lives once; /model, --model, and settings sanitize
- *  all consume it. */
-export def embeddingSpecHasProvider(value: string): boolean {
-  return parseModelSpec(value, false, knownProviders()).provider != ""
+/** True when a value for a slot that needs the provider/model form names
+ *  a provider that slot accepts. The rule lives once; /model, --model,
+ *  presets, and settings sanitize all consume it. */
+export def slotValueHasProvider(slot: string, value: string): boolean {
+  return parseModelSpec(value, false, providersFor(slot, knownProviders())).provider != ""
 }
 
 // The agent always uses the OpenAI Responses API (not Chat Completions) for
@@ -316,7 +316,7 @@ export def priceDefault(
       {
       model: "",
       provider: "",
-      via: "built-in:embedding(derived)"
+      via: "built-in:${canonicalSlot(slot)}(derived)"
     },
     )
   }
@@ -350,7 +350,7 @@ export def priceDefault(
       {
       model: "",
       provider: "",
-      via: "built-in:embedding(derived)"
+      via: "built-in:${canonicalSlot(slot)}(derived)"
     },
     )
   }

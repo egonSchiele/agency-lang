@@ -240,6 +240,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "routerWithoutProvider",
+      "input": "",
+      "expectedOutput": "[\"slots.router needs the provider/model form, e.g. openrouter/jev-1.14\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "routerWithADecisionProvider",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithRouter",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

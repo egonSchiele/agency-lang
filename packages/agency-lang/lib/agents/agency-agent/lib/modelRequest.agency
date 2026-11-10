@@ -8,11 +8,11 @@ import { filterEntries } from "std::object"
 
 import { EffortChoice, parseEffort } from "./effort.agency"
 import { LlmOptions } from "./llmOptions.agency"
-import { embeddingSpecHasProvider, parseModelFlag } from "./models.agency"
+import { parseModelFlag, slotValueHasProvider } from "./models.agency"
 import { Preset, PresetSlots } from "./presetRules.agency"
 import { RawLayer } from "./resolution.agency"
 import { ModelSettings } from "./settings.agency"
-import { SLOTS } from "./slots.agency"
+import { chatSlots, needsProviderForm, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
 
 /** The startup model flags. `pin` is a bare --model. `slots` holds
   --model slot=, --fastmodel, and --slowmodel. `local` is null when
@@ -41,7 +41,8 @@ export type ModelRequest = {
 
 export type LocalModel = {
   model: string;
-  embedding: string
+  embedding: string;
+  router: string
 }
 
 /** The models provider detection should know about. */
@@ -95,11 +96,11 @@ def modelFlagProblem(parsed: ParsedModelFlag, hasChatModel: boolean, local: stri
   if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
     return "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}."
   }
-  if (parsed.slot == "embedding" && !embeddingSpecHasProvider(parsed.model)) {
-    return "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small."
+  if (needsProviderForm(parsed.slot) && !slotValueHasProvider(parsed.slot, parsed.model)) {
+    return "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. --model ${parsed.slot}=${providerFormExample(parsed.slot)}."
   }
   if (local != null && hasChatModel) {
-    return "Pass either --model (hosted) or --local (local), not both. The one exception is --model embedding=<local provider>/<model>."
+    return "Pass either --model (hosted) or --local (local), not both. The exceptions are --model embedding=<provider>/<model> and --model router=<provider>/<model>."
   }
   return ""
 }
@@ -107,8 +108,8 @@ def modelFlagProblem(parsed: ParsedModelFlag, hasChatModel: boolean, local: stri
 export def modelFlagsFromArgs(args: Record<string, any>): Result<ModelFlags> {
   """
   Read the model flags from parsed agent args. Fails on an unknown
-  --model slot, an embedding model without a provider, --local with a
-  chat model flag, or an --effort that is not one of its choices.
+  --model slot, an embedding or router model without a provider, --local
+  with a chat model flag, or an --effort that is not one of its choices.
 
   @param args - The result of parseAgentArgs
   """
@@ -117,7 +118,7 @@ export def modelFlagsFromArgs(args: Record<string, any>): Result<ModelFlags> {
   const slow = args.flags.slowmodel ?? ""
   const local = args.flags["local"] ?? null
   const parsed = parseModelFlag(modelArg)
-  const modelNamesAChatSlot = modelArg != "" && parsed.slot != "embedding"
+  const modelNamesAChatSlot = modelArg != "" && !needsProviderForm(parsed.slot)
   const hasChatModel = modelNamesAChatSlot || fast != "" || slow != ""
   const problem = modelFlagProblem(parsed, hasChatModel, local)
   if (problem != "") {
@@ -183,7 +184,8 @@ export def localModelOf(request: ModelRequest): LocalModel | null {
   if (flags.local != null) {
     return {
       model: flags.local,
-      embedding: flags.slots["embedding"] ?? ""
+      embedding: flags.slots["embedding"] ?? "",
+      router: flags.slots["router"] ?? ""
     }
   }
   const preset = request.preset
@@ -193,7 +195,8 @@ export def localModelOf(request: ModelRequest): LocalModel | null {
   const presetSlots = preset.slots ?? {}
   return {
     model: preset.local,
-    embedding: presetSlots.embedding ?? ""
+    embedding: presetSlots.embedding ?? "",
+    router: presetSlots.router ?? ""
   }
 }
 
@@ -226,8 +229,7 @@ export def requestLlmOptions(request: ModelRequest, settings: ModelSettings): Ll
 }
 
 def choosesAChatModel(choices: ModelChoices): boolean {
-  const chatSlots = [slot for slot in Object.keys(choices.slots) if slot != "embedding"]
-  return choices.pin != "" || chatSlots.length > 0
+  return choices.pin != "" || chatSlots(Object.keys(choices.slots)).length > 0
 }
 
 // A preset's effort was chosen for its models, so a model flag or a

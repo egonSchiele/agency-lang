@@ -66,7 +66,7 @@ export def savePreset(name: string, preset: PresetInput): string {
   also approves a preset that sets llmOptions.baseUrl.mlx.
 
   @param name - Lowercase letters, digits, and hyphens, starting with a letter, e.g. cheap
-  @param preset - Only the fields the user asked for. For a local model, set local and do not set provider, pin, slots.main, or slots.reasoning. slots.embedding, the tool limits, and llmOptions may be set with it.
+  @param preset - Only the fields the user asked for. For a local model, set local and do not set provider, pin, slots.main, or slots.reasoning. slots.embedding, slots.router, the tool limits, and llmOptions may be set with it.
   """
   const checked = checkPreset(name, preset, false)
   if (checked is failure(reason)) {

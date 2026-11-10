@@ -170,6 +170,146 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "presetCommandLists",
+      "input": "",
+      "expectedOutput": "\"{\\\"kind\\\":\\\"list\\\",\\\"name\\\":\\\"\\\"}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetCommandSwitches",
+      "input": "",
+      "expectedOutput": "\"{\\\"kind\\\":\\\"switch\\\",\\\"name\\\":\\\"glm\\\"}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetCommandSavesToTheActive",
+      "input": "",
+      "expectedOutput": "\"{\\\"kind\\\":\\\"save\\\",\\\"name\\\":\\\"\\\"}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetCommandSavesToAName",
+      "input": "",
+      "expectedOutput": "\"{\\\"kind\\\":\\\"save\\\",\\\"name\\\":\\\"fast\\\"}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetCommandSwitchesToAPresetNamedLikeSave",
+      "input": "",
+      "expectedOutput": "\"{\\\"kind\\\":\\\"switch\\\",\\\"name\\\":\\\"saved\\\"}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveWithNoPresetAndNoNameIsRefused",
+      "input": "",
+      "expectedOutput": "\"No preset is active. Name one: /preset save <name>\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveAddsTheRouterToTheActivePreset",
+      "input": "",
+      "expectedOutput": "\"Saved the 'small' preset: |   slots.router: (none) → openrouter/jev-1.14 || {\\\"router\\\":\\\"openrouter/jev-1.14\\\"} || {\\\"provider\\\":\\\"anthropic\\\",\\\"pin\\\":\\\"claude-opus-4-8\\\",\\\"maxToolResultChars\\\":20000}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveKeepsTheDefaultFlag",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveUnderANewNameCreatesIt",
+      "input": "",
+      "expectedOutput": "\"Created the 'fast' preset: | active: small\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveWithNothingChangedWritesNothing",
+      "input": "",
+      "expectedOutput": "\"[\\\"Nothing to save: this session matches the 'small' preset.\\\"] | file unchanged: true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "savedPresetIsUsableAtOnce",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveAfterLocalSwitchIsRefused",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveLeavesABrokenFileAlone",
+      "input": "",
+      "expectedOutput": "\"true | not json{{{\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveRefusesABadName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

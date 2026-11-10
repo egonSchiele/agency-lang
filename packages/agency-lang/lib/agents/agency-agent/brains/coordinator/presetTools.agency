@@ -1,41 +1,19 @@
 /** @module
   @summary The coordinator's preset tools. A write tool describes its
-  change as a PresetEdit and hands it to editPresets, the one place that
-  reads settings.json, applies the change, writes the file, and refreshes
-  the in-memory presets. The policy handler decides the read and the
+  change as a PresetEdit and hands it to editPresets in
+  lib/presets.agency, the one place that reads settings.json, applies the
+  change, writes the file, and refreshes the in-memory presets. The policy handler decides the read and the
   write. Nothing here approves them.
 */
 import { PresetInput, checkPreset } from "../../lib/presetRules.agency"
 import {
-  PresetEdit,
   PresetEditOutcome,
   activePresetName,
-  applyPresetEdit,
-  editOutcome,
+  editPresets,
   presetListing,
   presetTable,
-  readPresetTable,
-  setPresetTable,
  } from "../../lib/presets.agency"
-import { readSettingsFile, writeSettingsFile } from "../../lib/settings.agency"
 import { confirmServerUrl } from "./llmOptionTools.agency"
-
-def editPresets(edit: PresetEdit): Result<PresetEditOutcome> {
-  const loaded = readSettingsFile()
-  if (isFailure(loaded)) {
-    return loaded
-  }
-  const edited = applyPresetEdit(loaded.value, edit)
-  if (isFailure(edited)) {
-    return edited
-  }
-  const written = writeSettingsFile(edited.value)
-  if (isFailure(written)) {
-    return written
-  }
-  setPresetTable(readPresetTable(edited.value.presets))
-  return success(editOutcome(loaded.value, edit.name))
-}
 
 def useItHint(name: string): string {
   return "To use it now, the user runs /preset ${name}. To start with it, agency agent --preset ${name}."

@@ -47,7 +47,8 @@ import {
   modelChoiceItems,
   scopedPickerNotes,
   parseModelsFilters,
-  parsePresetName,
+  parsePresetCommand,
+  saveSessionPreset,
   switchPreset,
   applySessionLlmOptions,
   takePendingLlmOptions,
@@ -203,13 +204,20 @@ def pushResolvedSlots(heading: string, resolved: Record<string, Resolved>) {
 }
 
 def presetSlashCommand(command: string): boolean {
-  const name = parsePresetName(command)
-  if (name == "") {
+  const parsed = parsePresetCommand(command)
+  if (parsed.kind == "list") {
     for (line in presetListLines(presetTable(), activePresetName())) {
       pushMessage(line)
     }
     return true
   }
+  if (parsed.kind == "save") {
+    for (line in saveSessionPreset(parsed.name, _session)) {
+      pushMessage(line)
+    }
+    return true
+  }
+  const name = parsed.name
   const switched = switchPreset(name)
   if (switched is failure(reason)) {
     pushMessage(color.red("Could not switch preset: ${reason}"))

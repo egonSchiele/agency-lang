@@ -1,16 +1,10 @@
 import { requireCapabilities } from "../host/host.js";
 import { forgetSpan } from "../statelog/spanSlot.js";
 import * as smoltalk from "smoltalk";
-import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
-import { createLogger, type Logger } from "../logger.js";
-import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
+import { UserContentInput } from "smoltalk";
+import { AgencyFunction } from "./agencyFunction.js";
 import type { Run } from "./asyncContext.js";
-import {
-  harvestReplyAttachments,
-  buildReplyUserMessage,
-  appendReplyMarker,
-  type HarvestedReplyAttachment,
-} from "./replyAttachments.js";
+import { harvestReplyAttachments, appendReplyMarker } from "./replyAttachments.js";
 import {
   runInitialBoundary,
   runRoundBoundary,
@@ -19,33 +13,26 @@ import {
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
-import { recordCompletionUsage } from "./recordPaidUsage.js";
-import { projectProviderTokenUsage, type ProviderUsageKind } from "./invocationUsage.js";
-import { resolveCompletionModel } from "./modelIdentity.js";
+import { type ProviderUsageKind } from "./invocationUsage.js";
+import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
+import type { RetryConfig } from "./llmRetry.js";
 import {
-  CUT_OFF_NOTE,
-  CUT_OFF_RETRIES,
-  decideCutOff,
-  decideValidationRetry,
-  resolveRetryPolicy,
-} from "./llmRetry.js";
-import type { CutOffDecision, RetryPolicy, RetryConfig } from "./llmRetry.js";
+  advanceCutOffAttempt,
+  cutOffDecision,
+  pushCutOffNote,
+  removeCutOffReply,
+  type CutOffFrame,
+} from "./cutOffRetry.js";
 import { mergeFields, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 import { roundWarningSettings, type WarnAtRoundsLeft } from "./roundWarning.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
-import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindFor } from "./llmDispatch.js";
-import {
-  emitPromptCompletion,
-  emitPromptStart,
-  redactMessagesForLog,
-  redactPromptForLog,
-} from "./promptEvents.js";
-import type { DecisionLog } from "../statelog/wireTypes.js";
+import { armCallTimeout, runWithRetry } from "./llmDispatch.js";
+import { redactMessagesForLog } from "./promptEvents.js";
 import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
-import { withHostKeys, type PromptConfig } from "./llmClient.js";
+import { withHostKeys } from "./llmClient.js";
 import type { CallConfig } from "./llmConfig.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/agents/promptRunner.md for the control-flow abstraction used here.
@@ -78,13 +65,9 @@ import {
   type RepeatStreak,
   resultCap,
 } from "./toolLoopGuards.js";
-import {
-  GuardTripRetry,
-  raiseGuardTripsUntilClear,
-  throwRetryForResumableTrip,
-} from "./guardTripInterrupt.js";
+import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { initLoopFrame } from "./loopFrame.js";
-import { failure, isFailure, isSuccess, markDestructiveWork, runtimeFailure } from "./result.js";
+import { failure, isFailure, markDestructiveWork, runtimeFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -98,7 +81,6 @@ import {
   runEndTurnStep,
   stripHandoffSystemMessages,
   type DeferredHandBack,
-  type HandoffOutcome,
   type TurnEnded,
   type TurnMarks,
 } from "./handoff.js";
@@ -124,28 +106,10 @@ import {
 } from "./toolInvocation.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
-import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
-import { buildReplyMessage, extractStructuredResponse, updateTokenStats } from "./utils.js";
-
-export type Tool = {
-  name: string;
-  description?: string;
-  schema: any;
-};
-
-/** Result of `_runPrompt`. Callback bodies cannot raise interrupts
- *  (typechecker-enforced), so the result is always plain data — the LLM
- *  hooks (onLLMCallStart, onLLMCallEnd) fire as side effects only. */
-export type RunPromptResult = {
-  messages: MessageThread;
-  toolCalls: smoltalk.ToolCallJSON[];
-  /** Why this round ended, normalized by smoltalk across providers. */
-  stopReason?: smoltalk.StopReason;
-  /** How the round was booked: a text model's completion, or a decision
-   *  model's answer. Set by `_runPrompt`; a direct-return path may omit it. */
-  usageKind?: ProviderUsageKind;
-};
+import { extractStructuredResponse } from "./utils.js";
+import { _runPrompt, ctxLogger, type Tool } from "./promptRequest.js";
+export type { RunPromptResult, Tool } from "./promptRequest.js";
 
 /** Flatten a prompt (a string, or an array of text/attachment parts) to plain
  *  text for consumers that require a string — e.g. memory recall and log
@@ -167,257 +131,6 @@ export const _internal = {
   runWithRetry,
   dropNullDefaultedArgs,
 };
-
-/** In-flight visibility: record the request SHAPE before dispatch, so a
- *  call that never completes (hang, kill, runaway generation) still
- *  leaves a trace. Pairs with promptCompletion/llmError/promptCancelled
- *  by span + order. Un-awaited like promptCompletion (post() detaches
- *  the remote send; the file sink is a sync append). Called inside the
- *  same idempotent pr.step as the completion, so resumed runs do not
- *  double-emit for replayed steps. Retries inside dispatchWithRetry
- *  share the one start. */
-/** The runtime's logger for a run: its level, writing to its host. */
-function ctxLogger(ctx: RuntimeContext<any>): Logger {
-  return createLogger(ctx.logLevel, ctx.host.settings);
-}
-
-/** Turn a failed dispatch into the error `_runPrompt` should throw, logging
- *  the outcome on the way.
- *
- *  Cancellation normalization. When WE aborted the request (user pressed Esc →
- *  ctx.cancel(), a race loser, a timeout), the provider SDK surfaces its OWN
- *  abort error — e.g. Anthropic throws a plain `Error("Request was aborted.")`
- *  whose name isn't "AbortError", so `isAbortError` can't recognize it by
- *  identity. Our cancellation state is authoritative: if the call threw while
- *  we're cancelled, it's a cancellation. Normalize to AgencyCancelledError so
- *  the rest of the runtime (function/node catches re-throw it, the REPL prints
- *  "cancelled") handles it as one — and skip the llmError log, since a user
- *  cancel isn't a request failure worth recording.
- *
- *  Prefer the structured cause when present so the normalized error keeps its
- *  intent (guardTrip / userInterrupt / …); fall back to the isCancelled
- *  heuristic for provider errors that arrive with no cause. The cause object
- *  preserves identity (readCause off the error or the composed signal returns
- *  the SAME branded object the producer set), so the `delivered` de-dup flag
- *  stays shared across the two trip paths.
- *
- *  Returns rather than throws so the caller's `throw` keeps TypeScript's
- *  control flow honest. A resumable guard trip is the one exception: it throws
- *  `GuardTripRetry` from here and never returns. */
-async function dispatchFailureToThrow(
-  err: unknown,
-  {
-    run,
-    stateStack,
-    tools,
-  }: {
-    run: Run;
-    stateStack: StateStack | undefined;
-    tools: Tool[];
-  },
-): Promise<unknown> {
-  const ctx = run.ctx as RuntimeContext<GraphState>;
-  const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
-  // Resumable trip? Throws GuardTripRetry and never returns.
-  throwRetryForResumableTrip(cause, run, stateStack);
-  if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
-    // Terminate the promptStart pair: a cancelled call (race loser, Esc,
-    // timeout abort) is a NORMAL outcome, not a request failure — no
-    // llmError — but leaving the start unpaired would make every healthy
-    // race() render "never completed" warnings.
-    run.log.promptCancelled({
-      threadId: run.threads.activeId() ?? null,
-    });
-    return new AgencyCancelledError(undefined, cause);
-  }
-  try {
-    await run.log.error({
-      errorType: "llmError",
-      message: err instanceof Error ? err.message : String(err),
-      tools,
-    });
-  } catch {
-    // ignore — never let logging shadow the original failure
-  }
-  return err;
-}
-
-/** Post-turn memory work: let the memory manager observe the completed turn
- *  and compact the thread if it has grown past its threshold. Skipped when a
- *  guard is already over budget, since memory's own LLM calls would spend
- *  past the cap. A memory failure is logged, not fatal — except a guard-
- *  exceeded error, which must keep unwinding. */
-async function runPostTurnMemory(
-  run: Run,
-  targetStack: StateStack,
-  messages: MessageThread,
-): Promise<void> {
-  if (targetStack.anyGuardOverBudget()) return;
-  const memoryManager = run.ctx.getActiveMemoryManager(run.stack);
-  if (!memoryManager) return;
-  try {
-    const original = messages.getMessages();
-    await memoryManager.onTurn(run, original);
-    const plan = await memoryManager.compactIfNeeded(run, original);
-    if (plan) {
-      // Reassemble the thread from the ORIGINAL smoltalk Message
-      // instances so tool_call metadata, ids, and other class-level
-      // fields survive untouched. Expiring messages from the compacted
-      // range stay, after the summary, for their owners to remove.
-      const pick = (indices: number[]) => indices.map((i) => original[i]);
-      const summary = smoltalk.systemMessage(plan.summaryMessageContent);
-      messages.setMessages([
-        ...pick(plan.systemPrefixIndices),
-        summary,
-        ...pick(plan.keptIndices),
-        ...pick(plan.tailIndices),
-      ]);
-    }
-  } catch (err) {
-    if (isGuardExceededError(err)) throw err;
-    ctxLogger(run.ctx).warn(`[memory] post-turn hook failed: ${(err as Error).message}`);
-  }
-}
-
-async function _runPrompt({
-  run,
-  messages,
-  tools,
-  prompt,
-  responseFormat,
-  clientConfig,
-  stateStack,
-  retryPolicy,
-  callLabel,
-}: {
-  run: Run;
-  messages: MessageThread;
-  tools: Tool[];
-  prompt: string | UserContentInput;
-  responseFormat?: any;
-  clientConfig: Partial<smoltalk.SmolConfig>;
-  /** The branch-local stack, if this _runPrompt call is running inside a
-   * fork/race branch. Used for branch-aware cancellation checks and for
-   * scoping the LLM HTTP abort signal to the current branch. */
-  stateStack?: StateStack;
-  retryPolicy: RetryPolicy;
-  /** This call's `llm(label:)` debug tag (see `emitPromptStart`), or null. */
-  callLabel?: string | null;
-}): Promise<RunPromptResult> {
-  const ctx = run.ctx as RuntimeContext<GraphState>;
-  if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
-
-  // Pre-call cost-guard gate. If any active guard (including shared
-  // parent guards inherited by this branch) is already over budget —
-  // e.g. because a sibling branch's earlier LLM call pushed the shared
-  // CostGuard over its limit, or because a prior call here did — refuse
-  // to issue this call. Catches "another expensive call would have been
-  // billed but we're already past the cap" before the request hits the
-  // wire.
-  const targetStack = stateStack ?? ctx.stateStack;
-  targetStack.enforceGuards();
-
-  // Note: the llmCall span is opened in the outer `runPrompt`, not here,
-  // so that any tool executions triggered by this LLM response nest under
-  // the same llmCall span (matching the design spec hierarchy
-  // agentRun > nodeExecution > llmCall > toolExecution).
-  const stream = !!(clientConfig as any)?.stream;
-  const startTime = performance.now();
-
-  await callHook(run, {
-    name: "onLLMCallStart",
-    data: {
-      prompt: redactPromptForLog(prompt),
-      tools,
-      model: clientConfig.model,
-      messages: redactMessagesForLog(messages),
-    },
-  });
-
-  // Re-check after hook — cancellation may have occurred during the callback
-  if (ctx.isCancelled(stateStack)) {
-    throw new AgencyCancelledError();
-  }
-
-  const promptConfig: PromptConfig = {
-    ...clientConfig,
-    messages: messages.getMessages(),
-    tools,
-    responseFormat,
-    abortSignal: ctx.getAbortSignal(stateStack),
-    metadata: clientConfig,
-  } as any;
-
-  // "completion" for a text model; "decision" for a decision model, whose
-  // call is booked under its own kind. See decision/dispatch.ts.
-  const usageKind = usageKindFor(promptConfig);
-  emitPromptStart({ run, messages, tools, responseFormat, clientConfig, callLabel, usageKind });
-
-  let completion: PromptResult;
-  let toolCalls: ToolCallJSON[];
-  let decision: DecisionLog | undefined;
-  try {
-    ({ completion, toolCalls, decision } = await dispatchWithRetry({
-      run,
-      ctx,
-      promptConfig,
-      prompt,
-      stream,
-      retryPolicy,
-      parentSignal: ctx.getAbortSignal(stateStack),
-      stateStack,
-    }));
-  } catch (err) {
-    throw await dispatchFailureToThrow(err, { run, stateStack, tools });
-  }
-
-  const endTime = performance.now();
-
-  const modelName = resolveCompletionModel(completion.model, clientConfig.model);
-
-  const projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
-
-  emitPromptCompletion({
-    run,
-    messages,
-    completion,
-    projectedUsage,
-    modelName,
-    timeTaken: endTime - startTime,
-    tools,
-    responseFormat,
-    stream,
-    usageKind,
-    decision,
-  });
-
-  const reply = buildReplyMessage(completion, toolCalls, ctx.logLevel, ctx.host.settings);
-  messages.push(reply, callLabel);
-
-  updateTokenStats({
-    globals: ctx.globals,
-    usage: projectedUsage,
-    cost: completion.cost,
-    model: modelName,
-  });
-
-  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model, usageKind);
-  await runPostTurnMemory(run, targetStack, messages);
-
-  await callHook(run, {
-    name: "onLLMCallEnd",
-    data: {
-      model: modelName,
-      result: completion,
-      usage: completion.usage,
-      cost: completion.cost,
-      timeTaken: endTime - startTime,
-      messages: redactMessagesForLog(messages),
-    },
-  });
-
-  return { messages, toolCalls, stopReason: completion.stopReason, usageKind };
-}
 
 type RunPromptArgs = {
   prompt: string | UserContentInput;
@@ -453,17 +166,6 @@ type RunPromptArgs = {
   draftSchema?: unknown;
   checkpointInfo?: SourceLocationOpts;
 };
-
-/** The index of the thread's last assistant message, or -1. */
-function lastAssistantIndex(messages: MessageThread): number {
-  return messages.getMessages().findLastIndex((message) => message.role === "assistant");
-}
-
-/** A message's content as text, or null when it has none. */
-function textContent(content: unknown): string | null {
-  if (content === null || content === undefined) return null;
-  return typeof content === "string" ? content : JSON.stringify(content);
-}
 
 export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   const { prompt } = args;
@@ -521,6 +223,8 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // desync: a replayed helper stole it and runPrompt restarted blank.
   claimFrameForScope(stack, "runPrompt", "", run.log);
   const self = stack.locals;
+  // The fields of the frame the cut-off retry reads and writes.
+  const cutOffFrame = self as CutOffFrame;
 
   // Frame-backed locals (survive checkpoint/restore)
   initLoopFrame(self, args);
@@ -855,6 +559,25 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       }
     }
   };
+  /** Send the thread to the model and keep what it returned. */
+  const sendRequest = async (atCap: boolean): Promise<void> => {
+    const result = await _runPrompt({
+      run,
+      messages,
+      tools: toolsOffered(tools, exposedFunctions, atCap),
+      prompt,
+      responseFormat,
+      clientConfig: configOffered(clientConfig, atCap),
+      stateStack,
+      retryPolicy,
+      callLabel,
+    });
+    messages = result.messages;
+    toolCalls = result.toolCalls;
+    self.lastStopReason = result.stopReason ?? null;
+    lastUsageKind = result.usageKind;
+  };
+
   /** The key of the messages that expire when this request returns. */
   const requestExpiryKey = (which: WhichLlmCall): string =>
     `${self.llmCallKey}:${llmCallKey(which)}`;
@@ -885,21 +608,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     await requestStepWithTripRetry(which, async () => {
       try {
         pushForRequest?.();
-        const nextResult = await _runPrompt({
-          run,
-          messages,
-          tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
-          prompt,
-          responseFormat,
-          clientConfig: configOffered(clientConfig, atRoundCap()),
-          stateStack,
-          retryPolicy,
-          callLabel,
-        });
-        messages = nextResult.messages;
-        toolCalls = nextResult.toolCalls;
-        self.lastStopReason = nextResult.stopReason ?? null;
-        lastUsageKind = nextResult.usageKind;
+        await sendRequest(atRoundCap());
       } finally {
         messages.expire("request", expiryKey);
       }
@@ -911,51 +620,16 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
   };
-  /** What to do with the reply that ended the tool loop. A retry prepared
-   *  before a pause is finished, not judged again: its `feedback` step
-   *  already removed the reply the decision was about. See "A reply cut off
-   *  by the output limit" in docs/dev/agents/tool-loop-guards.md. */
-  const cutOffDecision = (): CutOffDecision => {
-    if (self.cutOffPending !== null) return { kind: "retry" };
-    const index = lastAssistantIndex(messages);
-    if (index === -1) return { kind: "accept" };
-    return decideCutOff({
-      stopReason: self.lastStopReason ?? undefined,
-      content: textContent(messages.getMessages()[index].content),
-      attempt: self.cutOffAttempt,
-    });
-  };
-
   /** Remove the empty cut-off reply and send the request again, with a
    *  note that lasts for that one request. */
   const retryCutOffReply = async (): Promise<void> => {
     const attempt: number = self.cutOffPending ?? self.cutOffAttempt;
+    const which = { cutOffRetry: attempt };
     await resendRequest(
-      { cutOffRetry: attempt },
-      async () => {
-        await callHook(run, {
-          name: "onLLMRetry",
-          data: {
-            attempt: attempt + 1,
-            maxRetries: CUT_OFF_RETRIES,
-            delayMs: 0,
-            reason: "cutOff",
-            detail: "The reply reached the output limit before it held any text or tool call.",
-          },
-        });
-        messages.removeAt(lastAssistantIndex(messages));
-        self.cutOffPending = attempt;
-      },
-      () => {
-        self.cutOffAttempt = attempt + 1;
-        self.cutOffPending = null;
-      },
-      () => {
-        messages.push(smoltalk.userMessage(CUT_OFF_NOTE), null, {
-          at: "request",
-          key: requestExpiryKey({ cutOffRetry: attempt }),
-        });
-      },
+      which,
+      () => removeCutOffReply(run, messages, cutOffFrame, attempt),
+      () => advanceCutOffAttempt(cutOffFrame, attempt),
+      () => pushCutOffNote(messages, requestExpiryKey(which)),
     );
   };
 
@@ -1004,21 +678,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       // finally so a GuardTripRetry unwind cannot leave the recall
       // message in the thread and duplicate it on re-issue.
       try {
-        const result = await _runPrompt({
-          run,
-          messages,
-          tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
-          prompt,
-          responseFormat,
-          clientConfig: configOffered(clientConfig, atRoundCap()),
-          stateStack,
-          retryPolicy,
-          callLabel,
-        });
-        messages = result.messages;
-        toolCalls = result.toolCalls;
-        self.lastStopReason = result.stopReason ?? null;
-        lastUsageKind = result.usageKind;
+        await sendRequest(atRoundCap());
       } finally {
         messages.expire("request", factsKey);
       }
@@ -1965,21 +1625,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         // do NOT close/reopen it here — this round's promptCompletion
         // nests under the same span as the first round's.
         await requestStepWithTripRetry({ afterToolRound: round }, async () => {
-          const nextResult = await _runPrompt({
-            run,
-            messages,
-            tools: toolsOffered(tools, exposedFunctions, atRoundCap(round + 1)),
-            prompt,
-            responseFormat,
-            clientConfig: configOffered(clientConfig, atRoundCap(round + 1)),
-            stateStack,
-            retryPolicy,
-            callLabel,
-          });
-          messages = nextResult.messages;
-          toolCalls = nextResult.toolCalls;
-          self.lastStopReason = nextResult.stopReason ?? null;
-          lastUsageKind = nextResult.usageKind;
+          await sendRequest(atRoundCap(round + 1));
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
           self.toolCallRound = round + 1;
@@ -1989,7 +1635,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       }
       // Tool calls are drained. An empty reply the output limit cut off is
       // retried before anything reads it, so validation never sees one.
-      const cutOff = cutOffDecision();
+      const cutOff = cutOffDecision(cutOffFrame, messages);
       if (cutOff.kind === "retry") {
         await retryCutOffReply();
         continue;

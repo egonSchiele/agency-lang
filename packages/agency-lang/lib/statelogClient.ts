@@ -5,7 +5,7 @@ import { openLineSink } from "#platform";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
-import type { DecisionLog } from "./statelog/wireTypes.js";
+import type { DecisionLog, StatelogErrorType, StatelogWarnType } from "./statelog/wireTypes.js";
 import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
@@ -1554,15 +1554,7 @@ export class StatelogClient {
     sourceLocation,
     tools,
   }: {
-    errorType:
-      | "toolError"
-      | "llmError"
-      | "runtimeError"
-      | "validationError"
-      | "limitExceeded"
-      | "structuredOutput"
-      | "replyCutOff"
-      | "finalizeError";
+    errorType: StatelogErrorType;
     message: string;
     functionName?: string;
     /** Tool-failure classification for the tool loop's retry policy. */
@@ -1607,13 +1599,7 @@ export class StatelogClient {
     schemaChars,
     threshold,
   }: {
-    warnType:
-      | "failurePropagation"
-      | "toolSchemaSize"
-      | "failureData"
-      | "decisionBatchCap"
-      | "endTurn"
-      | "replyCutOff";
+    warnType: StatelogWarnType;
     message: string;
     functionName?: string;
     param?: string;

@@ -1,0 +1,45 @@
+// A reply the output limit cut off, paused and resumed in the middle of
+// its retry. See "A reply cut off by the output limit" in
+// docs/dev/agents/tool-loop-guards.md. test.js scripts each model reply.
+
+def interruptTool(): string {
+  interrupt("approve")
+  return "tool result"
+}
+
+// The retried request calls a tool that interrupts.
+node toolPause() {
+  return llm("go", { tools: [interruptTool] })
+}
+
+// The cost guard trips at the cut-off gate, after the empty reply is gone.
+// The second llm() call shows what the thread kept.
+node gatePause() {
+  const r = guard(cost: $0.000001, label: "budget") {
+    return llm("go")
+  }
+  if (isFailure(r)) {
+    return "unexpected-failure"
+  }
+  const after = llm("again")
+  return { inner: r.value, after: after }
+}
+
+// The time guard kills the retried request, and the handler approves more
+// time, so the request body is sent again in process.
+node tripDuringRetry() {
+  handle {
+    const r = guard(time: 300ms, label: "clock") {
+      return llm("go")
+    }
+    if (isFailure(r)) {
+      return "unexpected-failure"
+    }
+    return r.value
+  } with (i) {
+    if (i.effect == "std::guard") {
+      return approve({ maxTime: 600000 })
+    }
+    return pass()
+  }
+}

@@ -22,8 +22,14 @@ import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } fro
 import { recordCompletionUsage } from "./recordPaidUsage.js";
 import { projectProviderTokenUsage, type ProviderUsageKind } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
-import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
-import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
+import {
+  CUT_OFF_NOTE,
+  CUT_OFF_RETRIES,
+  decideCutOff,
+  decideValidationRetry,
+  resolveRetryPolicy,
+} from "./llmRetry.js";
+import type { CutOffDecision, RetryPolicy, RetryConfig } from "./llmRetry.js";
 import { mergeFields, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 import { roundWarningSettings, type WarnAtRoundsLeft } from "./roundWarning.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
@@ -447,6 +453,17 @@ type RunPromptArgs = {
   draftSchema?: unknown;
   checkpointInfo?: SourceLocationOpts;
 };
+
+/** The index of the thread's last assistant message, or -1. */
+function lastAssistantIndex(messages: MessageThread): number {
+  return messages.getMessages().findLastIndex((message) => message.role === "assistant");
+}
+
+/** A message's content as text, or null when it has none. */
+function textContent(content: unknown): string | null {
+  if (content === null || content === undefined) return null;
+  return typeof content === "string" ? content : JSON.stringify(content);
+}
 
 export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   const { prompt } = args;
@@ -894,6 +911,54 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
   };
+  /** What to do with the reply that ended the tool loop. A retry prepared
+   *  before a pause is finished, not judged again: its `feedback` step
+   *  already removed the reply the decision was about. See "A reply cut off
+   *  by the output limit" in docs/dev/agents/tool-loop-guards.md. */
+  const cutOffDecision = (): CutOffDecision => {
+    if (self.cutOffPending !== null) return { kind: "retry" };
+    const index = lastAssistantIndex(messages);
+    if (index === -1) return { kind: "accept" };
+    return decideCutOff({
+      stopReason: self.lastStopReason ?? undefined,
+      content: textContent(messages.getMessages()[index].content),
+      attempt: self.cutOffAttempt,
+    });
+  };
+
+  /** Remove the empty cut-off reply and send the request again, with a
+   *  note that lasts for that one request. */
+  const retryCutOffReply = async (): Promise<void> => {
+    const attempt: number = self.cutOffPending ?? self.cutOffAttempt;
+    await resendRequest(
+      { cutOffRetry: attempt },
+      async () => {
+        await callHook(run, {
+          name: "onLLMRetry",
+          data: {
+            attempt: attempt + 1,
+            maxRetries: CUT_OFF_RETRIES,
+            delayMs: 0,
+            reason: "cutOff",
+            detail: "The reply reached the output limit before it held any text or tool call.",
+          },
+        });
+        messages.removeAt(lastAssistantIndex(messages));
+        self.cutOffPending = attempt;
+      },
+      () => {
+        self.cutOffAttempt = attempt + 1;
+        self.cutOffPending = null;
+      },
+      () => {
+        messages.push(smoltalk.userMessage(CUT_OFF_NOTE), null, {
+          at: "request",
+          key: requestExpiryKey({ cutOffRetry: attempt }),
+        });
+      },
+    );
+  };
+
   try {
     // The call-entry boundary: queueMessage entries queued before this
     // llm() call, then the gate, then feedback queued by the gate or by
@@ -1922,7 +1987,24 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
         });
       }
-      // Tool calls are drained. No schema means nothing to validate; the
+      // Tool calls are drained. An empty reply the output limit cut off is
+      // retried before anything reads it, so validation never sees one.
+      const cutOff = cutOffDecision();
+      if (cutOff.kind === "retry") {
+        await retryCutOffReply();
+        continue;
+      }
+      if (cutOff.kind === "surfaceFailure") {
+        await pr.step("guardGate.final", guardGate);
+        run.log.error({ errorType: "replyCutOff", message: cutOff.message });
+        return failure(cutOff.message);
+      }
+      if (cutOff.kind === "warn") {
+        await pr.step("cutOff.warning", async () => {
+          void run.log.warn({ warnType: "replyCutOff", message: cutOff.message });
+        });
+      }
+      // No schema means nothing to validate; the
       // plain-content return after the finally handles it — but first,
       // the final guard-trip gate: the last request's charge may have
       // crossed a limit, and there is no next round to raise it at. See

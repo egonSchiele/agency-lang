@@ -1561,6 +1561,7 @@ export class StatelogClient {
       | "validationError"
       | "limitExceeded"
       | "structuredOutput"
+      | "replyCutOff"
       | "finalizeError";
     message: string;
     functionName?: string;
@@ -1607,7 +1608,12 @@ export class StatelogClient {
     threshold,
   }: {
     warnType:
-      "failurePropagation" | "toolSchemaSize" | "failureData" | "decisionBatchCap" | "endTurn";
+      | "failurePropagation"
+      | "toolSchemaSize"
+      | "failureData"
+      | "decisionBatchCap"
+      | "endTurn"
+      | "replyCutOff";
     message: string;
     functionName?: string;
     param?: string;

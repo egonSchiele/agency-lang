@@ -310,9 +310,8 @@ export idempotent def threadIsNew(): boolean {
   return _threadIsNew()
 }
 
-/** For an agent's persona. An agent called twice from code on one thread
-  keeps one persona; a handoff, whose system messages are removed when it
-  hands back, pushes the persona fresh on every dispatch. */
+/** Push a system message unless the active thread already holds one with
+  the same text, so code that runs twice on one thread adds it once. */
 export def ensureSystemMessage(msg: string) {
   """
   Push `msg` as a system message unless the active thread already holds it.

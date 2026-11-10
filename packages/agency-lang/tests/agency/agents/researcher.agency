@@ -4,6 +4,21 @@
 // docs/dev/agents/research-loop.md.
 import { researcherAgent } from "std::agents/researcher"
 
+// How many copies of the researcher's persona each model request held,
+// in request order. Read by followUpHoldsThePersona.
+let personaCounts: number[] = []
+
+callback("onLLMCallStart") as data {
+  let copies = 0
+  for (msg in data.messages) {
+    const content = "${msg.content}"
+    if (msg.role == "system" && content.startsWith("You are a research analyst.")) {
+      copies = copies + 1
+    }
+  }
+  personaCounts = [...personaCounts, copies]
+}
+
 def rejectEverything(intr) {
   return reject()
 }
@@ -47,4 +62,11 @@ node answerIsReturnedAsWritten(): string {
     return "failed: ${err}"
   }
   return answer.value
+}
+
+// The persona expires with the first model call, so the follow-up pushes
+// it again: each request holds it once.
+node followUpHoldsThePersona(): string {
+  const answer = research("what did he study")
+  return personaCounts.join(",")
 }

@@ -7,7 +7,7 @@ import { evalValue } from "std::statelog"
 import {
   ThreadMessage,
   assistantMessage,
-  ensureSystemMessage,
+  systemMessage,
   threadIsNew,
   userMessage,
  } from "std::thread"
@@ -86,9 +86,7 @@ def research(
 ): Result<string> {
   const researchTools = buildTools()
   const fresh = threadIsNew()
-  // A handoff runs on the caller's thread, which may already hold the
-  // persona; the push is skipped when it does.
-  ensureSystemMessage(systemPrompt)
+  systemMessage(systemPrompt, expires: "llmCall")
   if (fresh) {
     // The conversation so far, so the question is read in its context. A
     // shared session already holds its history and is not seeded again.
@@ -115,7 +113,9 @@ def research(
     ),
   )
   if (answerIsEmpty(answer)) {
-    // Keep the sources in context and remove tools so the follow-up writes an answer.
+    // Keep the sources in context and remove tools so the follow-up writes an
+    // answer. The persona expired with the first call, so push it again.
+    systemMessage(systemPrompt, expires: "llmCall")
     answer = llm(NO_ANSWER_FOLLOWUP, llmOptions(model: model, provider: provider))
     if (answerIsBlank(answer)) {
       return failure("the model returned no answer twice")

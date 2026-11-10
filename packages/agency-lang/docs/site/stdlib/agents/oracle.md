@@ -47,8 +47,9 @@ Read the code and give a focused second opinion on a plan, design, or bug.
   context.
 
 Called from code, this runs on the caller's thread like any function:
-  the system prompt, the reads, and the answer stay there. Wrap the call
-  in `thread { ... }` for an isolated consult.
+  the reads and the answer stay there, and the system prompt is removed
+  when the agent finishes. Wrap the call in `thread { ... }` for an
+  isolated consult.
 
 **Parameters:**
 
@@ -66,4 +67,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L130))

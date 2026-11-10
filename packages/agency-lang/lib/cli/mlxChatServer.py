@@ -86,9 +86,12 @@ The exception is a request that also sends `tool_choice: "none"`: the caller
 has ruled a tool call out, so the schema is enforced.
 
 This script reaches into `mlx_lm.server`: it subclasses its request handler
-and response generator, and replaces two module-level names, `run` and
-`_make_logits_processors`. `agency local serve` pins the mlx-lm version for
-that reason; a new version needs these seams checked.
+and response generator, replaces two module-level names, `run` and
+`_make_logits_processors`, and patches a few of mlx_lm's methods to work
+around its bugs. `agency local serve` pins the mlx-lm version for that
+reason; a new version needs these seams checked.
+docs/dev/llm/upstream-workarounds.md lists every workaround and when it can
+come out.
 
 Options are `mlx_lm.server`'s own (--model, --host, --port, --max-tokens, and
 the rest) plus the limit flags above. Distributed serving (`mlx.distributed`)
@@ -117,8 +120,8 @@ from llguidance.mlx import apply_token_bitmask
 from llguidance.numpy import allocate_token_bitmask, fill_next_token_bitmask
 import mlx.core as mx
 from mlx_lm import server
-from mlx_lm.generate import GenerationBatch
-from mlx_lm.models.cache import can_trim_prompt_cache
+from mlx_lm.generate import GenerationBatch, PromptProcessingBatch
+from mlx_lm.models.cache import ArraysCache, can_trim_prompt_cache
 
 
 def schema_can_be_enforced(tools, tool_choice):
@@ -1160,12 +1163,16 @@ def cache_arrays(caches):
     return found
 
 
+def original_of(function):
+    """The function a shim wrapped, or the function itself. Wrapping the
+    original, not a wrapper, keeps a re-executed module from wrapping its
+    own shim twice."""
+    return getattr(function, "__cache_leak_original__", function)
+
+
 # Remove this shim once a released mlx_lm carries the upstream fix (#1642);
-# the extra per-step eval is redundant after that. Unwrap before capturing so
-# that if this module is ever re-executed, `original_batch_step` is the true
-# original and `settled_step` never wraps itself into infinite recursion.
-_installed = GenerationBatch._step
-original_batch_step = getattr(_installed, "__cache_leak_original__", _installed)
+# the extra per-step eval is redundant after that.
+original_batch_step = original_of(GenerationBatch._step)
 
 
 def settled_step(self):
@@ -1178,6 +1185,99 @@ def settled_step(self):
 
 settled_step.__cache_leak_original__ = original_batch_step
 GenerationBatch._step = settled_step
+
+
+# ---------------------------------------------------------------------------
+# A finished request's cache keeps the whole batch's memory (mlx_lm 0.31.3,
+# still so in 0.32.2).
+# ---------------------------------------------------------------------------
+#
+# When a request in a batch finishes, mlx_lm takes its rows out of the
+# batch's cache (`extract_cache`) and stores them in the server's prompt
+# cache, so a later request with the same start can reuse them. Two things
+# make those rows keep the whole batch's arrays alive:
+#
+# 1. `ArraysCache.extract` returns `c[idx : idx + 1]`, a slice. A slice
+#    shares its parent's buffer, so one request's rows hold every
+#    request's.
+# 2. Nothing evaluates the extracted rows. MLX computes an array only when
+#    asked, and an array not yet computed keeps its inputs. So even the
+#    attention caches' rows, which `BatchKVCache.extract` copies with
+#    `mx.contiguous`, hold the batch's keys and values until something
+#    reads them.
+#
+# Each step after, the batch is rebuilt for the requests still running, so
+# every finished request leaves a full copy of the batch's state behind.
+# On Qwen3.5-family models that is the linear-attention layers' recurrent
+# state, about 157 MB per request: a finished request kept about 3 GB with
+# 16 requests in the batch, and 1.5 GB with 8. The prompt cache counts each
+# entry as its own 157 MB, so its size limit never stepped in. 16 requests
+# at once to a 27B model passed 40 GB before half had finished.
+#
+# 3. mlx_lm clears MLX's cache of freed buffers only while it processes
+#    prompts, never while generating. With 1 and 2 fixed, the freed buffers
+#    piled up there instead (19 GB for the same 16 requests), because the
+#    batch shrinks by one each time a request finishes and the next arrays
+#    have new sizes that the freed buffers do not fit.
+#
+# So: copy the slices, evaluate a finished request's rows when they are
+# taken out, and after the batch is rebuilt, evaluate it and clear MLX's
+# cache. With all three, the same 16 requests peaked at 29.6 GB, and memory
+# fell as requests finished. Remove 1 and 2 when a released mlx_lm copies
+# and evaluates extracted caches, and 3 when it clears the cache while
+# generating; docs/dev/llm/upstream-workarounds.md tracks this.
+
+
+def copying_extract(self, idx):
+    """`ArraysCache.extract`, with each row copied out of the batch."""
+    cache = ArraysCache(len(self.cache))
+    cache.cache = [None if c is None else mx.contiguous(c[idx : idx + 1]) for c in self.cache]
+    return cache
+
+
+copying_extract.__cache_leak_original__ = original_of(ArraysCache.extract)
+ArraysCache.extract = copying_extract
+
+
+def settled_extract(original):
+    """An `extract_cache` whose rows are computed before it returns, so they
+    no longer refer to the batch's arrays."""
+
+    def extract_cache(self, idx):
+        caches = original(self, idx)
+        arrays = cache_arrays(caches)
+        if arrays:
+            mx.eval(arrays)
+        return caches
+
+    extract_cache.__cache_leak_original__ = original
+    return extract_cache
+
+
+GenerationBatch.extract_cache = settled_extract(original_of(GenerationBatch.extract_cache))
+PromptProcessingBatch.extract_cache = settled_extract(original_of(PromptProcessingBatch.extract_cache))
+
+original_batch_filter = original_of(GenerationBatch.filter)
+
+
+def releasing_filter(self, keep):
+    """`GenerationBatch.filter`, then the smaller batch computed and MLX's
+    cache of freed buffers emptied, so the old batch's memory goes back to
+    the system."""
+    original_batch_filter(self, keep)
+    arrays = cache_arrays(self.prompt_cache)
+    if arrays:
+        mx.eval(arrays)
+    # eval returns once the new arrays are computed, but the old ones are
+    # released a moment later, when the GPU reports the work done. Without
+    # waiting for that, the old batch lands in the cache just after it was
+    # cleared.
+    mx.synchronize()
+    mx.clear_cache()
+
+
+releasing_filter.__cache_leak_original__ = original_batch_filter
+GenerationBatch.filter = releasing_filter
 
 
 original_make_logits_processors = server._make_logits_processors

@@ -15,10 +15,12 @@ import sys
 import unittest
 import weakref
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import mlx.core as mx
 import numpy as np
+from mlx_lm.models.cache import ArraysCache, BatchKVCache
 
 sys.path.insert(0, str(Path(__file__).parent))
 import mlxChatServer as m  # noqa: E402
@@ -987,6 +989,85 @@ class CacheLeak(unittest.TestCase):
 
     def test_the_batched_step_is_the_settled_one(self):
         self.assertIs(m.GenerationBatch._step, m.settled_step)
+
+
+BATCH = 16
+
+
+def batch_of_rows(*row_shape):
+    """A computed array of BATCH random rows. Random, not zeros, so that MLX
+    cannot share one buffer between them."""
+    rows = mx.random.normal((BATCH, *row_shape))
+    mx.eval(rows)
+    return rows
+
+
+def megabytes(n_bytes):
+    return n_bytes / 1e6
+
+
+class FinishedRequestCache(unittest.TestCase):
+    """A finished request's cache must keep only its own rows of the
+    batch's arrays, and the batch's old arrays must go back to the system
+    once the batch shrinks."""
+
+    def setUp(self):
+        gc.collect()
+        mx.clear_cache()
+
+    def batch_caches(self):
+        recurrent = ArraysCache(1)
+        recurrent.cache = [batch_of_rows(1024, 1024)]
+        attention = BatchKVCache([0] * BATCH)
+        attention.keys = batch_of_rows(8, 256, 128)
+        attention.values = batch_of_rows(8, 256, 128)
+        attention._idx = 256
+        return [recurrent, attention]
+
+    def test_the_patches_are_installed(self):
+        self.assertIs(ArraysCache.extract, m.copying_extract)
+        self.assertIs(m.GenerationBatch.filter, m.releasing_filter)
+        for batch_class in (m.GenerationBatch, m.PromptProcessingBatch):
+            with self.subTest(batch_class.__name__):
+                self.assertTrue(hasattr(batch_class.extract_cache, "__cache_leak_original__"))
+
+    def test_a_finished_request_keeps_only_its_own_rows(self):
+        for batch_class in (m.GenerationBatch, m.PromptProcessingBatch):
+            with self.subTest(batch_class.__name__):
+                batch = SimpleNamespace(prompt_cache=self.batch_caches())
+                batch_size = sum(a.nbytes for a in m.cache_arrays(batch.prompt_cache))
+                before = mx.get_active_memory()
+                extracted = batch_class.extract_cache(batch, 3)
+                del batch
+                gc.collect()
+                kept = mx.get_active_memory() - (before - batch_size)
+                self.assertEqual(extracted[0].cache[0].shape, (1, 1024, 1024))
+                self.assertEqual(extracted[1].keys.shape, (1, 8, 256, 128))
+                self.assertLess(
+                    megabytes(kept),
+                    megabytes(batch_size) / BATCH * 2,
+                    f"the extracted cache kept {megabytes(kept):.0f} MB of a {megabytes(batch_size):.0f} MB batch",
+                )
+                del extracted
+
+    def test_after_the_batch_shrinks_its_old_arrays_are_returned(self):
+        batch = SimpleNamespace(prompt_cache=self.batch_caches()[:1])
+        old_size = sum(a.nbytes for a in m.cache_arrays(batch.prompt_cache))
+        before = mx.get_active_memory()
+
+        def shrink(self, keep):
+            for cache in self.prompt_cache:
+                cache.filter(keep)
+
+        with mock.patch.object(m, "original_batch_filter", shrink):
+            m.GenerationBatch.filter(batch, [0, 1])
+        gc.collect()
+        self.assertLess(
+            mx.get_active_memory(),
+            before - old_size * 0.8,
+            "the old batch's arrays are still in use after the batch shrank",
+        )
+        self.assertEqual(mx.get_cache_memory(), 0, "the old batch's memory stayed in MLX's cache")
 
 
 class ConnectionQueue(unittest.TestCase):

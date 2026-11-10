@@ -1,0 +1,13 @@
+// A reply's reasoning record survives a checkpoint: the model's first
+// reply calls a tool that interrupts, the run resumes, and the next request
+// still carries the record. See "Reasoning sent back to the model" in
+// docs/dev/llm/smoltalk.md.
+
+def interruptTool(): string {
+  interrupt("approve")
+  return "tool result"
+}
+
+node main() {
+  return llm("go", { tools: [interruptTool] })
+}

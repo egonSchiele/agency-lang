@@ -6,9 +6,9 @@ import {
   shellTools,
   gitTools,
   memoryTools,
-  planningTools,
   webTools,
   ASK_USER_HINT,
+  PROGRESS_NOTE,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
@@ -46,7 +46,7 @@ static const systemPrompt = """You are an expert software engineer. Solve the ta
 - When an exact check decides success (a numeric tolerance, an exact match, or a hidden test), list the judgment calls you made — each place the task could be read two ways. Check your solution once under each reading. When it passes under all of them, you are done: submit. Re-running a check that already passed adds no information, and every extra minute spent re-verifying a correct answer is worse than submitting it. If you find yourself checking the same property twice, stop and submit.
 - If a tool call fails because an argument was malformed or invalid, the environment has not changed — no files moved, no directory disappeared. Fix the argument and retry. Never go searching for "lost" files because one call failed.
 - Call `saveDraft` as you go, whenever you finish a meaningful step: the files you have written so far, what you verified, what is left. Your run has a cost and time budget, and if it runs out mid-task the most recent draft is what the caller receives. A run that saved nothing returns nothing.
-- For a task with more than two steps, call `todoWrite` first and mark each item done the moment it is finished.
+- For a task with more than two steps, write a short numbered plan in the same response as your first tool call, then follow it.
 - You have web search. Use it when a task needs current or external information rather than guessing or declining.
 - NEVER fabricate output you did not actually produce.
 
@@ -54,7 +54,7 @@ static const systemPrompt = """You are an expert software engineer. Solve the ta
 You have been given safeBash and exec tools. **Avoid using them if at all possible**. These tools should be a last resort: they often need an approval that a human must grant — which slows you down — and that a non-interactive run cannot grant at all. So *always use another tool when possible* and only use safeBash/exec if no other tool will do the job. If a permission is rejected and the task cannot be done without it, do not hunt for workarounds: stop and report exactly which permission is missing.
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${ASK_USER_HINT}
+${PROGRESS_NOTE}${ASK_USER_HINT}
 """
 
 static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
@@ -73,7 +73,6 @@ export def buildTools(): any[] {
     ...gitTools(),
     githubAgent,
     ...memoryTools(),
-    ...planningTools(),
     ...webTools(),
     ...searchTools(),
     ...communicationTools(),

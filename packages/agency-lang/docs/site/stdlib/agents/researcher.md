@@ -32,7 +32,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L188))
 
 ## Functions
 
@@ -46,7 +46,7 @@ Return the researcher's source lookup and communication tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L43))
 
 ### researcherAgent
 
@@ -62,6 +62,7 @@ researcherAgent(
   extraTools: any[] = [],
   history: ThreadMessage[] = [],
   keepDraft: boolean = true,
+  offerSaveDraft: boolean = true,
 ): Result<string>
 ```
 
@@ -81,6 +82,7 @@ Answer a research question from web and Wikipedia sources and return a
 | extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
 | history | `ThreadMessage[]` | [] | Prior messages, oldest first, used only when the active thread is empty. |
 | keepDraft | `boolean` | true | False returns a budget failure even when a draft was saved. |
+| offerSaveDraft | `boolean` | true | False keeps `saveDraft` out of the model's tools, for a caller that never reads the draft. |
 
 **Returns:** `Result<string>`
 

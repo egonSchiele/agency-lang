@@ -188,6 +188,17 @@ and `agencyResearcherAgent`, so a trip is a failure, the handoff hands
 back with "stopped before finishing", and the coordinator says what is
 unfinished from the work above.
 
+**The agent's researchers are not offered `saveDraft`.** The failure
+above carries the draft in its data, and nothing in the agent reads it:
+`replyText` and the tool loop show only the message. A model often calls
+`saveDraft` alone in a response, so each call would be a model round that
+buys nothing. `researchAgent` passes `offerSaveDraft: false` to both
+researchers, which then build their tools and prompt with
+`draftTools(offerSaveDraft)` and `draftHint(offerSaveDraft)`
+(`stdlib/agents/lib/toolkits.agency`). Those give the tool and the
+instruction to use it together, or neither. A caller that reads
+`draft` from the failure leaves `offerSaveDraft` at its default, true.
+
 **Known gap: a trip during `sleep()` bypasses the handler** (ticket
 ADI-137). A time guard that fires while `sleep()` is running cancels the
 sleep directly, and no handler sees a `std::guard` interrupt. The

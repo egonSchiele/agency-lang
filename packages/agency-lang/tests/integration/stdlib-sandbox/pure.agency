@@ -1,4 +1,3 @@
-import { todoList } from "std::agent"
 import { cwd } from "std::system"
 import { add, subtract, multiply } from "std::math"
 import { filter, reduce } from "std::array"
@@ -48,12 +47,6 @@ node main() {
   const dir = cwd()
   if (dir == "") {
     return "cwd failed"
-  }
-
-  // Agent
-  const todos = todoList()
-  if (todos.length != 0) {
-    return "todoList failed"
   }
 
   return "pure ok"

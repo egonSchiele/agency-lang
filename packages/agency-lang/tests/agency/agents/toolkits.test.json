@@ -78,8 +78,8 @@
       ]
     },
     {
-      "nodeName": "planningToolsComposesWithAgentSaveDraft",
-      "description": "planningTools does not duplicate the saveDraft an agent appends itself",
+      "nodeName": "draftToolsFollowOffer",
+      "description": "draftTools and draftHint give saveDraft and its hint together, or neither",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

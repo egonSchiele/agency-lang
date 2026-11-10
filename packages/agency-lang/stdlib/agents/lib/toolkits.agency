@@ -1,5 +1,5 @@
 import { typecheck, parseAST, testFile } from "std::agency"
-import { question, todoWrite, todoList } from "std::agent"
+import { question } from "std::agent"
 import { edit } from "std::fs"
 import {
   gitIsRepo,
@@ -99,22 +99,14 @@ static const briefDiagnosticsSkill = docsToolFromEntries("diagnostics", diagnost
 static const briefStdlibSkill = docsToolFromEntries("stdlib", stdlibEntries, brief: true).rename("agencyStdlib")
 static const briefAgentSkill = docsToolFromEntries("agent", agentEntries, brief: true).rename("agencyAgent")
 
-export def whatIAmDoing(message: string): string {
-  """
-  Tell the user what you are doing. Use this tool often to update the user on what you're up to.
-  """
-  print(message)
-  return "Delivered message to user."
-}
-
 /** `question` raises an interrupt the host or a handler answers with a value.
 Use it in hosted as well as terminal agents. Approval policy rules cannot
 supply a question's reply. */
 export def communicationTools(): any[] {
   """
-  Return progress-reporting and user-question tools.
+  Return the tool that asks the user a question.
   """
-  return [whatIAmDoing, question]
+  return [question]
 }
 
 /** The grep tool always respects `.gitignore`. The setting is bound so the
@@ -305,15 +297,10 @@ export def memoryTools(): any[] {
   return [remember, recall]
 }
 
-// saveDraft is deliberately not here. Every worker offers saveDraft itself at
-// its own llm call, so a caller can hand this bundle to an agent as extra tools
-// without landing saveDraft in the list twice, which the provider rejects.
-export def planningTools(): any[] {
-  """
-  Return tools for replacing and reading the agent's todo list.
-  """
-  return [todoWrite, todoList]
-}
+// A model-facing instruction for an agent's prompt. A sentence written beside
+// a tool call arrives in the same response, so it reports progress without
+// spending a model round, as a separate status tool would.
+export static const PROGRESS_NOTE = "- When you call a tool, write one short sentence in the same response saying what you are doing. That sentence is how the user follows your progress."
 
 // A model-facing instruction, spliced into an agent's prompt when the agent
 // offers the `question` tool. Without it the tool sits unused: a model that
@@ -324,3 +311,30 @@ export static const ASK_USER_HINT = "\n\nWhen the work turns on something only t
 // offers the `saveDraft` tool. Tells the model to checkpoint its best answer
 // so a run cut short by a budget guard still returns something useful.
 export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."
+
+// A model often calls `saveDraft` alone in a response, and each such call
+// costs a model round. When nothing reads the draft, the round buys nothing.
+// These two give the tool and the instruction to use it together, or neither.
+export def draftTools(offer: boolean): any[] {
+  """
+  Return the `saveDraft` tool, or no tools when `offer` is false.
+
+  @param offer - Whether a caller reads the agent's draft when its budget runs out.
+  """
+  if (offer) {
+    return [saveDraft]
+  }
+  return []
+}
+
+export def draftHint(offer: boolean): string {
+  """
+  Return the prompt text that tells a model to save drafts, or "" when `offer` is false.
+
+  @param offer - Whether a caller reads the agent's draft when its budget runs out.
+  """
+  if (offer) {
+    return SAVE_DRAFT_HINT
+  }
+  return ""
+}

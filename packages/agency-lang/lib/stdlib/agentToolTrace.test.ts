@@ -14,12 +14,6 @@ import {
 
 const plain = { columns: 80, color: false };
 
-const tasks = [
-  { id: "1", text: "Verify rankings", status: "completed" },
-  { id: "2", text: "Check availability", status: "in_progress" },
-  { id: "3", text: "Compare hardware", status: "pending" },
-];
-
 describe("custom presentations", () => {
   it("announces a subagent once and labels its completion", () => {
     expect(
@@ -174,116 +168,31 @@ describe("search sources", () => {
   });
 });
 
-describe("task lists", () => {
-  it.each(["todoWrite", "todoAdd", "todoUpdate", "todoList"])(
-    "shows the full %s snapshot",
-    (toolName) => {
-      expect(formatAgentTrace({ kind: "toolStart", toolName, args: { todos: tasks } }, plain)).toBe(
-        "",
-      );
-      const heading = toolName === "todoList" ? "Tasks" : "✓ Tasks updated";
-      expect(
-        formatAgentTrace({ kind: "toolEnd", toolName, value: tasks, outcome: "plain" }, plain),
-      ).toBe(
-        [
-          `${heading}  ${toolName}`,
-          "  │ 1/3 complete",
-          "  │ ✓ Verify rankings",
-          "  │ › Check availability · in progress",
-          "  │ ○ Compare hardware",
-        ].join("\n"),
-      );
-    },
-  );
-
-  it("strikes only completed task text and wraps the whole list", () => {
-    const text = "long-task-".repeat(20);
-    const value = [...tasks, { id: "4", text, status: "pending" }];
+describe("narration", () => {
+  it("prints the text a model wrote beside its tool calls as one muted block", () => {
     const output = formatAgentTrace(
-      { kind: "toolEnd", toolName: "todoWrite", value, outcome: "success" },
-      { columns: 40, color: true },
-    );
-    expect(output).toContain("\x1b[2m\x1b[9mVerify rankings\x1b[0m");
-    expect(output.match(/\x1b\[9m/g)).toHaveLength(1);
-    expect(output.split("\n").every((line) => visualWidth(line) <= 40)).toBe(true);
-    expect(stripAnsi(output).replace(/\s|│/g, "")).toContain(text);
-    expect(stripAnsi(output)).toContain("1/4 complete");
-  });
-
-  it("renders task lists with done and active flags", () => {
-    const value = [
-      { active: false, done: true, text: 'Identify what "Fable 5.1" is and who publishes it' },
-      { active: true, done: false, text: "Check availability" },
-      { active: false, done: false, text: "Compare hardware" },
-      { active: true, done: true, text: "Verify rankings" },
-    ];
-    const output = formatAgentTrace(
-      { kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" },
-      { ...plain, color: true },
-    );
-    expect(stripAnsi(output)).toBe(
-      [
-        "✓ Tasks updated  todoWrite",
-        "  │ 2/4 complete",
-        '  │ ✓ Identify what "Fable 5.1" is and who publishes it',
-        "  │ › Check availability · in progress",
-        "  │ ○ Compare hardware",
-        "  │ ✓ Verify rankings",
-      ].join("\n"),
-    );
-    expect(output.match(/\x1b\[9m/g)).toHaveLength(2);
-  });
-
-  it("shows empty, completed, and multiple active lists independently", () => {
-    const render = (value: unknown) =>
-      formatAgentTrace({ kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" }, plain);
-    expect(render([])).toBe("✓ Tasks updated  todoWrite\n  │ 0/0 complete\n  │ No tasks");
-    expect(render(tasks.map((task) => ({ ...task, status: "completed" })))).toContain(
-      "3/3 complete",
-    );
-    const active = render(tasks.map((task) => ({ ...task, status: "in_progress" })));
-    expect(active).toContain("0/3 complete");
-    expect(active.match(/· in progress/g)).toHaveLength(3);
-    expect(render([tasks[2]])).toBe(
-      "✓ Tasks updated  todoWrite\n  │ 0/1 complete\n  │ ○ Compare hardware",
-    );
-  });
-
-  it("keeps a failed update attached to its name", () => {
-    expect(
-      formatAgentTrace(
-        { kind: "toolEnd", toolName: "todoWrite", value: "Update refused", outcome: "failure" },
-        plain,
-      ),
-    ).toBe("✗ Tasks failed  todoWrite\n  │ Update refused");
-  });
-
-  it("falls back for sparse task arrays supplied by JavaScript", () => {
-    expect(
-      formatAgentTrace(
-        { kind: "toolEnd", toolName: "todoWrite", value: Array(1), outcome: "plain" },
-        plain,
-      ),
-    ).toBe("· Task result  todoWrite\n  │ [null]");
-  });
-
-  it.each([
-    null,
-    {},
-    [null],
-    [{ text: "Missing id", status: "pending" }],
-    [{ id: "1", text: "Unknown", status: "done" }],
-    [{ text: "Missing active", done: false }],
-    [{ text: "Missing done", active: false }],
-    [{ text: "Invalid flag", done: "false", active: true }],
-    [{ text: "Invalid flag", done: true, active: "false" }],
-  ])("falls back for malformed tasks (%j)", (value) => {
-    const output = formatAgentTrace(
-      { kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" },
+      { kind: "narration", text: "  Searching for the release notes.\n" },
       plain,
     );
-    expect(output).toContain("· Task result  todoWrite");
-    expect(output).not.toContain("Tasks updated");
+    expect(output).toBe("Searching for the release notes.");
+    const colored = formatAgentTrace(
+      { kind: "narration", text: "Searching for the release notes." },
+      { columns: 80, color: true },
+    );
+    expect(colored).toContain("\x1b[2m");
+  });
+
+  it("prints nothing for an empty or blank narration", () => {
+    expect(formatAgentTrace({ kind: "narration", text: "" }, plain)).toBe("");
+    expect(formatAgentTrace({ kind: "narration", text: " \n " }, plain)).toBe("");
+  });
+
+  it("wraps a long plan to the terminal width and strips control sequences", () => {
+    const text = "1. Read the parser.\n2. " + "step ".repeat(30) + "\x1b[2J";
+    const output = formatAgentTrace({ kind: "narration", text }, { columns: 40, color: false });
+    expect(output).not.toContain("\x1b[2J");
+    expect(output).toContain("1. Read the parser.");
+    expect(output.split("\n").every((line) => visualWidth(line) <= 40)).toBe(true);
   });
 });
 
@@ -891,6 +800,5 @@ describe("table rows", () => {
 
   it("exposes the rows for the coverage test", () => {
     expect(presentedToolNames()).toContain("read");
-    expect(presentedToolNames()).toContain("todoWrite");
   });
 });

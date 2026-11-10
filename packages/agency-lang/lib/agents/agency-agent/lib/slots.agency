@@ -62,9 +62,16 @@ export def providersFor(name: string, chatProviders: string[]): string[] {
   return SLOT_PROVIDERS[canonicalSlot(name)] ?? chatProviders
 }
 
-/** True when the slot's value must be in the provider/model form. */
+/** True when the slot's value must be in the provider/model form. The
+  PROVIDER_FORM table decides, so a slot that needs the form always has
+  the message text for it. */
 export def needsProviderForm(name: string): boolean {
-  return slotKind(name) == "derived"
+  return PROVIDER_FORM[canonicalSlot(name)] != null
+}
+
+/** True for a slot a chat model fills: not a derived slot. */
+export def isChatSlot(name: string): boolean {
+  return slotKind(name) != "derived"
 }
 
 /** How a message names the slot ("Embedding"), and an example value in
@@ -81,5 +88,5 @@ export def providerFormExample(name: string): string {
   calls no chat model, so a router on another provider than the main
   model is no reason to warn about options a provider may reject. */
 export def chatSlots(names: string[]): string[] {
-  return [name for name in names if !needsProviderForm(name)]
+  return [name for name in names if isChatSlot(name)]
 }

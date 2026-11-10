@@ -22,8 +22,15 @@ these hold:
   whole output of a `!` command. The router was not measured on such
   prompts, the subagent would get the note as its task, and a long one can
   exceed what the decision model accepts.
+- The harness did not rewrite the message. `dispatchToBrain` replaces a
+  slash command with its skill's text, and after a coder changed folders it
+  puts the new folder's project block above the message. Either way the
+  text is not what the user typed: a skill's text often reads like a coding
+  task, and a project block can bury the question. `dispatchToBrain` records
+  the rewrite with `setMessageRewritten` (`lib/rewrittenMessage.agency`), and
+  `routeFor` reads it.
 
-Otherwise the turn runs as it did before the router existed.
+Otherwise the coordinator takes the turn.
 
 ## The slot
 
@@ -78,9 +85,9 @@ descriptions without measuring again.
 
 The coordinator's line names its other tools: learned tools and skills,
 generated tools, Claude skills, MCP tools, then the built-in ones, with the
-two routed subagents left out, at most 30. In the test, the model sent a
-request a learned tool answers in two seconds to the researcher, because it
-did not know the tool existed. The per-user tools come first because the
+two routed subagents left out, at most 30. Without the names, the model
+sent a request that a learned tool answers in two seconds to the
+researcher, because it did not know the tool existed. The per-user tools come first because the
 router keeps the first 30. `mainAgent` reads them once per turn
 (`userTools`) and gives the same lists to the router and to the
 coordinator's call.
@@ -104,14 +111,16 @@ model is reported again.
 
 ```ts
 const result = match(routed.route) {
-  "research" => replyText("The researcher", researchAgent(routed.text))
+  "research" => researchTurn(routed.text)
   "code" => replyText("The coder", codeAgent(routed.text))
   _ => llm(prompt, mainOptions(offeredTools(user, turnStart)))
 }
 ```
 
 The subagent is called from code, inside the main thread block, with the
-user's message as its task. The coordinator model is not called. The
+user's message as its task. The coordinator model is not called. The code
+arm does not use `coderTurn`, which opens a `code` thread of its own: a
+routed coder works on the main thread, so the next turn sees its work. The
 system prompt on the first turn and `addGlobalInstructions()` run first,
 so the main thread is set up the same way on either path.
 
@@ -131,7 +140,7 @@ to `"main"` after the routed call.
 
 ## Interrupts and sessions
 
-Nothing changes. The subagent runs inside `mainAgent`, under the same
+The subagent runs inside `mainAgent`, under the same
 handler chain as the coordinator's call, so it raises the same interrupts
 under the same policy. The route is a local of `mainAgent`'s frame,
 computed in a step, so a turn that pauses on an approval and resumes from
@@ -151,10 +160,6 @@ its checkpoint does not ask the router again.
   questions, but no logged turn tested that.
 - No coordinator on a routed turn: no memory recall, and no closing remark
   after the subagent.
-- The saving depends on the coordinator model. In the logs it was large
-  with GLM 5.3 Flash (a median first call of 12.8 seconds) and small with
-  Opus 4.8 (2.5 seconds).
-- Long messages are not routed.
 - The confidence floor was measured on Jev. Another model's 0.7 can mean
   something else.
 
@@ -169,12 +174,15 @@ name to `ROUTED_TOOLS`, which keeps it off the coordinator's line.
 ## Tests
 
 - `lib/agents/agency-agent/tests/routing.agency`: the router module: the
-  floor, a missing confidence, a failed call reported once, a cancel, the
-  request's state and question, the tool names and their cap.
+  floor, a missing confidence, a failed call reported once per router
+  model, a cancel, the request's state, the question's text, the tool-name
+  cap, and the caller's thread left alone.
 - `lib/agents/agency-agent/brains/coordinator/tests/routedTurn.agency`: the
-  turn: no router when unset, a research and a code route with no
-  coordinator request, a coordinator route, an attachment and a long
-  message not routed, the main thread after a routed turn, the next turn,
-  and a resume through the checkpoint.
+  turn: no router when unset, a research route, a code route on the main thread, a coordinator route, an
+  attachment, a long message, and a rewritten message not routed, the tool
+  names on the coordinator's line, the next turn, and a resume through the
+  checkpoint.
+- `lib/agents/agency-agent/tests/turn.agency`: `dispatchToBrain` marks a
+  slash command rewritten and a plain message not.
 - `lib/agents/agency-agent/tests/modelRequest.agency`, `presetRules.agency`,
   `slots.agency`, `localRouter.agency`: the slot.

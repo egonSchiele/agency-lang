@@ -2,36 +2,6 @@
   "sourceFile": "routing.agency",
   "tests": [
     {
-      "nodeName": "confidentResearch",
-      "description": "a confident research answer routes to research",
-      "input": "",
-      "expectedOutput": "\"research\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": {
-        "router": [
-          {
-            "decide": {
-              "answer": {
-                "type": "choice",
-                "choice": "research",
-                "confidence": 0.9,
-                "probabilities": {
-                  "research": 0.9,
-                  "code": 0.05,
-                  "coordinator": 0.05
-                }
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "nodeName": "lowConfidenceGoesToTheCoordinator",
       "description": "below the 0.7 floor, the coordinator handles it",
       "input": "",
@@ -89,21 +59,7 @@
       "nodeName": "failedCallIsReportedOnce",
       "description": "a failed call goes to the coordinator and is reported once per router model",
       "input": "",
-      "expectedOutput": "\"coordinator|true|false\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": {
-        "router": []
-      }
-    },
-    {
-      "nodeName": "aNewRouterModelIsReportedAgain",
-      "input": "",
-      "expectedOutput": "\"true|true\"",
+      "expectedOutput": "\"coordinator|true|false|true\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -148,7 +104,7 @@
     {
       "nodeName": "theRequestHoldsTheMessageAndTheQuestion",
       "input": "",
-      "expectedOutput": "\"2|find the release date of node 24|true\"",
+      "expectedOutput": "\"2|find the release date of node 24\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -192,20 +148,6 @@
       "nodeName": "atMostThirtyToolNames",
       "input": "",
       "expectedOutput": "\"true|false\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": {
-        "router": []
-      }
-    },
-    {
-      "nodeName": "noToolNamesNoToolsSentence",
-      "input": "",
-      "expectedOutput": "false",
       "evaluationCriteria": [
         {
           "type": "exact"

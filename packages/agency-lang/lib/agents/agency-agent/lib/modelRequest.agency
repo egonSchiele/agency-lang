@@ -12,7 +12,7 @@ import { lacksProviderForm, parseModelFlag } from "./models.agency"
 import { Preset, PresetSlots } from "./presetRules.agency"
 import { RawLayer } from "./resolution.agency"
 import { ModelSettings } from "./settings.agency"
-import { chatSlots, needsProviderForm, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
+import { chatSlots, isChatSlot, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
 
 /** The startup model flags. `pin` is a bare --model. `slots` holds
   --model slot=, --fastmodel, and --slowmodel. `local` is null when
@@ -118,7 +118,7 @@ export def modelFlagsFromArgs(args: Record<string, any>): Result<ModelFlags> {
   const slow = args.flags.slowmodel ?? ""
   const local = args.flags["local"] ?? null
   const parsed = parseModelFlag(modelArg)
-  const modelNamesAChatSlot = modelArg != "" && !needsProviderForm(parsed.slot)
+  const modelNamesAChatSlot = modelArg != "" && isChatSlot(parsed.slot)
   const hasChatModel = modelNamesAChatSlot || fast != "" || slow != ""
   const problem = modelFlagProblem(parsed, hasChatModel, local)
   if (problem != "") {

@@ -113,8 +113,7 @@ def checkProviderEnv(provider: string): Result<string> {
 }
 
 /** True when the slot needs the provider/model form and the value does not
- *  name a provider that slot accepts. The rule lives once; /model, --model,
- *  presets, and settings sanitize all consume it. */
+ *  name a provider that slot accepts. */
 export def lacksProviderForm(slot: string, value: string): boolean {
   if (!needsProviderForm(slot)) {
     return false

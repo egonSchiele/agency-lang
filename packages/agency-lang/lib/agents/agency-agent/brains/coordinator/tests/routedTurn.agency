@@ -3,6 +3,7 @@
 // the turn, and tests/modelRequest.agency covers how the slot is set.
 import { getThread, image, listThreads } from "std::thread"
 
+import { setMessageRewritten } from "../../../lib/rewrittenMessage.agency"
 import { applyResolved, getResolvedSlots } from "../../../shared.agency"
 import { coordinatorBrain } from "../coordinator.agency"
 
@@ -110,6 +111,8 @@ node confidentResearchGoesToTheResearcher(): string {
   return "${reply}|${requests.length}|${isResearcher}|${taskIsTheMessage}"
 }
 
+// The coder runs on the main thread, not a `code` thread of its own, so
+// its reply is the main thread's last message.
 node confidentCodeGoesToTheCoder(): string {
   const turn = startBrain()
   setRouter()
@@ -118,7 +121,8 @@ node confidentCodeGoesToTheCoder(): string {
     lastMessage(requests[1]),
     "add a --verbose flag to the build script",
   )
-  return "${reply}|${requests.length}|${taskIsTheMessage}"
+  const onMain = contentOf(lastMessage(mainThread())) == reply
+  return "${reply}|${requests.length}|${taskIsTheMessage}|${onMain}"
 }
 
 node coordinatorRouteRunsTheCoordinator(): string {
@@ -146,6 +150,16 @@ node aLongMessageIsNotRouted(): string {
   return "${reply}|${routerRequests()}"
 }
 
+// A message the harness rewrote (a slash command, or a project block after
+// the coder changed folders) is not what the router was measured on.
+node aRewrittenMessageIsNotRouted(): string {
+  const turn = startBrain()
+  setRouter()
+  setMessageRewritten(true)
+  const reply = turn("", ["find the release date of node 24"]) with approve
+  return "${reply}|${routerRequests()}"
+}
+
 // The coordinator's other tools are on its line; the routed subagents are
 // not, being options of their own.
 node theQuestionNamesTheCoordinatorsTools(): string {
@@ -155,20 +169,6 @@ node theQuestionNamesTheCoordinatorsTools(): string {
   const question = contentOf(lastMessage(requests[0]))
   const toolsLine = question.substring(question.indexOf("Its other tools:"))
   return "${toolsLine.includes("oracleAgent")}|${toolsLine.includes("researchAgent")}|${toolsLine.includes("codeAgent,")}"
-}
-
-// After a routed research turn the main thread holds the coordinator's
-// system prompt and the researcher's prompt and reply, and no system
-// message from the researcher.
-node aRoutedTurnLeavesNoPersona(): string {
-  const turn = startBrain()
-  setRouter()
-  const reply = turn("", ["find the release date of node 24"]) with approve
-  const messages = mainThread()
-  const systems = [message for message in messages if message.role == "system"]
-  const personas = countStarting(messages, RESEARCHER_PERSONA)
-  const replies = [message for message in messages if message.role == "assistant"]
-  return "${systems.length}|${personas}|${replies.length}|${contentOf(lastMessage(messages))}"
 }
 
 // The next turn goes to the coordinator, whose request holds the routed

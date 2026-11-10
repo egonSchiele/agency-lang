@@ -16,6 +16,7 @@ import { Attachment, endTurn, systemMessage } from "std::thread"
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 import { projectContextText } from "../../lib/projectContext.agency"
+import { messageWasRewritten } from "../../lib/rewrittenMessage.agency"
 import { learnedExtras } from "../../lib/learned.agency"
 import { claudeSkillTools } from "../../lib/claudeSkills.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
@@ -220,9 +221,9 @@ handoff def learnTools(
   return success(answer)
 }
 
-// A routed turn is longer than this, the router was not measured on such
-// messages: the REPL puts pending notes, which can be a whole `!` command's
-// output, above the message in one string.
+// A message longer than this is not routed. The REPL puts pending notes,
+// which can be a whole `!` command's output, above the message in one
+// string, and the router was not measured on such messages.
 static const ROUTE_MAX_CHARS = 8000
 
 type TurnRoute = {
@@ -245,8 +246,8 @@ def plainText(prompt: string | (string | Attachment)[]): string {
 }
 
 // Which agent takes the turn. Only a plain-text message of a routable
-// length is asked about, and only when the router slot is set. See
-// docs/dev/agents/agent-router.md.
+// length, as the user typed it, is asked about, and only when the router
+// slot is set. See docs/dev/agents/agent-router.md.
 def routeFor(
   prompt: string | (string | Attachment)[],
   user: UserTools,
@@ -254,7 +255,7 @@ def routeFor(
 ): TurnRoute {
   const text = plainText(prompt)
   const model = getRouterModel()
-  if (model == "" || text == "" || text.length > ROUTE_MAX_CHARS) {
+  if (model == "" || text == "" || text.length > ROUTE_MAX_CHARS || messageWasRewritten()) {
     return {
       route: "coordinator",
       text: text
@@ -290,8 +291,10 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     addGlobalInstructions()
     // A routed subagent runs here from code, on the main thread. Its persona
     // expires with its llm() call; its prompt and reply stay.
+    // Not coderTurn: it opens a `code` thread of its own, and a routed coder
+    // stays on the main thread so the next turn sees its work.
     const result = match(routed.route) {
-      "research" => replyText("The researcher", researchAgent(routed.text))
+      "research" => researchTurn(routed.text)
       "code" => replyText("The coder", codeAgent(routed.text))
       _ => llm(prompt, mainOptions(offeredTools(user, turnStart)))
     }

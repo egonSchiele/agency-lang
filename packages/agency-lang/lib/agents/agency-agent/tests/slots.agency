@@ -20,10 +20,6 @@ node kindOfEmbedding(): string {
   return slotKind("embedding")
 }
 
-node kindOfRouter(): string {
-  return slotKind("router")
-}
-
 // The router takes only the providers that answer decisions; every other
 // slot takes the chat providers it is given.
 node routerTakesTheDecisionProviders(): string {

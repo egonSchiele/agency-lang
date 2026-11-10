@@ -4,7 +4,7 @@
     {
       "nodeName": "plainMessageReachesBrain",
       "input": "",
-      "expectedOutput": "\"stub reply|true|array|0\"",
+      "expectedOutput": "\"stub reply|true|array|0|false\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -14,7 +14,7 @@
     {
       "nodeName": "slashCommandExpands",
       "input": "",
-      "expectedOutput": "\"false|true\"",
+      "expectedOutput": "\"false|true|true\"",
       "evaluationCriteria": [
         {
           "type": "exact"

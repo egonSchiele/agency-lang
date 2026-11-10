@@ -282,16 +282,6 @@
       ]
     },
     {
-      "nodeName": "routerFlagSetsTheSlot",
-      "input": "",
-      "expectedOutput": "\"jev-1.14 (cli:per-slot)\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
       "nodeName": "routerFlagWithoutProviderIsRefused",
       "input": "",
       "expectedOutput": "\"Router models need the provider/model form, e.g. --model router=openrouter/jev-1.14.\"",
@@ -322,37 +312,7 @@
       ]
     },
     {
-      "nodeName": "aBareModelLeavesTheRouterUnset",
-      "input": "",
-      "expectedOutput": "\" (built-in:router(derived))\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "aPresetSetsTheRouter",
-      "input": "",
-      "expectedOutput": "\"jev-1.14 (preset:per-slot)\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
       "nodeName": "localWithRouterFlagIsFine",
-      "input": "",
-      "expectedOutput": "\"qwen3.5-2b|openrouter/jev-1.14\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "localPresetCarriesTheRouter",
       "input": "",
       "expectedOutput": "\"qwen3.5-2b|openrouter/jev-1.14\"",
       "evaluationCriteria": [

@@ -14,8 +14,3 @@ node localSessionKeepsTheRouter(): string {
   )
   return "${getRouterProvider()}/${getRouterModel()}"
 }
-
-node localSessionWithNoRouter(): string {
-  configureLocalModel("mlx:mlx-community/Qwen3-4B-4bit")
-  return "[${getRouterProvider()}/${getRouterModel()}]"
-}

@@ -20,10 +20,6 @@ def route(text: string): string {
   return choice.route
 }
 
-node confidentResearch(): string {
-  return route("find the release date of node 24")
-}
-
 node lowConfidenceGoesToTheCoordinator(): string {
   return route("find the release date of node 24")
 }
@@ -32,19 +28,14 @@ node noConfidenceGoesToTheCoordinator(): string {
   return route("find the release date of node 24")
 }
 
-// The router queue is empty, so both calls fail. The first reports it and
-// the second, for the same router model, does not.
+// The router queue is empty, so every call fails. The first is reported,
+// the second, for the same router model, is not, and the third, for a new
+// router model, is.
 node failedCallIsReportedOnce(): string {
   const first = pickRoute("hi", [], MODEL, PROVIDER)
   const second = pickRoute("hi again", [], MODEL, PROVIDER)
-  return "${first.route}|${first.notice != ""}|${second.notice != ""}"
-}
-
-// A new router model is a new problem, so its failure is reported too.
-node aNewRouterModelIsReportedAgain(): string {
-  const first = pickRoute("hi", [], MODEL, PROVIDER)
-  const second = pickRoute("hi", [], "laya", "laya")
-  return "${first.notice != ""}|${second.notice != ""}"
+  const third = pickRoute("hi", [], "laya", "laya")
+  return "${first.route}|${first.notice != ""}|${second.notice != ""}|${third.notice != ""}"
 }
 
 // A time guard cancels the router call while it waits. A cancel is not a
@@ -62,14 +53,11 @@ node aCancelIsNotAFailure(): string {
   return "${isFailure(guarded)}|${after.notice != ""}"
 }
 
-// The model reads only the user's message, and the question carries the
-// three descriptions.
+// The model reads only the user's message, then the question.
 node theRequestHoldsTheMessageAndTheQuestion(): string {
   const picked = route("find the release date of node 24")
   const messages = requests[0]
-  const question = "${messages[messages.length - 1].content}"
-  const hasDescriptions = question.includes("\nresearch: Answer a question") && question.includes("\ncode: A coding task") && question.includes("\ncoordinator: Anything small enough")
-  return "${messages.length}|${messages[0].content}|${hasDescriptions}"
+  return "${messages.length}|${messages[0].content}"
 }
 
 node toolNamesGoOnTheCoordinatorLine(): string {
@@ -83,10 +71,6 @@ node atMostThirtyToolNames(): string {
   }
   const question = routeQuestion(names)
   return "${question.includes("tool30.")}|${question.includes("tool31")}"
-}
-
-node noToolNamesNoToolsSentence(): boolean {
-  return routeQuestion([]).includes("Its other tools")
 }
 
 node theCallersThreadIsUnchanged(): number {

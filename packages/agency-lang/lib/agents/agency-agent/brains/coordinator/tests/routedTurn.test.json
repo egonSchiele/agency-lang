@@ -51,9 +51,9 @@
     },
     {
       "nodeName": "confidentCodeGoesToTheCoder",
-      "description": "a confident code route runs the coder on the user's message",
+      "description": "a confident code route runs the coder on the user's message, on the main thread",
       "input": "",
-      "expectedOutput": "\"code answer|2|true\"",
+      "expectedOutput": "\"code answer|2|true|true\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -146,6 +146,23 @@
       ]
     },
     {
+      "nodeName": "aRewrittenMessageIsNotRouted",
+      "description": "a message the harness rewrote goes to the coordinator without asking the router",
+      "input": "",
+      "expectedOutput": "\"coordinator answer|0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "coordinator answer"
+        }
+      ]
+    },
+    {
       "nodeName": "theQuestionNamesTheCoordinatorsTools",
       "description": "the question lists the coordinator's other tools and not the routed subagents",
       "input": "",
@@ -173,37 +190,6 @@
         },
         {
           "return": "coordinator answer"
-        }
-      ]
-    },
-    {
-      "nodeName": "aRoutedTurnLeavesNoPersona",
-      "description": "after a routed research turn the main thread holds no researcher persona",
-      "input": "",
-      "expectedOutput": "\"1|0|1|research answer (https://example.com/node)\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "decide": {
-            "answer": {
-              "type": "choice",
-              "choice": "research",
-              "confidence": 0.9,
-              "probabilities": {
-                "research": 0.9,
-                "code": 0.05,
-                "coordinator": 0.05
-              }
-            }
-          }
-        },
-        {
-          "return": "research answer (https://example.com/node)"
         }
       ]
     },

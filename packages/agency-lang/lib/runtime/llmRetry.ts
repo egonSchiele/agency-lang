@@ -262,7 +262,9 @@ export function resolveRetryPolicy(opts: RetryConfig, branchDefaults: RetryConfi
  * anything unrecognized (caller rethrows the original).
  */
 export function enrichSchemaLimitationError(err: unknown): Error | null {
-  if (!(err instanceof Error)) return null;
+  if (!(err instanceof Error)) {
+    return null;
+  }
   if (!/Circular reference detected in schema definitions/.test(err.message)) {
     return null;
   }
@@ -303,7 +305,9 @@ export function buildValidationRetryMessage(error: string): string {
  *  makes this easy to hit: thinking comes out of the same budget, so a small
  *  `maxTokens` can leave no room for a visible answer at all. */
 function truncatedByTokenLimitHint(stopReason?: string): string {
-  if (stopReason !== "length") return "";
+  if (stopReason !== "length") {
+    return "";
+  }
   return (
     ` The model stopped because it hit the token limit, so this output is cut ` +
     `short rather than malformed. Raise maxTokens for this call. Note that a ` +
@@ -377,14 +381,18 @@ export type FinalReply = {
  *  and return nothing: that reply is retried, and a reply with some text is
  *  kept with a warning. See docs/dev/agents/tool-loop-guards.md. */
 export function decideCutOff(reply: FinalReply): CutOffDecision {
-  if (reply.stopReason !== "length") return { kind: "accept" };
+  if (reply.stopReason !== "length") {
+    return { kind: "accept" };
+  }
   if ((reply.content ?? "").trim().length > 0) {
     return {
       kind: "warn",
       message: "The model's reply reached the output limit and may be incomplete.",
     };
   }
-  if (reply.attempt < CUT_OFF_RETRIES) return { kind: "retry" };
+  if (reply.attempt < CUT_OFF_RETRIES) {
+    return { kind: "retry" };
+  }
   return {
     kind: "surfaceFailure",
     message:

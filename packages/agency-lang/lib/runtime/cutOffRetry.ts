@@ -21,9 +21,13 @@ export type CutOffFrame = {
  *  before a pause is finished, not judged again: its `feedback` step already
  *  removed the reply the decision was about. */
 export function cutOffDecision(frame: CutOffFrame, thread: MessageThread): CutOffDecision {
-  if (frame.cutOffPending !== null) return { kind: "retry" };
+  if (frame.cutOffPending !== null) {
+    return { kind: "retry" };
+  }
   const index = lastAssistantIndex(thread);
-  if (index === -1) return { kind: "accept" };
+  if (index === -1) {
+    return { kind: "accept" };
+  }
   return decideCutOff({
     stopReason: frame.lastStopReason ?? undefined,
     content: textContent(thread.getMessages()[index].content),
@@ -69,6 +73,8 @@ function lastAssistantIndex(thread: MessageThread): number {
 }
 
 function textContent(content: unknown): string | null {
-  if (content === null || content === undefined) return null;
+  if (content === null || content === undefined) {
+    return null;
+  }
   return typeof content === "string" ? content : JSON.stringify(content);
 }

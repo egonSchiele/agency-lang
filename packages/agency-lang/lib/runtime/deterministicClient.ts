@@ -102,7 +102,9 @@ const FALLBACK_SCOPE = "*";
 /** Copies a mock's extras onto the result it scripted. A mock with no
  *  extras leaves the result as it was. */
 function applyMockExtras(value: PromptResult, mock: MockExtras): PromptResult {
-  if (mock.stopReason !== undefined) value.stopReason = mock.stopReason;
+  if (mock.stopReason !== undefined) {
+    value.stopReason = mock.stopReason;
+  }
   return value;
 }
 

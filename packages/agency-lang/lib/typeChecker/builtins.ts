@@ -65,6 +65,7 @@ const baseUrlObject: VariableType = {
     { key: "openAiCompat", value: optional(string) },
     { key: "mlx", value: optional(string) },
     { key: "typesafe", value: optional(string) },
+    { key: "laya", value: optional(string) },
   ],
 };
 

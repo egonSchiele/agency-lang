@@ -68,7 +68,8 @@ export type LlmBaseUrls = {
   liteLlm?: string;
   mlx?: string;
   ollama?: string;
-  typesafe?: string
+  typesafe?: string;
+  laya?: string
 }
 
 /** Default options for `llm()` calls. Every field is optional; only the

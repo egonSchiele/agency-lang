@@ -397,6 +397,25 @@ describe("DeterministicClient.decide", () => {
     );
   });
 
+  it("decide() waits a mock's delayMs, and an abort in the middle rejects with its reason", async () => {
+    const client = new DeterministicClient([
+      { decide: { answer: { type: "noul", noul: 0.9 } }, delayMs: 10_000 },
+    ]);
+    const controller = new AbortController();
+    const reason = new AgencyCancelledError("cancelled mid-request");
+    const pending = client.decide!("s", questions, { model: "m" }, controller.signal);
+    setTimeout(() => controller.abort(reason), 10);
+    await expect(pending).rejects.toBe(reason);
+  });
+
+  it("decide() answers after a short delayMs", async () => {
+    const client = new DeterministicClient([
+      { decide: { answer: { type: "noul", noul: 0.9 } }, delayMs: 5 },
+    ]);
+    const r = await client.decide!("s", questions, { model: "m" }, signal);
+    expect(r.success && r.value.answers.answer).toEqual({ type: "noul", noul: 0.9 });
+  });
+
   it("decide() rejects with the signal's reason when already aborted", async () => {
     const client = new DeterministicClient([{ decide: {} }]);
     const controller = new AbortController();

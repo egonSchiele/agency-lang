@@ -1,3 +1,7 @@
+## Nov 10 2026 — v0.39.2
+- **A decision call now sees tool results in its state,** each with the name and arguments of the call it answers. Before, tool results were left out. This means a tool result can now reach the decision provider, so run the decision call in its own `thread` if the thread holds results that should stay local.
+- Fix memory use in local models hosting: free a finished request's share of the batch, so 16 requests at once to a 27B model stay under 40 GB.
+
 ## Nov 10 2026 — v0.39.1
 - Fix memory leak in local models hosting: stop cache_arrays from keeping each step's arrays alive.
 

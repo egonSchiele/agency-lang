@@ -55,8 +55,10 @@ function warnUnserializableReplyField(
 /** The assistant message `runPrompt` appends for a completion. Everything the
  *  completion carried beyond its text rides on it, where `lastReply()` in
  *  std::thread reads it back: thinking, usage, cost, and a provider's extras
- *  such as a decision model's answers. Each of thinking, logprobs, usage, and
- *  cost goes through {@link serializableExtra} so a shape that would not survive smoltalk's
+ *  such as a decision model's answers. The reasoning record rides on it too,
+ *  so smoltalk can send it back to the model that produced it. Each of
+ *  thinking, logprobs, usage, cost, and the reasoning record goes through
+ *  {@link serializableExtra} so a shape that would not survive smoltalk's
  *  fromJSON on restore is dropped rather than left to break a checkpoint. An
  *  unset `toolCalls` serializes exactly as an omitted one. */
 export function buildReplyMessage(
@@ -80,6 +82,11 @@ export function buildReplyMessage(
     ),
     usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema, warn("usage")),
     cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema, warn("cost")),
+    reasoning: serializableExtra(
+      completion.reasoningRecord,
+      smoltalk.ReasoningRecordSchema,
+      warn("reasoning"),
+    ),
     rawData: completion.rawData,
   });
 }

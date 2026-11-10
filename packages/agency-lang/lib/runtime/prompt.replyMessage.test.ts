@@ -110,6 +110,12 @@ describe("an OpenRouter reply's servedBy and reasoning", () => {
     model: "z-ai/glm-5.3-flash",
     servedBy: "OpenInference",
     reasoning: "Let me search",
+    reasoningRecord: {
+      provider: "openrouter",
+      model: "z-ai/glm-5.3-flash",
+      text: "Let me search",
+      format: "reasoning",
+    },
   };
 
   it("logs servedBy and reasoning on the promptCompletion event", async () => {
@@ -125,13 +131,18 @@ describe("an OpenRouter reply's servedBy and reasoning", () => {
     expect(event.completion.reasoning).toBe("Let me search");
   });
 
-  it("does not put reasoning on the reply message", async () => {
-    // Unsigned reasoning on the message would be sent to Anthropic as a
-    // thinking block after a model switch, and Anthropic rejects it.
+  it("keeps the reasoning record on the reply message, apart from thinking blocks", async () => {
     const thread = await runWith(new CannedClient(completion));
-    const reply = (thread.getMessages().at(-1) as smoltalk.AssistantMessage).toJSON();
-    expect(JSON.stringify(reply)).not.toContain("Let me search");
-    expect(JSON.stringify(reply)).not.toContain("OpenInference");
-    expect((reply as any).thinkingBlocks).toBeUndefined();
+    const reply = thread.getMessages().at(-1) as smoltalk.AssistantMessage;
+    expect(reply.reasoning).toEqual(completion.reasoningRecord);
+    expect(reply.toJSON().thinkingBlocks).toBeUndefined();
+    expect(JSON.stringify(reply.toJSON())).not.toContain("OpenInference");
+  });
+
+  it("drops a reasoning record that does not match its schema", async () => {
+    const bad = { ...completion, reasoningRecord: { text: "x" } as any };
+    const thread = await runWith(new CannedClient(bad));
+    const reply = thread.getMessages().at(-1) as smoltalk.AssistantMessage;
+    expect(reply.reasoning).toBeUndefined();
   });
 });

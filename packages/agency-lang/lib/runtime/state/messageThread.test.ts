@@ -459,3 +459,34 @@ describe("MessageThread expiring messages", () => {
     expect(child.expiryAt(0)).toEqual({ at: "llmCall", key: "k1" });
   });
 });
+
+describe("MessageThread and reasoning records", () => {
+  const record: smoltalk.ReasoningRecord = {
+    provider: "openrouter",
+    model: "z-ai/glm-5.3-flash",
+    text: "plan",
+    format: "reasoning",
+  };
+
+  it("a subthread copy keeps the reasoning record", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("q"));
+    thread.push(smoltalk.assistantMessage("a", { reasoning: record }));
+    const child = thread.newSubthreadChild(null);
+    const reply = child.getMessages().at(-1) as smoltalk.AssistantMessage;
+    expect(reply.reasoning).toEqual(record);
+  });
+
+  it("a thread saved before reasoning records resumes unchanged", () => {
+    const saved = {
+      messages: [
+        { role: "user", content: "q" },
+        { role: "assistant", content: "a" },
+      ],
+    };
+    const reply = MessageThread.fromJSON(saved as any)
+      .getMessages()
+      .at(-1) as smoltalk.AssistantMessage;
+    expect(reply.reasoning).toBeUndefined();
+  });
+});

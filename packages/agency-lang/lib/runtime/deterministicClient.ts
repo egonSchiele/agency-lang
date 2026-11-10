@@ -41,6 +41,8 @@ export type DeterministicClientOptions = {
 export type MockExtras = {
   /** Why the scripted reply ended, as smoltalk reports it. */
   stopReason?: StopReason;
+  /** Reasoning text the scripted reply carries, with a record for it. */
+  reasoning?: string;
 };
 
 export type ReturnMock = MockExtras & {
@@ -104,6 +106,15 @@ const FALLBACK_SCOPE = "*";
 function applyMockExtras(value: PromptResult, mock: MockExtras): PromptResult {
   if (mock.stopReason !== undefined) {
     value.stopReason = mock.stopReason;
+  }
+  if (mock.reasoning !== undefined) {
+    value.reasoning = mock.reasoning;
+    value.reasoningRecord = {
+      provider: "deterministic",
+      model: "deterministic",
+      text: mock.reasoning,
+      format: "reasoning",
+    };
   }
   return value;
 }

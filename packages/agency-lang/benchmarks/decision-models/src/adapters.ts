@@ -46,7 +46,12 @@ export function decisionPredictions(
         return [name, { label: answer.noul >= 0.5 ? "true" : "false", probabilities }];
       }
       const labels = labelsFor(question);
-      checkDistribution(answer.probabilities, labels);
+      // The benchmark scores the distribution, and some models leave it out.
+      const probabilities = answer.probabilities;
+      if (probabilities === undefined) {
+        throw new Error(`No probabilities for ${name}.`);
+      }
+      checkDistribution(probabilities, labels);
       if (answer.type === "choice") {
         if (!labels.includes(answer.choice)) {
           throw new Error(`Invalid choice for ${name}.`);
@@ -55,7 +60,7 @@ export function decisionPredictions(
           name,
           {
             label: answer.choice,
-            probabilities: answer.probabilities,
+            probabilities,
             confidence: answer.confidence,
           },
         ];
@@ -66,8 +71,8 @@ export function decisionPredictions(
       return [
         name,
         {
-          label: highestLabel(answer.probabilities, labels),
-          probabilities: answer.probabilities,
+          label: highestLabel(probabilities, labels),
+          probabilities,
           score: answer.score,
           confidence: answer.confidence,
         },

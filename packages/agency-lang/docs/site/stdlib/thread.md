@@ -155,42 +155,50 @@ export type NoulAnswer = {
 
 A decision model's answer to a pick-one question: the option picked,
   a provider-specific confidence score, and the probability of every option.
-  Read `probabilities[choice]` for the selected option's probability.
+  Read `probabilities[choice]` for the selected option's probability. Some
+  models leave out `confidence` and `probabilities`, so check each for
+  `null` before reading it.
 
 ```ts
 /** A decision model's answer to a pick-one question: the option picked,
   a provider-specific confidence score, and the probability of every option.
-  Read `probabilities[choice]` for the selected option's probability. */
+  Read `probabilities[choice]` for the selected option's probability. Some
+  models leave out `confidence` and `probabilities`, so check each for
+  `null` before reading it. */
 export type ChoiceAnswer = {
   type: "choice";
   choice: string;
-  confidence: number;
-  probabilities: Record<string, number>
+  confidence?: number;
+  probabilities?: Record<string, number>
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L385))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L387))
 
 ### ScoreAnswer
 
 A decision model's answer on an ordered scale. `score` is the expected
   level and may be fractional; `legend` maps each level to its description.
-  No Agency annotation produces a score question yet.
+  No Agency annotation produces a score question yet. Some models leave
+  out `confidence`, `legend`, and `probabilities`, so check each for `null`
+  before reading it.
 
 ```ts
 /** A decision model's answer on an ordered scale. `score` is the expected
   level and may be fractional; `legend` maps each level to its description.
-  No Agency annotation produces a score question yet. */
+  No Agency annotation produces a score question yet. Some models leave
+  out `confidence`, `legend`, and `probabilities`, so check each for `null`
+  before reading it. */
 export type ScoreAnswer = {
   type: "score";
   score: number;
-  confidence: number;
-  legend: Record<string, string>;
-  probabilities: Record<string, number>
+  confidence?: number;
+  legend?: Record<string, string>;
+  probabilities?: Record<string, number>
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L395))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L399))
 
 ### DecisionAnswer
 
@@ -203,7 +211,7 @@ One answer from a decision model. Check `type` before reading the rest:
 export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L405))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L409))
 
 ### TokenAlternative
 
@@ -219,7 +227,7 @@ export type TokenAlternative = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L409))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L413))
 
 ### TokenLogprob
 
@@ -238,7 +246,7 @@ export type TokenLogprob = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L417))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L421))
 
 ### Reply
 
@@ -263,7 +271,7 @@ export type Reply = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L427))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L431))
 
 ### GuardFailureData
 
@@ -285,7 +293,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L457))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L461))
 
 ### ThreadMessage
 
@@ -299,7 +307,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L477))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L481))
 
 ### ThreadInfo
 
@@ -318,7 +326,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L483))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L487))
 
 ## Effects
 
@@ -695,7 +703,7 @@ Messages added by `assistantMessage` also count as replies.
 
 **Returns:** `Reply | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L446))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L450))
 
 ### listThreads
 
@@ -719,7 +727,7 @@ cached summary, the label, or an empty string without another LLM call.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L548))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L552))
 
 ### sessionThreadId
 
@@ -738,7 +746,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L595))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L599))
 
 ### currentThreadId
 
@@ -753,7 +761,7 @@ later with `thread(continue: id)`.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L605))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L609))
 
 ### getThread
 
@@ -776,4 +784,4 @@ are rendered as text, and attachment payloads become placeholders.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L614))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L618))

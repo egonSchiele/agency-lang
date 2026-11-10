@@ -27,17 +27,21 @@ export function decisionSummary(decision: DecisionLog): string {
  *  prints as its name. The viewer degrades; it never throws on a log. */
 function answerSummary(answer: DecisionAnswer): string {
   switch (answer.type) {
-    case "choice": {
-      const probability = (answer.probabilities ?? {})[answer.choice] ?? answer.confidence ?? 0;
-      return `${answer.choice} ${percent(probability)}`;
-    }
+    case "choice":
+      return withPercent(answer.choice, answer.probabilities?.[answer.choice] ?? answer.confidence);
     case "noul":
       return answer.noul >= 0.5 ? `yes ${percent(answer.noul)}` : `no ${percent(1 - answer.noul)}`;
     case "score":
-      return `score ${(answer.score ?? 0).toFixed(1)} ${percent(answer.confidence ?? 0)}`;
+      return withPercent(`score ${(answer.score ?? 0).toFixed(1)}`, answer.confidence);
     default:
       return String((answer as { type?: unknown }).type ?? "answer");
   }
+}
+
+/** A label, then its percentage when the model gave one. Some models
+ *  leave out the confidence, and a missing one prints as nothing. */
+function withPercent(label: string, value: number | undefined): string {
+  return value === undefined ? label : `${label} ${percent(value)}`;
 }
 
 /** The input preview: what the model read, then what it was asked. */

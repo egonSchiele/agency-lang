@@ -229,3 +229,24 @@ describe("llm() validationRetries option", () => {
     expect(unknown).toHaveLength(0);
   });
 });
+
+describe("builtin named-arg validation (the decision option)", () => {
+  it("accepts decision: true in an options object and as a named argument", () => {
+    for (const options of [`{ decision: true }`, `decision: false`]) {
+      const source = `node main() {\n  const spam: boolean = llm("Is this spam?", ${options})\n  print(spam)\n}`;
+      expect(errorsFrom(source)).toEqual([]);
+    }
+  });
+
+  it("refuses a decision value that is not a boolean", () => {
+    const errors = errorsFrom(`node main() { let r = llm("hi", { decision: "yes" }) }`);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it("refuses decision on setLlmOptions, where it would turn every later call into one", () => {
+    const errors = errorsFrom(
+      `import { setLlmOptions } from "std::llm"\nnode main() {\n  setLlmOptions({ decision: true })\n}`,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});

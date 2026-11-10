@@ -16,5 +16,18 @@ node main() {
       const escalate: boolean = llm("Escalate? Urgent was ${urgent}", { model: "jev-1.13" })
     }
   }
-  return { dept: dept, churn: churn, urgent: urgent, escalate: escalate }
+  // The catalog lists gpt-4o-mini as a text model. With decision: true both
+  // calls are decision calls, and the collector groups them like any other.
+  parallel {
+    const textDept: Dept = llm("Which department, asked of a text model?", { model: "gpt-4o-mini", decision: true })
+    const textChurn: boolean = llm("Will the customer leave, asked of a text model?", { model: "gpt-4o-mini", decision: true })
+  }
+  return {
+    dept: dept,
+    churn: churn,
+    urgent: urgent,
+    escalate: escalate,
+    textDept: textDept,
+    textChurn: textChurn
+  }
 }

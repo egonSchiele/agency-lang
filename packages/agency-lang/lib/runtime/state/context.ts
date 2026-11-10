@@ -22,7 +22,7 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
 import { DeterministicClient } from "../deterministicClient.js";
-import { mergeLlmConfig } from "../llmConfig.js";
+import { mergeLlmConfig, type CallConfig } from "../llmConfig.js";
 import { MemoryManager } from "../memory/manager.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { getOrCreateStore } from "../memory/registry.js";
@@ -893,7 +893,7 @@ export class RuntimeContext<T> {
     };
   }
   /* Get smoltalk config with missing keys populated with defaults */
-  getSmoltalkConfig(...configs: Partial<SmolConfig>[]): Partial<SmolConfig> {
+  getSmoltalkConfig(...configs: CallConfig[]): CallConfig {
     return configs.reduce(mergeLlmConfig, { ...this.smoltalkDefaults });
   }
 

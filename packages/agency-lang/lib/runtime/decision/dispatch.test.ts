@@ -71,6 +71,32 @@ describe("isDecisionCall", () => {
   });
 });
 
+describe("isDecisionCall with the decision option", () => {
+  it("is a decision call when the option is true, even for a text catalog entry", () => {
+    expect(isDecisionCall(base({ model: "gpt-4o-mini", decision: true }))).toBe(true);
+  });
+
+  it("is a text call when the option is false, even for a decision catalog entry", () => {
+    expect(isDecisionCall(base({ model: "jev-1.13", decision: false }))).toBe(false);
+  });
+
+  it("is a decision call for an unknown model under any provider when the option is true", () => {
+    expect(
+      isDecisionCall(base({ model: "new-decider", provider: "anthropic", decision: true })),
+    ).toBe(true);
+  });
+
+  it("keeps the catalog's answer for a model with both entries when the option is absent", () => {
+    // gpt-6-luna is a chat model many programs use; with no option it stays one.
+    expect(isDecisionCall(base({ model: "gpt-6-luna", provider: "openai" }))).toBe(false);
+  });
+
+  it("keeps the old rule for an unknown model with no option", () => {
+    expect(isDecisionCall(base({ model: "nobody-knows-me", provider: "typesafe" }))).toBe(true);
+    expect(isDecisionCall(base({ model: "nobody-knows-me", provider: "anthropic" }))).toBe(false);
+  });
+});
+
 describe("provider-specific decision records", () => {
   const modelData: smoltalk.ModelDataBlob = {
     schemaVersion: 1,
@@ -339,6 +365,12 @@ describe("questionCapFor", () => {
     expect(questionCapFor(base({ model: "jev-1.13" }))).toBe(64);
     expect(questionCapFor(base({ model: "my-laya", provider: "typesafe" }))).toBe(
       DEFAULT_QUESTION_CAP,
+    );
+  });
+
+  it("is the decision entry's cap for a name that also has a text entry", () => {
+    expect(questionCapFor(base({ model: "gpt-6-luna", provider: "openai", decision: true }))).toBe(
+      400,
     );
   });
 });

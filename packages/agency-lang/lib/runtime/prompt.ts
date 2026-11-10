@@ -40,6 +40,7 @@ import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
 import { withHostKeys, type PromptConfig } from "./llmClient.js";
+import type { CallConfig } from "./llmConfig.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/agents/promptRunner.md for the control-flow abstraction used here.
 import {
@@ -422,7 +423,7 @@ type RunPromptArgs = {
    *  stripped before the config is forwarded to the LLM client. Direct TS
    *  callers (e.g. `agency.llm`) should use the dedicated `retryConfig`
    *  parameter instead. */
-  clientConfig: Partial<smoltalk.SmolConfig> & RetryConfig & { tools?: any[] };
+  clientConfig: CallConfig & RetryConfig & { tools?: any[] };
   /** Per-call resilience policy. Takes precedence over any retry fields
    *  piggybacked on `clientConfig`. */
   retryConfig?: RetryConfig;

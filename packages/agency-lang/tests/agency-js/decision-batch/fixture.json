@@ -3,9 +3,11 @@
     "dept": "billing",
     "churn": true,
     "urgent": true,
-    "escalate": false
+    "escalate": false,
+    "textDept": "support",
+    "textChurn": false
   },
-  "requests": 2,
+  "requests": 3,
   "first": {
     "questionNames": [
       "answer",
@@ -35,5 +37,20 @@
       "assistant"
     ],
     "stateEndsWithTicket": false
+  },
+  "textModel": {
+    "model": "gpt-4o-mini",
+    "questionNames": [
+      "answer",
+      "answer"
+    ],
+    "instructions": [
+      "Which department, asked of a text model?",
+      "Will the customer leave, asked of a text model?"
+    ],
+    "stateRoles": [
+      "user"
+    ],
+    "stateEndsWithTicket": true
   }
 }

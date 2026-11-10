@@ -37,7 +37,7 @@ import {
  } from "./modelRequest.agency"
 import {
   parseModelFlag,
-  slotValueHasProvider,
+  lacksProviderForm,
   missingProviderEnvVar,
   Resolved,
  } from "./models.agency"
@@ -53,7 +53,7 @@ import {
   getModelSettings,
   loadSettings,
  } from "./settings.agency"
-import { chatSlots, needsProviderForm, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
+import { chatSlots, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
 import { ToolLimits, applyToolLimits } from "./toolLimits.agency"
 import {
   demoteProvider,
@@ -278,7 +278,7 @@ export def switchModel(
       changes: []
     }
   }
-  if (needsProviderForm(parsed.slot) && !slotValueHasProvider(parsed.slot, parsed.model)) {
+  if (lacksProviderForm(parsed.slot, parsed.model)) {
     // A derived slot exists to point AWAY from the chat provider, so the
     // provider can never be inferred. Require the explicit form.
     pushMessage(

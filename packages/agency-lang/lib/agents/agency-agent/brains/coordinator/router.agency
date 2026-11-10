@@ -28,6 +28,10 @@ static const RESEARCH_DESCRIPTION = "Answer a question that needs reading rather
 static const CODE_DESCRIPTION = "A coding task in any language except Agency: reading, writing, and editing code, running commands, builds, and tests."
 static const COORDINATOR_DESCRIPTION = "Anything small enough to handle directly: a short answer or a follow-up about the conversation so far, a few file reads, searches, or edits, running a saved skill or learned tool, or saving a skill. Also any question about the Agency language."
 
+// A router call that takes longer than this fails, and the turn goes to
+// the coordinator.
+static const ROUTER_TIMEOUT = 3s
+
 // The router reads the first this many of the coordinator's other tools.
 static const MAX_TOOL_NAMES = 30
 
@@ -69,9 +73,9 @@ def askRouter(
       {
         model: model,
         provider: provider,
-        decision: true,
+        type: "decision",
         retries: 0,
-        timeout: 3s
+        timeout: ROUTER_TIMEOUT
       },
     )
     const reply = lastReply()

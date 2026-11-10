@@ -8,8 +8,8 @@ import { filterEntries } from "std::object"
 
 import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
 import { checkLlmOptions, LlmOptions } from "./llmOptions.agency"
-import { slotValueHasProvider } from "./models.agency"
-import { canonicalSlot, isKnownSlot, needsProviderForm, providerFormExample, slotKind } from "./slots.agency"
+import { lacksProviderForm } from "./models.agency"
+import { canonicalSlot, isKnownSlot, providerFormExample, slotKind } from "./slots.agency"
 import { isPlainObject } from "./utils.agency"
 
 export type PresetSlots = {
@@ -129,15 +129,11 @@ def slotProblems(slots: Record<string, any>): string[] {
   const unknown = ["has an unknown slot '${slot}'" for slot in names if !isKnownSlot(slot)]
   const known = [slot for slot in names if isKnownSlot(slot)]
   const notText = ["slots.${slot} must be a non-empty string" for slot in known if !kindHolds("text", slots[slot])]
-  const needForm = [
-    slot
-    for slot in known
-    if needsProviderForm(slot) && kindHolds("text", slots[slot])
-  ]
+  const textSlots = [slot for slot in known if kindHolds("text", slots[slot])]
   const noProvider = [
     "slots.${canonicalSlot(slot)} needs the provider/model form, e.g. ${providerFormExample(slot)}"
-    for slot in needForm
-    if !slotValueHasProvider(slot, slots[slot])
+    for slot in textSlots
+    if lacksProviderForm(slot, slots[slot])
   ]
   return [...unknown, ...notText, ...noProvider]
 }

@@ -25,8 +25,8 @@ import { exists } from "std::shell"
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
 import { CapabilitySettings, sanitizeCapabilitySettings } from "./capabilities.agency"
 import { LlmOptions, checkLlmOptions } from "./llmOptions.agency"
-import { slotValueHasProvider } from "./models.agency"
-import { isKnownSlot, canonicalSlot, needsProviderForm, providerFormExample } from "./slots.agency"
+import { lacksProviderForm } from "./models.agency"
+import { isKnownSlot, canonicalSlot, providerFormExample } from "./slots.agency"
 
 
 export type SearchSettings = {
@@ -89,7 +89,7 @@ def sanitizeSlots(settings: ModelSettings): ModelSettings {
       continue
     }
     const canonical = canonicalSlot(key)
-    if (needsProviderForm(canonical) && !slotValueHasProvider(canonical, slots[key])) {
+    if (lacksProviderForm(canonical, slots[key])) {
       // A derived slot points away from the chat provider, so its
       // provider can never be inferred. Require the explicit form.
       print(

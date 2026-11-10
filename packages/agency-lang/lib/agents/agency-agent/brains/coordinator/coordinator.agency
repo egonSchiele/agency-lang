@@ -162,10 +162,14 @@ export def turnTools(turnStart: any): any[] {
   return offeredTools(userTools(), turnStart)
 }
 
+// The tools a turn can be routed to, one per arm of the `match` in
+// mainAgent. Each is an option of its own in the router's question, so
+// the coordinator's line leaves them out.
+static const ROUTED_TOOLS = ["researchAgent", "codeAgent"]
+
 // The names the router reads on the coordinator's line, which keeps the
 // first 30: the tools that differ per user first, since they are what the
-// router cannot otherwise know about, then the built-in ones. The routed
-// subagents are options of their own.
+// router cannot otherwise know about, then the built-in ones.
 def routerToolNames(user: UserTools, turnStart: any): string[] {
   const tools = [
     ...user.learned,
@@ -175,7 +179,7 @@ def routerToolNames(user: UserTools, turnStart: any): string[] {
     ...mainAgentTools,
     ...turnBuiltIns(turnStart),
   ]
-  return [tool.name for tool in tools if tool.name != "researchAgent" && tool.name != "codeAgent"]
+  return [tool.name for tool in tools if !ROUTED_TOOLS.includes(tool.name)]
 }
 
 def mainOptions(tools: any[]): any {

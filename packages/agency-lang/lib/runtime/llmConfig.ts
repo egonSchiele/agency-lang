@@ -49,8 +49,7 @@ export function modelRecord(config: Partial<SmolConfig>): ModelType | undefined 
  * decision entry, and keeps the route when the model has none. */
 export function modelProviderOverride(
   defaults: Partial<SmolConfig>,
-  override: Partial<SmolConfig>,
-  decision: boolean = false,
+  override: CallConfig,
 ): string | undefined {
   if (
     override.model === undefined ||
@@ -59,7 +58,7 @@ export function modelProviderOverride(
   ) {
     return undefined;
   }
-  if (decision) {
+  if (override.type === "decision") {
     return firstDecisionEntry(override.model, override.modelData ?? defaults.modelData)?.provider;
   }
   const record = modelRecord({ ...defaults, ...override, provider: undefined });
@@ -80,7 +79,7 @@ export function mergeLlmConfig(defaults: CallConfig, override: CallConfig): Call
   if (override.baseUrl !== undefined) {
     merged.baseUrl = { ...defaults.baseUrl, ...override.baseUrl };
   }
-  const provider = modelProviderOverride(defaults, override, override.type === "decision");
+  const provider = modelProviderOverride(defaults, override);
   if (provider !== undefined) {
     merged.provider = provider;
   }

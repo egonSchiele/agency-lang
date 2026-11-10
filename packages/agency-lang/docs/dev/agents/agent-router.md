@@ -54,8 +54,9 @@ decision model's state, and the prompt is the question
 message and answers about it. The question and the answer never reach the
 main thread.
 
-The call passes `decision: true`, so a model the catalog does not list as a
-decision model works too. It has `retries: 0` and a 3 second timeout: the
+The call passes `type: "decision"`, so a model the catalog does not list
+as a decision model works too. It has `retries: 0` and a 3 second timeout
+(`ROUTER_TIMEOUT`): the
 router is fast or it is skipped. It asks once; the same request gives the
 same answer, so voting gains nothing.
 
@@ -162,7 +163,8 @@ its checkpoint does not ask the router again.
 Measure first: replay logged turns that went to the subagent through the
 router with a description for it, and check that none goes to a wrong
 subagent at the floor. Then add the description to the question, the
-member to `Route`, and an arm to the `match` in `mainAgent`.
+member to `Route`, an arm to the `match` in `mainAgent`, and the tool's
+name to `ROUTED_TOOLS`, which keeps it off the coordinator's line.
 
 ## Tests
 

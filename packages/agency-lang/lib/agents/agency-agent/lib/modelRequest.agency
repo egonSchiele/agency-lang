@@ -8,7 +8,7 @@ import { filterEntries } from "std::object"
 
 import { EffortChoice, parseEffort } from "./effort.agency"
 import { LlmOptions } from "./llmOptions.agency"
-import { parseModelFlag, slotValueHasProvider } from "./models.agency"
+import { lacksProviderForm, parseModelFlag } from "./models.agency"
 import { Preset, PresetSlots } from "./presetRules.agency"
 import { RawLayer } from "./resolution.agency"
 import { ModelSettings } from "./settings.agency"
@@ -96,7 +96,7 @@ def modelFlagProblem(parsed: ParsedModelFlag, hasChatModel: boolean, local: stri
   if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
     return "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}."
   }
-  if (needsProviderForm(parsed.slot) && !slotValueHasProvider(parsed.slot, parsed.model)) {
+  if (lacksProviderForm(parsed.slot, parsed.model)) {
     return "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. --model ${parsed.slot}=${providerFormExample(parsed.slot)}."
   }
   if (local != null && hasChatModel) {

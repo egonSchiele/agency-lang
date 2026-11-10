@@ -94,7 +94,7 @@
     {
       "nodeName": "flagsFromArgs",
       "input": "",
-      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"reasoning\":\"opus\",\"main\":\"sonnet\"},\"provider\":\"anthropic\",\"local\":null}",
+      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"reasoning\":\"opus\",\"main\":\"sonnet\"},\"provider\":\"anthropic\",\"local\":null,\"effort\":null}",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -104,7 +104,7 @@
     {
       "nodeName": "fastmodelBeatsModelMainFlag",
       "input": "",
-      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"main\":\"sonnet\"},\"provider\":\"\",\"local\":null}",
+      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"main\":\"sonnet\"},\"provider\":\"\",\"local\":null,\"effort\":null}",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -124,7 +124,7 @@
     {
       "nodeName": "localWithEmbeddingFlagIsFine",
       "input": "",
-      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"embedding\":\"mlx/nomic-embed\"},\"provider\":\"\",\"local\":\"qwen3.5-2b\"}",
+      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"embedding\":\"mlx/nomic-embed\"},\"provider\":\"\",\"local\":\"qwen3.5-2b\",\"effort\":null}",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -185,6 +185,96 @@
       "nodeName": "aLocalPresetKeepsItsOptions",
       "input": "",
       "expectedOutput": "\"{\\\"temperature\\\":0.7}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "effortFlagBeatsThePreset",
+      "input": "",
+      "expectedOutput": "\"low\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetEffortWhenThereIsNoFlag",
+      "input": "",
+      "expectedOutput": "\"high\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aModelFlagDropsThePresetEffort",
+      "input": "",
+      "expectedOutput": "\"null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noEffortAnywhere",
+      "input": "",
+      "expectedOutput": "\"null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "effortFromArgs",
+      "input": "",
+      "expectedOutput": "\"high\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badEffortIsAnError",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aModelChoiceDropsThePresetEffort",
+      "input": "",
+      "expectedOutput": "\"null|null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anEmbeddingChoiceKeepsThePresetEffort",
+      "input": "",
+      "expectedOutput": "\"high\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aModelChoiceKeepsTheFlagEffort",
+      "input": "",
+      "expectedOutput": "\"low\"",
       "evaluationCriteria": [
         {
           "type": "exact"

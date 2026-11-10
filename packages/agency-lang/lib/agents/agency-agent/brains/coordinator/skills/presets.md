@@ -29,6 +29,9 @@ Set only the fields the user asked for.
 - `maxToolCallRounds`: the most tool-call rounds in one turn, a whole number above zero.
 - `maxToolResultChars`: the most characters of one tool result you see.
   `0` means no cap.
+- `effort`: how hard a reasoning model thinks on every call: `low`,
+  `medium`, `high`, or `default` for the provider's own level. The
+  `--effort` flag overrides it.
 - `llmOptions`: `llm()` options for the preset's models, the same fields
   `useLlmOptions` takes. The common one is `openRouter.provider`, which
   picks the companies OpenRouter may send calls to, such as

@@ -6,6 +6,7 @@
 */
 import { filterEntries } from "std::object"
 
+import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
 import { checkLlmOptions, LlmOptions } from "./llmOptions.agency"
 import { slotValueHasProvider } from "./models.agency"
 import { canonicalSlot, isKnownSlot, needsProviderForm, providerFormExample, slotKind } from "./slots.agency"
@@ -26,6 +27,7 @@ export type PresetInput = {
   local?: string;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
+  effort?: EffortChoice;
   llmOptions?: LlmOptions
 }
 
@@ -38,10 +40,11 @@ export type Preset = {
   local?: string;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
+  effort?: EffortChoice;
   llmOptions?: LlmOptions
 }
 
-type FieldKind = "flag" | "text" | "slots" | "positiveWholeNumber" | "wholeNumber" | "llmOptions"
+type FieldKind = "flag" | "text" | "slots" | "positiveWholeNumber" | "wholeNumber" | "effort" | "llmOptions"
 
 static const PRESET_FIELD_KINDS: Record<string, FieldKind> = {
   default: "flag",
@@ -51,6 +54,7 @@ static const PRESET_FIELD_KINDS: Record<string, FieldKind> = {
   slots: "slots",
   maxToolCallRounds: "positiveWholeNumber",
   maxToolResultChars: "wholeNumber",
+  effort: "effort",
   llmOptions: "llmOptions"
 }
 
@@ -60,6 +64,7 @@ static const KIND_RULES: Record<string, string> = {
   slots: "must be an object of slot names to models",
   positiveWholeNumber: "must be a whole number above zero",
   wholeNumber: "must be a whole number, zero or more",
+  effort: "must be low, medium, high, or default",
   llmOptions: "must be an object of llm() options"
 }
 
@@ -73,6 +78,7 @@ def kindHolds(kind: FieldKind, value: any): boolean {
     "slots" => isPlainObject(value)
     "positiveWholeNumber" => Number.isInteger(value) && value > 0
     "wholeNumber" => Number.isInteger(value) && value >= 0
+    "effort" => EFFORT_CHOICES.includes(value)
     "llmOptions" => isPlainObject(value)
     _ => false
   }

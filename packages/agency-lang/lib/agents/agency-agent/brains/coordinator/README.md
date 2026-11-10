@@ -51,8 +51,8 @@ the first turn, and calls the LLM with the tool list: the specialists,
 `generateImageFile`, the read-only file tools plus `write` and `edit` (so a
 question that hinges on a few files, a new file whose content the
 coordinator already has, or a small change to a file never costs a
-subagent dispatch), any MCP tools the harness connected, `whatIAmDoing`
-(progress reporting), and `elapsedTime` anchored to the turn start.
+subagent dispatch), any MCP tools the harness connected, and `elapsedTime`
+anchored to the turn start.
 
 The system prompt is `main.md`, for every model.
 

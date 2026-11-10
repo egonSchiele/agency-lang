@@ -9,8 +9,8 @@ import {
   agencyDocTools,
   agencyCodeTools,
   memoryTools,
-  planningTools,
   spillTools,
+  draftTools,
  } from "std::agents/lib/toolkits"
 import { buildTools as codingTools } from "std::agents/coding"
 import { buildTools as researcherTools } from "std::agents/researcher"
@@ -36,7 +36,6 @@ def allBundles(): any[] {
     agencyDocTools(),
     agencyCodeTools(),
     memoryTools(),
-    planningTools(),
     spillTools(),
   ]
 }
@@ -169,14 +168,11 @@ node noBundleHasDuplicateNames(): boolean {
   return true
 }
 
-// Every worker appends its own saveDraft at its llm call, so a bundle a caller
-// hands an agent as extra tools must not carry saveDraft too. When planningTools
-// did, passing it as extraTools put saveDraft in the list twice and the call was
-// rejected before it reached the provider.
-node planningToolsComposesWithAgentSaveDraft(): boolean {
-  const composed = [...planningTools(), saveDraft]
-  const names = map(composed, \tool -> tool.name)
-  return unique(names, \name -> name).length == names.length
+// An agent whose draft nobody reads offers no saveDraft.
+node draftToolsFollowOffer(): boolean {
+  const offered = map(draftTools(true), \tool -> tool.name)
+  const offeredOne = offered.length == 1 && offered[0] == "saveDraft"
+  return offeredOne && draftTools(false).length == 0
 }
 
 // The wikipedia tools must not advertise a bare `search`, which collides with

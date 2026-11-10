@@ -7,7 +7,7 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { question } from "std::agent"
 import { AgencySource } from "std::agency"
-import { writableFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
+import { writableFileTools } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
@@ -140,7 +140,6 @@ def userTools(): UserTools {
 def turnBuiltIns(turnStart: any): any[] {
   return [
     learnTools.partial(turnStart: turnStart),
-    whatIAmDoing,
     searchSessions,
     question,
     elapsedTime.partial(since: turnStart),
@@ -268,9 +267,8 @@ def routeFor(
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
-  // The prompt tells the model to report progress (whatIAmDoing) and watch
-  // the clock (elapsedTime), so both must be in its tool list. elapsedTime
-  // is anchored to this turn's start.
+  // The prompt tells the model to watch the clock (elapsedTime), so it must
+  // be in its tool list. elapsedTime is anchored to this turn's start.
   const turnStart = now()
   const user = userTools()
   const routed = routeFor(prompt, user, turnStart)

@@ -1,4 +1,3 @@
-import { todoWrite } from "std::agent"
 import { announce } from "../../../lib/agents/agency-agent/brains/coordinator/lib/announce.agency"
 import {
   setInteractive,
@@ -16,10 +15,6 @@ def successful(): Result<string> {
 
 def failedFixture(): Result<string> {
   return failure("fixture failure")
-}
-
-def whatIAmDoing(): string {
-  return "suppressed"
 }
 
 // Shaped like the stdlib `read` so it lands on that tool's summary row.
@@ -51,7 +46,7 @@ node main(interactive: boolean, verbose: boolean, debug: boolean) {
   setVerbose(verbose)
   setDebug(debug)
   return llm("trace fixture", {
-    tools: [todoWrite, echo, successful, failedFixture, whatIAmDoing, read, researchAgent, web_search_tavily, web_search_brave],
+    tools: [echo, successful, failedFixture, read, researchAgent, web_search_tavily, web_search_brave],
     retries: 0
   })
 }

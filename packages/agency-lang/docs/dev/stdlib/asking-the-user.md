@@ -27,7 +27,7 @@ That is the whole implementation (`stdlib/agent.agency:66`). There is no termina
 
 ## Which agents have it, and the split to be careful about
 
-Most get it from `communicationTools()` (`stdlib/agents/lib/toolkits.agency`), the bundle that also carries `whatIAmDoing`: coding, github, explorer, planner, researcher, review, data, verifier, typescript/review and writing/review all claim that bundle.
+Most get it from `communicationTools()` (`stdlib/agents/lib/toolkits.agency`): coding, github, explorer, planner, researcher, review, data, verifier, typescript/review and writing/review all claim that bundle.
 
 Three agents do not claim it, and their callers hand them `question` at the call site instead. All three call sites are in `lib/agents/agency-agent/brains/coordinator/subagents/`:
 
@@ -39,7 +39,7 @@ Three agents do not claim it, and their callers hand them `question` at the call
 
 **Adding `communicationTools()` to any of those three means dropping its call-site copy in the same change.** Two tools named `question` in one request are rejected by `assertUniqueToolNames` (`lib/runtime/prompt.ts`) before it is sent, so the dispatch fails outright. `composedOracleToolsHaveUniqueNames`, `composedAgencyReviewToolsHaveUniqueNames` and `composedAgencyResearchToolsHaveUniqueNames` in `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency` ping the composed lists for exactly this.
 
-The coordinator asks directly rather than through a subagent, so `question` is in `turnTools()` (`brains/coordinator/coordinator.agency`) beside `whatIAmDoing`.
+The coordinator asks directly rather than through a subagent, so `question` is in `turnTools()` (`brains/coordinator/coordinator.agency`).
 
 ## Wiring the tool is not enough; the prompt has to name it
 

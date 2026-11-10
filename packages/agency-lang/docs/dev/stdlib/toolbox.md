@@ -212,8 +212,7 @@ A draft nobody accepts is not saved. When it had open review points, the
 failure lists them (`notAccepted`), so a model that called `designTool`
 with no user at a terminal can say why.
 
-`progress` prints a line at each stage with `print`, the channel
-`whatIAmDoing` uses.
+`progress` prints a line at each stage with `print`.
 
 ### A draft nobody accepted is kept for the session
 

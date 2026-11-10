@@ -17,6 +17,10 @@ node main() {
 }
 ```
 
+The model reports progress in a sentence beside each tool call, and
+nothing prints it by default. `std::agents/lib/toolkits` shows the
+callback that does.
+
 ## Functions
 
 ### buildTools
@@ -29,7 +33,7 @@ Return the data agent's connectors and source lookup tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L59))
 
 ### dataAgent
 
@@ -67,4 +71,4 @@ Answer a question from structured public-data APIs, naming the source and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L120))

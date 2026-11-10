@@ -222,6 +222,26 @@
       ]
     },
     {
+      "nodeName": "presetWithEffort",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetWithUnknownEffort",
+      "input": "",
+      "expectedOutput": "[\"effort must be low, medium, high, or default\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "routerWithoutProvider",
       "input": "",
       "expectedOutput": "[\"slots.router needs the provider/model form, e.g. openrouter/jev-1.14\"]",

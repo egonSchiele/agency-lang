@@ -9,13 +9,14 @@ import {
   localModelsSupported,
   listModelNames,
  } from "std::agency/local"
-import { hostedModelInfo, listHostedModels } from "std::llm"
+import { hostedModelInfo, listHostedModels, setLlmOptions } from "std::llm"
 import { disableMemory } from "std::memory"
 import { filterEntries } from "std::object"
 import { isTTY } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
+import { EffortModel, effortToSend, noDefaultWarning } from "./effort.agency"
 import { LlmOptions, applyLlmOptions, mixedProviderWarning } from "./llmOptions.agency"
 import {
   filterHostedModels,
@@ -29,6 +30,7 @@ import {
   modelFlagsFromArgs,
   noModelChoices,
   noModelFlags,
+  requestEffort,
   requestIsLocal,
   requestLlmOptions,
   requestProvider,
@@ -128,15 +130,30 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   return success(true)
 }
 
-// Call after the models are applied: the warning reads their providers.
+def chatModels(): EffortModel[] {
+  const slots = getResolvedSlots()
+  return [
+    { provider: slotProvider(slots[slot]), model: slots[slot].model }
+    for slot in chatSlots(Object.keys(slots))
+    if slots[slot] != null
+  ]
+}
+
+// Call after the models are applied: the warning and the effort read them.
 def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
   const options = requestLlmOptions(request, settings)
   applyLlmOptions(options)
-  const slots = getResolvedSlots()
-  const providers = [slotProvider(slots[slot]) for slot in chatSlots(Object.keys(slots)) if slots[slot] != null]
-  const warning = mixedProviderWarning(options, providers)
-  if (warning != "") {
-    pushMessage(color.yellow("Warning: ${warning}"))
+  const models = chatModels()
+  const asked = requestEffort(request)
+  // A null removes the level an earlier model or preset set.
+  setLlmOptions({
+    reasoningEffort: effortToSend(asked, models)
+  })
+  const warnings = [mixedProviderWarning(options, [model.provider for model in models]), noDefaultWarning(asked, models)]
+  for (warning in warnings) {
+    if (warning != "") {
+      pushMessage(color.yellow("Warning: ${warning}"))
+    }
   }
 }
 

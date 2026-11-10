@@ -1,7 +1,8 @@
 // A typed llm() call pointed at a decision model. The registry knows
 // jev-1.13, so the first call needs no provider. The second names an
 // unknown model and marks it with provider: "typesafe". Both go through
-// the real dispatch branch; the test's client answers.
+// the real dispatch branch; the test's client answers. The last asks a
+// model the registry lists as text, with decision: true.
 import { getCost } from "std::thread"
 
 type Dept = "billing" | "support" | "sales"
@@ -25,10 +26,15 @@ node main() {
     return again
   } with reject
 
+  // The catalog lists gpt-4o-mini as a text model. decision: true sends the
+  // call to the decision API anyway.
+  const chosen: Dept = llm("Which department, asked of a text model?", { model: "gpt-4o-mini", decision: true })
+
   return {
     dept: dept,
     triage: t,
     cost: getCost(),
     guardTripped: isFailure(guarded),
+    chosen: chosen,
   }
 }

@@ -88,6 +88,14 @@ describe("toSmolConfig — metadata pass-through", () => {
   });
 });
 
+describe("toSmolConfig — the decision option", () => {
+  it("does not forward decision to smoltalk", () => {
+    const clientConfig = { model: "gpt-6-luna", provider: "openai", decision: false };
+    const promptConfig = { ...clientConfig, messages: [], metadata: clientConfig } as any;
+    expect(toSmolConfig(promptConfig)).not.toHaveProperty("decision");
+  });
+});
+
 describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
   // prompt.ts builds the PromptConfig as `{ ...clientConfig, metadata: clientConfig }`,
   // so the nested apiKey/baseUrl maps arrive via metadata. toSmolConfig must

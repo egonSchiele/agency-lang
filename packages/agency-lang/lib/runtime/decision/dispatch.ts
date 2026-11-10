@@ -39,9 +39,13 @@ function registryRecord(config: PromptConfig): smoltalk.ModelType | undefined {
   });
 }
 
-/** Known models use their registry type. An unknown local decision model
- * can opt into the TypeSafe protocol with provider: "typesafe". */
+/** In order: the call's `decision` option; else the registry entry's type;
+ * else, for a model the registry does not know, the "typesafe" provider.
+ * See docs/dev/llm/decision-models.md, "Which calls are decision calls". */
 export function isDecisionCall(config: PromptConfig): boolean {
+  if (config.decision !== undefined) {
+    return config.decision;
+  }
   const known = registryRecord(config);
   if (known !== undefined) {
     return known.type === "decision";
@@ -69,13 +73,23 @@ function promptText(config: PromptConfig): string {
  *  tools check, the schema mapping, and the client capability. Runs before
  *  metering so a refusal is never counted as an attempt. */
 /** The most questions one request to this call's model may carry: the
- *  registry's `maxQuestions` for a known decision model, else Jev's cap. */
+ *  registry's `maxQuestions` for a known decision model, else Jev's cap.
+ *  The decision entry is looked up first, because a name can also have a
+ *  text entry that the plain lookup finds first (`gpt-6-luna`). */
 export function questionCapFor(config: PromptConfig): number {
-  const record = registryRecord(config);
+  const record = decisionRecord(config) ?? registryRecord(config);
   if (record?.type === "decision" && record.maxQuestions !== undefined) {
     return record.maxQuestions;
   }
   return DEFAULT_QUESTION_CAP;
+}
+
+function decisionRecord(config: PromptConfig): smoltalk.DecisionModel | undefined {
+  if (config.model === undefined || config.provider === undefined) {
+    return undefined;
+  }
+  const maps = (config.metadata ?? {}) as ConfigMaps;
+  return smoltalk.getDecisionModelForProvider(config.provider, config.model, maps.modelData);
 }
 
 export function prepareDecision(

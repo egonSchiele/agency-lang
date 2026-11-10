@@ -5,8 +5,9 @@
       "department": "billing",
       "churn": true
     },
-    "cost": 0.000003,
-    "guardTripped": true
+    "cost": 0.000004,
+    "guardTripped": true,
+    "chosen": "sales"
   },
   "firstCall": {
     "stateRoles": [
@@ -54,5 +55,11 @@
       "model": "my-laya",
       "provider": "typesafe"
     }
+  },
+  "textModelCall": {
+    "model": "gpt-4o-mini",
+    "questionNames": [
+      "answer"
+    ]
   }
 }

@@ -345,6 +345,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "headerShowsTheRouter",
+      "input": "",
+      "expectedOutput": "\"Router     jev-1.14 (openrouter)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headerOmitsAnUnsetRouter",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headerOmitsARouterTurnedOff",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

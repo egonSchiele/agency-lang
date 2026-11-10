@@ -238,6 +238,31 @@ node headerLinesSkipsMissing(): number {
   }).length
 }
 
+static const HEADER_CHAT_SLOTS: Record<string, Resolved> = {
+  main: { model: "claude-sonnet-4-6", provider: "anthropic", via: "x" },
+  reasoning: { model: "claude-opus-4-8", provider: "anthropic", via: "x" }
+}
+
+node headerShowsTheRouter(): string {
+  const lines = headerModelLines({
+    ...HEADER_CHAT_SLOTS,
+    router: { model: "jev-1.14", provider: "openrouter", via: "default:per-slot" }
+  })
+  return lines[2] ?? "missing"
+}
+
+node headerOmitsAnUnsetRouter(): number {
+  return headerModelLines(HEADER_CHAT_SLOTS).length
+}
+
+// `router=off` resolves to an empty model and provider.
+node headerOmitsARouterTurnedOff(): number {
+  return headerModelLines({
+    ...HEADER_CHAT_SLOTS,
+    router: { model: "", provider: "", via: "preset:off" }
+  }).length
+}
+
 // Built from the real baked catalog, so a bare filter yields items.
 node modelItemsNonEmpty(): boolean {
   return modelChoiceItems({}).length > 0

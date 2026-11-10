@@ -251,6 +251,8 @@ parser raises on. The script's docstring explains the phases and the seams
 it patches in `mlx_lm.server`. Those seams are why `MLX_LM_VERSION` in
 `localServe.ts` pins mlx-lm, the way `MLX_AUDIO_VERSION` pins mlx-audio,
 and why `checkPython` asks for `llguidance` before serving a chat model.
+`upstream-workarounds.md` lists the patches that work around mlx_lm bugs,
+and what to check before each one comes out.
 
 **The front door** (`lib/cli/mlxServer.ts`) listens on `--port`, reads
 the request body, and forwards to the process whose public name matches the

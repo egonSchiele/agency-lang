@@ -85,17 +85,23 @@ describe("builtin named-arg validation (fork/race shared:)", () => {
 });
 
 describe("builtin named-arg validation (llm options)", () => {
-  it.each(["openAiCompat", "openRouter", "deepInfra", "liteLlm", "mlx", "ollama", "typesafe"])(
-    "accepts a per-call %s base URL in an options object and named argument",
-    (provider) => {
-      for (const options of [
-        `{ baseUrl: { ${provider}: "http://localhost:8000/v1" } }`,
-        `baseUrl: { ${provider}: "http://localhost:8000/v1" }`,
-      ]) {
-        expect(errorsFrom(`node main() { let r = llm("hi", ${options})\n print(r) }`)).toEqual([]);
-      }
-    },
-  );
+  it.each([
+    "openAiCompat",
+    "openRouter",
+    "deepInfra",
+    "liteLlm",
+    "mlx",
+    "ollama",
+    "typesafe",
+    "laya",
+  ])("accepts a per-call %s base URL in an options object and named argument", (provider) => {
+    for (const options of [
+      `{ baseUrl: { ${provider}: "http://localhost:8000/v1" } }`,
+      `baseUrl: { ${provider}: "http://localhost:8000/v1" }`,
+    ]) {
+      expect(errorsFrom(`node main() { let r = llm("hi", ${options})\n print(r) }`)).toEqual([]);
+    }
+  });
 
   it.each(['"http://localhost:8000/v1"', "{ openAiCompat: 42 }"])(
     "rejects an invalid baseUrl value: %s",

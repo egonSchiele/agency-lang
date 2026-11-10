@@ -5,9 +5,10 @@
       "department": "billing",
       "churn": true
     },
-    "cost": 0.000004,
+    "cost": 0.0000049999999999999996,
     "guardTripped": true,
-    "chosen": "sales"
+    "chosen": "sales",
+    "local": true
   },
   "firstCall": {
     "stateRoles": [
@@ -61,5 +62,9 @@
     "questionNames": [
       "answer"
     ]
+  },
+  "layaCall": {
+    "provider": "laya",
+    "layaBaseUrl": "http://127.0.0.1:9000"
   }
 }

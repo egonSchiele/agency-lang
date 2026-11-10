@@ -13,7 +13,7 @@ import {
 import { DEFAULT_MODEL, defaultRoute, type AgencyConfig } from "../config/config.js";
 
 export type LlmBaseUrls = NonNullable<SmolConfig["baseUrl"]> &
-  Pick<NonNullable<DecideConfig["baseUrl"]>, "typesafe">;
+  Pick<NonNullable<DecideConfig["baseUrl"]>, "typesafe" | "laya">;
 
 /** One layer of an `llm()` call's options as the merge sees them:
  *  smoltalk's config plus the per-call `decision` flag, which picks a

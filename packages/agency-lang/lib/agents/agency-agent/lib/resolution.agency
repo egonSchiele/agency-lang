@@ -176,6 +176,32 @@ export def buildLayers(
   return [parseLayer(layer, providers, providerEstablished) for layer in raw]
 }
 
+/** Fold several raw layers, most immediate first, into one that resolves
+  every slot the same way. A layer's named slots are read before its pin
+  is recorded, because within one layer a named slot beats the pin. */
+export def flattenLayers(layers: RawLayer[]): RawLayer {
+  let pin = ""
+  let slots: Record<string, string> = {}
+  for (layer in layers) {
+    for (key in Object.keys(layer.slots)) {
+      const slot = canonicalSlot(key)
+      // A pin in a more immediate layer hides every chat slot below it.
+      const hidden = pin != "" && isChatSlot(slot)
+      if (slots[slot] == null && !hidden) {
+        slots[slot] = layer.slots[key]
+      }
+    }
+    if (pin == "") {
+      pin = layer.pin
+    }
+  }
+  return {
+    name: "flat",
+    pin: pin,
+    slots: slots
+  }
+}
+
 /** Slots whose (model, provider) changed between two assignments. */
 export def diffResolved(
   before: Record<string, Resolved>,

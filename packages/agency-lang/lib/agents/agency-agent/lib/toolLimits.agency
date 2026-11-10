@@ -35,6 +35,11 @@ export def setStartupLimitFlags(flags: LimitFlags) {
   _startupFlags = flags
 }
 
+/** The limit flags startup kept, null where a flag was not given. */
+export def startupLimitFlags(): LimitFlags {
+  return _startupFlags
+}
+
 export def effectiveLimits(flags: LimitFlags, preset: Preset | null, oneShot: boolean): ToolLimits {
   const fromPreset: Preset = preset ?? {}
   const rounds = flags.maxToolCallRounds ?? fromPreset.maxToolCallRounds ?? null

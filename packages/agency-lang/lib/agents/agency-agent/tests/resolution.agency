@@ -3,6 +3,7 @@ import {
   resolveSlot,
   resolveAll,
   buildLayers,
+  flattenLayers,
   Layer,
   Ctx,
   RawLayer,
@@ -257,4 +258,53 @@ node offBeatsTheDefault(): Resolved {
 // `off` means something only in a slot with a default.
 node offInTheMainSlotIsAModelName(): Resolved {
   return resolveFrom("main", [{ name: "preset", pin: "", slots: { main: "off" } }])
+}
+
+// flattenLayers must resolve every slot the way the layers it folds do.
+def sameAfterFlatten(raw: RawLayer[]): boolean {
+  const flat = [flattenLayers(raw)]
+  for (slot in ["main", "reasoning", "router"]) {
+    const layered = resolveFrom(slot, raw)
+    const flattened = resolveFrom(slot, flat)
+    if (layered.model != flattened.model || layered.provider != flattened.provider) {
+      return false
+    }
+  }
+  return true
+}
+
+node flatKeepsAPinOverALowerSlot(): boolean {
+  return sameAfterFlatten(
+    [
+      { name: "in-session", pin: "model-x", slots: {} },
+      { name: "preset", pin: "", slots: { main: "model-y" } },
+    ],
+  )
+}
+
+node flatKeepsASlotOverALowerPin(): boolean {
+  return sameAfterFlatten(
+    [
+      { name: "in-session", pin: "", slots: { reasoning: "model-x" } },
+      { name: "preset", pin: "model-y", slots: {} },
+    ],
+  )
+}
+
+node flatKeepsALowerRouterUnderAPin(): boolean {
+  return sameAfterFlatten(
+    [
+      { name: "in-session", pin: "model-x", slots: {} },
+      { name: "preset", pin: "", slots: { router: "openrouter/jev-1.14" } },
+    ],
+  )
+}
+
+node flatKeepsTheFirstPin(): boolean {
+  return sameAfterFlatten(
+    [
+      { name: "cli", pin: "model-x", slots: {} },
+      { name: "preset", pin: "model-y", slots: {} },
+    ],
+  )
 }

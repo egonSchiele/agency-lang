@@ -1,0 +1,215 @@
+// sessionPreset must build a preset that loads to the same session, and
+// presetChangeLines must name exactly the fields that differ.
+import { setEnv } from "std::system"
+
+import { ModelChoices, ModelFlags, ModelRequest, noModelChoices, noModelFlags, requestEffort, requestLlmOptions } from "../lib/modelRequest.agency"
+import { Resolved } from "../lib/models.agency"
+import { presetChangeLines, sessionPreset } from "../lib/presetSnapshot.agency"
+import { Preset } from "../lib/presetRules.agency"
+import { LimitFlags } from "../lib/toolLimits.agency"
+import { resolveHostedModels } from "../shared.agency"
+
+static const GLM: Preset = {
+  provider: "openrouter",
+  pin: "z-ai/glm-5.3-flash",
+  effort: "low",
+  llmOptions: { openRouter: { provider: { only: ["baseten/fp8"] } } }
+}
+
+static const NO_LIMITS: LimitFlags = {
+  maxToolCallRounds: null,
+  maxToolResultChars: null
+}
+
+static const NONE: Record<string, Resolved> = {}
+
+static const KEY_VARS = ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"]
+
+// Set one provider's key and clear the others, so the detected provider
+// does not depend on the shell.
+def onlyKey(name: string) {
+  for (varName in KEY_VARS) {
+    const value = if varName == name then "test-key" else ""
+    setEnv(varName, value) with approve
+  }
+}
+
+def req(flags: ModelFlags, preset: Preset | null, choices: ModelChoices): ModelRequest {
+  return {
+    flags: flags,
+    preset: preset,
+    choices: choices
+  }
+}
+
+def withPinChoice(pin: string): ModelChoices {
+  return {
+    ...noModelChoices(),
+    pin: pin
+  }
+}
+
+def withSlotChoice(slot: string, model: string): ModelChoices {
+  return {
+    ...noModelChoices(),
+    slots: Object.fromEntries([[slot, model]])
+  }
+}
+
+// Resolve the request, save it, load the save in a fresh session, and
+// compare. Returns "same" or the first thing that differs.
+def sameSession(request: ModelRequest): string {
+  const before = resolveHostedModels(request, {})
+  if (before is failure(reason)) {
+    return "before failed: ${reason}"
+  }
+  const saved = sessionPreset(request, NO_LIMITS, before.value)
+  const loaded = req(noModelFlags(), saved, noModelChoices())
+  const after = resolveHostedModels(loaded, {})
+  if (after is failure(reason)) {
+    return "after failed: ${reason}"
+  }
+  for (slot in ["main", "reasoning", "embedding", "router"]) {
+    const was: Resolved = before.value[slot]
+    const now: Resolved = after.value[slot]
+    if (was.model != now.model || was.provider != now.provider) {
+      return "${slot}: ${was.provider}/${was.model} became ${now.provider}/${now.model}"
+    }
+  }
+  if (JSON.stringify(requestEffort(request)) != JSON.stringify(requestEffort(loaded))) {
+    return "effort"
+  }
+  if (JSON.stringify(requestLlmOptions(request, {})) != JSON.stringify(requestLlmOptions(loaded, {}))) {
+    return "llmOptions"
+  }
+  return "same"
+}
+
+node sameAfterNoChange(): string {
+  onlyKey("OPENROUTER_API_KEY")
+  return sameSession(req(noModelFlags(), GLM, noModelChoices()))
+}
+
+node sameAfterARouterChoice(): string {
+  onlyKey("OPENROUTER_API_KEY")
+  return sameSession(req(noModelFlags(), GLM, withSlotChoice("router", "openrouter/jev-1.14")))
+}
+
+node sameAfterAChatModelChoice(): string {
+  onlyKey("OPENROUTER_API_KEY")
+  return sameSession(req(noModelFlags(), GLM, withPinChoice("z-ai/glm-5.3")))
+}
+
+node sameAfterAPinOverAPresetSlot(): string {
+  onlyKey("OPENROUTER_API_KEY")
+  const preset: Preset = {
+    provider: "openrouter",
+    slots: { main: "z-ai/glm-5.3-flash" }
+  }
+  return sameSession(req(noModelFlags(), preset, withPinChoice("z-ai/glm-5.3")))
+}
+
+node sameAfterABarePinWithADetectedProvider(): string {
+  onlyKey("ANTHROPIC_API_KEY")
+  return sameSession(req(noModelFlags(), null, withPinChoice("claude-opus-4-8")))
+}
+
+node sameAfterAOneSlotChoiceWithADetectedProvider(): string {
+  onlyKey("ANTHROPIC_API_KEY")
+  return sameSession(req(noModelFlags(), null, withSlotChoice("reasoning", "claude-opus-4-8")))
+}
+
+node sameAfterAModelFlag(): string {
+  onlyKey("ANTHROPIC_API_KEY")
+  return sameSession(req({ ...noModelFlags(), pin: "claude-opus-4-8" }, GLM, noModelChoices()))
+}
+
+node unchangedSessionGivesThePresetBack(): string {
+  return JSON.stringify(sessionPreset(req(noModelFlags(), GLM, noModelChoices()), NO_LIMITS, NONE))
+}
+
+node routerOffIsSaved(): string {
+  const saved = sessionPreset(req(noModelFlags(), GLM, withSlotChoice("router", "off")), NO_LIMITS, NONE)
+  const slots = saved.slots ?? {}
+  return slots.router ?? "missing"
+}
+
+node chatModelChoiceDropsTheEffort(): boolean {
+  const saved = sessionPreset(req(noModelFlags(), GLM, withPinChoice("z-ai/glm-5.3")), NO_LIMITS, NONE)
+  return saved.effort == null
+}
+
+node modelFlagDropsThePresetsModelFields(): string {
+  const opus: Resolved = {
+    model: "claude-opus-4-8",
+    provider: "anthropic",
+    via: "cli:global-pin"
+  }
+  const request = req({ ...noModelFlags(), pin: "claude-opus-4-8" }, GLM, noModelChoices())
+  return JSON.stringify(sessionPreset(request, NO_LIMITS, { main: opus, reasoning: opus }))
+}
+
+node effortFlagIsSaved(): string {
+  const saved = sessionPreset(req({ ...noModelFlags(), effort: "high" }, GLM, noModelChoices()), NO_LIMITS, NONE)
+  return saved.effort ?? "missing"
+}
+
+node limitFlagIsSaved(): number {
+  const limits: LimitFlags = {
+    maxToolCallRounds: 40,
+    maxToolResultChars: null
+  }
+  const saved = sessionPreset(req(noModelFlags(), GLM, noModelChoices()), limits, NONE)
+  return saved.maxToolCallRounds ?? -1
+}
+
+node sessionOptionsReplaceThePresets(): string {
+  const choices: ModelChoices = {
+    ...noModelChoices(),
+    llmOptions: { temperature: 0 }
+  }
+  const saved = sessionPreset(req(noModelFlags(), GLM, choices), NO_LIMITS, NONE)
+  return JSON.stringify(saved.llmOptions)
+}
+
+node settingsAreNotCopied(): string {
+  return JSON.stringify(sessionPreset(req(noModelFlags(), null, noModelChoices()), NO_LIMITS, NONE))
+}
+
+node localRequestSavesLocal(): string {
+  const flags: ModelFlags = {
+    ...noModelFlags(),
+    local: "qwen",
+    slots: { router: "openrouter/jev-1.14" }
+  }
+  return JSON.stringify(sessionPreset(req(flags, null, noModelChoices()), NO_LIMITS, NONE))
+}
+
+node changeLinesForARouter(): string[] {
+  const after: Preset = {
+    ...GLM,
+    slots: { router: "openrouter/jev-1.14" }
+  }
+  return presetChangeLines(GLM, after)
+}
+
+node changeLinesForADroppedEffort(): string[] {
+  const after: Preset = {
+    provider: GLM.provider,
+    pin: GLM.pin,
+    llmOptions: GLM.llmOptions
+  }
+  return presetChangeLines(GLM, after)
+}
+
+node noChangeLines(): string[] {
+  return presetChangeLines(GLM, GLM)
+}
+
+node changeLinesIgnoreDefault(): string[] {
+  const before: Preset = {
+    ...GLM,
+    default: true
+  }
+  return presetChangeLines(before, GLM)
+}

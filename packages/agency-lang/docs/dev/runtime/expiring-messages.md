@@ -201,7 +201,7 @@ To add a message that should not outlive its call, request, or handoff,
 push it with an expiry and let its owner call `expire`. Do not find the
 message again by its content or its position.
 
-Four other edits change history, and they are the only edits of
+Five other edits change history, and they are the only edits of
 assistant and tool messages:
 
 1. `dropHandoffToolCall` removes a handoff's call from an assistant
@@ -212,6 +212,8 @@ assistant and tool messages:
    summary.
 4. `repairReopenedThread` appends tool results for calls an abandoned
    turn left without one.
+5. The tool loop removes an empty reply that the output limit cut off,
+   before it retries (`docs/dev/agents/tool-loop-guards.md`).
 
 ## Files
 

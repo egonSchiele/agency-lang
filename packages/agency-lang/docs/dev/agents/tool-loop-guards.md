@@ -268,6 +268,73 @@ cut with a marker saying to read a smaller slice. Which tools the call
 offers never changes any of this. The rules, the store, and the readers
 are in `docs/dev/stdlib/spill.md`.
 
+## A reply cut off by the output limit
+
+A reasoning model spends its reasoning tokens from the same budget as its
+reply. When it reasons until the budget runs out, the reply has no text
+and no tool calls, and smoltalk reports the stop reason `"length"` for
+every provider. That reply looks like a finished model, so without a
+check the tool loop would return the empty text as the answer of the
+`llm()` call.
+
+After the tool loop has run every tool call, and before it returns or
+validates, `decideCutOff` in `lib/runtime/llmRetry.ts` looks at the last
+reply:
+
+| Last reply | What happens |
+|---|---|
+| Stop reason `"length"`, no tool calls, no visible text | Retry, up to 2 times, then return a failure |
+| Stop reason `"length"`, no tool calls, some visible text | Log one `replyCutOff` warning, and return the reply as before |
+| Any other stop reason | Return the reply as before |
+
+"No visible text" means the content is null or empty once trimmed.
+Reasoning does not count as text. The check runs before validation, so a
+call with an output schema gets the same retry, and validation only sees
+a reply that has content.
+
+A retry removes the empty reply from the thread. Several providers refuse
+an assistant message with no content and no tool calls, and the reply's
+usage and cost were recorded when it arrived. The retry then sends the
+request again with a user message, `CUT_OFF_NOTE`, that asks the model to
+reason more briefly. The note expires when that request returns, so the
+model sees it once and the thread does not keep it.
+
+The limit is the constant `CUT_OFF_RETRIES` (2), counted per `llm()`
+call, not per round. A retry costs a full request, so a model that always
+overruns its budget stops after three requests. When the third reply is
+also cut off empty, the call returns a failure that names the output
+limit and suggests a lower `reasoningEffort` or a higher `maxTokens`, and
+logs an error event with `errorType: "replyCutOff"`. An `llm()` option for
+the limit would need option types and user docs; add one only when
+someone needs a different number.
+
+The validation retry and the cut-off retry share one helper,
+`resendRequest` in `prompt.ts`. It runs three durable steps: a
+`<prefix>.feedback` step that edits the thread, the guard gate, and the
+request step, which advances the attempt counter. The prefix is
+`validation.<n>` or `cutOff.<n>`.
+
+A retry can pause at its guard gate, at a debugger stop before the
+request, or when a guard trip unwinds the request. Each resumes by
+running `runPrompt` again from the top with finished steps skipped, so
+nothing the decision reads may be lost on resume:
+
+1. The stop reason is on the frame, `self.lastStopReason`. Each request
+   step sets it, so a checkpoint carries it.
+2. A prepared retry is on the frame. The `cutOff.<n>.feedback` step
+   removes the empty reply and sets `self.cutOffPending = n`, and the
+   request step clears it. When it is set, the loop finishes that retry
+   without deciding again, because the thread no longer holds the reply
+   the decision was about.
+3. The note is pushed at the top of the request body and removed in its
+   `finally`. A guard trip sends the body again, so every attempt carries
+   the note once.
+4. The attempt counter, `self.cutOffAttempt`, advances only inside the
+   request step, so a resume re-enters the same attempt with the same
+   step keys.
+
+No tool runs during a retry, and no handler is pushed or popped.
+
 ## Tests
 
 - Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,
@@ -291,6 +358,11 @@ are in `docs/dev/stdlib/spill.md`.
   pausing sibling, empty-id providers across rounds, and a fifth
   rejection landing beside a paused call whose approval must still be
   honored (`removalRace`).
+- A cut-off reply: `lib/runtime/prompt.cutOff.test.ts` covers each row
+  of the table, three cut-off replies in a row, and a schema call.
+  `tests/agency-js/cut-off-retry-resume` pauses a retry at its guard gate
+  and in a tool call, resumes it, and trips a guard during the retried
+  request.
 - Real wiring: `tests/agency-js/repeated-tool-calls` scripts five
   identical calls and one garbled one through a fake client and checks
   the tool ran four times (the fourth call was refused and the count

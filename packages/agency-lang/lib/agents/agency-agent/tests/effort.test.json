@@ -8,6 +8,8 @@
     { "nodeName": "defaultForGlm", "input": "", "expectedOutput": "\"high|high\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "noDefaultWhenMixed", "input": "", "expectedOutput": "\"null|null|null\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "noDefaultOnAnotherProvider", "input": "", "expectedOutput": "\"null\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "askedWins", "input": "", "expectedOutput": "\"low|null|high|null\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "askedWins", "input": "", "expectedOutput": "\"low|null|high|null\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "warnsWhenTheDefaultIsLost", "input": "", "expectedOutput": "\"No default effort: z-ai/glm-5.3-flash would use high, but claude-opus-4-8 has no default. Pass --effort to set one.\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "noWarningOtherwise", "input": "", "expectedOutput": "\"||\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

@@ -16,7 +16,7 @@ import { isTTY } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
-import { EffortModel, effortToSend } from "./effort.agency"
+import { EffortModel, effortToSend, noDefaultWarning } from "./effort.agency"
 import { LlmOptions, applyLlmOptions, mixedProviderWarning } from "./llmOptions.agency"
 import {
   filterHostedModels,
@@ -144,13 +144,16 @@ def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
   const options = requestLlmOptions(request, settings)
   applyLlmOptions(options)
   const models = chatModels()
+  const asked = requestEffort(request)
   // A null removes the level an earlier model or preset set.
   setLlmOptions({
-    reasoningEffort: effortToSend(requestEffort(request), models)
+    reasoningEffort: effortToSend(asked, models)
   })
-  const warning = mixedProviderWarning(options, [model.provider for model in models])
-  if (warning != "") {
-    pushMessage(color.yellow("Warning: ${warning}"))
+  const warnings = [mixedProviderWarning(options, [model.provider for model in models]), noDefaultWarning(asked, models)]
+  for (warning in warnings) {
+    if (warning != "") {
+      pushMessage(color.yellow("Warning: ${warning}"))
+    }
   }
 }
 

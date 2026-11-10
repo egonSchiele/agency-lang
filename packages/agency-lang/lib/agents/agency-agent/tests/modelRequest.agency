@@ -239,3 +239,23 @@ node effortFromArgs(): string {
 node badEffortIsAnError(): boolean {
   return isFailure(modelFlagsFromArgs({ flags: { effort: "max" }, positionals: [] }))
 }
+
+def effortWithChoices(choices: any): string {
+  return "${requestEffort(request(noModelFlags(), { pin: "p", effort: "high" }, choices))}"
+}
+
+// /model changes the models the preset's effort was chosen for.
+node aModelChoiceDropsThePresetEffort(): string {
+  const pinned = effortWithChoices({ ...noModelChoices(), pin: "claude-opus-4-8" })
+  const slotted = effortWithChoices({ ...noModelChoices(), slots: { reasoning: "claude-opus-4-8" } })
+  return "${pinned}|${slotted}"
+}
+
+node anEmbeddingChoiceKeepsThePresetEffort(): string {
+  return effortWithChoices({ ...noModelChoices(), slots: { embedding: "openai/text-embedding-3-small" } })
+}
+
+node aModelChoiceKeepsTheFlagEffort(): string {
+  const flags = { ...noModelFlags(), effort: "low" }
+  return "${requestEffort(request(flags, null, { ...noModelChoices(), pin: "claude-opus-4-8" }))}"
+}

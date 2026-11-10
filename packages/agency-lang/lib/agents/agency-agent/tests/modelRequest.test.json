@@ -250,6 +250,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "aModelChoiceDropsThePresetEffort",
+      "input": "",
+      "expectedOutput": "\"null|null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anEmbeddingChoiceKeepsThePresetEffort",
+      "input": "",
+      "expectedOutput": "\"high\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aModelChoiceKeepsTheFlagEffort",
+      "input": "",
+      "expectedOutput": "\"low\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

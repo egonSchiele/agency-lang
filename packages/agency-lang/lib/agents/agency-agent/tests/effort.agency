@@ -1,4 +1,4 @@
-import { defaultEffort, effortToSend, parseEffort } from "../lib/effort.agency"
+import { defaultEffort, effortToSend, noDefaultWarning, parseEffort } from "../lib/effort.agency"
 
 static const GLM = { provider: "openrouter", model: "z-ai/glm-5.3-flash" }
 static const KIMI = { provider: "openrouter", model: "moonshotai/kimi-k3" }
@@ -38,4 +38,13 @@ node noDefaultOnAnotherProvider(): string {
 // A named level beats the default, and "default" sends nothing.
 node askedWins(): string {
   return "${effortToSend("low", [GLM])}|${effortToSend("default", [GLM])}|${effortToSend(null, [GLM])}|${effortToSend(null, [OPUS])}"
+}
+// The default turns off when one chat model has no rule, and the user is told.
+node warnsWhenTheDefaultIsLost(): string {
+  return noDefaultWarning(null, [GLM, OPUS])
+}
+// Nothing to say when a level was named, when the default applies, or
+// when no model has one.
+node noWarningOtherwise(): string {
+  return "${noDefaultWarning("low", [GLM, OPUS])}|${noDefaultWarning(null, [GLM, KIMI])}|${noDefaultWarning(null, [OPUS])}"
 }

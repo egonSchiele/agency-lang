@@ -225,10 +225,16 @@ export def requestLlmOptions(request: ModelRequest, settings: ModelSettings): Ll
   return request.choices.llmOptions ?? presetLlmOptions(request) ?? settings.llmOptions ?? {}
 }
 
-// Like its options, a preset's effort was chosen for its models.
+def choosesAChatModel(choices: ModelChoices): boolean {
+  const chatSlots = [slot for slot in Object.keys(choices.slots) if slot != "embedding"]
+  return choices.pin != "" || chatSlots.length > 0
+}
+
+// A preset's effort was chosen for its models, so a model flag or a
+// /model choice of a chat model drops it.
 def presetEffort(request: ModelRequest): EffortChoice | null {
   const preset = request.preset
-  if (preset == null || hasModelFlags(request.flags)) {
+  if (preset == null || hasModelFlags(request.flags) || choosesAChatModel(request.choices)) {
     return null
   }
   return preset.effort ?? null
@@ -237,6 +243,7 @@ def presetEffort(request: ModelRequest): EffortChoice | null {
 export def requestEffort(request: ModelRequest): EffortChoice | null {
   """
   The reasoning effort the request asks for: --effort, then the
+  preset's. A model flag or a /model choice of a chat model drops the
   preset's. null means neither named one.
 
   @param request - The model request

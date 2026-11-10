@@ -88,6 +88,33 @@ export def defaultEffort(models: EffortModel[]): EffortLevel | null {
   return levels[0]
 }
 
+export def noDefaultWarning(asked: EffortChoice | null, models: EffortModel[]): string {
+  """
+  A warning when some chat model has a default level and the session gets
+  none, because another model has a different one or no rule. "" when
+  --effort or the preset named a level, or when there is nothing to warn
+  about.
+
+  @param asked - What --effort or the preset asked for, or null
+  @param models - The session's chat models
+  """
+  if (asked != null || defaultEffort(models) != null) {
+    return ""
+  }
+  const withRule = find(models, \model -> ruleLevel(model) != null)
+  if (withRule == null) {
+    return ""
+  }
+  const level = ruleLevel(withRule)
+  const other = find(models, \model -> ruleLevel(model) != level)
+  if (other == null) {
+    return ""
+  }
+  const otherLevel = ruleLevel(other)
+  const otherHas = if otherLevel == null then "has no default" else "would use ${otherLevel}"
+  return "No default effort: ${withRule.model} would use ${level}, but ${other.model} ${otherHas}. Pass --effort to set one."
+}
+
 export def effortToSend(asked: EffortChoice | null, models: EffortModel[]): EffortLevel | null {
   """
   The level to send with every call, or null to send none and leave the

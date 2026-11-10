@@ -161,9 +161,21 @@ The flag and the preset take `low`, `medium`, `high`, or `default`.
 way to get a level Agency cannot name, such as GLM 5.3's `max`.
 
 `--effort` is not a model flag. `hasModelFlags` ignores it, so
-`--preset glm --effort low` keeps the preset's models. A real model flag
-drops the preset's effort along with its models and its `llmOptions`,
-because the effort was chosen for those models.
+`--preset glm --effort low` keeps the preset's models, and the flag's
+level stays for the whole session.
+
+A preset's effort was chosen for its models, so it is dropped when the
+models change: by a model flag, which also drops the preset's models and
+`llmOptions`, or by a `/model` choice of a chat model. After
+`--preset glm` with `"effort": "low"`, typing `/model claude-opus-4-8`
+sends Opus no level. A `/model embedding=...` choice keeps it. This
+differs from the preset's `llmOptions` block, which a `/model` switch
+keeps.
+
+A level a model does not list is still accepted. GLM 5.3 lists `low`,
+`high`, and `max`. Sent `medium` through OpenRouter, it answered on four
+hosts (Z.AI, Baseten, SiliconFlow, DigitalOcean) and thought about as much
+as at `low`. So `checkPreset` does not check the level against the model.
 
 The built-in default is the table `DEFAULT_EFFORT_RULES`. Each row names a
 provider, a model id prefix, and a level. The table holds the models whose
@@ -171,18 +183,26 @@ provider thinks at its top level when no level is sent: GLM 5.3 and
 Kimi K3 on OpenRouter, which both default to `max`. Their row says `high`.
 In a replay of 18 logged agent calls on GLM 5.3 Flash, `high` took 43% less
 time than `max`, and Z.ai's coding benchmark puts `high` 3 points below
-`max`. OpenRouter lists each model's levels and its default at
+`max`. The Kimi K3 row is not measured. It is there because OpenRouter
+gives Kimi K3 the same levels and the same `max` default. OpenRouter lists each model's levels and its default at
 `https://openrouter.ai/api/v1/models`, under `reasoning`.
 
 `defaultEffort` returns a level only when every chat model of the session
 matches a row with the same level. The level is one setting for all calls,
 so a session that pairs GLM 5.3 with a model outside the table gets no
-default, and each provider uses its own.
+default, and each provider uses its own. `noDefaultWarning` writes the
+yellow line that says so, such as "No default effort: z-ai/glm-5.3-flash
+would use high, but claude-haiku-5-5 has no default. Pass --effort to set
+one."
 
 `applyRequestOptions` in `lib/session.agency` sets the level, right after
 the `llmOptions` block. Startup, `/model`, and `/preset` all go through it,
 so the level follows the models: switching from GLM 5.3 to a model with no
 row sets `reasoningEffort` to `null`, which removes it.
+
+A resumed session restores the `llm()` defaults it was saved with, and
+`applyRequestOptions` does not run on a restore. A session saved with no
+level keeps none until its first `/model` or `/preset` switch.
 
 ## Why the presets are read once
 

@@ -46,10 +46,14 @@ export type RunnerState = {
 };
 
 /** Which model request of the tool loop a step is: the first one, the
- *  one after a round of tool calls, or a validation retry. The runner
+ *  one after a round of tool calls, a validation retry, or a retry of a
+ *  reply the output limit cut off. The runner
  *  derives the step's key and the debugger's label from it. */
 export type WhichLlmCall =
-  { first: true } | { afterToolRound: number } | { validationRetry: number };
+  | { first: true }
+  | { afterToolRound: number }
+  | { validationRetry: number }
+  | { cutOffRetry: number };
 
 /** The step key of a model request. Keys are recorded in checkpoints
  *  (`runnerState.completedSteps`), so they keep the names they had before
@@ -58,6 +62,7 @@ export type WhichLlmCall =
 export function llmCallKey(which: WhichLlmCall): string {
   if ("first" in which) return "initialLlmCall";
   if ("afterToolRound" in which) return `round.${which.afterToolRound}.nextLlmCall`;
+  if ("cutOffRetry" in which) return `cutOff.${which.cutOffRetry}.llmCall`;
   return `validation.${which.validationRetry}.llmCall`;
 }
 
@@ -67,6 +72,7 @@ export function llmCallKey(which: WhichLlmCall): string {
 function llmCallLabel(which: WhichLlmCall): string {
   if ("first" in which) return "round 1";
   if ("afterToolRound" in which) return `round ${which.afterToolRound + 2}`;
+  if ("cutOffRetry" in which) return `cut-off retry ${which.cutOffRetry + 1}`;
   return `validation retry ${which.validationRetry + 1}`;
 }
 

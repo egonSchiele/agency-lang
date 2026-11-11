@@ -9,6 +9,9 @@ export const PolicyRuleSchema = z
      *  for a rejected tool call, what the model reads (e.g. "Use safeBash
      *  instead of bash"). Only valid on a reject rule. */
     rejectMessage: z.string().min(1, "rejectMessage must not be empty").optional(),
+    /** Let this rule's globs match path segments that start with a period,
+     *  so `/x/**` reaches `/x/.cache/y`. Off by default. */
+    matchDotFolders: z.boolean().optional(),
   })
   .refine((rule) => rule.rejectMessage === undefined || rule.action === "reject", {
     message: 'rejectMessage is only valid on a rule whose action is "reject"',
@@ -192,8 +195,8 @@ export function substitutePlaceholders(pattern: string, dirs: PolicyDirs): strin
   return substituteHome(withAgentHome, dirs.home);
 }
 
-function matchesGlob(value: string, pattern: string): boolean {
-  return pattern === "" ? value === "" : picomatch.isMatch(value, pattern);
+function matchesGlob(value: string, pattern: string, dot: boolean): boolean {
+  return pattern === "" ? value === "" : picomatch.isMatch(value, pattern, { dot });
 }
 
 function matchesRule(
@@ -202,6 +205,7 @@ function matchesRule(
   dirs: PolicyDirs,
 ): boolean {
   if (!rule.match) return true; // catch-all
+  const dot = rule.matchDotFolders === true;
 
   for (const [key, pattern] of Object.entries(rule.match)) {
     let value: string | undefined;
@@ -221,16 +225,16 @@ function matchesRule(
     // The raw pattern first (relative values match relative patterns as
     // before), then the cwd-resolved form for dir patterns, so `.` gains its
     // meaning without taking any match away.
-    const raw = matchesGlob(stripDotSlash(value), stripDotSlash(pattern));
+    const raw = matchesGlob(stripDotSlash(value), stripDotSlash(pattern), dot);
     const viaDot =
       !raw &&
       key === "dir" &&
-      matchesGlob(stripDotSlash(value), stripDotSlash(substituteDot(pattern, dirs.cwd)));
+      matchesGlob(stripDotSlash(value), stripDotSlash(substituteDot(pattern, dirs.cwd)), dot);
     const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      matchesGlob(stripDotSlash(value), substitutePlaceholders(pattern, dirs));
+      matchesGlob(stripDotSlash(value), substitutePlaceholders(pattern, dirs), dot);
     if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }

@@ -3,7 +3,7 @@ import { checkPolicy } from "./policy.js";
 import { resolvePolicyDirs } from "./policyDirs.js";
 import { nodeHost } from "../host/node/nodeHost.js";
 import type { Policy } from "./policy.js";
-import { appendPolicyRules, missingPolicyRules } from "./policyUpdate.js";
+import { appendPolicyRules, missingPolicyRules, prependPolicyRule } from "./policyUpdate.js";
 import { recommendedAutoApprovePolicy } from "./builtinPolicies.js";
 
 describe("missingPolicyRules", () => {
@@ -96,5 +96,39 @@ describe("appendPolicyRules", () => {
     const merged = appendPolicyRules(saved, missing);
     expect(missingPolicyRules(merged, recommendedAutoApprovePolicy)).toEqual({});
     expect(merged["std::read"][0]).toEqual(saved["std::read"][0]);
+  });
+
+  it("treats rules that differ only in matchDotFolders as different", () => {
+    const rule = { match: { dir: "/a" }, action: "approve" as const };
+    const saved: Policy = { e: [rule] };
+    const base: Policy = { e: [{ ...rule, matchDotFolders: true }] };
+    expect(missingPolicyRules(saved, base)).toEqual(base);
+  });
+});
+
+describe("prependPolicyRule", () => {
+  const rule = { match: { dir: "/a" }, action: "approve" as const, matchDotFolders: true };
+
+  it("puts the rule first under each effect and keeps the rules after it", () => {
+    const saved: Policy = { e: [{ action: "reject" }] };
+    const next = prependPolicyRule(saved, ["e", "f"], rule);
+    expect(next).toEqual({ e: [rule, { action: "reject" }], f: [rule] });
+  });
+
+  it("does not change the policy it was given", () => {
+    const saved: Policy = { e: [{ action: "reject" }] };
+    const before = JSON.stringify(saved);
+    prependPolicyRule(saved, ["e"], rule);
+    expect(JSON.stringify(saved)).toBe(before);
+  });
+
+  it("saves one copy when the same rule is prepended twice", () => {
+    const once = prependPolicyRule({}, ["e"], rule);
+    expect(prependPolicyRule(once, ["e"], { ...rule })).toEqual({ e: [rule] });
+  });
+
+  it("returns an equal policy for an empty effect list", () => {
+    const saved: Policy = { e: [{ action: "reject" }] };
+    expect(prependPolicyRule(saved, [], rule)).toEqual(saved);
   });
 });

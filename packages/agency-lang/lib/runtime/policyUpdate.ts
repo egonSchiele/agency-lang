@@ -14,7 +14,10 @@ function sameMatch(a: PolicyRule["match"], b: PolicyRule["match"]): boolean {
 
 function sameRule(a: PolicyRule, b: PolicyRule): boolean {
   return (
-    a.action === b.action && a.rejectMessage === b.rejectMessage && sameMatch(a.match, b.match)
+    a.action === b.action &&
+    a.rejectMessage === b.rejectMessage &&
+    (a.matchDotFolders === true) === (b.matchDotFolders === true) &&
+    sameMatch(a.match, b.match)
   );
 }
 
@@ -53,4 +56,18 @@ export function appendPolicyRules(saved: Policy, additions: Policy): Policy {
     merged[effect] = [...(saved[effect] ?? []), ...additions[effect]];
   }
   return merged;
+}
+
+/** `policy` with `rule` put first under each of `effects`, so it decides
+ *  before the rules already there. An effect whose first rule is already
+ *  the same rule is left as it is, so one answer given twice saves one rule. */
+export function prependPolicyRule(policy: Policy, effects: string[], rule: PolicyRule): Policy {
+  const next: Policy = { ...policy };
+  for (const effect of effects) {
+    const existing = policy[effect] ?? [];
+    if (existing.length === 0 || !sameRule(existing[0], rule)) {
+      next[effect] = [rule, ...existing];
+    }
+  }
+  return next;
 }

@@ -88,11 +88,16 @@ export type InterruptEffect = string
  this is what the model reads, so it can steer the next attempt — for
  example, a rule rejecting `std::bash` with
  `rejectMessage: "Use safeBash instead"`.
+
+ A rule's globs skip path segments that start with a period: `/x/**` does
+ not match `/x/.cache/y`. Set `matchDotFolders: true` to let them match.
+ The approval prompt sets it on the read rules it saves.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
   action: "approve" | "reject" | "propagate";
-  rejectMessage?: string
+  rejectMessage?: string;
+  matchDotFolders?: boolean
 }
 
 /**

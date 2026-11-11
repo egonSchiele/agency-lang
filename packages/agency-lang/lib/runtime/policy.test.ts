@@ -947,3 +947,31 @@ describe("<home> dir patterns", () => {
     }
   });
 });
+
+describe("matchDotFolders", () => {
+  const rule = (extra: object): Policy => ({
+    "std::read": [{ match: { dir: "{/p/.w,/p/.w/**}" }, action: "approve", ...extra }],
+  });
+  const read = (dir: string) => ({ effect: "std::read", message: "", data: { dir }, origin: "" });
+
+  it("is off by default, so ** stops at a dot folder", () => {
+    expect(checkPolicy(rule({}), read("/p/.w/a/.build/x")).type).toBe("propagate");
+  });
+
+  it("lets ** enter dot folders when set", () => {
+    const policy = rule({ matchDotFolders: true });
+    expect(checkPolicy(policy, read("/p/.w/a/.build/x")).type).toBe("approve");
+    expect(checkPolicy(policy, read("/p/.w")).type).toBe("approve");
+  });
+
+  it("does not widen the rule sideways", () => {
+    const policy = rule({ matchDotFolders: true });
+    expect(checkPolicy(policy, read("/p/.wx/a")).type).toBe("propagate");
+    expect(checkPolicy(policy, read("/p")).type).toBe("propagate");
+  });
+
+  it("is accepted by validatePolicy as a boolean and refused as a string", () => {
+    expect(validatePolicy(rule({ matchDotFolders: true })).success).toBe(true);
+    expect(validatePolicy(rule({ matchDotFolders: "yes" })).success).toBe(false);
+  });
+});

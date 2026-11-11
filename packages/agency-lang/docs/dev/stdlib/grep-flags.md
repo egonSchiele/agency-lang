@@ -94,15 +94,27 @@ The agent toolkits bind it with partial application, so the model cannot
 turn it off. A plain `ls` lists every entry of its folder, ignored ones
 included, so the model can see an ignored folder and name it.
 
-A folder the caller names is searched even when git ignores it. When the
-`.gitignore` files above the search folder ignore that folder, or every name
-in it, the walk does not apply them. `ignoresWholeDirectory` decides this, and
-`ancestorIgnoreFiles` applies it. It is true when the rules ignore the folder
-itself, or ignore both a made-up file and a made-up folder inside it. So
-`dist/`, `**/node_modules/*`, and `.*` (for `.worktrees`) count, and `*.js`
-above `src` does not. An allow-list `.gitignore` (`*`, `!*/`, `!*.ts`) does
-not count either, because it keeps folders. The `.gitignore` files in the
-search folder and below it still apply.
+A folder the caller names is searched even when git ignores it.
+`startIgnoreFiles` decides which `.gitignore` files apply in the search
+folder, in two steps. When the files above the folder ignore the whole
+folder, as `.*` does for `.worktrees`, it drops them. Then, when the folder's
+own `.gitignore` ignores the whole folder on top of what is left, it drops
+that file too. A virtualenv that uv or `python -m venv` writes holds a
+`.gitignore` of just `*`, so a search of the virtualenv drops it. An own
+file that ignores only some entries, such as `*.log` in `out`, still applies.
+
+`ignoresWholeDirectory` decides whether rules ignore the whole folder. It is
+true when they ignore the folder itself, or ignore both a made-up file and a
+made-up folder inside it. So `dist/`, `**/node_modules/*`, `*`, and `.*` (for `.worktrees`)
+count, and `*.js` above `src` does not. An allow-list `.gitignore` (`*`,
+`!*/`, `!*.ts`) does not count either, because it keeps folders. The
+`.gitignore` files below the search folder still apply.
+
+When the files above are dropped, every rule in them goes, not only the
+rules that ignore the folder. With `out/` and `*.log` in the root `.gitignore`,
+`grep("x", path: "out")` searches `out/debug.log`. ripgrep keeps applying
+`*.log` there. Dropping rule by rule would match it, but negated rules make
+that harder, so it is left for later.
 
 | Call, with `.*` and `out/` in the root `.gitignore` | Result |
 |---|---|

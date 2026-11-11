@@ -442,13 +442,30 @@ async function gitignoreFilesAbove(walkRoot: WalkRoot, dir: string): Promise<Git
   return [...aboveFiles, ...(await inTree(0))];
 }
 
-/** The .gitignore files a walk of `dir` applies before it reads any of its
- *  own. A folder the files above ignore entirely is searched, the way grep
- *  searches a file named on its command line. The folder's own .gitignore
- *  files, and those below it, still apply. */
-async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
-  const files = await gitignoreFilesAbove(walkRoot, dir);
-  return ignoresWholeDirectory(path.join(walkRoot.base, dir), files) ? [] : files;
+/** `files` plus the .gitignore in `rel`, if it has one. */
+async function withGitignoreIn(
+  walkRoot: WalkRoot,
+  rel: string,
+  files: GitignoreFile[],
+): Promise<GitignoreFile[]> {
+  const own = await gitignoreUnder(walkRoot, rel);
+  return own ? [...files, own] : files;
+}
+
+/** The .gitignore files that apply to the entries of `dir`, the folder a
+ *  walk starts in, so a folder the caller names is searched, the way grep
+ *  searches a file named on its command line. When the files above `dir`
+ *  ignore the whole folder (`.worktrees` under `.*`), they are dropped.
+ *  Then, when the folder's own .gitignore ignores the whole folder on top
+ *  of what is left (a virtualenv whose own .gitignore is `*`), it is
+ *  dropped too. An own file that ignores only some entries (`*.log`)
+ *  still applies, and so do the .gitignore files below `dir`. */
+async function startIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
+  const absoluteDir = path.join(walkRoot.base, dir);
+  const above = await gitignoreFilesAbove(walkRoot, dir);
+  const kept = ignoresWholeDirectory(absoluteDir, above) ? [] : above;
+  const withOwn = await withGitignoreIn(walkRoot, dir, kept);
+  return ignoresWholeDirectory(absoluteDir, withOwn) ? kept : withOwn;
 }
 
 /** Walk `dir` under the approved root. A `dir` that is itself a symlink
@@ -463,9 +480,10 @@ async function walkDir(
 ): Promise<void> {
   await host.files.resolvePath(approved, dir);
   const walkRoot: WalkRoot = { host, approved, base: await host.files.resolvePath(approved, ".") };
-  // The .gitignore files on the path from the root to the directory being
-  // read, outermost first: a deeper file's rules refine a shallower one's.
-  async function walk(rel: string, ignoreFiles: GitignoreFile[]): Promise<boolean> {
+  // `scoped` holds the .gitignore files that apply to the entries of `rel`,
+  // its own included, outermost first: a deeper file's rules refine a
+  // shallower one's.
+  async function walk(rel: string, scoped: GitignoreFile[]): Promise<boolean> {
     let entries: Entry[];
     try {
       entries = await host.files.list(approved, rel);
@@ -475,22 +493,23 @@ async function walkDir(
       }
       return true;
     }
-    let scoped = ignoreFiles;
-    if (options.respectGitignore) {
-      const here = await gitignoreUnder(walkRoot, rel);
-      if (here) scoped = [...ignoreFiles, here];
-    }
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name)) continue;
       const entryRel = joinRel(rel, entry.name);
       const full = path.join(walkRoot.base, entryRel);
       if (options.respectGitignore && isIgnored(full, entry.type === "dir", scoped)) continue;
       if (!(await visit(entryRel, entry))) return false;
-      if (entry.type === "dir" && !(await walk(entryRel, scoped))) return false;
+      if (entry.type !== "dir") {
+        continue;
+      }
+      const inner = options.respectGitignore
+        ? await withGitignoreIn(walkRoot, entryRel, scoped)
+        : scoped;
+      if (!(await walk(entryRel, inner))) return false;
     }
     return true;
   }
-  await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(walkRoot, dir) : []);
+  await walk(dir, options.respectGitignore ? await startIgnoreFiles(walkRoot, dir) : []);
 }
 
 export type SearchTarget = { dir: string; file: string | null };

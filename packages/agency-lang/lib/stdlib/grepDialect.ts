@@ -210,5 +210,5 @@ export function _renderGrepOutput(results: GrepResults, render: GrepRender): str
  *  the walk skips so the two cannot drift apart. */
 export function _skippedDirsNote(): string {
   const skipped = [...SKIP_DIRS].join(", ");
-  return `(safeBash ran this with the grep tool's search, which skips ${skipped}, and files .gitignore ignores. To search a folder or file .gitignore ignores, give that folder or file as grep's path.)`;
+  return `(safeBash ran this with the grep tool's search, which skips ${skipped}, and files .gitignore ignores. To search one of these folders, or a folder or file .gitignore ignores, name it as the path, for example: grep -rn x node_modules/some-package/dist.)`;
 }

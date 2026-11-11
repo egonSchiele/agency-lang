@@ -584,6 +584,22 @@ describe("a folder named as the search root is searched whatever the .gitignore 
     fs.writeFileSync(path.join(worktree, ".gitignore"), "*.log\n");
     fs.writeFileSync(path.join(worktree, "a.txt"), "needle\n");
     fs.writeFileSync(path.join(worktree, "a.log"), "needle\n");
+    // A folder that ignores itself, as uv and `python -m venv` write it.
+    fs.mkdirSync(path.join(root, "venv", "lib"), { recursive: true });
+    fs.writeFileSync(path.join(root, "venv", ".gitignore"), "*\n");
+    fs.writeFileSync(path.join(root, "venv", "a.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "venv", "lib", ".gitignore"), "*.log\n");
+    fs.writeFileSync(path.join(root, "venv", "lib", "b.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "venv", "lib", "c.log"), "needle\n");
+    // Like .venv-laya: ignored from above by `.*`, and by its own `*`.
+    fs.mkdirSync(path.join(root, ".venv"));
+    fs.writeFileSync(path.join(root, ".venv", ".gitignore"), "*\n");
+    fs.writeFileSync(path.join(root, ".venv", "x.txt"), "needle\n");
+    // An allow-list .gitignore, which keeps its folders.
+    fs.mkdirSync(path.join(root, "allow"));
+    fs.writeFileSync(path.join(root, "allow", ".gitignore"), "*\n!*/\n!*.txt\n");
+    fs.writeFileSync(path.join(root, "allow", "a.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "allow", "b.md"), "needle\n");
   });
 
   afterEach(async () => {
@@ -619,6 +635,30 @@ describe("a folder named as the search root is searched whatever the .gitignore 
 
   it("applies each repository's own .gitignore inside an ignored folder of repositories", async () => {
     expect(await foundAsRoot(".worktrees")).toEqual(["wt/a.txt"]);
+  });
+
+  it("searches a folder whose own .gitignore ignores everything in it, and keeps the files below it", async () => {
+    expect(await foundAsRoot("venv")).toEqual(["a.txt", "lib/b.txt"]);
+    expect(await foundBelowRoot("venv")).toEqual(["a.txt", "lib/b.txt"]);
+    expect((await _glob(root, ".", "venv/**/*.txt", 100)).sort()).toEqual([
+      "venv/a.txt",
+      "venv/lib/b.txt",
+    ]);
+  });
+
+  it("searches a folder ignored both from above and by its own .gitignore", async () => {
+    expect(await foundAsRoot(".venv")).toEqual(["x.txt"]);
+    expect(await foundBelowRoot(".venv")).toEqual(["x.txt"]);
+  });
+
+  it("still skips that folder in a search that starts above it", async () => {
+    const fromRoot = await foundAsRoot(".");
+    expect(fromRoot.filter((hit) => hit.startsWith("venv/"))).toEqual([]);
+    expect(fromRoot).toContain("src/e.txt");
+  });
+
+  it("keeps a folder's own allow-list .gitignore", async () => {
+    expect(await foundAsRoot("allow")).toEqual(["a.txt"]);
   });
 });
 

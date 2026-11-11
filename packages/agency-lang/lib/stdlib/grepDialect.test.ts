@@ -175,6 +175,11 @@ describe("_skippedDirsNote", () => {
       expect(note).toContain(name);
     }
   });
+
+  it("tells the model to name a skipped folder as the path to search it", () => {
+    expect(_skippedDirsNote()).toContain("name it as the path");
+    expect(_skippedDirsNote()).toContain("node_modules/some-package/dist");
+  });
 });
 
 describe.each(["ls", "grep", "glob"])("the %s tool's docstring", (tool) => {

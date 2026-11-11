@@ -4,7 +4,7 @@
       "nodeName": "envOffersAlwaysHere",
       "description": "std::env always-here pins the variable name with no agent-side table",
       "input": "",
-      "expectedOutput": "\"approve always here (name=BRAVE_API_KEY)\"",
+      "expectedOutput": "\"always approve when (name = BRAVE_API_KEY)\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

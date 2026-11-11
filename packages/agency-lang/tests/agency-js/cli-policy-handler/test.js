@@ -9,7 +9,9 @@ const policyFile = join(dir, "policy.json");
 // Scripted answers consumed in order. If the handler issues more
 // prompts than we have answers, the override throws — surfacing the
 // over-prompting as a clear test failure instead of a hang.
-const answers = ["aa", "ap", "a"];
+// The "1" picks the interrupt's own folder at the folder step that follows
+// "ap" on std::read.
+const answers = ["aa", "ap", "1", "a"];
 const inputOverride = async () => {
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");

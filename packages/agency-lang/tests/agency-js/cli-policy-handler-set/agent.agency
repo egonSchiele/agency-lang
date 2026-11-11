@@ -1,0 +1,71 @@
+import { cliPolicyHandler, flushPolicy } from "std::policy"
+import { ls, grep } from "std::shell"
+
+def outcome(name: string, failed: boolean): string {
+  if (failed) {
+    return "${name} rejected"
+  }
+  return "${name} ok"
+}
+
+// "as" at the read, then a parent folder. The ls and the grep that follow
+// must not prompt.
+node setWide(args: { policyFile: string, root: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let outcomes: string[] = []
+  handle {
+    const deep = "${args.root}/.w/a/.build"
+    const first = read("x.txt", dir: deep)
+    outcomes.push(outcome("read", isFailure(first)))
+    const second = ls("${args.root}/.w/b")
+    outcomes.push(outcome("ls", isFailure(second)))
+    // This grep is what shows the saved rule enters dot folders: its dir is
+    // two dot folders deep and nobody is asked about it. Keep it.
+    const third = grep("needle", deep)
+    outcomes.push(outcome("grep", isFailure(third)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}
+
+// "ap" at an ls, then a parent folder. A read in that folder still prompts,
+// because "ap" saves a rule for std::ls alone.
+node oneEffect(args: { policyFile: string, root: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let outcomes: string[] = []
+  handle {
+    const first = ls("${args.root}/.w/a")
+    outcomes.push(outcome("ls", isFailure(first)))
+    const second = read("x.txt", dir: "${args.root}/.w/a/.build")
+    outcomes.push(outcome("read", isFailure(second)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}
+
+// One read, answered at the prompt the test scripts.
+node readOnce(args: { policyFile: string, root: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let outcomes: string[] = []
+  handle {
+    const first = read("x.txt", dir: "${args.root}/.w/a/.build")
+    outcomes.push(outcome("read", isFailure(first)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}
+
+// Two listings: the first answered with a rule, the second in a sibling
+// folder whose name the first one's glob characters must not reach.
+node twoListings(args: { policyFile: string, first: string, second: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let outcomes: string[] = []
+  handle {
+    const one = ls(args.first)
+    outcomes.push(outcome("first", isFailure(one)))
+    const two = ls(args.second)
+    outcomes.push(outcome("second", isFailure(two)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}

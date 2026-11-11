@@ -1,0 +1,33 @@
+{
+  "set": {
+    "outcomes": ["read ok", "ls ok", "grep ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "ruleUnderEveryMember": true
+  },
+  "one": {
+    "outcomes": ["ls ok", "read ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "savedEffects": ["std::ls"],
+    "lsRule": true
+  },
+  "back": {
+    "outcomes": ["read ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "saved": null
+  },
+  "glob": {
+    "outcomes": ["first ok", "second ok"],
+    "remainingAnswers": 0,
+    "error": null
+  },
+  "rejected": {
+    "outcomes": ["read ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "globRules": [{ "action": "reject" }],
+    "readRuleSaved": true
+  }
+}

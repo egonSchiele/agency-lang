@@ -731,8 +731,9 @@ describe("optionRows", () => {
   });
 
   it("prints an item with no tone and no detail as key and label", () => {
+    // The key column is the longest key, here one letter, plus a gap of three.
     expect(plain(_internal.optionRows([{ key: "v", label: "view it all" }], 80))).toEqual([
-      "v    view it all",
+      "v   view it all",
     ]);
   });
 });

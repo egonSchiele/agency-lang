@@ -39,7 +39,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: make ci
         working-directory: packages/agency-lang
-      - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      # No --with-deps: the runner image already has the libraries Chromium
+      # needs, so it only added fonts, which these tests do not use, and its
+      # apt step failed the job whenever Ubuntu's mirror was unreachable.
+      - run: node node_modules/playwright-core/cli.js install chromium
         working-directory: packages/agency-lang
       - run: pnpm run test:browser
         working-directory: packages/agency-lang

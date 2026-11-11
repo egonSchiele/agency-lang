@@ -249,7 +249,10 @@ describe("every stdlib effect has a decided always-scope", () => {
   it("gives every member of a shared approval set the same scope", () => {
     const sets = builtinEffectSets();
     const scopeOf = (effect: string) =>
-      declarations.find((one) => one.effect === effect)?.scope.toSorted().join(",");
+      declarations
+        .find((one) => one.effect === effect)
+        ?.scope.toSorted()
+        .join(",");
     const mismatches = SHARED_APPROVAL_SETS.flatMap((name) => {
       const members = sets[name]?.members ?? [];
       expect(members, `${name} is not a built-in effect set`).not.toEqual([]);

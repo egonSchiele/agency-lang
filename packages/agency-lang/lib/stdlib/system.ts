@@ -172,8 +172,8 @@ export function _setTitle(title: string): void {
   currentHost().system.setTitle(title);
 }
 
-/** The policy scope for std::openUrl: the hostname, so "approve always
- *  here" covers one site. A URL with no hostname (`mailto:`, `file:`) and
+/** The policy scope for std::openUrl: the hostname, so "always approve
+ *  when" covers one site. A URL with no hostname (`mailto:`, `file:`) and
  *  a string that is not a URL both return the whole string, so each pins
  *  only itself; a shared "" would let one approval cover them all. */
 export function _urlHost(url: string): string {

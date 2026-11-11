@@ -1778,7 +1778,7 @@ node programUnderRecommendedIsUndecided() {
   return "NO EXEC EFFECT"
 }
 
-/** The rule "approve always here" saves for `node --version`. */
+/** The rule "always approve when" saves for `node --version`. */
 const NODE_VERSION_POLICY = {
   "std::exec": [
     { "match": { "command": "node", "subcommand": "--version" }, "action": "approve" }

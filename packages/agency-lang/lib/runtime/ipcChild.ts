@@ -30,7 +30,7 @@ export type IpcInterruptMessage = {
     data: any;
     origin: string;
     expectsValue?: boolean;
-    /** The fields an "approve always here" rule pins for this effect, from
+    /** The fields an "always approve when" rule pins for this effect, from
      * its declaration. The child always sends it; the parent may never have
      * imported that module. The receiver treats a missing scope as empty. */
     alwaysScope?: ScopedField[];

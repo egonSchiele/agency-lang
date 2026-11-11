@@ -170,8 +170,8 @@ export def readStdin(): string {
   return _readStdin()
 }
 
-// The policy scope for std::openUrl: the hostname, so "approve always
-// here" covers one site rather than one exact URL.
+// The policy scope for std::openUrl: the hostname, so "always approve
+// when" covers one site rather than one exact URL.
 def urlHost(url: string): string {
   return _urlHost(url)
 }

@@ -1,7 +1,7 @@
 # `@always` and `@alwaysUnder` on effect declarations
 
-An effect declaration can say which of its payload fields an "approve
-always here" policy rule pins:
+An effect declaration can say which of its payload fields an "always
+approve when" policy rule pins:
 
     @always(name)
     effect std::env { name: string }
@@ -39,7 +39,12 @@ which is why there is no `subpaths(dir)` form.
    `defaultScopedFields()`, and inside `buildScopedMatch`,
    `recordScopedRule`, and the approval prompt. A caller's `fields:`
    argument overrides the registry per effect. An empty list turns the
-   option off for that effect.
+   option off for that effect. The prompt also reads the scope to write
+   the dim detail beside each scoped answer (`describeScope` in
+   `lib/runtime/alwaysChoices.ts`), to decide whether the set-wide `as`
+   answer is offered, and to find the one `@alwaysUnder` field its folder
+   step asks about. See "What always approve when pins" in
+   `docs/dev/agents/approval-policies.md`.
 
 ## Subtleties
 
@@ -56,7 +61,7 @@ which is why there is no `subpaths(dir)` form.
   wins, a malformed value is ignored, and nothing throws.
 - A scope can only ever narrow a rule. `buildScopedMatch` returns `{}` when
   any scoped field is missing from the interrupt data, the prompt offers
-  "approve always here" only when that match is non-empty, and
+  "always approve when" only when that match is non-empty, and
   `recordScopedRule` writes nothing for an empty match. Without those
   three, a scope naming a field the payload lacks would save a rule with
   an empty match, which `matchesRule` treats as a catch-all approve.
@@ -70,7 +75,7 @@ which is why there is no `subpaths(dir)` form.
   `lib/runtime/policy.ts`), so approving `ls *.md` saves a rule for that
   exact command. Hand-written rules stay patterns.
 - `agency doc` prints the tag line above each effect declaration, so the
-  generated stdlib reference shows what "approve always here" pins.
-- The stdlib coverage test `lib/utils/alwaysTag.stdlib.test.ts` holds the
+  generated stdlib reference shows what "always approve when" pins.
+- The stdlib coverage test `lib/typeChecker/alwaysTag.stdlib.test.ts` holds the
   decision table, one row per effect. A new stdlib effect fails it until
   a row is added.

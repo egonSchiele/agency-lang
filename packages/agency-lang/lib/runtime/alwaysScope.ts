@@ -1,5 +1,5 @@
 /**
- * Which payload fields an "approve always here" policy rule pins, per
+ * Which payload fields an "always approve when" policy rule pins, per
  * effect. Filled by generated code: each `effect` declaration carrying an
  * `@always` / `@alwaysUnder` tag compiles to one `__registerAlwaysScope`
  * call at module JS-load. Read by `std::policy` when it builds a scoped

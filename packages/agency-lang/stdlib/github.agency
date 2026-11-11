@@ -172,7 +172,7 @@ export type CommentInfo = {
   url: string
 }
 
-// @always(owner, repo): an "approve always" answer pins to one repository
+// @always(owner, repo): an "always approve when" answer pins to one repository
 // instead of every repository the token can reach.
 @always(owner, repo)
 effect std::github::prGet {

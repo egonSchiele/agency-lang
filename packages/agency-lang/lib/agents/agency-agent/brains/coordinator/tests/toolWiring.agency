@@ -33,7 +33,6 @@ import { buildTools as reviewTools } from "std::agents/review"
 import { buildTools as writingReviewTools } from "std::agents/writing/review"
 
 import test { _setLearnedRoot } from "../../../lib/learned.agency"
-import test { escalate } from "../subagents/code.agency"
 import { LEARNED_SKILLS_TOOL, LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
 import { mainAgentTools, turnTools } from "../coordinator.agency"
 import { checkBundledSkill } from "../lib/bundledSkills.agency"
@@ -68,16 +67,15 @@ node codeToolsHaveUniqueNames() {
 }
 
 // What each coder really sends: the stdlib coding agent's tools, the tools
-// this agent adds, escalate bound to the task, and the saveDraft the stdlib
-// agent appends. The Agency coder is the one at risk, because the brief docs
-// tools, agencyCli, and the superpowers skill tool join the coding agent's
-// own skill tool.
+// this agent adds, and the saveDraft the stdlib agent appends. The Agency
+// coder is the one at risk, because the brief docs tools and agencyCli join
+// the coding agent's own tools.
 node composedCodeToolsHaveUniqueNames() {
-  return pingWith([...codeTools, escalate.partial(task: "x"), saveDraft])
+  return pingWith([...codeTools, saveDraft])
 }
 
 node composedAgencyCodeToolsHaveUniqueNames() {
-  return pingWith([...agencyCodeAgentTools, escalate.partial(task: "x"), saveDraft])
+  return pingWith([...agencyCodeAgentTools, saveDraft])
 }
 
 node researchToolsHaveUniqueNames() {

@@ -4,7 +4,6 @@ import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/share
 import {
   writableFileTools,
   shellTools,
-  gitTools,
   memoryTools,
   webTools,
   ASK_USER_HINT,
@@ -54,9 +53,6 @@ static const systemPrompt = """You are an expert software engineer. Solve the ta
 - You have web search. Use it when a task needs current or external information rather than guessing or declining.
 - NEVER fabricate output you did not actually produce.
 
-## Avoid safeBash and exec when possible
-You have been given safeBash and exec tools. **Avoid using them if at all possible**. These tools should be a last resort: they often need an approval that a human must grant — which slows you down — and that a non-interactive run cannot grant at all. So *always use another tool when possible* and only use safeBash/exec if no other tool will do the job. If a permission is rejected and the task cannot be done without it, do not hunt for workarounds: stop and report exactly which permission is missing.
-
 ## Communicating with the user
 ${PROGRESS_NOTE}${ASK_USER_HINT}
 """
@@ -74,7 +70,6 @@ export def buildTools(): any[] {
     getAgentCwd,
     ...writableFileTools(),
     ...shellTools(),
-    ...gitTools(),
     githubAgent,
     ...memoryTools(),
     ...webTools(),

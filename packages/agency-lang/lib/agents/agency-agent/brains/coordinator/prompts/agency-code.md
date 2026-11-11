@@ -30,10 +30,6 @@ language. For anything it does not cover, read the bundled docs.
 
 - When several lookups do not depend on each other, send them in one
   response. They run in parallel.
-- For a larger task, read the matching skill in `superpowersSkill`
-  before you write code. A new feature, a refactor across several
-  files, and a bug that survived one attempt are larger tasks. Skip the
-  skill for a small edit or a quick question.
 
 ## Working with the user
 

@@ -419,7 +419,6 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   skill: one("Skill", (a) => [text(a.name)]),
   coordinator_skills: one("Skill", (a) => [text(a.filename)]),
   skills_coding: one("Skill", (a) => [text(a.filename)]),
-  superpowersSkill: one("Skill", (a) => [text(a.filename)]),
 
   // Memory: remember makes a model call
   remember: two("Remember", nothing),

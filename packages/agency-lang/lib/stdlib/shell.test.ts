@@ -7,7 +7,11 @@ import {
   __internal_bash,
   _exists,
   _glob,
+  _globIncludingIgnored,
   _grep,
+  _ls,
+  globFixedPrefix,
+  type LsEntry,
   _searchTarget,
   _searchTargetIn,
   _stat,
@@ -243,6 +247,102 @@ describe("_glob and symlinks", () => {
     const linked = path.join(root, "linked");
     await expect(_glob(linked, ".", "*.md", 100)).rejects.toThrow(/symlink/);
     expect(await _glob(await _realDir(linked), ".", "*.md", 100)).toEqual(["a.md"]);
+  });
+});
+
+describe("_glob honours .gitignore", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-glob-ignore-"));
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n.*\n");
+    fs.writeFileSync(path.join(root, "a.md"), "a");
+    fs.writeFileSync(path.join(root, "a.js"), "a");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.md"), "b");
+    fs.mkdirSync(path.join(root, "keep", "sub"), { recursive: true });
+    fs.writeFileSync(path.join(root, "keep", ".gitignore"), "!*.js\n");
+    fs.writeFileSync(path.join(root, "keep", "c.js"), "c");
+    fs.writeFileSync(path.join(root, "keep", "sub", "x.js"), "x");
+    fs.mkdirSync(path.join(root, ".hidden"));
+    fs.writeFileSync(path.join(root, ".hidden", "d.md"), "d");
+    fs.mkdirSync(path.join(root, "node_modules", "pkg"), { recursive: true });
+    fs.writeFileSync(path.join(root, "node_modules", "pkg", "package.json"), "{}");
+    fs.symlinkSync(path.join(root, "out"), path.join(root, "linked"));
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("skips ignored files and folders, and lets a nested .gitignore un-ignore", async () => {
+    expect((await _glob(root, ".", "**/*.{md,js}", 100)).sort()).toEqual([
+      "a.md",
+      "keep/c.js",
+      "keep/sub/x.js",
+    ]);
+  });
+
+  it("returns everything with the option off", async () => {
+    expect((await _glob(root, ".", "**/*.{md,js}", 100, [], false)).sort()).toEqual([
+      ".hidden/d.md",
+      "a.js",
+      "a.md",
+      "keep/c.js",
+      "keep/sub/x.js",
+      "out/b.md",
+    ]);
+  });
+
+  it("searches a folder named as the root, in both shapes", async () => {
+    expect(await _glob(root, "out", "**/*.md", 100)).toEqual(["b.md"]);
+    expect(await _glob(path.join(root, "out"), ".", "**/*.md", 100)).toEqual(["b.md"]);
+    expect(await _glob(path.join(root, ".hidden"), ".", "*.md", 100)).toEqual(["d.md"]);
+  });
+
+  it("searches a folder named at the start of the pattern", async () => {
+    expect(await _glob(root, ".", "out/*.md", 100)).toEqual(["out/b.md"]);
+    expect(await _glob(root, ".", ".hidden/**/*.md", 100)).toEqual([".hidden/d.md"]);
+    // SKIP_DIRS applies below the start of the walk, so a name in the prefix is searched.
+    expect(await _glob(root, ".", "node_modules/pkg/*.json", 100)).toEqual([
+      "node_modules/pkg/package.json",
+    ]);
+    // The walk starts inside keep and never visits keep itself.
+    expect(await _glob(root, ".", "keep/**", 100, [], false)).not.toContain("keep");
+  });
+
+  it.each([
+    [".claude/**/*.md", ".claude"],
+    ["src/lib/*.ts", "src/lib"],
+    ["src/app.ts", "src"],
+    ["**/*.md", ""],
+    ["{src,lib}/*.ts", ""],
+    ["../other/*.md", ""],
+    ["./src/*.ts", ""],
+    ["{src/lib,test}/*.ts", ""],
+  ])("globFixedPrefix(%s) is %j", (pattern, prefix) => {
+    expect(globFixedPrefix(pattern)).toBe(prefix);
+  });
+
+  it("keeps results relative to dir when dir and a prefix are both given", async () => {
+    expect(await _glob(root, "keep", "sub/*.js", 100)).toEqual(["sub/x.js"]);
+  });
+
+  it("matches nothing for a prefix that is not a folder under the root", async () => {
+    expect(await _glob(root, ".", "missing/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "../out/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "a.md/*", 100)).toEqual([]);
+    expect(await _glob(root, ".", "linked/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "linked/sub/*.md", 100)).toEqual([]);
+    // stat throws for these two, with ENOTDIR and with "outside dir".
+    expect(await _glob(root, ".", "a.md/sub/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "~/out/*.md", 100)).toEqual([]);
+  });
+
+  it("_globIncludingIgnored lists ignored files", async () => {
+    expect(await _globIncludingIgnored(root, ".", "out/*.md", 100)).toEqual(["out/b.md"]);
+    expect(await _globIncludingIgnored(root, ".", "*.js", 100)).toEqual(["a.js"]);
   });
 });
 

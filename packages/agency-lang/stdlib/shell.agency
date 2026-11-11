@@ -317,6 +317,12 @@ export idempotent def grep(
   )
 }
 
+/**
+Searches skip node_modules, .git, dist, build, .next, and .cache, plus paths
+ignored by .gitignore when `respectGitignore` is true. To search an ignored
+folder, pass it as `dir` or start the pattern with it. Symlinked entries are
+omitted.
+*/
 @capabilities(fileRead)
 export idempotent def glob(
   pattern: string,
@@ -324,12 +330,17 @@ export idempotent def glob(
   maxResults: number = 500,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
+  respectGitignore: boolean = true,
 ): Result raises <std::glob> {
   """
-  Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
+  Find files matching a glob such as "src/**/*.ts". The search skips
+  node_modules, .git, dist, build, .next, and .cache, and anything .gitignore
+  ignores. To search an ignored folder, pass it as dir or start the pattern
+  with it. Symlinked entries are omitted.
 
   @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
   @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
+  @param respectGitignore - Skip what .gitignore ignores; false includes ignored files.
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -344,7 +355,7 @@ export idempotent def glob(
     maxResults: maxResults
   })
 
-  return try _glob(target.value.dir, ".", pattern, maxResults, allowedPaths)
+  return try _glob(target.value.dir, ".", pattern, maxResults, allowedPaths, respectGitignore)
 }
 
 type StatInfo = {

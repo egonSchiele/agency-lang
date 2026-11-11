@@ -621,30 +621,95 @@ export function firstMatchingLines(text: string, plan: GrepPlan, limit: number):
   return hits;
 }
 
-/** Glob under `dir` in `rootDir`. Returned paths are relative to `dir`. */
+/** Glob under `dir` in `rootDir`. Returned paths are relative to `dir`.
+ *  With `respectGitignore`, skips what .gitignore ignores. A folder named
+ *  as `dir` or at the start of the pattern is searched even when ignored. */
 export async function _glob(
   rootDir: string,
   dir: string,
   pattern: string,
   maxResults: number,
   allowedPaths?: string[],
+  respectGitignore: boolean = true,
 ): Promise<string[]> {
   const host = currentHost();
   if (maxResults <= 0) return [];
   const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
+  // Before globStart, which relies on this refusing an unmatched brace.
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  await walkDir(host, approved, dir, async (rel) => {
-    const relToDir = relativeTo(dir, rel);
-    if (re.test(relToDir)) {
-      results.push(relToDir);
-      if (results.length >= maxResults) return false;
-    }
-    return true;
-  });
+  await walkDir(
+    host,
+    approved,
+    await globStart(host, approved, dir, pattern),
+    async (rel) => {
+      const relToDir = relativeTo(dir, rel);
+      if (re.test(relToDir)) {
+        results.push(relToDir);
+        if (results.length >= maxResults) return false;
+      }
+      return true;
+    },
+    { respectGitignore },
+  );
 
   return results;
+}
+
+/** Every match under `dir`, whatever .gitignore says. For a folder the
+ *  program owns, such as a skills or workflows folder, where no .gitignore
+ *  rule should hide a file. */
+export async function _globIncludingIgnored(
+  rootDir: string,
+  dir: string,
+  pattern: string,
+  maxResults: number,
+): Promise<string[]> {
+  return _glob(rootDir, dir, pattern, maxResults, [], false);
+}
+
+/** The folder names a glob pattern starts with, before its first segment
+ *  that matches more than one name: `src/lib` for `src/lib/*.ts`, and ""
+ *  for `**\/*.md`. The last segment names what to match, so it is never
+ *  part of the prefix. A segment holding `{` ends the prefix, because a
+ *  brace group can hold a `/` and so spans segments. */
+export function globFixedPrefix(pattern: string): string {
+  const segments = pattern.split("/").slice(0, -1);
+  const prefix: string[] = [];
+  for (const segment of segments) {
+    const stops =
+      segment === "" ||
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("{") ||
+      !isPlainSegment(segment);
+    if (stops) break;
+    prefix.push(segment);
+  }
+  return prefix.join("/");
+}
+
+/** True when a pattern segment names one folder and matches nothing else. */
+function isPlainSegment(segment: string): boolean {
+  return globParser(segment).result === escapeRegex(segment);
+}
+
+/** The folder a glob's walk starts in: the pattern's fixed prefix when it
+ *  is a folder under the root, and `dir` otherwise. */
+async function globStart(host: Host, approved: Root, dir: string, pattern: string): Promise<string> {
+  const prefix = globFixedPrefix(pattern);
+  if (prefix === "") return dir;
+  const start = joinRel(dir, prefix);
+  try {
+    const info = await host.files.stat(approved, start);
+    return info?.kind === "dir" ? start : dir;
+  } catch {
+    // A prefix through a file throws ENOTDIR, and one starting with `~`
+    // expands outside the root. Neither is a folder to start in, and
+    // nothing under `dir` will match it, which is the answer.
+    return dir;
+  }
 }
 
 function globToRegExp(glob: string): RegExp {

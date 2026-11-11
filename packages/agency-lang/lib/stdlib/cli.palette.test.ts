@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type * as readline from "node:readline";
+import * as readline from "node:readline";
+import { PassThrough } from "node:stream";
 import { _internal, _setSlashPalette, _slashPalette } from "./cli.js";
 
 type Key = { name?: string; sequence?: string };
@@ -32,6 +33,22 @@ function sendKeys(rl: { _ttyWrite(s: string, key: Key): void }, text: string): v
 }
 
 const nextTick = () => new Promise((r) => setImmediate(r));
+
+describe("askLine", () => {
+  it("opens with the prefill and the cursor at its end", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    output.resume();
+    const rl = readline.createInterface({ input, output, terminal: true });
+    const answer = _internal.askLine(rl, "> ", "/rename ");
+    const state = rl as unknown as { line: string; cursor: number };
+    expect(state.line).toBe("/rename ");
+    expect(state.cursor).toBe(8);
+    input.write("title\r");
+    expect(await answer).toBe("/rename title");
+    rl.close();
+  });
+});
 
 describe("installSlashTrigger", () => {
   const palette: [string, string][] = [["/rename", "Rename"]];

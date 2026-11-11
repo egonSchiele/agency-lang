@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PassThrough } from "stream";
 import prompts from "prompts";
-import { commandPaletteQuestion } from "./prompts.js";
+import { __commandPaletteQuestionForTest as commandPaletteQuestion } from "./prompts.js";
 
 const ITEMS = [
   { key: "/rename", label: "Give this session a title" },
@@ -12,12 +12,13 @@ const ITEMS = [
 const ENTER = "\r";
 const TAB = "\t";
 
-/** Open the palette on fake streams, type `keys` one character at a time,
- *  and return what it submitted and whether it was a fill. The pause
- *  between characters lets the async filter catch up, as it does for a
- *  person typing. */
+/** Open the palette on fake streams, type `keys`, and return what it
+ *  submitted and whether it was a fill. By default each character is sent
+ *  after a pause, which lets the async filter catch up, as it does for a
+ *  person typing. `oneChunk` sends all the keys at once, as a paste does. */
 async function typeIntoPalette(
   keys: string,
+  { oneChunk = false } = {},
 ): Promise<{ value: unknown; fill: boolean; drawn: string }> {
   const stdin = new PassThrough();
   const stdout = new PassThrough();
@@ -33,9 +34,9 @@ async function typeIntoPalette(
     stdin,
     stdout,
   });
-  for (const ch of keys) {
+  for (const chunk of oneChunk ? [keys] : [...keys]) {
     await new Promise((r) => setTimeout(r, 10));
-    stdin.write(ch);
+    stdin.write(chunk);
   }
   const { value } = await answer;
   return { value, fill, drawn };
@@ -59,6 +60,20 @@ describe("the slash palette's keys", () => {
     const result = await typeIntoPalette(`re${ENTER}`);
     expect(result).toMatchObject({ value: "/rename", fill: false });
     expect(result.drawn).toContain(DONE_MARK);
+  });
+
+  it("types a space into an empty filter instead of filling", async () => {
+    // The space matches no command, so Enter has nothing to submit.
+    expect(await typeIntoPalette(` ${ENTER}`)).toMatchObject({ value: undefined, fill: false });
+  });
+
+  it("fills from the finished filter when Tab arrives with the filter text", async () => {
+    // Before the filter catches up, the list is every command, and the
+    // first one, /rename, is highlighted.
+    expect(await typeIntoPalette(`cos${TAB}`, { oneChunk: true })).toMatchObject({
+      value: "/cost",
+      fill: true,
+    });
   });
 
   it("fills nothing on Tab when no command matches", async () => {

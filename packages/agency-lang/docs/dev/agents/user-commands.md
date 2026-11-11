@@ -10,9 +10,8 @@ All three live in `lib/stdlib/cli.ts`, so every program that calls `repl()`
 from `std::ui/cli` has them.
 
 **The slash palette.** Pressing `/` at an empty prompt opens a menu of the
-slash commands. The menu is a `prompts` autocomplete, the same kind the
-policy approval prompt uses, and what the user types after the `/` filters
-it. Three keys close it:
+slash commands, a `prompts` autocomplete. What the user types after the `/`
+filters it. Three keys close it:
 
 | Key | What happens |
 |---|---|
@@ -20,24 +19,19 @@ it. Three keys close it:
 | Tab | puts the highlighted command and a space at the prompt, for the user to add arguments |
 | space, after some filter text | the same as Tab, so typing `/rename my title` works |
 
-The menu cannot hold arguments itself: its text is a filter, and it returns
-one command name. That is why Tab and space close it and hand the line back
-to the prompt. `fillOnTabOrSpace` in `lib/stdlib/prompts.ts` replaces the
-element's Tab handler (`next`) and its typed-character handler (`_`). It
-reaches the element through the `onRender` hook, the only hook `prompts`
-calls with the element as `this`. A fill does not draw the menu's
-final "✔ Slash command: › /rename" line, which would read as if the
-command ran. `submitErased` erases the menu instead, and the loop in
-`_runLineRepl` erases the `> /` line above it. The loop then passes the
-filled command to the next `askLine` as its starting text, so the screen
-shows only `> /rename `.
+The menu's text is only a filter, and the menu returns one command name, so
+it cannot hold arguments. Tab and space close it and hand the command back
+to the prompt. `fillOnTabOrSpace` in `lib/stdlib/prompts.ts` changes those
+two keys through the `onRender` hook, the only hook `prompts` calls with
+the menu itself as `this`.
 
-`installSlashTrigger` opens the menu by putting `/` in the buffer and
-submitting it, but it waits one turn of the event loop first. Readline
-handles every key of a pasted chunk in the same turn, so if more text
-followed the `/`, the buffer holds more than `/` and the menu stays shut. A
-pasted `/review-pr https://…` therefore stays at the prompt with its
-arguments, ready for Enter.
+After a fill, the screen shows only `> /rename `. The menu's usual last
+line, "✔ Slash command: › /rename", would read as if the command ran.
+
+A pasted `/review-pr https://…` skips the menu and stays at the prompt with
+its arguments. `installSlashTrigger` waits one turn of the event loop
+before it opens the menu. Readline handles every key of a pasted chunk
+within that turn, so the menu opens only when the buffer holds a lone `/`.
 
 **Ctrl+G.** `installEditorKey` wraps readline's `_ttyWrite`, as the slash
 trigger and the cancel key do. On Ctrl+G at the prompt it records the text

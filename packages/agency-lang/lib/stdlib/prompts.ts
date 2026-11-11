@@ -256,8 +256,11 @@ type AutocompleteElement = {
   input: string;
   suggestions: unknown[];
   outputText: string;
+  // The pending filter update, or false once `suggestions` matches `input`.
+  completing: Promise<unknown> | false;
   out: { write: (s: string) => void; columns?: number };
   done: boolean;
+  closed?: boolean;
   aborted: boolean;
   exited: boolean;
   next: () => void;
@@ -267,9 +270,8 @@ type AutocompleteElement = {
   _: (c: string, key: unknown) => void;
 };
 
-/** The palette's question for `prompts`. Exported for tests, which pass it
- *  fake streams. */
-export function commandPaletteQuestion(
+/** The palette's question for `prompts`. */
+function commandPaletteQuestion(
   items: PromptsChoiceItem[],
   onFill: () => void,
 ): prompts.PromptObject {
@@ -292,29 +294,52 @@ export function commandPaletteQuestion(
   };
 }
 
+// Tests drive the palette with fake streams through this.
+export const __commandPaletteQuestionForTest = commandPaletteQuestion;
+
 /** Make Tab, and a space typed after some filter text, submit the
  *  highlighted command as a fill. Tab otherwise moves the highlight down
  *  (`next`), and a space is typed into the filter (`_`). With nothing
- *  highlighted, Tab beeps and a space is typed as before. */
+ *  highlighted, Tab beeps and a space is typed as before.
+ *
+ *  The filter updates asynchronously, so when the filter keys and Tab
+ *  arrive in one chunk (a paste, a slow SSH link), the list may still be
+ *  the one for the earlier filter. Both keys wait for the update first, so
+ *  they fill the command the finished filter highlights. */
 function fillOnTabOrSpace(element: AutocompleteElement, onFill: () => void): void {
   const typeChar = element._.bind(element);
+  const whenSettled = (act: () => void): void => {
+    if (element.closed) return;
+    if (element.completing) {
+      void element.completing.then(() => whenSettled(act));
+    } else {
+      act();
+    }
+  };
   const fill = (): void => {
     onFill();
     submitErased(element);
   };
-  element.next = (): void => {
-    if (element.suggestions.length === 0) {
-      element.bell();
-      return;
-    }
-    fill();
-  };
-  element._ = (c: string, key: unknown): void => {
-    if (c === " " && element.input !== "" && element.suggestions.length > 0) {
+  element.next = (): void =>
+    whenSettled(() => {
+      if (element.suggestions.length === 0) {
+        element.bell();
+        return;
+      }
       fill();
+    });
+  element._ = (c: string, key: unknown): void => {
+    if (c !== " " || element.input === "") {
+      typeChar(c, key);
       return;
     }
-    typeChar(c, key);
+    whenSettled(() => {
+      if (element.suggestions.length > 0) {
+        fill();
+      } else {
+        typeChar(c, key);
+      }
+    });
   };
 }
 

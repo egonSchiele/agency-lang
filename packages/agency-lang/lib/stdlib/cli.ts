@@ -991,6 +991,28 @@ async function pickFromSlashPalette(
   return picked;
 }
 
+/** What the REPL loop does after the slash palette. `run` is a command to
+ *  run as if the user had typed it, or null to prompt again. `prefill` is
+ *  the text the next prompt opens with. */
+type SlashOutcome = { prefill: string; run: string | null };
+
+/** Open the slash palette for a bare `/`. A cancel prompts again with an
+ *  empty line, and Enter runs the picked command. A fill prompts again with
+ *  the command and a space. The palette erased itself, so this erases the
+ *  `> /` row above it, and the prompt redraws there as `> /rename `. */
+async function slashOutcome(
+  rl: readline.Interface,
+  palette: [string, string][],
+  mark: number,
+  useTTY: boolean,
+): Promise<SlashOutcome> {
+  const picked = await pickFromSlashPalette(rl, palette, mark);
+  if (picked == null) return { prefill: "", run: null };
+  if (!picked.fill) return { prefill: "", run: picked.command };
+  if (useTTY) process.stdout.write(eraseRows(2));
+  return { prefill: `${picked.command} `, run: null };
+}
+
 /** Roll back the entries the slash palette polluted — `"/"` plus any leaked
  *  filter keystrokes, i.e. everything added since `mark` — and, when a command
  *  was picked, record it as one clean entry. `history` is readline's
@@ -1479,28 +1501,14 @@ export async function _runLineRepl(
         line = expansions[line];
         trimmed = line.trim();
       }
-      // Bare `/` opens the slash-command palette via
-      // `prompts.autocomplete` — the same modal the interrupt UI
-      // uses, so palette and policy menus look and feel identical.
-      // The `/` key fires this branch immediately (no Enter needed)
-      // via `installSlashTrigger`'s `_ttyWrite` hook above; users can
-      // also type `/` + Enter manually. A command picked with Enter is
-      // fed back through the normal onSubmit path. A command filled in
-      // with Tab opens the next prompt, so the user can type its
-      // arguments. Cancel just reprompts.
+      // A bare `/` (sent at once by `installSlashTrigger`) opens the palette.
       if (trimmed === "/" && palette.length > 0) {
-        const picked = await pickFromSlashPalette(rl, palette, slashHistoryMark);
+        const outcome = await slashOutcome(rl, palette, slashHistoryMark, useTTY);
         slashHistoryMark = -1;
-        if (picked == null) continue;
-        if (picked.fill) {
-          // The menu erased itself; erase the `> /` line above it too, so
-          // the prompt redraws on that row as `> /rename `.
-          if (useTTY) process.stdout.write(eraseRows(2));
-          prefill = `${picked.command} `;
-          continue;
-        }
-        line = picked.command;
-        trimmed = picked.command;
+        prefill = outcome.prefill;
+        if (outcome.run == null) continue;
+        line = outcome.run;
+        trimmed = outcome.run;
       }
 
       // `/paste` (built-in, à la Node's `.editor`): open the multi-line
@@ -1870,6 +1878,7 @@ export const _internal = {
   recordPasteEntry,
   repairSlashHistory,
   installSlashTrigger,
+  askLine,
   summarizeMultiline,
   eraseRows,
   buildFrame,

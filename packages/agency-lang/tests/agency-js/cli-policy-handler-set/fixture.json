@@ -1,4 +1,10 @@
 {
+  "scopedReject": {
+    "outcomes": ["read ok", "ls rejected", "grep ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "lsRuleOrder": ["reject", "approve"]
+  },
   "set": {
     "outcomes": ["read ok", "ls ok", "grep ok"],
     "remainingAnswers": 0,

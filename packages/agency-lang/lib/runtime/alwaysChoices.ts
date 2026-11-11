@@ -37,15 +37,31 @@ function withParents(folder: string): string[] {
   return parent === folder ? [folder] : [folder, ...withParents(parent)];
 }
 
+/** The directories `folderChoices` measures against, as the run resolved
+ *  them (`PolicyDirs`). */
+export type FolderDirs = { cwd: string; home: string; agentHome: string };
+
+/** True for a folder a read grant must never cover: the home directory or
+ *  the agent home, a folder holding either, or a filesystem root. A root
+ *  is checked apart from the home directory because on Windows another
+ *  drive's root (`D:\`) does not hold the home directory. */
+function tooBroad(folder: string, dirs: FolderDirs): boolean {
+  return (
+    isContained(dirs.home, folder) ||
+    isContained(dirs.agentHome, folder) ||
+    path.dirname(folder) === folder
+  );
+}
+
 /**
  * The folders a read rule for `value` may cover: `value`, then each parent,
  * nearest first. The list stops at the launch directory when `value` is
- * inside it. It never holds the home directory, a folder above it, or the
- * filesystem root, because a read grant there covers the agent's earlier
- * conversations and `~/.ssh`. So it is empty for one of those. A value
- * that is not an absolute path comes back alone.
+ * inside it. It never holds the home directory, the agent home, a folder
+ * holding either, or a filesystem root, because a read grant there covers
+ * the agent's earlier conversations and `~/.ssh`. So it is empty for one of
+ * those. A value that is not an absolute path comes back alone.
  */
-export function folderChoices(value: string, dirs: { cwd: string; home: string }): FolderChoice[] {
+export function folderChoices(value: string, dirs: FolderDirs): FolderChoice[] {
   if (!path.isAbsolute(value)) {
     return [{ path: value, note: "" }];
   }
@@ -58,36 +74,37 @@ export function folderChoices(value: string, dirs: { cwd: string; home: string }
   const reach = launch === -1 ? all : all.slice(0, launch + 1);
   const allowed = reach
     .map((folder, index) => ({ path: folder, note: index === launch ? LAUNCH_DIRECTORY_NOTE : "" }))
-    .filter((choice) => !isContained(dirs.home, choice.path));
+    .filter((choice) => !tooBroad(choice.path, dirs));
   if (allowed.length <= MAX_FOLDER_CHOICES) {
     return allowed;
   }
   return [...allowed.slice(0, MAX_FOLDER_CHOICES - 1), allowed[allowed.length - 1]];
 }
 
-/** Each effect's scope: the override when there is one, else the registry's.
- *  An override of `[]` stays in the result, as an empty scope. */
-export function resolvedScopes(
-  registered: Record<string, ScopedField[]>,
-  overrides: Record<string, ScopedField[]>,
-): Record<string, ScopedField[]> {
-  return { ...registered, ...overrides };
-}
-
-/** The listed set `effect` belongs to whose members all share `effect`'s
- *  scope, or null. A member absent from `scopes` is taken to agree: its
- *  module is not loaded, and a stdlib test keeps the declarations uniform. */
+/**
+ * The listed set `effect` belongs to whose members all share `effect`'s
+ * scope, or null. Each scope is the caller's override when there is one
+ * (an override of `[]` is an empty scope), and the registry's otherwise.
+ *
+ * A member with neither has a module that is not loaded. It is taken to
+ * agree only when `effect` itself has its declared scope: a stdlib test
+ * keeps the declarations of a listed set uniform, so the unloaded member
+ * declares the same scope, but nothing says it matches an override.
+ */
 export function sharedApprovalSet(
   effect: string,
-  scopes: Record<string, ScopedField[]>,
+  registered: Record<string, ScopedField[]>,
+  overrides: Record<string, ScopedField[]>,
   sets: Record<string, EffectSetInfo>,
 ): EffectSetInfo | null {
+  const scopes = { ...registered, ...overrides };
   const own = scopes[effect] ?? [];
   if (own.length === 0) {
     return null;
   }
+  const ownIsDeclared = sameScopedFields(registered[effect] ?? [], own);
   const agrees = (member: string) =>
-    !Object.hasOwn(scopes, member) || sameScopedFields(scopes[member], own);
+    Object.hasOwn(scopes, member) ? sameScopedFields(scopes[member], own) : ownIsDeclared;
   const found = SHARED_APPROVAL_SETS.map((name) => sets[name]).find(
     (set) => set !== undefined && set.members.includes(effect) && set.members.every(agrees),
   );

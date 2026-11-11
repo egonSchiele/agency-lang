@@ -26,7 +26,7 @@ import {
   _allAlwaysScopes,
   _missingPolicyRules,
   _appendPolicyRules,
-  _prependPolicyRule,
+  _insertApproveRule,
   _describeScope,
   _folderChoices,
   _sharedApprovalSet,
@@ -990,8 +990,9 @@ def folderField(intr: any): string {
 }
 
 // The folders the folder step would offer for this interrupt. Empty when
-// the step does not apply, and also when the folder is the home directory
-// or above it, which the step never offers.
+// the step does not apply, and also when the folder is one the step never
+// offers: the home directory, the agent home, a folder holding either, or
+// a filesystem root.
 def folderOptions(intr: any): any[] {
   const field = folderField(intr)
   if (field == "") {
@@ -1003,8 +1004,8 @@ def folderOptions(intr: any): any[] {
 // The set an (as) answer would cover. Each member's scope is resolved with
 // the caller's `fields:` overrides, so the answer is not offered when an
 // override makes one member differ. It is also not offered when the folder
-// step applies but has no folder to offer: the rule would then cover the
-// home directory, or a folder above it, for every member.
+// step applies but has no folder to offer: the rule would then cover one
+// of the folders that step never offers, for every member.
 def sharedSetFor(intr: any): SharedSet {
   const set: SharedSet = _sharedApprovalSet(intr.effect, globalCliPolicyOpts.fields)
   if (folderField(intr) != "" && folderOptions(intr).length == 0) {
@@ -1054,10 +1055,11 @@ export def askUserChoices(intr: any): ChoiceItem[] {
   return map(offered, \row -> answerItem(row, intr, scope, set))
 }
 
-// The effects among `effects` that a new approve rule may be saved under:
-// those the policy does not already reject for this interrupt. An approve
-// rule is put first, so under an effect the user rejected it would turn
-// that rejection into an approval nobody asked for.
+// The effects among `effects` the (as) answer saves a rule under: those the
+// policy does not already reject for this interrupt. A rule saved under an
+// effect that rejects this interrupt would sit behind that reject and
+// never decide anything, and the folder step's members line would list an
+// effect the answer does not approve.
 def unrejectedEffects(policy: Policy, intr: any, effects: string[]): string[] {
   return filter(effects, \effect -> checkPolicy(policy, { ...intr, effect: effect }).type != "reject")
 }
@@ -1215,12 +1217,18 @@ def recordAnswer(intr: any, answer: AskUserResult) {
   }
 }
 
-// Save one scoped approve rule under each of `effects`. When the folder
-// step ran, the rule covers the folder picked there in place of the one in
-// the interrupt, and it matches dot folders below it: the step offers only
-// file-reading effects and never the home directory. `intr` itself is not
-// changed, since the handler still uses it. `recordScopedRule`, which
-// programs with their own approval UI call, does neither of these.
+// Save one scoped approve rule under each of `effects`, just after each
+// effect's reject rules, so no reject the user saved is overturned by a
+// grant for a folder that holds it. When the folder step ran, the rule
+// covers the folder picked there in place of the one in the interrupt.
+// `intr` itself is not changed, since the handler still uses it.
+// `recordScopedRule`, which programs with their own approval UI call, puts
+// its rule first and never matches dot folders.
+//
+// The rule matches dot folders only for an effect in a shared set
+// (`SHARED_APPROVAL_SETS`): those effects only read, and the folder step
+// never offers the home directory. Both conditions are written out so the
+// flag does not spread to another effect if the folder step ever does.
 def recordPromptRule(policy: Policy, intr: any, effects: string[], folder: string): Policy {
   const subject = if folder == "" then intr else { ...intr, data: { ...intr.data, [folderField(intr)]: folder } }
   const match = buildScopedMatch(subject, globalCliPolicyOpts.fields)
@@ -1228,10 +1236,10 @@ def recordPromptRule(policy: Policy, intr: any, effects: string[], folder: strin
     return policy
   }
   let rule: PolicyRule = { match: match, action: "approve" }
-  if (folder != "") {
+  if (folder != "" && _inSharedApprovalSet(intr.effect)) {
     rule.matchDotFolders = true
   }
-  return _prependPolicyRule(policy, effects, rule)
+  return _insertApproveRule(policy, effects, rule)
 }
 
 // The user's keystroke, or the text they typed, as a decision. Only a key

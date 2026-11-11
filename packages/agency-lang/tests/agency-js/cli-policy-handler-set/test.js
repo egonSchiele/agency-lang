@@ -75,7 +75,20 @@ try {
     "std::glob": [{ action: "reject" }],
   });
 
+  // The policy rejects listing <root>/.w/b. "as" for the parent <root>/.w
+  // must not overturn that: the ls is rejected without a prompt.
+  const lsB = escapeGlob(join(root, ".w", "b"));
+  const scopedReject = await run(setWide, "scoped-reject", ["as", "3"], { root }, {
+    "std::ls": [{ match: { dir: `{${lsB},${lsB}/**}` }, action: "reject" }],
+  });
+
   writeFileSync("__result.json", JSON.stringify({
+    scopedReject: {
+      outcomes: scopedReject.outcomes,
+      remainingAnswers: scopedReject.remainingAnswers,
+      error: scopedReject.error,
+      lsRuleOrder: (scopedReject.saved?.["std::ls"] ?? []).map((rule) => rule.action),
+    },
     set: {
       outcomes: set.outcomes,
       remainingAnswers: set.remainingAnswers,

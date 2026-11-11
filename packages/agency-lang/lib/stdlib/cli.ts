@@ -539,28 +539,32 @@ function coloredKey(item: InterruptItem): string {
 }
 
 /** The answers, one per line, in three columns: key, label, and a dim
- *  detail. A detail that does not fit beside its label wraps onto lines of
- *  its own, indented to the label column, so a long path is shown whole.
- *  One or more lines per item. Pure. */
+ *  detail. An item that does not fit on one line wraps its label and then
+ *  its detail onto lines of their own, indented to the label column, so a
+ *  long path is shown whole whether it is the label (the folder step) or
+ *  the detail. One or more lines per item. Pure. */
 function optionRows(items: InterruptItem[], width: number): string[] {
   const keyWidth = Math.max(...items.map((item) => item.key.length)) + KEY_COLUMN_GAP;
   const withDetail = items.filter((item) => item.detail !== undefined && item.detail !== "");
   const labelWidth =
     Math.max(0, ...withDetail.map((item) => visualWidth(item.label))) + LABEL_COLUMN_GAP;
+  const indent = " ".repeat(keyWidth);
+  const wrapWidth = Math.max(1, width - keyWidth);
   const dim = (text: string) => `${DIM}${text}${COLOR_RESET}`;
   return items.flatMap((item) => {
-    const head = coloredKey(item) + " ".repeat(keyWidth - item.key.length) + item.label;
+    const key = coloredKey(item) + " ".repeat(keyWidth - item.key.length);
     const detail = item.detail ?? "";
-    if (detail === "") {
-      return [head];
+    if (detail === "" && keyWidth + visualWidth(item.label) <= width) {
+      return [key + item.label];
     }
-    if (keyWidth + labelWidth + visualWidth(detail) <= width) {
+    if (detail !== "" && keyWidth + labelWidth + visualWidth(detail) <= width) {
       const pad = " ".repeat(labelWidth - visualWidth(item.label));
-      return [head + pad + dim(detail)];
+      return [key + item.label + pad + dim(detail)];
     }
-    const indent = " ".repeat(keyWidth);
-    const wrapped = wrapText(detail, Math.max(1, width - keyWidth));
-    return [head, ...wrapped.map((line) => indent + dim(line))];
+    const labelLines = wrapText(item.label, wrapWidth);
+    const detailLines = detail === "" ? [] : wrapText(detail, wrapWidth).map(dim);
+    const rest = [...labelLines.slice(1), ...detailLines];
+    return [key + labelLines[0], ...rest.map((line) => indent + line)];
   });
 }
 
@@ -581,29 +585,66 @@ type InterruptFooterInput = {
   expectsValue?: boolean;
   state: InterruptState;
   columns: number;
+  /** The terminal's height. The body shrinks so the whole footer fits in
+   *  it. Leave it out for no limit beyond INTERRUPT_BODY_MAX_LINES. */
+  rows?: number;
 };
+
+/** What decides how many body rows the footer shows. The shell and the
+ *  renderer both pass this, so they agree on whether the body is cut. */
+type FooterShape = Pick<
+  InterruptFooterInput,
+  "title" | "body" | "items" | "allowFreeText" | "columns" | "rows"
+>;
+
+// Rows the footer draws besides the title, body, and answers: the divider,
+// the body's ellipsis, the free-text hint, a notice, and the input line.
+// A notice comes and goes with keystrokes, so its row is always kept free
+// and the body does not change size as the user types.
+const FOOTER_FIXED_ROWS = 5;
+
+function footerWidth(columns: number): number {
+  return Math.max(MIN_FOOTER_WIDTH, columns - 1);
+}
 
 /** The width the footer wraps its body to: the footer's width, less the
  *  1-col indent. A table rendered wider than this gets wrapped again. */
 function interruptBodyWidth(columns: number): number {
-  return Math.max(MIN_FOOTER_WIDTH, columns - 1) - 1;
+  return footerWidth(columns) - 1;
 }
 
-/** Body lines for the footer, capped to INTERRUPT_BODY_MAX_LINES *physical*
- *  rows. Wrapping happens here (to `wrapWidth`, from interruptBodyWidth)
- *  so the cap bounds real screen rows — buildFrame re-wraps at the
- *  footer's width, but each line is already within it, so that is a no-op.
- *  Capping raw `\n` lines instead would let one very long line re-expand
- *  past the cap and blow out the pinned region. */
-function bodyLines(body: string, wrapWidth: number): { lines: string[]; truncated: boolean } {
-  if (body === "") {
+/** How many body rows fit: at most INTERRUPT_BODY_MAX_LINES, fewer when the
+ *  terminal is too short for the title, the answers, and the fixed rows
+ *  besides, and at least one. The answers are counted with the view item,
+ *  which a cut body adds. */
+function bodyRowCap(shape: FooterShape): number {
+  if (shape.rows === undefined) {
+    return INTERRUPT_BODY_MAX_LINES;
+  }
+  const width = footerWidth(shape.columns);
+  const titleRows = shape.title === "" ? 0 : wrapText(` ${shape.title}`, width).length;
+  const answerRows = optionRows(
+    [...shape.items, { key: VIEW_KEY, label: VIEW_LABEL }],
+    width - 1,
+  ).length;
+  const spare = shape.rows - titleRows - answerRows - FOOTER_FIXED_ROWS;
+  return Math.max(1, Math.min(INTERRUPT_BODY_MAX_LINES, spare));
+}
+
+/** Body lines for the footer, capped to `cap` *physical* rows. Wrapping
+ *  happens here (to the body width) so the cap bounds real screen rows —
+ *  buildFrame re-wraps at the footer's width, but each line is already
+ *  within it, so that is a no-op. Capping raw `\n` lines instead would let
+ *  one very long line re-expand past the cap and blow out the pinned
+ *  region. */
+function bodyLines(shape: FooterShape): { lines: string[]; truncated: boolean } {
+  if (shape.body === "") {
     return { lines: [], truncated: false };
   }
-  const wrapped = wrapText(body, Math.max(1, wrapWidth));
-  const lines = wrapped
-    .slice(0, INTERRUPT_BODY_MAX_LINES)
-    .map((line) => ` ${DIM}${line}${COLOR_RESET}`);
-  const truncated = wrapped.length > INTERRUPT_BODY_MAX_LINES;
+  const cap = bodyRowCap(shape);
+  const wrapped = wrapText(shape.body, Math.max(1, interruptBodyWidth(shape.columns)));
+  const lines = wrapped.slice(0, cap).map((line) => ` ${DIM}${line}${COLOR_RESET}`);
+  const truncated = wrapped.length > cap;
   if (truncated) {
     lines.push(` ${DIM}…${COLOR_RESET}`);
   }
@@ -612,20 +653,20 @@ function bodyLines(body: string, wrapWidth: number): { lines: string[]; truncate
 
 /** True when this prompt's body does not fit the footer, so the widget
  *  offers VIEW_KEY. The shell and the renderer must agree on it. */
-function bodyIsTruncated(body: string, columns: number): boolean {
-  return bodyLines(body, interruptBodyWidth(columns)).truncated;
+function bodyIsTruncated(shape: FooterShape): boolean {
+  return bodyLines(shape).truncated;
 }
 
 /** Render the sticky approval prompt as footer lines. Pure. The real
  *  cursor is hidden by the widget, so the input line ends with a caret
  *  glyph. buildFrame wraps each line to width. */
 function renderInterruptFooter(input: InterruptFooterInput): string[] {
-  const width = Math.max(MIN_FOOTER_WIDTH, input.columns - 1);
+  const width = footerWidth(input.columns);
   const lines: string[] = [`${DIM}${"─".repeat(width)}${COLOR_RESET}`];
   if (input.title !== "") {
     lines.push(` ${input.title}`);
   }
-  const body = bodyLines(input.body, interruptBodyWidth(input.columns));
+  const body = bodyLines(input);
   body.lines.forEach((line) => lines.push(line));
   const items = body.truncated
     ? [...input.items, { key: VIEW_KEY, label: VIEW_LABEL }]
@@ -693,25 +734,24 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
   // Read at each keystroke, not once: the terminal can be resized while the
   // prompt is up, and the footer that offers the view key re-renders at the
   // new width, so the check has to move with it.
+  const shape = (): FooterShape => ({
+    title: opts.title,
+    body: opts.body,
+    items: opts.items,
+    allowFreeText: opts.allowFreeText,
+    columns: process.stdout.columns || 80,
+    rows: process.stdout.rows || undefined,
+  });
   const config = (): InterruptConfig => ({
     validKeys: opts.items.map((item) => item.key),
     allowFreeText: opts.allowFreeText,
     allowCancel: opts.allowCancel,
-    canReveal: bodyIsTruncated(opts.body, process.stdout.columns || 80),
+    canReveal: bodyIsTruncated(shape()),
   });
   let state = INITIAL_INTERRUPT_STATE;
 
   const region = installBottomRegion(
-    () =>
-      renderInterruptFooter({
-        title: opts.title,
-        body: opts.body,
-        items: opts.items,
-        allowFreeText: opts.allowFreeText,
-        expectsValue: opts.expectsValue,
-        state,
-        columns: process.stdout.columns || 80,
-      }),
+    () => renderInterruptFooter({ ...shape(), expectsValue: opts.expectsValue, state }),
     process.stdout.isTTY === true,
     { hideCursor: true },
   );
@@ -1870,6 +1910,7 @@ export const _internal = {
   INITIAL_INTERRUPT_STATE,
   optionRows,
   renderInterruptFooter,
+  bodyIsTruncated,
   interruptBodyWidth,
   stickyInterruptPrompt,
   replyOutput,

@@ -4,7 +4,6 @@ import {
   describeScope,
   folderChoices,
   inSharedApprovalSet,
-  resolvedScopes,
   sharedApprovalSet,
 } from "./alwaysChoices.js";
 
@@ -27,7 +26,7 @@ describe("describeScope", () => {
 });
 
 describe("folderChoices", () => {
-  const dirs = { cwd: "/Users/me/proj", home: "/Users/me" };
+  const dirs = { cwd: "/Users/me/proj", home: "/Users/me", agentHome: "/Users/me/.agency-agent" };
   const paths = (value: string, where = dirs) => folderChoices(value, where).map((c) => c.path);
 
   it("stops at the launch directory for a folder inside it", () => {
@@ -54,8 +53,14 @@ describe("folderChoices", () => {
     // proj2 is not inside proj, so the list does not stop at /Users/me/proj.
     expect(paths("/Users/me/proj2/x")).toEqual(["/Users/me/proj2/x", "/Users/me/proj2"]);
   });
+  it("never offers a folder that holds an agent home outside the home directory", () => {
+    const elsewhere = { ...dirs, agentHome: "/data/agent-home" };
+    expect(paths("/data/project/src", elsewhere)).toEqual(["/data/project/src", "/data/project"]);
+    // A folder inside the agent home is offered. The agent home is not.
+    expect(paths("/data/agent-home/sessions", elsewhere)).toEqual(["/data/agent-home/sessions"]);
+  });
   it("does not offer the launch directory when it is the home directory", () => {
-    const atHome = { cwd: "/Users/me", home: "/Users/me" };
+    const atHome = { ...dirs, cwd: "/Users/me" };
     expect(paths("/Users/me/a/b", atHome)).toEqual(["/Users/me/a/b", "/Users/me/a"]);
   });
   it("returns the folder alone when it is the launch directory", () => {
@@ -87,37 +92,37 @@ describe("sharedApprovalSet", () => {
     },
     Other: { name: "Other", doc: "", members: ["std::read", "x::y"], composedOf: [] },
   };
+  // std::vision is absent from every registry below: its module is not loaded.
+  const registered = { "std::read": [under("dir")], "std::ls": [under("dir")] };
+
   it("returns the listed set when every known member shares the scope", () => {
-    const scopes = { "std::read": [under("dir")], "std::ls": [under("dir")] };
-    expect(sharedApprovalSet("std::ls", scopes, sets)?.name).toBe("FileRead");
+    expect(sharedApprovalSet("std::ls", registered, {}, sets)?.name).toBe("FileRead");
   });
   it("returns null when a member's scope differs", () => {
-    const scopes = { "std::read": [exact("dir")], "std::ls": [under("dir")] };
-    expect(sharedApprovalSet("std::ls", scopes, sets)).toBeNull();
+    const differing = { "std::read": [exact("dir")], "std::ls": [under("dir")] };
+    expect(sharedApprovalSet("std::ls", differing, {}, sets)).toBeNull();
   });
   it("returns null when a member's scope was overridden to empty", () => {
-    const registered = { "std::read": [under("dir")], "std::ls": [under("dir")] };
-    const scopes = resolvedScopes(registered, { "std::read": [] });
-    expect(sharedApprovalSet("std::ls", scopes, sets)).toBeNull();
+    expect(sharedApprovalSet("std::ls", registered, { "std::read": [] }, sets)).toBeNull();
+  });
+  it("does not take an unloaded member to agree with an override", () => {
+    // Every loaded member is overridden to the same exact scope. std::vision
+    // declares a subpath scope, so the set no longer agrees.
+    const overrides = { "std::read": [exact("dir")], "std::ls": [exact("dir")] };
+    expect(sharedApprovalSet("std::ls", registered, overrides, sets)).toBeNull();
+  });
+  it("lets an override that only repeats the declared scope keep the set", () => {
+    const overrides = { "std::ls": [under("dir")] };
+    expect(sharedApprovalSet("std::ls", registered, overrides, sets)?.name).toBe("FileRead");
   });
   it("returns null for an effect in no listed set", () => {
-    expect(sharedApprovalSet("x::y", { "x::y": [exact("a")] }, sets)).toBeNull();
+    expect(sharedApprovalSet("x::y", { "x::y": [exact("a")] }, {}, sets)).toBeNull();
   });
   it("returns null for an effect with no scope", () => {
-    expect(sharedApprovalSet("std::ls", {}, sets)).toBeNull();
+    expect(sharedApprovalSet("std::ls", {}, {}, sets)).toBeNull();
   });
   it("says whether an effect is in a listed set", () => {
     expect(inSharedApprovalSet("std::vision", sets)).toBe(true);
     expect(inSharedApprovalSet("x::y", sets)).toBe(false);
-  });
-});
-
-describe("resolvedScopes", () => {
-  it("lets an override replace a registered scope, an empty one included", () => {
-    const registered = { "a::b": [under("dir")], "c::d": [exact("x")] };
-    expect(resolvedScopes(registered, { "a::b": [] })).toEqual({
-      "a::b": [],
-      "c::d": [exact("x")],
-    });
   });
 });

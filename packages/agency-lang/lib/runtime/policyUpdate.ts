@@ -58,16 +58,22 @@ export function appendPolicyRules(saved: Policy, additions: Policy): Policy {
   return merged;
 }
 
-/** `policy` with `rule` put first under each of `effects`, so it decides
- *  before the rules already there. An effect whose first rule is already
- *  the same rule is left as it is, so one answer given twice saves one rule. */
-export function prependPolicyRule(policy: Policy, effects: string[], rule: PolicyRule): Policy {
+/** `policy` with the approve rule `rule` added under each of `effects`,
+ *  just after that effect's last reject rule, or first when it has none.
+ *  The first match wins, so the new rule decides ahead of the approve and
+ *  propagate rules already there, and every reject rule still decides
+ *  ahead of it. A rule that approves a parent folder then never overturns
+ *  a rule that rejects a folder inside it. An effect that already has the
+ *  same rule is left as it is, so one answer given twice saves one rule. */
+export function insertApproveRule(policy: Policy, effects: string[], rule: PolicyRule): Policy {
   const next: Policy = { ...policy };
   for (const effect of effects) {
     const existing = policy[effect] ?? [];
-    if (existing.length === 0 || !sameRule(existing[0], rule)) {
-      next[effect] = [rule, ...existing];
+    if (existing.some((one) => sameRule(one, rule))) {
+      continue;
     }
+    const at = existing.findLastIndex((one) => one.action === "reject") + 1;
+    next[effect] = [...existing.slice(0, at), rule, ...existing.slice(at)];
   }
   return next;
 }

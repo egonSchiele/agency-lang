@@ -111,6 +111,9 @@ they cannot see.
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body
 (`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
+In a short terminal it shows fewer, down to one: `bodyRowCap` subtracts
+the title, the answers, and the footer's fixed rows from the terminal's
+height, so the answers and the input line always stay on screen.
 Six rows is nothing next to a file being written, and that is a prompt
 where the body is the whole point. (The two effects that carry source
 code do not rely on the footer at all; see the next section.)
@@ -420,31 +423,51 @@ saves the exact scope in the interrupt, with no further question.
 `as` is offered only when every member of the set has the same scope as
 the effect being asked about. Each member's scope is resolved the way
 `scopedFieldsFor` resolves it, with the caller's `fields:` override first
-(`resolvedScopes`, then `sharedApprovalSet`). So `fields: { "std::read":
-[] }` turns `as` off at an `ls` prompt too. A member whose module is not
-loaded has no registered scope and is taken to agree. A test in
+(`sharedApprovalSet`). So `fields: { "std::read": [] }` turns `as` off at
+an `ls` prompt too. A member whose module is not loaded has no registered
+scope. It is taken to agree only when the effect being asked about has its
+declared scope, with no override changing it. A test in
 `lib/typeChecker/alwaysTag.stdlib.test.ts` fails if the stdlib declarations
 of a listed set's members disagree, which keeps that assumption true.
 
-`as` skips a member that the policy already rejects for this interrupt
-(`unrejectedEffects`). The new rule is put first, so under `std::glob`
-after an earlier "always reject" it would turn the rejection into an
-approval nobody asked for. The folder step lists the members a rule will
-be saved under.
+### Where a saved approve rule goes
+
+The prompt saves its scoped rules with `insertApproveRule`
+(`lib/runtime/policyUpdate.ts`), just after the effect's last reject rule.
+The first match wins, so the new rule decides ahead of the approve and
+propagate rules already there, and every reject rule still decides ahead
+of it. This matters because the folder step can pick a parent folder.
+Suppose the policy rejects reads under `/p/secrets`, and the person
+answers a read in `/p/src` with `ap` and picks `/p`. The rule for `/p`
+goes after the reject, so a read in `/p/secrets` is still rejected.
+`recordScopedRule`, which programs with their own approval UI call, still
+puts its rule first.
+
+`as` also skips a member whose policy already rejects this interrupt
+(`unrejectedEffects`), such as `std::glob` after an earlier "always
+reject". A rule there would sit behind the reject and never decide
+anything. The folder step lists the members a rule will be saved under.
 
 ### The folder step
 
 `folderChoices` lists the folder in the interrupt, then each parent,
 nearest first. It stops at the launch directory when the folder is inside
-it. It never lists the home directory, a folder above it, or the
-filesystem root, for the reason in "What `recommended` lets the agent
-read": a read grant over the home directory covers the agent home's
-earlier conversations, and `recommended` also approves web searches. The
-same grant would cover `~/.ssh`. When the list would be empty, because the
-interrupt names the home directory or a folder above it, `as` is not
-offered and `ap` saves the exact scope without `matchDotFolders`, as it
-did before the folder step existed. At most eight folders are listed. `b`
-goes back to the first prompt.
+it. It never lists the home directory, the agent home, a folder holding
+either, or a filesystem root, for the reason in "What `recommended` lets
+the agent read": a read grant over the agent home covers its earlier
+conversations, and `recommended` also approves web searches. A grant over
+the home directory would also cover `~/.ssh`. The agent home is checked on
+its own because `AGENCY_AGENT_HOME` can put it outside the home directory,
+and a root is checked on its own because on Windows another drive's root
+does not hold the home directory. When the list would be empty, because
+the interrupt names one of those folders, `as` is not offered and `ap`
+saves the exact scope without `matchDotFolders`, as it did before the
+folder step existed. At most eight folders are listed. `b` goes back to
+the first prompt.
+
+A rule saved after the folder step sets `matchDotFolders` only for an
+effect in a listed set. `recordPromptRule` checks both conditions, the
+folder and the set, so the flag stays tied to effects that only read.
 
 The folder step is a second `interruptChoice` call, so the log shows two
 prompt waits (`_logPromptWait`) for one interrupt.

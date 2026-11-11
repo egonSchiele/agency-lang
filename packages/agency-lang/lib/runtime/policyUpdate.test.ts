@@ -3,7 +3,7 @@ import { checkPolicy } from "./policy.js";
 import { resolvePolicyDirs } from "./policyDirs.js";
 import { nodeHost } from "../host/node/nodeHost.js";
 import type { Policy } from "./policy.js";
-import { appendPolicyRules, missingPolicyRules, prependPolicyRule } from "./policyUpdate.js";
+import { appendPolicyRules, insertApproveRule, missingPolicyRules } from "./policyUpdate.js";
 import { recommendedAutoApprovePolicy } from "./builtinPolicies.js";
 
 describe("missingPolicyRules", () => {
@@ -106,29 +106,43 @@ describe("appendPolicyRules", () => {
   });
 });
 
-describe("prependPolicyRule", () => {
+describe("insertApproveRule", () => {
   const rule = { match: { dir: "/a" }, action: "approve" as const, matchDotFolders: true };
+  const reject = { match: { dir: "/a/secret" }, action: "reject" as const };
+  const approve = { match: { dir: "/b" }, action: "approve" as const };
+  const read = (dir: string) => ({ effect: "e", message: "", data: { dir }, origin: "test" });
 
-  it("puts the rule first under each effect and keeps the rules after it", () => {
-    const saved: Policy = { e: [{ action: "reject" }] };
-    const next = prependPolicyRule(saved, ["e", "f"], rule);
-    expect(next).toEqual({ e: [rule, { action: "reject" }], f: [rule] });
+  it("puts the rule after the reject rules and before the others", () => {
+    const saved: Policy = { e: [reject, approve, { action: "propagate" }] };
+    const next = insertApproveRule(saved, ["e", "f"], rule);
+    expect(next).toEqual({ e: [reject, rule, approve, { action: "propagate" }], f: [rule] });
+  });
+
+  it("keeps a reject for a folder inside the approved one deciding", () => {
+    const parent = { match: { dir: "{/p,/p/**}" }, action: "approve" as const };
+    const saved: Policy = {
+      e: [{ match: { dir: "{/p/secrets,/p/secrets/**}" }, action: "reject" }],
+    };
+    const next = insertApproveRule(saved, ["e"], parent);
+    const dirs = resolvePolicyDirs(nodeHost());
+    expect(checkPolicy(next, read("/p/secrets/keys"), dirs).type).toBe("reject");
+    expect(checkPolicy(next, read("/p/src"), dirs).type).toBe("approve");
   });
 
   it("does not change the policy it was given", () => {
-    const saved: Policy = { e: [{ action: "reject" }] };
+    const saved: Policy = { e: [reject] };
     const before = JSON.stringify(saved);
-    prependPolicyRule(saved, ["e"], rule);
+    insertApproveRule(saved, ["e"], rule);
     expect(JSON.stringify(saved)).toBe(before);
   });
 
-  it("saves one copy when the same rule is prepended twice", () => {
-    const once = prependPolicyRule({}, ["e"], rule);
-    expect(prependPolicyRule(once, ["e"], { ...rule })).toEqual({ e: [rule] });
+  it("saves one copy when the same rule is added twice", () => {
+    const once = insertApproveRule({ e: [reject] }, ["e"], rule);
+    expect(insertApproveRule(once, ["e"], { ...rule })).toEqual({ e: [reject, rule] });
   });
 
   it("returns an equal policy for an empty effect list", () => {
-    const saved: Policy = { e: [{ action: "reject" }] };
-    expect(prependPolicyRule(saved, [], rule)).toEqual(saved);
+    const saved: Policy = { e: [reject] };
+    expect(insertApproveRule(saved, [], rule)).toEqual(saved);
   });
 });

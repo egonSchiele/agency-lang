@@ -8,7 +8,6 @@ import { builtinEffectSets } from "@/runtime/effectSets.js";
 import {
   folderChoices,
   inSharedApprovalSet,
-  resolvedScopes,
   sharedApprovalSet,
   type FolderChoice,
 } from "@/runtime/alwaysChoices.js";
@@ -44,8 +43,7 @@ export function _sharedApprovalSet(
   effect: string,
   overrides: Record<string, ScopedField[]>,
 ): { name: string; members: string[] } {
-  const scopes = resolvedScopes(allAlwaysScopes(), overrides);
-  const set = sharedApprovalSet(effect, scopes, builtinEffectSets());
+  const set = sharedApprovalSet(effect, allAlwaysScopes(), overrides, builtinEffectSets());
   return set === null ? { name: "", members: [] } : { name: set.name, members: set.members };
 }
 
@@ -62,7 +60,7 @@ export { policyOverlayFromFlags as _policyOverlayFromFlags } from "@/runtime/pol
 export {
   missingPolicyRules as _missingPolicyRules,
   appendPolicyRules as _appendPolicyRules,
-  prependPolicyRule as _prependPolicyRule,
+  insertApproveRule as _insertApproveRule,
 } from "@/runtime/policyUpdate.js";
 
 export {

@@ -5,6 +5,7 @@ import { join } from "path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 import {
   ignoredFromAbove,
+  ignoresWholeDirectory,
   isIgnored,
   parseGitignore,
   readAncestorGitignores,
@@ -79,6 +80,39 @@ describe("parseGitignore + isIgnored", () => {
     const file = parseGitignore(root, "[!a]*.txt\n");
     expect(isIgnored(at("b.txt"), false, [file])).toBe(true);
     expect(isIgnored(at("a.txt"), false, [file])).toBe(false);
+  });
+});
+
+describe("ignoresWholeDirectory", () => {
+  const rules = (text: string) => [parseGitignore(root, text)];
+
+  it("is true for a folder a rule names, and for one inside it", () => {
+    expect(ignoresWholeDirectory(at("dist"), rules("dist/\n"))).toBe(true);
+    expect(ignoresWholeDirectory(at("dist/lib"), rules("dist/\n"))).toBe(true);
+    expect(ignoresWholeDirectory(at("src"), rules("dist/\n"))).toBe(false);
+  });
+
+  it("is true when the rules ignore everything inside a folder but not the folder", () => {
+    expect(ignoresWholeDirectory(at("node_modules"), rules("**/node_modules/*\n"))).toBe(true);
+    expect(ignoresWholeDirectory(at("src"), rules("src/*\n"))).toBe(true);
+  });
+
+  it("is true for a dot folder under a .* rule", () => {
+    expect(ignoresWholeDirectory(at(".worktrees"), rules(".*\n"))).toBe(true);
+  });
+
+  it("is false when the rules ignore only some entries", () => {
+    expect(ignoresWholeDirectory(at("src"), rules(".*\n*.log\n**/*.js\n"))).toBe(false);
+  });
+
+  it("is false for a folder an allow-list .gitignore keeps", () => {
+    // `*` ignores every file, and `!*/` un-ignores every folder so git can
+    // look inside. The made-up file is ignored and the made-up folder is not.
+    expect(ignoresWholeDirectory(at("src"), rules("*\n!*/\n!*.ts\n"))).toBe(false);
+  });
+
+  it("is false with no files", () => {
+    expect(ignoresWholeDirectory(at("dist"), [])).toBe(false);
   });
 });
 

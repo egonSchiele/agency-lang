@@ -385,6 +385,78 @@ describe("_grep honours .gitignore", () => {
   });
 });
 
+describe("a folder named as the search root is searched whatever the .gitignore files above it say", () => {
+  let root: string;
+  const query = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: true,
+    invert: false,
+  };
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-named-folder-"));
+    // Without the .git folder, no .gitignore above a search folder applies.
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n.*\n");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "out", "c.js"), "needle\n");
+    fs.writeFileSync(path.join(root, "out", "f.log"), "needle\n");
+    fs.writeFileSync(path.join(root, "out", ".gitignore"), "*.log\n");
+    fs.mkdirSync(path.join(root, ".hidden"));
+    fs.writeFileSync(path.join(root, ".hidden", "d.txt"), "needle\n");
+    fs.mkdirSync(path.join(root, "src"));
+    fs.writeFileSync(path.join(root, "src", "e.js"), "needle\n");
+    fs.writeFileSync(path.join(root, "src", "e.txt"), "needle\n");
+    // A folder of repositories, laid out like .worktrees: each holds a .git
+    // file and its own .gitignore.
+    const worktree = path.join(root, ".worktrees", "wt");
+    fs.mkdirSync(worktree, { recursive: true });
+    fs.writeFileSync(path.join(worktree, ".git"), "gitdir: elsewhere\n");
+    fs.writeFileSync(path.join(worktree, ".gitignore"), "*.log\n");
+    fs.writeFileSync(path.join(worktree, "a.txt"), "needle\n");
+    fs.writeFileSync(path.join(worktree, "a.log"), "needle\n");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  /** The files holding "needle", searched the way the public tools call _grep. */
+  async function foundAsRoot(folder: string): Promise<string[]> {
+    const hits = (await _grep(path.join(root, folder), ".", query, 100)) as string[];
+    return hits.sort();
+  }
+
+  /** The same search, with the folder as `dir` below the root. */
+  async function foundBelowRoot(folder: string): Promise<string[]> {
+    const hits = (await _grep(root, folder, query, 100)) as string[];
+    return hits.sort();
+  }
+
+  it("searches a folder a rule above it ignores, and keeps that folder's own .gitignore", async () => {
+    expect(await foundAsRoot("out")).toEqual(["b.txt", "c.js"]);
+    expect(await foundBelowRoot("out")).toEqual(["b.txt", "c.js"]);
+  });
+
+  it("searches a dot folder under a .* rule", async () => {
+    expect(await foundAsRoot(".hidden")).toEqual(["d.txt"]);
+    expect(await foundBelowRoot(".hidden")).toEqual(["d.txt"]);
+  });
+
+  it("keeps the rules above a folder they ignore only part of", async () => {
+    expect(await foundAsRoot("src")).toEqual(["e.txt"]);
+    expect(await foundBelowRoot("src")).toEqual(["e.txt"]);
+  });
+
+  it("applies each repository's own .gitignore inside an ignored folder of repositories", async () => {
+    expect(await foundAsRoot(".worktrees")).toEqual(["wt/a.txt"]);
+  });
+});
+
 describe("_grep stops at maxResults inside one file", () => {
   let root: string;
   const query = {

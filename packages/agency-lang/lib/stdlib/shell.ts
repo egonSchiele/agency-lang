@@ -15,6 +15,7 @@ import { resolveDir } from "./resolveDir.js";
 import { expandTilde, resolveAgainstCwd, type TildeMode } from "./prepareContainedPath.js";
 import {
   type GitignoreFile,
+  ignoresWholeDirectory,
   isIgnored,
   readGitignore,
   parseGitignore,
@@ -402,7 +403,7 @@ function prefixesAbove(dir: string): string[] {
  *  which makes a root per directory since no approval names them. Files
  *  between the root and `dir` are read under the root. The nearest `.git` entry marks the repository
  *  root, and with no repository anywhere above `dir` nothing applies. */
-async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
+async function gitignoreFilesAbove(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
   const { host, approved } = walkRoot;
   if ((await host.files.stat(approved, path.join(dir, ".git"))) !== null) return [];
   const prefixes = prefixesAbove(dir);
@@ -429,6 +430,15 @@ async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<Git
     if (file) aboveFiles.push(file);
   }
   return [...aboveFiles, ...(await inTree(0))];
+}
+
+/** The .gitignore files a walk of `dir` applies before it reads any of its
+ *  own. A folder the files above ignore entirely is searched, the way grep
+ *  searches a file named on its command line. The folder's own .gitignore
+ *  files, and those below it, still apply. */
+async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
+  const files = await gitignoreFilesAbove(walkRoot, dir);
+  return ignoresWholeDirectory(path.join(walkRoot.base, dir), files) ? [] : files;
 }
 
 /** Walk `dir` under the approved root. A `dir` that is itself a symlink

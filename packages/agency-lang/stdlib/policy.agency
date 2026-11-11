@@ -31,6 +31,8 @@ import {
   _folderChoices,
   _sharedApprovalSet,
   _inSharedApprovalSet,
+  _effectRisk,
+  _riskColored,
  } from "agency-lang/stdlib-lib/policy.js"
 import { describeProblem } from "agency-lang/stdlib-lib/workflow/index.js"
 
@@ -65,7 +67,7 @@ answers in a JSON policy file. Use the rule-building functions below when
 your application provides its own approval UI.
 
 For a file read, the prompt offers two broader answers. "Always approve
-FileRead when" (`as`) saves one rule under every effect in the `FileRead`
+all reads in" (`as`) saves one rule under every effect in the `FileRead`
 set, so approving a read in a folder also approves listing and searching
 it. Both `as` and "always approve when" (`ap`) then ask which folder the
 rule covers: the folder in the interrupt or one of its parents, up to the
@@ -959,7 +961,7 @@ static const ANSWERS: AnswerRow[] = [
   { key: "a", action: "approve", tone: "approve", label: "approve once", covers: "nothing" },
   { key: "aa", action: "approve-always", tone: "approve", label: "always approve", covers: "effect" },
   { key: "ap", action: "approve-always-here", tone: "approve", label: "always approve when", covers: "scope" },
-  // The label gets the set's name and "when" added: "always approve FileRead when".
+  // The label gets the set's phrase and "in" added: "always approve all reads in".
   { key: "as", action: "approve-always-set", tone: "approve", label: "always approve", covers: "set" },
   { key: "r", action: "reject", tone: "reject", label: "reject once", covers: "nothing" },
   { key: "rr", action: "reject-always", tone: "reject", label: "always reject", covers: "effect" }
@@ -971,6 +973,8 @@ static const BACK_KEY = "b"
 /** The effect set an (as) answer covers. Empty when it is not offered. */
 type SharedSet = {
   name: string;
+  /** What the answer calls the set: "all reads". */
+  phrase: string;
   members: string[]
 }
 
@@ -1009,7 +1013,7 @@ def folderOptions(intr: any): any[] {
 def sharedSetFor(intr: any): SharedSet {
   const set: SharedSet = _sharedApprovalSet(intr.effect, globalCliPolicyOpts.fields)
   if (folderField(intr) != "" && folderOptions(intr).length == 0) {
-    return { name: "", members: [] }
+    return { name: "", phrase: "", members: [] }
   }
   return set
 }
@@ -1038,8 +1042,12 @@ def answerItem(row: AnswerRow, intr: any, scope: string, set: SharedSet): Choice
   if (row.covers == "scope") {
     return { key: row.key, label: row.label, tone: row.tone, detail: scope }
   }
+  // "always approve all reads in   /x and below". The folder alone reads
+  // after "in"; the field name would not.
   if (row.covers == "set") {
-    return { key: row.key, label: "${row.label} ${set.name} when", tone: row.tone, detail: scope }
+    const field = folderField(intr)
+    const where = if field == "" then scope else stripControlChars("${intr.data[field]} and below")
+    return { key: row.key, label: "${row.label} ${set.phrase} in", tone: row.tone, detail: where }
   }
   return { key: row.key, label: row.label, tone: row.tone }
 }
@@ -1067,20 +1075,23 @@ def unrejectedEffects(policy: Policy, intr: any, effects: string[]): string[] {
 // The folder step: which folder the rule should cover. Returns the folder
 // picked, or null when the user went back. `value` is the scoped field's
 // value in the interrupt, and `subject` names the effect or the set.
-def askFolder(value: string, subject: string, membersLine: string): string | null {
+def askFolder(value: string, subject: string, membersLine: string, risk: string): string | null {
   const choices = _folderChoices(value)
   let items: ChoiceItem[] = []
   for (choice in choices) {
     items.push({ key: "${items.length + 1}", label: stripControlChars(choice.path), detail: choice.note })
   }
   items.push({ key: BACK_KEY, label: "back" })
-  const title = "Always approve ${color.bold.cyan(stripControlChars(subject))} in which folder? Folders inside it are included."
+  // Each part colored on its own: a color's reset would end a bold that
+  // wrapped it.
+  const title = "${color.bold("Always approve")} ${_riskColored(risk, stripControlChars(subject))} ${color.bold("in which folder?")} Folders inside it are included."
   const picked = interruptChoice(
     title,
     stripControlChars(membersLine),
     items,
     allowFreeText: false,
     allowCancel: true,
+    risk: risk,
   )
   if (picked == BACK_KEY) {
     return null
@@ -1100,12 +1111,13 @@ def askFolderFor(intr: any, answer: AskUserResult): string | null {
     return ""
   }
   const value = "${intr.data[folderField(intr)]}"
+  const risk = _effectRisk(intr.effect)
   if (answer.action == "approve-always-here") {
-    return askFolder(value, intr.effect, "")
+    return askFolder(value, intr.effect, "", risk)
   }
   const set = sharedSetFor(intr)
   const members = unrejectedEffects(_policy ?? {}, intr, set.members)
-  return askFolder(value, set.name, "${set.name}: ${members.join(", ")}")
+  return askFolder(value, set.phrase, "Covers ${members.join(", ")}", risk)
 }
 
 // Present the approval menu for one interrupt and return the user's
@@ -1121,8 +1133,10 @@ def askFolderFor(intr: any, answer: AskUserResult): string | null {
 def askUser(intr: any): AskUserResult {
   // The message comes from whoever raised the interrupt, a tool the agent
   // wrote among them, and it goes to the footer whole. The effect beside
-  // it is a name from the code.
-  const title = "${color.bold.cyan(intr.effect)}  ${stripControlChars(intr.message)}"
+  // it is a name from the code. The effect takes the color for its risk,
+  // the same as the divider above it, and the question is bold.
+  const risk = _effectRisk(intr.effect)
+  const title = "${_riskColored(risk, intr.effect)}  ${color.bold(stripControlChars(intr.message))}"
   const body = prettyPrintInterruptData(intr.data, intr.effect, cols: interruptBodyWidth())
 
   const items = askUserChoices(intr)
@@ -1168,6 +1182,7 @@ def askUser(intr: any): AskUserResult {
         allowFreeText: true,
         allowCancel: true,
         expectsValue: intr.expectsValue == true,
+        risk: risk,
       )
       result = choiceResult(choice, items)
       const folder = askFolderFor(intr, result)

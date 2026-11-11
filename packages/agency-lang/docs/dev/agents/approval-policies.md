@@ -84,9 +84,20 @@ which work on the handler's active policy:
 
 ## Reading what you are approving
 
-The prompt's first line is the effect, in cyan and bold, then the
-interrupt's message, so which permission is being asked for is legible
-before the reason for it.
+The pinned prompt opens with a blank line and a divider labelled
+"approval needed", or "answer needed" for a raise that expects a value.
+The next line is the effect, then the interrupt's message in bold, so
+which permission is being asked for is legible before the reason for it.
+
+The divider and the effect name are colored by how much the action
+matters (`effectRisk` in `lib/runtime/effectRisk.ts`). Cyan is a read
+(`FileRead`). Yellow is a change (`FileWrite`, `Network`, `AwsS3`,
+`Calendar`, `Memory`, and any effect in no listed set, a program's own
+effects among them). Red is a danger (`Shell`, `Secrets`, `Messaging`,
+`Auth`). An effect in several sets takes the highest. The table there
+names concrete sets only: a set built from others, such as `FileSystem`,
+would otherwise pull every read up to a change. `std::remove` is in
+`FileWrite`, so it is yellow; nothing marks an effect as destructive.
 
 `interruptChoice` (`stdlib/ui/cli.agency`) draws the prompt in one of three
 ways:
@@ -404,9 +415,11 @@ from interrupt data, which a model can influence, so they go through
 sets whose members only read local files. Today that is `FileRead`. An
 effect in a listed set gets three things the others do not:
 
-- **A set-wide answer, `as`.** "Always approve FileRead when" saves the
+- **A set-wide answer, `as`.** "Always approve all reads in" saves the
   same scoped rule under every member of the set, so approving a read in a
-  folder also approves listing and searching it.
+  folder also approves listing and searching it. The words come from
+  `SHARED_APPROVAL_SETS`, which maps each set to its phrase. The detail
+  beside it is the folder alone, "/x and below", because it follows "in".
 - **A folder step** after `ap` and `as`. The person picks the folder the
   rule covers: the one in the interrupt or a parent.
 - **Rules that match dot folders.** A rule saved after the folder step sets

@@ -384,6 +384,7 @@ interruptChoice(
   allowFreeText: boolean = false,
   allowCancel: boolean = false,
   expectsValue: boolean = false,
+  risk: string = "",
 ): string
 ```
 
@@ -404,6 +405,7 @@ to `chooseOption`, including its plain-input fallback.
 | allowFreeText | `boolean` | false | Accept an answer outside the listed choices |
 | allowCancel | `boolean` | false | Let Escape cancel the current request in a terminal |
 | expectsValue | `boolean` | false | Treat free text as an answer value instead of a rejection reason |
+| risk | `string` | "" | "read", "change", or "danger": colors the prompt's divider and labels it "approval needed". Empty for a plain divider. |
 
 **Returns:** `string`
 

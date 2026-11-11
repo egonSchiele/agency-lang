@@ -395,6 +395,7 @@ export def interruptChoice(
   allowFreeText: boolean = false,
   allowCancel: boolean = false,
   expectsValue: boolean = false,
+  risk: string = "",
 ): string {
   """
   Ask for an approval choice or a free-text answer, using the active terminal
@@ -405,13 +406,14 @@ export def interruptChoice(
   @param allowFreeText - Accept an answer outside the listed choices
   @param allowCancel - Let Escape cancel the current request in a terminal
   @param expectsValue - Treat free text as an answer value instead of a rejection reason
+  @param risk - "read", "change", or "danger": colors the prompt's divider and labels it "approval needed". Empty for a plain divider.
   """
   // The wait is logged here because this prompt usually runs inside a policy
   // handler, and the log then says only that a handler answered.
   const openedAt = _promptOpened()
   let answer = ""
   if (_stickyInterruptAvailable()) {
-    answer = _interruptChoice(title, body, items, allowFreeText, allowCancel, expectsValue)
+    answer = _interruptChoice(title, body, items, allowFreeText, allowCancel, expectsValue, risk)
   } else {
     // Only the pinned footer draws `detail`, and it can hold what the
     // answer approves, so the picker and the plain prompt get it in the

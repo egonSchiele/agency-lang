@@ -8,10 +8,14 @@ import { isContained } from "../stdlib/isContained.js";
 // the effect set one answer may cover. Pure: the prompt passes in the
 // registry, the sets, and the run's directories.
 
-/** Effect sets whose members only read local files. An effect in one of
- *  them gets the set-wide answer, the folder step, and generated rules that
- *  match dot folders. Check a new entry against all three. */
-export const SHARED_APPROVAL_SETS: string[] = ["FileRead"];
+/** Effect sets whose members only read local files, each with the words
+ *  the prompt's set-wide answer uses for it: "always approve all reads in".
+ *  An effect in one of them gets the set-wide answer, the folder step, and
+ *  generated rules that match dot folders. Check a new entry against all
+ *  three. */
+export const SHARED_APPROVAL_SETS: Record<string, string> = { FileRead: "all reads" };
+
+const SHARED_SET_NAMES = Object.keys(SHARED_APPROVAL_SETS);
 
 /** How many folders the folder step lists at most. */
 export const MAX_FOLDER_CHOICES = 8;
@@ -105,7 +109,7 @@ export function sharedApprovalSet(
   const ownIsDeclared = sameScopedFields(registered[effect] ?? [], own);
   const agrees = (member: string) =>
     Object.hasOwn(scopes, member) ? sameScopedFields(scopes[member], own) : ownIsDeclared;
-  const found = SHARED_APPROVAL_SETS.map((name) => sets[name]).find(
+  const found = SHARED_SET_NAMES.map((name) => sets[name]).find(
     (set) => set !== undefined && set.members.includes(effect) && set.members.every(agrees),
   );
   return found ?? null;
@@ -113,5 +117,5 @@ export function sharedApprovalSet(
 
 /** True when `effect` is in a listed set. */
 export function inSharedApprovalSet(effect: string, sets: Record<string, EffectSetInfo>): boolean {
-  return SHARED_APPROVAL_SETS.some((name) => sets[name]?.members.includes(effect) === true);
+  return SHARED_SET_NAMES.some((name) => sets[name]?.members.includes(effect) === true);
 }

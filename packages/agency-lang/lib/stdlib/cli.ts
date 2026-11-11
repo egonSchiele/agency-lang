@@ -8,6 +8,7 @@ import { logReplTurn } from "./statelog.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./prompts.js";
+import { footerDivider, optionRows, type InterruptItem } from "./interruptRows.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
 import { escapedTurnText, hasInterrupts } from "../runtime/interrupts.js";
@@ -517,57 +518,6 @@ function reduceInterrupt(
   return { state, outcome: { kind: "pending" } };
 }
 
-/** One answer at the approval prompt. */
-type InterruptItem = {
-  key: string;
-  label: string;
-  /** Dim text in the third column: what the answer covers. */
-  detail?: string;
-  /** Colors the key: green for approve, red for reject, bold alone otherwise. */
-  tone?: "approve" | "reject";
-};
-
-const KEY_COLUMN_GAP = 3;
-const LABEL_COLUMN_GAP = 3;
-const TONE_COLOR: Record<"approve" | "reject", (text: string) => string> = {
-  approve: color.bold.green,
-  reject: color.bold.red,
-};
-
-function coloredKey(item: InterruptItem): string {
-  return item.tone === undefined ? color.bold(item.key) : TONE_COLOR[item.tone](item.key);
-}
-
-/** The answers, one per line, in three columns: key, label, and a dim
- *  detail. An item that does not fit on one line wraps its label and then
- *  its detail onto lines of their own, indented to the label column, so a
- *  long path is shown whole whether it is the label (the folder step) or
- *  the detail. One or more lines per item. Pure. */
-function optionRows(items: InterruptItem[], width: number): string[] {
-  const keyWidth = Math.max(...items.map((item) => item.key.length)) + KEY_COLUMN_GAP;
-  const withDetail = items.filter((item) => item.detail !== undefined && item.detail !== "");
-  const labelWidth =
-    Math.max(0, ...withDetail.map((item) => visualWidth(item.label))) + LABEL_COLUMN_GAP;
-  const indent = " ".repeat(keyWidth);
-  const wrapWidth = Math.max(1, width - keyWidth);
-  const dim = (text: string) => `${DIM}${text}${COLOR_RESET}`;
-  return items.flatMap((item) => {
-    const key = coloredKey(item) + " ".repeat(keyWidth - item.key.length);
-    const detail = item.detail ?? "";
-    if (detail === "" && keyWidth + visualWidth(item.label) <= width) {
-      return [key + item.label];
-    }
-    if (detail !== "" && keyWidth + labelWidth + visualWidth(detail) <= width) {
-      const pad = " ".repeat(labelWidth - visualWidth(item.label));
-      return [key + item.label + pad + dim(detail)];
-    }
-    const labelLines = wrapText(item.label, wrapWidth);
-    const detailLines = detail === "" ? [] : wrapText(detail, wrapWidth).map(dim);
-    const rest = [...labelLines.slice(1), ...detailLines];
-    return [key + labelLines[0], ...rest.map((line) => indent + line)];
-  });
-}
-
 const INTERRUPT_BODY_MAX_LINES = 6;
 // Typed like any other option. The widget owns it, so no caller has to
 // offer it and no effect can take it for something else.
@@ -588,6 +538,10 @@ type InterruptFooterInput = {
   /** The terminal's height. The body shrinks so the whole footer fits in
    *  it. Leave it out for no limit beyond INTERRUPT_BODY_MAX_LINES. */
   rows?: number;
+  /** How much the prompt should catch the eye ("read", "change",
+   *  "danger"). It colors the divider and adds its label. Any other value
+   *  leaves a plain dim divider. */
+  risk?: string;
 };
 
 /** What decides how many body rows the footer shows. The shell and the
@@ -597,11 +551,11 @@ type FooterShape = Pick<
   "title" | "body" | "items" | "allowFreeText" | "columns" | "rows"
 >;
 
-// Rows the footer draws besides the title, body, and answers: the divider,
-// the body's ellipsis, the free-text hint, a notice, and the input line.
-// A notice comes and goes with keystrokes, so its row is always kept free
-// and the body does not change size as the user types.
-const FOOTER_FIXED_ROWS = 5;
+// Rows the footer draws besides the title, body, and answers: the blank
+// line and the divider, the body's ellipsis, the free-text hint, a notice,
+// and the input line. A notice comes and goes with keystrokes, so its row
+// is always kept free and the body does not change size as the user types.
+const FOOTER_FIXED_ROWS = 6;
 
 function footerWidth(columns: number): number {
   return Math.max(MIN_FOOTER_WIDTH, columns - 1);
@@ -662,7 +616,9 @@ function bodyIsTruncated(shape: FooterShape): boolean {
  *  glyph. buildFrame wraps each line to width. */
 function renderInterruptFooter(input: InterruptFooterInput): string[] {
   const width = footerWidth(input.columns);
-  const lines: string[] = [`${DIM}${"─".repeat(width)}${COLOR_RESET}`];
+  // A blank line, then the divider, set the prompt apart from the output
+  // above it.
+  const lines: string[] = ["", footerDivider(width, input.risk ?? "", input.expectsValue === true)];
   if (input.title !== "") {
     lines.push(` ${input.title}`);
   }
@@ -694,6 +650,8 @@ type InterruptOpts = {
   allowFreeText: boolean;
   allowCancel: boolean;
   expectsValue?: boolean;
+  /** See InterruptFooterInput.risk. */
+  risk?: string;
 };
 
 /** Stop the "Thinking" spinner if the REPL has one running (which also
@@ -751,7 +709,13 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
   let state = INITIAL_INTERRUPT_STATE;
 
   const region = installBottomRegion(
-    () => renderInterruptFooter({ ...shape(), expectsValue: opts.expectsValue, state }),
+    () =>
+      renderInterruptFooter({
+        ...shape(),
+        expectsValue: opts.expectsValue,
+        risk: opts.risk,
+        state,
+      }),
     process.stdout.isTTY === true,
     { hideCursor: true },
   );
@@ -808,12 +772,13 @@ export async function _interruptChoice(
   allowFreeText: boolean,
   allowCancel: boolean,
   expectsValue: boolean = false,
+  risk: string = "",
 ): Promise<string> {
   const hook = (globalThis as any).__agencyInterruptPrompt;
   if (typeof hook !== "function") {
     throw new Error("_interruptChoice: no active line-mode REPL");
   }
-  return hook({ title, body, items, allowFreeText, allowCancel, expectsValue });
+  return hook({ title, body, items, allowFreeText, allowCancel, expectsValue, risk });
 }
 
 /** True when a line-mode REPL is running AND both ends are real terminals,

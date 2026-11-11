@@ -253,7 +253,7 @@ describe("every stdlib effect has a decided always-scope", () => {
         .find((one) => one.effect === effect)
         ?.scope.toSorted()
         .join(",");
-    const mismatches = SHARED_APPROVAL_SETS.flatMap((name) => {
+    const mismatches = Object.keys(SHARED_APPROVAL_SETS).flatMap((name) => {
       const members = sets[name]?.members ?? [];
       expect(members, `${name} is not a built-in effect set`).not.toEqual([]);
       const first = scopeOf(members[0]);

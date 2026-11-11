@@ -9,8 +9,10 @@ import {
   folderChoices,
   inSharedApprovalSet,
   sharedApprovalSet,
+  SHARED_APPROVAL_SETS,
   type FolderChoice,
 } from "@/runtime/alwaysChoices.js";
+import { effectRisk, RISK_COLOR, type EffectRisk } from "@/runtime/effectRisk.js";
 export { validatePolicy as _validatePolicy, escapeGlob as _escapeGlob } from "@/runtime/policy.js";
 
 /** `checkPolicy` from Agency: the `dir` patterns stand for the directories
@@ -37,14 +39,28 @@ export function _folderChoices(value: string): FolderChoice[] {
 }
 
 /** The listed effect set one answer may cover for `effect`, with each
- *  member's scope resolved through the caller's `fields:` overrides. An
- *  empty name and member list when no set applies. */
+ *  member's scope resolved through the caller's `fields:` overrides, and
+ *  the words the prompt uses for it ("all reads"). Empty when no set
+ *  applies. */
 export function _sharedApprovalSet(
   effect: string,
   overrides: Record<string, ScopedField[]>,
-): { name: string; members: string[] } {
+): { name: string; phrase: string; members: string[] } {
   const set = sharedApprovalSet(effect, allAlwaysScopes(), overrides, builtinEffectSets());
-  return set === null ? { name: "", members: [] } : { name: set.name, members: set.members };
+  if (set === null) {
+    return { name: "", phrase: "", members: [] };
+  }
+  return { name: set.name, phrase: SHARED_APPROVAL_SETS[set.name], members: set.members };
+}
+
+/** How much the prompt for `effect` should catch the eye. */
+export function _effectRisk(effect: string): EffectRisk {
+  return effectRisk(effect, builtinEffectSets());
+}
+
+/** `text` in the bold color for `risk`, the one the prompt's divider uses. */
+export function _riskColored(risk: EffectRisk, text: string): string {
+  return RISK_COLOR[risk](text);
 }
 
 /** Whether `effect` belongs to a set that gets the broader answers. */

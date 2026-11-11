@@ -1,0 +1,62 @@
+import { glob, ls, grep } from "std::shell"
+import { sortBy } from "std::array"
+
+// The fixture's .gitignore names itself, ignored.md, and out/. Those files
+// are committed with `git add -f`, because a plain `git add` skips them.
+def fixtures(): string {
+  return __dirname + "/gitignore-fixtures"
+}
+
+def sortedPaths(paths: string[]): string[] {
+  const sorted = sortBy(paths) as item {
+    return item
+  }
+  return sorted
+}
+
+def globIn(pattern: string, dir: string, respectGitignore: boolean = true): string[] {
+  const results = glob(pattern, dir, respectGitignore: respectGitignore) catch [] with approve
+  return sortedPaths(results)
+}
+
+def lsIn(dir: string, recursive: boolean = true, respectGitignore: boolean = true): string[] {
+  const entries = ls(dir, recursive, respectGitignore: respectGitignore) catch [] with approve
+  return sortedPaths([entry.path for entry in entries])
+}
+
+node globSkipsIgnored() {
+  return globIn("**/*.md", fixtures())
+}
+
+node globIncludesIgnoredWhenAsked() {
+  return globIn("**/*.md", fixtures(), respectGitignore: false)
+}
+
+node globSearchesNamedIgnoredFolder() {
+  return globIn("*.md", fixtures() + "/out")
+}
+
+node globSearchesFolderNamedInPattern() {
+  return globIn("out/*.md", fixtures())
+}
+
+node lsRecursiveSkipsIgnored() {
+  return lsIn(fixtures())
+}
+
+node lsRecursiveIncludesIgnoredWhenAsked() {
+  return lsIn(fixtures(), respectGitignore: false)
+}
+
+node lsPlainShowsIgnored() {
+  return lsIn(fixtures(), recursive: false)
+}
+
+node lsRecursiveListsNamedIgnoredFolder() {
+  return lsIn(fixtures() + "/out")
+}
+
+node grepSearchesNamedIgnoredFolder() {
+  const hits = grep("needle", fixtures() + "/out", filesOnly: true) catch [] with approve
+  return hits
+}

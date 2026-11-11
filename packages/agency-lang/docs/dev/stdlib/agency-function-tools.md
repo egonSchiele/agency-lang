@@ -128,6 +128,27 @@ calls, failure counts, and tool removal use its advertised name and
 original parameters. The factory adds no validator inferred from JSON
 Schema. The original `!` checks and custom validators run in the child.
 
+## The wrong std:: module
+
+Preparation checks a `std::` module source against
+`lib/stdlib/stdlibModules.data.ts`, a table of every stdlib module and
+its public functions. When the module does not exist, or exists but
+does not export a requested name, the error names the module that does:
+
+```
+There is no standard library module named std::exec. `exec` is exported by std::shell.
+Public exported function 'exec' was not found. `exec` is exported by std::shell.
+```
+
+`scripts/generate-stdlib-modules.mjs` writes the table in the
+`generated-data` make target, from `_stdlibModuleTable`, which uses the
+same export walk as `learn`. CI fails when the committed table differs
+from a fresh one, so a change to stdlib exports needs `make` and a
+commit of the data file.
+
+A module missing from the table is looked up on disk before it is
+refused. With a stale table, a module that exists still loads.
+
 ## Coordinator records
 
 The coordinator's learning module keeps `learnedState` in an Agency

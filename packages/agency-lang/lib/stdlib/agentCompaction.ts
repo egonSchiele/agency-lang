@@ -7,6 +7,7 @@ import * as smoltalk from "smoltalk";
 import { agency } from "../runtime/agency.js";
 import { expiryOf } from "../runtime/state/messageMetadata.js";
 import type { MessageThread } from "../runtime/state/messageThread.js";
+import { reasoningChars } from "../runtime/reasoningSize.js";
 import { _contentToString } from "./threads.js";
 
 // A rough size for text the provider has not counted yet.
@@ -59,8 +60,13 @@ function messageText(message: smoltalk.Message): string {
   return [content, toolCallsText(message)].filter((part) => part !== "").join("\n");
 }
 
+/** Counts each message's text, tool calls, and reasoning record, which goes
+ *  back to the model. The summarizer's transcript leaves the reasoning out. */
 export function estimateTokens(messages: smoltalk.Message[]): number {
-  const chars = messages.reduce((total, message) => total + messageText(message).length, 0);
+  const chars = messages.reduce(
+    (total, message) => total + messageText(message).length + reasoningChars(message),
+    0,
+  );
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 
@@ -86,7 +92,11 @@ export function contextTokens(messages: smoltalk.Message[]): number {
  *  `keepTokens` long. The kept part starts at a user message when one is
  *  close enough, and otherwise at an assistant message. It never starts at
  *  a tool result, which would be cut off from the call it answers. Returns
- *  0 when everything fits, or when no message can start the kept part. */
+ *  0 when everything fits, or when no message can start the kept part.
+ *  When the newest message alone is over the budget, as a reply with long
+ *  reasoning can be, the kept part starts at the last user or assistant
+ *  message, so a tool result keeps the call it answers and everything older
+ *  can still be summarized. */
 function firstKeptIndex(conversation: smoltalk.Message[], keepTokens: number): number {
   let fits = conversation.length;
   let tokens = 0;
@@ -100,6 +110,12 @@ function firstKeptIndex(conversation: smoltalk.Message[], keepTokens: number): n
   }
   if (fits === 0) {
     return 0;
+  }
+  if (fits === conversation.length) {
+    const start = conversation.findLastIndex(
+      (message) => message.role === "user" || message.role === "assistant",
+    );
+    return Math.max(start, 0);
   }
   for (const role of ["user", "assistant"]) {
     const index = conversation.findIndex((message, at) => at >= fits && message.role === role);

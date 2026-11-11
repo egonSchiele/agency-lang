@@ -116,7 +116,9 @@ export function dropHandoffToolCall(
     thread.removeAt(index);
     return;
   }
-  thread.replaceAt(index, smoltalk.assistantMessage(text));
+  // The reasoning that led to the text stays with it, so smoltalk can send
+  // it back to the model that made it.
+  thread.replaceAt(index, smoltalk.assistantMessage(text, { reasoning: carrier.reasoning }));
 }
 
 /**
@@ -436,12 +438,13 @@ export function endThreadWithAnswer(thread: MessageThread, answerText: string): 
   const messages = thread.getMessages();
   const index = messages.length - 1;
   const last = messages[index];
-  const answer = smoltalk.assistantMessage(answerText);
   if (last !== undefined && last.role === "assistant" && !carriesToolCalls(last)) {
-    thread.replaceAt(index, answer);
+    // The answer takes the replaced reply's reasoning record with it.
+    const reasoning = (last as smoltalk.AssistantMessage).reasoning;
+    thread.replaceAt(index, smoltalk.assistantMessage(answerText, { reasoning }));
     return;
   }
-  thread.push(answer);
+  thread.push(smoltalk.assistantMessage(answerText));
 }
 
 function carriesToolCalls(message: smoltalk.Message): boolean {

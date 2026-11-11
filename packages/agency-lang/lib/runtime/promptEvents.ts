@@ -24,7 +24,10 @@ export function redactMessagesForLog(messages: MessageThread): smoltalk.MessageJ
 /** A thread's redacted messages for statelog, each carrying its debug
  *  label (from `llm(label:)` / `userMessage(msg, label:)`) as a top-level
  *  `label` when it has one. The message's `metadata` is runtime
- *  bookkeeping and is left out of the dump. `redactAttachments` is 1:1
+ *  bookkeeping and is left out of the dump. So is its `reasoning`: each
+ *  call's reasoning is already on that call's own `promptCompletion`
+ *  event, and dumping it with the thread on every call would grow a
+ *  long run's log with the square of its reasoning. `redactAttachments` is 1:1
  *  over an array, so index `i` is message `i`; a test pins that through
  *  the redaction path with a real attachment.
  *
@@ -34,7 +37,13 @@ export function withMessageLabels(
   messages: MessageThread,
 ): (smoltalk.MessageJSON & { label?: string })[] {
   return redactMessagesForLog(messages).map((m, i) => {
-    const { metadata: _metadata, ...rest } = m;
+    const {
+      metadata: _metadata,
+      reasoning: _reasoning,
+      ...rest
+    } = m as smoltalk.MessageJSON & {
+      reasoning?: unknown;
+    };
     const label = messages.labelAt(i);
     return label === null ? rest : { ...rest, label };
   });
@@ -118,8 +127,11 @@ export function emitPromptCompletion({
     // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
     // A decision call's rawData is its answers, which `decision` carries
     // explicitly, so the echo leaves it out rather than logging them twice.
+    // The reasoning record is left out too: `reasoning` already logs the
+    // text, and a Responses record holds encrypted items no reader can use.
     completion: {
       ...completion,
+      reasoningRecord: undefined,
       usage: projectedUsage,
       ...(decision === undefined ? {} : { rawData: undefined }),
     },

@@ -120,12 +120,45 @@ OpenRouter passes each call on to one of several companies that host the model. 
 
 Both reach the log with no Agency code: `emitPromptCompletion` (`lib/runtime/promptEvents.ts`) copies the whole completion into the `promptCompletion` event. The logs viewer shows `servedBy` after the model name and `reasoning` above the reply.
 
-Neither goes on the assistant message in the thread, so `lastReply()` does not return them. `buildReplyMessage` (`lib/runtime/utils.ts`) copies named fields only. There are two reasons:
-
-- **The reasoning has no signature.** smoltalk sends a message's `thinkingBlocks` back to Anthropic on the next request, and Anthropic rejects a thinking block without a valid signature. If reasoning from a GLM call rode on the thread, the first Claude call after a `/model` switch would fail.
-- **The thread is in every checkpoint.** Reasoning can run to thousands of tokens per call.
+`servedBy` does not go on the assistant message in the thread, so `lastReply()` does not return it: `buildReplyMessage` (`lib/runtime/utils.ts`) copies named fields only. The reasoning does, as a reasoning record. See the next section.
 
 Two request options go the other way. `openRouter.provider` chooses which companies OpenRouter may use, for example `{ provider: { ignore: ["open-inference"] } }`; it can be set per call, with `setLlmOptions`, or as `client.openRouter` in `agency.json`. `rawAttributes` is spread into the request body for a field Agency has no option for, such as `top_k`. It is spread after the fields the client builds, so today it can also replace them, the model included (smoltalk#73).
+
+## Reasoning sent back to the model
+
+smoltalk turns each reply's reasoning into a reasoning record on `PromptResult.reasoningRecord`. The record names the provider and the model that produced it. When a later request is built, smoltalk sends each record back only to that same provider and model, in the field it arrived in: OpenRouter's `reasoning_details` or `reasoning`, a compatible server's `reasoning_content`, or the Responses API's encrypted reasoning items. Reasoning from another model is dropped, and it is never turned into visible text. Anthropic and Google thinking blocks are separate, and smoltalk sends them back by provider. smoltalk's `CLAUDE.md` has the full rules.
+
+Agency keeps the record and smoltalk decides who receives it:
+
+- **The reply message.** `buildReplyMessage` copies the record onto the reply as its `reasoning`. Like the other extras, it goes through `serializableExtra`, so a record that does not match `ReasoningRecordSchema` is dropped and cannot break a checkpoint.
+- **A model switch.** A `/model` switch, preset slots, and the router leave records in place. The next request goes to the new model, and smoltalk leaves out the old model's records. If the conversation switches back, they are sent again.
+- **The statelog.** `withMessageLabels` (`lib/runtime/promptEvents.ts`) leaves `reasoning` out of the thread it dumps on every `promptCompletion` event. Each call's reasoning is already on that call's own event, and dumping it with the whole thread on every call would grow a long run's log with the square of its reasoning.
+- **Who else can read it.** The record is an ordinary field of the message, so the `onLLMCallStart`, `onLLMCallEnd`, and `onThreadEnd` callbacks see it, and so do `agency.threads.list()` and `agency.threads.get()` in TypeScript and `listThreads` in Agency code. That includes a Responses record's encrypted items. Nothing sends them to a model except smoltalk's own rule.
+- **A cut-off reply.** The cut-off retry (`docs/dev/agents/tool-loop-guards.md`) removes an empty reply that the output limit cut off, and its record goes with it. That reasoning stopped in the middle, so it should not go back.
+
+Records stay on the thread for as long as the thread exists, so they ride in every checkpoint and saved agent session. On the SWE-bench run on GLM 5.3 Flash on 2026-11-10, before reasoning was sent back:
+
+| Task | Model calls | Reasoning per call | Reasoning on the thread by the end |
+|---|---|---|---|
+| `astropy-13398` | 101 | 5,515 characters | about 557,000 characters |
+| `sympy-13615` | 34 | 6,543 characters | about 222,000 characters |
+| `pytest-10356` | 50 | 3,938 characters | about 197,000 characters |
+| the other seven | 11 to 50 | 130 to 770 characters | under 40,000 characters |
+
+A hosted resume request (`MAX_BODY_BYTES`, 10 MB, in `lib/serve/constants.ts`) holds more than one copy of this. A checkpoint taken during a tool loop holds the thread twice, once in the thread store and once as `messagesJSON` on the `runPrompt` frame (`docs/dev/runtime/checkpoint-patch.md`). The `/resume` body sends back every interrupt, and each one carries the whole checkpoint. On a run as long as `astropy-13398`, about 557,000 characters of reasoning is about 1.2 MB once escaped and stored twice, so 9 interrupts at once would pass the limit before any message text is counted. The other cost is input tokens: every request carries all of the same model's earlier reasoning, and the provider bills it. If either the size or the cost is too much, the fallback is to keep only the newest records up to a size budget. Dropping a call's records when the call returns would not help the coding agent, whose whole task is one `llm()` call.
+
+Two other places depend on how much reasoning there is:
+
+- **Traces.** A trace stores a whole checkpoint at every step (`docs/dev/runtime/trace.md`), so reasoning makes an `.agencytrace` file grow with the square of the run.
+- **Compaction size.** Both compactions estimate a message's size from its text, and both add its reasoning record through `reasoningChars` (`lib/runtime/reasoningSize.ts`), because the record goes back to the model. The agent's compaction (`lib/stdlib/agentCompaction.ts`) uses that estimate to decide how much to keep, and memory compaction (`lib/runtime/memory/compaction.ts`) uses it for its token trigger. Neither summary includes the reasoning.
+
+**Open issue.** Anthropic's newest models and OpenAI's newer models use earlier reasoning only while the system prompt, the tools, and the messages before it are unchanged. After a change, the API drops the reasoning that follows it. Every provider's prompt cache also matches by exact prefix, so the same change makes everything after it a cache miss. Agency changes earlier history in several places:
+
+- an expiring message is removed when its owner ends: the memory facts after a request, the round warning and the agent's global instructions after an `llm()` call, and a handoff's persona after the handoff;
+- the tool list shrinks at the round cap, and removed tools leave it;
+- memory compaction replaces older messages with a summary.
+
+This is Linear ADI-294.
 
 ## Where smoltalk is used
 

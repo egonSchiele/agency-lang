@@ -7,7 +7,7 @@ description: Developer docs for Agency's LLM plumbing: the smoltalk library ever
 
 Paths are relative to `packages/agency-lang/`. Read the one that matches the task; each doc records the key decisions, the architecture, the relevant files, and the subtleties that are easy to miss.
 
-- `docs/dev/llm/smoltalk.md` — The external library Agency routes every LLM call through.
+- `docs/dev/llm/smoltalk.md` — The external library Agency routes every LLM call through, and the reasoning record each reply keeps so smoltalk can send it back to the model that produced it: why it rides on the thread, why the statelog dump leaves it out, and what it costs.
 - `docs/dev/llm/llm-clients.md` — The `LLMClient` interface, for swapping smoltalk out for something else.
 - `docs/dev/llm/local-models.md` — How local-model support is wired, from the provider to model download and verification, the kind every model has and where it comes from, and embeddings through the plugin.
 - `docs/dev/llm/mlx-local-models.md` — The `mlx` backend: the three backends, the `backend` field and `mlx:` prefix, how a run finds the served model name, the per-model record file, `remove -f`, why a snapshot directory of symlinks is accepted, `agency local serve` with its one-process-per-model front door, the `ServeTarget` list that is its one input, the model pool that owns the processes, `--lazy` loading with its memory estimate and eviction, `cancel` and the `stopsOnClose` row, how `close` stops the processes and the pipe that stops them when the server dies, and the admin routes with their host and content-type rules, the `--vlm` chat runtime and its request rules, the embedding server behind `serve --embedding`, and the Hub downloader: chunks, resume, verification, and the fake hub.

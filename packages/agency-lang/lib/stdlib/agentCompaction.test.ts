@@ -181,3 +181,55 @@ describe("transcriptText", () => {
     expect(transcriptText([calling])).toContain('read({"filename":"a.ts"})');
   });
 });
+
+describe("reasoning in the size estimates", () => {
+  // 400 characters of reasoning is 100 estimated tokens.
+  const thinking = (label: string) =>
+    assistantMessage(label.padEnd(100, "."), {
+      reasoning: { provider: "openrouter", model: "m", text: "r".repeat(400), format: "reasoning" },
+    });
+
+  it("estimateTokens counts a reply's reasoning record, which goes back to the model", () => {
+    expect(estimateTokens([thinking("a1")])).toBe(25 + 100);
+  });
+
+  it("planCompaction summarizes older turns when their reasoning fills the keep budget", () => {
+    const turns = [user("u1"), thinking("a1"), user("u2"), thinking("a2")];
+    // Text alone is 100 tokens and fits a keep budget of 200; with the
+    // reasoning, the turns are 300 tokens and the older one must go.
+    const plan = planCompaction(turns, 200);
+    expect(plan).not.toBeNull();
+    expect(labels(plan!.summarized)).toEqual(["u1", "a1"]);
+  });
+
+  it("summarizes older turns when the newest reply alone is over the keep budget", () => {
+    const huge = assistantMessage("a2".padEnd(100, "."), {
+      reasoning: {
+        provider: "openrouter",
+        model: "m",
+        text: "r".repeat(1200),
+        format: "reasoning",
+      },
+    });
+    const plan = planCompaction([user("u1"), assistant("a1"), user("u2"), huge], 200);
+    expect(plan).not.toBeNull();
+    expect(labels(plan!.summarized)).toEqual(["u1", "a1", "u2"]);
+    expect(plan!.kept).toEqual([huge]);
+  });
+
+  it("keeps a tool result with the call it answers when the tool result alone is over the budget", () => {
+    const caller = assistantMessage("a2-call".padEnd(100, "."), {
+      toolCalls: [new ToolCall("c1", "read", {})],
+    });
+    const hugeResult = toolMessage("t2".padEnd(1200, "."), { tool_call_id: "c1", name: "read" });
+    const plan = planCompaction([user("u1"), assistant("a1"), caller, hugeResult], 200);
+    expect(plan).not.toBeNull();
+    expect(labels(plan!.summarized)).toEqual(["u1", "a1"]);
+    expect(plan!.kept).toEqual([caller, hugeResult]);
+  });
+
+  it("keeps reasoning out of the summarizer's transcript", () => {
+    const plan = planCompaction([user("u1"), thinking("a1"), user("u2"), thinking("a2")], 200);
+    expect(transcriptText(plan!.summarized)).not.toContain("rrrr");
+  });
+});

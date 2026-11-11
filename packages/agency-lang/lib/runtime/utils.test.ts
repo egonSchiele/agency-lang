@@ -3,6 +3,7 @@ import {
   deepFreeze,
   extractStructuredResponse,
   normalizeModelUsage,
+  serializableExtra,
   updateTokenStats,
 } from "./utils.js";
 import { isSuccess, isFailure } from "./result.js";
@@ -446,5 +447,27 @@ describe("token-stats counters: missing vs malformed", () => {
     normalizeModelUsage({ "opus-4.8": { inputTokens: {}, outputTokens: 5, totalCost: 0.02 } });
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0][0])).toContain("models.opus-4.8.inputTokens");
+  });
+});
+
+describe("serializableExtra", () => {
+  const anything = z.object({ details: z.array(z.unknown()) });
+
+  it("drops a value JSON cannot encode, even when the schema accepts it", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const dropped: unknown[] = [];
+    expect(
+      serializableExtra({ details: [circular] }, anything, (e) => dropped.push(e)),
+    ).toBeUndefined();
+    expect(serializableExtra({ details: [10n] }, anything, (e) => dropped.push(e))).toBeUndefined();
+    expect(dropped).toHaveLength(2);
+  });
+
+  it("keeps a copy that later changes to the original do not reach", () => {
+    const original = { details: [{ text: "a" }] };
+    const kept = serializableExtra(original, anything);
+    (original.details[0] as { text: string }).text = "changed";
+    expect(kept).toEqual({ details: [{ text: "a" }] });
   });
 });

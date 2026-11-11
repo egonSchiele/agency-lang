@@ -12,7 +12,8 @@ export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
-/** Keep a value only when it round-trips through the given schema. The reply
+/** Keep a JSON copy of a value only when it round-trips through JSON and the
+ *  given schema. The reply
  *  message's usage, cost, thinking, and logprobs are validated by smoltalk's fromJSON
  *  on restore (checkpoint resume, rewind, subthread clone), which throws on a
  *  bad shape, so a value that would not pass is dropped here instead — the
@@ -28,9 +29,20 @@ export function serializableExtra<T>(
   if (value === undefined) {
     return undefined;
   }
-  const parsed = schema.safeParse(value);
+  // The thread is written to checkpoints as JSON, and a schema field typed
+  // as unknown would accept a value JSON cannot encode, such as a circular
+  // object or a bigint. So the value kept is a JSON copy, checked against
+  // the schema.
+  let copy: T;
+  try {
+    copy = JSON.parse(JSON.stringify(value));
+  } catch (error) {
+    onInvalid?.(error);
+    return undefined;
+  }
+  const parsed = schema.safeParse(copy);
   if (parsed.success) {
-    return value;
+    return copy;
   }
   onInvalid?.(parsed.error);
   return undefined;
@@ -55,8 +67,10 @@ function warnUnserializableReplyField(
 /** The assistant message `runPrompt` appends for a completion. Everything the
  *  completion carried beyond its text rides on it, where `lastReply()` in
  *  std::thread reads it back: thinking, usage, cost, and a provider's extras
- *  such as a decision model's answers. Each of thinking, logprobs, usage, and
- *  cost goes through {@link serializableExtra} so a shape that would not survive smoltalk's
+ *  such as a decision model's answers. The reasoning record rides on it too,
+ *  so smoltalk can send it back to the model that produced it. Each of
+ *  thinking, logprobs, usage, cost, and the reasoning record goes through
+ *  {@link serializableExtra} so a shape that would not survive smoltalk's
  *  fromJSON on restore is dropped rather than left to break a checkpoint. An
  *  unset `toolCalls` serializes exactly as an omitted one. */
 export function buildReplyMessage(
@@ -80,6 +94,11 @@ export function buildReplyMessage(
     ),
     usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema, warn("usage")),
     cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema, warn("cost")),
+    reasoning: serializableExtra(
+      completion.reasoningRecord,
+      smoltalk.ReasoningRecordSchema,
+      warn("reasoning"),
+    ),
     rawData: completion.rawData,
   });
 }

@@ -50,6 +50,25 @@ describe("dropHandoffToolCall", () => {
     expect(thread.labelAt(1)).toBe("main");
   });
 
+  it("keeps the reasoning record on the text it leaves", () => {
+    const record: smoltalk.ReasoningRecord = {
+      provider: "openrouter",
+      model: "m",
+      text: "plan",
+      format: "reasoning",
+    };
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("hello"));
+    thread.push(
+      smoltalk.assistantMessage("I'll ask the explorer.", {
+        toolCalls: [toolCall()],
+        reasoning: record,
+      }),
+    );
+    dropHandoffToolCall(thread, explorerCall);
+    expect((thread.getMessages()[1] as smoltalk.AssistantMessage).reasoning).toEqual(record);
+  });
+
   it("removes the message when the assistant wrote no text", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
@@ -458,6 +477,22 @@ describe("endThreadWithAnswer", () => {
     endThreadWithAnswer(thread, "3 events");
     expect(roles(thread)).toEqual(["user", "assistant"]);
     expect(contents(thread)[1]).toBe("3 events");
+  });
+
+  it("keeps the replaced reply's reasoning record on the answer", () => {
+    const record: smoltalk.ReasoningRecord = {
+      provider: "openrouter",
+      model: "m",
+      text: "plan",
+      format: "reasoning",
+    };
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("q"));
+    thread.push(
+      smoltalk.assistantMessage(JSON.stringify({ answer: "3 events" }), { reasoning: record }),
+    );
+    endThreadWithAnswer(thread, "3 events");
+    expect((thread.getMessages()[1] as smoltalk.AssistantMessage).reasoning).toEqual(record);
   });
 
   it("replaces the caller's leftover text left by dropHandoffToolCall", () => {

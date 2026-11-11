@@ -1,0 +1,11 @@
+{
+  "paused": true,
+  "result": "done",
+  "requests": 2,
+  "recordAfterResume": {
+    "provider": "openrouter",
+    "model": "test-model",
+    "text": "plan",
+    "format": "reasoning"
+  }
+}

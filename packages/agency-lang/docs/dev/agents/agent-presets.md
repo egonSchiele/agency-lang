@@ -324,8 +324,7 @@ through the `coordinator_skills` tool. `skillsDir` does not fail when a
 folder is missing. It builds a tool that lists nothing. So
 `coordinatorInit` checks each bundled skills tool with
 `checkBundledSkill(tool, skillName)` and exits if the tool does not list a
-skill it should. The `code` subagent's `superpowersSkill` is checked the
-same way.
+skill it should.
 
 ## Known limits
 

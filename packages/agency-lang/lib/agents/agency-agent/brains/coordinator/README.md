@@ -67,7 +67,7 @@ and an inner `with approve` cannot get past an outer policy.
 
 | Tool | What it does | Where the agent really lives |
 |---|---|---|
-| `codeAgent` | Code in any language but Agency: reading, writing, editing, running commands. A handoff, so one coder works the task in the coordinator's conversation, and no other model advises or reviews it. The coder can call `escalate` to write and run a planned agent for a big multi-step task. | `std::agents/coding` |
+| `codeAgent` | Code in any language but Agency: reading, writing, editing, running commands. A handoff, so one coder works the task in the coordinator's conversation, and no other model advises or reviews it. | `std::agents/coding` |
 | `agencyCodeAgent` | The same coder for Agency code and Agency questions, with the Agency prompt (`prompts/agency-code.md`), the bundled docs tools, and the typecheck and test tools. A handoff. | `std::agents/coding` |
 | `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. | `std::agents` |
 | `oracleAgent` | Deep-reasoning consult on the slow model slot. A handoff: it continues the coordinator's conversation, so repeated consults see each other. | `std::agents/oracle` |

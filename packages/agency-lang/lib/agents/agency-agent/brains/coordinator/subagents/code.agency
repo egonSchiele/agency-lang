@@ -15,10 +15,9 @@
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
 import { agencyCodeTools, agencyDocToolsBrief } from "std::agents/lib/toolkits"
-import { plannerAgent } from "std::agents/planner"
 import { getAgentCwd } from "std::index"
 import { exec } from "std::shell"
-import { agentPrompt, skillsDir } from "std::skills"
+import { agentPrompt } from "std::skills"
 import { ensureSystemMessage } from "std::thread"
 
 import { AGENT_SOURCE_DIR } from "../../../lib/agentSource.agency"
@@ -26,14 +25,6 @@ import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
 import { getSearchBackend } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
-
-
-// The name matches what prompts/agency-code.md tells the model.
-export static const superpowersSkill = skillsDir(
-  path.join(AGENT_SOURCE_DIR, "skills/superpowers"),
-  "flat",
-  name: "superpowersSkill",
-) with approve
 
 
 export def agencyCli(args: string[]): any {
@@ -112,47 +103,20 @@ export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
 
-// The default budget for one coder dispatch, and for escalate's planner.
+// The default budget for one coder dispatch.
 static const CODE_MAX_COST = $20.00
 static const CODE_MAX_TIME = 15m
 
-def escalate(task: string, reason: string, plan: string): string {
-  """
-  Switch this task to plan-as-code: writes and runs a purpose-built agent for a
-  multi-step task, showing you the plan first. Reach for this ONLY when the task
-  genuinely needs a multi-step plan you cannot finish in a few direct edits. Do
-  NOT use it for ordinary follow-ups. After it returns, REPORT its result; do not
-  redo the work it already did.
-
-  @param reason - why this task needs a multi-step plan.
-  @param plan - your outline of the steps.
-  """
-  const planned = plannerAgent(
-    task,
-    context: "${reason}\n\n${globalInstructionsText()}",
-    plan: plan,
-    maxCost: CODE_MAX_COST,
-    maxTime: CODE_MAX_TIME,
-  )
-  if (isFailure(planned)) {
-    return "Planner stopped: ${planned.error}"
-  }
-  return planned.value
-}
-
-// What each coder is given on top of the stdlib coding agent's own tools.
-// `escalate` joins per dispatch, bound to the task.
-export static const codeExtras: any[] = [superpowersSkill]
-
+// What the Agency coder is given on top of the stdlib coding agent's own
+// tools. The plain coder gets the stdlib tools alone.
 export static const agencyCodeExtras: any[] = [
-  ...codeExtras,
   ...agencyDocToolsBrief(),
   ...agencyCodeTools(),
   agencyCli,
 ]
 
 // The full lists, for the tests that check tool names.
-export static const codeTools: any[] = [...codingAgentTools(), ...codeExtras]
+export static const codeTools: any[] = codingAgentTools()
 
 export static const agencyCodeAgentTools: any[] = [...codingAgentTools(), ...agencyCodeExtras]
 
@@ -186,7 +150,7 @@ def runCoder(
     context: dispatchContext(),
     maxCost: maxDollars ?? CODE_MAX_COST,
     maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
-    extraTools: [...extras, escalate.partial(task: userMsg)],
+    extraTools: extras,
   )
 }
 
@@ -208,7 +172,7 @@ export handoff def codeAgent(
     for the default ($20).
   """
   announce("codeAgent", userMsg)
-  return runCoder(userMsg, maxSeconds, maxDollars, codeExtras)
+  return runCoder(userMsg, maxSeconds, maxDollars, [])
 }
 
 export handoff def agencyCodeAgent(

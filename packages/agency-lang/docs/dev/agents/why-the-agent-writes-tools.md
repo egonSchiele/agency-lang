@@ -141,6 +141,16 @@ The second reason is where the Agency agent's situation differs:
 Pi also lets each user add their own skills, extensions, and command line
 tools. Its small core leaves room for them.
 
+The coding agent (`std::agents/coding`) follows Pi's first reason for
+commands a model already knows. It carries no git tools: the model runs
+git through `safeBash`, which adds the same hardening flags the git tools
+use (`docs/dev/stdlib/safe-bash.md`). The agency agent's coders add no
+skill catalog and no hand-off to the planner. Each of those was sent on
+every request and rarely called. The eighteen git tools alone were about
+2,800 tokens of a 10,000-token first request. Before adding a tool to the
+coder, check that the model calls it often enough to pay for being in
+every request.
+
 The two views agree on a rule: write as many tools as are useful, and
 show the model only a few at a time. Today the agent offers every learned
 tool on every turn. When the catalog grows, the agent will need to look a

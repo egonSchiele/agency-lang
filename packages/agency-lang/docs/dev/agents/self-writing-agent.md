@@ -348,8 +348,8 @@ the task names.** **[mine, grounded in the task text]**
    For context, Terminal-Bench's own reference harness Terminus has **one tool,
    a tmux session**, and mini-swe-agent is bash-only at >74% on SWE-bench
    Verified. **[relayed]**
-2. **Make verification a gate, not advice.** `lib/agents/agency-agent/brains/coordinator/prompts/oneShot.md` already says
-   under-verifying is the number-one failure, and it is still the top failure
+2. **Make verification a gate, not advice.** `lib/agents/agency-agent/brains/coordinator/prompts/oneShot.md` already tells
+   the model to run its work and fix what fails, and under-verifying is still the top failure
    cluster — prose has been tried. The measured version is structural:
    LangChain moved Terminal-Bench 2.0 from **52.8% → 66.5% with the same
    model**, centered on a middleware that blocks completion until a

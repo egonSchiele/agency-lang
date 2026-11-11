@@ -33,7 +33,7 @@ import {
   getSlowProvider,
  } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
-import { agencyCodeAgent, codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
+import { agencyCodeAgent, codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
@@ -108,7 +108,6 @@ def coordinatorInit(context: BrainContext) {
     print(color.red("Failed to read prompts/main.md: ${MAIN_PROMPT.error}"))
     _exit(1)
   }
-  exitIfBroken(checkBundledSkill(superpowersSkill, "brainstorming"))
   exitIfBroken(checkBundledSkill(coordinatorSkills, "presets"))
   _context = context.grounding
   first = true

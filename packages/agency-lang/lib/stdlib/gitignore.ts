@@ -71,23 +71,6 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
   return { dir, rules };
 }
 
-/** The .gitignore files that already apply to `dir` before a walk enters
- * it: those in its ancestors up to and including the repository root (the
- * nearest ancestor holding a `.git` entry), outermost first. A search
- * rooted in a subdirectory would otherwise miss the root file, where
- * rules like `**\/*.js` usually live. With no repository above `dir`,
- * nothing applies. */
-export async function readAncestorGitignores(host: Host, dir: string): Promise<GitignoreFile[]> {
-  const ancestors = await repositoryAncestors(host, dir);
-  if (ancestors === null) return [];
-  const files: GitignoreFile[] = [];
-  for (const ancestor of ancestors) {
-    const file = await readGitignore(host, ancestor);
-    if (file) files.push(file);
-  }
-  return files;
-}
-
 /** A name no rule is written for, so only a rule that ignores every
  * entry of a directory (`dist/`, `**\/node_modules/*`, `*`) ignores it. */
 const PROBE_NAME = "agency-ignore-probe";
@@ -106,21 +89,6 @@ export function ignoresWholeDirectory(absoluteDir: string, files: GitignoreFile[
     isIgnored(absoluteDir, true, files) ||
     (isIgnored(probe, false, files) && isIgnored(probe, true, files))
   );
-}
-
-/** Whether the .gitignore files above `dir` ignore it or everything in
- * it. The repository root's own .gitignore is not "above" a search rooted
- * there. */
-export async function ignoredFromAbove(host: Host, dir: string): Promise<boolean> {
-  return ignoresWholeDirectory(
-    path.resolve(host.system.cwd(), dir),
-    await readAncestorGitignores(host, dir),
-  );
-}
-
-/** `ignoredFromAbove` for Agency code, which has no host to pass. */
-export async function _ignoredFromAbove(dir: string): Promise<boolean> {
-  return ignoredFromAbove(currentHost(), dir);
 }
 
 /** The directories strictly above `dir`, an absolute path, up to and

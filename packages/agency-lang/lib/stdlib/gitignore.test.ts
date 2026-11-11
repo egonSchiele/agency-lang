@@ -1,14 +1,13 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 import {
-  ignoredFromAbove,
   ignoresWholeDirectory,
   isIgnored,
   parseGitignore,
-  readAncestorGitignores,
+  repositoryAncestors,
 } from "./gitignore.js";
 import { nodeHost } from "../host/node/nodeHost.js";
 
@@ -116,7 +115,7 @@ describe("ignoresWholeDirectory", () => {
   });
 });
 
-describe("readAncestorGitignores", () => {
+describe("repositoryAncestors", () => {
   const host = nodeHost();
   const scratchDirs: string[] = [];
   afterEach(() => {
@@ -129,96 +128,27 @@ describe("readAncestorGitignores", () => {
     return base;
   }
 
-  it("loads the files between a subdirectory and its repository root", async () => {
+  it("lists the folders between a subdirectory and its repository root, outermost first", async () => {
     const outer = repo();
     mkdirSync(join(outer, ".git"));
-    writeFileSync(join(outer, ".gitignore"), "*.log\n");
     mkdirSync(join(outer, "lib", "deep"), { recursive: true });
-    const files = await readAncestorGitignores(host, join(outer, "lib", "deep"));
-    expect(files.map((file) => file.dir)).toEqual([outer]);
+    expect(await repositoryAncestors(host, join(outer, "lib", "deep"))).toEqual([
+      outer,
+      join(outer, "lib"),
+    ]);
   });
 
   it("stops at a nested repository root, where an enclosing repository's rules do not reach", async () => {
     const outer = repo();
     mkdirSync(join(outer, ".git"));
-    writeFileSync(join(outer, ".gitignore"), "*\n");
     const inner = join(outer, "inner");
     mkdirSync(join(inner, ".git"), { recursive: true });
     mkdirSync(join(inner, "src"));
-    expect(await readAncestorGitignores(host, inner)).toEqual([]);
-    const fromSrc = await readAncestorGitignores(host, join(inner, "src"));
-    expect(fromSrc.map((file) => file.dir)).toEqual([]);
+    expect(await repositoryAncestors(host, inner)).toEqual([]);
+    expect(await repositoryAncestors(host, join(inner, "src"))).toEqual([inner]);
   });
 
-  it("finds nothing outside any repository", async () => {
-    const dir = repo();
-    writeFileSync(join(dir, ".gitignore"), "*.log\n");
-    expect(await readAncestorGitignores(host, join(dir))).toEqual([]);
-  });
-});
-
-describe("ignoredFromAbove", () => {
-  const host = nodeHost();
-  const scratchDirs: string[] = [];
-  afterEach(() => {
-    for (const dir of scratchDirs.splice(0)) safeDeleteDirectoryWithin(tmpdir(), dir);
-  });
-
-  /** A repository whose root .gitignore holds `rules`, with `paths` created
-   *  under it (a trailing slash makes a directory). */
-  function repoWith(rules: string, paths: string[]): string {
-    const base = mkdtempSync(join(tmpdir(), "ignored-from-above-"));
-    scratchDirs.push(base);
-    mkdirSync(join(base, ".git"));
-    writeFileSync(join(base, ".gitignore"), rules);
-    for (const entry of paths) {
-      if (entry.endsWith("/")) {
-        mkdirSync(join(base, entry), { recursive: true });
-      } else {
-        mkdirSync(join(base, entry, ".."), { recursive: true });
-        writeFileSync(join(base, entry), "x\n");
-      }
-    }
-    return base;
-  }
-
-  it("is true for a directory the rules name, and for one inside it", async () => {
-    const base = repoWith("dist/\n", ["dist/lib/a.js", "src/a.ts"]);
-    expect(await ignoredFromAbove(host, join(base, "dist"))).toBe(true);
-    expect(await ignoredFromAbove(host, join(base, "dist", "lib"))).toBe(true);
-    expect(await ignoredFromAbove(host, join(base, "src"))).toBe(false);
-  });
-
-  it("is true when the rules ignore everything inside a directory but not the directory itself", async () => {
-    const base = repoWith("**/node_modules/*\n", ["node_modules/pkg/index.js"]);
-    expect(await ignoredFromAbove(host, join(base, "node_modules"))).toBe(true);
-  });
-
-  it("is true for a directory a bare star ignores", async () => {
-    const base = repoWith("src/*\n", ["src/a.ts"]);
-    expect(await ignoredFromAbove(host, join(base, "src"))).toBe(true);
-  });
-
-  it("is false when the rules ignore only some entries, since the search still finds the rest", async () => {
-    const base = repoWith(".*\n*.log\n**/*.js\n", [
-      "src/a.ts",
-      "src/b.log",
-      "src/.DS_Store",
-      "src/c.js",
-    ]);
-    expect(await ignoredFromAbove(host, join(base, "src"))).toBe(false);
-  });
-
-  it("is false at the repository root, whose own .gitignore is the walk's to apply", async () => {
-    const base = repoWith("*.log\n", ["a.log"]);
-    expect(await ignoredFromAbove(host, base)).toBe(false);
-  });
-
-  it("is false outside any repository", async () => {
-    const base = mkdtempSync(join(tmpdir(), "ignored-from-above-"));
-    scratchDirs.push(base);
-    writeFileSync(join(base, ".gitignore"), "*\n");
-    mkdirSync(join(base, "sub"));
-    expect(await ignoredFromAbove(host, join(base, "sub"))).toBe(false);
+  it("is null outside any repository", async () => {
+    expect(await repositoryAncestors(host, repo())).toBeNull();
   });
 });

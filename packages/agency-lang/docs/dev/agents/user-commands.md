@@ -1,13 +1,43 @@
 # What the user can type at the agent prompt
 
 This covers the input features of `agency agent` beyond a plain message and
-the slash commands: the editor key, file completion, `!command`, and
-`/image`.
+the slash commands: the slash palette, the editor key, file completion,
+`!command`, and `/image`.
 
-## Ctrl+G and file completion are in the REPL
+## The slash palette, Ctrl+G, and file completion are in the REPL
 
-Both live in `lib/stdlib/cli.ts`, so every program that calls `repl()` from
-`std::ui/cli` has them.
+All three live in `lib/stdlib/cli.ts`, so every program that calls `repl()`
+from `std::ui/cli` has them.
+
+**The slash palette.** Pressing `/` at an empty prompt opens a menu of the
+slash commands. The menu is a `prompts` autocomplete, the same kind the
+policy approval prompt uses, and what the user types after the `/` filters
+it. Three keys close it:
+
+| Key | What happens |
+|---|---|
+| Enter | runs the highlighted command with no arguments |
+| Tab | puts the highlighted command and a space at the prompt, for the user to add arguments |
+| space, after some filter text | the same as Tab, so typing `/rename my title` works |
+
+The menu cannot hold arguments itself: its text is a filter, and it returns
+one command name. That is why Tab and space close it and hand the line back
+to the prompt. `fillOnTabOrSpace` in `lib/stdlib/prompts.ts` replaces the
+element's Tab handler (`next`) and its typed-character handler (`_`). It
+reaches the element through the `onRender` hook, the only hook `prompts`
+calls with the element as `this`. A fill does not draw the menu's
+final "✔ Slash command: › /rename" line, which would read as if the
+command ran. `submitErased` erases the menu instead, and the loop in
+`_runLineRepl` erases the `> /` line above it. The loop then passes the
+filled command to the next `askLine` as its starting text, so the screen
+shows only `> /rename `.
+
+`installSlashTrigger` opens the menu by putting `/` in the buffer and
+submitting it, but it waits one turn of the event loop first. Readline
+handles every key of a pasted chunk in the same turn, so if more text
+followed the `/`, the buffer holds more than `/` and the menu stays shut. A
+pasted `/review-pr https://…` therefore stays at the prompt with its
+arguments, ready for Enter.
 
 **Ctrl+G.** `installEditorKey` wraps readline's `_ttyWrite`, as the slash
 trigger and the cancel key do. On Ctrl+G at the prompt it records the text

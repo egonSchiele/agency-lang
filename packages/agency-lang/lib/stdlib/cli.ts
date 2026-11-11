@@ -7,10 +7,9 @@ import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { logReplTurn } from "./statelog.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
-import { _promptsAutocomplete } from "./prompts.js";
+import { _promptsCommandPalette, type PaletteChoice } from "./prompts.js";
 import { footerDivider, optionRows, type InterruptItem } from "./interruptRows.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
-import { isFailure } from "../runtime/result.js";
 import { escapedTurnText, hasInterrupts } from "../runtime/interrupts.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
@@ -956,24 +955,19 @@ function paletteEntries(paletteCommands: unknown): [string, string][] {
 }
 
 /**
- * Open the `prompts.autocomplete` modal preloaded with the slash
- * palette. Returns the picked command key (e.g. `/cost`) on success,
- * or `null` if the user cancelled (Ctrl+C / Escape).
+ * Open the slash palette, a `prompts.autocomplete` modal over the
+ * commands. Triggered when the user presses `/` at an empty prompt (see
+ * `installSlashTrigger`). It uses the same `prompts` machinery as the
+ * interrupt UI, so the palette and the policy picker look alike. Enter
+ * runs the highlighted command; Tab, or a space after some filter text,
+ * fills it in at the prompt (see `_promptsCommandPalette`).
  *
- * Replaces the old inline `installSlashHints` popup. Triggered when
- * the user presses `/` at an empty prompt (see `installSlashTrigger`)
- * — we hand off to the same `prompts` machinery the interrupt UI
- * uses, so the palette and the policy interrupt picker look and feel
- * identical.
- *
- * No-op (returns null) when the palette is empty.
+ * Returns null when the user cancelled or the palette is empty.
  */
-async function openSlashPalette(entries: [string, string][]): Promise<string | null> {
+async function openSlashPalette(entries: [string, string][]): Promise<PaletteChoice | null> {
   if (entries.length === 0) return null;
   const items = entries.map(([key, label]) => ({ key, label }));
-  const result = await _promptsAutocomplete("Slash command:", items, false, "press Esc to close");
-  if (isFailure(result)) return null;
-  return String(result.value);
+  return _promptsCommandPalette(items);
 }
 
 /** Open the slash palette and repair readline history around it. Selecting a
@@ -981,17 +975,19 @@ async function openSlashPalette(entries: [string, string][]): Promise<string | n
  *  commits `"/"`, and the modal's filter keystrokes leak through the shared
  *  stdin so the confirming Enter commits a fragment like `"pa"` too. `mark` is
  *  where history stood the instant `/` was pressed (captured by the trigger);
- *  everything added since is rolled back, and on a pick the chosen command
- *  (e.g. `"/paste"`) is recorded instead — one clean entry. Returns the picked
- *  command, or null if cancelled. */
+ *  everything added since is rolled back. A command run with Enter is recorded
+ *  as one clean entry (e.g. `"/paste"`). A filled command is not recorded,
+ *  since readline records the line once the user submits it with arguments.
+ *  Returns null if cancelled. */
 async function pickFromSlashPalette(
   rl: readline.Interface,
   palette: [string, string][],
   mark: number,
-): Promise<string | null> {
+): Promise<PaletteChoice | null> {
   const picked = await openSlashPalette(palette);
   const history = (rl as unknown as { history?: string[] }).history;
-  if (history) repairSlashHistory(history, mark, picked);
+  const ran = picked != null && !picked.fill ? picked.command : null;
+  if (history) repairSlashHistory(history, mark, ran);
   return picked;
 }
 
@@ -1014,6 +1010,12 @@ function repairSlashHistory(history: string[], mark: number, picked: string | nu
  * When the buffer is non-empty (e.g. typing `/etc/foo` after some
  * other text), the keystroke passes through normally. Returns a
  * teardown that restores the original `_ttyWrite`.
+ *
+ * The submit waits one turn of the event loop. A paste arrives as one
+ * chunk, and readline handles every key in a chunk before that turn
+ * ends, so a pasted `/review-pr https://…` is all in the buffer by
+ * then. The trigger fires only if the buffer still holds just `/`, so
+ * the pasted line stays at the prompt, arguments and all.
  *
  * Overriding `_ttyWrite` is the standard pattern for layered key
  * handling on top of readline (used by inquirer, enquirer, etc.).
@@ -1038,22 +1040,19 @@ function installSlashTrigger(
     key: { name?: string; sequence?: string },
   ): void {
     const isSlash = key && (key.sequence === "/" || key.name === "slash");
-    if (isSlash && (this.line ?? "") === "") {
+    const startsLine = isSlash && (this.line ?? "") === "";
+    originalTtyWrite.call(this, s, key);
+    if (!startsLine) return;
+    setImmediate(() => {
+      if (this.line !== "/") return;
       // Mark where history stands *before* the synthesized submit commits "/",
       // so the bare-`/` branch can roll back that "/" plus any palette-filter
       // keystrokes that leak in while the modal is open.
       onTrigger();
-      // Substitute `/` into the buffer and synthesize Enter so the
-      // pending `rl.question` resolves with "/". The main loop sees
-      // it, opens `openSlashPalette`, and we never echo the `/`
-      // ourselves — readline's Enter handler does its normal line
-      // termination, which writes the trailing newline.
-      this.line = "/";
-      this.cursor = 1;
+      // Synthesize Enter so the pending `rl.question` resolves with "/".
+      // The main loop sees it and opens `openSlashPalette`.
       originalTtyWrite.call(this, "\r", { name: "return" });
-      return;
-    }
-    originalTtyWrite.call(this, s, key);
+    });
   };
   return (): void => {
     rlAny._ttyWrite = originalTtyWrite;
@@ -1444,13 +1443,16 @@ export async function _runLineRepl(
   });
   // Ctrl+G at the prompt opens `$EDITOR` on what was typed.
   const editorKey = installEditorKey(rl, useTTY);
+  // Text the next prompt opens with: a command filled in from the palette.
+  let prefill = "";
   try {
     while (true) {
       let line: string;
       herdr.report("idle");
       try {
         editorKey.atPrompt(true);
-        line = await askLine(rl, coloredPrompt);
+        line = await askLine(rl, coloredPrompt, prefill);
+        prefill = "";
       } catch {
         // Ctrl+D (EOT) or Ctrl+C at idle: readline emits `close`,
         // we treat that as a clean exit. The color reset guards
@@ -1482,14 +1484,23 @@ export async function _runLineRepl(
       // uses, so palette and policy menus look and feel identical.
       // The `/` key fires this branch immediately (no Enter needed)
       // via `installSlashTrigger`'s `_ttyWrite` hook above; users can
-      // also type `/` + Enter manually. The picked command is fed
-      // back through the normal onSubmit path; cancel just reprompts.
+      // also type `/` + Enter manually. A command picked with Enter is
+      // fed back through the normal onSubmit path. A command filled in
+      // with Tab opens the next prompt, so the user can type its
+      // arguments. Cancel just reprompts.
       if (trimmed === "/" && palette.length > 0) {
         const picked = await pickFromSlashPalette(rl, palette, slashHistoryMark);
         slashHistoryMark = -1;
         if (picked == null) continue;
-        line = picked;
-        trimmed = picked;
+        if (picked.fill) {
+          // The menu erased itself; erase the `> /` line above it too, so
+          // the prompt redraws on that row as `> /rename `.
+          if (useTTY) process.stdout.write(eraseRows(2));
+          prefill = `${picked.command} `;
+          continue;
+        }
+        line = picked.command;
+        trimmed = picked.command;
       }
 
       // `/paste` (built-in, à la Node's `.editor`): open the multi-line
@@ -1656,18 +1667,19 @@ function lineOrEdited(
 
 /** Promise-wrap `rl.question` + a one-shot `close` listener so a
  *  Ctrl+D / Ctrl+C while idle rejects (loop exit) instead of leaving
- *  the question pending forever. */
-function askLine(rl: readline.Interface, prompt: string): Promise<string> {
+ *  the question pending forever. The prompt opens holding `prefill`,
+ *  with the cursor at its end. */
+function askLine(rl: readline.Interface, prompt: string, prefill: string): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    // Start from an empty buffer. While a turn was running, a nested
-    // prompt/menu (the policy approval autocomplete) runs its own readline
-    // on the shared stdin, but the outer `rl` stays attached too — so
-    // keystrokes that drove the menu (e.g. arrow keys → history recall)
-    // can leave `rl.line` holding the previous prompt. Clearing it here
-    // guarantees each REPL prompt opens blank. (`rl.question` renders the
-    // current `rl.line`; it does not reset it.)
+    // Start from `prefill`, not from what the buffer holds. While a turn
+    // was running, a nested prompt/menu (the policy approval autocomplete,
+    // the slash palette) runs its own readline on the shared stdin, but the
+    // outer `rl` stays attached too — so keystrokes that drove the menu
+    // (e.g. arrow keys → history recall, filter text) can leave `rl.line`
+    // holding junk. (`rl.question` renders the current `rl.line`; it does
+    // not reset it.)
     const rlAny = rl as unknown as { line: string; cursor: number };
-    rlAny.line = "";
+    rlAny.line = prefill;
     rlAny.cursor = 0;
     const onClose = () => reject(new Error("closed"));
     rl.once("close", onClose);
@@ -1675,6 +1687,8 @@ function askLine(rl: readline.Interface, prompt: string): Promise<string> {
       rl.off("close", onClose);
       resolve(answer);
     });
+    // `rl.question` puts the cursor at the start; Ctrl+E moves it to the end.
+    if (prefill !== "") rl.write(null, { ctrl: true, name: "e" });
   });
 }
 
@@ -1855,6 +1869,7 @@ export const _internal = {
   recordHistoryEntry,
   recordPasteEntry,
   repairSlashHistory,
+  installSlashTrigger,
   summarizeMultiline,
   eraseRows,
   buildFrame,

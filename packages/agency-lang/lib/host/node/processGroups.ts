@@ -85,7 +85,9 @@ export function trackChild(child: ChildProcess): void {
   }
   if (running.length === 0) {
     for (const signal of EXIT_SIGNALS) {
-      process.on(signal, onExitSignal);
+      // First in line: Node removes a `once` listener before calling it,
+      // so a listener counted after one has run would not see it.
+      process.prependListener(signal, onExitSignal);
     }
   }
   running.push(child);

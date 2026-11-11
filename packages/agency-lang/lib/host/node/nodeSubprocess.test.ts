@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -175,4 +175,34 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
       await running.wait();
       expect(await waitUntilGone(Number(fs.readFileSync(pidFile, "utf8").trim()))).toBe(true);
     }));
+
+  it("leaves an exit signal to a handler the program registered with once", async () => {
+    // A signal this process sends itself is recorded and not delivered, so
+    // a failure of this test does not end the test run.
+    const sentToSelf: string[] = [];
+    const realKill = process.kill.bind(process);
+    const spy = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (pid === process.pid) {
+        sentToSelf.push(String(signal));
+        return true;
+      }
+      return realKill(pid, signal);
+    });
+    let handled = false;
+    const theirs = () => {
+      handled = true;
+    };
+    process.once("SIGHUP", theirs);
+    const running = await nodeSubprocess.start({ kind: "shell", script: "sleep 30" });
+    try {
+      process.emit("SIGHUP", "SIGHUP");
+      expect(handled).toBe(true);
+      expect(sentToSelf).toEqual([]);
+    } finally {
+      process.removeListener("SIGHUP", theirs);
+      running.kill("SIGKILL");
+      await running.wait();
+      spy.mockRestore();
+    }
+  });
 });

@@ -139,6 +139,7 @@ Three things follow from a child having its own session:
 - **Ctrl+C does not reach it.** The terminal signals its foreground group, and the child is no longer in it. `trackChild` keeps a list of the children that have not closed. The process's `exit` event kills each one's group. While the list is not empty, a `SIGINT`, `SIGTERM`, or `SIGHUP` that nothing else handles kills the groups and then ends the process with the same signal. When something else handles the signal, as the TUI does, that handler decides, and the `exit` event is the backstop. There is one list for the whole process, because the code that reads it runs when the process ends.
 - **It has no terminal.** A program that opens `/dev/tty` to ask for a password, such as `sudo`, fails at once.
 - **A process that leaves the group survives a stop.** Catching those takes Linux cgroups or a container. A sandbox around the agent is the backstop.
+- **`SIGKILL` of the Agency process runs no hook.** The commands it had running live on. `std::agency`'s `run` kills its child program this way (`killChildSafely` in `lib/runtime/ipc.ts`) on a limit, an abort, or a guard trip, so a command that child was running is not stopped. When the parent dies instead, the child exits through `process.exit`, and the `exit` event kills its commands.
 
 A command that ends normally is not stopped, so a job it left in the background with its output redirected (`server > log 2>&1 &`) keeps running. Without the redirect the job holds the pipe, and the call waits for it or for the time limit.
 

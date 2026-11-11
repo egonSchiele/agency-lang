@@ -1342,10 +1342,6 @@ the limit the line runs under, and the call to `_bash`. A plan is made
 before the limit is known, so the `timeout` in a planned `ExecPayload` is
 0, and `raiseOne` writes the real one.
 
-The default is 120 seconds from the SWE-bench pilot: across 409 shell
-calls the 99th percentile was 104 seconds, and the only calls over 120
-were runs of a whole test suite.
-
 Only the bash path has the limit. A plan that runs in process (a lone
 `grep`, `cat`, or `echo`, or a chain of them) starts no program, and the
 git tools have their own 30-second limit.

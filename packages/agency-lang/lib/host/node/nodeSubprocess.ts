@@ -232,11 +232,8 @@ function startChild(
     }, PIPE_GRACE_MS);
   };
   // The host's own stop, for the time limit, the abort signal, and the
-  // output cap: signal the group, kill what is left after the grace
-  // period, and stop reading the pipes once the child has exited. The
-  // kill is not cancelled when the child closes: a process that ignored
-  // SIGTERM and holds no pipe is still in the group. The child stays
-  // tracked until then, so an exit in between kills the group too.
+  // output cap. The kill is not cancelled when the child closes: a
+  // process that ignored SIGTERM and holds no pipe is still in the group.
   const stop = () => {
     if (stopping) {
       return;

@@ -80,13 +80,47 @@ line.
 
 ## `.gitignore`
 
-`grep` skips what the `.gitignore` files under (and above, up to the
-repository root) the search directory ignore, so compiled output does not
-crowd out source. The matcher is `lib/stdlib/gitignore.ts`: comments,
-negation, directory-only rules, anchoring, nested files refining their
-parents; not `.git/info/exclude` or the global excludes. The
-`respectGitignore` parameter is true by default, and the agent toolkits
-lock it with partial application so the model cannot turn it off.
+`grep`, `glob`, and a recursive `ls` skip what `.gitignore` ignores, so
+compiled output and other ignored trees do not crowd out source. They read
+the `.gitignore` files in the folder they search and below it. They also read
+the ones above it, up to the repository root, which is the nearest folder
+holding a `.git` entry. The walk is `walkDir` in `lib/stdlib/shell.ts`. The
+matcher is `lib/stdlib/gitignore.ts`, which handles comments, negation,
+directory-only rules, anchoring, and nested files refining their parents. It
+does not read `.git/info/exclude` or the global excludes file.
+
+Each of the three tools has a `respectGitignore` parameter, true by default.
+The agent toolkits bind it with partial application, so the model cannot
+turn it off. A plain `ls` lists every entry of its folder, ignored ones
+included, so the model can see an ignored folder and name it.
+
+A folder the caller names is searched even when git ignores it. When the
+`.gitignore` files above the search folder ignore that folder, or every name
+in it, the walk does not apply them. `ignoresWholeDirectory` decides this, and
+`ancestorIgnoreFiles` applies it. It is true when the rules ignore the folder
+itself, or ignore both a made-up file and a made-up folder inside it. So
+`dist/`, `**/node_modules/*`, and `.*` (for `.worktrees`) count, and `*.js`
+above `src` does not. An allow-list `.gitignore` (`*`, `!*/`, `!*.ts`) does
+not count either, because it keeps folders. The `.gitignore` files in the
+search folder and below it still apply.
+
+| Call, with `.*` and `out/` in the root `.gitignore` | Result |
+|---|---|
+| `glob("**/*.md")` | skips `.worktrees` and `out` |
+| `grep("x", path: ".worktrees")` | searches `.worktrees` |
+| `glob(".worktrees/**/*.md")` | searches `.worktrees` |
+| `ls(".")` | shows `.worktrees` and `out` |
+| `grep("x", path: "src")`, with `*.js` ignored | skips the `.js` files in `src` |
+
+`glob` starts its walk at the pattern's fixed prefix. The fixed prefix is the
+leading folder names before the first segment that the glob parser reads as
+a pattern, or that holds `{`, since a brace group can hold a `/`. When the
+prefix is not a folder under the search root, the walk starts at the root as
+before. A folder named at the start of the pattern is then the search folder,
+and the rule above applies to it. A `SKIP_DIRS` name in the prefix is
+searched too, because `SKIP_DIRS` applies below the start of the walk.
+Braces are not expanded into several starting folders, so
+`glob("{out,src}/*.md")` still skips an ignored `out`.
 
 ## A bash grep through safeBash
 
@@ -108,5 +142,9 @@ table above is not involved. See `docs/dev/stdlib/safe-bash.md`, "grep".
   all three tools, the `file` field in the interrupt payload, and a model
   calling `grep` with `dir`. The `_searchTarget` and single-file `_grep`
   cases in `lib/stdlib/shell.test.ts` cover the messages.
-- `lib/stdlib/gitignore.test.ts` and the `_grep honours .gitignore` cases
-  in `lib/stdlib/shell.test.ts` cover the ignore rules and the walk.
+- `lib/stdlib/gitignore.test.ts` covers the ignore rules and
+  `ignoresWholeDirectory`. The `.gitignore` cases for `_grep`, `_glob`, and
+  `_ls` in `lib/stdlib/shell.test.ts` cover the walk, the named-folder rule,
+  and the fixed prefix. `tests/agency/stdlib/gitignore-search.agency` runs
+  the three public tools over a fixture whose ignored files are committed
+  with `git add -f`.

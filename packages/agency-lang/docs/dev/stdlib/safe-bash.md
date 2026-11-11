@@ -812,15 +812,13 @@ is narrow, with pattern `**`.
 
 ### What a recursive listing shows
 
-The `ls` tool's recursive walk and the `glob` tool's walk skip
-`SKIP_DIRS` (`node_modules`, `.git`, `dist`, `build`, `.next`,
-`.cache`), and `_glob` also honors `.gitignore`. Real `ls -R`, `du`,
-`tree`, and `find` skip nothing. A recursive listing through bash is
-still narrow under the same payload. It shows the names under `.git`
-and `node_modules` that the tools leave out, and no file's contents.
-The names are not what decided grep, where a directory search through
-bash asks `std::bash` because real grep reads the contents the tool
-skips.
+The `ls` tool's recursive walk and the `glob` tool's walk skip `SKIP_DIRS`
+(`node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`) and what
+`.gitignore` ignores. Real `ls -R`, `du`, `tree`, and `find` skip nothing. A
+recursive listing through bash is still narrow under the same payload. It
+shows the names the tools leave out, and no file's contents. The names are
+not what decided grep, where a directory search through bash asks
+`std::bash` because real grep reads the contents the tool skips.
 
 ## Programs with no rule
 

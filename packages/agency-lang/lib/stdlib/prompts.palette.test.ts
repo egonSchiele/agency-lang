@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest";
+import { PassThrough } from "stream";
+import prompts from "prompts";
+import { __commandPaletteQuestionForTest as commandPaletteQuestion } from "./prompts.js";
+
+const ITEMS = [
+  { key: "/rename", label: "Give this session a title" },
+  { key: "/review-pr", label: "Review a PR" },
+  { key: "/cost", label: "Show cost" },
+];
+
+const ENTER = "\r";
+const TAB = "\t";
+
+/** Open the palette on fake streams, type `keys`, and return what it
+ *  submitted and whether it was a fill. By default each character is sent
+ *  after a pause, which lets the async filter catch up, as it does for a
+ *  person typing. `oneChunk` sends all the keys at once, as a paste does. */
+async function typeIntoPalette(
+  keys: string,
+  { oneChunk = false } = {},
+): Promise<{ value: unknown; fill: boolean; drawn: string }> {
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  let drawn = "";
+  stdout.on("data", (chunk: Buffer) => {
+    drawn += chunk.toString();
+  });
+  let fill = false;
+  const answer = prompts({
+    ...commandPaletteQuestion(ITEMS, () => {
+      fill = true;
+    }),
+    stdin,
+    stdout,
+  });
+  for (const chunk of oneChunk ? [keys] : [...keys]) {
+    await new Promise((r) => setTimeout(r, 10));
+    stdin.write(chunk);
+  }
+  const { value } = await answer;
+  return { value, fill, drawn };
+}
+
+// The check mark `prompts` draws on the line it leaves behind.
+const DONE_MARK = "✔";
+
+describe("the slash palette's keys", () => {
+  it("fills the highlighted command on Tab and draws no done line", async () => {
+    const result = await typeIntoPalette(`ren${TAB}`);
+    expect(result).toMatchObject({ value: "/rename", fill: true });
+    expect(result.drawn).not.toContain(DONE_MARK);
+  });
+
+  it("fills the highlighted command on a space after filter text", async () => {
+    expect(await typeIntoPalette("review ")).toMatchObject({ value: "/review-pr", fill: true });
+  });
+
+  it("runs the highlighted command on Enter and draws a done line", async () => {
+    const result = await typeIntoPalette(`re${ENTER}`);
+    expect(result).toMatchObject({ value: "/rename", fill: false });
+    expect(result.drawn).toContain(DONE_MARK);
+  });
+
+  it("types a space into an empty filter instead of filling", async () => {
+    // The space matches no command, so Enter has nothing to submit.
+    expect(await typeIntoPalette(` ${ENTER}`)).toMatchObject({ value: undefined, fill: false });
+  });
+
+  it("fills from the finished filter when Tab arrives with the filter text", async () => {
+    // Before the filter catches up, the list is every command, and the
+    // first one, /rename, is highlighted.
+    expect(await typeIntoPalette(`cos${TAB}`, { oneChunk: true })).toMatchObject({
+      value: "/cost",
+      fill: true,
+    });
+  });
+
+  it("fills nothing on Tab when no command matches", async () => {
+    expect(await typeIntoPalette(`xyz${TAB}${ENTER}`)).toMatchObject({
+      value: undefined,
+      fill: false,
+    });
+  });
+});

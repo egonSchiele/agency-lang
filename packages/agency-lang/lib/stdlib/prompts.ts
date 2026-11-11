@@ -1,6 +1,7 @@
 import process from "process";
 import prompts from "prompts";
 import { color } from "@/utils/termcolors.js";
+import { visualWidth } from "./layout/ansi.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
@@ -227,6 +228,145 @@ export async function _promptsAutocomplete(
     return success(raw.slice(AUTOCOMPLETE_FREE_TEXT_PREFIX.length));
   }
   return success(raw);
+}
+
+/** The command picked in the slash palette. `fill` is true when the user
+ *  pressed Tab or space to put the command at the prompt, so they can add
+ *  arguments, and false when they pressed Enter to run it. */
+export type PaletteChoice = { command: string; fill: boolean };
+
+/** Open the slash palette. Returns null when the user pressed Escape. */
+export async function _promptsCommandPalette(
+  items: PromptsChoiceItem[],
+): Promise<PaletteChoice | null> {
+  _assertLineModeAvailable("autocomplete");
+  let fill = false;
+  const result = await _runPrompt(
+    commandPaletteQuestion(items, () => {
+      fill = true;
+    }),
+  );
+  if (isFailure(result)) return null;
+  return { command: String(result.value), fill };
+}
+
+// The parts of the `prompts` autocomplete element that the palette changes.
+// Its type definitions leave the element out, so they are named here.
+type AutocompleteElement = {
+  input: string;
+  suggestions: unknown[];
+  outputText: string;
+  // The pending filter update, or false once `suggestions` matches `input`.
+  completing: Promise<unknown> | false;
+  out: { write: (s: string) => void; columns?: number };
+  done: boolean;
+  closed?: boolean;
+  aborted: boolean;
+  exited: boolean;
+  next: () => void;
+  bell: () => void;
+  fire: () => void;
+  close: () => void;
+  _: (c: string, key: unknown) => void;
+};
+
+/** The palette's question for `prompts`. */
+function commandPaletteQuestion(
+  items: PromptsChoiceItem[],
+  onFill: () => void,
+): prompts.PromptObject {
+  let installed = false;
+  return {
+    type: "autocomplete",
+    name: "value",
+    message: "Slash command:",
+    choices: items.map((it) => ({ title: `${color.cyan(it.key)} - ${it.label}`, value: it.key })),
+    suggest: _buildSuggest(items, false),
+    // `prompts` calls `onRender` with the element as `this`, first before
+    // any key arrives. It is the only hook that reaches the element. The
+    // element looks up its key handlers on itself, so replacing them here
+    // changes what the keys do.
+    onRender(this: AutocompleteElement) {
+      if (installed) return;
+      installed = true;
+      fillOnTabOrSpace(this, onFill);
+    },
+  };
+}
+
+// Tests drive the palette with fake streams through this.
+export const __commandPaletteQuestionForTest = commandPaletteQuestion;
+
+/** Make Tab, and a space typed after some filter text, submit the
+ *  highlighted command as a fill. Tab otherwise moves the highlight down
+ *  (`next`), and a space is typed into the filter (`_`). With nothing
+ *  highlighted, Tab beeps and a space is typed as before.
+ *
+ *  The filter updates asynchronously, so when the filter keys and Tab
+ *  arrive in one chunk (a paste, a slow SSH link), the list may still be
+ *  the one for the earlier filter. Both keys wait for the update first, so
+ *  they fill the command the finished filter highlights. */
+function fillOnTabOrSpace(element: AutocompleteElement, onFill: () => void): void {
+  const typeChar = element._.bind(element);
+  const whenSettled = (act: () => void): void => {
+    if (element.closed) return;
+    if (element.completing) {
+      void element.completing.then(() => whenSettled(act));
+    } else {
+      act();
+    }
+  };
+  const fill = (): void => {
+    onFill();
+    submitErased(element);
+  };
+  element.next = (): void =>
+    whenSettled(() => {
+      if (element.suggestions.length === 0) {
+        element.bell();
+        return;
+      }
+      fill();
+    });
+  element._ = (c: string, key: unknown): void => {
+    if (c !== " " || element.input === "") {
+      typeChar(c, key);
+      return;
+    }
+    whenSettled(() => {
+      if (element.suggestions.length > 0) {
+        fill();
+      } else {
+        typeChar(c, key);
+      }
+    });
+  };
+}
+
+/** Submit like the element's own `submit`, but erase the menu in place of
+ *  drawing its final "✔ Slash command: › /rename" line, which would read
+ *  as if the command ran. The cursor ends at the start of the menu's
+ *  first row. */
+function submitErased(element: AutocompleteElement): void {
+  element.out.write(eraseRendered(element.outputText, element.out.columns));
+  element.done = true;
+  element.aborted = false;
+  element.exited = false;
+  element.fire();
+  element.close();
+}
+
+/** Erase what the element last drew, counting a wrapped line as several
+ *  rows. This mirrors `prompts`' own `util/clear.js`, which it does not
+ *  export. */
+function eraseRendered(text: string, columns: number | undefined): string {
+  let rows = 0;
+  for (const line of text.split(/\r?\n/)) {
+    rows += columns ? 1 + Math.floor(Math.max(visualWidth(line) - 1, 0) / columns) : 1;
+  }
+  const ERASE_LINE = "\x1b[2K";
+  const UP = "\x1b[1A";
+  return ERASE_LINE + `${UP}${ERASE_LINE}`.repeat(rows - 1) + "\r";
 }
 
 // `_promptsSelect`'s free-text mechanism is intentionally different

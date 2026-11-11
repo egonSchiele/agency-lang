@@ -1,13 +1,37 @@
 # What the user can type at the agent prompt
 
 This covers the input features of `agency agent` beyond a plain message and
-the slash commands: the editor key, file completion, `!command`, and
-`/image`.
+the slash commands: the slash palette, the editor key, file completion,
+`!command`, and `/image`.
 
-## Ctrl+G and file completion are in the REPL
+## The slash palette, Ctrl+G, and file completion are in the REPL
 
-Both live in `lib/stdlib/cli.ts`, so every program that calls `repl()` from
-`std::ui/cli` has them.
+All three live in `lib/stdlib/cli.ts`, so every program that calls `repl()`
+from `std::ui/cli` has them.
+
+**The slash palette.** Pressing `/` at an empty prompt opens a menu of the
+slash commands, a `prompts` autocomplete. What the user types after the `/`
+filters it. Three keys close it:
+
+| Key | What happens |
+|---|---|
+| Enter | runs the highlighted command with no arguments |
+| Tab | puts the highlighted command and a space at the prompt, for the user to add arguments |
+| space, after some filter text | the same as Tab, so typing `/rename my title` works |
+
+The menu's text is only a filter, and the menu returns one command name, so
+it cannot hold arguments. Tab and space close it and hand the command back
+to the prompt. `fillOnTabOrSpace` in `lib/stdlib/prompts.ts` changes those
+two keys through the `onRender` hook, the only hook `prompts` calls with
+the menu itself as `this`.
+
+After a fill, the screen shows only `> /rename `. The menu's usual last
+line, "✔ Slash command: › /rename", would read as if the command ran.
+
+A pasted `/review-pr https://…` skips the menu and stays at the prompt with
+its arguments. `installSlashTrigger` waits one turn of the event loop
+before it opens the menu. Readline handles every key of a pasted chunk
+within that turn, so the menu opens only when the buffer holds a lone `/`.
 
 **Ctrl+G.** `installEditorKey` wraps readline's `_ttyWrite`, as the slash
 trigger and the cancel key do. On Ctrl+G at the prompt it records the text

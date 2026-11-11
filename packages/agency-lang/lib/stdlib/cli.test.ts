@@ -10,6 +10,8 @@ import {
   type PasteState,
 } from "./cli.js";
 import { escapedTurnText, interrupt } from "../runtime/interrupts.js";
+import { stripAnsi } from "./layout/ansi.js";
+import { color } from "../utils/termcolors.js";
 
 const {
   EMPTY_PASTE,
@@ -681,28 +683,57 @@ describe("reduceInterrupt", () => {
   });
 });
 
-describe("packOptions", () => {
-  it("packs short tokens onto one line", () => {
-    expect(
-      _internal.packOptions(
-        [
-          { key: "a", label: "ok" },
-          { key: "r", label: "no" },
-        ],
-        40,
-      ),
-    ).toEqual(["a=ok  r=no"]);
+describe("optionRows", () => {
+  const plain = (rows: string[]) => rows.map(stripAnsi);
+  const items = [
+    { key: "a", label: "approve once", tone: "approve" as const },
+    { key: "aa", label: "always approve", detail: "every std::ls", tone: "approve" as const },
+    {
+      key: "ap",
+      label: "always approve when",
+      detail: "dir = /x and below",
+      tone: "approve" as const,
+    },
+    { key: "r", label: "reject once", tone: "reject" as const },
+  ];
+
+  it("puts each item on its own line with aligned columns", () => {
+    expect(plain(_internal.optionRows(items, 80))).toEqual([
+      "a    approve once",
+      "aa   always approve        every std::ls",
+      "ap   always approve when   dir = /x and below",
+      "r    reject once",
+    ]);
   });
-  it("wraps when the next token would overflow", () => {
-    expect(
-      _internal.packOptions(
-        [
-          { key: "a", label: "approve" },
-          { key: "r", label: "reject" },
-        ],
-        10,
-      ),
-    ).toEqual(["a=approve", "r=reject"]);
+
+  it("wraps a detail that does not fit, indented under the label", () => {
+    const path = "/long".repeat(30);
+    const long = [{ key: "ap", label: "always approve when", detail: `dir = ${path} and below` }];
+    const rows = plain(_internal.optionRows(long, 60));
+    expect(rows[0]).toBe("ap   always approve when");
+    expect(rows.length).toBeGreaterThan(2);
+    rows.slice(1).forEach((row) => {
+      expect(row.startsWith("     ")).toBe(true);
+      expect(row.length).toBeLessThanOrEqual(60);
+    });
+    // Nothing is cut: the wrapped lines hold the whole detail.
+    const joined = rows
+      .slice(1)
+      .map((row) => row.trim())
+      .join("");
+    expect(joined.replace(/\s/g, "")).toBe(`dir = ${path} and below`.replace(/\s/g, ""));
+  });
+
+  it("colors an approving key green and a rejecting key red", () => {
+    const rows = _internal.optionRows(items, 80);
+    expect(rows[0].startsWith(color.bold.green("a"))).toBe(true);
+    expect(rows[3].startsWith(color.bold.red("r"))).toBe(true);
+  });
+
+  it("prints an item with no tone and no detail as key and label", () => {
+    expect(plain(_internal.optionRows([{ key: "v", label: "view it all" }], 80))).toEqual([
+      "v    view it all",
+    ]);
   });
 });
 
@@ -722,10 +753,10 @@ describe("renderInterruptFooter", () => {
   };
   it("shows divider, title, options, hint, and the input line with a caret", () => {
     const lines = _internal.renderInterruptFooter(base);
-    const joined = lines.join("\n");
+    const joined = stripAnsi(lines.join("\n"));
     expect(joined).toContain("bash: rm -rf build/ — approve?");
-    expect(joined).toContain("a=approve once");
-    expect(joined).toContain("rr=reject always");
+    expect(joined).toContain(" a    approve once\n");
+    expect(joined).toContain(" rr   reject always\n");
     expect(joined).toContain("Enter to submit");
     expect(lines[lines.length - 1]).toContain("> aa");
     expect(lines[lines.length - 1]).toContain("▏");
@@ -738,12 +769,10 @@ describe("renderInterruptFooter", () => {
   });
   it("offers the view option only when the body is cut off", () => {
     const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
-    expect(_internal.renderInterruptFooter({ ...base, body }).join("\n")).toContain(
-      "v=view it all",
-    );
-    expect(_internal.renderInterruptFooter({ ...base, body: "one line" }).join("\n")).not.toContain(
-      "v=view it all",
-    );
+    const footer = (text: string) =>
+      stripAnsi(_internal.renderInterruptFooter({ ...base, body: text }).join("\n"));
+    expect(footer(body)).toContain("v    view it all");
+    expect(footer("one line")).not.toContain("view it all");
   });
   it("shows a notice when present", () => {
     const lines = _internal.renderInterruptFooter({

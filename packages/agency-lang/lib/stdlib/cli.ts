@@ -517,30 +517,51 @@ function reduceInterrupt(
   return { state, outcome: { kind: "pending" } };
 }
 
-/** Greedily pack `key=label` tokens into lines no wider than `width`
- *  visible columns, joined by two spaces. A token wider than `width` gets
- *  its own line (buildFrame wraps it at render time). */
-function packOptions(items: { key: string; label: string }[], width: number): string[] {
-  const lines: string[] = [];
-  let current = "";
-  items.forEach((item) => {
-    const token = `${item.key}=${item.label}`;
-    if (current === "") {
-      current = token;
-      return;
+/** One answer at the approval prompt. */
+type InterruptItem = {
+  key: string;
+  label: string;
+  /** Dim text in the third column: what the answer covers. */
+  detail?: string;
+  /** Colors the key: green for approve, red for reject, bold alone otherwise. */
+  tone?: "approve" | "reject";
+};
+
+const KEY_COLUMN_GAP = 3;
+const LABEL_COLUMN_GAP = 3;
+const TONE_COLOR: Record<"approve" | "reject", (text: string) => string> = {
+  approve: color.bold.green,
+  reject: color.bold.red,
+};
+
+function coloredKey(item: InterruptItem): string {
+  return item.tone === undefined ? color.bold(item.key) : TONE_COLOR[item.tone](item.key);
+}
+
+/** The answers, one per line, in three columns: key, label, and a dim
+ *  detail. A detail that does not fit beside its label wraps onto lines of
+ *  its own, indented to the label column, so a long path is shown whole.
+ *  One or more lines per item. Pure. */
+function optionRows(items: InterruptItem[], width: number): string[] {
+  const keyWidth = Math.max(...items.map((item) => item.key.length)) + KEY_COLUMN_GAP;
+  const withDetail = items.filter((item) => item.detail !== undefined && item.detail !== "");
+  const labelWidth =
+    Math.max(0, ...withDetail.map((item) => visualWidth(item.label))) + LABEL_COLUMN_GAP;
+  const dim = (text: string) => `${DIM}${text}${COLOR_RESET}`;
+  return items.flatMap((item) => {
+    const head = coloredKey(item) + " ".repeat(keyWidth - item.key.length) + item.label;
+    const detail = item.detail ?? "";
+    if (detail === "") {
+      return [head];
     }
-    const fits = visualWidth(current) + 2 + visualWidth(token) <= width;
-    if (fits) {
-      current = `${current}  ${token}`;
-      return;
+    if (keyWidth + labelWidth + visualWidth(detail) <= width) {
+      const pad = " ".repeat(labelWidth - visualWidth(item.label));
+      return [head + pad + dim(detail)];
     }
-    lines.push(current);
-    current = token;
+    const indent = " ".repeat(keyWidth);
+    const wrapped = wrapText(detail, Math.max(1, width - keyWidth));
+    return [head, ...wrapped.map((line) => indent + dim(line))];
   });
-  if (current !== "") {
-    lines.push(current);
-  }
-  return lines;
 }
 
 const INTERRUPT_BODY_MAX_LINES = 6;
@@ -553,7 +574,7 @@ const INTERRUPT_CARET = "▏";
 type InterruptFooterInput = {
   title: string;
   body: string;
-  items: { key: string; label: string }[];
+  items: InterruptItem[];
   allowFreeText: boolean;
   /** True when the raise wants a value, so typed text is the answer.
    *  Otherwise typed text is a rejection reason. */
@@ -609,7 +630,7 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
   const items = body.truncated
     ? [...input.items, { key: VIEW_KEY, label: VIEW_LABEL }]
     : input.items;
-  packOptions(items, width - 1).forEach((row) => lines.push(` ${row}`));
+  optionRows(items, width - 1).forEach((row) => lines.push(` ${row}`));
   if (input.allowFreeText) {
     const hint = input.expectsValue ? "or type your answer" : "or type a reason";
     lines.push(` ${DIM}${hint} · Enter to submit${COLOR_RESET}`);
@@ -628,7 +649,7 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
 type InterruptOpts = {
   title: string;
   body: string;
-  items: { key: string; label: string }[];
+  items: InterruptItem[];
   allowFreeText: boolean;
   allowCancel: boolean;
   expectsValue?: boolean;
@@ -743,7 +764,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
 export async function _interruptChoice(
   title: string,
   body: string,
-  items: { key: string; label: string }[],
+  items: InterruptItem[],
   allowFreeText: boolean,
   allowCancel: boolean,
   expectsValue: boolean = false,
@@ -1847,7 +1868,7 @@ export const _internal = {
   classifyInterruptKey,
   reduceInterrupt,
   INITIAL_INTERRUPT_STATE,
-  packOptions,
+  optionRows,
   renderInterruptFooter,
   interruptBodyWidth,
   stickyInterruptPrompt,

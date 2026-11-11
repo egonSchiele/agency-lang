@@ -107,30 +107,30 @@ node readOnlyGitIsTheReadHalfOfGitTools(): boolean {
   return exact && covered
 }
 
-/** True when a tool has `useAgentCwd` bound to true by partial application.
-  The bound arguments arrive as parallel indices and values, so the check
-  looks the parameter up by name and then reads the value bound at its
-  position. */
-def isCwdBound(tool: any): boolean {
+/** True when a tool has the parameter `name` bound to true by partial
+  application. The bound arguments arrive as parallel indices and values, so
+  the check looks the parameter up by name and then reads the value bound at
+  its position. */
+def isBoundTrue(tool: any, name: string): boolean {
   const args = tool.boundArgs
   if (args == null) {
     return false
   }
   let position = 0
-  let cwdIndex = -1
+  let paramIndex = -1
   for (param in args.originalParams) {
-    if (param.name == "useAgentCwd") {
-      cwdIndex = position
+    if (param.name == name) {
+      paramIndex = position
     }
     position = position + 1
   }
-  if (cwdIndex < 0) {
+  if (paramIndex < 0) {
     return false
   }
   let slot = 0
   let bound = false
   for (index in args.indices) {
-    if (index == cwdIndex && args.values[slot] == true) {
+    if (index == paramIndex && args.values[slot] == true) {
       bound = true
     }
     slot = slot + 1
@@ -152,7 +152,15 @@ node fileAndShellToolsAreCwdBound(): boolean {
     [...writableFileTools(), ...shellTools()],
     \tool -> !unbound.includes(tool.name),
   )
-  return every(shouldBeBound, isCwdBound)
+  return every(shouldBeBound, \tool -> isBoundTrue(tool, "useAgentCwd"))
+}
+
+// The model cannot include ignored files by passing respectGitignore: false.
+node searchToolsRespectGitignore(): boolean {
+  const searchToolNames = ["ls", "glob", "grep"]
+  const searchers = filter(readOnlyFileTools(), \tool -> searchToolNames.includes(tool.name))
+  const allPresent = searchers.length == searchToolNames.length
+  return allPresent && every(searchers, \tool -> isBoundTrue(tool, "respectGitignore"))
 }
 
 // Providers reject two tools with the same name, and .partial() preserves the

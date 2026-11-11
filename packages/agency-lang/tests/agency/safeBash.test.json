@@ -627,9 +627,9 @@
     },
     {
       "nodeName": "grepOfIgnoredFolder",
-      "description": "A lone grep of a folder whose contents .gitignore ignores does not run the tool's search, which would come back empty; it asks std::bash, as any directory search through bash does.",
+      "description": "A lone grep of a folder .gitignore ignores runs the tool's search and asks std::grep, like a grep of any other folder.",
       "input": "",
-      "expectedOutput": "[\"bash\",[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}]",
+      "expectedOutput": "[\"grep\",[\"std::grep\"],null]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -175,12 +175,17 @@ describe("_skippedDirsNote", () => {
       expect(note).toContain(name);
     }
   });
+
+  it("tells the model to name a skipped folder as the path to search it", () => {
+    expect(_skippedDirsNote()).toContain("name it as the path");
+    expect(_skippedDirsNote()).toContain("node_modules/some-package/dist");
+  });
 });
 
-describe("the grep tool's docstring", () => {
+describe.each(["ls", "grep", "glob"])("the %s tool's docstring", (tool) => {
   it("names every folder the walk skips, so a folder added to SKIP_DIRS fails here until the docstring says so", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../stdlib/shell.agency"), "utf8");
-    const afterSignature = source.split("export idempotent def grep(")[1] ?? "";
+    const afterSignature = source.split(`export idempotent def ${tool}(`)[1] ?? "";
     const description = afterSignature.split('"""')[1]?.split("@param")[0] ?? "";
     expect(description).not.toBe("");
     for (const name of SKIP_DIRS) {

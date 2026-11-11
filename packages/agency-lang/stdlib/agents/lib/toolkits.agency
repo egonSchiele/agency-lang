@@ -123,16 +123,17 @@ export def communicationTools(): any[] {
   return [question]
 }
 
-/** The grep tool always respects `.gitignore`. The setting is bound so the
-model cannot include ignored files by changing an argument. */
+/** ls, glob, and grep always respect `.gitignore`. The setting is bound so
+the model cannot include ignored files by changing an argument. The model can
+still search an ignored folder by naming it as the folder to search. */
 export def readOnlyFileTools(): any[] {
   """
   Return file inspection tools rooted in the agent's working directory.
   """
   return [
     read.partial(useAgentCwd: true),
-    ls.partial(useAgentCwd: true),
-    glob.partial(useAgentCwd: true),
+    ls.partial(useAgentCwd: true, respectGitignore: true),
+    glob.partial(useAgentCwd: true, respectGitignore: true),
     grep.partial(useAgentCwd: true, respectGitignore: true),
   ]
 }

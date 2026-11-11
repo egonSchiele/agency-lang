@@ -1,0 +1,2 @@
+# A test checks that the scan still lists what this file ignores. Add a file this file names with `git add -f`.
+renamed.json

@@ -66,7 +66,6 @@ import { _searchTargetIn, _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
-import { _ignoredFromAbove } from "agency-lang/stdlib-lib/gitignore.js"
 
 /** @module
 @summary Run Bash commands with approvals matched to their actions.
@@ -1172,19 +1171,6 @@ def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<Plan> {
   // Without -r, grep does not search a directory, and the tool would.
   if (target.file == null && !letters.includes("r")) {
     return failure("grep without -r does not search a directory")
-  }
-  // The tool's search applies the .gitignore files above the directory to
-  // every entry. Where they ignore everything in it (`**/dist/*` for
-  // `dist`), the search finds nothing, and an empty answer would read as
-  // "no match". Those go to the bash path.
-  if (target.file == null) {
-    const ignored = try _ignoredFromAbove(target.dir)
-    if (isFailure(ignored)) {
-      return ignored
-    }
-    if (ignored.value) {
-      return failure("git ignores everything in this directory, so the grep tool's search would find nothing")
-    }
   }
   const syntax = grepSyntax(letters)
   if (isFailure(syntax)) {

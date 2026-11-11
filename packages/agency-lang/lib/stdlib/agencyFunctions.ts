@@ -7,7 +7,8 @@ import {
 } from "../compiler/closureValidator.js";
 import { compileValidatedClosure } from "../compiler/compileValidatedClosure.js";
 import { getStdlibDir, isStdlibImport, resolveAgencyImportPath } from "../importPaths.js";
-import { readText, wholePath } from "../host/node/nodeFiles.js";
+import { list, readText, root, stat, wholePath } from "../host/node/nodeFiles.js";
+import { isKnownStdlibModule, missingModuleMessage } from "./stdlibModules.js";
 import { generateAgency } from "../backends/agencyGenerator.js";
 import { parseDescribedProgram, _parseAST } from "./agency.js";
 import { _parseStatements } from "./template.js";
@@ -74,8 +75,21 @@ function stdlibFile(moduleName: string): string {
   return filename;
 }
 
-function resolveSource(source: AgencySourceValue): ResolvedSource {
+/** A module the table does not know is checked on disk once. With a stale
+ *  table, a module that exists still loads, and only the hint is out of date. */
+function checkStdlibModule(moduleName: string, names: string[]): void {
+  if (isKnownStdlibModule(moduleName)) {
+    return;
+  }
+  const located = wholePath(stdlibFile(moduleName));
+  if (stat(located.root, located.target) === null) {
+    throw new Error(missingModuleMessage(moduleName, names));
+  }
+}
+
+function resolveSource(source: AgencySourceValue, names: string[]): ResolvedSource {
   if (source.kind === "module") {
+    checkStdlibModule(source.module, names);
     const entryId = stdlibFile(source.module);
     // Installed stdlib code is trusted. The generated adapter imports it;
     // supplied source and local dependencies still use the normal validator.
@@ -181,6 +195,37 @@ function exportedItems(resolved: ResolvedSource): ExportedItem[] {
     return out;
   };
   return visit(resolved.entryId);
+}
+
+/** Each std:: module under the stdlib folder, as "std::data/finance/fred". */
+function stdlibModuleNames(): string[] {
+  const stdlib = root(getStdlibDir());
+  const walk = (dir: string): string[] =>
+    list(stdlib, dir).flatMap((entry) => {
+      const relative = dir === "." ? entry.name : `${dir}/${entry.name}`;
+      // docs/ holds the staged markdown pages, not modules.
+      if (entry.type === "dir") {
+        return relative === "docs" ? [] : walk(relative);
+      }
+      if (entry.type !== "file" || !entry.name.endsWith(".agency")) {
+        return [];
+      }
+      return [`std::${relative.replace(/\.agency$/, "")}`];
+    });
+  return walk(".").sort();
+}
+
+/** Every std:: module and its public exported functions, by the rule
+ *  `learn` uses. Only scripts/generate-stdlib-modules.mjs and the
+ *  staleness test call it; the runtime reads stdlibModules.data.ts. */
+export function _stdlibModuleTable(): Record<string, string[]> {
+  const table: Record<string, string[]> = {};
+  for (const moduleName of stdlibModuleNames()) {
+    table[moduleName] = exportedItems(resolveSource({ kind: "module", module: moduleName }, []))
+      .filter((item) => item.kind === "function")
+      .map((item) => item.name);
+  }
+  return table;
 }
 
 function selectFunctions(items: ExportedItem[], names: string[]): ExportedFunction[] {
@@ -319,7 +364,7 @@ export function _prepareFunctions(
   names: string[],
   includeMetadata = false,
 ): PreparedFunctions {
-  const resolved = resolveSource(source);
+  const resolved = resolveSource(source, names);
   const selected = selectFunctions(exportedItems(resolved), names);
   const adapter = generateAdapter(selected, resolved.closure, includeMetadata);
   const compiled = compileValidatedClosure(withGeneratedEntry(resolved.closure, adapter), {

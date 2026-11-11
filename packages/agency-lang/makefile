@@ -1,4 +1,4 @@
-.PHONY: all ci test stdlib agents effect-sets doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency examples eval-image
+.PHONY: all ci test stdlib agents generated-data doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency examples eval-image
 
 # Resolve tsc/tsc-alias from the workspace, not from whatever happens to
 # be global. Historically `make build` was only ever reached via
@@ -40,14 +40,14 @@ define stage-stdlib-docs
 endef
 
 all:
-	pnpm run templates && $(MAKE) build && $(MAKE) effect-sets && $(MAKE) diagnostics-docs && $(MAKE) compile-agency && $(MAKE) doc && $(MAKE) examples
+	pnpm run templates && $(MAKE) build && $(MAKE) generated-data && $(MAKE) diagnostics-docs && $(MAKE) compile-agency && $(MAKE) doc && $(MAKE) examples
 
 # What CI test jobs need: `all` without `doc` and `examples`, which only
 # regenerate tracked pages under docs/site/ and take about 20s on a CI
 # machine. Tests read the tracked pages. The node23-build job still runs
 # the full `make`, so a doc generator failure still fails CI.
 ci:
-	pnpm run templates && $(MAKE) build && $(MAKE) effect-sets && $(MAKE) diagnostics-docs && $(MAKE) compile-agency
+	pnpm run templates && $(MAKE) build && $(MAKE) generated-data && $(MAKE) diagnostics-docs && $(MAKE) compile-agency
 
 # Build the dist/ tree. Invoked by `pnpm run build`. Kept here (rather
 # than as a chain in package.json) so the steps remain readable and easy
@@ -121,14 +121,16 @@ compile-agency:
 	node ./dist/scripts/agency.js compile stdlib/ $(AGENT_PATHS)
 	$(stage-stdlib-docs)
 
-# The built-in effect sets as a TypeScript data file, so the runtime reads
-# nothing from disk for them. Needs the parser in dist/, so it runs after
-# build; when the file changed, build again so dist/ carries the new data.
-effect-sets:
+# Two TypeScript data files made from the stdlib, so the runtime reads
+# nothing from disk for them: the built-in effect sets, and every std::
+# module with the functions it exports. Both scripts need dist/, so this
+# runs after build; when a file changed, build again so dist/ carries it.
+generated-data:
 	@set -e; \
-	before=$$(cat lib/runtime/effectSets.data.ts 2>/dev/null | cksum); \
+	before=$$(cat lib/runtime/effectSets.data.ts lib/stdlib/stdlibModules.data.ts 2>/dev/null | cksum); \
 	node ./scripts/generate-effect-sets.mjs; \
-	after=$$(cat lib/runtime/effectSets.data.ts | cksum); \
+	node ./scripts/generate-stdlib-modules.mjs; \
+	after=$$(cat lib/runtime/effectSets.data.ts lib/stdlib/stdlibModules.data.ts | cksum); \
 	if [ "$$before" != "$$after" ]; then $(MAKE) build; fi
 
 # Selective-use aliases (same recipes, one root set each).

@@ -74,6 +74,34 @@ and compiles it with the original modules. Each step returns the input
 for the next. The final prepared value contains the compiled code and
 the selected export names.
 
+### A module that does not exist
+
+A model often names an effect as if it were a module. For example, it
+asks to learn `exec` from `std::exec`, but `std::exec` is the effect that
+`exec` raises, and the function lives in `std::shell`. Without a check,
+the read of `stdlib/exec.agency` fails with a bare ENOENT, and the model
+repeats the call. So before reading a module source, preparation looks
+the name up in a table of every `std::` module and its public functions.
+A missing module fails with a message the model can act on:
+
+```
+There is no standard library module named std::exec. `exec` is exported by std::shell.
+```
+
+When no requested name is exported anywhere, the message lists the
+modules that export functions instead.
+
+The table is `lib/stdlib/stdlibModules.data.ts`, so the lookup reads no
+files. `scripts/generate-stdlib-modules.mjs` writes it after the build,
+from `_stdlibModuleTable`, which reuses the same export walk `learn`
+uses. That way the table cannot disagree with what `learn` accepts.
+The `generated-data` make target runs it beside the effect-sets
+generator, and `stdlibModules.test.ts` fails when the table is stale.
+
+A name that is missing from the table is checked on disk once before
+it is refused. With a stale table, a module that exists still loads,
+and only the hint is out of date.
+
 Original local files keep their relative paths. Their private helpers,
 imports, types, and default expressions remain in their original scope.
 The sandboxed compiler applies its existing import restrictions. It

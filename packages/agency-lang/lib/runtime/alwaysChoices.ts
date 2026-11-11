@@ -101,12 +101,16 @@ export function sharedApprovalSet(
   overrides: Record<string, ScopedField[]>,
   sets: Record<string, EffectSetInfo>,
 ): EffectSetInfo | null {
+  // Own keys only: `effect` is a user-controlled string, and an effect
+  // named `constructor` must not resolve Object's from the prototype.
+  const scopeOf = (record: Record<string, ScopedField[]>, name: string) =>
+    Object.hasOwn(record, name) ? record[name] : [];
   const scopes = { ...registered, ...overrides };
-  const own = scopes[effect] ?? [];
+  const own = scopeOf(scopes, effect);
   if (own.length === 0) {
     return null;
   }
-  const ownIsDeclared = sameScopedFields(registered[effect] ?? [], own);
+  const ownIsDeclared = sameScopedFields(scopeOf(registered, effect), own);
   const agrees = (member: string) =>
     Object.hasOwn(scopes, member) ? sameScopedFields(scopes[member], own) : ownIsDeclared;
   const found = SHARED_SET_NAMES.map((name) => sets[name]).find(

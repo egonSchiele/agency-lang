@@ -117,6 +117,9 @@ describe("sharedApprovalSet", () => {
   });
   it("returns null for an effect in no listed set", () => {
     expect(sharedApprovalSet("x::y", { "x::y": [exact("a")] }, {}, sets)).toBeNull();
+    // A name an object inherits from its prototype must not be read as a scope.
+    expect(sharedApprovalSet("constructor", {}, {}, sets)).toBeNull();
+    expect(sharedApprovalSet("constructor", registered, {}, sets)).toBeNull();
   });
   it("returns null for an effect with no scope", () => {
     expect(sharedApprovalSet("std::ls", {}, {}, sets)).toBeNull();

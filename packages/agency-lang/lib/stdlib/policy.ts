@@ -58,7 +58,8 @@ export function _effectRisk(effect: string): EffectRisk {
   return effectRisk(effect, builtinEffectSets());
 }
 
-/** `text` in the bold color for `risk`, the one the prompt's divider uses. */
+/** `text` in the bold color for `risk`. The prompt colors the effect name
+ *  with it. */
 export function _riskColored(risk: EffectRisk, text: string): string {
   return RISK_COLOR[risk](text);
 }

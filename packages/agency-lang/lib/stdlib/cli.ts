@@ -551,7 +551,9 @@ type FooterShape = Pick<
 // line and the divider, the body's ellipsis, the free-text hint, a notice,
 // and the input line. A notice comes and goes with keystrokes, so its row
 // is always kept free and the body does not change size as the user types.
-const FOOTER_FIXED_ROWS = 6;
+// One more row stays free above the footer, so it never fills the whole
+// screen and the newest line of output stays in view.
+const FOOTER_FIXED_ROWS = 7;
 
 function footerWidth(columns: number): number {
   return Math.max(MIN_FOOTER_WIDTH, columns - 1);

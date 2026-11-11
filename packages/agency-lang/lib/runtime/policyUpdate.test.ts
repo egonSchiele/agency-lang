@@ -145,4 +145,38 @@ describe("insertApproveRule", () => {
     const saved: Policy = { e: [reject] };
     expect(insertApproveRule(saved, [], rule)).toEqual(saved);
   });
+
+  it("keeps a scoped reject under * deciding for a folder inside the approved one", () => {
+    const secrets = { match: { dir: "{/p/secrets,/p/secrets/**}" }, action: "reject" as const };
+    const saved: Policy = { "*": [secrets] };
+    const dirs = resolvePolicyDirs(nodeHost());
+    const readIn = (dir: string) => ({ ...read(dir), effect: "std::read" });
+    expect(checkPolicy(saved, readIn("/p/src"), dirs).type).toBe("propagate");
+    const parent = {
+      match: { dir: "{/p,/p/**}" },
+      action: "approve" as const,
+      matchDotFolders: true,
+    };
+    const next = insertApproveRule(saved, ["std::read"], parent);
+    expect(checkPolicy(next, readIn("/p/secrets/keys"), dirs).type).toBe("reject");
+    expect(checkPolicy(next, readIn("/p/src"), dirs).type).toBe("approve");
+    expect(next["std::read"]).toEqual([secrets, parent]);
+  });
+
+  it("does not copy a catch-all reject under *, which would hide every rule after it", () => {
+    const saved: Policy = { "*": [{ action: "reject" }], e: [approve] };
+    expect(insertApproveRule(saved, ["e"], rule)["e"]).toEqual([rule, approve]);
+  });
+
+  it("goes ahead of a catch-all propagate that would hide it", () => {
+    const saved: Policy = { e: [{ action: "propagate" }, reject] };
+    const next = insertApproveRule(saved, ["e"], rule);
+    expect(next["e"]).toEqual([rule, { action: "propagate" }, reject]);
+    expect(checkPolicy(next, read("/a"), resolvePolicyDirs(nodeHost())).type).toBe("approve");
+  });
+
+  it("goes after a catch-all reject, which still decides", () => {
+    const saved: Policy = { e: [{ action: "reject" }] };
+    expect(insertApproveRule(saved, ["e"], rule)["e"]).toEqual([{ action: "reject" }, rule]);
+  });
 });

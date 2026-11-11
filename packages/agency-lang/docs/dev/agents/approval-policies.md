@@ -91,13 +91,15 @@ which permission is being asked for is legible before the reason for it.
 
 The effect name, and nothing else, is colored by how much the action
 matters (`effectRisk` in `lib/runtime/effectRisk.ts`). Green is a read
-(`FileRead`). Yellow is a change (`FileWrite`, `Network`, `AwsS3`,
-`Calendar`, `Memory`, and any effect in no listed set, a program's own
-effects among them). Red is a danger (`Shell`, `Secrets`, `Messaging`,
-`Auth`). An effect in several sets takes the highest. The table there
-names concrete sets only: a set built from others, such as `FileSystem`,
-would otherwise pull every read up to a change. `std::remove` is in
-`FileWrite`, so it is yellow; nothing marks an effect as destructive.
+(`FileRead`, `NotesRead`). Yellow is a change (`FileWrite`, `NotesWrite`,
+`Network`, `AwsS3`, `Calendar`, `Memory`, and any effect in no listed set,
+a program's own effects among them). Red is a danger (`Shell`, `Secrets`,
+`Messaging`, `Auth`). An effect in several sets takes the highest. The
+table there names concrete sets only: a set built from others, such as
+`FileSystem`, would otherwise pull every read up to a change. A test fails
+when a built-in set has members no row covers, so a new set gets a
+decision. `std::remove` is in `FileWrite`, so it is yellow; nothing marks
+an effect as destructive.
 
 `interruptChoice` (`stdlib/ui/cli.agency`) draws the prompt in one of three
 ways:
@@ -452,9 +454,27 @@ propagate rules already there, and every reject rule still decides ahead
 of it. This matters because the folder step can pick a parent folder.
 Suppose the policy rejects reads under `/p/secrets`, and the person
 answers a read in `/p/src` with `ap` and picks `/p`. The rule for `/p`
-goes after the reject, so a read in `/p/secrets` is still rejected.
-`recordScopedRule`, which programs with their own approval UI call, still
-puts its rule first.
+goes after the reject, so a read in `/p/secrets` is still rejected. This
+applies to `ap` on every effect, `std::write` and `std::exec` included, not
+only to the file reads that get the folder step. `recordScopedRule`, which
+programs with their own approval UI call, still puts its rule first.
+
+Three cases refine "just after the last reject":
+
+- **A reject under `"*"`.** The matcher tries an effect's own rules before
+  the `"*"` rules, so a `"*"` reject for `/p/secrets` would lose to the new
+  rule for `/p`. `insertApproveRule` copies the scoped `"*"` rejects into
+  the effect's list ahead of the new rule. The copies also decide ahead of
+  the effect's rules that come after them, which can only turn an approval
+  into a rejection. A `"*"` reject with no `match` is not copied: it would
+  hide every rule after it.
+- **A catch-all approve or propagate.** A rule with no `match` decides
+  every interrupt, so a rule after it never decides. The new rule goes
+  ahead of the first such catch-all, after only the rejects before it.
+- **A scoped propagate ahead of a reject.** This is left as it is. The new
+  rule lands after the reject and so behind the propagate, and an
+  interrupt that propagate covers still asks. Moving the new rule ahead of
+  the propagate would put it ahead of the reject too.
 
 `as` also skips a member whose policy already rejects this interrupt
 (`unrejectedEffects`), such as `std::glob` after an earlier "always

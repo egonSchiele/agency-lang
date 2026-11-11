@@ -9,10 +9,13 @@ export type EffectRisk = "read" | "change" | "danger";
 
 /** The built-in effect sets that decide an effect's risk. A set made of
  *  other sets (FileSystem, Github) is left out: its members are already
- *  in one of these. */
-const RISK_BY_SET: Record<string, EffectRisk> = {
+ *  in one of these. A test in effectRisk.test.ts fails when a built-in set
+ *  has members that no row here covers. */
+export const RISK_BY_SET: Record<string, EffectRisk> = {
   FileRead: "read",
+  NotesRead: "read",
   FileWrite: "change",
+  NotesWrite: "change",
   Network: "change",
   AwsS3: "change",
   Calendar: "change",

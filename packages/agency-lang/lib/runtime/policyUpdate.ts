@@ -21,10 +21,15 @@ function sameRule(a: PolicyRule, b: PolicyRule): boolean {
   );
 }
 
+// A rule with no `match` matches every interrupt of its effect.
+function isCatchAll(rule: PolicyRule): boolean {
+  return rule.match === undefined || Object.keys(rule.match).length === 0;
+}
+
 // The first matching rule wins, so a rule with no `match` decides every
 // interrupt of its effect and anything listed after it is never reached.
 function decidesEverything(rules: PolicyRule[]): boolean {
-  return rules.some((rule) => rule.match === undefined || Object.keys(rule.match).length === 0);
+  return rules.some(isCatchAll);
 }
 
 /** The rules `base` has and `saved` lacks, keyed by effect. An effect the
@@ -58,22 +63,52 @@ export function appendPolicyRules(saved: Policy, additions: Policy): Policy {
   return merged;
 }
 
-/** `policy` with the approve rule `rule` added under each of `effects`,
- *  just after that effect's last reject rule, or first when it has none.
- *  The first match wins, so the new rule decides ahead of the approve and
- *  propagate rules already there, and every reject rule still decides
- *  ahead of it. A rule that approves a parent folder then never overturns
- *  a rule that rejects a folder inside it. An effect that already has the
- *  same rule is left as it is, so one answer given twice saves one rule. */
+// Where a new approve rule goes in an effect's list: just after the last
+// reject rule that can still decide something. A catch-all that is not a
+// reject decides every interrupt, so a reject after it never decides, and
+// a new rule placed after it would never decide either.
+function insertionIndex(rules: PolicyRule[]): number {
+  const blocker = rules.findIndex((one) => isCatchAll(one) && one.action !== "reject");
+  const reachable = blocker === -1 ? rules : rules.slice(0, blocker);
+  return reachable.findLastIndex((one) => one.action === "reject") + 1;
+}
+
+/**
+ * `policy` with the approve rule `rule` added under each of `effects`.
+ * The first match wins, and the rule goes where every reject still
+ * decides ahead of it while it decides ahead of the approve and propagate
+ * rules already there. So a rule that approves a parent folder never
+ * overturns a rule that rejects a folder inside it:
+ *
+ * - Under the effect, it goes just after the last reject rule, and ahead
+ *   of any catch-all approve or propagate rule, which would hide it.
+ * - The scoped reject rules under `"*"` are copied in ahead of it. The
+ *   matcher tries an effect's own rules before `"*"`, so without the copy
+ *   a `"*"` reject for `/p/secrets` would lose to an approve for `/p`.
+ *   The copies also decide ahead of the rules after them, which can only
+ *   turn an approval into a rejection. A `"*"` catch-all reject is not
+ *   copied: it would hide every rule after it.
+ *
+ * A scoped propagate rule ahead of a reject is left where it is, so a new
+ * rule behind it does not decide what it covers, and that interrupt still
+ * asks. An effect that already has the same rule is left as it is, so one
+ * answer given twice saves one rule.
+ */
 export function insertApproveRule(policy: Policy, effects: string[], rule: PolicyRule): Policy {
+  const wildcardRejects = (policy["*"] ?? []).filter(
+    (one) => one.action === "reject" && !isCatchAll(one),
+  );
   const next: Policy = { ...policy };
   for (const effect of effects) {
     const existing = policy[effect] ?? [];
     if (existing.some((one) => sameRule(one, rule))) {
       continue;
     }
-    const at = existing.findLastIndex((one) => one.action === "reject") + 1;
-    next[effect] = [...existing.slice(0, at), rule, ...existing.slice(at)];
+    const at = insertionIndex(existing);
+    const copied = wildcardRejects.filter(
+      (reject) => !existing.some((one) => sameRule(one, reject)),
+    );
+    next[effect] = [...existing.slice(0, at), ...copied, rule, ...existing.slice(at)];
   }
   return next;
 }

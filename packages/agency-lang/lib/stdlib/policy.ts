@@ -3,6 +3,15 @@ import { currentRun } from "@/runtime/asyncContext.js";
 import { currentHost } from "@/runtime/currentHost.js";
 import path from "#path";
 import { assertContained } from "./assertContained.js";
+import { allAlwaysScopes, type ScopedField } from "@/runtime/alwaysScope.js";
+import { builtinEffectSets } from "@/runtime/effectSets.js";
+import {
+  folderChoices,
+  inSharedApprovalSet,
+  resolvedScopes,
+  sharedApprovalSet,
+  type FolderChoice,
+} from "@/runtime/alwaysChoices.js";
 export { validatePolicy as _validatePolicy, escapeGlob as _escapeGlob } from "@/runtime/policy.js";
 
 /** `checkPolicy` from Agency: the `dir` patterns stand for the directories
@@ -18,7 +27,32 @@ export {
   alwaysScopeFor as _alwaysScopeFor,
   allAlwaysScopes as _allAlwaysScopes,
 } from "@/runtime/alwaysScope.js";
+export { describeScope as _describeScope } from "@/runtime/alwaysChoices.js";
 import type { Policy } from "@/runtime/policy.js";
+
+/** The folders the prompt's folder step offers for `value`, measured
+ *  against the directories the run resolved when its context was built. */
+export function _folderChoices(value: string): FolderChoice[] {
+  const { ctx } = currentRun();
+  return folderChoices(value, ctx.policyDirs);
+}
+
+/** The listed effect set one answer may cover for `effect`, with each
+ *  member's scope resolved through the caller's `fields:` overrides. An
+ *  empty name and member list when no set applies. */
+export function _sharedApprovalSet(
+  effect: string,
+  overrides: Record<string, ScopedField[]>,
+): { name: string; members: string[] } {
+  const scopes = resolvedScopes(allAlwaysScopes(), overrides);
+  const set = sharedApprovalSet(effect, scopes, builtinEffectSets());
+  return set === null ? { name: "", members: [] } : { name: set.name, members: set.members };
+}
+
+/** Whether `effect` belongs to a set that gets the broader answers. */
+export function _inSharedApprovalSet(effect: string): boolean {
+  return inSharedApprovalSet(effect, builtinEffectSets());
+}
 
 // Built-in policies live in the runtime (single source of truth, shared with
 // the `agency run --policy` CLI resolver and the runtime handler); re-export
@@ -28,6 +62,7 @@ export { policyOverlayFromFlags as _policyOverlayFromFlags } from "@/runtime/pol
 export {
   missingPolicyRules as _missingPolicyRules,
   appendPolicyRules as _appendPolicyRules,
+  prependPolicyRule as _prependPolicyRule,
 } from "@/runtime/policyUpdate.js";
 
 export {

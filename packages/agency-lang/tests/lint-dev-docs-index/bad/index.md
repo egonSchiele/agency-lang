@@ -6,3 +6,4 @@
 - `docs/dev/listed.md` — The same file a second time.
 - `docs/dev/missing.md` — A file that does not exist.
 - `docs/dev/bare.md`
+- `docs/dev/dashed.md` - A hyphen where the em dash should be.

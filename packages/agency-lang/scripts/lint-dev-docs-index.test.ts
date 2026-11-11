@@ -4,7 +4,8 @@ import * as path from "path";
 
 // The check is a script, so these tests run it as one, over the fixture
 // folders in tests/lint-dev-docs-index/. Each holds an index.md (not a
-// CLAUDE.md, which Claude Code would load as instructions) and a docs/dev/.
+// CLAUDE.md, which Claude Code would load as instructions), and most hold a
+// docs/dev/.
 const script = path.resolve(__dirname, "lint-dev-docs-index.mjs");
 const fixtures = path.resolve(__dirname, "../tests/lint-dev-docs-index");
 
@@ -50,18 +51,21 @@ describe("lint-dev-docs-index", () => {
       expect(result.output).toContain("bad/index.md:8: docs/dev/bare.md has no description");
     });
 
+    it("reports the wrong separator, and does not call that doc unlisted", () => {
+      expect(result.output).toContain(
+        'bad/index.md:9: docs/dev/dashed.md: separate the path from the description with " — " (an em dash)',
+      );
+      expect(result.output).not.toContain("docs/dev/dashed.md is not listed");
+    });
+
     it("reports a doc the index does not list", () => {
       expect(result.output).toContain("docs/dev/unlisted.md is not listed in bad/index.md");
     });
   });
 
   it("fails when the index has no Deeper docs section", () => {
-    const result = spawnSync(
-      "node",
-      [script, "--root", path.join(fixtures, "good"), "--index", script],
-      { encoding: "utf-8" },
-    );
+    const result = runCheck("no-section");
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('no "## Deeper docs" section');
+    expect(result.output).toContain('no-section/index.md: no "## Deeper docs" section');
   });
 });

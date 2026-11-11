@@ -13,6 +13,7 @@
 // into every session. So this check reports:
 //  - a description longer than MAX_DESCRIPTION characters
 //  - an entry with no description
+//  - an entry whose path and description are not separated by " — "
 //  - an entry naming a file that does not exist
 //  - a file listed twice
 //  - a doc in docs/dev/ that the index does not list
@@ -21,7 +22,10 @@ import { join, relative, resolve } from "node:path";
 
 const MAX_DESCRIPTION = 150;
 const SECTION_HEADING = "## Deeper docs";
-const ENTRY = /^- `(docs\/[^`]+)`(?: — (.*))?$/;
+const SEPARATOR = " — ";
+// Any line that starts with a listed path is an entry, whatever follows it,
+// so a line with the wrong dash is reported as that and not as a missing doc.
+const ENTRY = /^- `(docs\/[^`]+)`(.*)$/;
 
 function flagValue(name, fallback) {
   const at = process.argv.indexOf(name);
@@ -51,7 +55,7 @@ function readEntries(text) {
   const entries = [];
   for (let i = start + 1; i < lines.length && !lines[i].startsWith("## "); i++) {
     const match = lines[i].match(ENTRY);
-    if (match) entries.push({ line: i + 1, path: match[1], description: match[2] ?? "" });
+    if (match) entries.push({ line: i + 1, path: match[1], rest: match[2] });
   }
   return entries;
 }
@@ -62,10 +66,15 @@ function check() {
 
   const problems = [];
   const seen = [];
-  for (const { line, path, description } of entries) {
+  for (const { line, path, rest } of entries) {
     const where = `${indexName}:${line}`;
+    const description = rest.startsWith(SEPARATOR) ? rest.slice(SEPARATOR.length) : "";
     const length = [...description].length;
-    if (length === 0) {
+    if (rest !== "" && !rest.startsWith(SEPARATOR)) {
+      problems.push(
+        `${where}: ${path}: separate the path from the description with "${SEPARATOR}" (an em dash)`,
+      );
+    } else if (length === 0) {
       problems.push(`${where}: ${path} has no description`);
     } else if (length > MAX_DESCRIPTION) {
       problems.push(

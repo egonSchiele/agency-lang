@@ -320,7 +320,7 @@ Other process docs:
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable.
 - `docs/dev/agents/research-loop.md` — The researcher's single pass, and why an empty answer is asked for once more with no tools.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
-- `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.
+- `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind `why-agents-write-code.md`.
 - `docs/dev/agents/subagent-budgets.md` — How a deadline reaches a subagent, and the `@guard` decorator that enforces it and decides what counts as success.
 - `docs/dev/agents/tool-loop-guards.md` — The refusals that stop a model wasting rounds, such as a repeated call, and the retry of an empty reply that was cut off.
 - `docs/dev/agents/tool-output.md` — What each tool's line in the agent's trace shows, and the test that fails on a tool with no line defined.

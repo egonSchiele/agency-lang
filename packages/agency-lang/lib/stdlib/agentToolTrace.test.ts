@@ -720,6 +720,16 @@ describe("result summarizers", () => {
     expect(end("safeBash", { command: "tsc" }, stdoutOnly, "failure")).toBe(
       "✗ Run tsc · exit 2\n  │ src/a.ts: error",
     );
+    const stopped = JSON.stringify({
+      command: "pytest",
+      exitCode: 1,
+      stderr: "",
+      stdout: "test_a passed",
+      timedOut: true,
+    });
+    expect(end("safeBash", { command: "pytest" }, stopped, "failure")).toBe(
+      "✗ Run pytest · timed out\n  │ test_a passed",
+    );
   });
 
   it("turns a nonzero exit on a plain command result red", () => {

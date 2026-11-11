@@ -2179,3 +2179,22 @@ node gitRunsSafely() {
   remove(GIT_BARE) with approve
   return seen
 }
+
+node timeLimitStopsTheCommand() {
+  let result: any = null
+  handle {
+    // The failure also holds the command's text, so the output is text
+    // the command does not spell: "A1" and "B2".
+    result = safeBash("printf 'A%s\\n' 1; sleep 20; printf 'B%s\\n' 2", timeout: 1)
+  } with (intr) {
+    // Every question about this line carries the limit, in milliseconds.
+    if (intr.data.timeout != 1000) {
+      return reject("timeout was ${intr.data.timeout}")
+    }
+    return approve()
+  }
+  if (result is failure(why)) {
+    return [why.includes("A1"), why.includes("B2"), why.includes("time limit of 1 seconds")]
+  }
+  return "NOT STOPPED"
+}

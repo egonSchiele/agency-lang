@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { definedVariables, nodeSubprocess, shellEnvironment } from "./nodeSubprocess.js";
+import { TERM_GRACE_MS, killTrackedChildren } from "./processGroups.js";
 import type { RunOptions } from "../host.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
@@ -94,4 +95,84 @@ describe("the shell a script runs under", () => {
     const env = { ...parentEnv(), POSIXLY_CORRECT: "1" };
     expect((await shell("echo -n hi", { env })).stdout).toBe("hi");
   });
+});
+
+const isAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    // ESRCH: no such process.
+    return false;
+  }
+};
+
+async function waitUntilGone(pid: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 40 && isAlive(pid); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return !isAlive(pid);
+}
+
+async function timed<T>(work: Promise<T>): Promise<{ result: T; ms: number }> {
+  const start = Date.now();
+  const result = await work;
+  return { result, ms: Date.now() - start };
+}
+
+describe.skipIf(process.platform === "win32")("stopping a command", () => {
+  it("a time limit stops what the script started, and keeps the output so far", async () => {
+    const { result, ms } = await timed(shell("sleep 30 & echo $!; wait", { timeoutMs: 200 }));
+    expect(result.timedOut).toBe(true);
+    expect(ms).toBeLessThan(1500);
+    expect(await waitUntilGone(Number(result.stdout.trim()))).toBe(true);
+  });
+
+  it("an abort returns while a later command of the script is still to run", async () => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 200);
+    const { result, ms } = await timed(shell("sleep 30; echo done", { signal: controller.signal }));
+    expect(result.aborted).toBe(true);
+    expect(result.stdout).toBe("");
+    expect(ms).toBeLessThan(1500);
+  });
+
+  it("a script that ignores SIGTERM is killed after the grace period", async () => {
+    const { result, ms } = await timed(
+      shell("trap '' TERM; echo ready; sleep 30", { timeoutMs: 200 }),
+    );
+    expect(result.stdout).toBe("ready\n");
+    expect(ms).toBeGreaterThan(TERM_GRACE_MS);
+    expect(ms).toBeLessThan(TERM_GRACE_MS + 2000);
+  });
+
+  it("returns when a process that left the group still holds the output pipe", async () => {
+    const escape = `perl -MPOSIX -e '$| = 1; setsid(); print "$$\\n"; sleep 20' & wait`;
+    const { result, ms } = await timed(shell(escape, { timeoutMs: 300 }));
+    const escaped = Number(result.stdout.trim());
+    try {
+      expect(result.timedOut).toBe(true);
+      expect(ms).toBeLessThan(2000);
+      // Still running: the group kill did not reach it, so only the pipe
+      // rule can have ended the call.
+      expect(isAlive(escaped)).toBe(true);
+    } finally {
+      process.kill(escaped, "SIGKILL");
+    }
+  });
+
+  it("killing the tracked children, as the exit hook does, stops a running command", () =>
+    withTempDir(async (dir) => {
+      const pidFile = path.join(dir, "pid");
+      const running = await nodeSubprocess.start({
+        kind: "shell",
+        script: `sleep 30 & echo $! > ${pidFile}; wait`,
+      });
+      while (!fs.existsSync(pidFile) || fs.readFileSync(pidFile, "utf8").trim() === "") {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      killTrackedChildren();
+      await running.wait();
+      expect(await waitUntilGone(Number(fs.readFileSync(pidFile, "utf8").trim()))).toBe(true);
+    }));
 });

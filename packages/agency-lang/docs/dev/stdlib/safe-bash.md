@@ -605,8 +605,8 @@ target goes through the same function:
 
 - A folder is refused. With folders, `diff a b` reads every file under
   both, following links, under two questions that name only `a` and `b`.
-- A FIFO or a device is refused. `wc -l pipe` would never return, and
-  `runBash` has no timeout.
+- A FIFO or a device is refused. `wc -l pipe` would not return until
+  `runBash`'s time limit stopped it.
 - A missing path is refused, so `cat nope.txt` asks `std::bash`, as
   `grep x nope.txt` does.
 
@@ -839,7 +839,8 @@ the line used to fail with "no rule for", and `execEffects` builds it.
 
 The payload has the exec tool's fields: `command` is the program,
 `args` its arguments, `subcommand` the first argument (or `""`), `cwd`
-safeBash's resolved folder, `timeout` 0, and `stdin` empty. The full
+safeBash's resolved folder, `timeout` the line's time limit in
+milliseconds (see "The time limit"), and `stdin` empty. The full
 line goes in an extra field, `line`, because `std::exec` already uses
 `command` for the program and `@always` pins it. The line then runs
 through bash, as every narrow plan does.
@@ -1333,6 +1334,43 @@ The alternatives that were set aside:
 - **Comparing the named write targets before and after the run.** It
   only covers narrow writes, adds reads around each one, and misses a
   write that leaves the size and time unchanged.
+
+## The time limit
+
+`safeBash` takes a `timeout` in seconds, 120 unless the model passes
+another. A line still running at the limit is stopped, with every process
+it started. How the stop works is in "Stopping a command" in
+`docs/dev/runtime/host.md`.
+
+The number is in seconds because that is the unit a model guesses, and
+the one the `bash` tools of other agents use. The `bash` and `exec` tools
+take milliseconds, with the same two-minute default.
+`safeBash` multiplies by 1000 in two places: the `timeout` field of the
+`std::bash` and `std::exec` questions it raises, so the payload states
+the limit the line runs under, and the call to `_bash`. A plan is made
+before the limit is known, so the `timeout` in a planned `ExecPayload` is
+0, and `raiseOne` writes the real one.
+
+The default is 120 seconds from the SWE-bench pilot: across 409 shell
+calls the 99th percentile was 104 seconds, and the only calls over 120
+were runs of a whole test suite.
+
+Only the bash path has the limit. A plan that runs in process (a lone
+`grep`, `cat`, or `echo`, or a chain of them) starts no program, and the
+git tools have their own 30-second limit.
+
+A stopped line is a failure in the shape `exitFailure` gives, so the tool
+trace reads it the same way, with two more fields: `timedOut: true`, which
+the trace shows as "timed out", and a `note` that names the limit and
+tells the model to run a narrower command or pass a larger `timeout`.
+`stdout` and `stderr` hold what the line printed before the stop, which
+for a test run shows which tests ran and which one hung.
+
+The limit is not capped at the time left in a subagent's budget, because
+it does not need to be. The budget is a time guard, a guard trip aborts
+the run's signal, and the host stops the running line on that signal the
+same way. That stop is a cancel. The call is unwound and its output is
+dropped, as for any other aborted tool.
 
 ## Why the executors call `_bash`, `_write`, `_grep`, and `_read`
 

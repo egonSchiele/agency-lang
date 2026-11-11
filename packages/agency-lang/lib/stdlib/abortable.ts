@@ -25,6 +25,8 @@ export type SpawnResult = {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** Present, and true, when the child was stopped at its time limit. */
+  timedOut?: boolean;
 };
 
 export type AbortableSpawnOptions = {
@@ -156,7 +158,12 @@ function spawnResultOf(
     };
   }
   if (result.timedOut) {
-    return { stdout: result.stdout, stderr: result.stderr + "\nProcess timed out", exitCode: 1 };
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr + "\nProcess timed out",
+      exitCode: 1,
+      timedOut: true,
+    };
   }
   return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode ?? 1 };
 }

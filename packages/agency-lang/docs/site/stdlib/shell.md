@@ -122,7 +122,7 @@ exec(
   command: string,
   args: string[] = [],
   cwd: string = "",
-  timeout: number = 0,
+  timeout: number = 2m,
   stdin: string = "",
   allowedExecutables: string[] = [],
   blockedCommands: string[] = [],
@@ -141,7 +141,7 @@ Run an executable with separate arguments and no shell expansion.
 | command | `string` |  | The executable to run |
 | args | `string[]` | [] | Arguments to pass |
 | cwd | `string` | "" | Working directory for the command |
-| timeout | `number` | 0 | Time limit in milliseconds (e.g. 30s) |
+| timeout | `number` | 2m | Time limit in milliseconds (e.g. 30s), after which the command and everything it started is stopped. 0 means no limit. |
 | stdin | `string` | "" | Input to feed to the command |
 | allowedExecutables | `string[]` | [] | Only allow running these executables (allow-list) |
 | blockedCommands | `string[]` | [] | Block running these executables |
@@ -162,7 +162,7 @@ Run an executable with separate arguments and no shell expansion.
 bash(
   command: string,
   cwd: string = "",
-  timeout: number = 0,
+  timeout: number = 2m,
   stdin: string = "",
   blockedCommands: string[] = [],
   allowedPaths: string[] = [],
@@ -183,7 +183,7 @@ Run a bash command with pipes, redirects, and globbing.
 |---|---|---|---|
 | command | `string` |  | The shell command to run |
 | cwd | `string` | "" | Working directory for the command |
-| timeout | `number` | 0 | Time limit in milliseconds (e.g. 30s) |
+| timeout | `number` | 2m | Time limit in milliseconds (e.g. 30s), after which the command and everything it started is stopped. 0 means no limit. |
 | stdin | `string` | "" | Input to feed to the command |
 | blockedCommands | `string[]` | [] | Block commands that start with these strings |
 | allowedPaths | `string[]` | [] | Only allow cwd values under these path prefixes |

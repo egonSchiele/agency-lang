@@ -12,6 +12,15 @@ import fs from "fs";
 import path from "path";
 import { GIT_CODE_ENV, GIT_RETARGET_ENV, namedBy } from "../gitEnvironment.js";
 import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "../host.js";
+import {
+  OWN_GROUP,
+  PIPE_GRACE_MS,
+  TERM_GRACE_MS,
+  killGroup,
+  signalGroup,
+  trackChild,
+  untrackChild,
+} from "./processGroups.js";
 
 /**
  * Stream teardown error codes that are safe to swallow. They mean the pipe
@@ -143,9 +152,15 @@ function spawnCommand(command: Command, options: RunOptions): ChildProcess {
       cwd: options.cwd,
       env: shellEnvironment(env),
       stdio,
+      detached: OWN_GROUP,
     });
   }
-  return spawn(command.program, command.args, { cwd: options.cwd, env: options.env, stdio });
+  return spawn(command.program, command.args, {
+    cwd: options.cwd,
+    env: options.env,
+    stdio,
+    detached: OWN_GROUP,
+  });
 }
 
 /** Collect a stream's text, keeping at most `limit` bytes when `limit`
@@ -193,21 +208,64 @@ function startChild(
   options: RunOptions,
 ): { child: ChildProcess; ended: Promise<RunResult>; kill: RunningProcess["kill"] } {
   const child = spawnCommand(command, options);
+  trackChild(child);
   let truncated: "stdout" | "stderr" | null = null;
   let timedOut = false;
   let aborted = false;
+  let stopping = false;
+  let killPending = false;
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  const later = (work: () => void, ms: number) => {
+    timers.push(setTimeout(work, ms));
+  };
   const maxOutputBytes = options.maxOutputBytes ?? 0;
   const killSignal = options.killSignal ?? "SIGTERM";
   const kill: RunningProcess["kill"] = (signal) => {
-    child.kill(signal ?? killSignal);
+    signalGroup(child, signal ?? killSignal);
   };
+  // A process that left the group can hold an output pipe open long after
+  // the child is gone, and `close` waits for the pipes.
+  const releasePipes = () => {
+    later(() => {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    }, PIPE_GRACE_MS);
+  };
+  // The host's own stop, for the time limit, the abort signal, and the
+  // output cap: signal the group, kill what is left after the grace
+  // period, and stop reading the pipes once the child has exited. The
+  // kill is not cancelled when the child closes: a process that ignored
+  // SIGTERM and holds no pipe is still in the group. The child stays
+  // tracked until then, so an exit in between kills the group too.
+  const stop = () => {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    kill();
+    if (killSignal === "SIGTERM") {
+      killPending = true;
+      setTimeout(() => {
+        killGroup(child);
+        untrackChild(child);
+      }, TERM_GRACE_MS).unref();
+    }
+    if (child.exitCode !== null || child.signalCode !== null) {
+      releasePipes();
+    }
+  };
+  child.on("exit", () => {
+    if (stopping) {
+      releasePipes();
+    }
+  });
   // Each stream has its own limit, as execFile's maxBuffer works. The
   // first to overflow is the one reported.
   const overflow = (stream: "stdout" | "stderr") => () => {
     if (truncated === null) {
       truncated = stream;
     }
-    kill();
+    stop();
   };
   const stdout = collector(maxOutputBytes, overflow("stdout"));
   const stderr = collector(maxOutputBytes, overflow("stderr"));
@@ -232,16 +290,15 @@ function startChild(
       child.stdin!.end();
     }
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
     if (options.timeoutMs !== undefined && options.timeoutMs > 0) {
-      timer = setTimeout(() => {
+      later(() => {
         timedOut = true;
-        kill();
+        stop();
       }, options.timeoutMs);
     }
     const onAbort = () => {
       aborted = true;
-      kill();
+      stop();
     };
     const signal = options.signal;
     if (signal !== undefined) {
@@ -252,8 +309,9 @@ function startChild(
       }
     }
     const cleanup = () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
+      timers.forEach(clearTimeout);
+      if (!killPending) {
+        untrackChild(child);
       }
       signal?.removeEventListener("abort", onAbort);
     };

@@ -11,8 +11,7 @@ import {
 } from "./cli.js";
 import { escapedTurnText, interrupt } from "../runtime/interrupts.js";
 import { stripAnsi } from "./layout/ansi.js";
-import { color } from "../utils/termcolors.js";
-import { RISK_COLOR } from "../runtime/effectRisk.js";
+import { color, RESET, styles } from "../utils/termcolors.js";
 
 const {
   EMPTY_PASTE,
@@ -817,15 +816,14 @@ describe("renderInterruptFooter", () => {
     });
     expect(lines.join("\n")).toContain("not a valid option");
   });
-  it("opens with a blank line and a divider labelled and colored by risk", () => {
-    const lines = _internal.renderInterruptFooter({ ...base, risk: "danger" });
+  it("opens with a blank line and a dim divider with a plain label", () => {
+    const lines = _internal.renderInterruptFooter(base);
     expect(lines[0]).toBe("");
     expect(stripAnsi(lines[1]).startsWith("── approval needed ──")).toBe(true);
-    expect(lines[1]).toBe(RISK_COLOR.danger(stripAnsi(lines[1])));
-    const question = _internal.renderInterruptFooter({ ...base, risk: "read", expectsValue: true });
+    // The label sits between the two dim parts, with no style of its own.
+    expect(lines[1]).toContain(`${RESET}approval needed${styles.dim}`);
+    const question = _internal.renderInterruptFooter({ ...base, expectsValue: true });
     expect(stripAnsi(question[1]).startsWith("── answer needed ──")).toBe(true);
-    const plainRule = _internal.renderInterruptFooter(base);
-    expect(stripAnsi(plainRule[1])).toMatch(/^─+$/);
   });
 
   describe("fits the terminal's height", () => {

@@ -1,6 +1,5 @@
 import { color, styles, RESET } from "../utils/termcolors.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
-import { isEffectRisk, RISK_COLOR } from "../runtime/effectRisk.js";
 
 // The lines of the approval prompt's footer that are not its body: the
 // divider that opens it and the answers. Pure. `renderInterruptFooter` in
@@ -73,13 +72,11 @@ export function optionRows(items: InterruptItem[], width: number): string[] {
   });
 }
 
-/** The line that opens the footer: "── approval needed ────" in the color
- *  for the prompt's risk, or "answer needed" for a raise that wants a
- *  value. A plain dim rule when there is no risk to color by. */
-export function footerDivider(width: number, risk: string, expectsValue: boolean): string {
-  if (!isEffectRisk(risk)) {
-    return dim("─".repeat(width));
-  }
-  const label = `── ${expectsValue ? "answer needed" : "approval needed"} `;
-  return RISK_COLOR[risk](label + "─".repeat(Math.max(0, width - label.length)));
+/** The line that opens the footer: "── approval needed ────", or "answer
+ *  needed" for a raise that wants a value. The rule is dim and the label
+ *  is plain text. */
+export function footerDivider(width: number, expectsValue: boolean): string {
+  const label = expectsValue ? "answer needed" : "approval needed";
+  const rest = Math.max(0, width - label.length - 4);
+  return `${dim("── ")}${label}${dim(` ${"─".repeat(rest)}`)}`;
 }

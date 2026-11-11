@@ -84,13 +84,13 @@ which work on the handler's active policy:
 
 ## Reading what you are approving
 
-The pinned prompt opens with a blank line and a divider labelled
+The pinned prompt opens with a blank line and a dim divider labelled
 "approval needed", or "answer needed" for a raise that expects a value.
 The next line is the effect, then the interrupt's message in bold, so
 which permission is being asked for is legible before the reason for it.
 
-The divider and the effect name are colored by how much the action
-matters (`effectRisk` in `lib/runtime/effectRisk.ts`). Cyan is a read
+The effect name, and nothing else, is colored by how much the action
+matters (`effectRisk` in `lib/runtime/effectRisk.ts`). Green is a read
 (`FileRead`). Yellow is a change (`FileWrite`, `Network`, `AwsS3`,
 `Calendar`, `Memory`, and any effect in no listed set, a program's own
 effects among them). Red is a danger (`Shell`, `Secrets`, `Messaging`,

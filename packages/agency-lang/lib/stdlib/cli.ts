@@ -538,10 +538,6 @@ type InterruptFooterInput = {
   /** The terminal's height. The body shrinks so the whole footer fits in
    *  it. Leave it out for no limit beyond INTERRUPT_BODY_MAX_LINES. */
   rows?: number;
-  /** How much the prompt should catch the eye ("read", "change",
-   *  "danger"). It colors the divider and adds its label. Any other value
-   *  leaves a plain dim divider. */
-  risk?: string;
 };
 
 /** What decides how many body rows the footer shows. The shell and the
@@ -618,7 +614,7 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
   const width = footerWidth(input.columns);
   // A blank line, then the divider, set the prompt apart from the output
   // above it.
-  const lines: string[] = ["", footerDivider(width, input.risk ?? "", input.expectsValue === true)];
+  const lines: string[] = ["", footerDivider(width, input.expectsValue === true)];
   if (input.title !== "") {
     lines.push(` ${input.title}`);
   }
@@ -650,8 +646,6 @@ type InterruptOpts = {
   allowFreeText: boolean;
   allowCancel: boolean;
   expectsValue?: boolean;
-  /** See InterruptFooterInput.risk. */
-  risk?: string;
 };
 
 /** Stop the "Thinking" spinner if the REPL has one running (which also
@@ -709,13 +703,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
   let state = INITIAL_INTERRUPT_STATE;
 
   const region = installBottomRegion(
-    () =>
-      renderInterruptFooter({
-        ...shape(),
-        expectsValue: opts.expectsValue,
-        risk: opts.risk,
-        state,
-      }),
+    () => renderInterruptFooter({ ...shape(), expectsValue: opts.expectsValue, state }),
     process.stdout.isTTY === true,
     { hideCursor: true },
   );
@@ -772,13 +760,12 @@ export async function _interruptChoice(
   allowFreeText: boolean,
   allowCancel: boolean,
   expectsValue: boolean = false,
-  risk: string = "",
 ): Promise<string> {
   const hook = (globalThis as any).__agencyInterruptPrompt;
   if (typeof hook !== "function") {
     throw new Error("_interruptChoice: no active line-mode REPL");
   }
-  return hook({ title, body, items, allowFreeText, allowCancel, expectsValue, risk });
+  return hook({ title, body, items, allowFreeText, allowCancel, expectsValue });
 }
 
 /** True when a line-mode REPL is running AND both ends are real terminals,

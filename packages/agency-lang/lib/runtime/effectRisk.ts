@@ -3,7 +3,7 @@ import type { EffectSetInfo } from "./effectSets.js";
 
 // How much an approval prompt should catch the eye, so a person sees at a
 // glance what kind of action they are asked about. The approval prompt
-// colors its divider and the effect name by this.
+// colors the effect name by this.
 
 export type EffectRisk = "read" | "change" | "danger";
 
@@ -30,7 +30,7 @@ const RANK: EffectRisk[] = ["read", "change", "danger"];
 
 /** Bold, in the color for each risk. */
 export const RISK_COLOR: Record<EffectRisk, (text: string) => string> = {
-  read: color.bold.cyan,
+  read: color.bold.green,
   change: color.bold.yellow,
   danger: color.bold.red,
 };
@@ -45,9 +45,4 @@ export function effectRisk(effect: string, sets: Record<string, EffectSetInfo>):
     return DEFAULT_RISK;
   }
   return RANK[Math.max(...risks.map((risk) => RANK.indexOf(risk)))];
-}
-
-/** True for a value the approval prompt can color by. */
-export function isEffectRisk(value: string): value is EffectRisk {
-  return RANK.includes(value as EffectRisk);
 }

@@ -1094,7 +1094,6 @@ def askFolder(value: string, subject: string, risk: string): string | null {
     items,
     allowFreeText: false,
     allowCancel: true,
-    risk: risk,
   )
   if (picked == BACK_KEY) {
     return null
@@ -1142,7 +1141,7 @@ def askUser(intr: any): AskUserResult {
   // The message comes from whoever raised the interrupt, a tool the agent
   // wrote among them, and it goes to the footer whole. The effect beside
   // it is a name from the code. The effect takes the color for its risk,
-  // the same as the divider above it, and the question is bold.
+  // and the question is bold.
   const risk = _effectRisk(intr.effect)
   const title = "${_riskColored(risk, intr.effect)}  ${color.bold(stripControlChars(intr.message))}"
   const body = prettyPrintInterruptData(intr.data, intr.effect, cols: interruptBodyWidth())
@@ -1190,7 +1189,6 @@ def askUser(intr: any): AskUserResult {
         allowFreeText: true,
         allowCancel: true,
         expectsValue: intr.expectsValue == true,
-        risk: risk,
       )
       result = choiceResult(choice, items)
       const folder = askFolderFor(intr, result)

@@ -9,7 +9,7 @@ import { Json } from "std::validation"
 
 import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
 import { _mkdir, _realDir } from "agency-lang/stdlib-lib/fs.js"
-import { _glob } from "agency-lang/stdlib-lib/shell.js"
+import { _globIncludingIgnored } from "agency-lang/stdlib-lib/shell.js"
 
 import {
   _compileWorkflowSource,
@@ -792,7 +792,7 @@ def savedWorkflowNames(root: string): Result<string[]> {
     return success([])
   }
   // One more than the cap, so a folder that full is refused, not cut short.
-  const fileNames = try _glob(root, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)?
+  const fileNames = try _globIncludingIgnored(root, WORKFLOWS_DIR, "*${FILE_SUFFIX}", MAX_WORKFLOWS + 1)?
   if (fileNames.length > MAX_WORKFLOWS) {
     return failure("${folder} has more than ${MAX_WORKFLOWS} workflows")
   }

@@ -873,9 +873,9 @@ node rejectedGrepNamesTheTool() {
 }
 
 node grepOfIgnoredFolder() {
-  // A lone grep of a folder .gitignore reaches into would come back empty
-  // from the tool's search, so it goes to the bash path, which asks
-  // std::bash for a directory.
+  // A lone grep of a folder .gitignore ignores runs the tool's search like a
+  // grep of any other folder, because the tool searches a folder it is given
+  // whatever the .gitignore files above it say.
   const plan = planFor("grep -rn parseAgency node_modules", PACKAGE_DIR)
   const names = [effect.name for effect in plan.effects]
   return [plan.execution.kind, names, plan.broadReason]

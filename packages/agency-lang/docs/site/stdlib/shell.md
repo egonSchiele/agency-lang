@@ -206,15 +206,19 @@ ls(
   maxResults: number = 1000,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
+  respectGitignore: boolean = true,
 ): Result raises <std::ls>
 ```
 
 List directory entries, optionally including subdirectories. A recursive
-  listing skips node_modules, .git, dist, build, .next, and .cache.
+  listing skips node_modules, .git, dist, build, .next, and .cache, and
+  anything .gitignore ignores. To list an ignored folder, pass it as dir.
   Narrow dir or raise maxResults when the listing reaches its limit.
 
-Recursive listings skip node_modules, .git, dist, build, .next, and .cache.
-Non-recursive listings include those directories. Symlinked entries are omitted.
+Recursive listings skip node_modules, .git, dist, build, .next, and .cache,
+plus paths ignored by .gitignore when `respectGitignore` is true. To list an
+ignored folder, pass it as `dir`. Non-recursive listings include every entry.
+Symlinked entries are omitted.
 
 **Parameters:**
 
@@ -225,6 +229,7 @@ Non-recursive listings include those directories. Symlinked entries are omitted.
 | maxResults | `number` | 1000 |  |
 | allowedPaths | `string[]` | [] | Restrict searches to these directories, or leave empty for no restriction. |
 | useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory when set. |
+| respectGitignore | `boolean` | true | Skip what .gitignore ignores in a recursive listing; false includes ignored files. |
 
 **Returns:** `Result`
 
@@ -232,7 +237,7 @@ Non-recursive listings include those directories. Symlinked entries are omitted.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L211))
 
 ### grep
 
@@ -253,12 +258,14 @@ grep(
 ```
 
 Search a file or directory recursively with a JavaScript regular expression.
-  A directory search skips node_modules, .git, dist, build, .next, and .cache.
+  A directory search skips node_modules, .git, dist, build, .next, and .cache,
+  and anything .gitignore ignores. To search an ignored folder, pass it as path.
   Narrow path or refine the pattern when results reach maxResults.
 
 Directory searches skip common build and dependency directories, plus paths
 ignored by .gitignore when `respectGitignore` is true. A directly named file
-is always searched. Symlinked entries are omitted.
+is always searched. To search an ignored folder, pass it as `path`. Symlinked
+entries are omitted.
 
 Match paths are relative to the searched directory. For a single-file search,
 they contain the filename. Use `filesOnly` when you only need matching paths.
@@ -285,7 +292,7 @@ they contain the filename. Use `filesOnly` when you only need matching paths.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L261))
 
 ### glob
 
@@ -296,10 +303,19 @@ glob(
   maxResults: number = 500,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
+  respectGitignore: boolean = true,
 ): Result raises <std::glob>
 ```
 
-Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
+Find files matching a glob such as "src/**/*.ts". The search skips
+  node_modules, .git, dist, build, .next, and .cache, and anything .gitignore
+  ignores. To search an ignored folder, pass it as dir or start the pattern
+  with it. Symlinked entries are omitted.
+
+Searches skip node_modules, .git, dist, build, .next, and .cache, plus paths
+ignored by .gitignore when `respectGitignore` is true. To search an ignored
+folder, pass it as `dir` or start the pattern with it. Symlinked entries are
+omitted.
 
 **Parameters:**
 
@@ -310,6 +326,7 @@ Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
 | maxResults | `number` | 500 |  |
 | allowedPaths | `string[]` | [] | Restrict searches to these directories, or leave empty for no restriction. |
 | useAgentCwd | `boolean` | false | Resolve a relative dir against the agent working directory when set. |
+| respectGitignore | `boolean` | true | Skip what .gitignore ignores; false includes ignored files. |
 
 **Returns:** `Result`
 
@@ -317,7 +334,7 @@ Find files matching a glob such as "src/**/*.ts". Symlinked entries are omitted.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L321))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L334))
 
 ### stat
 
@@ -345,7 +362,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L358))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L376))
 
 ### exists
 
@@ -373,7 +390,7 @@ Return true if a file or directory exists at the given path. A symlink below dir
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L382))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L400))
 
 ### which
 
@@ -393,4 +410,4 @@ Find an executable in PATH, or return an empty string if absent.
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L406))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L424))

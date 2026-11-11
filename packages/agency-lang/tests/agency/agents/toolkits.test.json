@@ -120,6 +120,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "searchToolsRespectGitignore",
+      "description": "ls, glob, and grep in the agent toolkit are bound to respectGitignore: true, so the model cannot turn it off",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

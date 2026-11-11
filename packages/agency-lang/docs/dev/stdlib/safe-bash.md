@@ -437,31 +437,24 @@ Four more refusals:
 `tryShellFreeGrep` applies to a grep that is the whole command line, with
 no pipe, chain, or redirect, whose flags are all in
 `SHELL_FREE_GREP_FLAGS` (the tool has no `-c`, `-o`, or context lines),
-whose directory target has `-r`, whose directory target is not wholly
-ignored by the `.gitignore` files above it, and whose pattern translates. It raises
+whose directory target has `-r`, and whose pattern translates. It raises
 `std::grep` and runs `runGrep`, which calls `_grep`. The payload and the
 search are built from one `GrepPayload`, and the payload's `pattern` is
 the JavaScript regex the search uses, with the regex flag `u`, so `.`
 matches a whole character, an emoji included, as grep does in a UTF-8
 locale.
 
-The `.gitignore` check matters because the tool's search applies the
-`.gitignore` files above its root to every entry. Where they ignore
-everything in the directory (`**/node_modules/*` for
-`grep -rn x node_modules`), the search finds nothing, which the model
-would read as "no match". `ignoredFromAbove` (`lib/stdlib/gitignore.ts`)
-is true when those files ignore the directory itself, or a made-up name
-inside it. Only a rule that covers every entry (`dist/`,
-`**/node_modules/*`, `src/*`) ignores the made-up name. Such a grep goes
-to the bash path, which asks `std::bash` for a directory.
+The tool's search skips what `.gitignore` ignores, so it can find fewer
+matches than grep would. The note at the end of the output says what it
+skipped. A folder the command names is searched even when git ignores it, so
+`grep -rn x node_modules` runs the tool's search and asks `std::grep`, like a
+grep of any other folder. See "`.gitignore`" in
+`docs/dev/stdlib/grep-flags.md`.
 
-A rule that ignores only some entries (`.*` for `.DS_Store`, `**/*.js`
-for compiled files) does not send the grep to bash. The search then finds
-fewer matches than grep would, the same as a search of the repository
-root, and the note at the end of the output says what it skipped. Do not
-make the check look at the entries themselves: nearly every real folder
-holds one ignored file, so nearly every grep would go back to
-`std::bash`.
+The `SKIP_DIRS` names still apply below the folder, and most published
+packages keep their code in `dist`. So `grep -rn x node_modules/some-package`
+skips that package's `dist` folder. Naming the folder searches it:
+`grep -rn x node_modules/some-package/dist`.
 
 `_grepPatternToRegex` (`lib/stdlib/grepDialect.ts`) accepts a character
 only when grep and JavaScript give it the same meaning, from one role
@@ -819,15 +812,13 @@ is narrow, with pattern `**`.
 
 ### What a recursive listing shows
 
-The `ls` tool's recursive walk and the `glob` tool's walk skip
-`SKIP_DIRS` (`node_modules`, `.git`, `dist`, `build`, `.next`,
-`.cache`), and `_glob` also honors `.gitignore`. Real `ls -R`, `du`,
-`tree`, and `find` skip nothing. A recursive listing through bash is
-still narrow under the same payload. It shows the names under `.git`
-and `node_modules` that the tools leave out, and no file's contents.
-The names are not what decided grep, where a directory search through
-bash asks `std::bash` because real grep reads the contents the tool
-skips.
+The `ls` tool's recursive walk and the `glob` tool's walk skip `SKIP_DIRS`
+(`node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`) and what
+`.gitignore` ignores. Real `ls -R`, `du`, `tree`, and `find` skip nothing. A
+recursive listing through bash is still narrow under the same payload. It
+shows the names the tools leave out, and no file's contents. The names are
+not what decided grep, where a directory search through bash asks
+`std::bash` because real grep reads the contents the tool skips.
 
 ## Programs with no rule
 

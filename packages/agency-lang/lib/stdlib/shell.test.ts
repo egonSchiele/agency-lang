@@ -7,7 +7,11 @@ import {
   __internal_bash,
   _exists,
   _glob,
+  _globIncludingIgnored,
   _grep,
+  _ls,
+  globFixedPrefix,
+  type LsEntry,
   _searchTarget,
   _searchTargetIn,
   _stat,
@@ -246,6 +250,167 @@ describe("_glob and symlinks", () => {
   });
 });
 
+describe("_glob honours .gitignore", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-glob-ignore-"));
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n.*\n");
+    fs.writeFileSync(path.join(root, "a.md"), "a");
+    fs.writeFileSync(path.join(root, "a.js"), "a");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.md"), "b");
+    fs.mkdirSync(path.join(root, "keep", "sub"), { recursive: true });
+    fs.writeFileSync(path.join(root, "keep", ".gitignore"), "!*.js\n");
+    fs.writeFileSync(path.join(root, "keep", "c.js"), "c");
+    fs.writeFileSync(path.join(root, "keep", "sub", "x.js"), "x");
+    fs.mkdirSync(path.join(root, ".hidden"));
+    fs.writeFileSync(path.join(root, ".hidden", "d.md"), "d");
+    fs.mkdirSync(path.join(root, "node_modules", "pkg"), { recursive: true });
+    fs.writeFileSync(path.join(root, "node_modules", "pkg", "package.json"), "{}");
+    fs.symlinkSync(path.join(root, "out"), path.join(root, "linked"));
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("skips ignored files and folders, and lets a nested .gitignore un-ignore", async () => {
+    expect((await _glob(root, ".", "**/*.{md,js}", 100)).sort()).toEqual([
+      "a.md",
+      "keep/c.js",
+      "keep/sub/x.js",
+    ]);
+  });
+
+  it("returns everything with the option off", async () => {
+    expect((await _glob(root, ".", "**/*.{md,js}", 100, [], false)).sort()).toEqual([
+      ".hidden/d.md",
+      "a.js",
+      "a.md",
+      "keep/c.js",
+      "keep/sub/x.js",
+      "out/b.md",
+    ]);
+  });
+
+  it("searches a folder named as the root, in both shapes", async () => {
+    expect(await _glob(root, "out", "**/*.md", 100)).toEqual(["b.md"]);
+    expect(await _glob(path.join(root, "out"), ".", "**/*.md", 100)).toEqual(["b.md"]);
+    expect(await _glob(path.join(root, ".hidden"), ".", "*.md", 100)).toEqual(["d.md"]);
+  });
+
+  it("searches a folder named at the start of the pattern", async () => {
+    expect(await _glob(root, ".", "out/*.md", 100)).toEqual(["out/b.md"]);
+    expect(await _glob(root, ".", ".hidden/**/*.md", 100)).toEqual([".hidden/d.md"]);
+    // SKIP_DIRS applies below the start of the walk, so a name in the prefix is searched.
+    expect(await _glob(root, ".", "node_modules/pkg/*.json", 100)).toEqual([
+      "node_modules/pkg/package.json",
+    ]);
+    // The walk starts inside keep and never visits keep itself.
+    expect(await _glob(root, ".", "keep/**", 100, [], false)).not.toContain("keep");
+  });
+
+  it.each([
+    [".claude/**/*.md", ".claude"],
+    ["src/lib/*.ts", "src/lib"],
+    ["src/app.ts", "src"],
+    ["**/*.md", ""],
+    ["{src,lib}/*.ts", ""],
+    ["../other/*.md", ""],
+    ["./src/*.ts", ""],
+    ["{src/lib,test}/*.ts", ""],
+  ])("globFixedPrefix(%s) is %j", (pattern, prefix) => {
+    expect(globFixedPrefix(pattern)).toBe(prefix);
+  });
+
+  it("keeps results relative to dir when dir and a prefix are both given", async () => {
+    expect(await _glob(root, "keep", "sub/*.js", 100)).toEqual(["sub/x.js"]);
+  });
+
+  it("matches nothing for a prefix that is not a folder under the root", async () => {
+    expect(await _glob(root, ".", "missing/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "../out/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "a.md/*", 100)).toEqual([]);
+    expect(await _glob(root, ".", "linked/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "linked/sub/*.md", 100)).toEqual([]);
+    // stat throws for these two, with ENOTDIR and with "outside dir".
+    expect(await _glob(root, ".", "a.md/sub/*.md", 100)).toEqual([]);
+    expect(await _glob(root, ".", "~/out/*.md", 100)).toEqual([]);
+  });
+
+  it("_globIncludingIgnored lists ignored files", async () => {
+    expect(await _globIncludingIgnored(root, ".", "out/*.md", 100)).toEqual(["out/b.md"]);
+    expect(await _globIncludingIgnored(root, ".", "*.js", 100)).toEqual(["a.js"]);
+  });
+});
+
+describe("_ls honours .gitignore on a recursive listing", () => {
+  let root: string;
+  const paths = (entries: LsEntry[]) => entries.map((entry) => entry.path).sort();
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-ls-ignore-"));
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n");
+    fs.writeFileSync(path.join(root, "a.agency"), "a");
+    fs.writeFileSync(path.join(root, "a.js"), "a");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.txt"), "b");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("skips ignored entries on a recursive listing", async () => {
+    expect(paths(await _ls(root, ".", true))).toEqual([".gitignore", "a.agency"]);
+  });
+
+  it("lists everything with the option off", async () => {
+    expect(paths(await _ls(root, ".", true, 1000, [], false))).toEqual([
+      ".gitignore",
+      "a.agency",
+      "a.js",
+      "out",
+      "out/b.txt",
+    ]);
+  });
+
+  it("shows every entry on a plain listing, SKIP_DIRS and ignored ones included", async () => {
+    expect(paths(await _ls(root, ".", false))).toEqual([
+      ".git",
+      ".gitignore",
+      "a.agency",
+      "a.js",
+      "out",
+    ]);
+  });
+
+  it("lists a folder named as the root, in both shapes", async () => {
+    expect(paths(await _ls(root, "out", true))).toEqual(["b.txt"]);
+    expect(paths(await _ls(path.join(root, "out"), ".", true))).toEqual(["b.txt"]);
+  });
+
+  it("returns nothing for a maxResults of 0 or less, and stops at maxResults", async () => {
+    expect(await _ls(root, ".", true, 0)).toEqual([]);
+    expect(await _ls(root, ".", true, -3)).toEqual([]);
+    expect(await _ls(root, ".", false, 0)).toEqual([]);
+    expect(await _ls(root, ".", true, 1, [], false)).toHaveLength(1);
+  });
+
+  it("fails when it cannot read the folder it was given", async () => {
+    // A file stands in for an unreadable folder. With the option on, the
+    // call fails in the .gitignore setup before the walk lists anything.
+    await expect(_ls(root, "a.agency", true)).rejects.toThrow();
+    await expect(_ls(root, "a.agency", false)).rejects.toThrow();
+    // With the option off the walk reaches the listing, so this one needs
+    // failOnUnreadableStart.
+    await expect(_ls(root, "a.agency", true, 1000, [], false)).rejects.toThrow();
+  });
+});
+
 describe("_exists and _stat report a symlink below the root as missing", () => {
   let root: string;
 
@@ -382,6 +547,118 @@ describe("_grep honours .gitignore", () => {
   it("searches everything when respectGitignore is false", async () => {
     const hits = (await _grep(root, ".", query, 100, [], false)) as string[];
     expect(hits.sort()).toEqual(["a.agency", "a.js", "keep/c.js", "out/b.txt"]);
+  });
+});
+
+describe("a folder named as the search root is searched whatever the .gitignore files above it say", () => {
+  let root: string;
+  const query = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: true,
+    invert: false,
+  };
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-named-folder-"));
+    // Without the .git folder, no .gitignore above a search folder applies.
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n.*\n");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "out", "c.js"), "needle\n");
+    fs.writeFileSync(path.join(root, "out", "f.log"), "needle\n");
+    fs.writeFileSync(path.join(root, "out", ".gitignore"), "*.log\n");
+    fs.mkdirSync(path.join(root, ".hidden"));
+    fs.writeFileSync(path.join(root, ".hidden", "d.txt"), "needle\n");
+    fs.mkdirSync(path.join(root, "src"));
+    fs.writeFileSync(path.join(root, "src", "e.js"), "needle\n");
+    fs.writeFileSync(path.join(root, "src", "e.txt"), "needle\n");
+    // A folder of repositories, laid out like .worktrees: each holds a .git
+    // file and its own .gitignore.
+    const worktree = path.join(root, ".worktrees", "wt");
+    fs.mkdirSync(worktree, { recursive: true });
+    fs.writeFileSync(path.join(worktree, ".git"), "gitdir: elsewhere\n");
+    fs.writeFileSync(path.join(worktree, ".gitignore"), "*.log\n");
+    fs.writeFileSync(path.join(worktree, "a.txt"), "needle\n");
+    fs.writeFileSync(path.join(worktree, "a.log"), "needle\n");
+    // A folder that ignores itself, as uv and `python -m venv` write it.
+    fs.mkdirSync(path.join(root, "venv", "lib"), { recursive: true });
+    fs.writeFileSync(path.join(root, "venv", ".gitignore"), "*\n");
+    fs.writeFileSync(path.join(root, "venv", "a.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "venv", "lib", ".gitignore"), "*.log\n");
+    fs.writeFileSync(path.join(root, "venv", "lib", "b.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "venv", "lib", "c.log"), "needle\n");
+    // Like .venv-laya: ignored from above by `.*`, and by its own `*`.
+    fs.mkdirSync(path.join(root, ".venv"));
+    fs.writeFileSync(path.join(root, ".venv", ".gitignore"), "*\n");
+    fs.writeFileSync(path.join(root, ".venv", "x.txt"), "needle\n");
+    // An allow-list .gitignore, which keeps its folders.
+    fs.mkdirSync(path.join(root, "allow"));
+    fs.writeFileSync(path.join(root, "allow", ".gitignore"), "*\n!*/\n!*.txt\n");
+    fs.writeFileSync(path.join(root, "allow", "a.txt"), "needle\n");
+    fs.writeFileSync(path.join(root, "allow", "b.md"), "needle\n");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  /** The files holding "needle", searched the way the public tools call _grep. */
+  async function foundAsRoot(folder: string): Promise<string[]> {
+    const hits = (await _grep(path.join(root, folder), ".", query, 100)) as string[];
+    return hits.sort();
+  }
+
+  /** The same search, with the folder as `dir` below the root. */
+  async function foundBelowRoot(folder: string): Promise<string[]> {
+    const hits = (await _grep(root, folder, query, 100)) as string[];
+    return hits.sort();
+  }
+
+  it("searches a folder a rule above it ignores, and keeps that folder's own .gitignore", async () => {
+    expect(await foundAsRoot("out")).toEqual(["b.txt", "c.js"]);
+    expect(await foundBelowRoot("out")).toEqual(["b.txt", "c.js"]);
+  });
+
+  it("searches a dot folder under a .* rule", async () => {
+    expect(await foundAsRoot(".hidden")).toEqual(["d.txt"]);
+    expect(await foundBelowRoot(".hidden")).toEqual(["d.txt"]);
+  });
+
+  it("keeps the rules above a folder they ignore only part of", async () => {
+    expect(await foundAsRoot("src")).toEqual(["e.txt"]);
+    expect(await foundBelowRoot("src")).toEqual(["e.txt"]);
+  });
+
+  it("applies each repository's own .gitignore inside an ignored folder of repositories", async () => {
+    expect(await foundAsRoot(".worktrees")).toEqual(["wt/a.txt"]);
+  });
+
+  it("searches a folder whose own .gitignore ignores everything in it, and keeps the files below it", async () => {
+    expect(await foundAsRoot("venv")).toEqual(["a.txt", "lib/b.txt"]);
+    expect(await foundBelowRoot("venv")).toEqual(["a.txt", "lib/b.txt"]);
+    expect((await _glob(root, ".", "venv/**/*.txt", 100)).sort()).toEqual([
+      "venv/a.txt",
+      "venv/lib/b.txt",
+    ]);
+  });
+
+  it("searches a folder ignored both from above and by its own .gitignore", async () => {
+    expect(await foundAsRoot(".venv")).toEqual(["x.txt"]);
+    expect(await foundBelowRoot(".venv")).toEqual(["x.txt"]);
+  });
+
+  it("still skips that folder in a search that starts above it", async () => {
+    const fromRoot = await foundAsRoot(".");
+    expect(fromRoot.filter((hit) => hit.startsWith("venv/"))).toEqual([]);
+    expect(fromRoot).toContain("src/e.txt");
+  });
+
+  it("keeps a folder's own allow-list .gitignore", async () => {
+    expect(await foundAsRoot("allow")).toEqual(["a.txt"]);
   });
 });
 

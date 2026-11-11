@@ -15,6 +15,7 @@ import { resolveDir } from "./resolveDir.js";
 import { expandTilde, resolveAgainstCwd, type TildeMode } from "./prepareContainedPath.js";
 import {
   type GitignoreFile,
+  ignoresWholeDirectory,
   isIgnored,
   readGitignore,
   parseGitignore,
@@ -305,9 +306,10 @@ function relativeTo(dir: string, rel: string): string {
  * List `dir`, a directory under `rootDir` ("." for the root itself).
  * Entries come back relative to `dir`. Symlinked entries are left out:
  * a link below the root is never followed, so there is nothing to say
- * about it. `isRoot` surfaces a readdir failure on the scanned dir
- * itself, while an unreadable subdirectory during a recursive walk is
- * skipped rather than failing the whole listing.
+ * about it. A plain listing shows every entry. A recursive listing skips
+ * SKIP_DIRS and, unless `respectGitignore` is false, what .gitignore
+ * ignores. An unreadable `dir` fails the call, while an unreadable
+ * subdirectory during a recursive walk is skipped.
  */
 export async function _ls(
   rootDir: string,
@@ -315,6 +317,7 @@ export async function _ls(
   recursive: boolean,
   maxResults: number = DEFAULT_LS_MAX_RESULTS,
   allowedPaths?: string[],
+  respectGitignore: boolean = true,
 ): Promise<LsEntry[]> {
   const host = currentHost();
   const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
@@ -323,33 +326,38 @@ export async function _ls(
   // value <= 0) is a valid request that yields an empty result.
   const cap = Number.isFinite(maxResults) ? maxResults : DEFAULT_LS_MAX_RESULTS;
   const out: LsEntry[] = [];
+  const add = (rel: string, entry: Entry) => {
+    out.push({
+      name: entry.name,
+      path: relativeTo(dir, rel),
+      type: entry.type,
+      size: entry.size,
+    });
+  };
 
-  async function walk(rel: string, isRoot: boolean): Promise<boolean> {
-    let entries: Entry[];
-    try {
-      entries = await host.files.list(approved, rel);
-    } catch (err) {
-      if (isRoot) throw err;
-      return true;
+  if (!recursive) {
+    for (const entry of await host.files.list(approved, dir)) {
+      if (out.length >= cap) {
+        break;
+      }
+      add(joinRel(dir, entry.name), entry);
     }
-    for (const entry of entries) {
-      if (out.length >= cap) return false;
-      // On a recursive walk, skip the heavyweight dirs entirely. A
-      // non-recursive `ls` still shows them.
-      if (recursive && SKIP_DIRS.has(entry.name)) continue;
-      const entryRel = joinRel(rel, entry.name);
-      out.push({
-        name: entry.name,
-        path: relativeTo(dir, entryRel),
-        type: entry.type,
-        size: entry.size,
-      });
-      if (recursive && entry.type === "dir" && !(await walk(entryRel, false))) return false;
-    }
-    return true;
+    return out;
   }
 
-  await walk(dir, true);
+  await walkDir(
+    host,
+    approved,
+    dir,
+    async (rel, entry) => {
+      if (out.length >= cap) {
+        return false;
+      }
+      add(rel, entry);
+      return true;
+    },
+    { respectGitignore, failOnUnreadableStart: true },
+  );
   return out;
 }
 
@@ -371,6 +379,9 @@ type WalkOptions = {
   /** Skip whatever the .gitignore files between the root and an entry
    * would ignore. Off, the walk skips only SKIP_DIRS. */
   respectGitignore?: boolean;
+  /** Throw when the starting directory cannot be listed, instead of
+   * yielding nothing. An unreadable directory below it is still skipped. */
+  failOnUnreadableStart?: boolean;
 };
 
 /** A root and where it sits, for a walk that spells every entry in full
@@ -402,7 +413,7 @@ function prefixesAbove(dir: string): string[] {
  *  which makes a root per directory since no approval names them. Files
  *  between the root and `dir` are read under the root. The nearest `.git` entry marks the repository
  *  root, and with no repository anywhere above `dir` nothing applies. */
-async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
+async function gitignoreFilesAbove(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
   const { host, approved } = walkRoot;
   if ((await host.files.stat(approved, path.join(dir, ".git"))) !== null) return [];
   const prefixes = prefixesAbove(dir);
@@ -431,6 +442,32 @@ async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<Git
   return [...aboveFiles, ...(await inTree(0))];
 }
 
+/** `files` plus the .gitignore in `rel`, if it has one. */
+async function withGitignoreIn(
+  walkRoot: WalkRoot,
+  rel: string,
+  files: GitignoreFile[],
+): Promise<GitignoreFile[]> {
+  const own = await gitignoreUnder(walkRoot, rel);
+  return own ? [...files, own] : files;
+}
+
+/** The .gitignore files that apply to the entries of `dir`, the folder a
+ *  walk starts in, so a folder the caller names is searched, the way grep
+ *  searches a file named on its command line. When the files above `dir`
+ *  ignore the whole folder (`.worktrees` under `.*`), they are dropped.
+ *  Then, when the folder's own .gitignore ignores the whole folder on top
+ *  of what is left (a virtualenv whose own .gitignore is `*`), it is
+ *  dropped too. An own file that ignores only some entries (`*.log`)
+ *  still applies, and so do the .gitignore files below `dir`. */
+async function startIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
+  const absoluteDir = path.join(walkRoot.base, dir);
+  const above = await gitignoreFilesAbove(walkRoot, dir);
+  const kept = ignoresWholeDirectory(absoluteDir, above) ? [] : above;
+  const withOwn = await withGitignoreIn(walkRoot, dir, kept);
+  return ignoresWholeDirectory(absoluteDir, withOwn) ? kept : withOwn;
+}
+
 /** Walk `dir` under the approved root. A `dir` that is itself a symlink
  *  below the root is refused before the walk starts; a missing `dir`
  *  yields nothing. */
@@ -443,19 +480,18 @@ async function walkDir(
 ): Promise<void> {
   await host.files.resolvePath(approved, dir);
   const walkRoot: WalkRoot = { host, approved, base: await host.files.resolvePath(approved, ".") };
-  // The .gitignore files on the path from the root to the directory being
-  // read, outermost first: a deeper file's rules refine a shallower one's.
-  async function walk(rel: string, ignoreFiles: GitignoreFile[]): Promise<boolean> {
+  // `scoped` holds the .gitignore files that apply to the entries of `rel`,
+  // its own included, outermost first: a deeper file's rules refine a
+  // shallower one's.
+  async function walk(rel: string, scoped: GitignoreFile[]): Promise<boolean> {
     let entries: Entry[];
     try {
       entries = await host.files.list(approved, rel);
-    } catch {
+    } catch (err) {
+      if (options.failOnUnreadableStart && rel === dir) {
+        throw err;
+      }
       return true;
-    }
-    let scoped = ignoreFiles;
-    if (options.respectGitignore) {
-      const here = await gitignoreUnder(walkRoot, rel);
-      if (here) scoped = [...ignoreFiles, here];
     }
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name)) continue;
@@ -463,11 +499,17 @@ async function walkDir(
       const full = path.join(walkRoot.base, entryRel);
       if (options.respectGitignore && isIgnored(full, entry.type === "dir", scoped)) continue;
       if (!(await visit(entryRel, entry))) return false;
-      if (entry.type === "dir" && !(await walk(entryRel, scoped))) return false;
+      if (entry.type !== "dir") {
+        continue;
+      }
+      const inner = options.respectGitignore
+        ? await withGitignoreIn(walkRoot, entryRel, scoped)
+        : scoped;
+      if (!(await walk(entryRel, inner))) return false;
     }
     return true;
   }
-  await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(walkRoot, dir) : []);
+  await walk(dir, options.respectGitignore ? await startIgnoreFiles(walkRoot, dir) : []);
 }
 
 export type SearchTarget = { dir: string; file: string | null };
@@ -570,7 +612,7 @@ export async function _grep(
         try {
           await searchFile(rel, relativeTo(dir, rel));
         } catch {
-          // An unreadable file during a walk is skipped, as in `_ls`.
+          // An unreadable file during a walk is skipped.
         }
         return matches.length < maxResults;
       },
@@ -611,30 +653,107 @@ export function firstMatchingLines(text: string, plan: GrepPlan, limit: number):
   return hits;
 }
 
-/** Glob under `dir` in `rootDir`. Returned paths are relative to `dir`. */
+/** Glob under `dir` in `rootDir`. Returned paths are relative to `dir`.
+ *  With `respectGitignore`, skips what .gitignore ignores. A folder named
+ *  as `dir` or at the start of the pattern is searched even when ignored. */
 export async function _glob(
   rootDir: string,
   dir: string,
   pattern: string,
   maxResults: number,
   allowedPaths?: string[],
+  respectGitignore: boolean = true,
 ): Promise<string[]> {
   const host = currentHost();
   if (maxResults <= 0) return [];
   const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
+  // Before globStart, which relies on this refusing an unmatched brace.
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  await walkDir(host, approved, dir, async (rel) => {
-    const relToDir = relativeTo(dir, rel);
-    if (re.test(relToDir)) {
-      results.push(relToDir);
-      if (results.length >= maxResults) return false;
-    }
-    return true;
-  });
+  await walkDir(
+    host,
+    approved,
+    await globStart(host, approved, dir, pattern),
+    async (rel) => {
+      const relToDir = relativeTo(dir, rel);
+      if (re.test(relToDir)) {
+        results.push(relToDir);
+        if (results.length >= maxResults) {
+          return false;
+        }
+      }
+      return true;
+    },
+    { respectGitignore },
+  );
 
   return results;
+}
+
+/** Every match under `dir`, whatever .gitignore says. For a folder the
+ *  program owns, such as a skills or workflows folder, where no .gitignore
+ *  rule should hide a file. */
+export async function _globIncludingIgnored(
+  rootDir: string,
+  dir: string,
+  pattern: string,
+  maxResults: number,
+): Promise<string[]> {
+  return _glob(rootDir, dir, pattern, maxResults, [], false);
+}
+
+/** The folder names a glob pattern starts with, before its first segment
+ *  that matches more than one name: `src/lib` for `src/lib/*.ts`, and ""
+ *  for `**\/*.md`. The last segment names what to match, so it is never
+ *  part of the prefix. A segment holding `{` ends the prefix, because a
+ *  brace group can hold a `/` and so spans segments. */
+export function globFixedPrefix(pattern: string): string {
+  const segments = pattern.split("/").slice(0, -1);
+  const prefix: string[] = [];
+  for (const segment of segments) {
+    const stops =
+      segment === "" ||
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("{") ||
+      !isPlainSegment(segment);
+    if (stops) {
+      break;
+    }
+    prefix.push(segment);
+  }
+  return prefix.join("/");
+}
+
+/** True when a pattern segment names one folder and matches nothing else. */
+function isPlainSegment(segment: string): boolean {
+  const parsed = globParser(segment);
+  return parsed.success && parsed.result === escapeRegex(segment);
+}
+
+/** The folder a glob's walk starts in: the pattern's fixed prefix when it
+ *  is a folder under the root, and `dir` otherwise. */
+async function globStart(
+  host: Host,
+  approved: Root,
+  dir: string,
+  pattern: string,
+): Promise<string> {
+  const prefix = globFixedPrefix(pattern);
+  if (prefix === "") {
+    return dir;
+  }
+  const start = joinRel(dir, prefix);
+  try {
+    const info = await host.files.stat(approved, start);
+    return info?.kind === "dir" ? start : dir;
+  } catch {
+    // A prefix through a file throws ENOTDIR, and one starting with `~`
+    // expands outside the root. Neither is a folder to start in, and
+    // nothing under `dir` will match it, which is the answer.
+    return dir;
+  }
 }
 
 function globToRegExp(glob: string): RegExp {

@@ -1,4 +1,10 @@
 {
+  "here": {
+    "outcomes": ["ls ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "lsRule": true
+  },
   "scopedReject": {
     "outcomes": ["read ok", "ls rejected", "grep ok"],
     "remainingAnswers": 0,

@@ -422,8 +422,8 @@ effect in a listed set gets three things the others do not:
   beside it is the folder alone, "/x and below", because it follows "in".
 - **A folder step** after `ap` and `as`. The person picks the folder the
   rule covers: the one in the interrupt or a parent.
-- **Rules that match dot folders.** A rule saved after the folder step sets
-  `matchDotFolders` (see "Rule matching").
+- **Rules that match dot folders.** A rule saved for a folder from the
+  folder list sets `matchDotFolders` (see "Rule matching").
 
 The list is explicit, and a new entry has to be checked against all
 three. The GitHub review effects all share `@always(owner, repo)`, so a
@@ -459,9 +459,17 @@ puts its rule first.
 `as` also skips a member whose policy already rejects this interrupt
 (`unrejectedEffects`), such as `std::glob` after an earlier "always
 reject". A rule there would sit behind the reject and never decide
-anything. The folder step lists the members a rule will be saved under.
+anything. The folder step names the members a rule will be saved under.
 
 ### The folder step
+
+The step asks "Which folder should this cover?", and the line under it
+says what the rule approves: "std::ls will always be approved in the folder
+you pick and in every folder inside it", or for `as`, "Reads (std::read,
+std::ls, …)" in place of the effect. On the first prompt, the `ap` and `as`
+details end with ", or pick a parent next" when the step will follow, so a
+second question is expected. When the list holds one folder there is no
+choice to make: the step is skipped, and the rule is saved for that folder.
 
 `folderChoices` lists the folder in the interrupt, then each parent,
 nearest first. It stops at the launch directory when the folder is inside
@@ -478,8 +486,8 @@ saves the exact scope without `matchDotFolders`, as it did before the
 folder step existed. At most eight folders are listed. `b` goes back to
 the first prompt.
 
-A rule saved after the folder step sets `matchDotFolders` only for an
-effect in a listed set. `recordPromptRule` checks both conditions, the
+A rule saved for a folder from that list, picked or the only one, sets
+`matchDotFolders` only for an effect in a listed set. `recordPromptRule` checks both conditions, the
 folder and the set, so the flag stays tied to effects that only read.
 
 The folder step is a second `interruptChoice` call, so the log shows two

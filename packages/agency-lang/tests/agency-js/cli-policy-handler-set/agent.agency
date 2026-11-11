@@ -55,6 +55,18 @@ node readOnce(args: { policyFile: string, root: string }): string[] {
   return outcomes
 }
 
+// One listing, answered at the prompt the test scripts.
+node listOnce(args: { policyFile: string, dir: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let outcomes: string[] = []
+  handle {
+    const one = ls(args.dir)
+    outcomes.push(outcome("ls", isFailure(one)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}
+
 // Two listings: the first answered with a rule, the second in a sibling
 // folder whose name the first one's glob characters must not reach.
 node twoListings(args: { policyFile: string, first: string, second: string }): string[] {

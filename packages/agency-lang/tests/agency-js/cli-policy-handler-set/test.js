@@ -1,4 +1,4 @@
-import { setWide, oneEffect, readOnce, twoListings } from "./agent.js";
+import { setWide, oneEffect, readOnce, twoListings, listOnce } from "./agent.js";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -82,7 +82,18 @@ try {
     "std::ls": [{ match: { dir: `{${lsB},${lsB}/**}` }, action: "reject" }],
   });
 
+  // The launch directory is the only folder the step could offer for a
+  // listing of itself, so "ap" saves the rule without a second question.
+  const launch = realpathSync(process.cwd());
+  const here = await run(listOnce, "here", ["ap"], { dir: launch });
+
   writeFileSync("__result.json", JSON.stringify({
+    here: {
+      outcomes: here.outcomes,
+      remainingAnswers: here.remainingAnswers,
+      error: here.error,
+      lsRule: JSON.stringify(here.saved?.["std::ls"]) === JSON.stringify([parentRule(launch)]),
+    },
     scopedReject: {
       outcomes: scopedReject.outcomes,
       remainingAnswers: scopedReject.remainingAnswers,

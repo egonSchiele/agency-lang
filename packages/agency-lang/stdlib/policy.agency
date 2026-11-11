@@ -1036,28 +1036,22 @@ def answerOffered(row: AnswerRow, intr: any, scope: string, set: SharedSet): boo
   return scope != "" && set.members.length > 0
 }
 
-// Added to the (ap) and (as) details when the folder step will follow, so
-// the user knows a second question is coming.
-def folderStepHint(intr: any): string {
-  if (folderOptions(intr).length > 1) {
-    return ", or pick a parent next"
-  }
-  return ""
-}
-
 def answerItem(row: AnswerRow, intr: any, scope: string, set: SharedSet): ChoiceItem {
   if (row.covers == "effect") {
     return { key: row.key, label: row.label, tone: row.tone, detail: "every ${stripControlChars(intr.effect)}" }
   }
+  // The (ap) and (as) rows end with "›" when the folder step will follow,
+  // so the user knows a second question is coming.
+  const followUp = folderOptions(intr).length > 1
   if (row.covers == "scope") {
-    return { key: row.key, label: row.label, tone: row.tone, detail: scope + folderStepHint(intr) }
+    return { key: row.key, label: row.label, tone: row.tone, detail: scope, followUp: followUp }
   }
   // "always approve all reads in   /x and below". The folder alone reads
   // after "in"; the field name would not.
   if (row.covers == "set") {
     const field = folderField(intr)
     const where = if field == "" then scope else stripControlChars("${intr.data[field]} and below")
-    return { key: row.key, label: "${row.label} ${set.phrase} in", tone: row.tone, detail: where + folderStepHint(intr) }
+    return { key: row.key, label: "${row.label} ${set.phrase} in", tone: row.tone, detail: where, followUp: followUp }
   }
   return { key: row.key, label: row.label, tone: row.tone }
 }

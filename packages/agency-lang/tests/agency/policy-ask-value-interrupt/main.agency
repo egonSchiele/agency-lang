@@ -58,16 +58,18 @@ node main(): string {
   const listingMenu = askUserChoices(listing)
   if (keysOf(listingMenu) != "a,aa,ap,as,r,rr") { return "FAIL ls: ${keysOf(listingMenu)}" }
   const here = itemFor(listingMenu, "ap")
-  // /x is a parent the folder step will offer, so the details say a second
-  // question follows.
-  if (here.label != "always approve when" || here.detail != "dir = /x/y and below, or pick a parent next") { return "FAIL ap item: ${here.label} / ${here.detail}" }
+  // /x is a parent the folder step will offer, so both rows are marked as
+  // asking a second question.
+  if (here.label != "always approve when" || here.detail != "dir = /x/y and below" || here.followUp != true) { return "FAIL ap item: ${here.label} / ${here.detail} / ${here.followUp}" }
   const setWide = itemFor(listingMenu, "as")
-  if (setWide.label != "always approve all reads in" || setWide.detail != "/x/y and below, or pick a parent next") { return "FAIL as item: ${setWide.label} / ${setWide.detail}" }
+  if (setWide.label != "always approve all reads in" || setWide.detail != "/x/y and below" || setWide.followUp != true) { return "FAIL as item: ${setWide.label} / ${setWide.detail} / ${setWide.followUp}" }
   if (choiceResult("as", listingMenu).action != "approve-always-set") { return "FAIL as at an ls" }
 
-  // An effect outside every shared set keeps today's answers.
+  // An effect outside every shared set keeps today's answers, and gets no
+  // folder step, so its (ap) row has no mark.
   const making = { effect: "std::mkdir", data: { dir: "/x/y" }, expectsValue: false }
   if (keysOf(askUserChoices(making)) != "a,aa,ap,r,rr") { return "FAIL mkdir: ${keysOf(askUserChoices(making))}" }
+  if (itemFor(askUserChoices(making), "ap").followUp == true) { return "FAIL mkdir ap marked as a follow-up" }
 
   // A folder is the home directory or above it: no set-wide answer.
   const rootListing = { effect: "std::ls", data: { dir: "/", recursive: false, maxResults: 10 }, expectsValue: false }

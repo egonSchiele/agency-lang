@@ -744,6 +744,21 @@ describe("optionRows", () => {
     );
   });
 
+  it("ends a follow-up answer's row with the mark, on its last line when wrapped", () => {
+    const short = [
+      { key: "ap", label: "always approve when", detail: "dir = /x and below", followUp: true },
+    ];
+    expect(plain(_internal.optionRows(short, 80))).toEqual([
+      "ap   always approve when   dir = /x and below  ›",
+    ]);
+    const path = "/long".repeat(30);
+    const long = [{ ...short[0], detail: `dir = ${path} and below` }];
+    const rows = plain(_internal.optionRows(long, 60));
+    expect(rows[rows.length - 1].endsWith("  ›")).toBe(true);
+    expect(rows.slice(0, -1).some((row) => row.includes("›"))).toBe(false);
+    rows.forEach((row) => expect(row.length).toBeLessThanOrEqual(60));
+  });
+
   it("colors an approving key green and a rejecting key red", () => {
     const rows = _internal.optionRows(items, 80);
     expect(rows[0].startsWith(color.bold.green("a"))).toBe(true);

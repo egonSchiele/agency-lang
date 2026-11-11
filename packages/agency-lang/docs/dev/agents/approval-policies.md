@@ -467,9 +467,12 @@ The step asks "Which folder should this cover?", and the line under it
 says what the rule approves: "std::ls will always be approved in the folder
 you pick and in every folder inside it", or for `as`, "Reads (std::read,
 std::ls, …)" in place of the effect. On the first prompt, the `ap` and `as`
-details end with ", or pick a parent next" when the step will follow, so a
-second question is expected. When the list holds one folder there is no
-choice to make: the step is skipped, and the rule is saved for that folder.
+rows end with `›` when the step will follow, like the arrow on a submenu,
+so a second question is expected. The item's `followUp` flag asks for the
+mark; `optionRows` draws it at the end of the item's last line, and the
+picker and plain prompts add it to the label. When the list holds one
+folder there is no choice to make: the step is skipped, the rule is saved
+for that folder, and the row has no mark.
 
 `folderChoices` lists the folder in the interrupt, then each parent,
 nearest first. It stops at the launch directory when the folder is inside

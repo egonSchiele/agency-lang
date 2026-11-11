@@ -14,10 +14,17 @@ export type InterruptItem = {
   detail?: string;
   /** Colors the key: green for approve, red for reject, bold alone otherwise. */
   tone?: "approve" | "reject";
+  /** True when choosing this answer asks a second question. The row then
+   *  ends with FOLLOW_UP_MARK. */
+  followUp?: boolean;
 };
 
 const KEY_COLUMN_GAP = 3;
 const LABEL_COLUMN_GAP = 3;
+/** Ends the row of an answer that asks a second question, like the arrow
+ *  on a submenu. */
+export const FOLLOW_UP_MARK = "›";
+const MARK_GAP = "  ";
 const TONE_COLOR: Record<"approve" | "reject", (text: string) => string> = {
   approve: color.bold.green,
   reject: color.bold.red,
@@ -30,31 +37,39 @@ function coloredKey(item: InterruptItem): string {
 }
 
 /** The answers, one per line, in three columns: key, label, and a dim
- *  detail. An item that does not fit on one line wraps its label and then
- *  its detail onto lines of their own, indented to the label column, so a
- *  long path is shown whole whether it is the label (the folder step) or
- *  the detail. One or more lines per item. */
+ *  detail, then FOLLOW_UP_MARK for an answer that asks a second question.
+ *  An item that does not fit on one line wraps its label and then its
+ *  detail onto lines of their own, indented to the label column, so a long
+ *  path is shown whole whether it is the label (the folder step) or the
+ *  detail. The mark ends the item's last line. One or more lines per item. */
 export function optionRows(items: InterruptItem[], width: number): string[] {
   const keyWidth = Math.max(...items.map((item) => item.key.length)) + KEY_COLUMN_GAP;
   const withDetail = items.filter((item) => item.detail !== undefined && item.detail !== "");
   const labelWidth =
     Math.max(0, ...withDetail.map((item) => visualWidth(item.label))) + LABEL_COLUMN_GAP;
   const indent = " ".repeat(keyWidth);
-  const wrapWidth = Math.max(1, width - keyWidth);
   return items.flatMap((item) => {
+    const mark = item.followUp === true ? MARK_GAP + color.bold(FOLLOW_UP_MARK) : "";
+    const markWidth = visualWidth(mark);
     const key = coloredKey(item) + " ".repeat(keyWidth - item.key.length);
     const detail = item.detail ?? "";
-    if (detail === "" && keyWidth + visualWidth(item.label) <= width) {
-      return [key + item.label];
+    if (detail === "" && keyWidth + visualWidth(item.label) + markWidth <= width) {
+      return [key + item.label + mark];
     }
-    if (detail !== "" && keyWidth + labelWidth + visualWidth(detail) <= width) {
+    if (detail !== "" && keyWidth + labelWidth + visualWidth(detail) + markWidth <= width) {
       const pad = " ".repeat(labelWidth - visualWidth(item.label));
-      return [key + item.label + pad + dim(detail)];
+      return [key + item.label + pad + dim(detail) + mark];
     }
+    // Wrapped narrower by the mark's width, so the last line has room for it.
+    const wrapWidth = Math.max(1, width - keyWidth - markWidth);
     const labelLines = wrapText(item.label, wrapWidth);
     const detailLines = detail === "" ? [] : wrapText(detail, wrapWidth).map(dim);
-    const rest = [...labelLines.slice(1), ...detailLines];
-    return [key + labelLines[0], ...rest.map((line) => indent + line)];
+    const lines = [
+      key + labelLines[0],
+      ...[...labelLines.slice(1), ...detailLines].map((line) => indent + line),
+    ];
+    lines[lines.length - 1] += mark;
+    return lines;
   });
 }
 

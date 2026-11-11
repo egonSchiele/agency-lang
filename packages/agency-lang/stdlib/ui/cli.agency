@@ -146,14 +146,17 @@ export def hline(char: string = "─", width: number = null): string {
 /**
 A row in a choice prompt: the `key` is what the prompt returns, the
 `label` is the text shown to the user. `interruptChoice` also reads
-`detail`, shown dim after the label to say what the answer covers, and
-`tone`, which colors the key green for an approval or red for a rejection.
+`detail`, shown dim after the label to say what the answer covers;
+`tone`, which colors the key green for an approval or red for a rejection;
+and `followUp`, which ends the row with `›` to say that choosing it asks a
+second question.
 */
 export type ChoiceItem = {
   key: string;
   label: string;
   detail?: string;
-  tone?: "approve" | "reject"
+  tone?: "approve" | "reject";
+  followUp?: boolean
 }
 
 @capabilities(terminal)
@@ -365,13 +368,12 @@ def _entryKey(entry: any): string {
   return entry.key
 }
 
-// An item for a prompt that does not draw `detail`: the detail moves into
-// the label, as "label (detail)".
+// An item for a prompt that draws neither `detail` nor `followUp`: both
+// move into the label, as "label (detail) ›".
 def foldDetail(item: any): ChoiceItem {
-  if (item.detail == null || item.detail == "") {
-    return { key: item.key, label: item.label }
-  }
-  return { key: item.key, label: "${item.label} (${item.detail})" }
+  const detail = if item.detail == null || item.detail == "" then "" else " (${item.detail})"
+  const mark = if item.followUp == true then " ›" else ""
+  return { key: item.key, label: "${item.label}${detail}${mark}" }
 }
 
 @capabilities(terminal)

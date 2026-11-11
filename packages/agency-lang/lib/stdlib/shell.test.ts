@@ -346,6 +346,71 @@ describe("_glob honours .gitignore", () => {
   });
 });
 
+describe("_ls honours .gitignore on a recursive listing", () => {
+  let root: string;
+  const paths = (entries: LsEntry[]) => entries.map((entry) => entry.path).sort();
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-ls-ignore-"));
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n");
+    fs.writeFileSync(path.join(root, "a.agency"), "a");
+    fs.writeFileSync(path.join(root, "a.js"), "a");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.txt"), "b");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("skips ignored entries on a recursive listing", async () => {
+    expect(paths(await _ls(root, ".", true))).toEqual([".gitignore", "a.agency"]);
+  });
+
+  it("lists everything with the option off", async () => {
+    expect(paths(await _ls(root, ".", true, 1000, [], false))).toEqual([
+      ".gitignore",
+      "a.agency",
+      "a.js",
+      "out",
+      "out/b.txt",
+    ]);
+  });
+
+  it("shows every entry on a plain listing, SKIP_DIRS and ignored ones included", async () => {
+    expect(paths(await _ls(root, ".", false))).toEqual([
+      ".git",
+      ".gitignore",
+      "a.agency",
+      "a.js",
+      "out",
+    ]);
+  });
+
+  it("lists a folder named as the root, in both shapes", async () => {
+    expect(paths(await _ls(root, "out", true))).toEqual(["b.txt"]);
+    expect(paths(await _ls(path.join(root, "out"), ".", true))).toEqual(["b.txt"]);
+  });
+
+  it("returns nothing for a maxResults of 0 or less, and stops at maxResults", async () => {
+    expect(await _ls(root, ".", true, 0)).toEqual([]);
+    expect(await _ls(root, ".", true, -3)).toEqual([]);
+    expect(await _ls(root, ".", false, 0)).toEqual([]);
+    expect(await _ls(root, ".", true, 1, [], false)).toHaveLength(1);
+  });
+
+  it("fails when it cannot read the folder it was given", async () => {
+    // A file stands in for an unreadable folder. With the option on, the
+    // call fails in the .gitignore setup before the walk lists anything.
+    await expect(_ls(root, "a.agency", true)).rejects.toThrow();
+    await expect(_ls(root, "a.agency", false)).rejects.toThrow();
+    // With the option off the walk reaches the listing, so this one needs
+    // failOnUnreadableStart.
+    await expect(_ls(root, "a.agency", true, 1000, [], false)).rejects.toThrow();
+  });
+});
+
 describe("_exists and _stat report a symlink below the root as missing", () => {
   let root: string;
 

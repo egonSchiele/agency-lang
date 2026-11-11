@@ -202,8 +202,10 @@ type LsEntry = {
 }
 
 /**
-Recursive listings skip node_modules, .git, dist, build, .next, and .cache.
-Non-recursive listings include those directories. Symlinked entries are omitted.
+Recursive listings skip node_modules, .git, dist, build, .next, and .cache,
+plus paths ignored by .gitignore when `respectGitignore` is true. To list an
+ignored folder, pass it as `dir`. Non-recursive listings include every entry.
+Symlinked entries are omitted.
 */
 @capabilities(fileRead)
 export idempotent def ls(
@@ -212,14 +214,17 @@ export idempotent def ls(
   maxResults: number = 1000,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
+  respectGitignore: boolean = true,
 ): Result raises <std::ls> {
   """
   List directory entries, optionally including subdirectories. A recursive
-  listing skips node_modules, .git, dist, build, .next, and .cache.
+  listing skips node_modules, .git, dist, build, .next, and .cache, and
+  anything .gitignore ignores. To list an ignored folder, pass it as dir.
   Narrow dir or raise maxResults when the listing reaches its limit.
 
   @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
   @param useAgentCwd - Resolve a relative dir against the agent working directory when set.
+  @param respectGitignore - Skip what .gitignore ignores in a recursive listing; false includes ignored files.
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -234,7 +239,7 @@ export idempotent def ls(
     maxResults: maxResults
   })
 
-  return try _ls(target.value.dir, ".", recursive, maxResults, allowedPaths)
+  return try _ls(target.value.dir, ".", recursive, maxResults, allowedPaths, respectGitignore)
 }
 
 type GrepMatch = {
@@ -246,7 +251,8 @@ type GrepMatch = {
 /**
 Directory searches skip common build and dependency directories, plus paths
 ignored by .gitignore when `respectGitignore` is true. A directly named file
-is always searched. Symlinked entries are omitted.
+is always searched. To search an ignored folder, pass it as `path`. Symlinked
+entries are omitted.
 
 Match paths are relative to the searched directory. For a single-file search,
 they contain the filename. Use `filesOnly` when you only need matching paths.
@@ -267,7 +273,8 @@ export idempotent def grep(
 ): Result raises <std::grep> {
   """
   Search a file or directory recursively with a JavaScript regular expression.
-  A directory search skips node_modules, .git, dist, build, .next, and .cache.
+  A directory search skips node_modules, .git, dist, build, .next, and .cache,
+  and anything .gitignore ignores. To search an ignored folder, pass it as path.
   Narrow path or refine the pattern when results reach maxResults.
 
   @param path - Directory or single file to search.

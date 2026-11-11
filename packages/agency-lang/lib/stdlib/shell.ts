@@ -306,9 +306,10 @@ function relativeTo(dir: string, rel: string): string {
  * List `dir`, a directory under `rootDir` ("." for the root itself).
  * Entries come back relative to `dir`. Symlinked entries are left out:
  * a link below the root is never followed, so there is nothing to say
- * about it. `isRoot` surfaces a readdir failure on the scanned dir
- * itself, while an unreadable subdirectory during a recursive walk is
- * skipped rather than failing the whole listing.
+ * about it. A plain listing shows every entry. A recursive listing skips
+ * SKIP_DIRS and, unless `respectGitignore` is false, what .gitignore
+ * ignores. An unreadable `dir` fails the call, while an unreadable
+ * subdirectory during a recursive walk is skipped.
  */
 export async function _ls(
   rootDir: string,
@@ -316,6 +317,7 @@ export async function _ls(
   recursive: boolean,
   maxResults: number = DEFAULT_LS_MAX_RESULTS,
   allowedPaths?: string[],
+  respectGitignore: boolean = true,
 ): Promise<LsEntry[]> {
   const host = currentHost();
   const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
@@ -324,33 +326,28 @@ export async function _ls(
   // value <= 0) is a valid request that yields an empty result.
   const cap = Number.isFinite(maxResults) ? maxResults : DEFAULT_LS_MAX_RESULTS;
   const out: LsEntry[] = [];
+  const add = (rel: string, entry: Entry) =>
+    out.push({ name: entry.name, path: relativeTo(dir, rel), type: entry.type, size: entry.size });
 
-  async function walk(rel: string, isRoot: boolean): Promise<boolean> {
-    let entries: Entry[];
-    try {
-      entries = await host.files.list(approved, rel);
-    } catch (err) {
-      if (isRoot) throw err;
-      return true;
+  if (!recursive) {
+    for (const entry of await host.files.list(approved, dir)) {
+      if (out.length >= cap) break;
+      add(joinRel(dir, entry.name), entry);
     }
-    for (const entry of entries) {
-      if (out.length >= cap) return false;
-      // On a recursive walk, skip the heavyweight dirs entirely. A
-      // non-recursive `ls` still shows them.
-      if (recursive && SKIP_DIRS.has(entry.name)) continue;
-      const entryRel = joinRel(rel, entry.name);
-      out.push({
-        name: entry.name,
-        path: relativeTo(dir, entryRel),
-        type: entry.type,
-        size: entry.size,
-      });
-      if (recursive && entry.type === "dir" && !(await walk(entryRel, false))) return false;
-    }
-    return true;
+    return out;
   }
 
-  await walk(dir, true);
+  await walkDir(
+    host,
+    approved,
+    dir,
+    async (rel, entry) => {
+      if (out.length >= cap) return false;
+      add(rel, entry);
+      return true;
+    },
+    { respectGitignore, failOnUnreadableStart: true },
+  );
   return out;
 }
 
@@ -372,6 +369,9 @@ type WalkOptions = {
   /** Skip whatever the .gitignore files between the root and an entry
    * would ignore. Off, the walk skips only SKIP_DIRS. */
   respectGitignore?: boolean;
+  /** Throw when the starting directory cannot be listed, instead of
+   * yielding nothing. An unreadable directory below it is still skipped. */
+  failOnUnreadableStart?: boolean;
 };
 
 /** A root and where it sits, for a walk that spells every entry in full
@@ -459,7 +459,8 @@ async function walkDir(
     let entries: Entry[];
     try {
       entries = await host.files.list(approved, rel);
-    } catch {
+    } catch (err) {
+      if (options.failOnUnreadableStart && rel === dir) throw err;
       return true;
     }
     let scoped = ignoreFiles;
@@ -580,7 +581,7 @@ export async function _grep(
         try {
           await searchFile(rel, relativeTo(dir, rel));
         } catch {
-          // An unreadable file during a walk is skipped, as in `_ls`.
+          // An unreadable file during a walk is skipped.
         }
         return matches.length < maxResults;
       },

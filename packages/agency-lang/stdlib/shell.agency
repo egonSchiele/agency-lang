@@ -87,7 +87,7 @@ export def exec(
   command: string,
   args: string[] = [],
   cwd: string = "",
-  timeout: number = 0,
+  timeout: number = 2m,
   stdin: string = "",
   allowedExecutables: string[] = [],
   blockedCommands: string[] = [],
@@ -102,7 +102,7 @@ export def exec(
   @param command - The executable to run
   @param args - Arguments to pass
   @param cwd - Working directory for the command
-  @param timeout - Time limit in milliseconds (e.g. 30s)
+  @param timeout - Time limit in milliseconds (e.g. 30s), after which the command and everything it started is stopped. 0 means no limit.
   @param stdin - Input to feed to the command
   @param allowedExecutables - Only allow running these executables (allow-list)
   @param blockedCommands - Block running these executables
@@ -153,7 +153,7 @@ export def exec(
 export def bash(
   command: string,
   cwd: string = "",
-  timeout: number = 0,
+  timeout: number = 2m,
   stdin: string = "",
   blockedCommands: string[] = [],
   allowedPaths: string[] = [],
@@ -166,7 +166,7 @@ export def bash(
 
   @param command - The shell command to run
   @param cwd - Working directory for the command
-  @param timeout - Time limit in milliseconds (e.g. 30s)
+  @param timeout - Time limit in milliseconds (e.g. 30s), after which the command and everything it started is stopped. 0 means no limit.
   @param stdin - Input to feed to the command
   @param blockedCommands - Block commands that start with these strings
   @param allowedPaths - Only allow cwd values under these path prefixes

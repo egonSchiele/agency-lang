@@ -1447,6 +1447,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "timeLimitStopsTheCommand",
+      "description": "A line still running at its time limit is stopped before its later commands run. The failure carries the output so far and names the limit, and each approval question carries the limit in milliseconds.",
+      "input": "",
+      "expectedOutput": "[true,false,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

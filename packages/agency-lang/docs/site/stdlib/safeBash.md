@@ -853,6 +853,7 @@ Use the requested directory, then the agent directory, then the process director
 safeBash(
   command: string,
   cwd: string = "",
+  timeout: number = 120,
 ): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
 ```
 
@@ -860,7 +861,9 @@ Run Bash commands after approval of the actions they perform.
   Return stdout on success. A nonzero exit is a failure carrying the exit
   code, stdout, and stderr, so there is no need to echo `$?` or re-run a
   command to learn how it exited. Read saved long output with readSpill or
-  grepSpill, not with bash.
+  grepSpill, not with bash. A command still running after `timeout`
+  seconds is stopped, with everything it started, and the failure carries
+  the output so far.
 
 **Parameters:**
 
@@ -868,6 +871,7 @@ Run Bash commands after approval of the actions they perform.
 |---|---|---|---|
 | command | `string` |  | One or more bash commands. |
 | cwd | `string` | "" | Working directory, defaulting to the agent directory or the process directory. |
+| timeout | `number` | 120 | Seconds the command may run. Pass more for a command known to be slow, such as a full test suite. |
 
 **Returns:** `Result<string>`
 

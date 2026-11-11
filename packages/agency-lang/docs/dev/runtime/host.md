@@ -124,6 +124,25 @@ A refusal from `makeHost` throws when the function is called, before any promise
 
 A test of a helper that runs a fixed program mocks `lib/host/node/nodeSubprocess.ts` and scripts `run` with the helpers in `lib/stdlib/__tests__/fakeSubprocess.ts`. `memoryHost` refuses every command unless the test passed a `subprocess`.
 
+### Stopping a command
+
+The Node host stops a child for three reasons of its own: the time limit ran out, the abort signal fired, or an output stream reached its cap. The abort signal is how a time guard, a cancel, and a lost `race` stop a command. A guard has no kill of its own; it aborts the signal, and the host does the rest. All three reasons go through one function, `stop` in `lib/host/node/nodeSubprocess.ts`, and it makes two promises.
+
+**Everything the command started is signalled.** Killing only the child is not enough. Take `cd tests && python runtests.py`: bash starts Python, and a `SIGTERM` to bash leaves Python running. So each child is started with `detached: true`, which makes it the leader of a new process group (and a new session). `signalGroup` in `lib/host/node/processGroups.ts` sends a signal to the whole group with `process.kill(-pid, signal)`. `stop` sends `SIGTERM` first, so a test runner can print its summary and remove its temporary files. After `TERM_GRACE_MS` (2 seconds) `killGroup` sends `SIGSTOP` and then `SIGKILL`. The stop comes first because a kill reaches the group one process at a time, and a shell running `a; b` could start `b` in between. The `SIGKILL` is sent even when the child has already closed, because a process that ignored `SIGTERM` and holds no pipe is still in the group. On Windows there are no groups, and the kill is `taskkill /F /T`, which walks the process tree.
+
+**The call returns.** `run` settles on the child's `close` event, and `close` waits for every process that holds an output pipe. A process that left the group (it called `setsid()`, as a daemon does) is not signalled and can hold the pipe for as long as it likes. So once a stopped child has exited, the host reads its pipes for `PIPE_GRACE_MS` (half a second) more and then destroys them, which fires `close`. The output read up to then is in the result.
+
+A caller's own `kill`, from `start`, signals the group once and does neither of the later steps. `record` stops its recorder that way and waits for it to finish the file.
+
+Three things follow from a child having its own session:
+
+- **Ctrl+C does not reach it.** The terminal signals its foreground group, and the child is no longer in it. `trackChild` keeps a list of the children that have not closed. The process's `exit` event kills each one's group. While the list is not empty, a `SIGINT`, `SIGTERM`, or `SIGHUP` that nothing else handles kills the groups and then ends the process with the same signal. When something else handles the signal, as the TUI does, that handler decides, and the `exit` event is the backstop. There is one list for the whole process, because the code that reads it runs when the process ends.
+- **It has no terminal.** A program that opens `/dev/tty` to ask for a password, such as `sudo`, fails at once.
+- **A process that leaves the group survives a stop.** Catching those takes Linux cgroups or a container. A sandbox around the agent is the backstop.
+- **`SIGKILL` of the Agency process runs no hook.** The commands it had running live on. `std::agency`'s `run` kills its child program this way (`killChildSafely` in `lib/runtime/ipc.ts`) on a limit, an abort, or a guard trip, so a command that child was running is not stopped. When the parent dies instead, the child exits through `process.exit`, and the `exit` event kills its commands.
+
+A command that ends normally is not stopped, so a job it left in the background with its output redirected (`server > log 2>&1 &`) keeps running. Without the redirect the job holds the pipe, and the call waits for it or for the time limit.
+
 ### The default host
 
 `lib/host/node/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`, and `lib/host/default.browser.ts` one that returns a plain `browserHost`. The runtime imports `#default-host`, an entry in the `imports` field of `package.json` that resolves to the Node file by default and to the browser file under the `browser` condition, which esbuild applies when it bundles with `--platform=browser`. `running-without-node.md` explains the mechanism and the three places that have to know about each entry. An app in a browser that wants the program to see its own variables and terminal passes a `browserHost` of its own: the generated `main({ host })` forwards it through `InvocationOptions`.

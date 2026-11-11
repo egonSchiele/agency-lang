@@ -150,7 +150,8 @@ export def globEffect(payload: GlobPayload): Effect {
 
 /** The fields the exec tool's own std::exec interrupt carries. From
  safeBash, `cwd` is safeBash's resolved working directory, `timeout` is
- 0 and `stdin` is empty, which is how safeBash runs the line, and an
+ 0 in the plan and safeBash's own limit when raised, `stdin` is empty,
+ which is how safeBash runs the line, and an
  argument may be an unexpanded glob or `~` that bash expands. */
 export type ExecPayload = {
   command: string;

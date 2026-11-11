@@ -269,7 +269,8 @@ function safeBashFailure(message: string): { line: string | null; detail: string
     return null;
   }
   if (!hasField(parsed, "exitCode") || typeof parsed.exitCode !== "number") return null;
-  return { line: `exit ${parsed.exitCode}`, detail: commandDetail(parsed.stdout, parsed.stderr) };
+  const line = parsed.timedOut === true ? "timed out" : `exit ${parsed.exitCode}`;
+  return { line, detail: commandDetail(parsed.stdout, parsed.stderr) };
 }
 
 const exitCode: ExitCodeSummary = { exitCode: true };

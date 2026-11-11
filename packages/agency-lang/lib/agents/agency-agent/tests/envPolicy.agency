@@ -1,6 +1,6 @@
 /*
  * The agent passes no scope table of its own: it installs cliPolicyHandler
- * without `fields`, and "approve always here" for std::env comes from the
+ * without `fields`, and "always approve when" for std::env comes from the
  * effect's declaration. This test installs the handler the same way and
  * reads the choices the prompt would offer. Importing std::system loads
  * the module that declares std::env, as the agent does.
@@ -12,7 +12,6 @@ import { env } from "std::system"
 node envOffersAlwaysHere(): string {
   const handler = cliPolicyHandler(file: "unused.json", policy: {}, interactive: true)
   const intr = { effect: "std::env", data: { name: "BRAVE_API_KEY" }, expectsValue: false }
-  const labels = map(askUserChoices(intr), \item -> item.label)
-  const here = filter(labels, \label -> label.startsWith("approve always here"))
-  return here.join("|")
+  const here = filter(askUserChoices(intr), \item -> item.key == "ap")
+  return map(here, \item -> "${item.label} (${item.detail})").join("|")
 }

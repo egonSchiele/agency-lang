@@ -6,6 +6,8 @@ import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.
 import { readAlwaysScope, type AlwaysTagProblem } from "./alwaysTag.js";
 import type { ScopedField } from "../runtime/alwaysScope.js";
 import type { EffectDeclaration } from "../types/effectDeclaration.js";
+import { SHARED_APPROVAL_SETS } from "../runtime/alwaysChoices.js";
+import { builtinEffectSets } from "../runtime/effectSets.js";
 
 const STDLIB = path.resolve(__dirname, "../../stdlib");
 
@@ -57,7 +59,7 @@ function stdlibDeclarations(): Declared[] {
 
 // The decision table from the spec (§5.6). Adding an effect to the stdlib
 // means adding a row here, so nobody ships an effect without deciding
-// what "approve always here" means for it.
+// what "always approve when" means for it.
 const EXPECTED: Record<string, string[]> = {
   "std::read": ["dir/**"],
   "std::readBinary": ["dir/**"],
@@ -240,5 +242,25 @@ describe("every stdlib effect has a decided always-scope", () => {
       (one) => JSON.stringify(one.scope) !== JSON.stringify(EXPECTED[one.effect]),
     );
     expect(wrong.map((one) => `${one.file} ${one.effect}: ${one.scope.join(",")}`)).toEqual([]);
+  });
+
+  // One answer at the prompt saves the same rule under every member of
+  // these sets, so the rule must mean the same thing for each of them.
+  it("gives every member of a shared approval set the same scope", () => {
+    const sets = builtinEffectSets();
+    const scopeOf = (effect: string) =>
+      declarations
+        .find((one) => one.effect === effect)
+        ?.scope.toSorted()
+        .join(",");
+    const mismatches = Object.keys(SHARED_APPROVAL_SETS).flatMap((name) => {
+      const members = sets[name]?.members ?? [];
+      expect(members, `${name} is not a built-in effect set`).not.toEqual([]);
+      const first = scopeOf(members[0]);
+      return members
+        .filter((member) => scopeOf(member) === undefined || scopeOf(member) !== first)
+        .map((member) => `${name}: ${member} is "${scopeOf(member)}", ${members[0]} is "${first}"`);
+    });
+    expect(mismatches).toEqual([]);
   });
 });

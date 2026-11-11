@@ -298,7 +298,7 @@ the use count:
   can tell creating a directory from removing one.
 
 Both carry `root`, the toolbox root, as the `@alwaysUnder` field, so
-"approve always here" pins the toolbox instead of one draft's staging
+"always approve when" pins the toolbox instead of one draft's staging
 directory, whose name ends in a random number and never recurs.
 
 The publish `move` raises nothing of its own: the `std::toolbox::save`

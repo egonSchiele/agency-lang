@@ -3,7 +3,7 @@ import type { Expression } from "../types.js";
 import type { ScopedField } from "../runtime/alwaysScope.js";
 
 /** `@always(f1, f2)` and `@alwaysUnder(d1, d2)` on an effect declaration
- *  name the payload fields an "approve always here" policy rule pins.
+ *  name the payload fields an "always approve when" policy rule pins.
  *  `@always` pins the exact value; `@alwaysUnder` pins the value and every
  *  subpath under it. See docs/dev/language/effect-always-tag.md. */
 export const ALWAYS_TAG = "always";

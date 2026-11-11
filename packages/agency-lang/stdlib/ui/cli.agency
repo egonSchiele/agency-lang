@@ -145,11 +145,18 @@ export def hline(char: string = "─", width: number = null): string {
 
 /**
 A row in a choice prompt: the `key` is what the prompt returns, the
-`label` is the text shown to the user.
+`label` is the text shown to the user. `interruptChoice` also reads
+`detail`, shown dim after the label to say what the answer covers;
+`tone`, which colors the key green for an approval or red for a rejection;
+and `followUp`, which ends the row with `›` to say that choosing it asks a
+second question.
 */
 export type ChoiceItem = {
   key: string;
-  label: string
+  label: string;
+  detail?: string;
+  tone?: "approve" | "reject";
+  followUp?: boolean
 }
 
 @capabilities(terminal)
@@ -361,6 +368,14 @@ def _entryKey(entry: any): string {
   return entry.key
 }
 
+// An item for a prompt that draws neither `detail` nor `followUp`: both
+// move into the label, as "label (detail) ›".
+def foldDetail(item: any): ChoiceItem {
+  const detail = if item.detail == null || item.detail == "" then "" else " (${item.detail})"
+  const mark = if item.followUp == true then " ›" else ""
+  return { key: item.key, label: "${item.label}${detail}${mark}" }
+}
+
 @capabilities(terminal)
 export def interruptBodyWidth(): number {
   """
@@ -400,7 +415,16 @@ export def interruptChoice(
   if (_stickyInterruptAvailable()) {
     answer = _interruptChoice(title, body, items, allowFreeText, allowCancel, expectsValue)
   } else {
-    answer = chooseOption(title, body, items, allowFreeText: allowFreeText, allowCancel: allowCancel)
+    // Only the pinned footer draws `detail`, and it can hold what the
+    // answer approves, so the picker and the plain prompt get it in the
+    // label. The plain prompt prints no items, so they go in its body.
+    const folded = map(items, foldDetail)
+    let shown = body
+    if (!_isTTY()) {
+      const lines = map(folded, \item -> "${item.key}  ${item.label}").join("\n")
+      shown = if body == "" then lines else "${body}\n${lines}"
+    }
+    answer = chooseOption(title, shown, folded, allowFreeText: allowFreeText, allowCancel: allowCancel)
   }
   _logPromptWait(openedAt, answer, [item.key for item in items])
   return answer

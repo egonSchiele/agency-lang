@@ -28,20 +28,31 @@ The terminal front end for CLI agents. `repl` is a line-mode REPL driven
 ### ChoiceItem
 
 A row in a choice prompt: the `key` is what the prompt returns, the
-`label` is the text shown to the user.
+`label` is the text shown to the user. `interruptChoice` also reads
+`detail`, shown dim after the label to say what the answer covers;
+`tone`, which colors the key green for an approval or red for a rejection;
+and `followUp`, which ends the row with `›` to say that choosing it asks a
+second question.
 
 ```ts
 /**
 A row in a choice prompt: the `key` is what the prompt returns, the
-`label` is the text shown to the user.
+`label` is the text shown to the user. `interruptChoice` also reads
+`detail`, shown dim after the label to say what the answer covers;
+`tone`, which colors the key green for an approval or red for a rejection;
+and `followUp`, which ends the row with `›` to say that choosing it asks a
+second question.
 */
 export type ChoiceItem = {
   key: string;
-  label: string
+  label: string;
+  detail?: string;
+  tone?: "approve" | "reject";
+  followUp?: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L154))
 
 ## Functions
 
@@ -190,7 +201,7 @@ Print a message to the terminal.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L163))
 
 ### select
 
@@ -223,7 +234,7 @@ non-TTY fallback, so a scripted caller must route around it
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L176))
 
 ### autocomplete
 
@@ -257,7 +268,7 @@ Requires stdout to be a terminal. Ctrl+C exits the process.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L196))
 
 ### prompt
 
@@ -291,7 +302,7 @@ a tool so the LLM cannot override the constraint.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L223))
 
 ### confirm
 
@@ -315,7 +326,7 @@ Requires stdout to be a terminal. Ctrl+C exits the process.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L243))
 
 ### chooseOption
 
@@ -352,7 +363,7 @@ std::policy uses it for its approve/reject menus.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L281))
 
 ### interruptBodyWidth
 
@@ -366,7 +377,7 @@ The width, in columns, that the approval prompt wraps its body to. Render a tabl
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L365))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L380))
 
 ### interruptChoice
 
@@ -403,4 +414,4 @@ to `chooseOption`, including its plain-input fallback.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L378))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L393))

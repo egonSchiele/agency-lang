@@ -321,7 +321,7 @@ effect app::x { a: string, b: string }
 
 **How to fix:** merge them into one tag, e.g. \`@always(a, b)\`.`,
 
-  alwaysScopeConflict: `Two tagged declarations of the same effect disagree about which fields an "approve always here" rule pins. Every tagged declaration must name the same fields with the same tag; an untagged declaration inherits the tagged scope and is fine.
+  alwaysScopeConflict: `Two tagged declarations of the same effect disagree about which fields an "always approve when" rule pins. Every tagged declaration must name the same fields with the same tag; an untagged declaration inherits the tagged scope and is fine.
 
 **How to fix:** make the tags match, or drop the tag from one declaration so it inherits the other.`,
 

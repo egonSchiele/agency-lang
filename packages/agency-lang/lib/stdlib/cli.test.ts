@@ -10,6 +10,8 @@ import {
   type PasteState,
 } from "./cli.js";
 import { escapedTurnText, interrupt } from "../runtime/interrupts.js";
+import { stripAnsi } from "./layout/ansi.js";
+import { color, RESET, styles } from "../utils/termcolors.js";
 
 const {
   EMPTY_PASTE,
@@ -681,28 +683,92 @@ describe("reduceInterrupt", () => {
   });
 });
 
-describe("packOptions", () => {
-  it("packs short tokens onto one line", () => {
-    expect(
-      _internal.packOptions(
-        [
-          { key: "a", label: "ok" },
-          { key: "r", label: "no" },
-        ],
-        40,
-      ),
-    ).toEqual(["a=ok  r=no"]);
+describe("optionRows", () => {
+  const plain = (rows: string[]) => rows.map(stripAnsi);
+  const items = [
+    { key: "a", label: "approve once", tone: "approve" as const },
+    { key: "aa", label: "always approve", detail: "every std::ls", tone: "approve" as const },
+    {
+      key: "ap",
+      label: "always approve when",
+      detail: "dir = /x and below",
+      tone: "approve" as const,
+    },
+    { key: "r", label: "reject once", tone: "reject" as const },
+  ];
+
+  it("puts each item on its own line with aligned columns", () => {
+    expect(plain(_internal.optionRows(items, 80))).toEqual([
+      "a    approve once",
+      "aa   always approve        every std::ls",
+      "ap   always approve when   dir = /x and below",
+      "r    reject once",
+    ]);
   });
-  it("wraps when the next token would overflow", () => {
-    expect(
-      _internal.packOptions(
-        [
-          { key: "a", label: "approve" },
-          { key: "r", label: "reject" },
-        ],
-        10,
-      ),
-    ).toEqual(["a=approve", "r=reject"]);
+
+  it("wraps a detail that does not fit, indented under the label", () => {
+    const path = "/long".repeat(30);
+    const long = [{ key: "ap", label: "always approve when", detail: `dir = ${path} and below` }];
+    const rows = plain(_internal.optionRows(long, 60));
+    expect(rows[0]).toBe("ap   always approve when");
+    expect(rows.length).toBeGreaterThan(2);
+    rows.slice(1).forEach((row) => {
+      expect(row.startsWith("     ")).toBe(true);
+      expect(row.length).toBeLessThanOrEqual(60);
+    });
+    // Nothing is cut: the wrapped lines hold the whole detail.
+    const joined = rows
+      .slice(1)
+      .map((row) => row.trim())
+      .join("");
+    expect(joined.replace(/\s/g, "")).toBe(`dir = ${path} and below`.replace(/\s/g, ""));
+  });
+
+  it("wraps a label that does not fit, indented under the label", () => {
+    // At the folder step the path is the label and the note is the detail.
+    const path =
+      "/Users/me/proj/.worktrees/agent-prompt-cleanup/packages/agency-lang/.agency-build";
+    const folders = [
+      { key: "1", label: path },
+      { key: "2", label: "/Users/me/proj", detail: "the launch directory" },
+    ];
+    const rows = plain(_internal.optionRows(folders, 60));
+    expect(rows[0].startsWith("1   /Users/me/proj")).toBe(true);
+    const wrapped = rows.slice(0, rows.indexOf(rows.find((row) => row.startsWith("2"))!));
+    expect(wrapped.length).toBeGreaterThan(1);
+    wrapped.slice(1).forEach((row) => expect(row.startsWith("    ")).toBe(true));
+    rows.forEach((row) => expect(row.length).toBeLessThanOrEqual(60));
+    expect(wrapped.map((row, index) => (index === 0 ? row.slice(4) : row.trim())).join("")).toBe(
+      path,
+    );
+  });
+
+  it("ends a follow-up answer's row with the mark, on its last line when wrapped", () => {
+    const short = [
+      { key: "ap", label: "always approve when", detail: "dir = /x and below", followUp: true },
+    ];
+    expect(plain(_internal.optionRows(short, 80))).toEqual([
+      "ap   always approve when   dir = /x and below  ›",
+    ]);
+    const path = "/long".repeat(30);
+    const long = [{ ...short[0], detail: `dir = ${path} and below` }];
+    const rows = plain(_internal.optionRows(long, 60));
+    expect(rows[rows.length - 1].endsWith("  ›")).toBe(true);
+    expect(rows.slice(0, -1).some((row) => row.includes("›"))).toBe(false);
+    rows.forEach((row) => expect(row.length).toBeLessThanOrEqual(60));
+  });
+
+  it("colors an approving key green and a rejecting key red", () => {
+    const rows = _internal.optionRows(items, 80);
+    expect(rows[0].startsWith(color.bold.green("a"))).toBe(true);
+    expect(rows[3].startsWith(color.bold.red("r"))).toBe(true);
+  });
+
+  it("prints an item with no tone and no detail as key and label", () => {
+    // The key column is the longest key, here one letter, plus a gap of three.
+    expect(plain(_internal.optionRows([{ key: "v", label: "view it all" }], 80))).toEqual([
+      "v   view it all",
+    ]);
   });
 });
 
@@ -722,10 +788,10 @@ describe("renderInterruptFooter", () => {
   };
   it("shows divider, title, options, hint, and the input line with a caret", () => {
     const lines = _internal.renderInterruptFooter(base);
-    const joined = lines.join("\n");
+    const joined = stripAnsi(lines.join("\n"));
     expect(joined).toContain("bash: rm -rf build/ — approve?");
-    expect(joined).toContain("a=approve once");
-    expect(joined).toContain("rr=reject always");
+    expect(joined).toContain(" a    approve once\n");
+    expect(joined).toContain(" rr   reject always\n");
     expect(joined).toContain("Enter to submit");
     expect(lines[lines.length - 1]).toContain("> aa");
     expect(lines[lines.length - 1]).toContain("▏");
@@ -738,12 +804,10 @@ describe("renderInterruptFooter", () => {
   });
   it("offers the view option only when the body is cut off", () => {
     const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
-    expect(_internal.renderInterruptFooter({ ...base, body }).join("\n")).toContain(
-      "v=view it all",
-    );
-    expect(_internal.renderInterruptFooter({ ...base, body: "one line" }).join("\n")).not.toContain(
-      "v=view it all",
-    );
+    const footer = (text: string) =>
+      stripAnsi(_internal.renderInterruptFooter({ ...base, body: text }).join("\n"));
+    expect(footer(body)).toContain("v    view it all");
+    expect(footer("one line")).not.toContain("view it all");
   });
   it("shows a notice when present", () => {
     const lines = _internal.renderInterruptFooter({
@@ -752,6 +816,92 @@ describe("renderInterruptFooter", () => {
     });
     expect(lines.join("\n")).toContain("not a valid option");
   });
+  it("opens with a blank line and a dim divider with a plain label", () => {
+    const lines = _internal.renderInterruptFooter(base);
+    expect(lines[0]).toBe("");
+    expect(stripAnsi(lines[1]).startsWith("── approval needed ──")).toBe(true);
+    // The label sits between the two dim parts, with no style of its own.
+    expect(lines[1]).toContain(`${RESET}approval needed${styles.dim}`);
+    const question = _internal.renderInterruptFooter({ ...base, expectsValue: true });
+    expect(stripAnsi(question[1]).startsWith("── answer needed ──")).toBe(true);
+  });
+
+  describe("fits the terminal's height", () => {
+    // Physical rows: buildFrame wraps each footer line at the footer's width.
+    const screenRows = (lines: string[], columns: number) =>
+      lines.reduce(
+        (total, line) => total + Math.max(1, Math.ceil(stripAnsi(line).length / (columns - 1))),
+        0,
+      );
+    const longDir =
+      "/Users/me/proj/.worktrees/agent-prompt-cleanup/packages/agency-lang/.agency-build";
+    const table = [
+      "╭──────────────────────────────────────────────────────╮",
+      `│ dir        │ ${longDir.slice(0, 40)} │`,
+      `│            │ ${longDir.slice(40)} │`,
+      "│ recursive  │ false                                   │",
+      "│ maxResults │ 100                                     │",
+      "╰──────────────────────────────────────────────────────╯",
+    ].join("\n");
+    const scope = `dir = ${longDir} and below`;
+    const answers = [
+      { key: "a", label: "approve once", tone: "approve" as const },
+      { key: "aa", label: "always approve", detail: "every std::ls", tone: "approve" as const },
+      { key: "ap", label: "always approve when", detail: scope, tone: "approve" as const },
+      { key: "as", label: "always approve FileRead when", detail: scope, tone: "approve" as const },
+      { key: "r", label: "reject once", tone: "reject" as const },
+      { key: "rr", label: "always reject", detail: "every std::ls", tone: "reject" as const },
+    ];
+    const prompt = {
+      ...base,
+      title: "std::ls  Are you sure you want to list this directory?",
+      body: table,
+      items: answers,
+      columns: 60,
+      rows: 24,
+    };
+
+    it("keeps a file-read prompt with long paths inside 60 by 24", () => {
+      const lines = _internal.renderInterruptFooter(prompt);
+      expect(screenRows(lines, 60)).toBeLessThanOrEqual(24);
+      expect(lines[lines.length - 1]).toContain("> aa");
+    });
+
+    it("keeps a folder step with eight long paths inside 60 by 24", () => {
+      const folders = Array.from({ length: 8 }, (_unused, index) => ({
+        key: `${index + 1}`,
+        label: longDir
+          .split("/")
+          .slice(0, 10 - index)
+          .join("/"),
+      }));
+      const lines = _internal.renderInterruptFooter({
+        ...prompt,
+        title: "Always approve FileRead in which folder? Folders inside it are included.",
+        body: "FileRead: std::read, std::readBinary, std::ls, std::glob, std::grep, std::vision",
+        items: [...folders, { key: "b", label: "back" }],
+        allowFreeText: false,
+      });
+      expect(screenRows(lines, 60)).toBeLessThanOrEqual(24);
+    });
+
+    it("cuts the body short in a short terminal and offers the view key", () => {
+      // The two long scopes take three lines each, so 20 rows leave the
+      // six-row table one row.
+      const lines = _internal.renderInterruptFooter({ ...prompt, rows: 20 });
+      const shown = stripAnsi(lines.join("\n"));
+      expect(screenRows(lines, 60)).toBeLessThanOrEqual(20);
+      // The one row is the table's top border.
+      expect(shown).toContain("╭");
+      expect(shown).not.toContain("recursive");
+      expect(shown).toContain("…");
+      expect(shown).toContain("v    view it all");
+      expect(shown).toContain("rr   always reject");
+      expect(_internal.bodyIsTruncated({ ...prompt, rows: 20 })).toBe(true);
+      expect(_internal.bodyIsTruncated({ ...prompt, rows: undefined })).toBe(false);
+    });
+  });
+
   it("interruptBodyWidth is the width the footer wraps its body to", () => {
     expect(_internal.interruptBodyWidth(60)).toBe(58);
     const linesFor = (body: string): number =>

@@ -291,7 +291,7 @@ model needs. Each command is a function of its arguments returning one
 dict, and `main` is a table lookup, so adding one is a row.
 
 `cropImage` raises `std::cropImage` with both real paths, since one
-approval is "read this, write that". Its "approve always" answer pins
+approval is "read this, write that". Its "always approve when" answer pins
 both folders with `@alwaysUnder(dir, outDir)`, as `std::copy` does. A
 rule saved for one crop into `./crops` does not let a later crop read
 from another folder. `pasteImages` raises `std::pasteImages` with every
@@ -351,7 +351,7 @@ model: "florence-2")` is a person-finder.
   check the payloads of `std::vision`, `std::cropImage`,
   `std::pasteImages`, and `std::readImage` with a handler that rejects,
   so they run with no model and no Pillow.
-- `alwaysTag.stdlib.test.ts` pins what "approve always" means for each
+- `alwaysTag.stdlib.test.ts` pins what "always approve when" means for each
   of those effects.
 
 ## Timings

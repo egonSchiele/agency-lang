@@ -84,13 +84,49 @@ which work on the handler's active policy:
 
 ## Reading what you are approving
 
-The prompt's first line is the effect, in bold, then the interrupt's
-message, so which permission is being asked for is legible before the
-reason for it.
+The pinned prompt opens with a blank line and a dim divider labelled
+"approval needed", or "answer needed" for a raise that expects a value.
+The next line is the effect, then the interrupt's message in bold, so
+which permission is being asked for is legible before the reason for it.
+
+The effect name, and nothing else, is colored by how much the action
+matters (`effectRisk` in `lib/runtime/effectRisk.ts`). Green is a read
+(`FileRead`, `NotesRead`). Yellow is a change (`FileWrite`, `NotesWrite`,
+`Network`, `AwsS3`, `Calendar`, `Memory`, and any effect in no listed set,
+a program's own effects among them). Red is a danger (`Shell`, `Secrets`,
+`Messaging`, `Auth`). An effect in several sets takes the highest. The
+table there names concrete sets only: a set built from others, such as
+`FileSystem`, would otherwise pull every read up to a change. A test fails
+when a built-in set has members no row covers, so a new set gets a
+decision. `std::remove` is in `FileWrite`, so it is yellow; nothing marks
+an effect as destructive.
+
+`interruptChoice` (`stdlib/ui/cli.agency`) draws the prompt in one of three
+ways:
+
+1. The pinned footer, when a line-mode REPL is running and both stdin and
+   stdout are terminals. `optionRows` in `lib/stdlib/cli.ts` lays out the
+   answers, one per line, with approving keys in green and rejecting keys
+   in red. A detail too long for its line wraps onto lines of its own,
+   indented under the label. `agency agent` always uses this one.
+2. A picker, when there is a terminal and no REPL. `chooseOption` calls
+   `autocomplete`, which shows `key - label`.
+3. Plain input, when stdout is not a terminal. `chooseOption` prints the
+   title and body and reads a line. Tests take this path.
+
+Only the footer draws an item's `detail`, and the detail can hold what an
+answer approves. So on the other two paths `interruptChoice` folds the
+detail into the label, as `label (detail)`. The plain path prints no items
+of its own, so `interruptChoice` also adds one line per item to the body.
+Without it, a person at the folder step would pick a number from a list
+they cannot see.
 
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body
 (`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
+In a short terminal it shows fewer, down to one: `bodyRowCap` subtracts
+the title, the answers, and the footer's fixed rows from the terminal's
+height, so the answers and the input line always stay on screen.
 Six rows is nothing next to a file being written, and that is a prompt
 where the body is the whole point. (The two effects that carry source
 code do not rely on the footer at all; see the next section.)
@@ -355,16 +391,130 @@ trojan source. Each of the three renderers drops a different subset on
 its own — `diff` drops carriage returns, the table renderer drops ANSI —
 so none of them can be relied on for this. Tabs and newlines stay.
 
-## What "approve always here" pins
+## What "always approve when" pins
 
-The prompt's "approve always here" answer saves a rule scoped to some of
-the interrupt's data fields. Which fields is declared on the effect with
-`@always` / `@alwaysUnder` (see
+The prompt's "always approve when" answer (`ap`) saves a rule scoped to
+some of the interrupt's data fields. Which fields is declared on the effect
+with `@always` / `@alwaysUnder` (see
 [effect-always-tag.md](../language/effect-always-tag.md)); the agent
 passes no table of its own. `cliPolicyHandler`'s `fields:` argument is an
 override: an entry replaces the declared scope for that effect, and an
 empty list turns the option off. Interrupts that expect a value (a
 question, a review) get no "always" answers at all.
+
+The answers are one table, `ANSWERS` in `stdlib/policy.agency`. The menu,
+the reading of a typed key, and the handler's approve check all read it.
+Each answer is on its own line, with a dim third column that says what it
+covers. `describeScope` (`lib/runtime/alwaysChoices.ts`) writes that column
+from the scope: `@always(x)` prints as `x = value`, and `@alwaysUnder(x)`
+as `x = value and below`. The raw glob is never shown. The values come
+from interrupt data, which a model can influence, so they go through
+`stripControlChars`.
+
+### Effect sets that get broader answers
+
+`SHARED_APPROVAL_SETS` in `lib/runtime/alwaysChoices.ts` names the effect
+sets whose members only read local files. Today that is `FileRead`. An
+effect in a listed set gets three things the others do not:
+
+- **A set-wide answer, `as`.** "Always approve all reads in" saves the
+  same scoped rule under every member of the set, so approving a read in a
+  folder also approves listing and searching it. The words come from
+  `SHARED_APPROVAL_SETS`, which maps each set to its phrase. The detail
+  beside it is the folder alone, "/x and below", because it follows "in".
+- **A folder step** after `ap` and `as`. The person picks the folder the
+  rule covers: the one in the interrupt or a parent.
+- **Rules that match dot folders.** A rule saved for a folder from the
+  folder list sets `matchDotFolders` (see "Rule matching").
+
+The list is explicit, and a new entry has to be checked against all
+three. The GitHub review effects all share `@always(owner, repo)`, so a
+rule that offered `as` for any set with a uniform scope would let one
+answer to a review comment also approve `std::github::prApprove`. A folder
+step on `std::remove` would let one keystroke approve removals across a
+much larger folder than the interrupt named. `ap` on every other effect
+saves the exact scope in the interrupt, with no further question.
+
+`as` is offered only when every member of the set has the same scope as
+the effect being asked about. Each member's scope is resolved the way
+`scopedFieldsFor` resolves it, with the caller's `fields:` override first
+(`sharedApprovalSet`). So `fields: { "std::read": [] }` turns `as` off at
+an `ls` prompt too. A member whose module is not loaded has no registered
+scope. It is taken to agree only when the effect being asked about has its
+declared scope, with no override changing it. A test in
+`lib/typeChecker/alwaysTag.stdlib.test.ts` fails if the stdlib declarations
+of a listed set's members disagree, which keeps that assumption true.
+
+### Where a saved approve rule goes
+
+The prompt saves its scoped rules with `insertApproveRule`
+(`lib/runtime/policyUpdate.ts`), just after the effect's last reject rule.
+The first match wins, so the new rule decides ahead of the approve and
+propagate rules already there, and every reject rule still decides ahead
+of it. This matters because the folder step can pick a parent folder.
+Suppose the policy rejects reads under `/p/secrets`, and the person
+answers a read in `/p/src` with `ap` and picks `/p`. The rule for `/p`
+goes after the reject, so a read in `/p/secrets` is still rejected. This
+applies to `ap` on every effect, `std::write` and `std::exec` included, not
+only to the file reads that get the folder step. `recordScopedRule`, which
+programs with their own approval UI call, still puts its rule first.
+
+Three cases refine "just after the last reject":
+
+- **A reject under `"*"`.** The matcher tries an effect's own rules before
+  the `"*"` rules, so a `"*"` reject for `/p/secrets` would lose to the new
+  rule for `/p`. `insertApproveRule` copies the scoped `"*"` rejects into
+  the effect's list ahead of the new rule. The copies also decide ahead of
+  the effect's rules that come after them, which can only turn an approval
+  into a rejection. A `"*"` reject with no `match` is not copied: it would
+  hide every rule after it.
+- **A catch-all approve or propagate.** A rule with no `match` decides
+  every interrupt, so a rule after it never decides. The new rule goes
+  ahead of the first such catch-all, after only the rejects before it.
+- **A scoped propagate ahead of a reject.** This is left as it is. The new
+  rule lands after the reject and so behind the propagate, and an
+  interrupt that propagate covers still asks. Moving the new rule ahead of
+  the propagate would put it ahead of the reject too.
+
+`as` also skips a member whose policy already rejects this interrupt
+(`unrejectedEffects`), such as `std::glob` after an earlier "always
+reject". A rule there would sit behind the reject and never decide
+anything. The folder step names the members a rule will be saved under.
+
+### The folder step
+
+The step asks "Which folder should this cover?", and the line under it
+says what the rule approves: "std::ls will always be approved in the folder
+you pick and in every folder inside it", or for `as`, "Reads (std::read,
+std::ls, …)" in place of the effect. On the first prompt, the `ap` and `as`
+rows end with `›` when the step will follow, like the arrow on a submenu,
+so a second question is expected. The item's `followUp` flag asks for the
+mark; `optionRows` draws it at the end of the item's last line, and the
+picker and plain prompts add it to the label. When the list holds one
+folder there is no choice to make: the step is skipped, the rule is saved
+for that folder, and the row has no mark.
+
+`folderChoices` lists the folder in the interrupt, then each parent,
+nearest first. It stops at the launch directory when the folder is inside
+it. It never lists the home directory, the agent home, a folder holding
+either, or a filesystem root, for the reason in "What `recommended` lets
+the agent read": a read grant over the agent home covers its earlier
+conversations, and `recommended` also approves web searches. A grant over
+the home directory would also cover `~/.ssh`. The agent home is checked on
+its own because `AGENCY_AGENT_HOME` can put it outside the home directory,
+and a root is checked on its own because on Windows another drive's root
+does not hold the home directory. When the list would be empty, because
+the interrupt names one of those folders, `as` is not offered and `ap`
+saves the exact scope without `matchDotFolders`, as it did before the
+folder step existed. At most eight folders are listed. `b` goes back to
+the first prompt.
+
+A rule saved for a folder from that list, picked or the only one, sets
+`matchDotFolders` only for an effect in a listed set. `recordPromptRule` checks both conditions, the
+folder and the set, so the flag stays tied to effects that only read.
+
+The folder step is a second `interruptChoice` call, so the log shows two
+prompt waits (`_logPromptWait`) for one interrupt.
 
 ## Effects that carry their own bookkeeping
 
@@ -430,7 +580,7 @@ approval means the same thing as for the tool. A grep elsewhere in a line
 (`git status && grep -n foo f.txt`) runs real grep, and safeBash asks
 `std::grep` for it only when it names one file. The same holds for
 `--approve std::grep`, the `FileRead` and `FileSystem` effect sets
-(`lib/runtime/effectSets.data.ts`), and an "approve always here" answer.
+(`lib/runtime/effectSets.data.ts`), and an "always approve when" answer.
 See `docs/dev/stdlib/safe-bash.md`, "grep".
 
 A `std::exec` rule for a program also covers that program's bash
@@ -440,7 +590,7 @@ unexpanded glob or `~`. A rule for an interpreter (`node`, `python3`,
 `perl`, `ruby`, `awk`, `sed`, `jq`) should be keyed on `subcommand`,
 because `node -e '...'` runs anything, and even then the files named
 after the program text are not pinned.
-"Approve always here" pins only `command` and `subcommand`, so approving
+"Always approve when" pins only `command` and `subcommand`, so approving
 `pnpm test` in one folder alone needs a hand-written rule with a `cwd`
 glob. From safeBash, `cwd` is always the resolved absolute folder, while
 from the exec tool it's whatever the model passed, often `""`. So a
@@ -597,10 +747,19 @@ under eval used that to list the home directory and read the repo's
 
 ## Rule matching
 
-A rule is `{ match?: Record<string, string>, action, rejectMessage? }`.
-Each match value is a picomatch glob tested against the interrupt's data
-field of the same name (`origin` and `message` come from the interrupt
-itself). All entries must match; a rule with no `match` is a catch-all.
+A rule is `{ match?: Record<string, string>, action, rejectMessage?,
+matchDotFolders? }`. Each match value is a picomatch glob tested against
+the interrupt's data field of the same name (`origin` and `message` come
+from the interrupt itself). All entries must match; a rule with no `match`
+is a catch-all.
+
+`matchDotFolders: true` passes picomatch's `dot` option for that rule, so
+its `**` matches path segments that start with a period (rule 3 below).
+Only the rules the prompt saves after its folder step set it. Hand-written
+rules, the built-in policies, and `recordScopedRule` leave it off. The rule
+schema drops keys it does not know, so an older Agency version that reads a
+policy file with the field ignores it: its rules then match fewer
+interrupts, never more.
 
 A reject rule may carry a `rejectMessage`: the rejection's reason,
 handed back to whoever raised the interrupt. For a rejected tool call it
@@ -636,9 +795,19 @@ Three semantics to keep straight:
 3. **`**` never matches a dot-led segment.** picomatch's dot rule: a glob
    `base/**` does not reach `base/.staging/x`. Dot segments in the
    *literal* prefix are fine — a launch directory whose own path contains
-   `.staging` works, because only the suffix is matched by `**`. This is
-   what shields `.git` from broad approve rules, and also what makes
-   dot-led subdirectories invisible to them.
+   `.staging` works, because only the suffix is matched by `**`. A rule
+   with `matchDotFolders: true` does reach them.
+
+   The rule applies only to the field the glob is matched against. A file
+   effect's payload has two fields, `dir` and `filename`, and `locateSync`
+   (`lib/host/node/nodeFiles.ts`) keeps `dir` as the folder the caller
+   passed and puts the rest of the path in `filename`. So
+   `write(".git/hooks/pre-commit", content, dir: "/Users/me/proj")` raises
+   `std::write` with `{ dir: "/Users/me/proj", filename:
+   ".git/hooks/pre-commit" }`, and a rule
+   `{ dir: "{/Users/me/proj,/Users/me/proj/**}" }` approves it, because a
+   rule on `dir` does not look at `filename`. The dot rule keeps a dot
+   folder out of a `dir` rule only when the dot folder is part of `dir`.
 
 ## The eval case, concretely
 

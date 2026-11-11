@@ -1,27 +1,39 @@
-import { map } from "std::array"
-import { askUserChoices } from "std::policy"
+import { map, filter } from "std::array"
+import { askUserChoices, cliPolicyHandler } from "std::policy"
 import test { typedValue, choiceResult } from "std::policy"
+// Loaded so that std::ls and std::mkdir, and their scope tags, are
+// registered, as they are in a program that calls these tools.
+import { ls } from "std::shell"
+import { mkdir } from "std::fs"
 
 @always(name)
 effect app::env { name: string }
 
+def keysOf(items: any[]): string {
+  return map(items, \item -> item.key).join(",")
+}
+
+def itemFor(items: any[], key: string): any {
+  return filter(items, \item -> item.key == key)[0]
+}
+
 node main(): string {
   const permission = { effect: "app::env", data: { name: "X" }, expectsValue: false }
-  const keys1 = map(askUserChoices(permission), \item -> item.key)
-  if (keys1.join(",") != "a,r,aa,ap,rr") { return "FAIL permission: ${keys1.join(",")}" }
+  const keys1 = keysOf(askUserChoices(permission))
+  if (keys1 != "a,aa,ap,r,rr") { return "FAIL permission: ${keys1}" }
 
   const question = { effect: "app::question", data: { prompt: "?" }, expectsValue: true }
-  const keys2 = map(askUserChoices(question), \item -> item.key)
-  if (keys2.join(",") != "a,r") { return "FAIL question: ${keys2.join(",")}" }
+  const keys2 = keysOf(askUserChoices(question))
+  if (keys2 != "a,r") { return "FAIL question: ${keys2}" }
 
-  // A scope whose field the data lacks offers no "here" option.
+  // A scope whose field the data lacks offers no "when" option.
   const nameless = { effect: "app::env", data: {}, expectsValue: false }
-  const keys4 = map(askUserChoices(nameless), \item -> item.key)
-  if (keys4.join(",") != "a,r,aa,rr") { return "FAIL nameless: ${keys4.join(",")}" }
+  const keys4 = keysOf(askUserChoices(nameless))
+  if (keys4 != "a,aa,r,rr") { return "FAIL nameless: ${keys4}" }
 
   const noScope = { effect: "app::plain", data: {}, expectsValue: false }
-  const keys3 = map(askUserChoices(noScope), \item -> item.key)
-  if (keys3.join(",") != "a,r,aa,rr") { return "FAIL no scope: ${keys3.join(",")}" }
+  const keys3 = keysOf(askUserChoices(noScope))
+  if (keys3 != "a,aa,r,rr") { return "FAIL no scope: ${keys3}" }
 
   // Text typed at a question is its answer. Typed at a permission, it is
   // a rejection reason, and a picked key is never a value.
@@ -30,15 +42,50 @@ node main(): string {
   if (typedValue(permission, typed) != null) { return "FAIL typed reason" }
   if (typedValue(question, { action: "approve", reason: null }) != null) { return "FAIL picked key" }
 
-  // A key the menu did not offer is text. At a question, "aa" and "rr"
-  // are answers the user typed.
+  // A key the menu did not offer is text. At a question, "aa", "as", and
+  // "rr" are answers the user typed.
   const questionMenu = askUserChoices(question)
-  for (typedKey in ["aa", "ap", "rr"]) {
+  for (typedKey in ["aa", "ap", "as", "rr"]) {
     const read = choiceResult(typedKey, questionMenu)
     if (typedValue(question, read) != typedKey) { return "FAIL ${typedKey} typed at a question is not its answer" }
   }
   if (choiceResult("a", questionMenu).action != "approve") { return "FAIL a at a question" }
   if (choiceResult("r", questionMenu).reason != null) { return "FAIL r at a question" }
   if (choiceResult("aa", askUserChoices(permission)).action != "approve-always") { return "FAIL aa at a permission" }
+
+  // A file read gets the set-wide answer, with the scope in words.
+  const listing = { effect: "std::ls", data: { dir: "/x/y", recursive: false, maxResults: 10 }, expectsValue: false }
+  const listingMenu = askUserChoices(listing)
+  if (keysOf(listingMenu) != "a,aa,ap,as,r,rr") { return "FAIL ls: ${keysOf(listingMenu)}" }
+  const here = itemFor(listingMenu, "ap")
+  // /x is a parent the folder step will offer, so both rows are marked as
+  // asking a second question.
+  if (here.label != "always approve when" || here.detail != "dir = /x/y and below" || here.followUp != true) { return "FAIL ap item: ${here.label} / ${here.detail} / ${here.followUp}" }
+  const setWide = itemFor(listingMenu, "as")
+  if (setWide.label != "always approve all reads in" || setWide.detail != "/x/y and below" || setWide.followUp != true) { return "FAIL as item: ${setWide.label} / ${setWide.detail} / ${setWide.followUp}" }
+  if (choiceResult("as", listingMenu).action != "approve-always-set") { return "FAIL as at an ls" }
+
+  // An effect outside every shared set keeps today's answers, and gets no
+  // folder step, so its (ap) row has no mark.
+  const making = { effect: "std::mkdir", data: { dir: "/x/y" }, expectsValue: false }
+  if (keysOf(askUserChoices(making)) != "a,aa,ap,r,rr") { return "FAIL mkdir: ${keysOf(askUserChoices(making))}" }
+  if (itemFor(askUserChoices(making), "ap").followUp == true) { return "FAIL mkdir ap marked as a follow-up" }
+
+  // A folder is the home directory or above it: no set-wide answer.
+  const rootListing = { effect: "std::ls", data: { dir: "/", recursive: false, maxResults: 10 }, expectsValue: false }
+  if (keysOf(askUserChoices(rootListing)) != "a,aa,ap,r,rr") { return "FAIL ls of /: ${keysOf(askUserChoices(rootListing))}" }
+
+  // An escape sequence in the data never reaches the terminal.
+  const sneaky = { effect: "std::ls", data: { dir: "/x/\u001b[2Jy", recursive: false, maxResults: 10 }, expectsValue: false }
+  for (item in askUserChoices(sneaky)) {
+    if ((item.detail ?? "").includes("\u001b")) { return "FAIL escape in ${item.key} detail" }
+  }
+
+  // A caller's override counts, for the effect asked about and for the
+  // other members of its set.
+  const noLsScope = cliPolicyHandler(file: "unused.json", fields: { "std::ls": [] }, policy: {}, interactive: true)
+  if (keysOf(askUserChoices(listing)) != "a,aa,r,rr") { return "FAIL ls override: ${keysOf(askUserChoices(listing))}" }
+  const noReadScope = cliPolicyHandler(file: "unused.json", fields: { "std::read": [] }, policy: {}, interactive: true)
+  if (keysOf(askUserChoices(listing)) != "a,aa,ap,r,rr") { return "FAIL read override: ${keysOf(askUserChoices(listing))}" }
   return "pass"
 }

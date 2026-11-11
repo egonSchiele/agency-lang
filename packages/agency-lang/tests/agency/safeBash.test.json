@@ -1267,7 +1267,7 @@
     },
     {
       "nodeName": "programUnderASavedRuleRuns",
-      "description": "The rule approve always here saves for a program, keyed on command and subcommand, also runs that program's bash spelling with no prompt.",
+      "description": "The rule always approve when saves for a program, keyed on command and subcommand, also runs that program's bash spelling with no prompt.",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

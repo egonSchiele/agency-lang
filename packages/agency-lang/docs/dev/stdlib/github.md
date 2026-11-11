@@ -51,7 +51,7 @@ close.
 
 With `owner` and `repo` left empty, a function resolves them from the origin
 remote of the agent working directory before raising, so the payload names
-the real repository and an "approve always" answer pins to it through
+the real repository and an "always approve when" answer pins to it through
 `@always(owner, repo)`. Explicit names are checked against GitHub's own
 syntax, since they feed URL paths, the search query, and that approval
 scope. `agency agent` sets the working directory. Plain `agency run` does

@@ -326,12 +326,20 @@ export async function _ls(
   // value <= 0) is a valid request that yields an empty result.
   const cap = Number.isFinite(maxResults) ? maxResults : DEFAULT_LS_MAX_RESULTS;
   const out: LsEntry[] = [];
-  const add = (rel: string, entry: Entry) =>
-    out.push({ name: entry.name, path: relativeTo(dir, rel), type: entry.type, size: entry.size });
+  const add = (rel: string, entry: Entry) => {
+    out.push({
+      name: entry.name,
+      path: relativeTo(dir, rel),
+      type: entry.type,
+      size: entry.size,
+    });
+  };
 
   if (!recursive) {
     for (const entry of await host.files.list(approved, dir)) {
-      if (out.length >= cap) break;
+      if (out.length >= cap) {
+        break;
+      }
       add(joinRel(dir, entry.name), entry);
     }
     return out;
@@ -342,7 +350,9 @@ export async function _ls(
     approved,
     dir,
     async (rel, entry) => {
-      if (out.length >= cap) return false;
+      if (out.length >= cap) {
+        return false;
+      }
       add(rel, entry);
       return true;
     },
@@ -460,7 +470,9 @@ async function walkDir(
     try {
       entries = await host.files.list(approved, rel);
     } catch (err) {
-      if (options.failOnUnreadableStart && rel === dir) throw err;
+      if (options.failOnUnreadableStart && rel === dir) {
+        throw err;
+      }
       return true;
     }
     let scoped = ignoreFiles;
@@ -648,7 +660,9 @@ export async function _glob(
       const relToDir = relativeTo(dir, rel);
       if (re.test(relToDir)) {
         results.push(relToDir);
-        if (results.length >= maxResults) return false;
+        if (results.length >= maxResults) {
+          return false;
+        }
       }
       return true;
     },
@@ -685,7 +699,9 @@ export function globFixedPrefix(pattern: string): string {
       segment === ".." ||
       segment.includes("{") ||
       !isPlainSegment(segment);
-    if (stops) break;
+    if (stops) {
+      break;
+    }
     prefix.push(segment);
   }
   return prefix.join("/");
@@ -693,14 +709,22 @@ export function globFixedPrefix(pattern: string): string {
 
 /** True when a pattern segment names one folder and matches nothing else. */
 function isPlainSegment(segment: string): boolean {
-  return globParser(segment).result === escapeRegex(segment);
+  const parsed = globParser(segment);
+  return parsed.success && parsed.result === escapeRegex(segment);
 }
 
 /** The folder a glob's walk starts in: the pattern's fixed prefix when it
  *  is a folder under the root, and `dir` otherwise. */
-async function globStart(host: Host, approved: Root, dir: string, pattern: string): Promise<string> {
+async function globStart(
+  host: Host,
+  approved: Root,
+  dir: string,
+  pattern: string,
+): Promise<string> {
   const prefix = globFixedPrefix(pattern);
-  if (prefix === "") return dir;
+  if (prefix === "") {
+    return dir;
+  }
   const start = joinRel(dir, prefix);
   try {
     const info = await host.files.stat(approved, start);

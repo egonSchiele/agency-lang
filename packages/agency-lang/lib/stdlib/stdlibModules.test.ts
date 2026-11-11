@@ -41,10 +41,26 @@ describe("missingModuleMessage", () => {
   });
 });
 
-describe("_prepareFunctions with a missing module", () => {
+describe("_prepareFunctions with the wrong module", () => {
   it("fails with the lookup message instead of a file error", () => {
     expect(() => _prepareFunctions({ kind: "module", module: "std::exec" }, ["exec"])).toThrow(
       "There is no standard library module named std::exec. `exec` is exported by std::shell.",
+    );
+  });
+
+  it("names the right module when the module exists but does not export the name", () => {
+    expect(() => _prepareFunctions({ kind: "module", module: "std::system" }, ["exec"])).toThrow(
+      "Public exported function 'exec' was not found. `exec` is exported by std::shell.",
+    );
+  });
+
+  it("adds no stdlib hint for a source that is not a std:: module", () => {
+    const source = {
+      kind: "source" as const,
+      source: 'export def greet(): string {\n  return "hi"\n}\n',
+    };
+    expect(() => _prepareFunctions(source, ["exec"])).toThrow(
+      /^Public exported function 'exec' was not found\.$/,
     );
   });
 });

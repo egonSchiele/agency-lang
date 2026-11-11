@@ -1,12 +1,22 @@
-// Every std:: module and the public functions it exports, for the message
-// `learn` and `runFunction` send back when a source names a module that
-// does not exist. The table is `stdlibModules.data.ts`, which
-// scripts/generate-stdlib-modules.mjs writes at build time, so a lookup
-// reads no files. stdlibModules.test.ts fails when the table is stale.
+// Every std:: module and the public functions it exports, read from the
+// generated stdlibModules.data.ts so a lookup reads no files. `learn` and
+// `runFunction` use it to name the right module when a source names the
+// wrong one.
 import { STDLIB_MODULES } from "./stdlibModules.data.js";
 
 export function isKnownStdlibModule(moduleName: string): boolean {
   return Object.hasOwn(STDLIB_MODULES, moduleName);
+}
+
+/** "`exec` is exported by std::shell.", or "" when no module exports it. */
+export function exporterHint(name: string): string {
+  const exporters = Object.keys(STDLIB_MODULES).filter((module) =>
+    STDLIB_MODULES[module].includes(name),
+  );
+  if (exporters.length === 0) {
+    return "";
+  }
+  return `\`${name}\` is exported by ${exporters.join(", ")}.`;
 }
 
 /** For `std::exec` with names ["exec"]: "There is no standard library
@@ -14,14 +24,12 @@ export function isKnownStdlibModule(moduleName: string): boolean {
  *  name is found, the message lists the modules that export functions. */
 export function missingModuleMessage(moduleName: string, names: string[]): string {
   const missing = `There is no standard library module named ${moduleName}.`;
-  const modules = Object.keys(STDLIB_MODULES);
-  const found = names.flatMap((name) => {
-    const exporters = modules.filter((module) => STDLIB_MODULES[module].includes(name));
-    return exporters.length === 0 ? [] : [`\`${name}\` is exported by ${exporters.join(", ")}.`];
-  });
-  if (found.length > 0) {
-    return [missing, ...found].join(" ");
+  const hints = names.map(exporterHint).filter((hint) => hint !== "");
+  if (hints.length > 0) {
+    return [missing, ...hints].join(" ");
   }
-  const withFunctions = modules.filter((module) => STDLIB_MODULES[module].length > 0);
+  const withFunctions = Object.keys(STDLIB_MODULES).filter(
+    (module) => STDLIB_MODULES[module].length > 0,
+  );
   return `${missing} The modules that export functions are: ${withFunctions.join(", ")}.`;
 }

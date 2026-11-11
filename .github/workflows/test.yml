@@ -132,6 +132,10 @@ jobs:
         cache: 'pnpm'
     - run: pnpm install
     - run: make
+    # `make` regenerates these from the stdlib; a diff means the PR changed
+    # the stdlib without committing the regenerated file.
+    - name: Generated data files are committed
+      run: git diff --exit-code -- packages/agency-lang/lib/runtime/effectSets.data.ts packages/agency-lang/lib/stdlib/stdlibModules.data.ts
 
   # Performance regression suite, INFORMATIONAL ONLY: PERF_ENFORCE is unset (a
   # breach records but does not throw) and continue-on-error means nothing here

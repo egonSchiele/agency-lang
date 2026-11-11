@@ -1,8 +1,8 @@
 // Writes every std:: module and its public exported functions into
 // lib/stdlib/stdlibModules.data.ts, so `learn` can name the module that
 // exports a function without reading the stdlib at run time. `make` runs
-// this after the build and rebuilds when the file changed;
-// lib/stdlib/stdlibModules.test.ts fails when it is stale.
+// this after the build and rebuilds when the file changed. CI fails when
+// the committed file differs from the one `make` writes.
 //
 // It uses the compiled helpers in dist/, so it needs a build first.
 import { readFileSync, writeFileSync } from "fs";

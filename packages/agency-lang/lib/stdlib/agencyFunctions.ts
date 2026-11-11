@@ -8,7 +8,7 @@ import {
 import { compileValidatedClosure } from "../compiler/compileValidatedClosure.js";
 import { getStdlibDir, isStdlibImport, resolveAgencyImportPath } from "../importPaths.js";
 import { list, readText, root, stat, wholePath } from "../host/node/nodeFiles.js";
-import { isKnownStdlibModule, missingModuleMessage } from "./stdlibModules.js";
+import { exporterHint, isKnownStdlibModule, missingModuleMessage } from "./stdlibModules.js";
 import { generateAgency } from "../backends/agencyGenerator.js";
 import { parseDescribedProgram, _parseAST } from "./agency.js";
 import { _parseStatements } from "./template.js";
@@ -228,7 +228,11 @@ export function _stdlibModuleTable(): Record<string, string[]> {
   return table;
 }
 
-function selectFunctions(items: ExportedItem[], names: string[]): ExportedFunction[] {
+function selectFunctions(
+  items: ExportedItem[],
+  names: string[],
+  notFoundHint: (name: string) => string,
+): ExportedFunction[] {
   const selectedNames =
     names.length === 0
       ? items.filter((item) => item.kind === "function").map((item) => item.name)
@@ -238,7 +242,10 @@ function selectFunctions(items: ExportedItem[], names: string[]): ExportedFuncti
     if (selectedNames.indexOf(name) !== index)
       throw new Error(`Export '${name}' was selected more than once`);
     const item = items.find((candidate) => candidate.name === name);
-    if (!item) throw new Error(`Public exported function '${name}' was not found`);
+    if (!item) {
+      const parts = [`Public exported function '${name}' was not found.`, notFoundHint(name)];
+      throw new Error(parts.filter((part) => part !== "").join(" "));
+    }
     if (item.kind === "node")
       throw new Error(`Export '${name}' is a node; nodes are not supported`);
     if (item.kind !== "function") throw new Error(`Export '${name}' is not an Agency def`);
@@ -365,7 +372,8 @@ export function _prepareFunctions(
   includeMetadata = false,
 ): PreparedFunctions {
   const resolved = resolveSource(source, names);
-  const selected = selectFunctions(exportedItems(resolved), names);
+  const notFoundHint = source.kind === "module" ? exporterHint : () => "";
+  const selected = selectFunctions(exportedItems(resolved), names, notFoundHint);
   const adapter = generateAdapter(selected, resolved.closure, includeMetadata);
   const compiled = compileValidatedClosure(withGeneratedEntry(resolved.closure, adapter), {
     enforceJsGlobals: true,

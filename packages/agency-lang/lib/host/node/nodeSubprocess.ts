@@ -213,7 +213,12 @@ function collector(
 function startChild(
   command: Command,
   options: RunOptions,
-): { child: ChildProcess; ended: Promise<RunResult>; kill: RunningProcess["kill"] } {
+): {
+  child: ChildProcess;
+  ended: Promise<RunResult>;
+  kill: RunningProcess["kill"];
+  output: RunningProcess["output"];
+} {
   const child = spawnCommand(command, options);
   trackChild(child);
   let truncated: "stdout" | "stderr" | null = null;
@@ -337,7 +342,8 @@ function startChild(
       reject(err);
     });
   });
-  return { child, ended, kill };
+  const output = () => ({ stdout: stdout.text(), stderr: stderr.text() });
+  return { child, ended, kill, output };
 }
 
 export const nodeSubprocess: HostSubprocess = {
@@ -345,10 +351,10 @@ export const nodeSubprocess: HostSubprocess = {
   run: async (command, options = {}) => startChild(command, options).ended,
   locate: async (program) => locateProgramSync(program, process.env.PATH ?? ""),
   start: async (command, options = {}) => {
-    const { ended, kill } = startChild(command, options);
+    const { ended, kill, output } = startChild(command, options);
     // A rejection with nobody waiting yet must not be unhandled; `wait`
     // hands it to the caller.
     ended.catch(() => undefined);
-    return { kill, wait: () => ended };
+    return { kill, wait: () => ended, output };
   },
 };

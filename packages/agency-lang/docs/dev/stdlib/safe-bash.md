@@ -1715,6 +1715,23 @@ executors are private functions in `stdlib/safeBash.agency`, not exports.
 An exported executor would let any program import it and run a command,
 write a file, or read a file with no approval at all.
 
+## `startJob` shares the approval
+
+`startJob` starts a command as a background job. It sits beside `safeBash`
+because the two share `approvedPlan`, which plans the command, returns a
+refusal, and calls `raiseAll`. Both raise the effect set
+`SafeBashEffects`, so an effect added for `safeBash` is added for both. `safeBash` then runs the plan with
+`runPlanned`. `startJob` starts a plan of kind `bash` with `_startJob`, and
+runs any other plan with `runPlanned`, in the foreground. `_startJob` is
+the second place a command runs with no interrupt of its own, and it is
+safe for the same reason as the executors: the only path to it runs
+through `approvedPlan`.
+
+`approvedPlan` decides from the plan, not from the caller, whether the
+command runs as a job. When it does, `raiseOne` puts "in the background"
+in the `std::bash` and `std::exec` questions, and the payload's `timeout`
+is the job's limit. See `docs/dev/stdlib/jobs.md`.
+
 ## Files and tests
 
 - `stdlib/safeBash.agency`: the classifier, `planFor`, `safeBash`, and

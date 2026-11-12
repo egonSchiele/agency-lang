@@ -1,0 +1,68 @@
+/** @module
+  @summary `/jobs`: the user lists the background jobs, or stops one.
+*/
+import { listJobs, stopJob, JobReport } from "std::jobs"
+import { pushMessage } from "std::ui/cli"
+
+import { addNote } from "../pendingNotes.agency"
+
+static const USAGE = "Usage: /jobs lists the background jobs, and /jobs stop <id> stops one."
+
+def listedJobs(): string {
+  const jobs = listJobs()
+  if (jobs.length == 0) {
+    return "No background jobs."
+  }
+  const rows = ["${job.id}  ${job.status}  ${job.runningFor}  ${job.command}" for job in jobs]
+  return rows.join("\n")
+}
+
+// The user typed the stop, so it asks no approval, like `!command`. The
+// REPL prints the job's finish line, so a stop that worked prints nothing
+// more. The model is told with a note on the user's next message:
+// stopJob reads the job, so the jobs message no longer lists it, and a
+// later jobOutput returns nothing. The note carries what stopJob read.
+def stoppedNote(id: string, report: JobReport): string {
+  let parts = ["I stopped background job ${id} myself: ${report.command}"]
+  if (report.stdout != "") {
+    parts.push("Its output since the last read:\n${report.stdout}")
+  }
+  if (report.stderr != "") {
+    parts.push("Its error output since the last read:\n${report.stderr}")
+  }
+  return parts.join("\n")
+}
+
+def stopFromSlash(id: string): boolean {
+  // A job that already ended was not stopped by the user, so it gets a
+  // reply and no note.
+  const ended = [job for job in listJobs() if job.id == id && job.state != "running"]
+  if (ended.length > 0) {
+    pushMessage("${id} had already ended (${ended[0].status}).")
+    return true
+  }
+  const stopped = stopJob(id)
+  if (stopped is failure(why)) {
+    pushMessage(why)
+    return true
+  }
+  addNote(stoppedNote(id, stopped.value))
+  return true
+}
+
+/** `/jobs` lists the jobs. `/jobs stop <id>` stops one. */
+export def jobsSlashCommand(args: string): boolean {
+  const trimmed = args.trim()
+  if (trimmed == "") {
+    pushMessage(listedJobs())
+    return true
+  }
+  if (trimmed.startsWith("stop ")) {
+    const id = trimmed.slice(5).trim()
+    if (id != "") {
+      return stopFromSlash(id)
+    }
+  }
+  pushMessage(USAGE)
+  return true
+}

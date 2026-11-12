@@ -45,6 +45,8 @@ export const NODE_ONLY = {
   "lib/stdlib/ffmpeg.ts": "probes for ffmpeg with spawnSync before any interrupt (std::speech)",
   "lib/stdlib/cli.ts": "the terminal UI needs the terminal's size and raw mode",
   "lib/stdlib/cliEditor.ts": "hands the REPL's terminal to $EDITOR, which needs stdin's raw mode",
+  "lib/stdlib/cliJobLine.ts":
+    "prints a job's finish line above the REPL's readline prompt and redraws it",
   "lib/stdlib/herdr.ts": "reports the REPL's state to Herdr over its Unix socket",
   "lib/stdlib/github/testUtils.ts": "a test helper",
   "lib/stdlib/hubClient.ts": "downloads model files to disk (local models)",

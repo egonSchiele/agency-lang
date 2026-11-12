@@ -1,0 +1,35 @@
+/** @module
+  @summary The message that tells the model which background jobs are
+  running, added at the start of each turn so the model does not have to
+  remember them.
+*/
+import { listJobs, JobSummary } from "std::jobs"
+import { systemMessage } from "std::thread"
+
+/** The text of the jobs message, or "" when there is nothing to list. A
+  job is listed while it runs, and after it ends until its last output has
+  been read. */
+export def jobsNoteText(jobs: JobSummary[]): string {
+  let rows: string[] = []
+  for (job in jobs) {
+    if (job.state == "running" || job.unread) {
+      const status = if job.unread then "${job.status}, output not read yet" else job.status
+      rows.push("- ${job.id}  ${status}  ${job.runningFor}  ${job.command}")
+    }
+  }
+  if (rows.length == 0) {
+    return ""
+  }
+  const listed = rows.join("\n")
+  return "Background jobs:\n${listed}"
+}
+
+/** Adds the jobs message to the current thread for this llm() call. It
+  leaves the thread when the call returns, so it is never saved with the
+  session, and the next turn writes it again. */
+export def addJobsNote() {
+  const text = jobsNoteText(listJobs())
+  if (text != "") {
+    systemMessage(text, label: "background-jobs", expires: "llmCall")
+  }
+}

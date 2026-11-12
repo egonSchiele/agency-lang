@@ -428,6 +428,7 @@ export default defineConfig({
             { text: "http", link: "/stdlib/http" },
             { text: "image", link: "/stdlib/image" },
             { text: "index", link: "/stdlib/index" },
+            { text: "jobs", link: "/stdlib/jobs" },
             { text: "llm", link: "/stdlib/llm" },
             { text: "markdown", link: "/stdlib/markdown" },
             { text: "math", link: "/stdlib/math" },

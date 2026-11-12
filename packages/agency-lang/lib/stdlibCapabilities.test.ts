@@ -146,6 +146,8 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "keepOutput",
     "readSpill",
     "grepSpill",
+    "jobs.agency: jobOutput",
+    "jobs.agency: listJobs",
     "setLlmOptions",
     "setModel",
     "listHostedModels",

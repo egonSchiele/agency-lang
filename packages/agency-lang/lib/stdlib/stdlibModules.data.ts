@@ -142,6 +142,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "readOnlyFileTools",
     "writableFileTools",
     "shellTools",
+    "jobTools",
     "spillTools",
     "readOnlyGitTools",
     "gitTools",
@@ -414,6 +415,11 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "groupBy",
     "callback"
   ],
+  "std::jobs": [
+    "jobOutput",
+    "stopJob",
+    "listJobs"
+  ],
   "std::llm": [
     "setLlmOptions",
     "setModel",
@@ -526,7 +532,8 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "isRefused",
     "bashParser",
     "resolveCwd",
-    "safeBash"
+    "safeBash",
+    "startJob"
   ],
   "std::safeBash/actions": [
     "writeEffect",

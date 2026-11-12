@@ -47,10 +47,11 @@ unchanged. Long text becomes a preview that includes the exit code and a
 saved name. Include `readSpill` and `grepSpill` in the model's tools so it can
 inspect the complete output.
 */
-export def keepOutput(text: string, exitCode: number, source: string = ""): string {
+export def keepOutput(text: string, exitCode: number | null, source: string = ""): string {
   """
   Save long command output and return a preview with its saved name.
 
+  @param exitCode - The command's exit code, or null for one still running. The preview names a code only when there is one.
   @param source - The command that produced the output, or an empty string when none applies.
   """
   return _keepOutput(text, exitCode, source)

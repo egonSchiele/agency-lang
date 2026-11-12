@@ -69,7 +69,11 @@ function rejectCorruptedCwd(cwd: string): void {
   );
 }
 
-async function resolveSpawnCwd(host: Host, cwd: string, allowedPaths: string[]): Promise<string> {
+export async function resolveSpawnCwd(
+  host: Host,
+  cwd: string,
+  allowedPaths: string[],
+): Promise<string> {
   if (!cwd) return "";
   rejectCorruptedCwd(cwd);
   const resolved = await resolveDir(host, cwd, allowedPaths);

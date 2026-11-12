@@ -14,7 +14,7 @@
  */
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
-import { agencyCodeTools, agencyDocToolsBrief } from "std::agents/lib/toolkits"
+import { agencyCodeTools, agencyDocToolsBrief, jobTools } from "std::agents/lib/toolkits"
 import { getAgentCwd } from "std::index"
 import { exec } from "std::shell"
 import { agentPrompt } from "std::skills"
@@ -103,6 +103,15 @@ export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
 
+/** The job tools for this session: none in a one-shot run, which exits
+  when its turn ends and would stop its jobs before they finish. */
+export def sessionJobTools(): any[] {
+  if (_oneShot) {
+    return []
+  }
+  return jobTools()
+}
+
 // The default budget for one coder dispatch.
 static const CODE_MAX_COST = $20.00
 static const CODE_MAX_TIME = 15m
@@ -150,7 +159,7 @@ def runCoder(
     context: dispatchContext(),
     maxCost: maxDollars ?? CODE_MAX_COST,
     maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
-    extraTools: extras,
+    extraTools: [...extras, ...sessionJobTools()],
   )
 }
 

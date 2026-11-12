@@ -346,6 +346,7 @@ Other process docs:
 - `docs/dev/stdlib/fetch-cache.md` — The per-run fetch cache, which gives a tool call the stored result for a URL the same conversation already fetched.
 - `docs/dev/stdlib/http-timeout.md` — The 30-second limit on `std::http` fetches, and why a timeout is a `Failure` and a cancel is not.
 - `docs/dev/stdlib/ui-layout-widths.md` — How wide a `std::ui/table` is, which columns shrink, and the cap on `diff()`'s colored bars.
+- `docs/dev/stdlib/jobs.md` — Background jobs: `startJob` and `std::jobs`, where the job table lives, and what stops a job.
 - `docs/dev/stdlib/grep-flags.md` — `std::grep`, `ls`, and `glob`: how grep flags become regex options, the path checks, and which tools skip ignored files.
 - `docs/dev/stdlib/safe-bash.md` — `safeBash`: how a shell command is planned and checked before it runs, which commands run as stdlib tools, and its time limit.
 - `docs/dev/stdlib/embedding.md` — `std::embedding`: `embed` and `embedMany`, how their cost is counted, and why there is no interrupt.

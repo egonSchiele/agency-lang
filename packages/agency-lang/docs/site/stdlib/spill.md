@@ -58,7 +58,7 @@ export static const MAX_STDOUT_LEN = 2000
 ### keepOutput
 
 ```ts
-keepOutput(text: string, exitCode: number, source: string = ""): string
+keepOutput(text: string, exitCode: number | null, source: string = ""): string
 ```
 
 Save long command output and return a preview with its saved name.
@@ -73,7 +73,7 @@ inspect the complete output.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | text | `string` |  |  |
-| exitCode | `number` |  |  |
+| exitCode | `number \| null` |  | The command's exit code, or null for one still running. The preview names a code only when there is one. |
 | source | `string` | "" | The command that produced the output, or an empty string when none applies. |
 
 **Returns:** `string`
@@ -98,7 +98,7 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L60))
 
 ### grepSpill
 
@@ -125,4 +125,4 @@ Search saved tool output using JavaScript regular expressions. Returns matching
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L75))

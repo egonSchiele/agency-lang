@@ -1,0 +1,120 @@
+import { keepOutput } from "std::spill"
+
+import {
+  _waitForJob,
+  _readJob,
+  _stopJob,
+  _listJobs,
+ } from "agency-lang/stdlib-lib/jobs.js"
+
+/** @module
+  @summary Read, stop, and list the shell commands running in the background.
+
+  A background job is a shell command that keeps running while the program
+  does other work, such as a download, a server, or a forty-minute
+  benchmark. `startJob` in `std::safeBash` starts one, after asking the same
+  questions `safeBash` asks for the same command. This module reads a job's
+  output, waits for it, stops it, and lists the jobs.
+
+  ```agency
+  import { startJob } from "std::safeBash"
+  import { jobOutput, stopJob, listJobs } from "std::jobs"
+
+  node main() {
+    handle {
+      startJob("./run-comparison.sh")
+      // Ids are random, such as job-3fa9c1. The start's reply names it too.
+      const id = listJobs()[0].id
+      const report = jobOutput(id, wait: 300)
+      print(report)
+      stopJob(id)
+    } with (intr) {
+      return approve()
+    }
+  }
+  ```
+
+  Jobs belong to the run that started them. They are not saved in a
+  checkpoint, because a running process cannot be saved. A job stops when
+  its run ends, and when the run pauses to hand an interrupt to its caller.
+  After that, reading the job returns a failure that says so.
+
+  None of these functions raises an interrupt. A job exists only because
+  its command was approved when it started, and its output is what
+  `safeBash` would have returned under the same approval. Stopping a job
+  can only undo what that approval allowed, and an id names a job from the
+  run's own table, so a call can never reach a process the run did not
+  start. A policy that wants to keep a program from using jobs rejects
+  `std::bash` and `std::exec`, which keeps any job from starting.
+
+  A time guard keeps counting during a wait. When it runs out, the wait
+  returns the job's state at that moment, and the guard's trip is raised as
+  `std::guard` right after, so every handler sees it. The job keeps running.
+*/
+
+export type JobReport = {
+  id: string;
+  command: string;
+  state: "running" | "ended" | "stopped" | "timedOut";
+  status: string;
+  exitCode?: number;
+  runningFor: string;
+  stdout: string;
+  stderr: string;
+  note: string
+}
+
+export type JobSummary = {
+  id: string;
+  command: string;
+  state: "running" | "ended" | "stopped" | "timedOut";
+  status: string;
+  exitCode?: number;
+  runningFor: string;
+  unread: boolean
+}
+
+/* Long output is saved and previewed, like any command output. A running
+  job has no exit code, so its preview names none. */
+def shown(report: JobReport): JobReport {
+  return {
+    ...report,
+    stdout: keepOutput(report.stdout, report.exitCode, report.command),
+    stderr: keepOutput(report.stderr, report.exitCode, report.command)
+  }
+}
+
+export def jobOutput(id: string, wait: number = 0): Result<JobReport> {
+  """
+  Read what a background job has printed since you last read it, and its state. Each call returns only output not returned before. A job that has ended reports its exit code.
+
+  @param id - The job id, such as job-3fa9c1.
+  @param wait - Seconds to wait before reading, at most 600. The call returns early when the job ends. A wait can be cancelled without stopping the job.
+  """
+  // Two statements: a guard trip during the wait is raised between them,
+  // so a handler that rejects it leaves the output for the next read.
+  const waited = try _waitForJob(id, wait)
+  if (isFailure(waited)) {
+    return waited
+  }
+  const report = try _readJob(id)?
+  return success(shown(report))
+}
+
+@capabilities(subprocess)
+export def stopJob(id: string): Result<JobReport> {
+  """
+  Stop a background job and everything it started, and return its last output.
+
+  @param id - The job id, such as job-3fa9c1.
+  """
+  const report = try _stopJob(id)?
+  return success(shown(report))
+}
+
+export def listJobs(): JobSummary[] {
+  """
+  List the background jobs of this run: each one's id, command, state, and running time.
+  """
+  return _listJobs()
+}

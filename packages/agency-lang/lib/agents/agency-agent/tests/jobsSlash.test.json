@@ -1,0 +1,26 @@
+{
+  "sourceFile": "jobsSlash.agency",
+  "tests": [
+    {
+      "nodeName": "stopAfterTheJobEndedLeavesNoNote",
+      "description": "/jobs stop on a job that already ended leaves no note, so the model is not told the user stopped it.",
+      "input": "",
+      "expectedOutput": "\"next\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "stopOfARunningJobTellsTheModel",
+      "description": "/jobs stop on a running job leaves a note on the user's next message saying the user stopped it.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "stopKeepsTheUnreadOutput",
+      "description": "/jobs stop on a running job puts the output the model had not read into the note, since the stop reads it.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

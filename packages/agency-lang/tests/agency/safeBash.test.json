@@ -1504,6 +1504,28 @@
       ]
     },
     {
+      "nodeName": "ghGlobHasNoRule",
+      "description": "Bash expands a glob after the plan is made, so a file named --jq=... in the folder could become gh's --jq. A gh line with a glob word or a glob flag value asks std::bash, on an owned subcommand or not.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]],[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]],[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]],[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLongFlagsFailClosed",
+      "description": "A short gh flag with no long name has no rule, so a flag added to a table without one cannot slip past the one-name-per-flag check.",
+      "input": "",
+      "expectedOutput": "[\"gh's `-X` has no long name, so a second spelling of it could not be caught\",\"gh's `-Y` has no long name, so a second spelling of it could not be caught\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "ghUnownedStaysExec",
       "description": "A gh subcommand the rule does not own asks std::exec, as before gh had a rule: the writes, gh run, gh pr create, and a line with a flag before the group.",
       "input": "",

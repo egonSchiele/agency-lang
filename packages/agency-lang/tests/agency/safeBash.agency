@@ -11,7 +11,7 @@ import {
   READ_VERBS,
   FlagSpec,
  } from "std::safeBash"
-import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
+import test { splitFlags, flattenCommands, readFileVerb, verbName, ghLongFlags } from "std::safeBash"
 import { pendingLookups, GhRepo, Plan } from "std::safeBash/actions"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
@@ -2325,6 +2325,34 @@ node ghJqHasNoRule() {
   ]
 }
 
+// A glob is expanded by bash after the plan is made, so a file named
+// `--jq=env.GITHUB_TOKEN` in the folder would become that flag. A gh line
+// with a glob has no rule, owned subcommand or not.
+node ghGlobHasNoRule() {
+  return [
+    ghBroad("gh run view 5 --json jobs *"),
+    ghBroad("gh api rate_limit [-]-jq env.GITHUB_TOKEN"),
+    ghBroad("gh run view 5 --json=*"),
+    ghBroad("gh pr view 1 *"),
+  ]
+}
+
+// Every short gh flag must have a long name, or `-X a --xlong b` would pass
+// the one-name-per-flag check. A letter with no long name has no rule.
+node ghLongFlagsFailClosed() {
+  const plain = ghLongFlags({ plain: ["X"], values: [], positionals: [] })
+  const valued = ghLongFlags({ plain: [], values: [{ flag: "Y", value: "1" }], positionals: [] })
+  return [refusalOf(plain), refusalOf(valued)]
+}
+
+/** A failure's message, or "ACCEPTED" when the result was a success. */
+def refusalOf(result: Result<any>): string {
+  if (result is failure(why)) {
+    return why
+  }
+  return "ACCEPTED"
+}
+
 /** A plan's outcome, and the program and subcommand of each std::exec. */
 def ghExecRow(source: string): any {
   const plan = planFor(source, "/repo")
@@ -2457,8 +2485,10 @@ def loginRow(script: string): any {
 }
 
 // A line that exits 4 gets the note only when gh printed its login message.
+// The last row prints that message from a line with no gh in it, so only
+// the check that gh ran keeps the note off.
 node ghLoginNote() {
-  const plain = safeBash("sh -c 'exit 4'", cwd: STDLIB_TESTS) with approve
+  const plain = safeBash("sh -c 'echo gh auth login >&2; exit 4'", cwd: STDLIB_TESTS) with approve
   let notGh: any = "NOT A FAILURE"
   if (plain is failure(why)) {
     notGh = exitAndNote(why)

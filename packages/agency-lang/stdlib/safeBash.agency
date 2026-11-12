@@ -494,6 +494,9 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null
   // verbEffects and asks std::exec, as it did before gh had a rule. The
   // --jq check covers both.
   if (name.text == "gh") {
+    if (ghHasGlob(command)) {
+      return failure("a glob in a gh line can expand to a flag, such as --jq")
+    }
     if (ghHasJq(command)) {
       return failure("gh's --jq runs a program that can read the environment")
     }
@@ -2817,10 +2820,26 @@ def ghOwns(command: SimpleCommand): boolean {
   return ghVerbKey(command) != null
 }
 
+// Bash expands a glob after the plan is made, so on a line that would ask
+// std::exec, `*` in a folder holding a file named `--jq=env.GITHUB_TOKEN`
+// becomes that flag. Checked before ghHasJq, which cannot see through it.
+def ghHasGlob(command: SimpleCommand): boolean {
+  for (word in command.args) {
+    if (word.tag == "glob") {
+      return true
+    }
+    if (word is { tag: "flag" } && word.valueIsGlob == true) {
+      return true
+    }
+  }
+  return false
+}
+
 // gh's --jq runs a jq program inside gh, and jq reads the environment
 // (`env.GITHUB_TOKEN`). The check looks at what gh will see: a quoted
 // `'--jq'` is a quoted word to the parser and the flag to gh. A word with
-// no literal text is skipped, because splitFlags or execArgs refuses it.
+// no literal text, such as a variable, is skipped, because splitFlags or
+// execArgs refuses it; a glob was refused by ghHasGlob.
 def ghHasJq(command: SimpleCommand): boolean {
   for (word in command.args) {
     if (isJqFlag(ghArgText(word))) {
@@ -2889,15 +2908,28 @@ def ghWordsMessage(key: string, verb: GhVerb): string {
   return "`gh ${key}` takes one number or URL and no other words"
 }
 
-def ghLongName(flag: string): string {
-  return GH_LONG_NAMES[flag] ?? flag
+/* A flag's long name. A short letter with no entry in GH_LONG_NAMES fails,
+  so a letter added to a table without one cannot pass the check below
+  under its second spelling. */
+def ghLongName(flag: string): Result<string> {
+  if (flag.startsWith("--")) {
+    return success(flag)
+  }
+  const long = GH_LONG_NAMES[flag]
+  if (long == null) {
+    return failure("gh's `-${flag}` has no long name, so a second spelling of it could not be caught")
+  }
+  return success(long)
 }
 
 /** The same flags with every short name replaced by its long name. Fails
   when a long name then appears twice, as in `-L 5 --limit 500`, where a
   payload built from one value would not say what gh does with the other. */
 def ghLongFlags(split: SplitArgs): Result<SplitArgs> {
-  const values: FlagValue[] = [{ flag: ghLongName(entry.flag), value: entry.value } for entry in split.values]
+  let values: FlagValue[] = []
+  for (entry in split.values) {
+    values.push({ flag: ghLongName(entry.flag)?, value: entry.value })
+  }
   for (entry in values) {
     if ([other for other in values if other.flag == entry.flag].length > 1) {
       return failure("gh takes `${entry.flag}` only once")
@@ -2905,7 +2937,7 @@ def ghLongFlags(split: SplitArgs): Result<SplitArgs> {
   }
   let plain: string[] = []
   for (name in split.plain) {
-    const long = ghLongName(name)
+    const long = ghLongName(name)?
     if (!plain.includes(long)) {
       plain.push(long)
     }

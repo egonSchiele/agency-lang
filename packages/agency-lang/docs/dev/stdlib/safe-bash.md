@@ -1284,6 +1284,12 @@ the parser reads it as a quoted word. It counts `--jq`, `--jq=x`, and any
 group of short flags that holds a `q`, such as `-wq`. On a subcommand
 where `-q` means something else that costs one broader prompt.
 
+A `gh` line with a glob word or a glob flag value has no rule either
+(`ghHasGlob`). Bash expands the glob after the plan is made, so on a line
+that would ask `std::exec`, `gh run view 1 --json jobs *` in a folder
+holding a file named `--jq=env.GITHUB_TOKEN` would pass that file name to
+`gh` as the flag.
+
 `--template` and `-t` are left off every owned row as well. Their Go
 template functions cannot read the environment (`{{env "X"}}` fails with
 `function "env" not defined`), but they are another small language, and

@@ -17,7 +17,7 @@ import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
-import { setEnv } from "std::system"
+import { env, setEnv } from "std::system"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -2339,6 +2339,85 @@ node ghUnownedStaysExec() {
     ghExecRow("gh pr create --fill"),
     ghExecRow("gh -R o/r pr view 1"),
   ]
+}
+
+/** A git repository whose origin is agency-lang on GitHub, and one with no
+  remote. Both are made by the tests below and removed after. */
+static const GH_ORIGIN_FIXTURE = __dirname + "/stdlib/__safebash_gh_origin__"
+static const GH_NO_REMOTE_FIXTURE = __dirname + "/stdlib/__safebash_gh_noremote__"
+
+/** The folder a fake `gh` is written into for a test. */
+static const FAKE_GH_DIR = __dirname + "/stdlib/__safebash_fake_gh__"
+
+def makeGhFixtures() {
+  remove(GH_ORIGIN_FIXTURE) with approve
+  mkdir(GH_ORIGIN_FIXTURE) with approve
+  bash("git init -q && git remote add origin https://github.com/egonSchiele/agency-lang.git", cwd: GH_ORIGIN_FIXTURE) with approve
+  remove(GH_NO_REMOTE_FIXTURE) with approve
+  mkdir(GH_NO_REMOTE_FIXTURE) with approve
+  bash("git init -q", cwd: GH_NO_REMOTE_FIXTURE) with approve
+}
+
+def removeGhFixtures() {
+  remove(GH_ORIGIN_FIXTURE) with approve
+  remove(GH_NO_REMOTE_FIXTURE) with approve
+}
+
+/** Run `source` through safeBash in `dir`, approved, with a `gh` on the
+  search path that is the shell script `script`. Puts PATH back before it
+  returns, whether the run succeeded or failed. */
+def runWithFakeGh(script: string, source: string, dir: string): any {
+  remove(FAKE_GH_DIR) with approve
+  mkdir(FAKE_GH_DIR) with approve
+  write("gh", "#!/bin/sh\n${script}\n", FAKE_GH_DIR) with approve
+  bash("chmod +x gh", cwd: FAKE_GH_DIR) with approve
+  const path = env("PATH") with approve
+  setEnv("PATH", "${FAKE_GH_DIR}:${path}") with approve
+  const result = runNarrow(source, dir)
+  setEnv("PATH", path ?? "") with approve
+  remove(FAKE_GH_DIR) with approve
+  return result
+}
+
+// The handler records the question and rejects it, so gh never runs and
+// the test needs no network and no gh.
+node ghLookupFillsThePair() {
+  makeGhFixtures()
+  let seen: any[] = []
+  handle {
+    safeBash("gh pr view 1451", cwd: GH_ORIGIN_FIXTURE)
+  } with (intr) {
+    seen.push([intr.effect, intr.data.owner, intr.data.repo, intr.data.number])
+    return reject()
+  }
+  removeGhFixtures()
+  return seen
+}
+
+node ghLookupFailureRaisesNothing() {
+  makeGhFixtures()
+  let seen: any[] = []
+  let failed = ""
+  handle {
+    const result = safeBash("gh pr view 1451", cwd: GH_NO_REMOTE_FIXTURE)
+    if (result is failure(why)) {
+      failed = why
+    }
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject()
+  }
+  removeGhFixtures()
+  return [seen, failed.includes("--repo OWNER/REPO")]
+}
+
+// The fake gh prints its arguments, one per line. This fails if safeBash
+// raises the second plan and runs the first, whose --repo is empty.
+node ghRunsWhatItAsked() {
+  makeGhFixtures()
+  const result = runWithFakeGh("printf '%s\\n' \"$@\"", "gh pr view 1451", GH_ORIGIN_FIXTURE)
+  removeGhFixtures()
+  return result
 }
 
 node timeLimitStopsTheCommand() {

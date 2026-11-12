@@ -74,6 +74,7 @@ import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
 import { _ghParseTarget, _ghParseRepoFlag } from "agency-lang/stdlib-lib/safeBashGh.js"
+import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
 import { _ghHasScopeQualifier, _ghScopedSearchQuery } from "agency-lang/stdlib-lib/github/issues.js"
 import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
@@ -4095,6 +4096,33 @@ export def resolveCwd(cwd: string): string {
   return "."
 }
 
+/** Added to a failed repository lookup, whose own message names the typed
+  tools' owner and repo parameters. */
+static const GH_REPO_HINT = "With gh, pass --repo OWNER/REPO."
+
+// A gh read that names no repository gets the origin remote of the folder
+// it runs in. Looking that up runs git, and planFor runs nothing, so the
+// line is planned a second time with the answer. The second plan is the
+// one raised and run, so its payloads and its command text come from one
+// pass over the same checked data. The lookup goes through _gitRun, which
+// adds the hardening flags and drops the GIT_* variables, and `git remote
+// get-url` runs no hook or pager.
+@capabilities(fileRead, subprocess)
+def resolvedPlan(first: Plan, source: string, cwd: string): Result<Plan> {
+  """
+  The plan to raise and run: `first` when it waits on no repository lookup, and otherwise the line planned again with the origin remote of the folder it named.
+  """
+  const folders = pendingLookups(first.effects)
+  if (folders.length == 0) {
+    return success(first)
+  }
+  const coord = try _ghResolveRepo("", "", folders[0])
+  if (coord is failure(why)) {
+    return failure("${why} ${GH_REPO_HINT}")
+  }
+  return success(planFor(source, cwd, { owner: coord.value.owner, repo: coord.value.repo }))
+}
+
 export def safeBash(
   command: string,
   cwd: string = "",
@@ -4114,12 +4142,23 @@ export def safeBash(
   @param timeout - Seconds the command may run. Pass more for a command known to be slow, such as a full test suite.
   """
   const dir = resolveCwd(cwd)
-  const plan = planFor(command, dir)
-  const exec = plan.execution
+  const first = planFor(command, dir)
 
   // Logged before the refusal check, so a refused plan is on the record
   // too. Nothing has been raised or run yet.
-  _debug("safeBash plan", planRecord(plan, command, dir))
+  _debug("safeBash plan", planRecord(first, command, dir))
+
+  // Everything below reads `plan`, the plan that is raised and run. A
+  // refused plan raises nothing, so it never waits on a lookup.
+  const plan = resolvedPlan(first, command, dir)?
+  const exec = plan.execution
+
+  // A command whose repository was never looked up must not run. This
+  // cannot happen while resolvedPlan is right; it stops a later change to
+  // the planning code from running a gh command with an empty repository.
+  if (pendingLookups(plan.effects).length > 0) {
+    return failure("safeBash did not look up the repository for a gh command, so it did not run it")
+  }
 
   // A refusal returns before anything is raised: there is nothing to
   // approve. It still has an arm in the match below, because the match is

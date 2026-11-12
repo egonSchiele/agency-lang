@@ -1515,6 +1515,39 @@
       ]
     },
     {
+      "nodeName": "ghLookupFillsThePair",
+      "description": "A gh read that names no repository asks about the repository in the origin remote of its folder. The handler rejects, so gh never runs.",
+      "input": "",
+      "expectedOutput": "[[\"std::github::prGet\",\"egonSchiele\",\"agency-lang\",1451]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLookupFailureRaisesNothing",
+      "description": "When the folder has no origin remote, safeBash raises nothing and tells the model to pass --repo.",
+      "input": "",
+      "expectedOutput": "[[],true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghRunsWhatItAsked",
+      "description": "The gh command that runs names the repository the question named. A fake gh prints its arguments.",
+      "input": "",
+      "expectedOutput": "[\"success\",\"pr\\nview\\n1451\\n--repo\\ngithub.com/egonSchiele/agency-lang\\n\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "timeLimitStopsTheCommand",
       "description": "A line still running at its time limit is stopped before its later commands run. The failure carries the output so far and names the limit, and each approval question carries the limit in milliseconds.",
       "input": "",

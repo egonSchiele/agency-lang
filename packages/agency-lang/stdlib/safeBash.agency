@@ -4107,7 +4107,7 @@ static const GH_REPO_HINT = "With gh, pass --repo OWNER/REPO."
 // pass over the same checked data. The lookup goes through _gitRun, which
 // adds the hardening flags and drops the GIT_* variables, and `git remote
 // get-url` runs no hook or pager.
-@capabilities(fileRead, subprocess)
+@capabilities(fileRead, subprocess, env)
 def resolvedPlan(first: Plan, source: string, cwd: string): Result<Plan> {
   """
   The plan to raise and run: `first` when it waits on no repository lookup, and otherwise the line planned again with the origin remote of the folder it named.

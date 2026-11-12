@@ -40,8 +40,8 @@ Sample output:
 
 ```
 Look up these SHAs and update lib/cli/schedule/backends/pinnedActions.ts by hand:
-  actions/checkout                         b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
-  egonSchiele/run-agency-action            4768784aa7611fafee0801e01cdaea9f06d08dfb  # v1.0.3
+  actions/checkout                         34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+  egonSchiele/run-agency-action            365228e05038132741c4bda2fafe53113452aced  # v1.2.0
 ```
 
 If you want to pin a *different* tag, for example bumping `v1.0.3` to

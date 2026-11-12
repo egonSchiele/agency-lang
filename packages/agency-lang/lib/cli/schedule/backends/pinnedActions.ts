@@ -9,11 +9,11 @@ export type PinnedAction = { sha: string; tag: string };
 
 export const PINNED_ACTIONS: Record<string, PinnedAction> = {
   "actions/checkout": {
-    sha: "b4ffde65f46336ab88eb53be808477a3936bae11",
-    tag: "v4.1.7",
+    sha: "34e114876b0b11c390a56381ad16ebd13914f8d5",
+    tag: "v4.3.1",
   },
   "egonSchiele/run-agency-action": {
-    sha: "bdae9e6bd4ac9cddbbebcef877c7d35ffe3cfa8c",
-    tag: "v1.1.0",
+    sha: "365228e05038132741c4bda2fafe53113452aced",
+    tag: "v1.2.0",
   },
 };

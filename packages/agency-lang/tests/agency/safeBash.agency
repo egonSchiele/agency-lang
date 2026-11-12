@@ -2341,6 +2341,37 @@ node ghUnownedStaysExec() {
   ]
 }
 
+// The three lines the coder ran in trace w77zDrJPgbqtWAlU7jLYp, where each
+// asked std::bash or std::exec and the run ended waiting on two of them.
+static const TRACE_PR_VIEW = "gh pr view 1451 --repo egonSchiele/agency-lang --json title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files"
+static const TRACE_PR_DIFF = "gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff && wc -l /tmp/pr1451.diff"
+static const TRACE_COMMITS = "gh pr view 1451 --repo egonSchiele/agency-lang --json commits --jq '.commits[].messageHeadline'"
+
+def effectNames(plan: Plan): string[] {
+  return [effect.name for effect in plan.effects]
+}
+
+// The first line is narrow. The second is broad because `wc` reads a file
+// the line makes, which does not exist when the plan is made; its gh half
+// is narrow on its own. Its reason holds a real path, which differs
+// between machines, so the row checks that the reason names the file. The
+// third uses --jq, which has no rule.
+node ghLinesFromTheTrace() {
+  const diff = planFor(TRACE_PR_DIFF, "/repo")
+  const diffAlone = planFor("gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff", "/repo")
+  const reason = diff.broadReason
+  let diffReason: any = null
+  if (reason != null) {
+    diffReason = [reason.kind, reason.detail.includes("pr1451.diff")]
+  }
+  return [
+    ghPlan(TRACE_PR_VIEW),
+    [outcomeOf(diff), diffReason],
+    [outcomeOf(diffAlone), effectNames(diffAlone)],
+    ghBroad(TRACE_COMMITS),
+  ]
+}
+
 /** A git repository whose origin is agency-lang on GitHub, and one with no
   remote. Both are made by the tests below and removed after. */
 static const GH_ORIGIN_FIXTURE = __dirname + "/stdlib/__safebash_gh_origin__"

@@ -1515,6 +1515,17 @@
       ]
     },
     {
+      "nodeName": "ghLinesFromTheTrace",
+      "description": "The three gh lines the coder ran in trace w77zDrJPgbqtWAlU7jLYp. The pr view is narrow and asks only std::github reads. The diff line is broad because wc reads a file the line makes, though its gh half alone is narrow. The commits line uses --jq, which has no rule.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::prFiles\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --json=title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files --repo github.com/egonSchiele/agency-lang\",[],null],[\"broad\",[\"unrecognized\",true]],[\"narrow\",[\"std::github::prDiff\",\"std::write\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "ghLookupFillsThePair",
       "description": "A gh read that names no repository asks about the repository in the origin remote of its folder. The handler rejects, so gh never runs.",
       "input": "",

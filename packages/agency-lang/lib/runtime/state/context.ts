@@ -30,6 +30,7 @@ import type { MemoryConfig } from "../memory/types.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
+import { endAllJobs, newJobTable, type JobTable } from "../jobs/jobTable.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "../types.js";
 import { callPlain } from "../asyncContext.js";
@@ -130,6 +131,9 @@ export class RuntimeContext<T> {
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
   lockReleasers: Record<string, () => void>;
+  /** The run's background jobs. Not serialized: a process is not data.
+   *  `cleanup()` stops them. See docs/dev/stdlib/jobs.md. */
+  jobs: JobTable;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
   /** Called before any checkpoint is built, from whichever stack. An
@@ -389,6 +393,7 @@ export class RuntimeContext<T> {
     this.lockOwners = {};
     this.lockWaiters = {};
     this.lockReleasers = {};
+    this.jobs = newJobTable();
     // After a debugger rewind, the first debug step would write a duplicate
     // checkpoint to the trace (the user already saw the rewound checkpoint).
     // rewindFrom sets this flag so the first debugStep trace-write is skipped.
@@ -549,6 +554,7 @@ export class RuntimeContext<T> {
     execCtx.lockOwners = {};
     execCtx.lockWaiters = {};
     execCtx.lockReleasers = {};
+    execCtx.jobs = newJobTable();
     execCtx._skipNextCheckpoint = false;
     execCtx.beforeCheckpoint = [];
     execCtx.pauseRequested = false;
@@ -831,6 +837,9 @@ export class RuntimeContext<T> {
 
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
+    // A job listens on its own signal, not on this context's, so the
+    // abort below does not reach it.
+    endAllJobs(this.jobs);
     if (!this.abortController.signal.aborted) {
       this.abortController.abort(
         new AgencyCancelledError("cleanup", makeAbortCause({ kind: "cleanup" })),

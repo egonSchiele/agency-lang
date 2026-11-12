@@ -825,3 +825,30 @@ describe("table rows", () => {
     expect(presentedToolNames()).toContain("read");
   });
 });
+
+describe("background job rows", () => {
+  const start = (toolName: string, args: object) =>
+    formatAgentTrace({ kind: "toolStart", toolName, args }, plain);
+  const end = (toolName: string, args: object, value: unknown) =>
+    formatAgentTrace({ kind: "toolEnd", toolName, args, value, outcome: "success" }, plain);
+
+  it("names the command a job starts", () => {
+    expect(end("startJob", { command: "./run.sh" }, "Started job-1.")).toBe("✓ Start job ./run.sh");
+  });
+
+  it("shows a check's wait on the start line and the job's status at the end", () => {
+    expect(start("jobOutput", { id: "job-1", wait: 300 })).toBe(
+      "● Check job job-1 waiting up to 5m",
+    );
+    expect(start("jobOutput", { id: "job-1", wait: 0 })).toBe("● Check job job-1");
+    expect(end("jobOutput", { id: "job-1" }, { status: "exit 0" })).toBe(
+      "✓ Check job job-1 · exit 0",
+    );
+  });
+
+  it("shows the status a stop leaves the job in", () => {
+    expect(end("stopJob", { id: "job-1" }, { status: "stopped" })).toBe(
+      "✓ Stop job job-1 · stopped",
+    );
+  });
+});

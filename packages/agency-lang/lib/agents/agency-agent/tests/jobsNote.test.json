@@ -1,0 +1,33 @@
+{
+  "sourceFile": "jobsNote.agency",
+  "tests": [
+    {
+      "nodeName": "emptyListAddsNothing",
+      "description": "With no jobs, the jobs message is empty, so nothing is added to the thread.",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runningJobIsListed",
+      "description": "A running job is listed with its status, running time, and command.",
+      "input": "",
+      "expectedOutput": "\"Background jobs:\\n- job-1  running  2m 0s  ./run.sh\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "unreadJobSaysSo",
+      "description": "A job that ended and whose last output has not been read is listed, and says so.",
+      "input": "",
+      "expectedOutput": "\"Background jobs:\\n- job-2  exit 1, output not read yet  2m 0s  ./run.sh\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "readJobIsLeftOut",
+      "description": "A job that ended and whose output was read is left out.",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

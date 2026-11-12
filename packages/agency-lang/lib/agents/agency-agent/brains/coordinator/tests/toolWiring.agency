@@ -13,7 +13,7 @@
  * tests run against a real provider — the assertions only depend on the
  * call succeeding, not on the response content, so both modes pass.
  */
-import { agencyCodeAgentTools, codeTools } from "../subagents/code.agency"
+import { agencyCodeAgentTools, codeTools, sessionJobTools, setCodeOneShot } from "../subagents/code.agency"
 import { researchTools } from "../subagents/research.agency"
 // The oracle and the explorer live in the stdlib now, so their tool lists
 // come from there. The check is the same: the agency agent still offers them,
@@ -223,4 +223,44 @@ node composedOracleToolsHaveUniqueNames() {
 
 node composedAgencyReviewToolsHaveUniqueNames() {
   return pingWith([...agencyReviewTools(), question, saveDraft])
+}
+
+// The coders get the job tools on top of their own in an interactive
+// session, so these are the lists that reach the provider there.
+node composedCodeToolsWithJobsHaveUniqueNames() {
+  setCodeOneShot(false)
+  return pingWith([...codeTools, ...sessionJobTools(), saveDraft])
+}
+
+node composedAgencyCodeToolsWithJobsHaveUniqueNames() {
+  setCodeOneShot(false)
+  return pingWith([...agencyCodeAgentTools, ...sessionJobTools(), saveDraft])
+}
+
+def countNamed(names: string[], name: string): number {
+  return filter(names, \each -> each == name).length
+}
+
+// An interactive session offers the job tools to the main agent and the
+// coders, once each. A one-shot run exits when its turn ends, which would
+// stop its jobs, so it offers them to neither.
+node jobToolsOnlyInInteractiveSessions(): any[] {
+  const jobNames = ["startJob", "jobOutput", "stopJob"]
+  _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
+  setCodeOneShot(false)
+  const coderNames = map(sessionJobTools(), \tool -> "${tool.name}")
+  let mainNames: string[] = []
+  let oneShotMain: string[] = []
+  handle {
+    mainNames = map(turnTools(now()), \tool -> "${tool.name}")
+    setCodeOneShot(true)
+    oneShotMain = map(turnTools(now()), \tool -> "${tool.name}")
+  } with approve
+  const oneShotCoder = sessionJobTools()
+  return [
+    coderNames,
+    map(jobNames, \name -> countNamed(mainNames, name)),
+    oneShotCoder.length,
+    map(jobNames, \name -> countNamed(oneShotMain, name))
+  ]
 }

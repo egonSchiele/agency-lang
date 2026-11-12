@@ -6,6 +6,7 @@ import { RuntimeContext } from "./context.js";
 import { StateStack } from "./stateStack.js";
 import { AgencyCancelledError } from "../errors.js";
 import { _resetStoreRegistry, MemoryFrame } from "../memory/index.js";
+import { addJob, readJob } from "../jobs/jobTable.js";
 
 function makeMockCtx() {
   return new RuntimeContext({
@@ -96,7 +97,47 @@ describe("RuntimeContext", () => {
       expect(ctx.abortController.signal.aborted).toBe(true);
     });
   });
+
+  describe.skipIf(process.platform === "win32")("background jobs", () => {
+    it("each execution context gets its own job table", async () => {
+      const ctx = makeMockCtx();
+      const execCtx = await ctx.createExecutionContext({ runId: "foo" });
+      expect(execCtx.jobs).not.toBe(ctx.jobs);
+    });
+
+    it("cleanup() stops every job and what it started", async () => {
+      const ctx = makeMockCtx();
+      const job = await addJob(ctx.jobs, ctx.host, {
+        command: "sleep 30 & echo $!; wait",
+        label: "sleep",
+        cwd: "",
+        maxMs: 60_000,
+      });
+      let printed = "";
+      const deadline = Date.now() + 5000;
+      while (printed.trim() === "" && Date.now() < deadline) {
+        printed += readJob(ctx.jobs, job.id)!.stdout;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const pid = Number(printed.trim());
+      ctx.cleanup();
+      const gone = Date.now() + 4000;
+      while (isAlive(pid) && Date.now() < gone) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(isAlive(pid)).toBe(false);
+    });
+  });
 });
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 describe("RuntimeContext memory frames", () => {
   let tmpRoot: string;

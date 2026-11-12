@@ -9,7 +9,7 @@ import { AgencyCancelledError, isAbortError, readCause } from "../runtime/errors
  * convert it instead of letting a bare cancel escape. Falls back to a
  * plain cancel when no structured cause is present.
  */
-function leafCancel(message: string, signal: AbortSignal | undefined): AgencyCancelledError {
+export function leafCancel(message: string, signal: AbortSignal | undefined): AgencyCancelledError {
   return new AgencyCancelledError(message, readCause(signal));
 }
 

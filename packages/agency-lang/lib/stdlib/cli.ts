@@ -18,6 +18,8 @@ import { herdrReporter, type HerdrReporter } from "./herdr.js";
 import { buildCompleter, listDirUnder } from "./cliCompleter.js";
 import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
+import { onJobEnd } from "../runtime/jobs/jobTable.js";
+import { jobEndedLine, printJobEnded } from "./cliJobLine.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -1359,6 +1361,39 @@ function installReplGlobals(
   };
 }
 
+/**
+ * Route nested `input()` calls through the REPL's readline. The `_input`
+ * impl in `builtins.ts` checks `ctx.inputOverride` before creating its own
+ * interface; routing through `rl` here means `chooseOption`'s fallback
+ * prompts share line-edit + history with the main REPL instead of
+ * contending for stdin with a second readline. Stops any running spinner
+ * first: "Thinking" is wrong while the agent waits on a human. Installed on
+ * THIS execution's context (not globalThis) so the override lives and dies
+ * with the run that owns the readline. Returns the function that puts the
+ * previous override back.
+ */
+function routeInputThroughRepl(
+  replCtx: Run["ctx"],
+  rl: readline.Interface,
+  herdr: HerdrReporter,
+  stopActiveSpinner: () => void,
+): () => void {
+  const prevOverride = replCtx.inputOverride;
+  replCtx.inputOverride = (p: string): Promise<string> => {
+    stopActiveSpinner();
+    return herdr.whileBlocked(
+      p.trim(),
+      () =>
+        new Promise<string>((resolve) => {
+          rl.question(p, (answer) => resolve(answer));
+        }),
+    );
+  };
+  return () => {
+    replCtx.inputOverride = prevOverride;
+  };
+}
+
 export async function _runLineRepl(
   status: unknown,
   onSubmit: unknown,
@@ -1420,27 +1455,9 @@ export async function _runLineRepl(
     }
   };
 
-  // Route nested `input()` calls through the same readline. The
-  // `_input` impl in `builtins.ts` checks `ctx.inputOverride` before
-  // creating its own interface; routing through `rl` here means
-  // `chooseOption`'s fallback prompts share line-edit + history with
-  // the main REPL instead of contending for stdin with a second
-  // readline. Stops any running spinner first (see comment above).
-  // Installed on THIS execution's context (not globalThis) so the
-  // override lives and dies with the run that owns the readline.
   const replCtx = run.ctx;
-  const prevOverride = replCtx.inputOverride;
   const herdr = herdrReporter(process.env, herdrName);
-  replCtx.inputOverride = (p: string): Promise<string> => {
-    stopActiveSpinner();
-    return herdr.whileBlocked(
-      p.trim(),
-      () =>
-        new Promise<string>((resolve) => {
-          rl.question(p, (answer) => resolve(answer));
-        }),
-    );
-  };
+  const restoreInput = routeInputThroughRepl(replCtx, rl, herdr, stopActiveSpinner);
 
   // Install the process-global hooks this REPL exposes while it runs
   // (spinner-stop, clear-history, sticky interrupt prompt, Herdr session),
@@ -1467,10 +1484,17 @@ export async function _runLineRepl(
   const editorKey = installEditorKey(rl, useTTY);
   // Text the next prompt opens with: a command filled in from the palette.
   let prefill = "";
+  // Set and cleared beside the Herdr reports. The spinner cannot say this:
+  // a nested prompt stops it in the middle of a turn.
+  let turnRunning = false;
+  const stopWatchingJobs = onJobEnd(replCtx.jobs, (job) =>
+    printJobEnded(rl, jobEndedLine(job), { turnRunning, useTTY, useColor }),
+  );
   try {
     while (true) {
       let line: string;
       herdr.report("idle");
+      turnRunning = false;
       try {
         editorKey.atPrompt(true);
         line = await askLine(rl, coloredPrompt, prefill);
@@ -1541,6 +1565,7 @@ export async function _runLineRepl(
       const tokensBefore = readTokenSnapshot(replCtx);
       activeStopSpinner = startSpinner(useTTY);
       herdr.report("working");
+      turnRunning = true;
 
       // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
       // which aborts the active LLM fetch; an AgencyCancelledError then
@@ -1603,11 +1628,12 @@ export async function _runLineRepl(
       await printFooter(run, status, useColor, stats);
     }
   } finally {
+    stopWatchingJobs();
     // Newest wrapper first: each restores the handler it wrapped.
     editorKey.teardown();
     teardownSlashTrigger();
     typedLine.teardown();
-    replCtx.inputOverride = prevOverride;
+    restoreInput();
     restoreReplGlobals();
     // Persist whatever entries readline accumulated. `rl.history` is
     // newest-first and already contains the history we loaded at startup

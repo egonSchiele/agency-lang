@@ -1,0 +1,49 @@
+/** @module
+  @summary `/jobs`: the user lists the background jobs, or stops one.
+*/
+import { listJobs, stopJob } from "std::jobs"
+import { pushMessage } from "std::ui/cli"
+
+import { addNote } from "../pendingNotes.agency"
+
+static const USAGE = "Usage: /jobs lists the background jobs, and /jobs stop <id> stops one."
+
+def listedJobs(): string {
+  const jobs = listJobs()
+  if (jobs.length == 0) {
+    return "No background jobs."
+  }
+  const rows = ["${job.id}  ${job.status}  ${job.runningFor}  ${job.command}" for job in jobs]
+  return rows.join("\n")
+}
+
+// The user typed the stop, so it asks no approval, like `!command`. The
+// REPL prints the job's finish line, so a stop that worked prints nothing
+// more. The model is told with a note on the user's next message:
+// stopJob reads the job, so the jobs message no longer lists it.
+def stopFromSlash(id: string): boolean {
+  const stopped = stopJob(id)
+  if (stopped is failure(why)) {
+    pushMessage(why)
+    return true
+  }
+  addNote("I stopped background job ${id} myself: ${stopped.value.command}")
+  return true
+}
+
+/** `/jobs` lists the jobs. `/jobs stop <id>` stops one. */
+export def jobsSlashCommand(args: string): boolean {
+  const trimmed = args.trim()
+  if (trimmed == "") {
+    pushMessage(listedJobs())
+    return true
+  }
+  if (trimmed.startsWith("stop ")) {
+    const id = trimmed.slice(5).trim()
+    if (id != "") {
+      return stopFromSlash(id)
+    }
+  }
+  pushMessage(USAGE)
+  return true
+}

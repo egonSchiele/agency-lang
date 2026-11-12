@@ -1,0 +1,36 @@
+import { JobSummary } from "std::jobs"
+
+import { jobsNoteText } from "../lib/jobsNote.agency"
+
+def job(
+  id: string,
+  state: "running" | "ended" | "stopped" | "timedOut",
+  status: string,
+  unread: boolean,
+): JobSummary {
+  return {
+    id: id,
+    command: "./run.sh",
+    state: state,
+    status: status,
+    exitCode: null,
+    runningFor: "2m 0s",
+    unread: unread
+  }
+}
+
+node emptyListAddsNothing(): string {
+  return jobsNoteText([])
+}
+
+node runningJobIsListed(): string {
+  return jobsNoteText([job("job-1", "running", "running", false)])
+}
+
+node unreadJobSaysSo(): string {
+  return jobsNoteText([job("job-2", "ended", "exit 1", true)])
+}
+
+node readJobIsLeftOut(): string {
+  return jobsNoteText([job("job-3", "ended", "exit 0", false)])
+}

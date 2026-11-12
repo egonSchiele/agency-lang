@@ -1,0 +1,74 @@
+{
+  "tests": [
+    {
+      "nodeName": "rejectedStartsNothing",
+      "description": "A rejected approval starts no job, and the rejection keeps its rejected flag. This fails if startJob starts the job before raising the plan's questions.",
+      "input": "",
+      "expectedOutput": "[true,true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "backgroundQuestionSaysSo",
+      "description": "startJob's question says the command runs in the background. safeBash's question for the same command does not.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "startReadStop",
+      "description": "startJob returns the job id at once. jobOutput with wait returns when the job ends, with its exit code and all its output. A second read returns no output, because it was already returned.",
+      "input": "",
+      "expectedOutput": "[true,\"ended\",0,true,true,\"\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "stopEndsIt",
+      "description": "stopJob stops a running job and returns its final report. The report counts as read, so the job is no longer unread.",
+      "input": "",
+      "expectedOutput": "[\"stopped\",false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "guardTripDuringWaitAsksTheHandler",
+      "description": "A time guard that runs out during a jobOutput wait raises std::guard, so the handler is asked. Rejecting it makes the guarded block a failure, and the job keeps running.",
+      "input": "",
+      "expectedOutput": "[true,true,\"running\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "guardTripDuringWaitCanBeApproved",
+      "description": "Approving the guard trip with more time lets the block finish with the report the wait returned when it was cut short. This fails if the wait throws on a guard trip.",
+      "input": "",
+      "expectedOutput": "[true,true,\"running\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "foregroundForInstantCommands",
+      "description": "A command that does not run under bash, such as echo, runs in the foreground with a line saying so. No job is started, and no question says background.",
+      "input": "",
+      "expectedOutput": "[true,true,0,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "unknownId",
+      "description": "jobOutput and stopJob for an id the run does not know return a failure that says so. Neither throws.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "missingFolder",
+      "description": "A working directory that does not exist gives the failure safeBash gives, and no job is started.",
+      "input": "",
+      "expectedOutput": "[true,true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "timeLimitCarriesTheLimit",
+      "description": "The question for a job carries the job's limit in milliseconds as its timeout.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

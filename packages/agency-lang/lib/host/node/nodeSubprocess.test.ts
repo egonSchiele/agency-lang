@@ -216,4 +216,24 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
       spy.mockRestore();
     }
   });
+
+  it("reports the output collected so far while the child runs", () =>
+    withTempDir(async (dir) => {
+      // The test creates `go`, so the clock never decides when the script moves on.
+      const running = await nodeSubprocess.start(
+        {
+          kind: "shell",
+          script: "printf 'A\\n'; while [ ! -f go ]; do sleep 0.05; done; printf 'B\\n'",
+        },
+        { cwd: dir },
+      );
+      const deadline = Date.now() + 5000;
+      while (!running.output().stdout.includes("A") && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(running.output().stdout).toBe("A\n");
+      fs.writeFileSync(path.join(dir, "go"), "");
+      await running.wait();
+      expect(running.output().stdout).toBe("A\nB\n");
+    }));
 });

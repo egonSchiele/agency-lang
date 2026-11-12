@@ -15,6 +15,7 @@ import { Attachment, endTurn, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
+import { addJobsNote } from "../../lib/jobsNote.agency"
 import { projectContextText } from "../../lib/projectContext.agency"
 import { messageWasRewritten } from "../../lib/rewrittenMessage.agency"
 import { learnedExtras } from "../../lib/learned.agency"
@@ -33,7 +34,7 @@ import {
   getSlowProvider,
  } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
-import { agencyCodeAgent, codeAgent, setCodeOneShot } from "./subagents/code.agency"
+import { agencyCodeAgent, codeAgent, sessionJobTools, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
@@ -154,6 +155,7 @@ def offeredTools(user: UserTools, turnStart: any): any[] {
     ...user.skills,
     ...user.generated,
     ...turnBuiltIns(turnStart),
+    ...sessionJobTools(),
   ]
 }
 
@@ -288,6 +290,9 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     // strongest model the user configured. High-volume work still runs on
     // the subagents' own slots.
     addGlobalInstructions()
+    // The routed coder, and the coder called as a tool, run on this thread
+    // and read it too.
+    addJobsNote()
     // A routed subagent runs here from code, on the main thread. Its persona
     // expires with its llm() call; its prompt and reply stay.
     // Not coderTurn: it opens a `code` thread of its own, and a routed coder

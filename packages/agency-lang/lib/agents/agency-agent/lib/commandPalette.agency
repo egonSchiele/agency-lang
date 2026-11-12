@@ -71,6 +71,7 @@ export def builtinPalette(): Record<string, string> {
     "/settings": "View and change capability settings for the current model",
     "/mcp": "List configured MCP servers and their tools",
     "/image": "Attach the image on the clipboard (macOS)",
+    "/jobs": "List background jobs, or stop one with /jobs stop <id>",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"
   }

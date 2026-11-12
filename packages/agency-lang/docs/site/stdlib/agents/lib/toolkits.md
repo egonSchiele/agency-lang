@@ -42,7 +42,7 @@ callback("onLLMCallEnd") as data {
 export static const PROGRESS_NOTE = "- When you call a tool, write one short sentence in the same response saying what you are doing. That sentence is how the user follows your progress."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L318))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L329))
 
 ### ASK_USER_HINT
 
@@ -50,7 +50,7 @@ export static const PROGRESS_NOTE = "- When you call a tool, write one short sen
 export static const ASK_USER_HINT = "\n\nWhen the work turns on something only the user can tell you — which account they mean, which of two readings of the request, a value you cannot look up — ask with the `question` tool, and ask before you build on the guess rather than after. Do not ask for anything you could find yourself, and do not ask the user to narrow a scope they left broad on purpose. When nobody can answer, your question comes back rejected; when that happens, pick the most reasonable reading, say which one you picked, and carry on."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L323))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L334))
 
 ### SAVE_DRAFT_HINT
 
@@ -58,7 +58,7 @@ export static const ASK_USER_HINT = "\n\nWhen the work turns on something only t
 export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L328))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L339))
 
 ## Functions
 
@@ -76,7 +76,7 @@ supply a question's reply.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L120))
 
 ### readOnlyFileTools
 
@@ -92,7 +92,7 @@ still search an ignored folder by naming it as the folder to search.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L130))
 
 ### writableFileTools
 
@@ -104,7 +104,7 @@ Return file inspection, write, and edit tools.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L142))
 
 ### shellTools
 
@@ -120,7 +120,23 @@ The saved-output readers retrieve output too large to return inline.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L161))
+
+### jobTools
+
+```ts
+jobTools(): any[]
+```
+
+Return the tools for running a shell command as a background job.
+
+Start a shell command in the background, read its output, and stop it.
+Not part of `shellTools()`: an agent that exits when its turn ends would
+stop its jobs before they finish.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L171))
 
 ### spillTools
 
@@ -135,7 +151,7 @@ long tool results. `shellTools` already includes them.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L180))
 
 ### readOnlyGitTools
 
@@ -150,7 +166,7 @@ Git finds the repository root even when `.git` is in a parent directory.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L189))
 
 ### gitTools
 
@@ -165,7 +181,7 @@ are also available separately from `readOnlyGitTools`.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L197))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L208))
 
 ### githubReadTools
 
@@ -180,7 +196,7 @@ working directory. They read remote data and cannot post reviews or comments.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L217))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L228))
 
 ### githubTools
 
@@ -195,7 +211,7 @@ has its own effect, so policies can permit comments while refusing approvals.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L238))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L249))
 
 ### webTools
 
@@ -211,7 +227,7 @@ Its `refresh` argument is bound to false to reuse a page within a conversation.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L263))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L274))
 
 ### agencyDocTools
 
@@ -226,7 +242,7 @@ Reads through these tools still raise `std::read`.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L277))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L288))
 
 ### agencyDocToolsBrief
 
@@ -241,7 +257,7 @@ Offer this bundle or `agencyDocTools`: both use the same tool names.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L297))
 
 ### agencyCodeTools
 
@@ -256,7 +272,7 @@ Use parse and typecheck for source text that has not been saved.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L301))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L312))
 
 ### memoryTools
 
@@ -268,7 +284,7 @@ Return fact storage and retrieval tools for enabled memory.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L308))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L319))
 
 ### draftTools
 
@@ -286,4 +302,4 @@ Return the `saveDraft` tool, or no tools when `offer` is false.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L333))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L344))

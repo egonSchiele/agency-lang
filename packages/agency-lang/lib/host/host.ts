@@ -302,6 +302,8 @@ export type RunningProcess = {
   kill(signal?: "SIGTERM" | "SIGKILL"): void;
   /** Resolves when the child ends. */
   wait(): Promise<RunResult>;
+  /** The output collected so far, kept within `maxOutputBytes`. */
+  output(): { stdout: string; stderr: string };
 };
 
 /** Subprocesses. `run` starts a child and waits for it. A program that

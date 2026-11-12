@@ -273,6 +273,17 @@ function safeBashFailure(message: string): { line: string | null; detail: string
   return { line, detail: commandDetail(parsed.stdout, parsed.stderr) };
 }
 
+/** A job report's state in words, as `status` carries it. */
+const jobStatus: CustomSummary = {
+  custom: (value) => (hasField(value, "status") ? text(value.status) : null),
+};
+
+function jobWait(seconds: unknown): string | null {
+  if (typeof seconds !== "number" || seconds <= 0) return null;
+  const limit = seconds % 60 === 0 ? `${seconds / 60}m` : formatElapsed(seconds * 1000);
+  return `waiting up to ${limit}`;
+}
+
 const exitCode: ExitCodeSummary = { exitCode: true };
 const typecheckReport: CustomSummary = {
   custom: summarizeTypecheck,
@@ -351,6 +362,11 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
     (a, lookup) => [text(a.pattern), prefixed("in ", spillOutput(a.filename, lookup))],
     { custom: summarizeGrepSpill },
   ),
+
+  // Background jobs. A wait can block for minutes, so a check has two lines.
+  startJob: one("Start job", (a) => [text(a.command)]),
+  jobOutput: two("Check job", (a) => [text(a.id), jobWait(a.wait)], jobStatus),
+  stopJob: one("Stop job", (a) => [text(a.id)], jobStatus),
 
   // Git, read-only: local and fast, so one line
   gitIsRepo: one("git rev-parse", nothing),

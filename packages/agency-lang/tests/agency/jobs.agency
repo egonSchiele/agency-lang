@@ -1,0 +1,170 @@
+import { jobOutput, stopJob, listJobs } from "std::jobs"
+import { safeBash, startJob } from "std::safeBash"
+
+// Each node is its own run, so its first job is job-1 and the run's
+// cleanup stops whatever a node leaves running.
+
+def endsInBackground(question: string): boolean {
+  return question.endsWith("in the background?")
+}
+
+node rejectedStartsNothing() {
+  let result: any = null
+  handle {
+    result = startJob("sleep 30")
+  } with (intr) {
+    return reject("no background jobs")
+  }
+  return [isFailure(result), result.rejected, listJobs().length]
+}
+
+node backgroundQuestionSaysSo() {
+  let questions: string[] = []
+  handle {
+    startJob("sleep 1")
+    safeBash("sleep 1")
+  } with (intr) {
+    questions.push(intr.message)
+    return approve()
+  }
+  return [
+    endsInBackground(questions[0]),
+    endsInBackground(questions[questions.length - 1]),
+  ]
+}
+
+node startReadStop() {
+  let started: any = null
+  let first: any = null
+  let second: any = null
+  handle {
+    // The printf form keeps the expected text, A1 and B2, out of the
+    // command, so the output cannot match by echoing the command.
+    started = startJob("printf 'A%s\\n' 1; sleep 1; printf 'B%s\\n' 2")
+    first = jobOutput("job-1", wait: 10)
+    second = jobOutput("job-1")
+  } with (intr) {
+    return approve()
+  }
+  return [
+    started.value.includes("job-1"),
+    first.value.state,
+    first.value.exitCode,
+    first.value.stdout.includes("A1"),
+    first.value.stdout.includes("B2"),
+    second.value.stdout,
+  ]
+}
+
+node stopEndsIt() {
+  let stopped: any = null
+  handle {
+    startJob("sleep 30")
+    stopped = stopJob("job-1")
+  } with (intr) {
+    return approve()
+  }
+  return [stopped.value.state, listJobs()[0].unread]
+}
+
+// A time guard that runs out during a wait raises std::guard, as a trip
+// between statements does, so the handler is asked. The job keeps running.
+node guardTripDuringWaitAsksTheHandler() {
+  let asked = false
+  let blockFailed = false
+  let state = ""
+  handle {
+    startJob("sleep 30")
+    const waited = guard(time: 200ms) {
+      return jobOutput("job-1", wait: 30)
+    }
+    blockFailed = isFailure(waited)
+    state = listJobs()[0].state
+    stopJob("job-1")
+  } with (intr) {
+    if (intr.effect == "std::guard") {
+      asked = true
+      return reject()
+    }
+    return approve()
+  }
+  return [asked, blockFailed, state]
+}
+
+// Approving the trip with more time lets the block finish with the
+// report the cut-short wait returned. This fails if the wait throws.
+node guardTripDuringWaitCanBeApproved() {
+  let asked = false
+  let waited: any = null
+  handle {
+    startJob("sleep 30")
+    waited = guard(time: 200ms) {
+      const report = jobOutput("job-1", wait: 30)
+      if (report is failure(why)) {
+        return "read failed: ${why}"
+      }
+      return report.value.state
+    }
+    stopJob("job-1")
+  } with (intr) {
+    if (intr.effect == "std::guard") {
+      asked = true
+      return approve({
+        maxTime: 60000
+      })
+    }
+    return approve()
+  }
+  return [asked, isSuccess(waited), waited.value]
+}
+
+node foregroundForInstantCommands() {
+  let result: any = null
+  let saysBackground = false
+  handle {
+    result = startJob("echo hi")
+  } with (intr) {
+    if (endsInBackground(intr.message)) {
+      saysBackground = true
+    }
+    return approve()
+  }
+  return [
+    result.value.startsWith("This command ran in the foreground"),
+    result.value.includes("hi"),
+    listJobs().length,
+    saysBackground,
+  ]
+}
+
+node unknownId() {
+  const read = jobOutput("job-99")
+  const stopped = stopJob("job-99")
+  return [
+    isFailure(read) && read.error.includes("is not running in this run"),
+    isFailure(stopped) && stopped.error.includes("is not running in this run"),
+  ]
+}
+
+node missingFolder() {
+  let result: any = null
+  handle {
+    result = startJob("sleep 1", cwd: "/no/such/folder")
+  } with (intr) {
+    return approve()
+  }
+  return [isFailure(result), result.error.includes("was not run"), listJobs().length]
+}
+
+node timeLimitCarriesTheLimit() {
+  let result: any = null
+  handle {
+    result = startJob("sleep 1", maxMinutes: 2)
+  } with (intr) {
+    if (intr.data.timeout != 120000) {
+      return reject("timeout was ${intr.data.timeout}")
+    }
+    return approve()
+  }
+  return isSuccess(result)
+}

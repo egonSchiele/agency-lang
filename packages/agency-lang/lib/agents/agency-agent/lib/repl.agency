@@ -72,6 +72,7 @@ import { withPendingNotes } from "./pendingNotes.agency"
 import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
 import { shellCommand } from "./slashCommands/shell.agency"
+import { jobsSlashCommand } from "./slashCommands/jobs.agency"
 import { currentBrain, runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -308,7 +309,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /compact, /fork, /paste, /help. Start a line with ! to run a shell command yourself.",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /init, /image, /compact, /fork, /jobs, /paste, /help. Start a line with ! to run a shell command yourself.",
       )
       return true
     }
@@ -328,6 +329,7 @@ def _runTurn(msg: string): boolean {
     "/rename" => renameSlashCommand("")
     "/image" => imageSlashCommand("")
     "/compact" => compactSlashCommand("")
+    "/jobs" => jobsSlashCommand("")
     "/fork" => {
       pushMessage(forkSession())
       return true
@@ -338,6 +340,9 @@ def _runTurn(msg: string): boolean {
       }
       if (trimmed.startsWith("/image ")) {
         return imageSlashCommand(trimmed.slice(7).trim())
+      }
+      if (trimmed.startsWith("/jobs ")) {
+        return jobsSlashCommand(trimmed.slice(6))
       }
       if (trimmed.startsWith("/compact ")) {
         return compactSlashCommand(trimmed.slice(9).trim())

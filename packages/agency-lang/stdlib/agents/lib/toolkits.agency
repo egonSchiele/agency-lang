@@ -43,7 +43,8 @@ import {
  } from "std::github"
 import { fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
-import { safeBash } from "std::safeBash"
+import { safeBash, startJob } from "std::safeBash"
+import { jobOutput, stopJob } from "std::jobs"
 import { ls, glob, grep, exec } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
 import { docsEntries, docsToolFromEntries } from "std::skills"
@@ -162,6 +163,16 @@ export def shellTools(): any[] {
   Return command execution and saved-output readers for the agent's working directory.
   """
   return [safeBash, exec.partial(useAgentCwd: true), readSpill, grepSpill]
+}
+
+/** Start a shell command in the background, read its output, and stop it.
+Not part of `shellTools()`: an agent that exits when its turn ends would
+stop its jobs before they finish. */
+export def jobTools(): any[] {
+  """
+  Return the tools for running a shell command as a background job.
+  """
+  return [startJob, jobOutput, stopJob]
 }
 
 /** Add these when an agent enables `spillToolResultsOver`, so it can retrieve

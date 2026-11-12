@@ -64,7 +64,7 @@ import {
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
-import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery } from "agency-lang/stdlib-lib/safeBashGh.js"
+import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery, _ghParseApiPath, _ghApiPath } from "agency-lang/stdlib-lib/safeBashGh.js"
 import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
 import { _ghHasScopeQualifier } from "agency-lang/stdlib-lib/github/issues.js"
 import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
@@ -2763,7 +2763,8 @@ static const GH_LONG_NAMES: Record<string, string> = {
   m: "--milestone",
   e: "--exclude",
   c: "--comments",
-  d: "--draft"
+  d: "--draft",
+  X: "--method"
 }
 
 /** The reads of one pull request or issue that a view can ask for. */
@@ -2816,7 +2817,22 @@ def ghVerbKey(command: SimpleCommand): string | null {
 }
 
 def ghOwns(command: SimpleCommand): boolean {
-  return ghVerbKey(command) != null
+  return ghVerbKey(command) != null || ghIsApi(command)
+}
+
+/* `gh api`, whose rule reads a path where the other rows read a subcommand.
+  The word's text decides, not its tag: gh reads `'api'` as `api`, and a
+  quoted spelling that fell through to std::exec would be approved by a
+  saved rule for `gh` and `api`, POSTs included. */
+def ghIsApi(command: SimpleCommand): boolean {
+  if (command.args.length == 0) {
+    return false
+  }
+  const text = literalWordText(command.args[0])
+  if (text is success(written)) {
+    return written == "api"
+  }
+  return false
 }
 
 // Bash expands a glob after the plan is made, so on a line that would ask
@@ -2871,6 +2887,9 @@ def ghEffects(command: SimpleCommand, cwd: string, origin: GhRepo | null): Resul
   """
   Classify a gh read: the std::github effects it raises and the gh command safeBash runs for it.
   """
+  if (ghIsApi(command)) {
+    return ghApiRule(command.args.slice(1), cwd, origin, command.redirects)
+  }
   const key = ghVerbKey(command)
   if (key == null) {
     return failure("no rule for this gh command")
@@ -3207,6 +3226,99 @@ def ghCommand(key: string, verb: GhVerb, split: SplitArgs, target: GhTarget | nu
       ...flagWords(split.plain, [entry for entry in split.values if entry.flag != "--repo"]),
       { tag: "flag", flagName: "--repo" },
       literalWordOf(repository),
+    ],
+    redirects: redirects
+  }
+}
+
+// `gh api` is the one gh command where the model writes the web request
+// itself. A GET of six paths has a rule (_ghParseApiPath in
+// lib/stdlib/safeBashGh.ts holds them): a pull request, its files,
+// reviews, or review comments, an issue, or its comments. gh sends a GET
+// unless told otherwise, and switches to POST as soon as it is given a
+// field, so the only flag allowed is -X/--method GET. Left out:
+// -f/-F/--field/--raw-field/--input (they POST), --paginate and --slurp
+// (no bound on the requests), -H/--header, --hostname (safeBash writes its
+// own), -i/--include, --verbose, -p/--preview, --cache, --silent, and
+// --jq/--template.
+static const GH_API_FLAGS: FlagSpec = { plain: [], valued: ["X", "--method"], optionsFirst: false }
+
+static const GH_API_HOST: Word[] = [{ tag: "flag", flagName: "--hostname" }, { tag: "literal", text: "github.com" }]
+static const GH_API_GET: Word[] = [{ tag: "flag", flagName: "--method" }, { tag: "literal", text: "GET" }]
+
+/** One of the six `gh api` reads, as _ghParseApiPath returns it. owner and
+  repo are "" when the path used {owner} and {repo}. */
+type GhApiRead = {
+  endpoint: "prGet" | "prFiles" | "prReviewList" | "prReviewCommentList" | "issueGet" | "issueCommentList";
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
+
+def ghApiRule(words: Word[], cwd: string, origin: GhRepo | null, redirects: Redirect[]): Result<GhRule> {
+  """
+  Classify a gh api GET: the std::github read effect for its path, and the gh api command safeBash runs for it.
+  """
+  const split = ghLongFlags(splitFlags("gh", gitWordsCommand(words), GH_API_FLAGS)?)?
+  if (ghValueOf(split.values, "--method", "GET").toUpperCase() != "GET") {
+    return failure("gh api with a method other than GET has no rule")
+  }
+  if (split.positionals.length != 1) {
+    return failure("`gh api` takes one path")
+  }
+  const text = literalWordText(split.positionals[0])?
+  const read: GhApiRead = try _ghParseApiPath(text)?
+  const repo = ghApiRepo(read, cwd, origin)
+  return success({ effects: ghApiEffects(read, repo)?, command: ghApiCommand(read, repo, redirects) })
+}
+
+/* The repository a gh api path acts on: the names it holds, or with
+  {owner} and {repo}, `origin`, or a lookup in `cwd`. */
+def ghApiRepo(read: GhApiRead, cwd: string, origin: GhRepo | null): GhResolved {
+  if (read.owner != "") {
+    return { owner: read.owner, repo: read.repo, lookup: null }
+  }
+  if (origin != null) {
+    return { owner: origin.owner, repo: origin.repo, lookup: null }
+  }
+  return { owner: "", repo: "", lookup: cwd }
+}
+
+// An issue path asks prGet as well as issueGet, for the reason
+// ghIssueReads gives: the number may be a pull request. The endpoint names
+// come from API_ROUTES in TypeScript, so an endpoint this match does not
+// know has no rule.
+def ghApiEffects(read: GhApiRead, repo: GhResolved): Result<Effect[]> {
+  const one = ghNumberPayload(read.number, repo)
+  const paged: GhPagedPayload = { owner: repo.owner, repo: repo.repo, number: read.number, perPage: read.perPage, page: read.page }
+  return match(read.endpoint) {
+    "prGet" => success([{ name: "std::github::prGet", payload: one, lookup: repo.lookup }])
+    "prFiles" => success([{ name: "std::github::prFiles", payload: paged, lookup: repo.lookup }])
+    "prReviewList" => success([{ name: "std::github::prReviewList", payload: paged, lookup: repo.lookup }])
+    "prReviewCommentList" => success([{ name: "std::github::prReviewCommentList", payload: paged, lookup: repo.lookup }])
+    "issueGet" => success([{ name: "std::github::issueGet", payload: one, lookup: repo.lookup }, { name: "std::github::prGet", payload: one, lookup: repo.lookup }])
+    "issueCommentList" => success([{ name: "std::github::issueCommentList", payload: paged, lookup: repo.lookup }])
+    _ => failure("no rule for the gh api endpoint `${read.endpoint}`")
+  }
+}
+
+// On a first pass with a lookup pending the names in the path are empty;
+// that text never runs.
+def ghApiCommand(read: GhApiRead, repo: GhResolved, redirects: Redirect[]): SimpleCommand {
+  """
+  Build the gh api command to run, with the host, the method, and the path written out.
+  """
+  return {
+    tag: "simpleCommand",
+    assignments: [],
+    command: GH_WORD,
+    args: [
+      literalWordOf("api"),
+      ...GH_API_HOST,
+      ...GH_API_GET,
+      { tag: "singleQuoted", text: _ghApiPath(read, repo.owner, repo.repo) },
     ],
     redirects: redirects
   }
@@ -4222,7 +4334,7 @@ export def safeBash(
   command: string,
   cwd: string = "",
   timeout: number = 120,
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run Bash commands after approval of the actions they perform.
   Return stdout on success. A nonzero exit is a failure carrying the exit
@@ -4672,6 +4784,17 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
     }
     "std::github::prReviewList" => {
       raise std::github::prReviewList("List reviews on pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prReviewCommentList" => {
+      raise std::github::prReviewCommentList("List inline review comments on pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
         owner: effect.payload.owner,
         repo: effect.payload.repo,
         number: effect.payload.number,

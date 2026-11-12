@@ -1,7 +1,7 @@
 // Text handling for safeBash's `gh` rule. Each function throws an Error that
 // says what is wrong, and the Agency side turns the throw into the plan's
 // broad reason, so a refused line tells the model why.
-import { _ghCheckNumber } from "./github/args.js";
+import { _ghCheckNumber, GITHUB_DEFAULT_PER_PAGE, GITHUB_MAX_PER_PAGE } from "./github/args.js";
 import { checkRepoCoord, type RepoCoord } from "./github/repo.js";
 
 export type GhTarget = { number: number; owner: string; repo: string };
@@ -31,6 +31,131 @@ export function _ghParseTarget(text: string, kind: "pull" | "issues"): GhTarget 
   _ghCheckNumber(number);
   const coord = checkRepoCoord({ owner: url[1], repo: url[2] });
   return { number, owner: coord.owner, repo: coord.repo };
+}
+
+export type GhApiEndpoint =
+  "prGet" | "prFiles" | "prReviewList" | "prReviewCommentList" | "issueGet" | "issueCommentList";
+
+export type GhApiRead = {
+  endpoint: GhApiEndpoint;
+  /** "" for both when the path used {owner} and {repo}. */
+  owner: string;
+  repo: string;
+  number: number;
+  /** GITHUB_DEFAULT_PER_PAGE and 1 when the query string does not give them. */
+  perPage: number;
+  page: number;
+};
+
+/** A path after `repos/OWNER/REPO/`: its kind, the part after the number,
+ *  and whether it is a list that takes paging. */
+type ApiRoute = { kind: "pulls" | "issues"; tail: string; endpoint: GhApiEndpoint; paged: boolean };
+
+// The six `gh api` reads with a rule. _ghParseApiPath finds a route here
+// and _ghApiPath writes a path from it, so the two cannot disagree. A new
+// route also needs its endpoint in GhApiRead and an arm in ghApiEffects
+// (stdlib/safeBash.agency); safeBashGh.test.ts pins GH_API_ENDPOINTS.
+const API_ROUTES: ApiRoute[] = [
+  { kind: "pulls", tail: "", endpoint: "prGet", paged: false },
+  { kind: "pulls", tail: "/files", endpoint: "prFiles", paged: true },
+  { kind: "pulls", tail: "/reviews", endpoint: "prReviewList", paged: true },
+  { kind: "pulls", tail: "/comments", endpoint: "prReviewCommentList", paged: true },
+  { kind: "issues", tail: "", endpoint: "issueGet", paged: false },
+  { kind: "issues", tail: "/comments", endpoint: "issueCommentList", paged: true },
+];
+
+export const GH_API_ENDPOINTS: GhApiEndpoint[] = API_ROUTES.map((route) => route.endpoint);
+
+const API_PATH = /^\/?repos\/([^/]+)\/([^/]+)\/(pulls|issues)\/([^/]+)(\/[^/]+)?$/;
+const PAGING_KEYS = ["per_page", "page"];
+
+function routeFor(endpoint: GhApiEndpoint): ApiRoute {
+  return API_ROUTES.find((route) => route.endpoint === endpoint)!;
+}
+
+/** `{owner}` and `{repo}` together, which gh fills from its own idea of the
+ *  repository, become "" for safeBash to fill. One placeholder beside a
+ *  name has no rule. */
+function apiRepo(owner: string, repo: string): RepoCoord {
+  if (owner === "{owner}" && repo === "{repo}") {
+    return { owner: "", repo: "" };
+  }
+  if (owner === "{owner}" || repo === "{repo}") {
+    throw new Error("A gh api path uses {owner} and {repo} together, or names both.");
+  }
+  return checkRepoCoord({ owner, repo });
+}
+
+/** The number the digits name, or 0 past Number.MAX_SAFE_INTEGER, where
+ *  `9999999999999999999999` reads as 1e+22. */
+function exactNumber(text: string): number {
+  const value = DIGITS.test(text) ? Number(text) : 0;
+  return Number.isSafeInteger(value) ? value : 0;
+}
+
+/** A paging value: digits, at least 1, and at most `most` when one is given. */
+function pagingValue(key: string, text: string, most: number | null): number {
+  const value = exactNumber(text);
+  if (value < 1 || (most !== null && value > most)) {
+    const range = most === null ? "a number of 1 or more" : `a number from 1 to ${most}`;
+    throw new Error(`gh api's ${key} takes ${range}, got "${text}".`);
+  }
+  return value;
+}
+
+/** One of the six read paths, with its paging. */
+export function _ghParseApiPath(text: string): GhApiRead {
+  const [path, query, extra] = text.split("?");
+  if (extra !== undefined) {
+    throw new Error(`A gh api path has one query string, got "${text}".`);
+  }
+  const match = API_PATH.exec(path);
+  const route =
+    match === null
+      ? undefined
+      : API_ROUTES.find((each) => each.kind === match[3] && each.tail === (match[5] ?? ""));
+  if (match === null || route === undefined) {
+    throw new Error(
+      `gh api has a rule for repos/OWNER/REPO/pulls/N with nothing, /files, /reviews, or /comments after it, and repos/OWNER/REPO/issues/N with nothing or /comments after it. Got "${path}".`,
+    );
+  }
+  if (!DIGITS.test(match[4])) {
+    throw new Error(`"${match[4]}" is not a pull request or issue number.`);
+  }
+  const number = exactNumber(match[4]);
+  _ghCheckNumber(number);
+  const coord = apiRepo(match[1], match[2]);
+  const params = new URLSearchParams(query ?? "");
+  const keys = Array.from(params.keys());
+  if (keys.length > 0 && !route.paged) {
+    throw new Error(
+      `gh api's ${path} is one ${route.kind === "pulls" ? "pull request" : "issue"}, and takes no query string.`,
+    );
+  }
+  for (const key of keys) {
+    if (!PAGING_KEYS.includes(key)) {
+      throw new Error(`gh api takes per_page and page in a query string, got "${key}".`);
+    }
+    if (params.getAll(key).length > 1) {
+      throw new Error(`gh api takes ${key} only once.`);
+    }
+  }
+  const perPage = params.has("per_page")
+    ? pagingValue("per_page", params.get("per_page")!, GITHUB_MAX_PER_PAGE)
+    : GITHUB_DEFAULT_PER_PAGE;
+  const page = params.has("page") ? pagingValue("page", params.get("page")!, null) : 1;
+  return { endpoint: route.endpoint, owner: coord.owner, repo: coord.repo, number, perPage, page };
+}
+
+/** The path safeBash runs for a read, with the names written out and, for a
+ *  list, both paging values. */
+export function _ghApiPath(read: GhApiRead, owner: string, repo: string): string {
+  const route = routeFor(read.endpoint);
+  const path = `repos/${owner}/${repo}/${route.kind}/${read.number}${route.tail}`;
+  if (!route.paged) {
+    return path;
+  }
+  return `${path}?per_page=${read.perPage}&page=${read.page}`;
 }
 
 /** `OWNER/REPO` or `github.com/OWNER/REPO`, the value of `--repo` or `-R`. */

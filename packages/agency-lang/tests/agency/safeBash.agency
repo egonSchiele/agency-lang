@@ -2345,10 +2345,10 @@ node ghGlobHasNoRule() {
   ]
 }
 
-// Every short gh flag must have a long name, or `-X a --xlong b` would pass
+// Every short gh flag must have a long name, or `-Z a --zlong b` would pass
 // the one-name-per-flag check. A letter with no long name has no rule.
 node ghLongFlagsFailClosed() {
-  const plain = ghLongFlags({ plain: ["X"], values: [], positionals: [] })
+  const plain = ghLongFlags({ plain: ["Z"], values: [], positionals: [] })
   const valued = ghLongFlags({ plain: [], values: [{ flag: "Y", value: "1" }], positionals: [] })
   return [refusalOf(plain), refusalOf(valued)]
 }
@@ -2512,6 +2512,55 @@ node ghLoginNote() {
 node ghRunsWhatItAsked() {
   makeGhFixtures()
   const result = runWithFakeGh("printf '%s\\n' \"$@\"", "gh pr view 1451", GH_ORIGIN_FIXTURE)
+  removeGhFixtures()
+  return result
+}
+
+static const ORIGIN_O_R: GhRepo = { owner: "o", repo: "r" }
+
+node ghApiReads() {
+  return [
+    ghPlan("gh api repos/{owner}/{repo}/pulls/5/comments"),
+    ghPlan("gh api repos/{owner}/{repo}/pulls/5/comments", "/repo", ORIGIN_O_R),
+    ghPlan("gh api 'repos/o/r/pulls/5/files?per_page=100&page=2'"),
+    ghPlan("gh api -X GET /repos/o/r/issues/7"),
+    ghPlan("gh api repos/o/r/pulls/5"),
+    ghPlan("gh api repos/o/r/pulls/5/reviews"),
+    ghPlan("gh api 'repos/o/r/issues/7/comments?page=3'"),
+    ghPlan("gh api -X get repos/o/r/pulls/5"),
+    ghPlan("gh 'api' repos/o/r/pulls/5"),
+  ]
+}
+
+node ghApiStaysBroad() {
+  return [
+    ghBroad("gh api repos/o/r/pulls/5/comments?per_page=100"),
+    ghBroad("gh api -X POST repos/o/r/issues/7/comments -f body=hi"),
+    ghBroad("gh api repos/o/r/issues/7/comments -f body=hi"),
+    ghBroad("gh api -X GET --method POST repos/o/r/pulls/5"),
+    ghBroad("gh api repos/o/r/pulls/5 --paginate"),
+    ghBroad("gh api repos/o/r/pulls/5 --hostname ghe.example.com"),
+    ghBroad("gh api repos/o/r/pulls/5 -H 'Accept: x'"),
+    ghBroad("gh api repos/o/r/pulls/5 --jq .title"),
+    ghBroad("gh api user"),
+    ghBroad("gh api graphql -f query=x"),
+    ghBroad("gh api repos/o/r/pulls/5/merge"),
+    ghBroad("gh api"),
+    ghBroad("gh api repos/o/r/pulls/5 repos/o/r/pulls/6"),
+    // Only the method check refuses these two.
+    ghBroad("gh api -X POST repos/o/r/pulls/5"),
+    ghBroad("gh api --method=delete repos/o/r/pulls/5"),
+    // A quoted `api` is still gh api, so it does not fall back to std::exec.
+    ghBroad("gh 'api' --method POST repos/o/r/issues/1/comments -f body=hi"),
+    ghBroad("gh \"api\" -X DELETE repos/o/r/issues/comments/9"),
+  ]
+}
+
+// The fake gh prints its arguments. The path names the repository the
+// lookup found, and the paging the payload shows.
+node ghApiRunsWhatItAsked() {
+  makeGhFixtures()
+  const result = runWithFakeGh("printf '%s\\n' \"$@\"", "gh api repos/{owner}/{repo}/pulls/5/comments", GH_ORIGIN_FIXTURE)
   removeGhFixtures()
   return result
 }

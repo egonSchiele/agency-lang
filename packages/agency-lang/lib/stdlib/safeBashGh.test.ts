@@ -1,5 +1,85 @@
 import { describe, it, expect } from "vitest";
-import { _ghParseRepoFlag, _ghParseTarget, _ghSearchQuery } from "./safeBashGh.js";
+import {
+  GH_API_ENDPOINTS,
+  _ghApiPath,
+  _ghParseApiPath,
+  _ghParseRepoFlag,
+  _ghParseTarget,
+  _ghSearchQuery,
+} from "./safeBashGh.js";
+
+describe("GH_API_ENDPOINTS", () => {
+  // The Agency side names these six in GhApiRead and in ghApiEffects
+  // (stdlib/safeBash.agency). A route added here needs both, then this list.
+  it("is the six endpoints the Agency rule has an arm for", () => {
+    expect(GH_API_ENDPOINTS).toEqual([
+      "prGet",
+      "prFiles",
+      "prReviewList",
+      "prReviewCommentList",
+      "issueGet",
+      "issueCommentList",
+    ]);
+  });
+});
+
+describe("_ghParseApiPath", () => {
+  it.each([
+    ["repos/o/r/pulls/5", "prGet", "o", "r", 5, 30, 1],
+    ["/repos/o/r/pulls/5", "prGet", "o", "r", 5, 30, 1],
+    ["repos/{owner}/{repo}/pulls/5/comments", "prReviewCommentList", "", "", 5, 30, 1],
+    ["repos/o/r/pulls/5/files?per_page=100&page=2", "prFiles", "o", "r", 5, 100, 2],
+    ["repos/o/r/pulls/5/reviews", "prReviewList", "o", "r", 5, 30, 1],
+    ["repos/o/r/issues/7", "issueGet", "o", "r", 7, 30, 1],
+    ["repos/o/r/issues/7/comments?page=3", "issueCommentList", "o", "r", 7, 30, 3],
+  ] as const)("reads %s", (text, endpoint, owner, repo, number, perPage, page) => {
+    expect(_ghParseApiPath(text)).toEqual({ endpoint, owner, repo, number, perPage, page });
+  });
+
+  it.each([
+    // One placeholder and one name: gh would fill the placeholder itself.
+    "repos/{owner}/r/pulls/5",
+    // Paths that are not one of the six reads.
+    "repos/o/r/pulls/5/merge",
+    "repos/o/r/pulls",
+    "repos/o/r/issues/7/labels",
+    "user",
+    "graphql",
+    // Paging out of range, an unknown key, or a key given twice.
+    "repos/o/r/pulls/5/files?per_page=101",
+    "repos/o/r/pulls/5/files?per_page=0",
+    "repos/o/r/pulls/5/files?page=0",
+    "repos/o/r/pulls/5/files?state=all",
+    "repos/o/r/pulls/5/files?per_page=5&per_page=6",
+    // A single pull request or issue has no pages.
+    "repos/o/r/pulls/5?page=1",
+    // A bad number or name.
+    "repos/o/r/pulls/0",
+    "repos/o/r/pulls/abc",
+    "repos/_bad/r/pulls/5",
+    "repos/o/r%2F..%2Fx/pulls/5",
+  ])("refuses %j", (text) => {
+    expect(() => _ghParseApiPath(text)).toThrow();
+  });
+
+  it.each([
+    ["a pull request number", "repos/o/r/pulls/9999999999999999999999"],
+    ["a page", `repos/o/r/pulls/5/files?page=${"9".repeat(400)}`],
+  ])("refuses %s too large to write back exactly", (_name, text) => {
+    expect(() => _ghParseApiPath(text)).toThrow(/whole number|takes a number/);
+  });
+});
+
+describe("_ghApiPath", () => {
+  it("writes the names and both paging values into a list path", () => {
+    const read = _ghParseApiPath("repos/{owner}/{repo}/pulls/5/comments");
+    expect(_ghApiPath(read, "o", "r")).toBe("repos/o/r/pulls/5/comments?per_page=30&page=1");
+  });
+
+  it("writes no query string for a single pull request or issue", () => {
+    expect(_ghApiPath(_ghParseApiPath("/repos/o/r/issues/7"), "o", "r")).toBe("repos/o/r/issues/7");
+  });
+});
 
 describe("_ghParseTarget", () => {
   it("reads a bare number, with no repository", () => {

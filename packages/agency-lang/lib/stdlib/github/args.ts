@@ -4,6 +4,9 @@
 /** GitHub rejects per_page above 100. */
 export const GITHUB_MAX_PER_PAGE = 100;
 
+/** The page size GitHub uses when a request gives no per_page. */
+export const GITHUB_DEFAULT_PER_PAGE = 30;
+
 function wholeNumberAtLeastOne(value: number): number {
   if (!Number.isFinite(value)) {
     return 1;

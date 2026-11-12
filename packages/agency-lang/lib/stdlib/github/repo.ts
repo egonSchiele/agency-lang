@@ -11,7 +11,7 @@ const REPO_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 /** Throws unless both names are ones GitHub could have issued. The pair
  *  feeds URL paths, the search query, and the @always approval scope, so a
  *  name with a space or a `/` in it must never get that far. */
-function checkRepoCoord(coord: RepoCoord): RepoCoord {
+export function checkRepoCoord(coord: RepoCoord): RepoCoord {
   if (!OWNER_PATTERN.test(coord.owner)) {
     throw new Error(`"${coord.owner}" is not a valid GitHub owner name.`);
   }

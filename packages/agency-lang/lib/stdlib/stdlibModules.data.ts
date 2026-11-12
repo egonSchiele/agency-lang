@@ -553,6 +553,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "gitStashPushEffect",
     "gitStashPopEffect",
     "gitRestoreEffect",
+    "pendingLookups",
     "grepExecution",
     "readExecution"
   ],

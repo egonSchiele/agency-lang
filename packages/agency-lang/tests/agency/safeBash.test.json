@@ -715,9 +715,20 @@
     },
     {
       "nodeName": "filtersInAPipe",
-      "description": "A filter in a later pipe stage reads the previous stage's output and adds nothing; a filter that names a file asks std::read for it, in a pipe or not. tr takes only literal sets, as many as its flags allow. tee and xargs have no rule, sort -o is refused, and a comma joined to a flag does not parse yet.",
+      "description": "A filter in a later pipe stage reads the previous stage's output and adds nothing; a filter that names a file asks std::read for it, in a pipe or not. tr takes only literal sets, as many as its flags allow. tee and xargs have no rule, and sort -o is refused. A comma joined to a flag parses, so `cut -d, -f1 one.txt` asks std::read like any other spelling.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`tee` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"-d, -f1 one.txt\\\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
+      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`tee` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "punctuationInWords",
+      "description": "A comma joined to a flag is read by the read tables, a reflog revision with braces is a git ref, and a date format is an argument. A brace expansion is unparseable.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::read\",\"one.txt\"]],null],[\"narrow\",[[\"std::read\",\"one.txt\"]],null],[\"narrow\",[[\"std::git::show\",{\"cwd\":\"/repo\",\"ref\":\"HEAD@{1}\"}]],null],[\"narrow\",[[\"std::exec\",{\"command\":\"date\",\"args\":[\"+%Y\"],\"subcommand\":\"+%Y\",\"cwd\":\"/repo\",\"timeout\":0,\"stdin\":\"\"}]],null],[\"broad\",[[\"std::bash\",null]],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"a{b,c}\\\"\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1156,9 +1167,9 @@
     },
     {
       "nodeName": "findAsksStdGlob",
-      "description": "find asks std::glob for each path it names. An unlisted word (-iname, -H, -delete, -L, -newer), a glob word, a missing or late path, -name given twice, a count that is not a number, -maxdepth 0, or a file path asks std::bash. -exec does not parse.",
+      "description": "find asks std::glob for each path it names. An unlisted word (-iname, -H, -delete, -L, -newer), a glob word, a missing or late path, -name given twice, a count that is not a number, -maxdepth 0, or a file path asks std::bash. -exec does not parse: the `{}` is a word, and the parse stops at the `\\;` after it.",
       "input": "",
-      "expectedOutput": "[[[\"std::glob\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-iname`\"}],[[\"std::glob\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-H`\"}],[[\"std::glob\",\"std::glob\"],null],[[\"std::glob\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-name` is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"{} \\\\;\\\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-L`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find needs a path before its tests\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find takes its paths before its tests\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find takes `-name` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-maxdepth` is not a number\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find -maxdepth 0 lists only the path itself\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-newer`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-size` starts with a dash\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find of a file is not a listing\"}],[[\"std::glob\"],null]]",
+      "expectedOutput": "[[[\"std::glob\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-iname`\"}],[[\"std::glob\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-H`\"}],[[\"std::glob\",\"std::glob\"],null],[[\"std::glob\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-name` is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"\\\\;\\\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-L`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find needs a path before its tests\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find takes its paths before its tests\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find takes `-name` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-maxdepth` is not a number\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find -maxdepth 0 lists only the path itself\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-newer`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `-size` starts with a dash\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find of a file is not a listing\"}],[[\"std::glob\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1442,6 +1453,138 @@
       "description": "Real git, in folders the test makes. A pathspec given to checkout fails and changes no file, and the failure names the model's text. A diff of a file outside the repository prints none of it, inside a repository, where there is none, in a bare repository, and inside a `.git` folder. A checkout, a log, and a redirected diff work.",
       "input": "",
       "expectedOutput": "[\"failure\",true,false,\"a = 2\\n\",\"b = 2\\n\",\"failure\",false,\"success\",\"success\",true,\"success\",true,\"failure\",true,false,\"failure\",true,false,\"failure\",true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghReads",
+      "description": "Each gh read raises the std::github read effects the typed tools raise for the same data, and runs a gh command safeBash writes, with the repository last. With no --repo, URL, or origin, the pair is empty and the plan names the folder to look it up in. A model's --repo or URL wins over origin. A plain pr view also reads comments, reviews, and checks, and a plain issue view reads comments, because gh 2.88.1 fetches them. An issue view also asks prGet, because gh shows a pull request when the number is one. A read of one pull request or issue has perPage 0. A search's query is the one gh sends, and the search runs with GH_HOST=github.com. A quoted search word that starts with `~` is kept.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":1451}],[\"std::github::issueCommentList\",{\"owner\":\"\",\"repo\":\"\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"\",\"repo\":\"\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"\",\"repo\":\"\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::issueCommentList\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --repo github.com/egonSchiele/agency-lang\",[],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::issueCommentList\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --repo github.com/egonSchiele/agency-lang\",[],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::issueCommentList\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --repo github.com/egonSchiele/agency-lang\",[],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"a\",\"repo\":\"b\",\"number\":1451}],[\"std::github::issueCommentList\",{\"owner\":\"a\",\"repo\":\"b\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"a\",\"repo\":\"b\",\"number\":1451,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"a\",\"repo\":\"b\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --repo github.com/a/b\",[],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"o\",\"repo\":\"r\",\"number\":1}],[\"std::github::issueCommentList\",{\"owner\":\"o\",\"repo\":\"r\",\"number\":1,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"o\",\"repo\":\"r\",\"number\":1,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"o\",\"repo\":\"r\",\"number\":1,\"perPage\":0,\"page\":1}]],\"gh pr view 1 --comments --repo github.com/o/r\",[],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":1}]],\"gh pr view 1 --json=title,body --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":1}],[\"std::github::prFiles\",{\"owner\":\"\",\"repo\":\"\",\"number\":1,\"perPage\":0,\"page\":1}],[\"std::github::issueCommentList\",{\"owner\":\"\",\"repo\":\"\",\"number\":1,\"perPage\":0,\"page\":1}],[\"std::github::prReviewList\",{\"owner\":\"\",\"repo\":\"\",\"number\":1,\"perPage\":0,\"page\":1}],[\"std::github::prChecks\",{\"owner\":\"\",\"repo\":\"\",\"number\":1,\"perPage\":0,\"page\":1}]],\"gh pr view 1 --json=title,files,reviews,latestReviews,comments,statusCheckRollup --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prDiff\",{\"owner\":\"\",\"repo\":\"\",\"number\":1}]],\"gh pr diff 1 --name-only --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prChecks\",{\"owner\":\"\",\"repo\":\"\",\"number\":1,\"perPage\":0,\"page\":1}]],\"gh pr checks 1 --required --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prChecks\",{\"owner\":\"\",\"repo\":\"\",\"number\":1,\"perPage\":0,\"page\":1}]],\"gh pr checks 1 --json=name,state --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prList\",{\"owner\":\"\",\"repo\":\"\",\"state\":\"open\",\"base\":\"\",\"perPage\":30,\"page\":1}]],\"gh pr list --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prList\",{\"owner\":\"\",\"repo\":\"\",\"state\":\"merged\",\"base\":\"main\",\"perPage\":5,\"page\":1}]],\"gh pr list --state=merged --base=main --limit=5 --author=dana --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::prList\",{\"owner\":\"\",\"repo\":\"\",\"state\":\"open\",\"base\":\"\",\"perPage\":100,\"page\":1}]],\"gh pr list --limit=100 --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::issueGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":7}],[\"std::github::prGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":7}],[\"std::github::issueCommentList\",{\"owner\":\"\",\"repo\":\"\",\"number\":7,\"perPage\":0,\"page\":1}]],\"gh issue view 7 --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::issueGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":7}],[\"std::github::prGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":7}],[\"std::github::issueCommentList\",{\"owner\":\"\",\"repo\":\"\",\"number\":7,\"perPage\":0,\"page\":1}]],\"gh issue view 7 --comments --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::issueGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":7}],[\"std::github::prGet\",{\"owner\":\"\",\"repo\":\"\",\"number\":7}],[\"std::github::issueCommentList\",{\"owner\":\"\",\"repo\":\"\",\"number\":7,\"perPage\":0,\"page\":1}]],\"gh issue view 7 --json=title,comments --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::issueList\",{\"owner\":\"\",\"repo\":\"\",\"state\":\"all\",\"labels\":[\"bug\",\"urgent\"],\"perPage\":30,\"page\":1}]],\"gh issue list --label=bug,urgent --state=all --repo github.com//\",[\"/repo\"],null],[\"narrow\",[[\"std::github::issueSearch\",{\"owner\":\"o\",\"page\":1,\"perPage\":10,\"query\":\"( crash in:title ) repo:o/r type:issue\",\"repo\":\"r\"}]],\"GH_HOST=github.com gh search issues crash in:title --limit=10 --repo o/r\",[],null],[\"narrow\",[[\"std::github::issueSearch\",{\"owner\":\"o\",\"page\":1,\"perPage\":30,\"query\":\"( \\\"crash bug\\\" ) author:dana (in:body OR in:title) label:bug label:ui repo:o/r state:closed type:issue\",\"repo\":\"r\"}]],\"GH_HOST=github.com gh search issues 'crash bug' --state=closed --label=bug,ui --match=title,body --author=dana --repo o/r\",[],null],[\"narrow\",[[\"std::github::issueSearch\",{\"owner\":\"o\",\"page\":1,\"perPage\":30,\"query\":\"( crash ) repo:o/r\",\"repo\":\"r\"}]],\"GH_HOST=github.com gh search issues crash --include-prs --repo o/r\",[],null],[\"narrow\",[[\"std::github::issueSearch\",{\"owner\":\"o\",\"page\":1,\"perPage\":30,\"query\":\"( ~/private ) repo:o/r type:issue\",\"repo\":\"r\"}]],\"GH_HOST=github.com gh search issues '~/private' --repo o/r\",[],null],[\"narrow\",[[\"std::github::prDiff\",{\"owner\":\"\",\"repo\":\"\",\"number\":1}]],\"gh pr diff 1 --repo github.com// | head -20\",[\"/repo\"],null]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLookupFollowsCd",
+      "description": "A gh read after `cd folder &&` names that folder, by its real path, as the one to look its repository up in.",
+      "input": "",
+      "expectedOutput": "[\"narrow\",1,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghStaysBroad",
+      "description": "A gh read the rule cannot describe completely asks std::bash, and the reason names the cause: a missing or bad number, a flag off the allowlist (--web, --watch, --template, --search, --owner), a limit outside 1 to 100, a flag given under both its names, a state the subcommand does not take, a --json field that is unknown or reads more than a list, a filter value with a repo: qualifier, a repository that is not a github.com name, a URL and --repo that disagree, a search with no --repo or with words that name another repository, an unquoted search word that starts with `~`, a search word or value with a parenthesis, a label value with a quote or an empty item, and gh commands that need lookups in two folders.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[\"unrecognized\",\"`gh pr view` needs a number or a URL\"]],[\"broad\",[\"unrecognized\",\"Expected a number or a https://github.com/OWNER/REPO/pull/N URL, got \\\"abc\\\".\"]],[\"broad\",[\"unrecognized\",\"gh does not take `--web`\"]],[\"broad\",[\"unrecognized\",\"gh does not take `--watch`\"]],[\"broad\",[\"unrecognized\",\"gh does not take `--template`\"]],[\"broad\",[\"unrecognized\",\"gh does not take `--search`\"]],[\"broad\",[\"unrecognized\",\"gh does not take `--search`\"]],[\"broad\",[\"unrecognized\",\"gh's `--limit` takes a number from 1 to 100\"]],[\"broad\",[\"unrecognized\",\"gh's `--limit` takes a number from 1 to 100\"]],[\"broad\",[\"unrecognized\",\"gh takes `--limit` only once\"]],[\"broad\",[\"unrecognized\",\"gh takes `--state` only once\"]],[\"broad\",[\"unrecognized\",\"`gh pr list` takes --state open, closed, merged, all, not `bogus`\"]],[\"broad\",[\"unrecognized\",\"`gh issue list` takes --state open, closed, all, not `merged`\"]],[\"broad\",[\"unrecognized\",\"`gh search issues` takes --state open, closed, not `all`\"]],[\"broad\",[\"unrecognized\",\"`gh pr list --json comments` reads more than a list\"]],[\"broad\",[\"unrecognized\",\"`gh issue list --json comments` reads more than a list\"]],[\"broad\",[\"unrecognized\",\"`gh pr view` has no --json field `nope`\"]],[\"broad\",[\"unrecognized\",\"the value of `--author` names another repository\"]],[\"broad\",[\"unrecognized\",\"--repo takes OWNER/REPO or github.com/OWNER/REPO, got \\\"ghe.example.com/o/r\\\".\"]],[\"broad\",[\"unrecognized\",\"\\\"..\\\" is not a valid GitHub owner name.\"]],[\"broad\",[\"unrecognized\",\"the URL and --repo name two different repositories\"]],[\"broad\",[\"unrecognized\",\"gh search needs --repo OWNER/REPO, or it searches all of GitHub\"]],[\"broad\",[\"unrecognized\",\"gh takes `--repo` only once\"]],[\"broad\",[\"unrecognized\",\"--repo takes OWNER/REPO or github.com/OWNER/REPO, got \\\"o/r,other/private\\\".\"]],[\"broad\",[\"unrecognized\",\"the search words name a repo:, org:, or user:; pass --repo OWNER/REPO instead\"]],[\"broad\",[\"unrecognized\",\"gh does not take `--owner`\"]],[\"broad\",[\"unrecognized\",\"a gh search word starts with `~`, which bash would expand\"]],[\"broad\",[\"unrecognized\",\"\\\"a)\\\" holds a parenthesis, a quote, a backslash, or a special space or control character.\"]],[\"broad\",[\"unrecognized\",\"\\\"x)\\\" holds a parenthesis, a quote, a backslash, or a special space or control character.\"]],[\"broad\",[\"unrecognized\",\"the value of `--label` holds a quote or a line break\"]],[\"broad\",[\"unrecognized\",\"the value of `--label` has an empty item\"]],[\"broad\",[\"unrecognized\",\"the value of `--label` has an empty item\"]],[\"broad\",[\"unrecognized\",\"gh commands in two folders need two repository lookups\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghJqHasNoRule",
+      "description": "gh's --jq runs a jq program that can read the environment, so a gh line with --jq or -q asks std::bash, on an owned subcommand or not, and when the flag is quoted, as gh still reads it as the flag.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghGlobHasNoRule",
+      "description": "Bash expands a glob after the plan is made, so a file named --jq=... in the folder could become gh's --jq. A gh line with a glob word or a glob flag value asks std::bash, on an owned subcommand or not.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]],[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]],[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]],[\"broad\",[\"unrecognized\",\"a glob in a gh line can expand to a flag, such as --jq\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLongFlagsFailClosed",
+      "description": "A short gh flag with no long name has no rule, so a flag added to a table without one cannot slip past the one-name-per-flag check.",
+      "input": "",
+      "expectedOutput": "[\"gh's `-X` has no long name, so a second spelling of it could not be caught\",\"gh's `-Y` has no long name, so a second spelling of it could not be caught\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghUnownedStaysExec",
+      "description": "A gh subcommand the rule does not own asks std::exec, as before gh had a rule: the writes, gh run, gh pr create, and a line with a flag before the group.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::exec\",\"gh\",\"pr\"]]],[\"narrow\",[[\"std::exec\",\"gh\",\"run\"]]],[\"narrow\",[[\"std::exec\",\"gh\",\"pr\"]]],[\"narrow\",[[\"std::exec\",\"gh\",\"-R\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLinesACoderWrites",
+      "description": "Three gh lines a coding agent writes to review a pull request. The pr view is narrow and asks only std::github reads. The diff line is broad because wc reads a file the line makes, though its gh half alone is narrow. The commits line uses --jq, which has no rule.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::prFiles\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --json=title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files --repo github.com/egonSchiele/agency-lang\",[],null],[\"broad\",[\"unrecognized\",true]],[\"narrow\",[\"std::github::prDiff\",\"std::write\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLookupFillsThePair",
+      "description": "A gh read that names no repository asks about the repository in the origin remote of its folder. The handler rejects, so gh never runs.",
+      "input": "",
+      "expectedOutput": "[[\"std::github::prGet\",\"egonSchiele\",\"agency-lang\",1451]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLookupFailureRaisesNothing",
+      "description": "When the folder has no origin remote, safeBash raises nothing and tells the model to pass --repo.",
+      "input": "",
+      "expectedOutput": "[[],true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghLoginNote",
+      "description": "A gh line that exits 4 with gh's login message fails with a note telling the model to ask the user to log in. Exit 4 with other stderr, or from another program, gets no note.",
+      "input": "",
+      "expectedOutput": "[[4,\"GitHub CLI is not logged in. Tell the user to run `gh auth login`, or to set `GH_TOKEN`. Do not retry the command, and do not run `gh auth login` yourself.\"],[4,null],[4,null]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ghRunsWhatItAsked",
+      "description": "The gh command that runs names the repository the question named. A fake gh prints its arguments.",
+      "input": "",
+      "expectedOutput": "[\"success\",\"pr\\nview\\n1451\\n--repo\\ngithub.com/egonSchiele/agency-lang\\n\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

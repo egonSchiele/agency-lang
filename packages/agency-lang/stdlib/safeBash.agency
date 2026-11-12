@@ -1,10 +1,11 @@
 // These imports are NOT unused. Effect declarations come with imports,
-// and without them the `raise std::bash(...)`, `raise std::grep(...)`, and
-// `raise std::git::*(...)` sites below compile with their payload
-// contracts UNENFORCED. Measured: dropping them makes
-// `raise std::git::status("...", { wrongField: x })` typecheck clean.
+// and without them the `raise std::bash(...)`, `raise std::grep(...)`,
+// `raise std::git::*(...)`, and `raise std::github::*(...)` sites below
+// compile with their payload contracts UNENFORCED. Measured: dropping them
+// makes `raise std::git::status("...", { wrongField: x })` typecheck clean.
 // `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
+import { ghPrGet } from "std::github"
 import { WriteMode } from "std::index"
 import { bash, grep, ls, glob, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
@@ -43,6 +44,10 @@ import {
   gitStashPushEffect,
   gitStashPopEffect,
   gitRestoreEffect,
+  GhRepo,
+  GhNumberPayload,
+  GhPagedPayload,
+  pendingLookups,
   ReadPayload,
   ReadView,
   readExecution,
@@ -59,6 +64,10 @@ import {
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
+import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery } from "agency-lang/stdlib-lib/safeBashGh.js"
+import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
+import { _ghHasScopeQualifier } from "agency-lang/stdlib-lib/github/issues.js"
+import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
@@ -426,15 +435,21 @@ type SimpleRule = {
   command: Command
 }
 
-export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean = false): Result<Effect[]> {
+export def effectsFor(
+  command: SimpleCommand,
+  cwd: string,
+  readsStdin: boolean = false,
+  origin: GhRepo | null = null,
+): Result<Effect[]> {
   """
   Classify the approvals needed by one simple command.
   Return a failure when it needs the broader Bash approval.
 
   @param cwd - The resolved working directory used in approval payloads.
   @param readsStdin - Whether a pipe supplies this command's input.
+  @param origin - The repository a `gh` command acts on when it names none. Left null, such a command's std::github effects name no repository.
   """
-  const rule = simpleCommandRule(command, cwd, readsStdin)?
+  const rule = simpleCommandRule(command, cwd, origin, readsStdin)?
   return success(rule.effects)
 }
 
@@ -442,7 +457,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
 // the verb apply to every verb, git included, which is why `gitEffects`
 // has no other caller: a second path would have to repeat them.
 @capabilities(fileRead)
-def simpleCommandRule(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<SimpleRule> {
+def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<SimpleRule> {
   """
   Classify one simple command: the approvals it needs and the command to run for it.
   """
@@ -465,6 +480,20 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, readsStdin: boolean):
   if (name.text == "git") {
     const git = gitEffects(command, cwd)?
     return success({ effects: [...git.effects, ...redirect], command: git.command })
+  }
+  // A gh read raises std::github. Every other gh line falls through to
+  // verbEffects and asks std::exec. The glob and --jq checks cover both.
+  if (name.text == "gh") {
+    if (ghHasGlob(command)) {
+      return failure("a glob in a gh line can expand to a flag, such as --jq")
+    }
+    if (ghHasJq(command)) {
+      return failure("gh's --jq runs a program that can read the environment")
+    }
+    if (ghOwns(command)) {
+      const gh = ghEffects(command, cwd, origin)?
+      return success({ effects: [...gh.effects, ...redirect], command: gh.command })
+    }
   }
   const effects = verbEffects(name.text, command, cwd, readsStdin, redirect)?
   return success({ effects: effects, command: command })
@@ -2531,6 +2560,658 @@ def flagValues(values: FlagValue[], flags: string[]): string[] {
   return [entry.value for entry in values if flags.includes(entry.flag)]
 }
 
+// ---------------------------------------------------------------------------
+// gh
+//
+// A `gh` read raises the std::github read effect the typed tool raises for
+// the same data, and safeBash writes the gh command that runs, with the
+// repository spelled out. Only the reads in GH_VERBS are owned. Every other
+// gh subcommand, every write included, asks std::exec.
+// ---------------------------------------------------------------------------
+
+/** How many items a gh list reads when no --limit is given. */
+static const GH_DEFAULT_LIMIT = 30
+
+/** perPage 0: every page gh fetches for one pull request or issue. */
+static const GH_EVERY_PAGE = 0
+static const GH_FIRST_PAGE = 1
+
+static const GH_WORD: LiteralWord = { tag: "literal", text: "gh" }
+static const GH_HOST_GITHUB: Assignment = { tag: "assignment", name: "GH_HOST", value: { tag: "literal", text: "github.com" } }
+
+/** A pull request or issue a gh command names: a number, and the pair a
+  URL gave, or "" for both when it was a bare number. */
+type GhTarget = {
+  number: number;
+  owner: string;
+  repo: string
+}
+
+/** The repository a gh command acts on, and the folder whose origin remote
+  names it when the command itself does not. */
+type GhResolved = {
+  owner: string;
+  repo: string;
+  lookup: string | null
+}
+
+/** What one gh command asks, and the gh command safeBash runs for it. */
+type GhRule = {
+  effects: Effect[];
+  command: SimpleCommand
+}
+
+/** What a row's --repo means.
+ - "base": the repository the command acts on. Optional; when it is
+   absent the pair comes from the target URL, from `origin`, or from a
+   lookup. Written as `--repo github.com/OWNER/REPO`.
+ - "filter": a search filter. Required, exactly once. Written as
+   `--repo OWNER/REPO`, because gh search does not read a host there,
+   with `GH_HOST=github.com` before the command to pin the host. */
+type GhRepoFlag = "base" | "filter"
+
+type GhVerb = {
+  flags: FlagSpec;
+  /** "pull" or "issues" when the subcommand takes one number or URL. */
+  target: "pull" | "issues" | "none";
+  /** How many plain words it takes besides the target: search words. */
+  words: CountRange;
+  repoFlag: GhRepoFlag;
+  /** The values --state takes here; [] when the row has no --state. */
+  states: string[];
+  /** The --json field names gh accepts here; [] when it has no --json. */
+  jsonFields: string[];
+  /** The --json fields with no rule here, because each reads more than
+    this subcommand's effect says. */
+  heavyFields: string[]
+}
+
+static const GH_REPO_FLAGS: string[] = ["R", "--repo"]
+static const GH_JSON_FLAGS: string[] = ["--json"]
+
+/** The flags whose value gh splits at commas into a list. */
+static const GH_LIST_FLAGS: string[] = ["--label", "--match"]
+
+// The --json fields of gh 2.88.1, from the JSON FIELDS block of each
+// subcommand's --help.
+static const GH_PR_FIELDS: string[] = [
+  "additions", "assignees", "author", "autoMergeRequest", "baseRefName", "baseRefOid", "body",
+  "changedFiles", "closed", "closedAt", "closingIssuesReferences", "comments", "commits",
+  "createdAt", "deletions", "files", "fullDatabaseId", "headRefName", "headRefOid",
+  "headRepository", "headRepositoryOwner", "id", "isCrossRepository", "isDraft", "labels",
+  "latestReviews", "maintainerCanModify", "mergeCommit", "mergeStateStatus", "mergeable",
+  "mergedAt", "mergedBy", "milestone", "number", "potentialMergeCommit", "projectCards",
+  "projectItems", "reactionGroups", "reviewDecision", "reviewRequests", "reviews", "state",
+  "statusCheckRollup", "title", "updatedAt", "url",
+]
+static const GH_CHECK_FIELDS: string[] = [
+  "bucket", "completedAt", "description", "event", "link", "name", "startedAt", "state", "workflow",
+]
+static const GH_ISSUE_FIELDS: string[] = [
+  "assignees", "author", "body", "closed", "closedAt", "closedByPullRequestsReferences",
+  "comments", "createdAt", "id", "isPinned", "labels", "milestone", "number", "projectCards",
+  "projectItems", "reactionGroups", "state", "stateReason", "title", "updatedAt", "url",
+]
+static const GH_SEARCH_ISSUE_FIELDS: string[] = [
+  "assignees", "author", "authorAssociation", "body", "closedAt", "commentsCount", "createdAt",
+  "id", "isLocked", "isPullRequest", "labels", "number", "repository", "state", "title",
+  "updatedAt", "url",
+]
+
+// The gh reads safeBash recognizes, keyed by the group and subcommand. The
+// flags are an allowlist. A flag that changes how a result is shown, or
+// shows less of it, is listed. Left out on purpose, so a line using one
+// asks std::bash:
+// - `--web` opens a browser.
+// - `--jq`/`-q` run a jq program that can read the environment, and
+//   `--template`/`-t` is another small language. `--json` covers the need.
+// - `--search` on a list command takes a search query, which can name
+//   another repository or contradict `--state`. `gh search issues` covers it.
+// - `--watch` keeps `gh pr checks` running until the checks finish.
+// - `--owner` widens `gh search issues` to every repository of an owner.
+// - The list fields in `heavyFields`, which read the comments, files, or
+//   checks of every pull request listed.
+static const GH_VERBS: Record<string, GhVerb> = {
+  "pr view": {
+    flags: { plain: ["c", "--comments"], valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS], optionsFirst: false },
+    target: "pull",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: GH_PR_FIELDS,
+    heavyFields: []
+  },
+  "pr diff": {
+    flags: { plain: ["--name-only", "--patch"], valued: [...GH_REPO_FLAGS, "--color", "e", "--exclude"], optionsFirst: false },
+    target: "pull",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: [],
+    heavyFields: []
+  },
+  "pr checks": {
+    flags: { plain: ["--required"], valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS], optionsFirst: false },
+    target: "pull",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: GH_CHECK_FIELDS,
+    heavyFields: []
+  },
+  "pr list": {
+    flags: {
+      plain: ["d", "--draft"],
+      valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS, "s", "--state", "B", "--base", "L", "--limit", "A", "--author", "a", "--assignee", "l", "--label", "H", "--head"],
+      optionsFirst: false
+    },
+    target: "none",
+    words: NONE,
+    repoFlag: "base",
+    states: ["open", "closed", "merged", "all"],
+    jsonFields: GH_PR_FIELDS,
+    heavyFields: ["comments", "commits", "files", "reviews", "latestReviews", "statusCheckRollup"]
+  },
+  "issue view": {
+    flags: { plain: ["c", "--comments"], valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS], optionsFirst: false },
+    target: "issues",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: GH_ISSUE_FIELDS,
+    heavyFields: []
+  },
+  "issue list": {
+    flags: {
+      plain: [],
+      valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS, "s", "--state", "l", "--label", "L", "--limit", "A", "--author", "a", "--assignee", "--mention", "m", "--milestone"],
+      optionsFirst: false
+    },
+    target: "none",
+    words: NONE,
+    repoFlag: "base",
+    states: ["open", "closed", "all"],
+    jsonFields: GH_ISSUE_FIELDS,
+    heavyFields: ["comments"]
+  },
+  "search issues": {
+    flags: {
+      plain: ["--include-prs"],
+      valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS, "--state", "--label", "--author", "--assignee", "L", "--limit", "--sort", "--order", "--match"],
+      optionsFirst: false
+    },
+    target: "none",
+    words: AT_LEAST_ONE,
+    repoFlag: "filter",
+    states: ["open", "closed"],
+    jsonFields: GH_SEARCH_ISSUE_FIELDS,
+    heavyFields: []
+  }
+}
+
+/** Each short flag the gh tables list, and its long name. No letter means
+  two things across the rows (checked against gh 2.88.1's --help). */
+static const GH_LONG_NAMES: Record<string, string> = {
+  R: "--repo",
+  L: "--limit",
+  s: "--state",
+  l: "--label",
+  B: "--base",
+  A: "--author",
+  a: "--assignee",
+  H: "--head",
+  m: "--milestone",
+  e: "--exclude",
+  c: "--comments",
+  d: "--draft"
+}
+
+/** The reads of one pull request or issue that a view can ask for. */
+type GhRead = "get" | "files" | "comments" | "reviews" | "checks"
+
+/** The pr view --json fields that read more than the pull request
+  itself. A field not listed here reads "get". That includes `commits`
+  and `projectItems`, although the typed ghPrGet returns neither: no
+  std::github effect covers them, and `pr view N --json commits` is the
+  spelling a model uses to list a pull request's commits. `pr list` has no
+  rule for `commits`, because there it reads every listed pull request. */
+static const PR_VIEW_FIELD_READS: Record<string, GhRead> = {
+  files: "files",
+  comments: "comments",
+  reviews: "reviews",
+  latestReviews: "reviews",
+  statusCheckRollup: "checks"
+}
+static const ISSUE_VIEW_FIELD_READS: Record<string, GhRead> = { comments: "comments" }
+
+// What a view with no --json fetches, from gh 2.88.1's source. `pr view`
+// asks for comments, reviews, and statusCheckRollup with the pull request
+// (defaultFields in pkg/cmd/pr/view/view.go), with or without --comments.
+// `issue view` asks for lastComment, or every comment with --comments
+// (pkg/cmd/issue/view/view.go).
+static const PR_VIEW_PLAIN_READS: GhRead[] = ["get", "comments", "reviews", "checks"]
+static const ISSUE_VIEW_PLAIN_READS: GhRead[] = ["get", "comments"]
+
+/** The order a view's effects are raised in, whatever order the fields came in. */
+static const GH_READ_ORDER: GhRead[] = ["get", "files", "comments", "reviews", "checks"]
+
+/* The row a gh command names with its first two words, or null. A flag or
+  a quoted word in either place is no row: `gh -R o/r pr view 1` keeps
+  asking std::exec. */
+def ghVerbKey(command: SimpleCommand): string | null {
+  const args = command.args
+  if (args.length < 2) {
+    return null
+  }
+  const group = args[0]
+  const sub = args[1]
+  if (group.tag != "literal" || sub.tag != "literal") {
+    return null
+  }
+  const key = "${group.text} ${sub.text}"
+  if (GH_VERBS[key] == null) {
+    return null
+  }
+  return key
+}
+
+def ghOwns(command: SimpleCommand): boolean {
+  return ghVerbKey(command) != null
+}
+
+// Bash expands a glob after the plan is made, so on a line that would ask
+// std::exec, `*` in a folder holding a file named `--jq=env.GITHUB_TOKEN`
+// becomes that flag. Checked before ghHasJq, which cannot see through it.
+def ghHasGlob(command: SimpleCommand): boolean {
+  for (word in command.args) {
+    if (word.tag == "glob") {
+      return true
+    }
+    if (word is { tag: "flag" } && word.valueIsGlob == true) {
+      return true
+    }
+  }
+  return false
+}
+
+// gh's --jq runs a jq program inside gh, and jq reads the environment
+// (`env.GITHUB_TOKEN`). The check looks at what gh will see: a quoted
+// `'--jq'` is a quoted word to the parser and the flag to gh. A word with
+// no literal text, such as a variable, is skipped, because splitFlags or
+// execArgs refuses it; a glob was refused by ghHasGlob.
+def ghHasJq(command: SimpleCommand): boolean {
+  for (word in command.args) {
+    if (isJqFlag(ghArgText(word))) {
+      return true
+    }
+  }
+  return false
+}
+
+def ghArgText(word: Word): string {
+  if (word is { tag: "flag" }) {
+    return word.flagName
+  }
+  const text = literalWordText(word)
+  if (text is success(written)) {
+    return written
+  }
+  return ""
+}
+
+/* `--jq`, `--jq=x`, or a group of short flags with `q` in it (`-wq`). */
+def isJqFlag(text: string): boolean {
+  if (text == "--jq" || text.startsWith("--jq=")) {
+    return true
+  }
+  return text.startsWith("-") && !text.startsWith("--") && text.includes("q")
+}
+
+def ghEffects(command: SimpleCommand, cwd: string, origin: GhRepo | null): Result<GhRule> {
+  """
+  Classify a gh read: the std::github effects it raises and the gh command safeBash runs for it.
+  """
+  const key = ghVerbKey(command)
+  if (key == null) {
+    return failure("no rule for this gh command")
+  }
+  const verb: GhVerb = GH_VERBS[key]
+  const split = ghLongFlags(splitFlags("gh", gitWordsCommand(command.args.slice(2)), verb.flags)?)?
+  let words = split.positionals
+  let target: GhTarget | null = null
+  if (verb.target != "none") {
+    if (words.length == 0) {
+      return failure("`gh ${key}` needs a number or a URL")
+    }
+    const text = literalWordText(words[0])?
+    target = try _ghParseTarget(text, verb.target)?
+    words = words.slice(1)
+  }
+  if (!countFits(words.length, verb.words)) {
+    return failure(ghWordsMessage(key, verb))
+  }
+  const searchWords = ghSearchWords(words)?
+  ghCheckValues(key, verb, split.values)?
+  const repo = ghRepoFor(verb, split.values, target, cwd, origin)?
+  const effects = ghPayloads(key, verb, split, target, searchWords, repo)?
+  return success({ effects: effects, command: ghCommand(key, verb, split, target, words, repo, command.redirects) })
+}
+
+/* The search words' text. ghCommand writes the words back as the model
+  wrote them, and bash expands a leading `~` in an unquoted word, so the
+  query would hold a home folder the payload does not show. */
+def ghSearchWords(words: Word[]): Result<string[]> {
+  const texts = literalWords(words)?
+  for (word, index in words) {
+    if (tildeModeFor(word) == "expand" && texts[index].startsWith("~")) {
+      return failure("a gh search word starts with `~`, which bash would expand")
+    }
+  }
+  return success(texts)
+}
+
+def ghWordsMessage(key: string, verb: GhVerb): string {
+  if (verb.words.least > 0) {
+    return "`gh ${key}` needs words to search for"
+  }
+  if (verb.target == "none") {
+    return "`gh ${key}` takes no words besides its flags"
+  }
+  return "`gh ${key}` takes one number or URL and no other words"
+}
+
+/* A flag's long name. A short letter with no entry in GH_LONG_NAMES fails,
+  so a letter added to a table without one cannot pass the check below
+  under its second spelling. */
+def ghLongName(flag: string): Result<string> {
+  if (flag.startsWith("--")) {
+    return success(flag)
+  }
+  const long = GH_LONG_NAMES[flag]
+  if (long == null) {
+    return failure("gh's `-${flag}` has no long name, so a second spelling of it could not be caught")
+  }
+  return success(long)
+}
+
+/** The same flags with every short name replaced by its long name. Fails
+  when a long name then appears twice, as in `-L 5 --limit 500`, where a
+  payload built from one value would not say what gh does with the other. */
+def ghLongFlags(split: SplitArgs): Result<SplitArgs> {
+  let values: FlagValue[] = []
+  for (entry in split.values) {
+    values.push({ flag: ghLongName(entry.flag)?, value: entry.value })
+  }
+  for (entry in values) {
+    if ([other for other in values if other.flag == entry.flag].length > 1) {
+      return failure("gh takes `${entry.flag}` only once")
+    }
+  }
+  let plain: string[] = []
+  for (name in split.plain) {
+    const long = ghLongName(name)?
+    if (!plain.includes(long)) {
+      plain.push(long)
+    }
+  }
+  return success({ plain: plain, values: values, positionals: split.positionals })
+}
+
+/* The checks on flag values that the payload relies on. */
+def ghCheckValues(key: string, verb: GhVerb, values: FlagValue[]): Result {
+  for (entry in values) {
+    // gh writes filter values into a search query, where a `repo:` widens it.
+    if (_ghHasScopeQualifier(entry.value)) {
+      return failure("the value of `${entry.flag}` names another repository")
+    }
+    // gh reads a list flag such as --label as one CSV line, where a quote
+    // or a line break changes how the value splits. No flag needs either.
+    if (entry.value.includes("\"") || entry.value.includes("\n") || entry.value.includes("\r")) {
+      return failure("the value of `${entry.flag}` holds a quote or a line break")
+    }
+    if (GH_LIST_FLAGS.includes(entry.flag) && entry.value.split(",").includes("")) {
+      return failure("the value of `${entry.flag}` has an empty item")
+    }
+  }
+  const states = flagValues(values, ["--state"])
+  if (states.length > 0 && !verb.states.includes(states[0])) {
+    return failure("`gh ${key}` takes --state ${verb.states.join(", ")}, not `${states[0]}`")
+  }
+  for (fields in flagValues(values, ["--json"])) {
+    for (field in fields.split(",")) {
+      if (!verb.jsonFields.includes(field)) {
+        return failure("`gh ${key}` has no --json field `${field}`")
+      }
+      if (verb.heavyFields.includes(field)) {
+        return failure("`gh ${key} --json ${field}` reads more than a list")
+      }
+    }
+  }
+  return success(null)
+}
+
+/* The value of a flag, or the fallback when it was not given. */
+def ghValueOf(values: FlagValue[], flag: string, fallback: string): string {
+  const given = flagValues(values, [flag])
+  if (given.length == 0) {
+    return fallback
+  }
+  return given[0]
+}
+
+/** How many items a list reads: --limit, from 1 to the most GitHub returns
+  in one page, or gh's default. */
+def ghLimit(values: FlagValue[]): Result<number> {
+  const given = flagValues(values, ["--limit"])
+  if (given.length == 0) {
+    return success(GH_DEFAULT_LIMIT)
+  }
+  const limit = if (isDigits(given[0])) then digitsValue(given[0]) else 0
+  if (limit < 1 || limit > GITHUB_MAX_PER_PAGE) {
+    return failure("gh's `--limit` takes a number from 1 to ${GITHUB_MAX_PER_PAGE}")
+  }
+  return success(limit)
+}
+
+/* The repository a gh command acts on. For a `base` row the model's
+  --repo or URL wins, then `origin`, and with neither the pair is left for
+  a lookup in `cwd`. A `filter` row must name it with --repo. */
+def ghRepoFor(verb: GhVerb, values: FlagValue[], target: GhTarget | null, cwd: string, origin: GhRepo | null): Result<GhResolved> {
+  const given = flagValues(values, ["--repo"])
+  if (verb.repoFlag == "filter") {
+    if (given.length == 0) {
+      return failure("gh search needs --repo OWNER/REPO, or it searches all of GitHub")
+    }
+    const pair = try _ghParseRepoFlag(given[0])?
+    return success({ owner: pair.owner, repo: pair.repo, lookup: null })
+  }
+  let named: GhRepo | null = null
+  if (given.length > 0) {
+    const pair = try _ghParseRepoFlag(given[0])?
+    named = { owner: pair.owner, repo: pair.repo }
+  }
+  if (target != null && target.owner != "") {
+    if (named != null && (named.owner != target.owner || named.repo != target.repo)) {
+      return failure("the URL and --repo name two different repositories")
+    }
+    return success({ owner: target.owner, repo: target.repo, lookup: null })
+  }
+  if (named != null) {
+    return success({ owner: named.owner, repo: named.repo, lookup: null })
+  }
+  if (origin != null) {
+    return success({ owner: origin.owner, repo: origin.repo, lookup: null })
+  }
+  return success({ owner: "", repo: "", lookup: cwd })
+}
+
+/* The one place that names the gh rows, one arm per row, as gitPayloads
+  does for git. */
+def ghPayloads(key: string, verb: GhVerb, split: SplitArgs, target: GhTarget | null, words: string[], repo: GhResolved): Result<Effect[]> {
+  const values = split.values
+  const number = if (target == null) then 0 else target.number
+  const state = ghValueOf(values, "--state", "open")
+  const limit = ghLimit(values)?
+  const fields = ghJsonFields(values)
+  return match(key) {
+    "pr view" => success([ghPullRead(read, number, repo) for read in ghViewReads(fields, PR_VIEW_FIELD_READS, PR_VIEW_PLAIN_READS)])
+    "pr diff" => success([{ name: "std::github::prDiff", payload: ghNumberPayload(number, repo), lookup: repo.lookup }])
+    "pr checks" => success([ghPullRead("checks", number, repo)])
+    "pr list" => success([
+      {
+        name: "std::github::prList",
+        payload: {
+          owner: repo.owner,
+          repo: repo.repo,
+          state: state,
+          base: ghValueOf(values, "--base", ""),
+          perPage: limit,
+          page: GH_FIRST_PAGE
+        },
+        lookup: repo.lookup
+      }
+    ])
+    "issue view" => success(ghIssueReads(ghViewReads(fields, ISSUE_VIEW_FIELD_READS, ISSUE_VIEW_PLAIN_READS), number, repo))
+    "issue list" => success([
+      {
+        name: "std::github::issueList",
+        payload: {
+          owner: repo.owner,
+          repo: repo.repo,
+          state: state,
+          labels: ghListValue(values, "--label"),
+          perPage: limit,
+          page: GH_FIRST_PAGE
+        },
+        lookup: repo.lookup
+      }
+    ])
+    "search issues" => ghSearchEffects(words, split, limit, repo)
+    _ => failure("no rule for `gh ${key}`")
+  }
+}
+
+// The payload's query is the query gh sends, so a handler that reads it
+// sees the filter flags and gh's own `type:issue`. GitHub search unions
+// repository qualifiers, so neither the words nor a filter value may name
+// another repository; ghCheckValues checks the values.
+def ghSearchEffects(words: string[], split: SplitArgs, limit: number, repo: GhResolved): Result<Effect[]> {
+  if (_ghHasScopeQualifier(words.join(" "))) {
+    return failure("the search words name a repo:, org:, or user:; pass --repo OWNER/REPO instead")
+  }
+  const values = split.values
+  const kind: string[] = if (split.plain.includes("--include-prs")) then [] else ["issue"]
+  const qualifiers: Record<string, string[]> = {
+    assignee: flagValues(values, ["--assignee"]),
+    author: flagValues(values, ["--author"]),
+    "in": ghListValue(values, "--match"),
+    label: ghListValue(values, "--label"),
+    repo: ["${repo.owner}/${repo.repo}"],
+    state: flagValues(values, ["--state"]),
+    "type": kind
+  }
+  const query = try _ghSearchQuery(words, qualifiers)?
+  return success([
+    {
+      name: "std::github::issueSearch",
+      payload: { owner: repo.owner, repo: repo.repo, query: query, perPage: limit, page: GH_FIRST_PAGE },
+      lookup: repo.lookup
+    }
+  ])
+}
+
+/* The --json field names, or null when the command has no --json. */
+def ghJsonFields(values: FlagValue[]): string[] | null {
+  const given = flagValues(values, ["--json"])
+  if (given.length == 0) {
+    return null
+  }
+  return given[0].split(",")
+}
+
+/* The items of a flag gh splits at commas, or [] when it was not given. */
+def ghListValue(values: FlagValue[], flag: string): string[] {
+  const given = flagValues(values, [flag])
+  if (given.length == 0) {
+    return []
+  }
+  return given[0].split(",")
+}
+
+/* A view's distinct reads, in GH_READ_ORDER. */
+def ghViewReads(fields: string[] | null, table: Record<string, GhRead>, plain: GhRead[]): GhRead[] {
+  if (fields == null) {
+    return plain
+  }
+  const wanted: GhRead[] = [table[field] ?? "get" for field in fields]
+  return [read for read in GH_READ_ORDER if wanted.includes(read)]
+}
+
+def ghNumberPayload(number: number, repo: GhResolved): GhNumberPayload {
+  return { owner: repo.owner, repo: repo.repo, number: number }
+}
+
+def ghPagedPayload(number: number, repo: GhResolved): GhPagedPayload {
+  return { owner: repo.owner, repo: repo.repo, number: number, perPage: GH_EVERY_PAGE, page: GH_FIRST_PAGE }
+}
+
+def ghPullRead(read: GhRead, number: number, repo: GhResolved): Effect {
+  return match(read) {
+    "get" => ({ name: "std::github::prGet", payload: ghNumberPayload(number, repo), lookup: repo.lookup })
+    "files" => ({ name: "std::github::prFiles", payload: ghPagedPayload(number, repo), lookup: repo.lookup })
+    "comments" => ({ name: "std::github::issueCommentList", payload: ghPagedPayload(number, repo), lookup: repo.lookup })
+    "reviews" => ({ name: "std::github::prReviewList", payload: ghPagedPayload(number, repo), lookup: repo.lookup })
+    "checks" => ({ name: "std::github::prChecks", payload: ghPagedPayload(number, repo), lookup: repo.lookup })
+  }
+}
+
+// `gh issue view N` shows a pull request when N is one, and the number
+// cannot tell which it is before gh runs. The typed ghIssueGet refuses a
+// pull request, so a read of the issue itself asks prGet as well.
+def ghIssueReads(reads: GhRead[], number: number, repo: GhResolved): Effect[] {
+  let effects: Effect[] = []
+  for (read in reads) {
+    if (read == "comments") {
+      effects.push({ name: "std::github::issueCommentList", payload: ghPagedPayload(number, repo), lookup: repo.lookup })
+    } else {
+      effects.push({ name: "std::github::issueGet", payload: ghNumberPayload(number, repo), lookup: repo.lookup })
+      effects.push({ name: "std::github::prGet", payload: ghNumberPayload(number, repo), lookup: repo.lookup })
+    }
+  }
+  return effects
+}
+
+// The one place a gh command is assembled, from checked data, as
+// gitCommand does for git. The flags are rebuilt from what ghLongFlags
+// returned, never copied from the model's text, and --repo always comes
+// last, naming the repository the payloads name. A `base` row's --repo
+// names the host. gh search reads no host in --repo and searches gh's
+// default host, so a `filter` row sets GH_HOST for that one command. On a
+// first pass with a lookup pending the pair is empty; that text never runs.
+def ghCommand(key: string, verb: GhVerb, split: SplitArgs, target: GhTarget | null, words: Word[], repo: GhResolved, redirects: Redirect[]): SimpleCommand {
+  """
+  Build the gh command to run: the subcommand, the number, the search words, the checked flags, and --repo.
+  """
+  const numberWords: Word[] = if (target == null) then [] else [literalWordOf("${target.number}")]
+  const pair = "${repo.owner}/${repo.repo}"
+  const repository = if (verb.repoFlag == "base") then "github.com/${pair}" else pair
+  const host: Assignment[] = if (verb.repoFlag == "filter") then [GH_HOST_GITHUB] else []
+  return {
+    tag: "simpleCommand",
+    assignments: host,
+    command: GH_WORD,
+    args: [
+      ...[literalWordOf(part) for part in key.split(" ")],
+      ...numberWords,
+      ...words,
+      ...flagWords(split.plain, [entry for entry in split.values if entry.flag != "--repo"]),
+      { tag: "flag", flagName: "--repo" },
+      literalWordOf(repository),
+    ],
+    redirects: redirects
+  }
+}
+
 
 /** How many lines head and tail print when no count is given. */
 static const DEFAULT_LINE_COUNT = 10
@@ -3092,11 +3773,17 @@ def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   return writePlan(command, cwd)
 }
 
-export def planFor(source: string, cwd: string): Plan {
+// `origin` is how a `gh` command that names no repository gets one without
+// planFor running anything. safeBash plans once with no origin, looks up
+// the origin remote of the folder `pendingLookups` names, and plans again
+// with the answer. The second plan is the one raised and run. A caller who
+// plans only once may get std::github effects with "" for owner and repo.
+export def planFor(source: string, cwd: string, origin: GhRepo | null = null): Plan {
   """
   Plan approvals and execution for Bash source without running the command.
 
   @param cwd - The working directory used to resolve paths during classification.
+  @param origin - The repository a `gh` command acts on when it names none. Left null, such a command's std::github effects name no repository and say which folder to look it up in.
   """
   const parsed = bashParser(source)
   if (parsed is failure(why)) {
@@ -3141,7 +3828,7 @@ export def planFor(source: string, cwd: string): Plan {
     }
   }
 
-  const classified = classifyAll(commands, cwd)
+  const classified = classifyAll(commands, cwd, origin)
   if (classified is failure(firstMiss)) {
     // We have to ask the broad question anyway, so asking narrow ones
     // first adds prompts without adding information. The ORIGINAL text
@@ -3154,6 +3841,10 @@ export def planFor(source: string, cwd: string): Plan {
     // of nothing but echoes. The audit rule makes this a std::bash
     // question, so by the same rule it runs the original text.
     return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
+  }
+  // One line gets one lookup, so its payloads all come from one answer.
+  if (pendingLookups(narrow).length > 1) {
+    return broadPlan(source, verbs, { kind: "unrecognized", detail: "gh commands in two folders need two repository lookups" })
   }
   // Narrow questions were asked, so run the tree we classified.
   const rebuilt = rebuild(classified.value.commands)
@@ -3186,14 +3877,14 @@ type ClassifiedAll = {
 // wall reads the flat list, because a `cd` on the left of `&&` moves the
 // working directory for the commands to its right.
 @capabilities(fileRead)
-def classifyAll(commands: Command[], cwd: string): Result<ClassifiedAll> {
+def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result<ClassifiedAll> {
   """
   Return the effects of every command and the tree to run, or the first reason one needs the broad Bash approval.
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
   for (command, index in commands) {
-    const classified = classify(command, cwd, false)?
+    const classified = classify(command, cwd, origin, false)?
     // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
     // payload for `b` would be true in both cases.
     if (classified.cwd != cwd && index < commands.length - 1) {
@@ -3206,21 +3897,21 @@ def classifyAll(commands: Command[], cwd: string): Result<ClassifiedAll> {
 }
 
 @capabilities(fileRead)
-def classify(command: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+def classify(command: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   // Keep this exhaustive, like flattenOne, so a new command shape cannot
   // be classified by accident.
   return match(command) {
-    { tag: "simpleCommand" } => classifySimple(command, cwd, readsStdin)
-    { tag: "pipeline", stages } => classifyPipeline(stages, cwd, readsStdin)
-    { tag: "and", left, right } => classifyAnd(left, right, cwd, readsStdin)
-    { tag: "or", left, right } => classifyOr(left, right, cwd, readsStdin)
-    { tag: "parens", command as inner } => classifyGroup(inner, cwd, readsStdin)
+    { tag: "simpleCommand" } => classifySimple(command, cwd, origin, readsStdin)
+    { tag: "pipeline", stages } => classifyPipeline(stages, cwd, origin, readsStdin)
+    { tag: "and", left, right } => classifyAnd(left, right, cwd, origin, readsStdin)
+    { tag: "or", left, right } => classifyOr(left, right, cwd, origin, readsStdin)
+    { tag: "parens", command as inner } => classifyGroup(inner, cwd, origin, readsStdin)
   }
 }
 
 @capabilities(fileRead)
-def classifySimple(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<Classified> {
-  const rule = simpleCommandRule(command, cwd, readsStdin)?
+def classifySimple(command: SimpleCommand, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const rule = simpleCommandRule(command, cwd, origin, readsStdin)?
   return success({ effects: rule.effects, cwd: cwd, command: rule.command })
 }
 
@@ -3228,11 +3919,11 @@ def classifySimple(command: SimpleCommand, cwd: string, readsStdin: boolean): Re
 // stage reads a pipe. Each stage runs in a subshell of its own, so a `cd`
 // inside one moves nothing outside it.
 @capabilities(fileRead)
-def classifyPipeline(stages: PipelineStage[], cwd: string, readsStdin: boolean): Result<Classified> {
+def classifyPipeline(stages: PipelineStage[], cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   let effects: Effect[] = []
   let rewritten: any[] = []
   for (stage, index in stages) {
-    const classified = classify(stage, cwd, readsStdin || index > 0)?
+    const classified = classify(stage, cwd, origin, readsStdin || index > 0)?
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
   }
@@ -3241,8 +3932,8 @@ def classifyPipeline(stages: PipelineStage[], cwd: string, readsStdin: boolean):
 
 // Parentheses run a subshell, so a `cd` inside them ends with them.
 @capabilities(fileRead)
-def classifyGroup(inner: Command, cwd: string, readsStdin: boolean): Result<Classified> {
-  const classified = classify(inner, cwd, readsStdin)?
+def classifyGroup(inner: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const classified = classify(inner, cwd, origin, readsStdin)?
   return success({ effects: classified.effects, cwd: cwd, command: { tag: "parens", command: classified.command } })
 }
 
@@ -3254,19 +3945,19 @@ def classifyGroup(inner: Command, cwd: string, readsStdin: boolean): Result<Clas
 // directory after the left side is carried to the right side, which is how
 // `b` is classified in `x` as well.
 @capabilities(fileRead)
-def classifyAnd(left: Command, right: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+def classifyAnd(left: Command, right: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const cd = asCd(left)
   if (cd != null) {
     const moved = cdTarget(cd, cwd)?
-    const rest = classify(right, moved, readsStdin)?
+    const rest = classify(right, moved, origin, readsStdin)?
     return success({
       effects: rest.effects,
       cwd: rest.cwd,
       command: { tag: "and", left: cdTo(cd, moved), right: rest.command }
     })
   }
-  const first = classify(left, cwd, readsStdin)?
-  const second = classify(right, first.cwd, readsStdin)?
+  const first = classify(left, cwd, origin, readsStdin)?
+  const second = classify(right, first.cwd, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
     cwd: second.cwd,
@@ -3278,12 +3969,12 @@ def classifyAnd(left: Command, right: Command, cwd: string, readsStdin: boolean)
 // and the working directory differs between the two. No payload for `b`
 // would be true in both cases, so the string asks the broad question.
 @capabilities(fileRead)
-def classifyOr(left: Command, right: Command, cwd: string, readsStdin: boolean): Result<Classified> {
-  const first = classify(left, cwd, readsStdin)?
+def classifyOr(left: Command, right: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const first = classify(left, cwd, origin, readsStdin)?
   if (first.cwd != cwd) {
     return failure("a command after `||` follows a `cd`, and its directory depends on whether the `cd` worked")
   }
-  const second = classify(right, cwd, readsStdin)?
+  const second = classify(right, cwd, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
     cwd: second.cwd,
@@ -3500,11 +4191,38 @@ export def resolveCwd(cwd: string): string {
   return "."
 }
 
+/** Added to a failed repository lookup, whose own message names the typed
+  tools' owner and repo parameters. */
+static const GH_REPO_HINT = "With gh, pass --repo OWNER/REPO."
+
+// A gh read that names no repository gets the origin remote of the folder
+// it runs in. Looking that up runs git, and planFor runs nothing, so the
+// line is planned a second time with the answer. The second plan is the
+// one raised and run, so its payloads and its command text come from one
+// pass over the same checked data. The lookup goes through _gitRun, which
+// adds the hardening flags and drops the GIT_* variables, and `git remote
+// get-url` runs no hook or pager.
+@capabilities(fileRead, subprocess, env)
+def resolvedPlan(first: Plan, source: string, cwd: string): Result<Plan> {
+  """
+  The plan to raise and run: `first` when it waits on no repository lookup, and otherwise the line planned again with the origin remote of the folder it named.
+  """
+  const folders = pendingLookups(first.effects)
+  if (folders.length == 0) {
+    return success(first)
+  }
+  const coord = try _ghResolveRepo("", "", folders[0])
+  if (coord is failure(why)) {
+    return failure("${why} ${GH_REPO_HINT}")
+  }
+  return success(planFor(source, cwd, { owner: coord.value.owner, repo: coord.value.repo }))
+}
+
 export def safeBash(
   command: string,
   cwd: string = "",
   timeout: number = 120,
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run Bash commands after approval of the actions they perform.
   Return stdout on success. A nonzero exit is a failure carrying the exit
@@ -3519,12 +4237,26 @@ export def safeBash(
   @param timeout - Seconds the command may run. Pass more for a command known to be slow, such as a full test suite.
   """
   const dir = resolveCwd(cwd)
-  const plan = planFor(command, dir)
-  const exec = plan.execution
+  const first = planFor(command, dir)
 
   // Logged before the refusal check, so a refused plan is on the record
   // too. Nothing has been raised or run yet.
-  _debug("safeBash plan", planRecord(plan, command, dir))
+  _debug("safeBash plan", planRecord(first, command, dir))
+
+  // Everything below reads `plan`, the plan that is raised and run. A
+  // refused plan raises nothing, so it never waits on a lookup.
+  const plan = resolvedPlan(first, command, dir)?
+  const exec = plan.execution
+  if (pendingLookups(first.effects).length > 0) {
+    _debug("safeBash resolved plan", planRecord(plan, command, dir))
+  }
+
+  // A command whose repository was never looked up must not run. This
+  // cannot happen while resolvedPlan is right; it stops a later change to
+  // the planning code from running a gh command with an empty repository.
+  if (pendingLookups(plan.effects).length > 0) {
+    return failure("safeBash did not look up the repository for a gh command, so it did not run it")
+  }
 
   // A refusal returns before anything is raised: there is nothing to
   // approve. It still has an arm in the match below, because the match is
@@ -3557,7 +4289,7 @@ export def safeBash(
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
     { kind: "chain" } => runChain(exec, command)
-    { kind: "bash", command as text } => runBash(text, dir, command, timeout)
+    { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
@@ -3898,6 +4630,114 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
       })
       return success(null)
     }
+    // The std::github messages are the typed tools' messages for the same
+    // effect, so a person sees one question on either path.
+    "std::github::prGet" => {
+      raise std::github::prGet("Read pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prDiff" => {
+      raise std::github::prDiff("Read the diff of pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueGet" => {
+      raise std::github::issueGet("Read issue #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prFiles" => {
+      raise std::github::prFiles("List the changed files of pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prReviewList" => {
+      raise std::github::prReviewList("List reviews on pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prChecks" => {
+      raise std::github::prChecks("Read CI check runs for pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueCommentList" => {
+      raise std::github::issueCommentList("List comments on issue #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prList" => {
+      raise std::github::prList("List ${effect.payload.state} pull requests on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        state: effect.payload.state,
+        base: effect.payload.base,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueList" => {
+      raise std::github::issueList("List ${effect.payload.state} issues on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        state: effect.payload.state,
+        labels: effect.payload.labels,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueSearch" => {
+      raise std::github::issueSearch("Search issues on ${effect.payload.owner}/${effect.payload.repo}: ${effect.payload.query}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        query: effect.payload.query,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
   }
   return success(null)
 }
@@ -3914,7 +4754,7 @@ result. Nonzero exits return failures, including grep's "no match" and
 diff's "files differ" statuses. Long output is saved with a preview.
 */
 @capabilities(fileRead, subprocess)
-def runBash(command: string, cwd: string, source: string = "", timeout: number = 120): Result<string> {
+def runBash(command: string, cwd: string, source: string = "", timeout: number = 120, verbs: string[] = []): Result<string> {
   """
   Execute a Bash command after its planned effects have been approved.
   Return stdout on success, or an exit failure with output on nonzero exit.
@@ -3950,24 +4790,38 @@ def runBash(command: string, cwd: string, source: string = "", timeout: number =
     return timeoutFailure(label, timeout, result.stdout, result.stderr)
   }
   if (result.exitCode != 0) {
-    return exitFailure(label, result.exitCode, result.stdout, result.stderr, label)
+    const note = if (isGhLoginFailure(verbs, result.exitCode, result.stderr)) then GH_LOGIN_NOTE else ""
+    return exitFailure(label, result.exitCode, result.stdout, result.stderr, label, note)
   }
   return success(keepOutput(result.stdout, result.exitCode, label))
 }
 
-// Include the exit code and both streams, saving long output for later retrieval.
-def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string): Result<string> {
-  const out = keepOutput(stdout, exitCode, label)
-  return failure(
-    JSON.stringify(
-    {
+/** The exit code gh uses when it is not logged in. */
+static const GH_LOGIN_EXIT = 4
+static const GH_LOGIN_MARK = "gh auth login"
+static const GH_LOGIN_NOTE = "GitHub CLI is not logged in. Tell the user to run `gh auth login`, or to set `GH_TOKEN`. Do not retry the command, and do not run `gh auth login` yourself."
+
+// A model that sees gh's login message may run `gh auth login`, which
+// waits for a person to answer its questions until the time limit. The
+// exit code belongs to the whole line, so in `gh pr view 1; other` a 4
+// could come from `other`; gh's own message in stderr settles it.
+def isGhLoginFailure(verbs: string[], exitCode: number, stderr: string): boolean {
+  return exitCode == GH_LOGIN_EXIT && verbs.includes("gh") && stderr.includes(GH_LOGIN_MARK)
+}
+
+// Include the exit code and both streams, saving long output for later
+// retrieval, and a note for the model when there is one.
+def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string, note: string = ""): Result<string> {
+  const fields = {
     command: command,
     exitCode: exitCode,
     stderr: keepOutput(stderr, exitCode, label),
-    stdout: out
-  },
-  ),
-  )
+    stdout: keepOutput(stdout, exitCode, label)
+  }
+  if (note == "") {
+    return failure(JSON.stringify(fields))
+  }
+  return failure(JSON.stringify({ ...fields, note: note }))
 }
 
 // The failure for a command stopped at its time limit: the output so far,

@@ -37,6 +37,17 @@ describe("shellEnvironment", () => {
     expect(shellEnvironment(env)).toEqual({ PATH: "/usr/bin" });
   });
 
+  it("removes the variables that send gh to another host or repository or start its pager, and keeps its tokens", () => {
+    const env = {
+      GH_HOST: "ghe.example.com",
+      GH_REPO: "other/private",
+      GH_FORCE_TTY: "1",
+      GH_TOKEN: "a",
+      GITHUB_TOKEN: "b",
+    };
+    expect(shellEnvironment(env)).toEqual({ GH_TOKEN: "a", GITHUB_TOKEN: "b" });
+  });
+
   it("keeps the variables that name git's SSH program, and unrelated GIT_ names", () => {
     const env = {
       GIT_SSH_COMMAND: "ssh -i ~/.ssh/work",

@@ -11,12 +11,13 @@ import {
   READ_VERBS,
   FlagSpec,
  } from "std::safeBash"
-import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
+import test { splitFlags, flattenCommands, readFileVerb, verbName, ghLongFlags } from "std::safeBash"
+import { pendingLookups, GhRepo, Plan } from "std::safeBash/actions"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
-import { setEnv } from "std::system"
+import { env, setEnv } from "std::system"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -1061,6 +1062,34 @@ node filtersInAPipe() {
     grepNames("tr a b"),
     grepNames("cat one.txt | tr a $B"),
     grepNames("cat one.txt | tr -dd x"),
+  ]
+}
+
+/** A plan made in the fixture folder: its outcome, each effect's name and
+  the file it reads, and the broad reason. */
+def fixtureReadRow(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload.filename] for effect in effects], plan.broadReason]
+}
+
+/** A plan made in a folder that does not exist: its outcome, each
+  effect's name and payload, and the broad reason. */
+def wordRow(source: string): any {
+  const plan = planFor(source, "/repo")
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects], plan.broadReason]
+}
+
+// The parser reads `,`, `@`, and `%` as word characters, and braces that
+// bash does not expand, so the rules judge these lines like any other.
+node punctuationInWords() {
+  return [
+    fixtureReadRow("cut -d, -f1 one.txt"),
+    fixtureReadRow("sort -k2,2n one.txt"),
+    wordRow("git show HEAD@{1}"),
+    wordRow("date +%Y"),
+    wordRow("echo a{b,c}"),
   ]
 }
 
@@ -2178,6 +2207,313 @@ node gitRunsSafely() {
   remove(GIT_NO_REPO) with approve
   remove(GIT_BARE) with approve
   return seen
+}
+
+// ---------------------------------------------------------------------------
+// gh
+//
+// The nodes below go through `planFor` and run nothing. A row that uses
+// `cd` plans in STDLIB_TESTS, where `grep-fixtures` exists; every other
+// row plans in `/repo`, a folder that does not exist.
+// ---------------------------------------------------------------------------
+
+/** A plan's outcome, each effect's name and payload, the text that runs,
+  the folders still waiting on a repository lookup, and why it went broad. */
+def ghPlan(source: string, cwd: string = "/repo", origin: GhRepo | null = null): any {
+  const plan = planFor(source, cwd, origin)
+  const effects: any[] = plan.effects
+  const text = match(plan.execution) {
+    { kind: "bash", command as text } => text
+    _ => ""
+  }
+  return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects], text, pendingLookups(plan.effects), reasonOf(plan)]
+}
+
+/** A plan's outcome and why it went broad. */
+def ghBroad(source: string, cwd: string = "/repo"): any {
+  const plan = planFor(source, cwd)
+  return [outcomeOf(plan), reasonOf(plan)]
+}
+
+def reasonOf(plan: Plan): any {
+  const reason = plan.broadReason
+  if (reason == null) {
+    return null
+  }
+  return [reason.kind, reason.detail]
+}
+
+static const AGENCY_LANG: GhRepo = { owner: "egonSchiele", repo: "agency-lang" }
+
+node ghReads() {
+  return [
+    ghPlan("gh pr view 1451"),
+    ghPlan("gh pr view 1451", "/repo", AGENCY_LANG),
+    ghPlan("gh pr view 1451 --repo egonSchiele/agency-lang"),
+    ghPlan("gh pr view https://github.com/egonSchiele/agency-lang/pull/1451"),
+    ghPlan("gh pr view 1451 --repo a/b", "/repo", AGENCY_LANG),
+    ghPlan("gh pr view 1 -R github.com/o/r --comments"),
+    ghPlan("gh pr view 1 --json title,body"),
+    ghPlan("gh pr view 1 --json title,files,reviews,latestReviews,comments,statusCheckRollup"),
+    ghPlan("gh pr diff 1 --name-only"),
+    ghPlan("gh pr checks 1 --required"),
+    ghPlan("gh pr checks 1 --json name,state"),
+    ghPlan("gh pr list"),
+    ghPlan("gh pr list --state merged --base main --limit 5 --author dana"),
+    ghPlan("gh pr list -L 100"),
+    ghPlan("gh issue view 7"),
+    ghPlan("gh issue view 7 --comments"),
+    ghPlan("gh issue view 7 --json title,comments"),
+    ghPlan("gh issue list --label bug,urgent --state all"),
+    ghPlan("gh search issues crash in:title --repo o/r --limit 10"),
+    ghPlan("gh search issues 'crash bug' --repo o/r --state closed --label bug,ui --match title,body --author dana"),
+    ghPlan("gh search issues crash --repo o/r --include-prs"),
+    ghPlan("gh search issues '~/private' --repo o/r"),
+    ghPlan("gh pr diff 1 | head -20"),
+  ]
+}
+
+// The lookup folder is the real path of the folder the `cd` names, which
+// differs between machines, so this row reports whether it ends right.
+node ghLookupFollowsCd() {
+  const plan = planFor("cd grep-fixtures && gh pr view 1", STDLIB_TESTS)
+  const folders = pendingLookups(plan.effects)
+  return [outcomeOf(plan), folders.length, folders[0].endsWith("/stdlib/grep-fixtures")]
+}
+
+node ghStaysBroad() {
+  return [
+    ghBroad("gh pr view"),
+    ghBroad("gh pr view abc"),
+    ghBroad("gh pr view 1 --web"),
+    ghBroad("gh pr checks 1 --watch"),
+    ghBroad("gh pr view 1 --template x"),
+    ghBroad("gh pr list --search foo"),
+    ghBroad("gh issue list --search foo"),
+    ghBroad("gh pr list --limit 101"),
+    ghBroad("gh pr list --limit 0"),
+    ghBroad("gh pr list -L 5 --limit 500"),
+    ghBroad("gh pr list -s open --state closed"),
+    ghBroad("gh pr list --state bogus"),
+    ghBroad("gh issue list --state merged"),
+    ghBroad("gh search issues crash --repo o/r --state all"),
+    ghBroad("gh pr list --json comments"),
+    ghBroad("gh issue list --json comments"),
+    ghBroad("gh pr view 1 --json nope"),
+    ghBroad("gh pr list --author 'x repo:other/private'"),
+    ghBroad("gh pr view 1 --repo ghe.example.com/o/r"),
+    ghBroad("gh pr view 1 --repo ../x"),
+    ghBroad("gh pr view https://github.com/a/b/pull/1 --repo c/d"),
+    ghBroad("gh search issues crash"),
+    ghBroad("gh search issues crash --repo o/r -R other/private"),
+    ghBroad("gh search issues crash --repo o/r,other/private"),
+    ghBroad("gh search issues repo:other/x crash --repo o/r"),
+    ghBroad("gh search issues crash --repo o/r --owner acme"),
+    ghBroad("gh search issues ~/private --repo o/r"),
+    ghBroad("gh search issues 'a)' OR '(b' --repo o/r"),
+    ghBroad("gh search issues crash --repo o/r --author 'x)'"),
+    ghBroad("gh issue list --label '\"bug,urgent\"'"),
+    ghBroad("gh issue list --label ''"),
+    ghBroad("gh issue list --label bug,"),
+    ghBroad("(cd grep-fixtures && gh pr view 1); gh pr view 2", STDLIB_TESTS),
+  ]
+}
+
+node ghJqHasNoRule() {
+  return [
+    ghBroad("gh pr view 1 --json title --jq .title"),
+    ghBroad("gh pr view 1 --json title --jq=.title"),
+    ghBroad("gh pr view 1 --json title -q .title"),
+    ghBroad("gh run view 5 --json jobs --jq .jobs"),
+    ghBroad("gh run view 5 --json jobs --jq=.jobs"),
+    ghBroad("gh run view 5 -wq .jobs"),
+    ghBroad("gh run view 5 --json jobs '--jq' '.jobs'"),
+    ghBroad("gh run view 5 --json jobs \"--jq=.jobs\""),
+    ghBroad("gh run view 5 --json jobs '-q' '.jobs'"),
+  ]
+}
+
+// A glob is expanded by bash after the plan is made, so a file named
+// `--jq=env.GITHUB_TOKEN` in the folder would become that flag. A gh line
+// with a glob has no rule, owned subcommand or not.
+node ghGlobHasNoRule() {
+  return [
+    ghBroad("gh run view 5 --json jobs *"),
+    ghBroad("gh api rate_limit [-]-jq env.GITHUB_TOKEN"),
+    ghBroad("gh run view 5 --json=*"),
+    ghBroad("gh pr view 1 *"),
+  ]
+}
+
+// Every short gh flag must have a long name, or `-X a --xlong b` would pass
+// the one-name-per-flag check. A letter with no long name has no rule.
+node ghLongFlagsFailClosed() {
+  const plain = ghLongFlags({ plain: ["X"], values: [], positionals: [] })
+  const valued = ghLongFlags({ plain: [], values: [{ flag: "Y", value: "1" }], positionals: [] })
+  return [refusalOf(plain), refusalOf(valued)]
+}
+
+/** A failure's message, or "ACCEPTED" when the result was a success. */
+def refusalOf(result: Result<any>): string {
+  if (result is failure(why)) {
+    return why
+  }
+  return "ACCEPTED"
+}
+
+/** A plan's outcome, and the program and subcommand of each std::exec. */
+def ghExecRow(source: string): any {
+  const plan = planFor(source, "/repo")
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload.command, effect.payload.subcommand] for effect in effects]]
+}
+
+node ghUnownedStaysExec() {
+  return [
+    ghExecRow("gh pr comment 1 -b hi"),
+    ghExecRow("gh run view 5"),
+    ghExecRow("gh pr create --fill"),
+    ghExecRow("gh -R o/r pr view 1"),
+  ]
+}
+
+// Three gh lines a coding agent writes to review a pull request.
+static const CODER_PR_VIEW = "gh pr view 1451 --repo egonSchiele/agency-lang --json title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files"
+static const CODER_PR_DIFF = "gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff && wc -l /tmp/pr1451.diff"
+static const CODER_COMMITS = "gh pr view 1451 --repo egonSchiele/agency-lang --json commits --jq '.commits[].messageHeadline'"
+
+def effectNames(plan: Plan): string[] {
+  return [effect.name for effect in plan.effects]
+}
+
+// The first line is narrow. The second is broad because `wc` reads a file
+// the line makes, which does not exist when the plan is made; its gh half
+// is narrow on its own. Its reason holds a real path, which differs
+// between machines, so the row checks that the reason names the file. The
+// third uses --jq, which has no rule.
+node ghLinesACoderWrites() {
+  const diff = planFor(CODER_PR_DIFF, "/repo")
+  const diffAlone = planFor("gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff", "/repo")
+  const reason = diff.broadReason
+  let diffReason: any = null
+  if (reason != null) {
+    diffReason = [reason.kind, reason.detail.includes("pr1451.diff")]
+  }
+  return [
+    ghPlan(CODER_PR_VIEW),
+    [outcomeOf(diff), diffReason],
+    [outcomeOf(diffAlone), effectNames(diffAlone)],
+    ghBroad(CODER_COMMITS),
+  ]
+}
+
+/** A git repository whose origin is agency-lang on GitHub, and one with no
+  remote. Both are made by the tests below and removed after. */
+static const GH_ORIGIN_FIXTURE = __dirname + "/stdlib/__safebash_gh_origin__"
+static const GH_NO_REMOTE_FIXTURE = __dirname + "/stdlib/__safebash_gh_noremote__"
+
+/** The folder a fake `gh` is written into for a test. */
+static const FAKE_GH_DIR = __dirname + "/stdlib/__safebash_fake_gh__"
+
+def makeGhFixtures() {
+  remove(GH_ORIGIN_FIXTURE) with approve
+  mkdir(GH_ORIGIN_FIXTURE) with approve
+  bash("git init -q && git remote add origin https://github.com/egonSchiele/agency-lang.git", cwd: GH_ORIGIN_FIXTURE) with approve
+  remove(GH_NO_REMOTE_FIXTURE) with approve
+  mkdir(GH_NO_REMOTE_FIXTURE) with approve
+  bash("git init -q", cwd: GH_NO_REMOTE_FIXTURE) with approve
+}
+
+def removeGhFixtures() {
+  remove(GH_ORIGIN_FIXTURE) with approve
+  remove(GH_NO_REMOTE_FIXTURE) with approve
+}
+
+/** Run `source` through safeBash in `dir`, approved, with a `gh` on the
+  search path that is the shell script `script`. Puts PATH back before it
+  returns, whether the run succeeded or failed. */
+def runWithFakeGh(script: string, source: string, dir: string): any {
+  remove(FAKE_GH_DIR) with approve
+  mkdir(FAKE_GH_DIR) with approve
+  write("gh", "#!/bin/sh\n${script}\n", FAKE_GH_DIR) with approve
+  bash("chmod +x gh", cwd: FAKE_GH_DIR) with approve
+  const path = env("PATH") with approve
+  setEnv("PATH", "${FAKE_GH_DIR}:${path}") with approve
+  const result = runNarrow(source, dir)
+  setEnv("PATH", path ?? "") with approve
+  remove(FAKE_GH_DIR) with approve
+  return result
+}
+
+// The handler records the question and rejects it, so gh never runs and
+// the test needs no network and no gh.
+node ghLookupFillsThePair() {
+  makeGhFixtures()
+  let seen: any[] = []
+  handle {
+    safeBash("gh pr view 1451", cwd: GH_ORIGIN_FIXTURE)
+  } with (intr) {
+    seen.push([intr.effect, intr.data.owner, intr.data.repo, intr.data.number])
+    return reject()
+  }
+  removeGhFixtures()
+  return seen
+}
+
+node ghLookupFailureRaisesNothing() {
+  makeGhFixtures()
+  let seen: any[] = []
+  let failed = ""
+  handle {
+    const result = safeBash("gh pr view 1451", cwd: GH_NO_REMOTE_FIXTURE)
+    if (result is failure(why)) {
+      failed = why
+    }
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject()
+  }
+  removeGhFixtures()
+  return [seen, failed.includes("--repo OWNER/REPO")]
+}
+
+/** A failed run's exit code and note, from the failure's JSON. */
+def exitAndNote(failed: string): any {
+  const parsed = JSON.parse(failed)
+  return [parsed.exitCode, parsed.note ?? null]
+}
+
+def loginRow(script: string): any {
+  const result = runWithFakeGh(script, "gh pr view 1 --repo o/r", STDLIB_TESTS)
+  if (result[0] != "failure") {
+    return result
+  }
+  return exitAndNote(result[1])
+}
+
+// A line that exits 4 gets the note only when gh printed its login message.
+// The last row prints that message from a line with no gh in it, so only
+// the check that gh ran keeps the note off.
+node ghLoginNote() {
+  const plain = safeBash("sh -c 'echo gh auth login >&2; exit 4'", cwd: STDLIB_TESTS) with approve
+  let notGh: any = "NOT A FAILURE"
+  if (plain is failure(why)) {
+    notGh = exitAndNote(why)
+  }
+  return [
+    loginRow("echo 'To get started with GitHub CLI, please run:  gh auth login' >&2; exit 4"),
+    loginRow("echo boom >&2; exit 4"),
+    notGh,
+  ]
+}
+
+// The fake gh prints its arguments, one per line. This fails if safeBash
+// raises the second plan and runs the first, whose --repo is empty.
+node ghRunsWhatItAsked() {
+  makeGhFixtures()
+  const result = runWithFakeGh("printf '%s\\n' \"$@\"", "gh pr view 1451", GH_ORIGIN_FIXTURE)
+  removeGhFixtures()
+  return result
 }
 
 node timeLimitStopsTheCommand() {

@@ -16,6 +16,12 @@ inside it, which is what makes the decision testable: hand in a string,
 read the plan. `safeBash` then raises every effect with `raiseAll`, and
 only when all are approved does it run the execution.
 
+`safeBash` may call `planFor` a second time. A `gh` read that names no
+repository gets one from an `origin` remote, which takes running git, so
+the first plan leaves the repository empty, `safeBash` looks it up, and
+plans the line again with the answer (see "gh" below). The second plan is
+the one raised and run.
+
 The parser is tarsec's bash parser (`lib/parsers/bash/` in the tarsec
 repository, re-exported by `lib/stdlib/safeBash.ts`). An unparseable
 string is "we understood nothing": the whole string asks `std::bash` and
@@ -34,9 +40,10 @@ bash runs the original text.
   without adding information.
 - **Rebuilt text when narrow.** When every command was recognized, the
   text that runs is rendered from the tree that was classified
-  (`astToBash`), so a parser bug degrades to running what was read. Two
+  (`astToBash`), so a parser bug degrades to running what was read. Three
   commands in that tree are written by the classifier: a `cd` names the
-  folder it resolved, and a git command is the one `gitCommand` built.
+  folder it resolved, a git command is the one `gitCommand` built, and a
+  `gh` command is the one `ghCommand` built.
 - **Every shell spawn raises at least one effect.** A string of nothing
   but echoes still raises `std::bash` (`bashPlan` substitutes it for an
   empty effect list), so the effect log is a complete audit of shell
@@ -82,7 +89,8 @@ in order (see "Chains in process" below). An `agency <sub> <file>` line
 runs in-process through `std::agency`.
 
 `bash`: everything else. Narrow when every command was recognized: a git
-command with a rule, see "git" below; a grep of one named file, a read of named files, a listing of named folders, a find, a
+command with a rule, see "git" below; a `gh` read with a rule, see "gh"
+below; a grep of one named file, a read of named files, a listing of named folders, a find, a
 program safeBash has no rule for (`std::exec`), a redirect contributing
 `std::write` or `std::read`), broad otherwise.
 
@@ -162,7 +170,12 @@ and `GIT_CONFIG_NOSYSTEM` are removed with the rest of the prefix, so a
 person who keeps their git config where `GIT_CONFIG_GLOBAL` points will
 see git ignore it in the shell, as the git tools already do. The git
 lists live in `lib/host/gitEnvironment.ts`, and the git tools remove the
-same entries plus the SSH ones. The list is `SHELL_ENV_REMOVED` in
+same entries plus the SSH ones. It also removes `GH_HOST` and `GH_REPO`,
+which send `gh` to another server or repository than the one a
+`std::github` question names. `GH_TOKEN` and `GITHUB_TOKEN` are kept. A
+person who uses `GH_HOST` for a GitHub Enterprise server loses it in this
+shell, as `std::github` has no Enterprise support either (issue #1003).
+The list is `SHELL_ENV_REMOVED` in
 `lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
 programs in the child read options anywhere on the line. No plan
 changes, because the flag tables that care set `optionsFirst`.
@@ -258,8 +271,9 @@ stdlib (see `docs/dev/agents/tool-loop-guards.md`).
 When a command that ran through bash exits non-zero, the failure is JSON
 with `command`, `exitCode`, `stderr`, and `stdout`. `command` is the text
 the model wrote, not the text that ran. The two differ for a `cd`, which
-runs with the folder the classifier resolved, and for a git command,
-which runs as the one `gitCommand` built:
+runs with the folder the classifier resolved, for a git command, which
+runs as the one `gitCommand` built, and for a `gh` command, which runs as
+the one `ghCommand` built:
 
 ```
 {"command":"git checkout '*.py'","exitCode":128,"stderr":"fatal: invalid reference: *.py", ...}
@@ -1141,6 +1155,228 @@ Any agent that carries `safeBash` can now write to git when the policy
 approves the effect, including the agents whose own git tools are
 read-only.
 
+## gh
+
+```
+gh pr view 1451
+```
+
+In a checkout whose `origin` is `github.com/egonSchiele/agency-lang`, this
+asks `std::github::prGet`, `issueCommentList`, `prReviewList`, and
+`prChecks`, each with `owner: "egonSchiele"`, `repo: "agency-lang"`, and
+`number: 1451`. These are the effects the typed tools in `std::github`
+raise for the same data, and `recommended` approves them. It runs:
+
+```
+gh pr view 1451 --repo github.com/egonSchiele/agency-lang
+```
+
+### Which subcommands the rule owns
+
+Seven reads have a rule: `gh pr view`, `pr diff`, `pr checks`, `pr list`,
+`issue view`, `issue list`, and `search issues`. A spelling of one of
+these that fails its rule asks `std::bash`, with the reason, such as
+``gh does not take `--web` ``.
+
+Every other `gh` subcommand asks `std::exec`, as it did before `gh` had a
+rule. That includes every write (`gh pr comment`, `gh pr review`, `gh
+issue create`, `gh pr create`, `gh pr merge`), and `gh run view`. The
+agents write through the typed tools in `std::github`, because a write
+effect names its repository and a person can approve writes to one
+repository once. A line with a flag before the group, such as `gh -R o/r
+pr view 1`, is not owned either and asks `std::exec`: the rule only reads
+a line whose first two words are a row.
+
+### The number and the URL
+
+A subcommand that acts on one pull request or issue takes a number
+(`1451`) or a URL (`https://github.com/OWNER/REPO/pull/1451`, or
+`/issues/` for an issue). A URL also gives the repository. The command
+that runs has the number, also when the model gave a URL. With no number,
+`gh` uses the pull request for the current branch, and the payload has no
+number to show, so that spelling has no rule. `gh pr view #1451` is the
+same case, because bash reads `#1451` as a comment.
+
+### The repository
+
+Every `std::github` payload names `owner` and `repo`, and an "always
+approve when" answer pins to that pair. `gh` finds its repository in ways
+safeBash cannot see (`gh repo set-default`, the upstream of a fork,
+`GH_REPO`), so safeBash always writes the repository into the command. It
+comes from one of three places, in this order:
+
+1. The URL, when the target is one. A `--repo` that names another pair
+   has no rule.
+2. `--repo` or `-R`, checked with the same name check the typed tools
+   use (`checkRepoCoord`). `OWNER/REPO` and `github.com/OWNER/REPO` are
+   accepted; another host has no rule.
+3. The `origin` remote of the folder the command runs in, as the typed
+   tools do. In a fork, `origin` is the fork.
+
+Looking up `origin` runs git, and `planFor` runs nothing. So `planFor`
+takes an optional `origin`. On the first plan it is null, and a `gh`
+command that names no repository gets effects with `owner: ""` and `repo:
+""`, each with a `lookup` folder (`pendingLookups` lists them).
+`resolvedPlan` in `safeBash` then looks up the folder's origin with
+`_ghResolveRepo` and plans the line again with the answer. The second
+plan is the one raised and run, so its payloads and its command come from
+one pass. Nothing edits a command's text after it is rendered. `safeBash`
+refuses to run a plan that still has a pending lookup.
+
+When the folder has no origin on GitHub, `safeBash` raises nothing and
+returns the lookup's message, followed by "With gh, pass --repo
+OWNER/REPO."
+
+The lookup is the one thing safeBash runs before an approval, and after
+`cd other &&` it runs in a folder the model picked. It goes through
+`_gitRun`, which puts the hardening flags on the command and removes the
+`GIT_*` variables, and `git remote get-url` runs no hook or pager.
+
+A line gets one lookup. When its `gh` commands need lookups in two
+folders, as in `(cd a && gh pr view 1); gh pr view 2`, it has no rule.
+
+### safeBash writes the gh command it runs
+
+`ghCommand` builds the command from checked data, as `gitCommand` does:
+
+```
+gh <group> <subcommand> <number> <search words> <flags> --repo <repository>
+```
+
+The flags are rebuilt from what `splitFlags` returned, with every short
+name replaced by its long one, so `-L 5` runs as `--limit=5`. The model's
+`--repo` is dropped and safeBash writes its own last. The repository
+names the host, `--repo github.com/OWNER/REPO`, because `gh` can take its
+default host from its own config. With the host written, the payload is
+true whatever that config says. `gh` has no per-repository config file,
+so once the repository is written nothing in the working folder changes
+what `gh` does.
+
+`gh search issues` is the exception. Its `--repo` is a search filter, and
+`gh search` reads no host there, so it is written as `--repo OWNER/REPO`.
+It is the one owned command whose host is not pinned.
+
+### One name per flag
+
+`splitFlags` compares spellings, so `-L 5 --limit 500` passes it, and so
+does `--repo o/r -R other/private`. `gh` uses both values: the second
+fetches five pages, and `gh search issues` takes `--repo` more than once
+and searches every repository it names. `ghLongFlags` replaces each short
+name with its long name (`GH_LONG_NAMES`), and a long name that then
+appears twice has no rule: ``gh takes `--limit` only once``.
+
+### `--jq` and `--template` have no rule
+
+`gh`'s `--jq` runs a jq program inside `gh`, and jq reads the
+environment:
+
+```
+$ FOO_TEST=secret-value gh api rate_limit --jq 'env.FOO_TEST'
+secret-value
+```
+
+An approved read would then print any variable, `GITHUB_TOKEN` included,
+with no `std::env` question. A check for the word `env` would be a
+denylist over a small language. So a `gh` line with `--jq` or `-q` has no
+rule, on an owned subcommand or not (`ghHasJq`). The check reads the text
+of every argument, because `gh` reads a quoted `'--jq'` as the flag while
+the parser reads it as a quoted word. It counts `--jq`, `--jq=x`, and any
+group of short flags that holds a `q`, such as `-wq`. On a subcommand
+where `-q` means something else that costs one broader prompt.
+
+`--template` and `-t` are left off every owned row as well. Their Go
+template functions cannot read the environment (`{{env "X"}}` fails with
+`function "env" not defined`), but they are another small language, and
+`--json` covers the need.
+
+### Filter values
+
+Every flag value is checked with `_ghHasScopeQualifier`, the check the
+typed `ghIssueSearch` uses. `gh search issues` writes its filter values
+into a search query, where a `repo:`, `org:`, or `user:` adds a
+repository, so `--author 'x repo:other/private'` has no rule. The search
+words get the same check. The payload's `query` is
+`_ghScopedSearchQuery`'s result, `repo:OWNER/REPO <words>`, the string the
+typed tool puts there.
+
+`--search` on `gh pr list` and `gh issue list` has no rule. Its value is
+a search query, which can name another repository or contradict
+`--state`. `gh search issues` covers the need.
+
+### The tables
+
+| Command | Effects | Flags besides `--repo`/`-R` |
+|---|---|---|
+| `pr view N` | `prGet`, `issueCommentList`, `prReviewList`, `prChecks` | `-c`/`--comments`, `--json` |
+| `pr view N --json f` | by field, below | |
+| `pr diff N` | `prDiff` | `--name-only`, `--patch`, `--color`, `-e`/`--exclude` |
+| `pr checks N` | `prChecks` | `--required`, `--json` |
+| `pr list` | `prList` with `state`, `base`, `perPage` | `--state`, `--base`, `--limit`, `--author`, `--assignee`, `--label`, `--draft`, `--head`, `--json` |
+| `issue view N` | `issueGet`, `issueCommentList` | `-c`/`--comments`, `--json` |
+| `issue view N --json f` | `comments` asks `issueCommentList`, any other field `issueGet` | |
+| `issue list` | `issueList` with `state`, `labels`, `perPage` | `--state`, `--label`, `--limit`, `--author`, `--assignee`, `--mention`, `--milestone`, `--json` |
+| `search issues <words> --repo O/R` | `issueSearch` with `query`, `perPage` | `--state`, `--label`, `--author`, `--assignee`, `--limit`, `--sort`, `--order`, `--include-prs`, `--match`, `--json` |
+
+A plain `pr view` asks for comments, reviews, and checks because `gh`
+2.88.1 fetches them with the pull request (`defaultFields` in
+`pkg/cmd/pr/view/view.go`). A plain `issue view` fetches the last comment,
+or all of them with `--comments`.
+
+`pr view --json` asks one effect per kind of data its fields read:
+
+| Field | Effect |
+|---|---|
+| `files` | `prFiles` |
+| `comments` | `issueCommentList` |
+| `reviews`, `latestReviews` | `prReviewList` |
+| `statusCheckRollup` | `prChecks` |
+| any other field | `prGet` |
+
+`--limit` sets `perPage`, from 1 to 100, the most GitHub returns in one
+page (`GITHUB_MAX_PER_PAGE`); with no `--limit` it is 30, `gh`'s default.
+A read of one pull request or issue fetches every page `gh` asks for, and
+its payload says so with `perPage: 0`. On `pr list`, the `--json` fields
+`comments`, `commits`, `files`, `reviews`, `latestReviews`, and
+`statusCheckRollup` have no rule, because each reads data about every
+pull request listed; on `issue list`, `comments` has none. A `--state`
+value must be one `gh` takes for that subcommand.
+
+Left out of every row: `--web` (opens a browser), `--watch` on `pr checks`
+(runs until the checks finish), and `--owner` on `search issues` (searches
+every repository of an owner).
+
+### Aliases and extensions
+
+A `gh` alias cannot replace a built-in command. `gh` 2.88.1 refuses `gh
+alias set pr 'api user'`, `gh alias set 'pr view' 'api user'`, and `gh
+alias set --shell pr 'echo hijacked'` with "already a gh command or
+extension". An alias written into `config.yml` by hand is listed by `gh
+alias list` and ignored: `gh pr view` still runs the built-in command.
+
+An extension cannot replace one either. `gh extension install` refuses a
+name that matches a built-in command ("matches the name of a built-in
+command or alias", `checkValidExtension` in
+`pkg/cmd/extension/command.go`), and `gh` runs its core command before it
+looks for an extension of that name.
+
+### Not logged in
+
+With no login, `gh` exits with code 4 and prints a message that names
+`gh auth login`. A model that sees it may run `gh auth login`, which
+waits for a person until the time limit. So when a line that ran `gh`
+(`Plan.verbs` holds it) exits 4 and stderr holds `gh auth login`, the
+failure's JSON gets a `note`: tell the user to run `gh auth login` or to
+set `GH_TOKEN`, and do not retry or log in yourself. The stderr check is
+there because the exit code belongs to the whole line. In `gh pr view 1 |
+head` the exit code is `head`'s, so the note does not appear.
+
+### Which agents this reaches
+
+Every agent that carries `safeBash` reads GitHub with `gh` and no prompt
+under `recommended`: the coder (`std::agents/coding`), the verifier
+(`std::agents/verifier`), and the Agency verifier
+(`std::agents/agency/verifier`), all through `shellTools`.
+
 ## `cd` on the left of `&&`
 
 ```
@@ -1379,7 +1615,9 @@ write a file, or read a file with no approval at all.
   the private executors.
 - `stdlib/safeBash/actions.agency`: `Plan`, `BroadReason`, `Effect`, and
   `Execution`, with a named payload type and a constructor per git
-  effect.
+  effect and per `std::github` read effect, and `pendingLookups`.
+- `lib/stdlib/safeBashGh.ts`: `_ghParseTarget` and `_ghParseRepoFlag`,
+  the text parsing for the `gh` rule, tested in `safeBashGh.test.ts`.
 - `lib/host/gitEnvironment.ts`: the git environment variables, in three
   lists the shell and the git tools share.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
@@ -1405,6 +1643,13 @@ write a file, or read a file with no approval at all.
   text each plan runs), `gitBranchShapes`, and `gitRunsSafely`, which
   runs real git in a repository and in a folder with none, both made by
   the test. No test approves a git write in the checkout it runs in.
+  The gh nodes are `ghReads`, `ghLookupFollowsCd`, `ghStaysBroad` (every
+  refused spelling, with its reason), `ghJqHasNoRule`,
+  `ghUnownedStaysExec`, `ghLookupFillsThePair` and
+  `ghLookupFailureRaisesNothing` (a repository the test makes, with and
+  without an origin), `ghRunsWhatItAsked` and `ghLoginNote` (a fake `gh`
+  on the search path, through `runWithFakeGh`), and
+  `wordsTarsecNowAccepts`, the lines tarsec 0.5.8 began to parse.
 - `lib/stdlib/safeBash.test.ts`: `astToBash` round-trips every command
   family the classifier sees.
 - `lib/stdlib/statelog.test.ts`: `_debug`.

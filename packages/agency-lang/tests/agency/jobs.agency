@@ -164,6 +164,20 @@ node foregroundForInstantCommands() {
   ]
 }
 
+// An agency line runs in this process, so it never becomes a job, and the
+// line in front of its output must not say it was quick.
+node foregroundForAgencyCommands() {
+  let result: any = null
+  handle {
+    result = startJob("agency typecheck tests/agency/jobs.agency")
+  } with approve
+  return [
+    result.value.startsWith("This command ran in the foreground"),
+    result.value.includes("finishes at once"),
+    listJobs().length,
+  ]
+}
+
 node unknownId() {
   const read = jobOutput("job-000000")
   const stopped = stopJob("job-000000")

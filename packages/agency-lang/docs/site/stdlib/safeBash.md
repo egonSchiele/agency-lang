@@ -907,7 +907,7 @@ startJob(
 ): Result<string> raises <SafeBashEffects>
 ```
 
-Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. A command that finishes at once, such as a file read, runs in the foreground instead. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
+Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
 
 **Parameters:**
 

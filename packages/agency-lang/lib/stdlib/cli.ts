@@ -19,7 +19,7 @@ import { buildCompleter, listDirUnder } from "./cliCompleter.js";
 import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
 import { onJobEnd } from "../runtime/jobs/jobTable.js";
-import { jobEndLines } from "./cliJobLine.js";
+import { jobEndLines, type JobEndLines } from "./cliJobLine.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -1377,17 +1377,16 @@ function routeInputThroughRepl(
   rl: readline.Interface,
   herdr: HerdrReporter,
   stopActiveSpinner: () => void,
+  jobLines: JobEndLines,
 ): () => void {
   const prevOverride = replCtx.inputOverride;
   replCtx.inputOverride = (p: string): Promise<string> => {
     stopActiveSpinner();
-    return herdr.whileBlocked(
-      p.trim(),
-      () =>
-        new Promise<string>((resolve) => {
-          rl.question(p, (answer) => resolve(answer));
-        }),
-    );
+    const ask = () =>
+      new Promise<string>((resolve) => {
+        rl.question(p, (answer) => resolve(answer));
+      });
+    return herdr.whileBlocked(p.trim(), () => jobLines.whileAsking(ask));
   };
   return () => {
     replCtx.inputOverride = prevOverride;
@@ -1457,7 +1456,8 @@ export async function _runLineRepl(
 
   const replCtx = run.ctx;
   const herdr = herdrReporter(process.env, herdrName);
-  const restoreInput = routeInputThroughRepl(replCtx, rl, herdr, stopActiveSpinner);
+  const jobLines = jobEndLines(rl, process.stdout, { useTTY, useColor });
+  const restoreInput = routeInputThroughRepl(replCtx, rl, herdr, stopActiveSpinner, jobLines);
 
   // Install the process-global hooks this REPL exposes while it runs
   // (spinner-stop, clear-history, sticky interrupt prompt, Herdr session),
@@ -1484,7 +1484,6 @@ export async function _runLineRepl(
   const editorKey = installEditorKey(rl, useTTY);
   // Text the next prompt opens with: a command filled in from the palette.
   let prefill = "";
-  const jobLines = jobEndLines(rl, process.stdout, { useTTY, useColor });
   const stopWatchingJobs = onJobEnd(replCtx.jobs, jobLines.jobEnded);
   try {
     while (true) {

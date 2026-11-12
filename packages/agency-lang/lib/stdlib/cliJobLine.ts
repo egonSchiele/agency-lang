@@ -25,6 +25,10 @@ export type JobEndLines = {
   setOwner(owner: TerminalOwner): void;
   /** The job table's end listener. */
   jobEnded(job: JobSummary): void;
+  /** Run a question asked through readline, such as a nested `input()`.
+   *  The question is a prompt while it waits for its answer, and the
+   *  terminal goes back to its owner after. */
+  whileAsking<T>(ask: () => Promise<T>): Promise<T>;
 };
 
 export function jobEndLines(
@@ -35,16 +39,26 @@ export function jobEndLines(
   let owner: TerminalOwner = "other";
   let held: string[] = [];
   const styled = (line: string) => (terminal.useColor ? `${styles.dim}${line}${RESET}` : line);
+  const setOwner = (next: TerminalOwner): void => {
+    owner = next;
+    if (next === "other") {
+      return;
+    }
+    for (const line of held) {
+      out.write(`${styled(line)}\n`);
+    }
+    held = [];
+  };
   return {
-    setOwner(next) {
-      owner = next;
-      if (next === "other") {
-        return;
+    setOwner,
+    async whileAsking(ask) {
+      const before = owner;
+      setOwner("prompt");
+      try {
+        return await ask();
+      } finally {
+        owner = before;
       }
-      for (const line of held) {
-        out.write(`${styled(line)}\n`);
-      }
-      held = [];
     },
     jobEnded(job) {
       const line = jobEndedLine(job);

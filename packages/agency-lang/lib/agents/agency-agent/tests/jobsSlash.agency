@@ -24,3 +24,15 @@ node stopOfARunningJobTellsTheModel(): boolean {
   jobsSlashCommand("stop ${id}")
   return withPendingNotes("next").startsWith("I stopped background job ${id} myself")
 }
+
+// The stop reads the job's last output, so the note has to carry it. The
+// printf form keeps the expected text, A1, out of the command.
+node stopKeepsTheUnreadOutput(): boolean {
+  handle {
+    startJob("printf 'A%s\\n' 1; sleep 30")
+  } with approve
+  const id = listJobs()[0].id
+  sleep(1s)
+  jobsSlashCommand("stop ${id}")
+  return withPendingNotes("next").includes("A1")
+}

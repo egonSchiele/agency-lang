@@ -14,6 +14,13 @@
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "stopKeepsTheUnreadOutput",
+      "description": "/jobs stop on a running job puts the output the model had not read into the note, since the stop reads it.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

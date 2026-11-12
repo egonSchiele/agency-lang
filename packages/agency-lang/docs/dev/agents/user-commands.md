@@ -114,7 +114,8 @@ status, running time, and command. `/jobs stop <id>` stops one with
 it. On success it prints nothing, since the REPL prints the job's finish
 line, and it leaves a pending note saying the user stopped the job. The
 model needs the note: `stopJob` reads the job, so the jobs message stops
-listing it. A job that had already ended gets a reply with its status and
+listing it and a later `jobOutput` returns nothing. The note carries the
+output `stopJob` read. A job that had already ended gets a reply with its status and
 no note. See `docs/dev/stdlib/jobs.md`.
 
 ## Pending notes

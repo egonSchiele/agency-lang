@@ -57,6 +57,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "foregroundForAgencyCommands",
+      "description": "An agency line runs in the foreground and starts no job, and nothing in its reply says the command finishes at once.",
+      "input": "",
+      "expectedOutput": "[true,false,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "unknownId",
       "description": "jobOutput and stopJob for an id the run does not know return a failure that says there is no such job and lists the jobs that exist. Neither throws.",
       "input": "",

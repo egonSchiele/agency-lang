@@ -145,4 +145,20 @@ describe("jobEndLines", () => {
     expect(screen()).toEqual([line, ">"]);
     rl.close();
   });
+
+  it("treats a question as a prompt while it waits, then gives the terminal back", async () => {
+    const { rl, out, screen } = promptWith("feat");
+    const lines = jobEndLines(rl, out, terminal);
+    lines.setOwner("other");
+    let answer = () => {};
+    const asked = lines.whileAsking(() => new Promise<void>((resolve) => (answer = resolve)));
+    lines.jobEnded(job);
+    expect(screen()).toEqual([line, "> feat"]);
+    answer();
+    await asked;
+    // The owner is "other" again, so this one is held.
+    lines.jobEnded(job);
+    expect(screen()).toEqual([line, "> feat"]);
+    rl.close();
+  });
 });

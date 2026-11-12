@@ -46,7 +46,9 @@ path to it runs through `approvedPlan`. Do not add a caller that skips it.
 
 Only a plan of kind `bash` becomes a job. Every other plan, such as a file
 read, `echo`, or an `agency` line, runs in the foreground the way `safeBash`
-runs it, with a line in front of its output saying so. `approvedPlan`
+runs it, with a line in front of its output saying so. An `agency` line
+runs in this process through `cli()`, so it stays in the foreground even
+when it is slow, such as `agency test`. `approvedPlan`
 decides from the plan whether the command runs as a job. When it does, the
 `std::bash` and `std::exec` questions say "in the background" and carry the
 job's limit as their `timeout`.
@@ -126,7 +128,8 @@ the coder called as a tool run on the main thread and read it too.
 **The finish line.** `_runLineRepl` prints a line when a job ends. What it
 does depends on what owns the terminal. During a turn it writes the line.
 At the plain prompt it clears every row of the prompt, writes the line,
-and draws the prompt again with what was typed. While the slash menu,
+and draws the prompt again with what was typed. A nested `input()`
+question is a prompt too, for as long as it waits. While the slash menu,
 `/paste`, or `$EDITOR` owns the terminal, it holds the line and prints it
 when the prompt or a turn takes the terminal back.
 

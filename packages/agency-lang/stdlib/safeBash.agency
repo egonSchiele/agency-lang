@@ -4449,7 +4449,7 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
 static const JOB_DEFAULT_MINUTES = 60
 static const JOB_MAX_MINUTES = 720
 static const FOREGROUND_TIMEOUT_SECONDS = 120
-static const FOREGROUND_LINE = "This command ran in the foreground, because it finishes at once."
+static const FOREGROUND_LINE = "This command ran in the foreground: only a plain shell command can run as a background job."
 
 def jobMinutes(asked: number): number {
   if (asked <= 0) {
@@ -4469,7 +4469,7 @@ export def startJob(
   maxMinutes: number = 60,
 ): Result<string> raises <SafeBashEffects> {
   """
-  Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. A command that finishes at once, such as a file read, runs in the foreground instead. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
+  Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
 
   @param command - One or more bash commands.
   @param cwd - Working directory, defaulting to the agent directory or the process directory.

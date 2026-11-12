@@ -1,7 +1,7 @@
 /** @module
   @summary `/jobs`: the user lists the background jobs, or stops one.
 */
-import { listJobs, stopJob } from "std::jobs"
+import { listJobs, stopJob, JobReport } from "std::jobs"
 import { pushMessage } from "std::ui/cli"
 
 import { addNote } from "../pendingNotes.agency"
@@ -20,7 +20,19 @@ def listedJobs(): string {
 // The user typed the stop, so it asks no approval, like `!command`. The
 // REPL prints the job's finish line, so a stop that worked prints nothing
 // more. The model is told with a note on the user's next message:
-// stopJob reads the job, so the jobs message no longer lists it.
+// stopJob reads the job, so the jobs message no longer lists it, and a
+// later jobOutput returns nothing. The note carries what stopJob read.
+def stoppedNote(id: string, report: JobReport): string {
+  let parts = ["I stopped background job ${id} myself: ${report.command}"]
+  if (report.stdout != "") {
+    parts.push("Its output since the last read:\n${report.stdout}")
+  }
+  if (report.stderr != "") {
+    parts.push("Its error output since the last read:\n${report.stderr}")
+  }
+  return parts.join("\n")
+}
+
 def stopFromSlash(id: string): boolean {
   // A job that already ended was not stopped by the user, so it gets a
   // reply and no note.
@@ -34,7 +46,7 @@ def stopFromSlash(id: string): boolean {
     pushMessage(why)
     return true
   }
-  addNote("I stopped background job ${id} myself: ${stopped.value.command}")
+  addNote(stoppedNote(id, stopped.value))
   return true
 }
 

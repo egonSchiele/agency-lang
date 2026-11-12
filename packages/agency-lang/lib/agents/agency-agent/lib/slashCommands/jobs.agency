@@ -22,6 +22,13 @@ def listedJobs(): string {
 // more. The model is told with a note on the user's next message:
 // stopJob reads the job, so the jobs message no longer lists it.
 def stopFromSlash(id: string): boolean {
+  // A job that already ended was not stopped by the user, so it gets a
+  // reply and no note.
+  const ended = [job for job in listJobs() if job.id == id && job.state != "running"]
+  if (ended.length > 0) {
+    pushMessage("${id} had already ended (${ended[0].status}).")
+    return true
+  }
   const stopped = stopJob(id)
   if (stopped is failure(why)) {
     pushMessage(why)

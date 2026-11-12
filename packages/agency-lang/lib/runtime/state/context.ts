@@ -30,7 +30,7 @@ import type { MemoryConfig } from "../memory/types.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
-import { endAllJobs, newJobTable, type JobTable } from "../jobs/jobTable.js";
+import { closeJobTable, newJobTable, type JobTable } from "../jobs/jobTable.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "../types.js";
 import { callPlain } from "../asyncContext.js";
@@ -839,7 +839,7 @@ export class RuntimeContext<T> {
   cleanup(): void {
     // A job listens on its own signal, not on this context's, so the
     // abort below does not reach it.
-    endAllJobs(this.jobs);
+    closeJobTable(this.jobs);
     if (!this.abortController.signal.aborted) {
       this.abortController.abort(
         new AgencyCancelledError("cleanup", makeAbortCause({ kind: "cleanup" })),

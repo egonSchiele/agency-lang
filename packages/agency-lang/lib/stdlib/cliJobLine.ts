@@ -1,32 +1,76 @@
 // The line the REPL prints when a background job ends, and how it prints
-// it without breaking the prompt. See docs/dev/stdlib/jobs.md.
+// it without breaking whatever owns the terminal. See docs/dev/stdlib/jobs.md.
 import * as readline from "readline";
-import process from "process";
 import { describeJobState, type JobSummary } from "../runtime/jobs/jobTable.js";
 import { formatElapsed } from "../utils/formatElapsed.js";
 import { RESET, styles } from "../utils/termcolors.js";
 
-/** "job-1 finished after 41m 8s (exit 0): ./run-comparison.sh" */
+/** "job-3fa9c1 finished after 41m 8s (exit 0): ./run-comparison.sh" */
 export function jobEndedLine(job: JobSummary): string {
   const ranFor = formatElapsed((job.endedAt ?? job.startedAt) - job.startedAt);
   return `${job.id} finished after ${ranFor} (${describeJobState(job)}): ${job.command}`;
 }
 
-/** What the REPL is doing when a job ends, which decides how the line is
- *  printed. */
-export type ReplMoment = { turnRunning: boolean; useTTY: boolean; useColor: boolean };
+/** What owns the terminal: the plain prompt waiting for a line, a turn,
+ *  or something else, such as the slash menu, `/paste`, or `$EDITOR`. */
+export type TerminalOwner = "prompt" | "turn" | "other";
 
-/** Print a job's finish line. During a turn the spinner's footer redraws
- *  below any write. At an idle prompt the line goes above the prompt,
- *  which is drawn again with what was typed. */
-export function printJobEnded(rl: readline.Interface, line: string, at: ReplMoment): void {
-  const shown = at.useColor ? `${styles.dim}${line}${RESET}` : line;
-  if (!at.useTTY || at.turnRunning) {
-    process.stdout.write(`${shown}\n`);
-    return;
-  }
-  readline.clearLine(process.stdout, 0);
-  readline.cursorTo(process.stdout, 0);
-  process.stdout.write(`${shown}\n`);
+/** The part of the readline interface the prompt redraw uses. */
+export type PromptLine = Pick<readline.Interface, "getCursorPos" | "prompt">;
+
+export type JobEndLines = {
+  /** Say who owns the terminal now. Call it with "prompt" before the
+   *  prompt is drawn. Moving to the prompt or a turn prints the lines held
+   *  while something else owned the terminal. */
+  setOwner(owner: TerminalOwner): void;
+  /** The job table's end listener. */
+  jobEnded(job: JobSummary): void;
+};
+
+export function jobEndLines(
+  rl: PromptLine,
+  out: NodeJS.WritableStream,
+  terminal: { useTTY: boolean; useColor: boolean },
+): JobEndLines {
+  let owner: TerminalOwner = "other";
+  let held: string[] = [];
+  const styled = (line: string) => (terminal.useColor ? `${styles.dim}${line}${RESET}` : line);
+  return {
+    setOwner(next) {
+      owner = next;
+      if (next === "other") {
+        return;
+      }
+      for (const line of held) {
+        out.write(`${styled(line)}\n`);
+      }
+      held = [];
+    },
+    jobEnded(job) {
+      const line = jobEndedLine(job);
+      if (!terminal.useTTY || owner === "turn") {
+        out.write(`${styled(line)}\n`);
+      } else if (owner === "other") {
+        held.push(line);
+      } else {
+        writeAbovePrompt(rl, out, styled(line));
+      }
+    },
+  };
+}
+
+/** Clear the prompt, write the line, and draw the prompt again below it
+ *  with what was typed. */
+function writeAbovePrompt(rl: PromptLine, out: NodeJS.WritableStream, text: string): void {
+  // Typed text can wrap, so clear from the prompt's first row, not only
+  // the cursor's row.
+  const { rows } = rl.getCursorPos();
+  readline.moveCursor(out, 0, -rows);
+  readline.cursorTo(out, 0);
+  readline.clearScreenDown(out);
+  // Readline's redraw starts by moving up as many rows as the cursor was
+  // below the prompt's first row. The blank rows written here are what it
+  // moves back over, so it does not land on the line and clear it.
+  out.write(`${text}\n${"\n".repeat(rows)}`);
   rl.prompt(true);
 }

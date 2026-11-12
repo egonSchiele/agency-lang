@@ -13,14 +13,16 @@ A background job is a shell command that keeps running while the program
 
   ```agency
   import { startJob } from "std::safeBash"
-  import { jobOutput, stopJob } from "std::jobs"
+  import { jobOutput, stopJob, listJobs } from "std::jobs"
 
   node main() {
     handle {
       startJob("./run-comparison.sh")
-      const report = jobOutput("job-1", wait: 300)
+      // Ids are random, such as job-3fa9c1. The start's reply names it too.
+      const id = listJobs()[0].id
+      const report = jobOutput(id, wait: 300)
       print(report)
-      stopJob("job-1")
+      stopJob(id)
     } with (intr) {
       return approve()
     }
@@ -62,7 +64,7 @@ export type JobReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L55))
 
 ### JobSummary
 
@@ -78,7 +80,7 @@ export type JobSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L67))
 
 ## Functions
 
@@ -94,12 +96,12 @@ Read what a background job has printed since you last read it, and its state. Ea
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| id | `string` |  | The job id, such as job-1. |
+| id | `string` |  | The job id, such as job-3fa9c1. |
 | wait | `number` | 0 | Seconds to wait before reading, at most 600. The call returns early when the job ends. A wait can be cancelled without stopping the job. |
 
 **Returns:** `Result<JobReport>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L87))
 
 ### stopJob
 
@@ -113,13 +115,13 @@ Stop a background job and everything it started, and return its last output.
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| id | `string` |  | The job id, such as job-1. |
+| id | `string` |  | The job id, such as job-3fa9c1. |
 
 **Returns:** `Result<JobReport>`
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L105))
 
 ### listJobs
 
@@ -131,4 +133,4 @@ List the background jobs of this run: each one's id, command, state, and running
 
 **Returns:** `JobSummary[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L115))

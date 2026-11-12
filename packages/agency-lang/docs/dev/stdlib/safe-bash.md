@@ -1719,7 +1719,8 @@ write a file, or read a file with no approval at all.
 
 `startJob` starts a command as a background job. It sits beside `safeBash`
 because the two share `approvedPlan`, which plans the command, returns a
-refusal, and calls `raiseAll`. `safeBash` then runs the plan with
+refusal, and calls `raiseAll`. Both raise the effect set
+`SafeBashEffects`, so an effect added for `safeBash` is added for both. `safeBash` then runs the plan with
 `runPlanned`. `startJob` starts a plan of kind `bash` with `_startJob`, and
 runs any other plan with `runPlanned`, in the foreground. `_startJob` is
 the second place a command runs with no interrupt of its own, and it is

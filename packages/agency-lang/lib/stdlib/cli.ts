@@ -19,7 +19,7 @@ import { buildCompleter, listDirUnder } from "./cliCompleter.js";
 import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
 import { onJobEnd } from "../runtime/jobs/jobTable.js";
-import { jobEndedLine, printJobEnded } from "./cliJobLine.js";
+import { jobEndLines } from "./cliJobLine.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -1484,20 +1484,18 @@ export async function _runLineRepl(
   const editorKey = installEditorKey(rl, useTTY);
   // Text the next prompt opens with: a command filled in from the palette.
   let prefill = "";
-  // Set and cleared beside the Herdr reports. The spinner cannot say this:
-  // a nested prompt stops it in the middle of a turn.
-  let turnRunning = false;
-  const stopWatchingJobs = onJobEnd(replCtx.jobs, (job) =>
-    printJobEnded(rl, jobEndedLine(job), { turnRunning, useTTY, useColor }),
-  );
+  const jobLines = jobEndLines(rl, process.stdout, { useTTY, useColor });
+  const stopWatchingJobs = onJobEnd(replCtx.jobs, jobLines.jobEnded);
   try {
     while (true) {
       let line: string;
       herdr.report("idle");
-      turnRunning = false;
       try {
         editorKey.atPrompt(true);
+        jobLines.setOwner("prompt");
         line = await askLine(rl, coloredPrompt, prefill);
+        // The palette, `/paste`, or `$EDITOR` may own the terminal next.
+        jobLines.setOwner("other");
         prefill = "";
       } catch {
         // Ctrl+D (EOT) or Ctrl+C at idle: readline emits `close`,
@@ -1565,7 +1563,7 @@ export async function _runLineRepl(
       const tokensBefore = readTokenSnapshot(replCtx);
       activeStopSpinner = startSpinner(useTTY);
       herdr.report("working");
-      turnRunning = true;
+      jobLines.setOwner("turn");
 
       // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
       // which aborts the active LLM fetch; an AgencyCancelledError then

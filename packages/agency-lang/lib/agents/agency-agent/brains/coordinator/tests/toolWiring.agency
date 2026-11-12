@@ -245,7 +245,8 @@ def countNamed(names: string[], name: string): number {
 // coders, once each. A one-shot run exits when its turn ends, which would
 // stop its jobs, so it offers them to neither.
 node jobToolsOnlyInInteractiveSessions(): any[] {
-  const jobNames = ["startJob", "jobOutput", "stopJob"]
+  // The main agent also gets the saved-output readers, for a long job read.
+  const jobNames = ["startJob", "jobOutput", "stopJob", "readSpill", "grepSpill"]
   _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
   setCodeOneShot(false)
   const coderNames = map(sessionJobTools(), \tool -> "${tool.name}")

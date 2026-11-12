@@ -112,10 +112,10 @@ this?` sends that text now, with the image.
 status, running time, and command. `/jobs stop <id>` stops one with
 `stopJob`. Like `!command`, it raises no interrupt, because the user typed
 it. On success it prints nothing, since the REPL prints the job's finish
-line, and it leaves a pending note saying the user stopped the job. Without
-the note the model would go on believing the job is running, because
-`stopJob` reads the job and the jobs message no longer lists it. See
-`docs/dev/stdlib/jobs.md`.
+line, and it leaves a pending note saying the user stopped the job. The
+model needs the note: `stopJob` reads the job, so the jobs message stops
+listing it. A job that had already ended gets a reply with its status and
+no note. See `docs/dev/stdlib/jobs.md`.
 
 ## Pending notes
 

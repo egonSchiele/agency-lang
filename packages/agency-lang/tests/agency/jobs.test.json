@@ -43,6 +43,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "rejectedWaitKeepsOutput",
+      "description": "A handler that rejects a guard trip during a jobOutput wait leaves the job's output unread, so the next read returns it.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "foregroundForInstantCommands",
       "description": "A command that does not run under bash, such as echo, runs in the foreground with a line saying so. No job is started, and no question says background.",
       "input": "",
@@ -51,7 +58,7 @@
     },
     {
       "nodeName": "unknownId",
-      "description": "jobOutput and stopJob for an id the run does not know return a failure that says so. Neither throws.",
+      "description": "jobOutput and stopJob for an id the run does not know return a failure that says there is no such job and lists the jobs that exist. Neither throws.",
       "input": "",
       "expectedOutput": "[true,true]",
       "evaluationCriteria": [{ "type": "exact" }]

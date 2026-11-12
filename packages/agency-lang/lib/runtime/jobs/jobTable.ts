@@ -17,7 +17,8 @@ export const JOB_OUTPUT_CAP_BYTES = 10 * 1024 * 1024;
 export type JobState = "running" | "ended" | "stopped" | "timedOut";
 
 export type JobSummary = {
-  /** "job-1", "job-2", ... */
+  /** "job-" and six random hex digits, such as "job-3fa9c1". Random, so a
+   *  resumed session never reuses an id its conversation already holds. */
   id: string;
   /** The command as the caller wrote it. */
   command: string;
@@ -52,8 +53,9 @@ type ReadPositions = { stdout: number; stderr: number };
 
 type Job = {
   summary: JobSummary;
-  process: RunningProcess;
-  /** The job's own signal. Only `endJob` and `endAllJobs` abort it. */
+  /** Null once a read has returned the final state, which frees the output. */
+  process: RunningProcess | null;
+  /** The job's own signal. Only `endJob` and `closeJobTable` abort it. */
   controller: AbortController;
   clock: Clock;
   read: ReadPositions;
@@ -65,30 +67,37 @@ type Job = {
 export type JobTable = {
   /** In the order they were started. */
   jobs: Job[];
-  nextId: number;
-  /** Starts that have passed the limit check and not finished starting. */
-  starting: number;
+  /** The signals of starts that passed the limit check and have not
+   *  finished starting. They count toward the limit, and closing the table
+   *  aborts them. */
+  starting: AbortController[];
+  /** Set when the run ends. No job starts after that. */
+  closed: boolean;
   listeners: ((job: JobSummary) => void)[];
 };
 
 export function newJobTable(): JobTable {
-  return { jobs: [], nextId: 1, starting: 0, listeners: [] };
+  return { jobs: [], starting: [], closed: false, listeners: [] };
 }
 
 /** Starts the command. When MAX_RUNNING_JOBS are already running, rejects
  *  with an Error whose message says so and lists them. A start that throws
- *  rejects and adds nothing to the table. `capBytes` is for tests. */
+ *  rejects and adds nothing to the table, and so does a start on a closed
+ *  table. `capBytes` is for tests. */
 export async function addJob(
   table: JobTable,
   host: Host,
   start: JobStart,
   capBytes: number = JOB_OUTPUT_CAP_BYTES,
 ): Promise<JobSummary> {
-  if (runningJobs(table).length + table.starting >= MAX_RUNNING_JOBS) {
+  if (table.closed) {
+    throw new Error("This run has ended, so no background job can start in it.");
+  }
+  if (runningJobs(table).length + table.starting.length >= MAX_RUNNING_JOBS) {
     throw new Error(tooManyJobsMessage(table));
   }
   const controller = new AbortController();
-  table.starting += 1;
+  table.starting.push(controller);
   let process: RunningProcess;
   try {
     process = await host.subprocess.start(
@@ -101,11 +110,11 @@ export async function addJob(
       },
     );
   } finally {
-    table.starting -= 1;
+    table.starting = table.starting.filter((each) => each !== controller);
   }
   const clock = host.clock;
   const summary: JobSummary = {
-    id: `job-${table.nextId}`,
+    id: newJobId(table, host),
     command: start.label,
     state: "running",
     exitCode: null,
@@ -113,7 +122,6 @@ export async function addJob(
     endedAt: null,
     unread: false,
   };
-  table.nextId += 1;
   const job: Job = {
     summary,
     process,
@@ -154,18 +162,21 @@ export function describeJobState(job: JobSummary): string {
 }
 
 /** The job's state and its output since the last read, or null for an
- *  unknown id. Moves the read position. */
+ *  unknown id. Moves the read position. Once it returns a finished job's
+ *  last output, the job lets go of its output, so a finished job holds no
+ *  memory for text that was already read. */
 export function readJob(table: JobTable, id: string): JobReport | null {
   const job = findJob(table, id);
   if (job === null) {
     return null;
   }
-  const output = job.process.output();
+  const output = job.process?.output() ?? { stdout: "", stderr: "" };
   const stdout = output.stdout.slice(job.read.stdout);
   const stderr = output.stderr.slice(job.read.stderr);
   job.read = { stdout: output.stdout.length, stderr: output.stderr.length };
   if (job.summary.state !== "running") {
     job.summary.unread = false;
+    job.process = null;
   }
   return {
     ...job.summary,
@@ -212,8 +223,13 @@ export async function endJob(table: JobTable, id: string): Promise<boolean> {
   return true;
 }
 
-/** Stops every running job. Does not wait. */
-export function endAllJobs(table: JobTable): void {
+/** Stops every running job and every start still in progress, and refuses
+ *  any later start. The run's `cleanup()` calls it. Does not wait. */
+export function closeJobTable(table: JobTable): void {
+  table.closed = true;
+  for (const controller of table.starting) {
+    controller.abort();
+  }
   for (const job of runningJobs(table)) {
     job.controller.abort();
   }
@@ -258,8 +274,24 @@ function finishJob(table: JobTable, job: Job, ending: Ending): void {
   job.summary.unread = true;
   job.note = ending.note;
   dropOldFinishedJob(table);
+  // A listener that throws must not reject `job.ended`, which nothing
+  // handles, and must not keep the other listeners from running.
   for (const listener of table.listeners) {
-    listener({ ...job.summary });
+    try {
+      listener({ ...job.summary });
+    } catch (error) {
+      console.warn(`[jobs] a listener for ${job.summary.id} failed: ${(error as Error).message}`);
+    }
+  }
+}
+
+function newJobId(table: JobTable, host: Host): string {
+  for (;;) {
+    const digits = Array.from(host.random.bytes(3), (byte) => byte.toString(16).padStart(2, "0"));
+    const id = `job-${digits.join("")}`;
+    if (findJob(table, id) === null) {
+      return id;
+    }
   }
 }
 

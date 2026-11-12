@@ -1,6 +1,11 @@
 import { keepOutput } from "std::spill"
 
-import { _jobOutput, _stopJob, _listJobs } from "agency-lang/stdlib-lib/jobs.js"
+import {
+  _waitForJob,
+  _readJob,
+  _stopJob,
+  _listJobs,
+ } from "agency-lang/stdlib-lib/jobs.js"
 
 /** @module
   @summary Read, stop, and list the shell commands running in the background.
@@ -13,14 +18,16 @@ import { _jobOutput, _stopJob, _listJobs } from "agency-lang/stdlib-lib/jobs.js"
 
   ```agency
   import { startJob } from "std::safeBash"
-  import { jobOutput, stopJob } from "std::jobs"
+  import { jobOutput, stopJob, listJobs } from "std::jobs"
 
   node main() {
     handle {
       startJob("./run-comparison.sh")
-      const report = jobOutput("job-1", wait: 300)
+      // Ids are random, such as job-3fa9c1. The start's reply names it too.
+      const id = listJobs()[0].id
+      const report = jobOutput(id, wait: 300)
       print(report)
-      stopJob("job-1")
+      stopJob(id)
     } with (intr) {
       return approve()
     }
@@ -67,13 +74,13 @@ export type JobSummary = {
   unread: boolean
 }
 
-/* Long output is saved and previewed, like any command output. */
+/* Long output is saved and previewed, like any command output. A running
+  job has no exit code, so its preview names none. */
 def shown(report: JobReport): JobReport {
-  const exitCode = report.exitCode ?? 0
   return {
     ...report,
-    stdout: keepOutput(report.stdout, exitCode, report.command),
-    stderr: keepOutput(report.stderr, exitCode, report.command)
+    stdout: keepOutput(report.stdout, report.exitCode, report.command),
+    stderr: keepOutput(report.stderr, report.exitCode, report.command)
   }
 }
 
@@ -81,10 +88,16 @@ export def jobOutput(id: string, wait: number = 0): Result<JobReport> {
   """
   Read what a background job has printed since you last read it, and its state. Each call returns only output not returned before. A job that has ended reports its exit code.
 
-  @param id - The job id, such as job-1.
+  @param id - The job id, such as job-3fa9c1.
   @param wait - Seconds to wait before reading, at most 600. The call returns early when the job ends. A wait can be cancelled without stopping the job.
   """
-  const report = try _jobOutput(id, wait)?
+  // Two statements: a guard trip during the wait is raised between them,
+  // so a handler that rejects it leaves the output for the next read.
+  const waited = try _waitForJob(id, wait)
+  if (isFailure(waited)) {
+    return waited
+  }
+  const report = try _readJob(id)?
   return success(shown(report))
 }
 
@@ -93,7 +106,7 @@ export def stopJob(id: string): Result<JobReport> {
   """
   Stop a background job and everything it started, and return its last output.
 
-  @param id - The job id, such as job-1.
+  @param id - The job id, such as job-3fa9c1.
   """
   const report = try _stopJob(id)?
   return success(shown(report))

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -9,8 +9,8 @@ import { safeDeleteDirectoryWithin } from "../../utils.js";
 import {
   MAX_RUNNING_JOBS,
   addJob,
+  closeJobTable,
   describeJobState,
-  endAllJobs,
   endJob,
   listJobs,
   newJobTable,
@@ -78,7 +78,7 @@ const summary = (state: JobSummary["state"], exitCode: number | null): JobSummar
 });
 
 afterEach(() => {
-  tables.forEach(endAllJobs);
+  tables.forEach(closeJobTable);
   tables = [];
   dirs.forEach((dir) => safeDeleteDirectoryWithin(os.tmpdir(), dir));
   dirs = [];
@@ -160,23 +160,32 @@ describe.skipIf(process.platform === "win32")("the job table", () => {
     expect(listJobs(jobs)[0].unread).toBe(false);
   });
 
-  it("endAllJobs stops every running job", async () => {
+  it("closeJobTable stops every running job and refuses later starts", async () => {
     const jobs = table();
     const first = await start(jobs, "sleep 30 & echo $!; wait");
     const second = await start(jobs, "sleep 30 & echo $!; wait");
     const pids = [await printedPid(jobs, first.id), await printedPid(jobs, second.id)];
-    endAllJobs(jobs);
+    closeJobTable(jobs);
     await until(() => pids.every((pid) => !isAlive(pid)), 4000);
     expect(pids.map(isAlive)).toEqual([false, false]);
+    await expect(start(jobs, "sleep 30")).rejects.toThrow(/run has ended/);
   });
 
   it("refuses a job past the limit and names the running ones", async () => {
     const jobs = table();
-    for (let i = 0; i < MAX_RUNNING_JOBS; i++) {
+    const first = await start(jobs, "sleep 30");
+    for (let i = 1; i < MAX_RUNNING_JOBS; i++) {
       await start(jobs, "sleep 30");
     }
-    await expect(start(jobs, "sleep 30")).rejects.toThrow(/job-1 \(sleep 30\)/);
+    await expect(start(jobs, "sleep 30")).rejects.toThrow(`${first.id} (sleep 30)`);
     expect(listJobs(jobs)).toHaveLength(MAX_RUNNING_JOBS);
+  });
+
+  it("gives each job a different random id", async () => {
+    const jobs = table();
+    const ids = [(await start(jobs, "true")).id, (await start(jobs, "true")).id];
+    expect(ids[0]).toMatch(/^job-[0-9a-f]{6}$/);
+    expect(ids[0]).not.toBe(ids[1]);
   });
 
   it("a job past its time limit is timedOut", async () => {
@@ -255,6 +264,102 @@ describe("a job whose process fails after it started", () => {
     expect(readJob(jobs, job.id)!.note).toBe("spawn bash ENOENT");
     // The limit counts running jobs, so this one no longer counts.
     expect(listJobs(jobs).filter((each) => each.state === "running")).toEqual([]);
+  });
+});
+
+/** A subprocess whose child ends when the test says, and counts reads. */
+function fakeSubprocess() {
+  let finish: () => void = () => {};
+  const seen = { signals: [] as AbortSignal[], outputReads: 0, letStart: () => {} };
+  let startGate: Promise<void> = Promise.resolve();
+  const subprocess: HostSubprocess = {
+    run: async () => {
+      throw new Error("unused");
+    },
+    locate: async () => null,
+    start: async (_command, options) => {
+      seen.signals.push(options!.signal!);
+      await startGate;
+      const ended = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      return {
+        kill: () => {},
+        wait: async () => {
+          await ended;
+          return {
+            exitCode: 0,
+            signal: null,
+            stdout: "done\n",
+            stderr: "",
+            truncated: null,
+            timedOut: false,
+            aborted: false,
+          };
+        },
+        output: () => {
+          seen.outputReads += 1;
+          return { stdout: "done\n", stderr: "" };
+        },
+      };
+    },
+  };
+  return {
+    host: memoryHost({ subprocess }),
+    seen,
+    finish: () => finish(),
+    holdStarts: () => {
+      startGate = new Promise((resolve) => {
+        seen.letStart = resolve;
+      });
+    },
+  };
+}
+
+const startOn = (jobs: JobTable, host: ReturnType<typeof fakeSubprocess>["host"]) =>
+  addJob(jobs, host, { command: "x", label: "x", cwd: "", maxMs: 60_000 });
+
+describe("the job table with a fake subprocess", () => {
+  it("a listener that throws does not stop the others or reject the job's end", async () => {
+    const fake = fakeSubprocess();
+    const jobs = table();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const heard: string[] = [];
+    onJobEnd(jobs, () => {
+      throw new Error("readline was closed");
+    });
+    onJobEnd(jobs, (job) => heard.push(job.id));
+    const job = await startOn(jobs, fake.host);
+    fake.finish();
+    expect(await endJob(jobs, job.id)).toBe(true);
+    expect(heard).toEqual([job.id]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("readline was closed"));
+    warn.mockRestore();
+  });
+
+  it("closing the table aborts a start still in progress", async () => {
+    const fake = fakeSubprocess();
+    const jobs = table();
+    fake.holdStarts();
+    const starting = startOn(jobs, fake.host);
+    await until(() => fake.seen.signals.length === 1);
+    closeJobTable(jobs);
+    expect(fake.seen.signals[0].aborted).toBe(true);
+    fake.seen.letStart();
+    await starting;
+    fake.finish();
+  });
+
+  it("lets go of a finished job's output once a read has returned it", async () => {
+    const fake = fakeSubprocess();
+    const jobs = table();
+    const job = await startOn(jobs, fake.host);
+    fake.finish();
+    await waitForJob(jobs, job.id, 1000, never);
+    expect(readJob(jobs, job.id)!.stdout).toBe("done\n");
+    const readsAfterFinal = fake.seen.outputReads;
+    expect(readJob(jobs, job.id)!.stdout).toBe("");
+    expect(fake.seen.outputReads).toBe(readsAfterFinal);
   });
 });
 

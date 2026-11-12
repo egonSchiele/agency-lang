@@ -1,0 +1,26 @@
+import { jobOutput, listJobs } from "std::jobs"
+import { startJob } from "std::safeBash"
+
+import { withPendingNotes } from "../lib/pendingNotes.agency"
+import { jobsSlashCommand } from "../lib/slashCommands/jobs.agency"
+
+// The user did not stop a job that had already ended, so the model is not
+// told they did.
+node stopAfterTheJobEndedLeavesNoNote(): string {
+  handle {
+    startJob("true")
+  } with approve
+  const id = listJobs()[0].id
+  jobOutput(id, wait: 10)
+  jobsSlashCommand("stop ${id}")
+  return withPendingNotes("next")
+}
+
+node stopOfARunningJobTellsTheModel(): boolean {
+  handle {
+    startJob("sleep 30")
+  } with approve
+  const id = listJobs()[0].id
+  jobsSlashCommand("stop ${id}")
+  return withPendingNotes("next").startsWith("I stopped background job ${id} myself")
+}

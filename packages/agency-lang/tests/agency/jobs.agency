@@ -1,8 +1,9 @@
 import { jobOutput, stopJob, listJobs } from "std::jobs"
 import { safeBash, startJob } from "std::safeBash"
 
-// Each node is its own run, so its first job is job-1 and the run's
-// cleanup stops whatever a node leaves running.
+// Each node is its own run, with its own jobs, and the run's cleanup stops
+// whatever a node leaves running. Job ids are random, so each node reads
+// its job's id from listJobs().
 
 def endsInBackground(question: string): boolean {
   return question.endsWith("in the background?")
@@ -35,19 +36,21 @@ node backgroundQuestionSaysSo() {
 
 node startReadStop() {
   let started: any = null
+  let id = ""
   let first: any = null
   let second: any = null
   handle {
     // The printf form keeps the expected text, A1 and B2, out of the
     // command, so the output cannot match by echoing the command.
     started = startJob("printf 'A%s\\n' 1; sleep 1; printf 'B%s\\n' 2")
-    first = jobOutput("job-1", wait: 10)
-    second = jobOutput("job-1")
+    id = listJobs()[0].id
+    first = jobOutput(id, wait: 10)
+    second = jobOutput(id)
   } with (intr) {
     return approve()
   }
   return [
-    started.value.includes("job-1"),
+    started.value.includes(id),
     first.value.state,
     first.value.exitCode,
     first.value.stdout.includes("A1"),
@@ -60,7 +63,7 @@ node stopEndsIt() {
   let stopped: any = null
   handle {
     startJob("sleep 30")
-    stopped = stopJob("job-1")
+    stopped = stopJob(listJobs()[0].id)
   } with (intr) {
     return approve()
   }
@@ -75,12 +78,13 @@ node guardTripDuringWaitAsksTheHandler() {
   let state = ""
   handle {
     startJob("sleep 30")
+    const id = listJobs()[0].id
     const waited = guard(time: 200ms) {
-      return jobOutput("job-1", wait: 30)
+      return jobOutput(id, wait: 30)
     }
     blockFailed = isFailure(waited)
     state = listJobs()[0].state
-    stopJob("job-1")
+    stopJob(id)
   } with (intr) {
     if (intr.effect == "std::guard") {
       asked = true
@@ -98,14 +102,15 @@ node guardTripDuringWaitCanBeApproved() {
   let waited: any = null
   handle {
     startJob("sleep 30")
+    const id = listJobs()[0].id
     waited = guard(time: 200ms) {
-      const report = jobOutput("job-1", wait: 30)
+      const report = jobOutput(id, wait: 30)
       if (report is failure(why)) {
         return "read failed: ${why}"
       }
       return report.value.state
     }
-    stopJob("job-1")
+    stopJob(id)
   } with (intr) {
     if (intr.effect == "std::guard") {
       asked = true
@@ -116,6 +121,28 @@ node guardTripDuringWaitCanBeApproved() {
     return approve()
   }
   return [asked, isSuccess(waited), waited.value]
+}
+
+// A handler that rejects the trip during the wait leaves the output
+// unread, so the next read returns it. This fails if the wait and the read
+// are one step.
+node rejectedWaitKeepsOutput() {
+  let later: any = null
+  handle {
+    startJob("printf 'A%s\\n' 1; sleep 30")
+    const id = listJobs()[0].id
+    const waited = guard(time: 200ms) {
+      return jobOutput(id, wait: 30)
+    }
+    later = jobOutput(id)
+    stopJob(id)
+  } with (intr) {
+    if (intr.effect == "std::guard") {
+      return reject()
+    }
+    return approve()
+  }
+  return later.value.stdout.includes("A1")
 }
 
 node foregroundForInstantCommands() {
@@ -138,11 +165,11 @@ node foregroundForInstantCommands() {
 }
 
 node unknownId() {
-  const read = jobOutput("job-99")
-  const stopped = stopJob("job-99")
+  const read = jobOutput("job-000000")
+  const stopped = stopJob("job-000000")
   return [
-    isFailure(read) && read.error.includes("is not running in this run"),
-    isFailure(stopped) && stopped.error.includes("is not running in this run"),
+    isFailure(read) && read.error.includes("There is no job job-000000 in this run"),
+    isFailure(stopped) && stopped.error.includes("This run has no jobs"),
   ]
 }
 

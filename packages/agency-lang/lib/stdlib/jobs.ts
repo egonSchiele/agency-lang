@@ -45,10 +45,14 @@ function forAgency<J extends JobSummary>(
   };
 }
 
-function notRunningMessage(id: string): string {
+/** Says only what is known, and lists the ids that do exist, so a typo is
+ *  easy to correct. */
+function noSuchJobMessage(id: string, run: Run): string {
+  const ids = listJobs(run.ctx.jobs).map((job) => job.id);
+  const known = ids.length === 0 ? "This run has no jobs." : `Its jobs are ${ids.join(", ")}.`;
   return (
-    `${id} is not running in this run. It was stopped when the run paused or ` +
-    `restarted. Start it again if you still need it.`
+    `There is no job ${id} in this run. ${known} ` +
+    `A job started before the run paused or restarted was stopped then.`
   );
 }
 
@@ -73,25 +77,32 @@ export async function _startJob(
   return job.id;
 }
 
-/** Waits up to `waitSeconds`, then reports. Throws for an unknown id. */
-export async function _jobOutput(id: string, waitSeconds: number): Promise<JobReportForAgency> {
+/** Waits up to `waitSeconds` for the job to end, and reads nothing.
+ *  Throws for an unknown id. */
+export async function _waitForJob(id: string, waitSeconds: number): Promise<void> {
   const run = currentRun();
   const table = run.ctx.jobs;
   if (!listJobs(table).some((job) => job.id === id)) {
-    throw new Error(notRunningMessage(id));
+    throw new Error(noSuchJobMessage(id, run));
   }
   const seconds = Math.min(Math.max(waitSeconds, 0), MAX_WAIT_SECONDS);
   const signal = run.ctx.getAbortSignal(run.stack);
   await waitForJob(table, id, seconds * 1000, signal);
-  // A guard trip returns the report as it stands, and the next step
-  // raises the trip, so every handler sees it. Any other cancel keeps
-  // its cause, which tells an Escape from a kill.
+  // A guard trip returns, and the next step raises it as std::guard, so
+  // every handler sees it. Any other cancel keeps its cause, which tells
+  // an Escape from a kill.
   if (signal.aborted && !isRaisableGuardTrip(run, signal)) {
     throw leafCancel("job wait cancelled", signal);
   }
-  const report = readJob(table, id);
+}
+
+/** The job's state and its output since the last read. Throws for an
+ *  unknown id. */
+export function _readJob(id: string): JobReportForAgency {
+  const run = currentRun();
+  const report = readJob(run.ctx.jobs, id);
   if (report === null) {
-    throw new Error(notRunningMessage(id));
+    throw new Error(noSuchJobMessage(id, run));
   }
   return forAgency(report, run.ctx.clock.now());
 }
@@ -102,13 +113,13 @@ export async function _stopJob(id: string): Promise<JobReportForAgency> {
   const run = currentRun();
   const table = run.ctx.jobs;
   if (!(await endJob(table, id))) {
-    throw new Error(notRunningMessage(id));
+    throw new Error(noSuchJobMessage(id, run));
   }
   // The read clears `unread`, so a job that was stopped on purpose drops
   // off the agent's jobs message.
   const report = readJob(table, id);
   if (report === null) {
-    throw new Error(notRunningMessage(id));
+    throw new Error(noSuchJobMessage(id, run));
   }
   return forAgency(report, run.ctx.clock.now());
 }

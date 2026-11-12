@@ -259,9 +259,9 @@
     },
     {
       "nodeName": "jobToolsOnlyInInteractiveSessions",
-      "description": "An interactive session offers startJob, jobOutput, and stopJob to the coders and once each to the main agent. A one-shot run offers them to neither.",
+      "description": "An interactive session offers startJob, jobOutput, and stopJob to the coders, and the three plus readSpill and grepSpill once each to the main agent. A one-shot run offers none of them.",
       "input": "",
-      "expectedOutput": "[[\"startJob\",\"jobOutput\",\"stopJob\"],[1,1,1],0,[0,0,0]]",
+      "expectedOutput": "[[\"startJob\",\"jobOutput\",\"stopJob\"],[1,1,1,1,1],0,[0,0,0,0,0]]",
       "evaluationCriteria": [
         {
           "type": "exact"

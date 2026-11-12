@@ -7,7 +7,7 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { question } from "std::agent"
 import { AgencySource } from "std::agency"
-import { writableFileTools } from "std::agents/lib/toolkits"
+import { spillTools, writableFileTools } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
@@ -155,8 +155,18 @@ def offeredTools(user: UserTools, turnStart: any): any[] {
     ...user.skills,
     ...user.generated,
     ...turnBuiltIns(turnStart),
-    ...sessionJobTools(),
+    ...mainJobTools(),
   ]
+}
+
+// A long job read is saved and previewed, so the main agent needs the
+// readers for saved output too. The coders get them from shellTools().
+def mainJobTools(): any[] {
+  const jobs = sessionJobTools()
+  if (jobs.length == 0) {
+    return []
+  }
+  return [...jobs, ...spillTools()]
 }
 
 // The tools one turn offers.

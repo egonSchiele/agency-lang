@@ -1064,6 +1064,35 @@ node filtersInAPipe() {
   ]
 }
 
+/** A plan made in the fixture folder: its outcome, each effect's name and
+  the file it reads, and the broad reason. */
+def fixtureReadRow(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload.filename] for effect in effects], plan.broadReason]
+}
+
+/** A plan made in a folder that does not exist: its outcome, each
+  effect's name and payload, and the broad reason. */
+def wordRow(source: string): any {
+  const plan = planFor(source, "/repo")
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects], plan.broadReason]
+}
+
+// tarsec 0.5.8 reads `,`, `@`, and `%` as word characters, and braces bash
+// does not expand. These lines were unparseable before it, and the rules
+// that already exist recognize them now.
+node wordsTarsecNowAccepts() {
+  return [
+    fixtureReadRow("cut -d, -f1 one.txt"),
+    fixtureReadRow("sort -k2,2n one.txt"),
+    wordRow("git show HEAD@{1}"),
+    wordRow("date +%Y"),
+    wordRow("echo a{b,c}"),
+  ]
+}
+
 node readUnderRecommendedNeedsNoPrompt() {
   // The launch directory is the package directory, so the fixtures are
   // inside it and recommended approves std::read there, and it approves

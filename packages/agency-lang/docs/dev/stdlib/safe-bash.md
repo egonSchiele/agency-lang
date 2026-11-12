@@ -625,9 +625,9 @@ checks the sets are literal and that there are as many as its flags take
 (`TR_SET_COUNTS`, a `CountRange` per flag set), then calls
 `stdinStage`.
 
-The bash parser refuses a comma joined to a flag, so `sort -t, -k2`,
-`cut -d, -f1`, and `sort -k2,2n` are unparseable and ask `std::bash`. The
-same flags with a space (`cut -d : -f 1`) parse.
+The bash parser reads a comma joined to a flag as part of the flag, so
+`cut -d, -f1 a.txt` and `sort -k2,2n a.txt` parse. The read tables judge
+them like any other spelling: each asks `std::read` for `a.txt`.
 
 ### A lone cat, head, or tail runs the read tool's read
 

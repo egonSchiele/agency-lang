@@ -1081,10 +1081,9 @@ def wordRow(source: string): any {
   return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects], plan.broadReason]
 }
 
-// tarsec 0.5.8 reads `,`, `@`, and `%` as word characters, and braces bash
-// does not expand. These lines were unparseable before it, and the rules
-// that already exist recognize them now.
-node wordsTarsecNowAccepts() {
+// The parser reads `,`, `@`, and `%` as word characters, and braces that
+// bash does not expand, so the rules judge these lines like any other.
+node punctuationInWords() {
   return [
     fixtureReadRow("cut -d, -f1 one.txt"),
     fixtureReadRow("sort -k2,2n one.txt"),
@@ -2267,6 +2266,9 @@ node ghReads() {
     ghPlan("gh issue view 7 --json title,comments"),
     ghPlan("gh issue list --label bug,urgent --state all"),
     ghPlan("gh search issues crash in:title --repo o/r --limit 10"),
+    ghPlan("gh search issues 'crash bug' --repo o/r --state closed --label bug,ui --match title,body --author dana"),
+    ghPlan("gh search issues crash --repo o/r --include-prs"),
+    ghPlan("gh search issues '~/private' --repo o/r"),
     ghPlan("gh pr diff 1 | head -20"),
   ]
 }
@@ -2307,6 +2309,12 @@ node ghStaysBroad() {
     ghBroad("gh search issues crash --repo o/r,other/private"),
     ghBroad("gh search issues repo:other/x crash --repo o/r"),
     ghBroad("gh search issues crash --repo o/r --owner acme"),
+    ghBroad("gh search issues ~/private --repo o/r"),
+    ghBroad("gh search issues 'a)' OR '(b' --repo o/r"),
+    ghBroad("gh search issues crash --repo o/r --author 'x)'"),
+    ghBroad("gh issue list --label '\"bug,urgent\"'"),
+    ghBroad("gh issue list --label ''"),
+    ghBroad("gh issue list --label bug,"),
     ghBroad("(cd grep-fixtures && gh pr view 1); gh pr view 2", STDLIB_TESTS),
   ]
 }
@@ -2369,11 +2377,10 @@ node ghUnownedStaysExec() {
   ]
 }
 
-// The three lines the coder ran in trace w77zDrJPgbqtWAlU7jLYp, where each
-// asked std::bash or std::exec and the run ended waiting on two of them.
-static const TRACE_PR_VIEW = "gh pr view 1451 --repo egonSchiele/agency-lang --json title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files"
-static const TRACE_PR_DIFF = "gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff && wc -l /tmp/pr1451.diff"
-static const TRACE_COMMITS = "gh pr view 1451 --repo egonSchiele/agency-lang --json commits --jq '.commits[].messageHeadline'"
+// Three gh lines a coding agent writes to review a pull request.
+static const CODER_PR_VIEW = "gh pr view 1451 --repo egonSchiele/agency-lang --json title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files"
+static const CODER_PR_DIFF = "gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff && wc -l /tmp/pr1451.diff"
+static const CODER_COMMITS = "gh pr view 1451 --repo egonSchiele/agency-lang --json commits --jq '.commits[].messageHeadline'"
 
 def effectNames(plan: Plan): string[] {
   return [effect.name for effect in plan.effects]
@@ -2384,8 +2391,8 @@ def effectNames(plan: Plan): string[] {
 // is narrow on its own. Its reason holds a real path, which differs
 // between machines, so the row checks that the reason names the file. The
 // third uses --jq, which has no rule.
-node ghLinesFromTheTrace() {
-  const diff = planFor(TRACE_PR_DIFF, "/repo")
+node ghLinesACoderWrites() {
+  const diff = planFor(CODER_PR_DIFF, "/repo")
   const diffAlone = planFor("gh pr diff 1451 --repo egonSchiele/agency-lang > /tmp/pr1451.diff", "/repo")
   const reason = diff.broadReason
   let diffReason: any = null
@@ -2393,10 +2400,10 @@ node ghLinesFromTheTrace() {
     diffReason = [reason.kind, reason.detail.includes("pr1451.diff")]
   }
   return [
-    ghPlan(TRACE_PR_VIEW),
+    ghPlan(CODER_PR_VIEW),
     [outcomeOf(diff), diffReason],
     [outcomeOf(diffAlone), effectNames(diffAlone)],
-    ghBroad(TRACE_COMMITS),
+    ghBroad(CODER_COMMITS),
   ]
 }
 

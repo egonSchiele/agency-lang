@@ -172,7 +172,9 @@ see git ignore it in the shell, as the git tools already do. The git
 lists live in `lib/host/gitEnvironment.ts`, and the git tools remove the
 same entries plus the SSH ones. It also removes `GH_HOST` and `GH_REPO`,
 which send `gh` to another server or repository than the one a
-`std::github` question names. `GH_TOKEN` and `GITHUB_TOKEN` are kept. A
+`std::github` question names, and `GH_FORCE_TTY`, which makes `gh` treat
+the captured output as a terminal and start a pager under a read
+approval. `GH_TOKEN` and `GITHUB_TOKEN` are kept. A
 person who uses `GH_HOST` for a GitHub Enterprise server loses it in this
 shell, as `std::github` has no Enterprise support either (issue #1003).
 The list is `SHELL_ENV_REMOVED` in
@@ -1178,8 +1180,7 @@ Seven reads have a rule: `gh pr view`, `pr diff`, `pr checks`, `pr list`,
 these that fails its rule asks `std::bash`, with the reason, such as
 ``gh does not take `--web` ``.
 
-Every other `gh` subcommand asks `std::exec`, as it did before `gh` had a
-rule. That includes every write (`gh pr comment`, `gh pr review`, `gh
+Every other `gh` subcommand asks `std::exec`. That includes every write (`gh pr comment`, `gh pr review`, `gh
 issue create`, `gh pr create`, `gh pr merge`), and `gh run view`. The
 agents write through the typed tools in `std::github`, because a write
 effect names its repository and a person can approve writes to one
@@ -1252,9 +1253,14 @@ true whatever that config says. `gh` has no per-repository config file,
 so once the repository is written nothing in the working folder changes
 what `gh` does.
 
-`gh search issues` is the exception. Its `--repo` is a search filter, and
-`gh search` reads no host there, so it is written as `--repo OWNER/REPO`.
-It is the one owned command whose host is not pinned.
+`gh search issues` is different. Its `--repo` is a search filter that
+takes no host, so it is written as `--repo OWNER/REPO`, and `gh search`
+searches its default host. safeBash pins that host by writing
+`GH_HOST=github.com` before the command:
+
+```
+GH_HOST=github.com gh search issues crash --repo o/r
+```
 
 ### One name per flag
 
@@ -1290,20 +1296,52 @@ that would ask `std::exec`, `gh run view 1 --json jobs *` in a folder
 holding a file named `--jq=env.GITHUB_TOKEN` would pass that file name to
 `gh` as the flag.
 
-`--template` and `-t` are left off every owned row as well. Their Go
-template functions cannot read the environment (`{{env "X"}}` fails with
-`function "env" not defined`), but they are another small language, and
+`--template` and `-t` are left off every owned row as well. Go templates
+cannot read the environment, but they are another small language, and
 `--json` covers the need.
 
-### Filter values
+### Flag values
 
 Every flag value is checked with `_ghHasScopeQualifier`, the check the
 typed `ghIssueSearch` uses. `gh search issues` writes its filter values
 into a search query, where a `repo:`, `org:`, or `user:` adds a
 repository, so `--author 'x repo:other/private'` has no rule. The search
-words get the same check. The payload's `query` is
-`_ghScopedSearchQuery`'s result, `repo:OWNER/REPO <words>`, the string the
-typed tool puts there.
+words get the same check.
+
+`gh` reads a list flag such as `--label` as one line of CSV. In CSV a
+quote changes where the value splits, so `--label '"bug,urgent"'` is one
+label to `gh` and two to a plain split at commas. A flag value with a
+quote or a line break has no rule, and neither does a `--label` or
+`--match` value with an empty item (`--label ''`, `--label bug,`).
+
+### The search query
+
+The payload's `query` is the query `gh` sends, built by `_ghSearchQuery`
+the way `gh` 2.88.1 builds it (`AdvancedIssueSearchString` in
+`pkg/search/query.go`). So a handler that reads `query` sees the filter
+flags and the `type:issue` that `gh` adds unless `--include-prs` is given:
+
+```
+gh search issues 'crash bug' --repo o/r --state closed --label bug
+```
+
+asks `issueSearch` with this `query`:
+
+```
+( "crash bug" ) label:bug repo:o/r state:closed type:issue
+```
+
+`gh` puts the words in parentheses and the qualifiers after them. A
+parenthesis in a word or a value could close that group early, so
+`a) OR (b` would put the `OR` outside the repository filter. A search word
+or value with a parenthesis has no rule. Neither has one with a backslash,
+a control character, or a space character other than a plain space,
+because `gh` quotes those differently than `_ghSearchQuery` can.
+
+`ghCommand` writes the search words back as the model wrote them, and
+bash expands a leading `~` in an unquoted word. So `gh search issues
+~/notes --repo o/r` has no rule, and `'~/notes'` asks for the text
+`~/notes`.
 
 `--search` on `gh pr list` and `gh issue list` has no rule. Its value is
 a search query, which can name another repository or contradict
@@ -1318,8 +1356,8 @@ a search query, which can name another repository or contradict
 | `pr diff N` | `prDiff` | `--name-only`, `--patch`, `--color`, `-e`/`--exclude` |
 | `pr checks N` | `prChecks` | `--required`, `--json` |
 | `pr list` | `prList` with `state`, `base`, `perPage` | `--state`, `--base`, `--limit`, `--author`, `--assignee`, `--label`, `--draft`, `--head`, `--json` |
-| `issue view N` | `issueGet`, `issueCommentList` | `-c`/`--comments`, `--json` |
-| `issue view N --json f` | `comments` asks `issueCommentList`, any other field `issueGet` | |
+| `issue view N` | `issueGet`, `prGet`, `issueCommentList` | `-c`/`--comments`, `--json` |
+| `issue view N --json f` | `comments` asks `issueCommentList`, any other field `issueGet` and `prGet` | |
 | `issue list` | `issueList` with `state`, `labels`, `perPage` | `--state`, `--label`, `--limit`, `--author`, `--assignee`, `--mention`, `--milestone`, `--json` |
 | `search issues <words> --repo O/R` | `issueSearch` with `query`, `perPage` | `--state`, `--label`, `--author`, `--assignee`, `--limit`, `--sort`, `--order`, `--include-prs`, `--match`, `--json` |
 
@@ -1327,6 +1365,11 @@ A plain `pr view` asks for comments, reviews, and checks because `gh`
 2.88.1 fetches them with the pull request (`defaultFields` in
 `pkg/cmd/pr/view/view.go`). A plain `issue view` fetches the last comment,
 or all of them with `--comments`.
+
+`issue view N` shows a pull request when `N` is one (`FindIssueOrPR` in
+`gh`), and the number cannot tell which before `gh` runs. The typed
+`ghIssueGet` refuses a pull request, so an approval of `issueGet` alone
+must not read one: a read of the issue itself asks `prGet` as well.
 
 `pr view --json` asks one effect per kind of data its fields read:
 
@@ -1337,6 +1380,12 @@ or all of them with `--comments`.
 | `reviews`, `latestReviews` | `prReviewList` |
 | `statusCheckRollup` | `prChecks` |
 | any other field | `prGet` |
+
+"Any other field" includes `commits` and `projectItems`, which the typed
+`ghPrGet` does not return. No `std::github` effect covers them, and `gh
+pr view N --json commits` is how a model lists a pull request's commits,
+so they count as reading the pull request. On `pr list`, `commits` has no
+rule, because there it reads the commits of every pull request listed.
 
 `--limit` sets `perPage`, from 1 to 100, the most GitHub returns in one
 page (`GITHUB_MAX_PER_PAGE`); with no `--limit` it is 30, `gh`'s default.
@@ -1353,17 +1402,10 @@ every repository of an owner).
 
 ### Aliases and extensions
 
-A `gh` alias cannot replace a built-in command. `gh` 2.88.1 refuses `gh
-alias set pr 'api user'`, `gh alias set 'pr view' 'api user'`, and `gh
-alias set --shell pr 'echo hijacked'` with "already a gh command or
-extension". An alias written into `config.yml` by hand is listed by `gh
-alias list` and ignored: `gh pr view` still runs the built-in command.
-
-An extension cannot replace one either. `gh extension install` refuses a
-name that matches a built-in command ("matches the name of a built-in
-command or alias", `checkValidExtension` in
-`pkg/cmd/extension/command.go`), and `gh` runs its core command before it
-looks for an extension of that name.
+Neither a `gh` alias nor an extension can replace a built-in command, so
+`gh pr view` always runs `gh`'s own code. `gh alias set` and `gh
+extension install` refuse a built-in name, and `gh` ignores an alias
+written into `config.yml` by hand under one.
 
 ### Not logged in
 
@@ -1621,9 +1663,10 @@ write a file, or read a file with no approval at all.
   the private executors.
 - `stdlib/safeBash/actions.agency`: `Plan`, `BroadReason`, `Effect`, and
   `Execution`, with a named payload type and a constructor per git
-  effect and per `std::github` read effect, and `pendingLookups`.
-- `lib/stdlib/safeBashGh.ts`: `_ghParseTarget` and `_ghParseRepoFlag`,
-  the text parsing for the `gh` rule, tested in `safeBashGh.test.ts`.
+  effect, and `pendingLookups`.
+- `lib/stdlib/safeBashGh.ts`: `_ghParseTarget`, `_ghParseRepoFlag`, and
+  `_ghSearchQuery`, the text handling for the `gh` rule, tested in
+  `safeBashGh.test.ts`.
 - `lib/host/gitEnvironment.ts`: the git environment variables, in three
   lists the shell and the git tools share.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
@@ -1654,8 +1697,8 @@ write a file, or read a file with no approval at all.
   `ghUnownedStaysExec`, `ghLookupFillsThePair` and
   `ghLookupFailureRaisesNothing` (a repository the test makes, with and
   without an origin), `ghRunsWhatItAsked` and `ghLoginNote` (a fake `gh`
-  on the search path, through `runWithFakeGh`), and
-  `wordsTarsecNowAccepts`, the lines tarsec 0.5.8 began to parse.
+  on the search path, through `runWithFakeGh`). `punctuationInWords`
+  covers words with `,`, `@`, `%`, and braces.
 - `lib/stdlib/safeBash.test.ts`: `astToBash` round-trips every command
   family the classifier sees.
 - `lib/stdlib/statelog.test.ts`: `_debug`.

@@ -37,10 +37,11 @@ describe("shellEnvironment", () => {
     expect(shellEnvironment(env)).toEqual({ PATH: "/usr/bin" });
   });
 
-  it("removes the variables that send gh to another host or repository, and keeps its tokens", () => {
+  it("removes the variables that send gh to another host or repository or start its pager, and keeps its tokens", () => {
     const env = {
       GH_HOST: "ghe.example.com",
       GH_REPO: "other/private",
+      GH_FORCE_TTY: "1",
       GH_TOKEN: "a",
       GITHUB_TOKEN: "b",
     };

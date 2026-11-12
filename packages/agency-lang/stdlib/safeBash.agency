@@ -2820,13 +2820,19 @@ def ghOwns(command: SimpleCommand): boolean {
   return ghVerbKey(command) != null || ghIsApi(command)
 }
 
-/* `gh api`, whose rule reads a path where the other rows read a subcommand. */
+/* `gh api`, whose rule reads a path where the other rows read a subcommand.
+  The word's text decides, not its tag: gh reads `'api'` as `api`, and a
+  quoted spelling that fell through to std::exec would be approved by a
+  saved rule for `gh` and `api`, POSTs included. */
 def ghIsApi(command: SimpleCommand): boolean {
   if (command.args.length == 0) {
     return false
   }
-  const group = command.args[0]
-  return group.tag == "literal" && group.text == "api"
+  const text = literalWordText(command.args[0])
+  if (text is success(written)) {
+    return written == "api"
+  }
+  return false
 }
 
 // Bash expands a glob after the plan is made, so on a line that would ask
@@ -3265,7 +3271,7 @@ def ghApiRule(words: Word[], cwd: string, origin: GhRepo | null, redirects: Redi
   const text = literalWordText(split.positionals[0])?
   const read: GhApiRead = try _ghParseApiPath(text)?
   const repo = ghApiRepo(read, cwd, origin)
-  return success({ effects: ghApiEffects(read, repo), command: ghApiCommand(read, repo, redirects) })
+  return success({ effects: ghApiEffects(read, repo)?, command: ghApiCommand(read, repo, redirects) })
 }
 
 /* The repository a gh api path acts on: the names it holds, or with
@@ -3281,24 +3287,24 @@ def ghApiRepo(read: GhApiRead, cwd: string, origin: GhRepo | null): GhResolved {
 }
 
 // An issue path asks prGet as well as issueGet, for the reason
-// ghIssueReads gives: the number may be a pull request.
-def ghApiEffects(read: GhApiRead, repo: GhResolved): Effect[] {
+// ghIssueReads gives: the number may be a pull request. The endpoint names
+// come from API_ROUTES in TypeScript, so an endpoint this match does not
+// know has no rule.
+def ghApiEffects(read: GhApiRead, repo: GhResolved): Result<Effect[]> {
   const one = ghNumberPayload(read.number, repo)
   const paged: GhPagedPayload = { owner: repo.owner, repo: repo.repo, number: read.number, perPage: read.perPage, page: read.page }
   return match(read.endpoint) {
-    "prGet" => [{ name: "std::github::prGet", payload: one, lookup: repo.lookup }]
-    "prFiles" => [{ name: "std::github::prFiles", payload: paged, lookup: repo.lookup }]
-    "prReviewList" => [{ name: "std::github::prReviewList", payload: paged, lookup: repo.lookup }]
-    "prReviewCommentList" => [{ name: "std::github::prReviewCommentList", payload: paged, lookup: repo.lookup }]
-    "issueGet" => [{ name: "std::github::issueGet", payload: one, lookup: repo.lookup }, { name: "std::github::prGet", payload: one, lookup: repo.lookup }]
-    "issueCommentList" => [{ name: "std::github::issueCommentList", payload: paged, lookup: repo.lookup }]
+    "prGet" => success([{ name: "std::github::prGet", payload: one, lookup: repo.lookup }])
+    "prFiles" => success([{ name: "std::github::prFiles", payload: paged, lookup: repo.lookup }])
+    "prReviewList" => success([{ name: "std::github::prReviewList", payload: paged, lookup: repo.lookup }])
+    "prReviewCommentList" => success([{ name: "std::github::prReviewCommentList", payload: paged, lookup: repo.lookup }])
+    "issueGet" => success([{ name: "std::github::issueGet", payload: one, lookup: repo.lookup }, { name: "std::github::prGet", payload: one, lookup: repo.lookup }])
+    "issueCommentList" => success([{ name: "std::github::issueCommentList", payload: paged, lookup: repo.lookup }])
+    _ => failure("no rule for the gh api endpoint `${read.endpoint}`")
   }
 }
 
-// `gh api --hostname github.com --method GET 'PATH'`. The path is written
-// from the read, with the names and both paging values, so {owner} and
-// {repo} never reach gh, which would fill them from its own idea of the
-// repository. On a first pass with a lookup pending the names are empty;
+// On a first pass with a lookup pending the names in the path are empty;
 // that text never runs.
 def ghApiCommand(read: GhApiRead, repo: GhResolved, redirects: Redirect[]): SimpleCommand {
   """

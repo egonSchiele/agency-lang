@@ -2528,6 +2528,7 @@ node ghApiReads() {
     ghPlan("gh api repos/o/r/pulls/5/reviews"),
     ghPlan("gh api 'repos/o/r/issues/7/comments?page=3'"),
     ghPlan("gh api -X get repos/o/r/pulls/5"),
+    ghPlan("gh 'api' repos/o/r/pulls/5"),
   ]
 }
 
@@ -2549,6 +2550,9 @@ node ghApiStaysBroad() {
     // Only the method check refuses these two.
     ghBroad("gh api -X POST repos/o/r/pulls/5"),
     ghBroad("gh api --method=delete repos/o/r/pulls/5"),
+    // A quoted `api` is still gh api, so it does not fall back to std::exec.
+    ghBroad("gh 'api' --method POST repos/o/r/issues/1/comments -f body=hi"),
+    ghBroad("gh \"api\" -X DELETE repos/o/r/issues/comments/9"),
   ]
 }
 

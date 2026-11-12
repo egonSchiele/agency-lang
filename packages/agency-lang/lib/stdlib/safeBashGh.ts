@@ -52,7 +52,9 @@ export type GhApiRead = {
 type ApiRoute = { kind: "pulls" | "issues"; tail: string; endpoint: GhApiEndpoint; paged: boolean };
 
 // The six `gh api` reads with a rule. _ghParseApiPath finds a route here
-// and _ghApiPath writes a path from it, so the two cannot disagree.
+// and _ghApiPath writes a path from it, so the two cannot disagree. A new
+// route also needs its endpoint in GhApiRead and an arm in ghApiEffects
+// (stdlib/safeBash.agency); safeBashGh.test.ts pins GH_API_ENDPOINTS.
 const API_ROUTES: ApiRoute[] = [
   { kind: "pulls", tail: "", endpoint: "prGet", paged: false },
   { kind: "pulls", tail: "/files", endpoint: "prFiles", paged: true },
@@ -61,6 +63,8 @@ const API_ROUTES: ApiRoute[] = [
   { kind: "issues", tail: "", endpoint: "issueGet", paged: false },
   { kind: "issues", tail: "/comments", endpoint: "issueCommentList", paged: true },
 ];
+
+export const GH_API_ENDPOINTS: GhApiEndpoint[] = API_ROUTES.map((route) => route.endpoint);
 
 const API_PATH = /^\/?repos\/([^/]+)\/([^/]+)\/(pulls|issues)\/([^/]+)(\/[^/]+)?$/;
 const PAGING_KEYS = ["per_page", "page"];
@@ -82,10 +86,8 @@ function apiRepo(owner: string, repo: string): RepoCoord {
   return checkRepoCoord({ owner, repo });
 }
 
-/** A whole number the digits name exactly. Past Number.MAX_SAFE_INTEGER
- *  they do not: `9999999999999999999999` reads as 1e+22, which is what
- *  _ghApiPath would write back, so the payload and the run would both
- *  differ from what the model wrote. */
+/** The number the digits name, or 0 past Number.MAX_SAFE_INTEGER, where
+ *  `9999999999999999999999` reads as 1e+22. */
 function exactNumber(text: string): number {
   const value = DIGITS.test(text) ? Number(text) : 0;
   return Number.isSafeInteger(value) ? value : 0;

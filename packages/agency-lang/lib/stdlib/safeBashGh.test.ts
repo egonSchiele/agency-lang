@@ -1,11 +1,27 @@
 import { describe, it, expect } from "vitest";
 import {
+  GH_API_ENDPOINTS,
   _ghApiPath,
   _ghParseApiPath,
   _ghParseRepoFlag,
   _ghParseTarget,
   _ghSearchQuery,
 } from "./safeBashGh.js";
+
+describe("GH_API_ENDPOINTS", () => {
+  // The Agency side names these six in GhApiRead and in ghApiEffects
+  // (stdlib/safeBash.agency). A route added here needs both, then this list.
+  it("is the six endpoints the Agency rule has an arm for", () => {
+    expect(GH_API_ENDPOINTS).toEqual([
+      "prGet",
+      "prFiles",
+      "prReviewList",
+      "prReviewCommentList",
+      "issueGet",
+      "issueCommentList",
+    ]);
+  });
+});
 
 describe("_ghParseApiPath", () => {
   it.each([
@@ -46,8 +62,6 @@ describe("_ghParseApiPath", () => {
     expect(() => _ghParseApiPath(text)).toThrow();
   });
 
-  // Past Number.MAX_SAFE_INTEGER the number is not the digits written:
-  // the payload would show 1e+22 or Infinity, and that is what would run.
   it.each([
     ["a pull request number", "repos/o/r/pulls/9999999999999999999999"],
     ["a page", `repos/o/r/pulls/5/files?page=${"9".repeat(400)}`],

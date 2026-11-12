@@ -1438,13 +1438,14 @@ soon as it is given a field. So the one flag allowed is `-X`/`--method`
 with `GET`, under one of its names. No rule for the field flags (`-f`,
 `-F`, `--field`, `--raw-field`, `--input`), `--paginate` and `--slurp` (no
 bound on the requests), `-H`, `--hostname`, `-i`, `--verbose`, `-p`,
-`--cache`, `--silent`, `--jq`, and `--template`. A POST asks `std::bash`.
+`--cache`, `--silent`, `--jq`, and `--template`.
 
-The rule owns every `gh api` line, so one it cannot describe, such as
-`gh api repos/o/r/pulls/5/commits`, `gh api graphql`, or a POST, asks
-`std::bash`. It does not fall back to `std::exec` the way an unowned
-subcommand like `gh run view` does, because `std::exec` names only `gh`
-and `api`, and a saved rule for that pair would approve any request.
+The rule owns every `gh api` line, a quoted `'api'` included, so one it
+cannot describe, such as `gh api repos/o/r/pulls/5/commits`, `gh api
+graphql`, or a POST, asks `std::bash`. It does not fall back to
+`std::exec` the way an unowned subcommand like `gh run view` does,
+because `std::exec` names only `gh` and `api`, and a saved rule for that
+pair would approve any request.
 
 safeBash runs:
 

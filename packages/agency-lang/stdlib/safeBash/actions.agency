@@ -48,6 +48,17 @@ export type Effect =
   | { name: "std::ls"; payload: LsPayload }
   | { name: "std::glob"; payload: GlobPayload }
   | { name: "std::exec"; payload: ExecPayload }
+  | { name: "std::github::prGet"; payload: GhNumberPayload; lookup: string | null }
+  | { name: "std::github::prDiff"; payload: GhNumberPayload; lookup: string | null }
+  | { name: "std::github::issueGet"; payload: GhNumberPayload; lookup: string | null }
+  | { name: "std::github::prFiles"; payload: GhPagedPayload; lookup: string | null }
+  | { name: "std::github::prReviewList"; payload: GhPagedPayload; lookup: string | null }
+  | { name: "std::github::prReviewCommentList"; payload: GhPagedPayload; lookup: string | null }
+  | { name: "std::github::prChecks"; payload: GhPagedPayload; lookup: string | null }
+  | { name: "std::github::issueCommentList"; payload: GhPagedPayload; lookup: string | null }
+  | { name: "std::github::prList"; payload: GhPrListPayload; lookup: string | null }
+  | { name: "std::github::issueList"; payload: GhIssueListPayload; lookup: string | null }
+  | { name: "std::github::issueSearch"; payload: GhSearchPayload; lookup: string | null }
 
 export type WritePayload = {
   dir: string;
@@ -382,6 +393,148 @@ export def gitRestoreEffect(payload: GitRestorePayload): Effect {
     name: "std::git::restore",
     payload: payload
   }
+}
+
+// The std::github read effects a `gh` read raises. Each payload has the
+// fields the effect declares in `std::github`. A `gh` command that names no
+// repository gets its pair from the origin remote of a folder, which
+// safeBash looks up between two plans. On the first plan the pair is ""
+// and `lookup` names that folder; on the second the pair is filled and
+// `lookup` is null.
+
+/** The repository a `gh` command acts on. */
+export type GhRepo = {
+  owner: string;
+  repo: string
+}
+
+export type GhNumberPayload = {
+  owner: string;
+  repo: string;
+  number: number
+}
+
+/** `perPage` 0 means every page `gh` fetches for one pull request or issue. */
+export type GhPagedPayload = {
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
+
+export type GhPrListPayload = {
+  owner: string;
+  repo: string;
+  state: string;
+  base: string;
+  perPage: number;
+  page: number
+}
+
+export type GhIssueListPayload = {
+  owner: string;
+  repo: string;
+  state: string;
+  labels: string[];
+  perPage: number;
+  page: number
+}
+
+export type GhSearchPayload = {
+  owner: string;
+  repo: string;
+  query: string;
+  perPage: number;
+  page: number
+}
+
+export def ghPrGetEffect(payload: GhNumberPayload, lookup: string | null): Effect {
+  """Build a std::github::prGet approval descriptor without raising it."""
+  return { name: "std::github::prGet", payload: payload, lookup: lookup }
+}
+
+export def ghPrDiffEffect(payload: GhNumberPayload, lookup: string | null): Effect {
+  """Build a std::github::prDiff approval descriptor without raising it."""
+  return { name: "std::github::prDiff", payload: payload, lookup: lookup }
+}
+
+export def ghIssueGetEffect(payload: GhNumberPayload, lookup: string | null): Effect {
+  """Build a std::github::issueGet approval descriptor without raising it."""
+  return { name: "std::github::issueGet", payload: payload, lookup: lookup }
+}
+
+export def ghPrFilesEffect(payload: GhPagedPayload, lookup: string | null): Effect {
+  """Build a std::github::prFiles approval descriptor without raising it."""
+  return { name: "std::github::prFiles", payload: payload, lookup: lookup }
+}
+
+export def ghPrReviewListEffect(payload: GhPagedPayload, lookup: string | null): Effect {
+  """Build a std::github::prReviewList approval descriptor without raising it."""
+  return { name: "std::github::prReviewList", payload: payload, lookup: lookup }
+}
+
+export def ghPrReviewCommentListEffect(payload: GhPagedPayload, lookup: string | null): Effect {
+  """Build a std::github::prReviewCommentList approval descriptor without raising it."""
+  return { name: "std::github::prReviewCommentList", payload: payload, lookup: lookup }
+}
+
+export def ghPrChecksEffect(payload: GhPagedPayload, lookup: string | null): Effect {
+  """Build a std::github::prChecks approval descriptor without raising it."""
+  return { name: "std::github::prChecks", payload: payload, lookup: lookup }
+}
+
+export def ghIssueCommentListEffect(payload: GhPagedPayload, lookup: string | null): Effect {
+  """Build a std::github::issueCommentList approval descriptor without raising it."""
+  return { name: "std::github::issueCommentList", payload: payload, lookup: lookup }
+}
+
+export def ghPrListEffect(payload: GhPrListPayload, lookup: string | null): Effect {
+  """Build a std::github::prList approval descriptor without raising it."""
+  return { name: "std::github::prList", payload: payload, lookup: lookup }
+}
+
+export def ghIssueListEffect(payload: GhIssueListPayload, lookup: string | null): Effect {
+  """Build a std::github::issueList approval descriptor without raising it."""
+  return { name: "std::github::issueList", payload: payload, lookup: lookup }
+}
+
+export def ghIssueSearchEffect(payload: GhSearchPayload, lookup: string | null): Effect {
+  """Build a std::github::issueSearch approval descriptor without raising it."""
+  return { name: "std::github::issueSearch", payload: payload, lookup: lookup }
+}
+
+/** The folder whose origin remote names this effect's repository, or null
+  when the effect names it already or is not a std::github effect. */
+def lookupOf(effect: Effect): string | null {
+  return match(effect.name) {
+    "std::github::prGet" => effect.lookup
+    "std::github::prDiff" => effect.lookup
+    "std::github::issueGet" => effect.lookup
+    "std::github::prFiles" => effect.lookup
+    "std::github::prReviewList" => effect.lookup
+    "std::github::prReviewCommentList" => effect.lookup
+    "std::github::prChecks" => effect.lookup
+    "std::github::issueCommentList" => effect.lookup
+    "std::github::prList" => effect.lookup
+    "std::github::issueList" => effect.lookup
+    "std::github::issueSearch" => effect.lookup
+    _ => null
+  }
+}
+
+export def pendingLookups(effects: Effect[]): string[] {
+  """
+  The distinct folders whose origin remote these effects still need, in the order first seen.
+  """
+  let folders: string[] = []
+  for (effect in effects) {
+    const folder = lookupOf(effect)
+    if (folder != null && !folders.includes(folder)) {
+      folders.push(folder)
+    }
+  }
+  return folders
 }
 
 // One variant per way a plan can be carried out, each carrying only the

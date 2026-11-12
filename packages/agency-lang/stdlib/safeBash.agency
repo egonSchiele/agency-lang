@@ -1,10 +1,11 @@
 // These imports are NOT unused. Effect declarations come with imports,
-// and without them the `raise std::bash(...)`, `raise std::grep(...)`, and
-// `raise std::git::*(...)` sites below compile with their payload
-// contracts UNENFORCED. Measured: dropping them makes
-// `raise std::git::status("...", { wrongField: x })` typecheck clean.
+// and without them the `raise std::bash(...)`, `raise std::grep(...)`,
+// `raise std::git::*(...)`, and `raise std::github::*(...)` sites below
+// compile with their payload contracts UNENFORCED. Measured: dropping them
+// makes `raise std::git::status("...", { wrongField: x })` typecheck clean.
 // `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
+import { ghPrGet } from "std::github"
 import { WriteMode } from "std::index"
 import { bash, grep, ls, glob, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
@@ -43,6 +44,8 @@ import {
   gitStashPushEffect,
   gitStashPopEffect,
   gitRestoreEffect,
+  GhRepo,
+  pendingLookups,
   ReadPayload,
   ReadView,
   readExecution,
@@ -426,15 +429,21 @@ type SimpleRule = {
   command: Command
 }
 
-export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean = false): Result<Effect[]> {
+export def effectsFor(
+  command: SimpleCommand,
+  cwd: string,
+  readsStdin: boolean = false,
+  origin: GhRepo | null = null,
+): Result<Effect[]> {
   """
   Classify the approvals needed by one simple command.
   Return a failure when it needs the broader Bash approval.
 
   @param cwd - The resolved working directory used in approval payloads.
   @param readsStdin - Whether a pipe supplies this command's input.
+  @param origin - The repository a `gh` command acts on when it names none. Left null, such a command's std::github effects name no repository.
   """
-  const rule = simpleCommandRule(command, cwd, readsStdin)?
+  const rule = simpleCommandRule(command, cwd, origin, readsStdin)?
   return success(rule.effects)
 }
 
@@ -442,7 +451,7 @@ export def effectsFor(command: SimpleCommand, cwd: string, readsStdin: boolean =
 // the verb apply to every verb, git included, which is why `gitEffects`
 // has no other caller: a second path would have to repeat them.
 @capabilities(fileRead)
-def simpleCommandRule(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<SimpleRule> {
+def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<SimpleRule> {
   """
   Classify one simple command: the approvals it needs and the command to run for it.
   """
@@ -3092,11 +3101,17 @@ def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   return writePlan(command, cwd)
 }
 
-export def planFor(source: string, cwd: string): Plan {
+// `origin` is how a `gh` command that names no repository gets one without
+// planFor running anything. safeBash plans once with no origin, looks up
+// the origin remote of the folder `pendingLookups` names, and plans again
+// with the answer. The second plan is the one raised and run. A caller who
+// plans only once may get std::github effects with "" for owner and repo.
+export def planFor(source: string, cwd: string, origin: GhRepo | null = null): Plan {
   """
   Plan approvals and execution for Bash source without running the command.
 
   @param cwd - The working directory used to resolve paths during classification.
+  @param origin - The repository a `gh` command acts on when it names none. Left null, such a command's std::github effects name no repository and say which folder to look it up in.
   """
   const parsed = bashParser(source)
   if (parsed is failure(why)) {
@@ -3141,7 +3156,7 @@ export def planFor(source: string, cwd: string): Plan {
     }
   }
 
-  const classified = classifyAll(commands, cwd)
+  const classified = classifyAll(commands, cwd, origin)
   if (classified is failure(firstMiss)) {
     // We have to ask the broad question anyway, so asking narrow ones
     // first adds prompts without adding information. The ORIGINAL text
@@ -3154,6 +3169,10 @@ export def planFor(source: string, cwd: string): Plan {
     // of nothing but echoes. The audit rule makes this a std::bash
     // question, so by the same rule it runs the original text.
     return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
+  }
+  // One line gets one lookup, so its payloads all come from one answer.
+  if (pendingLookups(narrow).length > 1) {
+    return broadPlan(source, verbs, { kind: "unrecognized", detail: "gh commands in two folders need two repository lookups" })
   }
   // Narrow questions were asked, so run the tree we classified.
   const rebuilt = rebuild(classified.value.commands)
@@ -3186,14 +3205,14 @@ type ClassifiedAll = {
 // wall reads the flat list, because a `cd` on the left of `&&` moves the
 // working directory for the commands to its right.
 @capabilities(fileRead)
-def classifyAll(commands: Command[], cwd: string): Result<ClassifiedAll> {
+def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result<ClassifiedAll> {
   """
   Return the effects of every command and the tree to run, or the first reason one needs the broad Bash approval.
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
   for (command, index in commands) {
-    const classified = classify(command, cwd, false)?
+    const classified = classify(command, cwd, origin, false)?
     // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
     // payload for `b` would be true in both cases.
     if (classified.cwd != cwd && index < commands.length - 1) {
@@ -3206,21 +3225,21 @@ def classifyAll(commands: Command[], cwd: string): Result<ClassifiedAll> {
 }
 
 @capabilities(fileRead)
-def classify(command: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+def classify(command: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   // Keep this exhaustive, like flattenOne, so a new command shape cannot
   // be classified by accident.
   return match(command) {
-    { tag: "simpleCommand" } => classifySimple(command, cwd, readsStdin)
-    { tag: "pipeline", stages } => classifyPipeline(stages, cwd, readsStdin)
-    { tag: "and", left, right } => classifyAnd(left, right, cwd, readsStdin)
-    { tag: "or", left, right } => classifyOr(left, right, cwd, readsStdin)
-    { tag: "parens", command as inner } => classifyGroup(inner, cwd, readsStdin)
+    { tag: "simpleCommand" } => classifySimple(command, cwd, origin, readsStdin)
+    { tag: "pipeline", stages } => classifyPipeline(stages, cwd, origin, readsStdin)
+    { tag: "and", left, right } => classifyAnd(left, right, cwd, origin, readsStdin)
+    { tag: "or", left, right } => classifyOr(left, right, cwd, origin, readsStdin)
+    { tag: "parens", command as inner } => classifyGroup(inner, cwd, origin, readsStdin)
   }
 }
 
 @capabilities(fileRead)
-def classifySimple(command: SimpleCommand, cwd: string, readsStdin: boolean): Result<Classified> {
-  const rule = simpleCommandRule(command, cwd, readsStdin)?
+def classifySimple(command: SimpleCommand, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const rule = simpleCommandRule(command, cwd, origin, readsStdin)?
   return success({ effects: rule.effects, cwd: cwd, command: rule.command })
 }
 
@@ -3228,11 +3247,11 @@ def classifySimple(command: SimpleCommand, cwd: string, readsStdin: boolean): Re
 // stage reads a pipe. Each stage runs in a subshell of its own, so a `cd`
 // inside one moves nothing outside it.
 @capabilities(fileRead)
-def classifyPipeline(stages: PipelineStage[], cwd: string, readsStdin: boolean): Result<Classified> {
+def classifyPipeline(stages: PipelineStage[], cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   let effects: Effect[] = []
   let rewritten: any[] = []
   for (stage, index in stages) {
-    const classified = classify(stage, cwd, readsStdin || index > 0)?
+    const classified = classify(stage, cwd, origin, readsStdin || index > 0)?
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
   }
@@ -3241,8 +3260,8 @@ def classifyPipeline(stages: PipelineStage[], cwd: string, readsStdin: boolean):
 
 // Parentheses run a subshell, so a `cd` inside them ends with them.
 @capabilities(fileRead)
-def classifyGroup(inner: Command, cwd: string, readsStdin: boolean): Result<Classified> {
-  const classified = classify(inner, cwd, readsStdin)?
+def classifyGroup(inner: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const classified = classify(inner, cwd, origin, readsStdin)?
   return success({ effects: classified.effects, cwd: cwd, command: { tag: "parens", command: classified.command } })
 }
 
@@ -3254,19 +3273,19 @@ def classifyGroup(inner: Command, cwd: string, readsStdin: boolean): Result<Clas
 // directory after the left side is carried to the right side, which is how
 // `b` is classified in `x` as well.
 @capabilities(fileRead)
-def classifyAnd(left: Command, right: Command, cwd: string, readsStdin: boolean): Result<Classified> {
+def classifyAnd(left: Command, right: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const cd = asCd(left)
   if (cd != null) {
     const moved = cdTarget(cd, cwd)?
-    const rest = classify(right, moved, readsStdin)?
+    const rest = classify(right, moved, origin, readsStdin)?
     return success({
       effects: rest.effects,
       cwd: rest.cwd,
       command: { tag: "and", left: cdTo(cd, moved), right: rest.command }
     })
   }
-  const first = classify(left, cwd, readsStdin)?
-  const second = classify(right, first.cwd, readsStdin)?
+  const first = classify(left, cwd, origin, readsStdin)?
+  const second = classify(right, first.cwd, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
     cwd: second.cwd,
@@ -3278,12 +3297,12 @@ def classifyAnd(left: Command, right: Command, cwd: string, readsStdin: boolean)
 // and the working directory differs between the two. No payload for `b`
 // would be true in both cases, so the string asks the broad question.
 @capabilities(fileRead)
-def classifyOr(left: Command, right: Command, cwd: string, readsStdin: boolean): Result<Classified> {
-  const first = classify(left, cwd, readsStdin)?
+def classifyOr(left: Command, right: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const first = classify(left, cwd, origin, readsStdin)?
   if (first.cwd != cwd) {
     return failure("a command after `||` follows a `cd`, and its directory depends on whether the `cd` worked")
   }
-  const second = classify(right, cwd, readsStdin)?
+  const second = classify(right, cwd, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
     cwd: second.cwd,
@@ -3504,7 +3523,7 @@ export def safeBash(
   command: string,
   cwd: string = "",
   timeout: number = 120,
-): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard> {
   """
   Run Bash commands after approval of the actions they perform.
   Return stdout on success. A nonzero exit is a failure carrying the exit
@@ -3894,6 +3913,125 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
         cwd: effect.payload.cwd,
         paths: effect.payload.paths,
         staged: effect.payload.staged,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    // The std::github messages are the typed tools' messages for the same
+    // effect, so a person sees one question on either path.
+    "std::github::prGet" => {
+      raise std::github::prGet("Read pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prDiff" => {
+      raise std::github::prDiff("Read the diff of pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueGet" => {
+      raise std::github::issueGet("Read issue #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prFiles" => {
+      raise std::github::prFiles("List the changed files of pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prReviewList" => {
+      raise std::github::prReviewList("List reviews on pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prReviewCommentList" => {
+      raise std::github::prReviewCommentList("List inline review comments on pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prChecks" => {
+      raise std::github::prChecks("Read CI check runs for pull request #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueCommentList" => {
+      raise std::github::issueCommentList("List comments on issue #${effect.payload.number} on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        number: effect.payload.number,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::prList" => {
+      raise std::github::prList("List ${effect.payload.state} pull requests on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        state: effect.payload.state,
+        base: effect.payload.base,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueList" => {
+      raise std::github::issueList("List ${effect.payload.state} issues on ${effect.payload.owner}/${effect.payload.repo}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        state: effect.payload.state,
+        labels: effect.payload.labels,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::github::issueSearch" => {
+      raise std::github::issueSearch("Search issues on ${effect.payload.owner}/${effect.payload.repo}: ${effect.payload.query}", {
+        owner: effect.payload.owner,
+        repo: effect.payload.repo,
+        query: effect.payload.query,
+        perPage: effect.payload.perPage,
+        page: effect.payload.page,
         command: fullCommand
       })
       return success(null)

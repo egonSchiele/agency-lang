@@ -97,6 +97,12 @@ describe("_ghSearchQuery", () => {
     );
   });
 
+  it("sorts values in code point order, as gh does, not in UTF-16 order", () => {
+    expect(_ghSearchQuery(["crash"], { ...scope, label: ["😀", "Ａ"] })).toBe(
+      "( crash ) label:Ａ label:😀 repo:o/r type:issue",
+    );
+  });
+
   it("leaves out type:issue when it is not given (--include-prs)", () => {
     expect(_ghSearchQuery(["crash"], { repo: ["o/r"], type: [] })).toBe("( crash ) repo:o/r");
   });

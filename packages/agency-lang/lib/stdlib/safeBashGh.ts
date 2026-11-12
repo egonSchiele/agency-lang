@@ -84,8 +84,23 @@ function keyword(text: string): string {
   return `${text.slice(0, colon)}:${quote(text.slice(colon + 1))}`;
 }
 
+/** Go sorts strings by their UTF-8 bytes, which is Unicode code point
+ *  order. JavaScript's default sort compares UTF-16 units, which puts an
+ *  emoji before `Ａ` (U+FF21) where Go puts it after. */
+function compareCodePoints(a: string, b: string): number {
+  const left = Array.from(a);
+  const right = Array.from(b);
+  for (let index = 0; index < Math.min(left.length, right.length); index++) {
+    const difference = left[index].codePointAt(0)! - right[index].codePointAt(0)!;
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return left.length - right.length;
+}
+
 function qualifierTerms(name: string, values: string[]): string[] {
-  const terms = values.map((value) => `${name}:${quote(value)}`).sort();
+  const terms = values.map((value) => `${name}:${quote(value)}`).sort(compareCodePoints);
   if (OR_QUALIFIERS.includes(name) && terms.length > 1) {
     return [`(${terms.join(" OR ")})`];
   }

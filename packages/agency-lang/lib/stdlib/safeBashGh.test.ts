@@ -45,6 +45,15 @@ describe("_ghParseApiPath", () => {
   ])("refuses %j", (text) => {
     expect(() => _ghParseApiPath(text)).toThrow();
   });
+
+  // Past Number.MAX_SAFE_INTEGER the number is not the digits written:
+  // the payload would show 1e+22 or Infinity, and that is what would run.
+  it.each([
+    ["a pull request number", "repos/o/r/pulls/9999999999999999999999"],
+    ["a page", `repos/o/r/pulls/5/files?page=${"9".repeat(400)}`],
+  ])("refuses %s too large to write back exactly", (_name, text) => {
+    expect(() => _ghParseApiPath(text)).toThrow(/whole number|takes a number/);
+  });
 });
 
 describe("_ghApiPath", () => {

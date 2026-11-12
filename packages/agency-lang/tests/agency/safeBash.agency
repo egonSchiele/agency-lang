@@ -2527,6 +2527,7 @@ node ghApiReads() {
     ghPlan("gh api repos/o/r/pulls/5"),
     ghPlan("gh api repos/o/r/pulls/5/reviews"),
     ghPlan("gh api 'repos/o/r/issues/7/comments?page=3'"),
+    ghPlan("gh api -X get repos/o/r/pulls/5"),
   ]
 }
 
@@ -2545,6 +2546,9 @@ node ghApiStaysBroad() {
     ghBroad("gh api repos/o/r/pulls/5/merge"),
     ghBroad("gh api"),
     ghBroad("gh api repos/o/r/pulls/5 repos/o/r/pulls/6"),
+    // Only the method check refuses these two.
+    ghBroad("gh api -X POST repos/o/r/pulls/5"),
+    ghBroad("gh api --method=delete repos/o/r/pulls/5"),
   ]
 }
 

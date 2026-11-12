@@ -82,9 +82,18 @@ function apiRepo(owner: string, repo: string): RepoCoord {
   return checkRepoCoord({ owner, repo });
 }
 
+/** A whole number the digits name exactly. Past Number.MAX_SAFE_INTEGER
+ *  they do not: `9999999999999999999999` reads as 1e+22, which is what
+ *  _ghApiPath would write back, so the payload and the run would both
+ *  differ from what the model wrote. */
+function exactNumber(text: string): number {
+  const value = DIGITS.test(text) ? Number(text) : 0;
+  return Number.isSafeInteger(value) ? value : 0;
+}
+
 /** A paging value: digits, at least 1, and at most `most` when one is given. */
 function pagingValue(key: string, text: string, most: number | null): number {
-  const value = DIGITS.test(text) ? Number(text) : 0;
+  const value = exactNumber(text);
   if (value < 1 || (most !== null && value > most)) {
     const range = most === null ? "a number of 1 or more" : `a number from 1 to ${most}`;
     throw new Error(`gh api's ${key} takes ${range}, got "${text}".`);
@@ -111,7 +120,7 @@ export function _ghParseApiPath(text: string): GhApiRead {
   if (!DIGITS.test(match[4])) {
     throw new Error(`"${match[4]}" is not a pull request or issue number.`);
   }
-  const number = Number(match[4]);
+  const number = exactNumber(match[4]);
   _ghCheckNumber(number);
   const coord = apiRepo(match[1], match[2]);
   const params = new URLSearchParams(query ?? "");

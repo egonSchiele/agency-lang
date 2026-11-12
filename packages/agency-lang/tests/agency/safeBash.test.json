@@ -1537,6 +1537,17 @@
       ]
     },
     {
+      "nodeName": "ghLoginNote",
+      "description": "A gh line that exits 4 with gh's login message fails with a note telling the model to ask the user to log in. Exit 4 with other stderr, or from another program, gets no note.",
+      "input": "",
+      "expectedOutput": "[[4,\"GitHub CLI is not logged in. Tell the user to run `gh auth login`, or to set `GH_TOKEN`. Do not retry the command, and do not run `gh auth login` yourself.\"],[4,null],[4,null]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "ghRunsWhatItAsked",
       "description": "The gh command that runs names the repository the question named. A fake gh prints its arguments.",
       "input": "",

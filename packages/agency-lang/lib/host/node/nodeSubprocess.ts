@@ -91,6 +91,11 @@ const SHELL_ENV_REMOVED: string[] = [
   // name git's SSH program are kept: a person sets those on purpose.
   ...GIT_RETARGET_ENV,
   ...GIT_CODE_ENV,
+  // Send a `gh` in the script to another server (GH_HOST) or repository
+  // (GH_REPO) than the one safeBash's question names. The tokens are kept:
+  // a person sets GH_TOKEN and GITHUB_TOKEN on purpose.
+  "GH_HOST",
+  "GH_REPO",
 ];
 
 /** The environment a shell script runs with: `env` without the variables

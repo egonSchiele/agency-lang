@@ -2411,6 +2411,34 @@ node ghLookupFailureRaisesNothing() {
   return [seen, failed.includes("--repo OWNER/REPO")]
 }
 
+/** A failed run's exit code and note, from the failure's JSON. */
+def exitAndNote(failed: string): any {
+  const parsed = JSON.parse(failed)
+  return [parsed.exitCode, parsed.note ?? null]
+}
+
+def loginRow(script: string): any {
+  const result = runWithFakeGh(script, "gh pr view 1 --repo o/r", STDLIB_TESTS)
+  if (result[0] != "failure") {
+    return result
+  }
+  return exitAndNote(result[1])
+}
+
+// A line that exits 4 gets the note only when gh printed its login message.
+node ghLoginNote() {
+  const plain = safeBash("sh -c 'exit 4'", cwd: STDLIB_TESTS) with approve
+  let notGh: any = "NOT A FAILURE"
+  if (plain is failure(why)) {
+    notGh = exitAndNote(why)
+  }
+  return [
+    loginRow("echo 'To get started with GitHub CLI, please run:  gh auth login' >&2; exit 4"),
+    loginRow("echo boom >&2; exit 4"),
+    notGh,
+  ]
+}
+
 // The fake gh prints its arguments, one per line. This fails if safeBash
 // raises the second plan and runs the first, whose --repo is empty.
 node ghRunsWhatItAsked() {

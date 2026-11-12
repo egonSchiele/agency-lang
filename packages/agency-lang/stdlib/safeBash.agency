@@ -4191,7 +4191,7 @@ export def safeBash(
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
     { kind: "chain" } => runChain(exec, command)
-    { kind: "bash", command as text } => runBash(text, dir, command, timeout)
+    { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
@@ -4667,7 +4667,7 @@ result. Nonzero exits return failures, including grep's "no match" and
 diff's "files differ" statuses. Long output is saved with a preview.
 */
 @capabilities(fileRead, subprocess)
-def runBash(command: string, cwd: string, source: string = "", timeout: number = 120): Result<string> {
+def runBash(command: string, cwd: string, source: string = "", timeout: number = 120, verbs: string[] = []): Result<string> {
   """
   Execute a Bash command after its planned effects have been approved.
   Return stdout on success, or an exit failure with output on nonzero exit.
@@ -4703,24 +4703,38 @@ def runBash(command: string, cwd: string, source: string = "", timeout: number =
     return timeoutFailure(label, timeout, result.stdout, result.stderr)
   }
   if (result.exitCode != 0) {
-    return exitFailure(label, result.exitCode, result.stdout, result.stderr, label)
+    const note = if (isGhLoginFailure(verbs, result.exitCode, result.stderr)) then GH_LOGIN_NOTE else ""
+    return exitFailure(label, result.exitCode, result.stdout, result.stderr, label, note)
   }
   return success(keepOutput(result.stdout, result.exitCode, label))
 }
 
-// Include the exit code and both streams, saving long output for later retrieval.
-def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string): Result<string> {
-  const out = keepOutput(stdout, exitCode, label)
-  return failure(
-    JSON.stringify(
-    {
+/** The exit code gh uses when it is not logged in. */
+static const GH_LOGIN_EXIT = 4
+static const GH_LOGIN_MARK = "gh auth login"
+static const GH_LOGIN_NOTE = "GitHub CLI is not logged in. Tell the user to run `gh auth login`, or to set `GH_TOKEN`. Do not retry the command, and do not run `gh auth login` yourself."
+
+// A model that sees gh's login message may run `gh auth login`, which
+// waits for a person to answer its questions until the time limit. The
+// exit code belongs to the whole line, so in `gh pr view 1; other` a 4
+// could come from `other`; gh's own message in stderr settles it.
+def isGhLoginFailure(verbs: string[], exitCode: number, stderr: string): boolean {
+  return exitCode == GH_LOGIN_EXIT && verbs.includes("gh") && stderr.includes(GH_LOGIN_MARK)
+}
+
+// Include the exit code and both streams, saving long output for later
+// retrieval, and a note for the model when there is one.
+def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string, note: string = ""): Result<string> {
+  const fields = {
     command: command,
     exitCode: exitCode,
     stderr: keepOutput(stderr, exitCode, label),
-    stdout: out
-  },
-  ),
-  )
+    stdout: keepOutput(stdout, exitCode, label)
+  }
+  if (note == "") {
+    return failure(JSON.stringify(fields))
+  }
+  return failure(JSON.stringify({ ...fields, note: note }))
 }
 
 // The failure for a command stopped at its time limit: the output so far,

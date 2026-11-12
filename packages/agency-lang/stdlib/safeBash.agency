@@ -45,7 +45,18 @@ import {
   gitStashPopEffect,
   gitRestoreEffect,
   GhRepo,
+  GhPagedPayload,
   pendingLookups,
+  ghPrGetEffect,
+  ghPrDiffEffect,
+  ghIssueGetEffect,
+  ghPrFilesEffect,
+  ghPrReviewListEffect,
+  ghPrChecksEffect,
+  ghIssueCommentListEffect,
+  ghPrListEffect,
+  ghIssueListEffect,
+  ghIssueSearchEffect,
   ReadPayload,
   ReadView,
   readExecution,
@@ -62,6 +73,9 @@ import {
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
+import { _ghParseTarget, _ghParseRepoFlag } from "agency-lang/stdlib-lib/safeBashGh.js"
+import { _ghHasScopeQualifier, _ghScopedSearchQuery } from "agency-lang/stdlib-lib/github/issues.js"
+import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
@@ -474,6 +488,18 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null
   if (name.text == "git") {
     const git = gitEffects(command, cwd)?
     return success({ effects: [...git.effects, ...redirect], command: git.command })
+  }
+  // A gh read raises std::github. Every other gh line falls through to
+  // verbEffects and asks std::exec, as it did before gh had a rule. The
+  // --jq check covers both.
+  if (name.text == "gh") {
+    if (ghHasJq(command)) {
+      return failure("gh's --jq runs a program that can read the environment")
+    }
+    if (ghOwns(command)) {
+      const gh = ghEffects(command, cwd, origin)?
+      return success({ effects: [...gh.effects, ...redirect], command: gh.command })
+    }
   }
   const effects = verbEffects(name.text, command, cwd, readsStdin, redirect)?
   return success({ effects: effects, command: command })
@@ -2538,6 +2564,556 @@ def hasAny(items: string[], wanted: string[]): boolean {
 /* The values given for any of these spellings of a flag. */
 def flagValues(values: FlagValue[], flags: string[]): string[] {
   return [entry.value for entry in values if flags.includes(entry.flag)]
+}
+
+// ---------------------------------------------------------------------------
+// gh
+//
+// A `gh` read raises the std::github read effect the typed tool raises for
+// the same data, and safeBash writes the gh command that runs, with the
+// repository spelled out. Only the reads in GH_VERBS are owned. Every other
+// gh subcommand, every write included, keeps asking std::exec.
+// ---------------------------------------------------------------------------
+
+/** How many items a gh list reads when no --limit is given. */
+static const GH_DEFAULT_LIMIT = 30
+
+/** perPage 0: every page gh fetches for one pull request or issue. */
+static const GH_EVERY_PAGE = 0
+static const GH_FIRST_PAGE = 1
+
+static const GH_WORD: LiteralWord = { tag: "literal", text: "gh" }
+
+/** A pull request or issue a gh command names: a number, and the pair a
+  URL gave, or "" for both when it was a bare number. */
+type GhTarget = {
+  number: number;
+  owner: string;
+  repo: string
+}
+
+/** The repository a gh command acts on, and the folder whose origin remote
+  names it when the command itself does not. */
+type GhResolved = {
+  owner: string;
+  repo: string;
+  lookup: string | null
+}
+
+/** What one gh command asks, and the gh command safeBash runs for it. */
+type GhRule = {
+  effects: Effect[];
+  command: SimpleCommand
+}
+
+/** What a row's --repo means.
+ - "base": the repository the command acts on. Optional; when it is
+   absent the pair comes from the target URL, from `origin`, or from a
+   lookup. Written as `--repo github.com/OWNER/REPO`.
+ - "filter": a search filter. Required, exactly once. Written as
+   `--repo OWNER/REPO`, because gh search does not read a host there. */
+type GhRepoFlag = "base" | "filter"
+
+type GhVerb = {
+  flags: FlagSpec;
+  /** "pull" or "issues" when the subcommand takes one number or URL. */
+  target: "pull" | "issues" | "none";
+  /** How many plain words it takes besides the target: search words. */
+  words: CountRange;
+  repoFlag: GhRepoFlag;
+  /** The values --state takes here; [] when the row has no --state. */
+  states: string[];
+  /** The --json field names gh accepts here; [] when it has no --json. */
+  jsonFields: string[];
+  /** The --json fields with no rule here, because each reads more than
+    this subcommand's effect says. */
+  heavyFields: string[]
+}
+
+static const GH_REPO_FLAGS: string[] = ["R", "--repo"]
+static const GH_JSON_FLAGS: string[] = ["--json"]
+
+// The --json fields of gh 2.88.1, from the JSON FIELDS block of each
+// subcommand's --help.
+static const GH_PR_FIELDS: string[] = [
+  "additions", "assignees", "author", "autoMergeRequest", "baseRefName", "baseRefOid", "body",
+  "changedFiles", "closed", "closedAt", "closingIssuesReferences", "comments", "commits",
+  "createdAt", "deletions", "files", "fullDatabaseId", "headRefName", "headRefOid",
+  "headRepository", "headRepositoryOwner", "id", "isCrossRepository", "isDraft", "labels",
+  "latestReviews", "maintainerCanModify", "mergeCommit", "mergeStateStatus", "mergeable",
+  "mergedAt", "mergedBy", "milestone", "number", "potentialMergeCommit", "projectCards",
+  "projectItems", "reactionGroups", "reviewDecision", "reviewRequests", "reviews", "state",
+  "statusCheckRollup", "title", "updatedAt", "url",
+]
+static const GH_CHECK_FIELDS: string[] = [
+  "bucket", "completedAt", "description", "event", "link", "name", "startedAt", "state", "workflow",
+]
+static const GH_ISSUE_FIELDS: string[] = [
+  "assignees", "author", "body", "closed", "closedAt", "closedByPullRequestsReferences",
+  "comments", "createdAt", "id", "isPinned", "labels", "milestone", "number", "projectCards",
+  "projectItems", "reactionGroups", "state", "stateReason", "title", "updatedAt", "url",
+]
+static const GH_SEARCH_ISSUE_FIELDS: string[] = [
+  "assignees", "author", "authorAssociation", "body", "closedAt", "commentsCount", "createdAt",
+  "id", "isLocked", "isPullRequest", "labels", "number", "repository", "state", "title",
+  "updatedAt", "url",
+]
+
+// The gh reads safeBash recognizes, keyed by the group and subcommand. The
+// flags are an allowlist. A flag that changes how a result is shown, or
+// shows less of it, is listed. Left out on purpose, so a line using one
+// asks std::bash:
+// - `--web` opens a browser.
+// - `--jq`/`-q` run a jq program that can read the environment, and
+//   `--template`/`-t` is another small language. `--json` covers the need.
+// - `--search` on a list command takes a search query, which can name
+//   another repository or contradict `--state`. `gh search issues` covers it.
+// - `--watch` keeps `gh pr checks` running until the checks finish.
+// - `--owner` widens `gh search issues` to every repository of an owner.
+// - The list fields in `heavyFields`, which read the comments, files, or
+//   checks of every pull request listed.
+static const GH_VERBS: Record<string, GhVerb> = {
+  "pr view": {
+    flags: { plain: ["c", "--comments"], valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS], optionsFirst: false },
+    target: "pull",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: GH_PR_FIELDS,
+    heavyFields: []
+  },
+  "pr diff": {
+    flags: { plain: ["--name-only", "--patch"], valued: [...GH_REPO_FLAGS, "--color", "e", "--exclude"], optionsFirst: false },
+    target: "pull",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: [],
+    heavyFields: []
+  },
+  "pr checks": {
+    flags: { plain: ["--required"], valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS], optionsFirst: false },
+    target: "pull",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: GH_CHECK_FIELDS,
+    heavyFields: []
+  },
+  "pr list": {
+    flags: {
+      plain: ["d", "--draft"],
+      valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS, "s", "--state", "B", "--base", "L", "--limit", "A", "--author", "a", "--assignee", "l", "--label", "H", "--head"],
+      optionsFirst: false
+    },
+    target: "none",
+    words: NONE,
+    repoFlag: "base",
+    states: ["open", "closed", "merged", "all"],
+    jsonFields: GH_PR_FIELDS,
+    heavyFields: ["comments", "commits", "files", "reviews", "latestReviews", "statusCheckRollup"]
+  },
+  "issue view": {
+    flags: { plain: ["c", "--comments"], valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS], optionsFirst: false },
+    target: "issues",
+    words: NONE,
+    repoFlag: "base",
+    states: [],
+    jsonFields: GH_ISSUE_FIELDS,
+    heavyFields: []
+  },
+  "issue list": {
+    flags: {
+      plain: [],
+      valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS, "s", "--state", "l", "--label", "L", "--limit", "A", "--author", "a", "--assignee", "--mention", "m", "--milestone"],
+      optionsFirst: false
+    },
+    target: "none",
+    words: NONE,
+    repoFlag: "base",
+    states: ["open", "closed", "all"],
+    jsonFields: GH_ISSUE_FIELDS,
+    heavyFields: ["comments"]
+  },
+  "search issues": {
+    flags: {
+      plain: ["--include-prs"],
+      valued: [...GH_REPO_FLAGS, ...GH_JSON_FLAGS, "--state", "--label", "--author", "--assignee", "L", "--limit", "--sort", "--order", "--match"],
+      optionsFirst: false
+    },
+    target: "none",
+    words: AT_LEAST_ONE,
+    repoFlag: "filter",
+    states: ["open", "closed"],
+    jsonFields: GH_SEARCH_ISSUE_FIELDS,
+    heavyFields: []
+  }
+}
+
+/** Each short flag the gh tables list, and its long name. No letter means
+  two things across the rows (checked against gh 2.88.1's --help). */
+static const GH_LONG_NAMES: Record<string, string> = {
+  R: "--repo",
+  L: "--limit",
+  s: "--state",
+  l: "--label",
+  B: "--base",
+  A: "--author",
+  a: "--assignee",
+  H: "--head",
+  m: "--milestone",
+  e: "--exclude",
+  c: "--comments",
+  d: "--draft"
+}
+
+/** The reads of one pull request or issue that a view can ask for. */
+type GhRead = "get" | "files" | "comments" | "reviews" | "checks"
+
+/** The pr view --json fields that read more than the pull request
+  itself. A field not listed here reads "get". */
+static const PR_VIEW_FIELD_READS: Record<string, GhRead> = {
+  files: "files",
+  comments: "comments",
+  reviews: "reviews",
+  latestReviews: "reviews",
+  statusCheckRollup: "checks"
+}
+static const ISSUE_VIEW_FIELD_READS: Record<string, GhRead> = { comments: "comments" }
+
+// What a view with no --json fetches, from gh 2.88.1's source. `pr view`
+// asks for comments, reviews, and statusCheckRollup with the pull request
+// (defaultFields in pkg/cmd/pr/view/view.go), with or without --comments.
+// `issue view` asks for lastComment, or every comment with --comments
+// (pkg/cmd/issue/view/view.go).
+static const PR_VIEW_PLAIN_READS: GhRead[] = ["get", "comments", "reviews", "checks"]
+static const ISSUE_VIEW_PLAIN_READS: GhRead[] = ["get", "comments"]
+
+/** The order a view's effects are raised in, whatever order the fields came in. */
+static const GH_READ_ORDER: GhRead[] = ["get", "files", "comments", "reviews", "checks"]
+
+/* The row a gh command names with its first two words, or null. A flag or
+  a quoted word in either place is no row: `gh -R o/r pr view 1` keeps
+  asking std::exec. */
+def ghVerbKey(command: SimpleCommand): string | null {
+  const args = command.args
+  if (args.length < 2) {
+    return null
+  }
+  const group = args[0]
+  const sub = args[1]
+  if (group.tag != "literal" || sub.tag != "literal") {
+    return null
+  }
+  const key = "${group.text} ${sub.text}"
+  if (GH_VERBS[key] == null) {
+    return null
+  }
+  return key
+}
+
+def ghOwns(command: SimpleCommand): boolean {
+  return ghVerbKey(command) != null
+}
+
+// gh's --jq runs a jq program inside gh, and jq reads the environment
+// (`env.GITHUB_TOKEN`). The check looks at what gh will see: a quoted
+// `'--jq'` is a quoted word to the parser and the flag to gh. A word with
+// no literal text is skipped, because splitFlags or execArgs refuses it.
+def ghHasJq(command: SimpleCommand): boolean {
+  for (word in command.args) {
+    if (isJqFlag(ghArgText(word))) {
+      return true
+    }
+  }
+  return false
+}
+
+def ghArgText(word: Word): string {
+  if (word is { tag: "flag" }) {
+    return word.flagName
+  }
+  const text = literalWordText(word)
+  if (text is success(written)) {
+    return written
+  }
+  return ""
+}
+
+/* `--jq`, `--jq=x`, or a group of short flags with `q` in it (`-wq`). */
+def isJqFlag(text: string): boolean {
+  if (text == "--jq" || text.startsWith("--jq=")) {
+    return true
+  }
+  return text.startsWith("-") && !text.startsWith("--") && text.includes("q")
+}
+
+def ghEffects(command: SimpleCommand, cwd: string, origin: GhRepo | null): Result<GhRule> {
+  """
+  Classify a gh read: the std::github effects it raises and the gh command safeBash runs for it.
+  """
+  const key = ghVerbKey(command)
+  if (key == null) {
+    return failure("no rule for this gh command")
+  }
+  const verb: GhVerb = GH_VERBS[key]
+  const split = ghLongFlags(splitFlags("gh", gitWordsCommand(command.args.slice(2)), verb.flags)?)?
+  let words = split.positionals
+  let target: GhTarget | null = null
+  if (verb.target != "none") {
+    if (words.length == 0) {
+      return failure("`gh ${key}` needs a number or a URL")
+    }
+    const text = literalWordText(words[0])?
+    target = try _ghParseTarget(text, verb.target)?
+    words = words.slice(1)
+  }
+  if (!countFits(words.length, verb.words)) {
+    return failure(ghWordsMessage(key, verb))
+  }
+  const searchWords = literalWords(words)?
+  ghCheckValues(key, verb, split.values)?
+  const repo = ghRepoFor(verb, split.values, target, cwd, origin)?
+  const effects = ghPayloads(key, verb, split, target, searchWords, repo)?
+  return success({ effects: effects, command: ghCommand(key, verb, split, target, words, repo, command.redirects) })
+}
+
+def ghWordsMessage(key: string, verb: GhVerb): string {
+  if (verb.words.least > 0) {
+    return "`gh ${key}` needs words to search for"
+  }
+  if (verb.target == "none") {
+    return "`gh ${key}` takes no words besides its flags"
+  }
+  return "`gh ${key}` takes one number or URL and no other words"
+}
+
+def ghLongName(flag: string): string {
+  return GH_LONG_NAMES[flag] ?? flag
+}
+
+/** The same flags with every short name replaced by its long name. Fails
+  when a long name then appears twice, as in `-L 5 --limit 500`, where a
+  payload built from one value would not say what gh does with the other. */
+def ghLongFlags(split: SplitArgs): Result<SplitArgs> {
+  const values: FlagValue[] = [{ flag: ghLongName(entry.flag), value: entry.value } for entry in split.values]
+  for (entry in values) {
+    if ([other for other in values if other.flag == entry.flag].length > 1) {
+      return failure("gh takes `${entry.flag}` only once")
+    }
+  }
+  let plain: string[] = []
+  for (name in split.plain) {
+    const long = ghLongName(name)
+    if (!plain.includes(long)) {
+      plain.push(long)
+    }
+  }
+  return success({ plain: plain, values: values, positionals: split.positionals })
+}
+
+/* The checks on flag values that the payload relies on. */
+def ghCheckValues(key: string, verb: GhVerb, values: FlagValue[]): Result {
+  for (entry in values) {
+    // gh writes filter values into a search query, where a `repo:` widens it.
+    if (_ghHasScopeQualifier(entry.value)) {
+      return failure("the value of `${entry.flag}` names another repository")
+    }
+  }
+  const states = flagValues(values, ["--state"])
+  if (states.length > 0 && !verb.states.includes(states[0])) {
+    return failure("`gh ${key}` takes --state ${verb.states.join(", ")}, not `${states[0]}`")
+  }
+  for (fields in flagValues(values, ["--json"])) {
+    for (field in fields.split(",")) {
+      if (!verb.jsonFields.includes(field)) {
+        return failure("`gh ${key}` has no --json field `${field}`")
+      }
+      if (verb.heavyFields.includes(field)) {
+        return failure("`gh ${key} --json ${field}` reads more than a list")
+      }
+    }
+  }
+  return success(null)
+}
+
+/* The value of a flag, or the fallback when it was not given. */
+def ghValueOf(values: FlagValue[], flag: string, fallback: string): string {
+  const given = flagValues(values, [flag])
+  if (given.length == 0) {
+    return fallback
+  }
+  return given[0]
+}
+
+/** How many items a list reads: --limit, from 1 to the most GitHub returns
+  in one page, or gh's default. */
+def ghLimit(values: FlagValue[]): Result<number> {
+  const given = flagValues(values, ["--limit"])
+  if (given.length == 0) {
+    return success(GH_DEFAULT_LIMIT)
+  }
+  const limit = if (isDigits(given[0])) then digitsValue(given[0]) else 0
+  if (limit < 1 || limit > GITHUB_MAX_PER_PAGE) {
+    return failure("gh's `--limit` takes a number from 1 to ${GITHUB_MAX_PER_PAGE}")
+  }
+  return success(limit)
+}
+
+/* The repository a gh command acts on. For a `base` row the model's
+  --repo or URL wins, then `origin`, and with neither the pair is left for
+  a lookup in `cwd`. A `filter` row must name it with --repo. */
+def ghRepoFor(verb: GhVerb, values: FlagValue[], target: GhTarget | null, cwd: string, origin: GhRepo | null): Result<GhResolved> {
+  const given = flagValues(values, ["--repo"])
+  if (verb.repoFlag == "filter") {
+    if (given.length == 0) {
+      return failure("gh search needs --repo OWNER/REPO, or it searches all of GitHub")
+    }
+    const pair = try _ghParseRepoFlag(given[0])?
+    return success({ owner: pair.owner, repo: pair.repo, lookup: null })
+  }
+  let named: GhRepo | null = null
+  if (given.length > 0) {
+    const pair = try _ghParseRepoFlag(given[0])?
+    named = { owner: pair.owner, repo: pair.repo }
+  }
+  if (target != null && target.owner != "") {
+    if (named != null && (named.owner != target.owner || named.repo != target.repo)) {
+      return failure("the URL and --repo name two different repositories")
+    }
+    return success({ owner: target.owner, repo: target.repo, lookup: null })
+  }
+  if (named != null) {
+    return success({ owner: named.owner, repo: named.repo, lookup: null })
+  }
+  if (origin != null) {
+    return success({ owner: origin.owner, repo: origin.repo, lookup: null })
+  }
+  return success({ owner: "", repo: "", lookup: cwd })
+}
+
+/* The one place that names the gh rows, one arm per row, as gitPayloads
+  does for git. */
+def ghPayloads(key: string, verb: GhVerb, split: SplitArgs, target: GhTarget | null, words: string[], repo: GhResolved): Result<Effect[]> {
+  const values = split.values
+  const number = if (target == null) then 0 else target.number
+  const state = ghValueOf(values, "--state", "open")
+  const limit = ghLimit(values)?
+  const fields = ghJsonFields(values)
+  return match(key) {
+    "pr view" => success([ghPullRead(read, number, repo) for read in ghViewReads(fields, PR_VIEW_FIELD_READS, PR_VIEW_PLAIN_READS)])
+    "pr diff" => success([ghPrDiffEffect({ owner: repo.owner, repo: repo.repo, number: number }, repo.lookup)])
+    "pr checks" => success([ghPullRead("checks", number, repo)])
+    "pr list" => success([
+      ghPrListEffect({
+        owner: repo.owner,
+        repo: repo.repo,
+        state: state,
+        base: ghValueOf(values, "--base", ""),
+        perPage: limit,
+        page: GH_FIRST_PAGE
+      }, repo.lookup)
+    ])
+    "issue view" => success([ghIssueRead(read, number, repo) for read in ghViewReads(fields, ISSUE_VIEW_FIELD_READS, ISSUE_VIEW_PLAIN_READS)])
+    "issue list" => success([
+      ghIssueListEffect({
+        owner: repo.owner,
+        repo: repo.repo,
+        state: state,
+        labels: ghLabels(values),
+        perPage: limit,
+        page: GH_FIRST_PAGE
+      }, repo.lookup)
+    ])
+    "search issues" => ghSearchEffects(words, limit, repo)
+    _ => failure("no rule for `gh ${key}`")
+  }
+}
+
+def ghSearchEffects(words: string[], limit: number, repo: GhResolved): Result<Effect[]> {
+  const text = words.join(" ")
+  // GitHub search unions repository qualifiers, so the words must not name
+  // another one. _ghScopedSearchQuery checks this too; this message names
+  // gh's flag where its own names the typed tool's parameters.
+  if (_ghHasScopeQualifier(text)) {
+    return failure("the search words name a repo:, org:, or user:; pass --repo OWNER/REPO instead")
+  }
+  const query = try _ghScopedSearchQuery(repo.owner, repo.repo, text)?
+  return success([
+    ghIssueSearchEffect({ owner: repo.owner, repo: repo.repo, query: query, perPage: limit, page: GH_FIRST_PAGE }, repo.lookup)
+  ])
+}
+
+/* The --json field names, or null when the command has no --json. */
+def ghJsonFields(values: FlagValue[]): string[] | null {
+  const given = flagValues(values, ["--json"])
+  if (given.length == 0) {
+    return null
+  }
+  return given[0].split(",")
+}
+
+def ghLabels(values: FlagValue[]): string[] {
+  const given = flagValues(values, ["--label"])
+  if (given.length == 0) {
+    return []
+  }
+  return given[0].split(",")
+}
+
+/* A view's distinct reads, in GH_READ_ORDER. */
+def ghViewReads(fields: string[] | null, table: Record<string, GhRead>, plain: GhRead[]): GhRead[] {
+  if (fields == null) {
+    return plain
+  }
+  const wanted: GhRead[] = [table[field] ?? "get" for field in fields]
+  return [read for read in GH_READ_ORDER if wanted.includes(read)]
+}
+
+def ghPullRead(read: GhRead, number: number, repo: GhResolved): Effect {
+  const paged: GhPagedPayload = { owner: repo.owner, repo: repo.repo, number: number, perPage: GH_EVERY_PAGE, page: GH_FIRST_PAGE }
+  return match(read) {
+    "get" => ghPrGetEffect({ owner: repo.owner, repo: repo.repo, number: number }, repo.lookup)
+    "files" => ghPrFilesEffect(paged, repo.lookup)
+    "comments" => ghIssueCommentListEffect(paged, repo.lookup)
+    "reviews" => ghPrReviewListEffect(paged, repo.lookup)
+    "checks" => ghPrChecksEffect(paged, repo.lookup)
+  }
+}
+
+def ghIssueRead(read: GhRead, number: number, repo: GhResolved): Effect {
+  if (read == "comments") {
+    return ghIssueCommentListEffect({ owner: repo.owner, repo: repo.repo, number: number, perPage: GH_EVERY_PAGE, page: GH_FIRST_PAGE }, repo.lookup)
+  }
+  return ghIssueGetEffect({ owner: repo.owner, repo: repo.repo, number: number }, repo.lookup)
+}
+
+// The one place a gh command is assembled, from checked data, as
+// gitCommand does for git. The flags are rebuilt from what ghLongFlags
+// returned, never copied from the model's text, and --repo always comes
+// last, naming the repository the payloads name. On a first pass with a
+// lookup pending the pair is empty; that text never runs.
+def ghCommand(key: string, verb: GhVerb, split: SplitArgs, target: GhTarget | null, words: Word[], repo: GhResolved, redirects: Redirect[]): SimpleCommand {
+  """
+  Build the gh command to run: the subcommand, the number, the search words, the checked flags, and --repo.
+  """
+  const numberWords: Word[] = if (target == null) then [] else [literalWordOf("${target.number}")]
+  const pair = "${repo.owner}/${repo.repo}"
+  const repository = if (verb.repoFlag == "base") then "github.com/${pair}" else pair
+  return {
+    tag: "simpleCommand",
+    assignments: [],
+    command: GH_WORD,
+    args: [
+      ...[literalWordOf(part) for part in key.split(" ")],
+      ...numberWords,
+      ...words,
+      ...flagWords(split.plain, [entry for entry in split.values if entry.flag != "--repo"]),
+      { tag: "flag", flagName: "--repo" },
+      literalWordOf(repository),
+    ],
+    redirects: redirects
+  }
 }
 
 

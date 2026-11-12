@@ -12,6 +12,7 @@ import {
   FlagSpec,
  } from "std::safeBash"
 import test { splitFlags, flattenCommands, readFileVerb, verbName } from "std::safeBash"
+import { pendingLookups, GhRepo, Plan } from "std::safeBash/actions"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
@@ -2207,6 +2208,137 @@ node gitRunsSafely() {
   remove(GIT_NO_REPO) with approve
   remove(GIT_BARE) with approve
   return seen
+}
+
+// ---------------------------------------------------------------------------
+// gh
+//
+// The nodes below go through `planFor` and run nothing. A row that uses
+// `cd` plans in STDLIB_TESTS, where `grep-fixtures` exists; every other
+// row plans in `/repo`, a folder that does not exist.
+// ---------------------------------------------------------------------------
+
+/** A plan's outcome, each effect's name and payload, the text that runs,
+  the folders still waiting on a repository lookup, and why it went broad. */
+def ghPlan(source: string, cwd: string = "/repo", origin: GhRepo | null = null): any {
+  const plan = planFor(source, cwd, origin)
+  const effects: any[] = plan.effects
+  const text = match(plan.execution) {
+    { kind: "bash", command as text } => text
+    _ => ""
+  }
+  return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects], text, pendingLookups(plan.effects), reasonOf(plan)]
+}
+
+/** A plan's outcome and why it went broad. */
+def ghBroad(source: string, cwd: string = "/repo"): any {
+  const plan = planFor(source, cwd)
+  return [outcomeOf(plan), reasonOf(plan)]
+}
+
+def reasonOf(plan: Plan): any {
+  const reason = plan.broadReason
+  if (reason == null) {
+    return null
+  }
+  return [reason.kind, reason.detail]
+}
+
+static const AGENCY_LANG: GhRepo = { owner: "egonSchiele", repo: "agency-lang" }
+
+node ghReads() {
+  return [
+    ghPlan("gh pr view 1451"),
+    ghPlan("gh pr view 1451", "/repo", AGENCY_LANG),
+    ghPlan("gh pr view 1451 --repo egonSchiele/agency-lang"),
+    ghPlan("gh pr view https://github.com/egonSchiele/agency-lang/pull/1451"),
+    ghPlan("gh pr view 1451 --repo a/b", "/repo", AGENCY_LANG),
+    ghPlan("gh pr view 1 -R github.com/o/r --comments"),
+    ghPlan("gh pr view 1 --json title,body"),
+    ghPlan("gh pr view 1 --json title,files,reviews,latestReviews,comments,statusCheckRollup"),
+    ghPlan("gh pr diff 1 --name-only"),
+    ghPlan("gh pr checks 1 --required"),
+    ghPlan("gh pr checks 1 --json name,state"),
+    ghPlan("gh pr list"),
+    ghPlan("gh pr list --state merged --base main --limit 5 --author dana"),
+    ghPlan("gh pr list -L 100"),
+    ghPlan("gh issue view 7"),
+    ghPlan("gh issue view 7 --comments"),
+    ghPlan("gh issue view 7 --json title,comments"),
+    ghPlan("gh issue list --label bug,urgent --state all"),
+    ghPlan("gh search issues crash in:title --repo o/r --limit 10"),
+    ghPlan("gh pr diff 1 | head -20"),
+  ]
+}
+
+// The lookup folder is the real path of the folder the `cd` names, which
+// differs between machines, so this row reports whether it ends right.
+node ghLookupFollowsCd() {
+  const plan = planFor("cd grep-fixtures && gh pr view 1", STDLIB_TESTS)
+  const folders = pendingLookups(plan.effects)
+  return [outcomeOf(plan), folders.length, folders[0].endsWith("/stdlib/grep-fixtures")]
+}
+
+node ghStaysBroad() {
+  return [
+    ghBroad("gh pr view"),
+    ghBroad("gh pr view abc"),
+    ghBroad("gh pr view 1 --web"),
+    ghBroad("gh pr checks 1 --watch"),
+    ghBroad("gh pr view 1 --template x"),
+    ghBroad("gh pr list --search foo"),
+    ghBroad("gh issue list --search foo"),
+    ghBroad("gh pr list --limit 101"),
+    ghBroad("gh pr list --limit 0"),
+    ghBroad("gh pr list -L 5 --limit 500"),
+    ghBroad("gh pr list -s open --state closed"),
+    ghBroad("gh pr list --state bogus"),
+    ghBroad("gh issue list --state merged"),
+    ghBroad("gh search issues crash --repo o/r --state all"),
+    ghBroad("gh pr list --json comments"),
+    ghBroad("gh issue list --json comments"),
+    ghBroad("gh pr view 1 --json nope"),
+    ghBroad("gh pr list --author 'x repo:other/private'"),
+    ghBroad("gh pr view 1 --repo ghe.example.com/o/r"),
+    ghBroad("gh pr view 1 --repo ../x"),
+    ghBroad("gh pr view https://github.com/a/b/pull/1 --repo c/d"),
+    ghBroad("gh search issues crash"),
+    ghBroad("gh search issues crash --repo o/r -R other/private"),
+    ghBroad("gh search issues crash --repo o/r,other/private"),
+    ghBroad("gh search issues repo:other/x crash --repo o/r"),
+    ghBroad("gh search issues crash --repo o/r --owner acme"),
+    ghBroad("(cd grep-fixtures && gh pr view 1); gh pr view 2", STDLIB_TESTS),
+  ]
+}
+
+node ghJqHasNoRule() {
+  return [
+    ghBroad("gh pr view 1 --json title --jq .title"),
+    ghBroad("gh pr view 1 --json title --jq=.title"),
+    ghBroad("gh pr view 1 --json title -q .title"),
+    ghBroad("gh run view 5 --json jobs --jq .jobs"),
+    ghBroad("gh run view 5 --json jobs --jq=.jobs"),
+    ghBroad("gh run view 5 -wq .jobs"),
+    ghBroad("gh run view 5 --json jobs '--jq' '.jobs'"),
+    ghBroad("gh run view 5 --json jobs \"--jq=.jobs\""),
+    ghBroad("gh run view 5 --json jobs '-q' '.jobs'"),
+  ]
+}
+
+/** A plan's outcome, and the program and subcommand of each std::exec. */
+def ghExecRow(source: string): any {
+  const plan = planFor(source, "/repo")
+  const effects: any[] = plan.effects
+  return [outcomeOf(plan), [[effect.name, effect.payload.command, effect.payload.subcommand] for effect in effects]]
+}
+
+node ghUnownedStaysExec() {
+  return [
+    ghExecRow("gh pr comment 1 -b hi"),
+    ghExecRow("gh run view 5"),
+    ghExecRow("gh pr create --fill"),
+    ghExecRow("gh -R o/r pr view 1"),
+  ]
 }
 
 node timeLimitStopsTheCommand() {

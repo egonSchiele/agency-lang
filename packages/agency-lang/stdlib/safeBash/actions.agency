@@ -53,6 +53,7 @@ export type Effect =
   | { name: "std::github::issueGet"; payload: GhNumberPayload; lookup: string | null }
   | { name: "std::github::prFiles"; payload: GhPagedPayload; lookup: string | null }
   | { name: "std::github::prReviewList"; payload: GhPagedPayload; lookup: string | null }
+  | { name: "std::github::prReviewCommentList"; payload: GhPagedPayload; lookup: string | null }
   | { name: "std::github::prChecks"; payload: GhPagedPayload; lookup: string | null }
   | { name: "std::github::issueCommentList"; payload: GhPagedPayload; lookup: string | null }
   | { name: "std::github::prList"; payload: GhPrListPayload; lookup: string | null }
@@ -459,6 +460,7 @@ def lookupOf(effect: Effect): string | null {
     "std::github::issueGet" => effect.lookup
     "std::github::prFiles" => effect.lookup
     "std::github::prReviewList" => effect.lookup
+    "std::github::prReviewCommentList" => effect.lookup
     "std::github::prChecks" => effect.lookup
     "std::github::issueCommentList" => effect.lookup
     "std::github::prList" => effect.lookup

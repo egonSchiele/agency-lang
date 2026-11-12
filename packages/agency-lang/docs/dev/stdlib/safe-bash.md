@@ -1176,9 +1176,10 @@ gh pr view 1451 --repo github.com/egonSchiele/agency-lang
 ### Which subcommands the rule owns
 
 Seven reads have a rule: `gh pr view`, `pr diff`, `pr checks`, `pr list`,
-`issue view`, `issue list`, and `search issues`. A spelling of one of
-these that fails its rule asks `std::bash`, with the reason, such as
-``gh does not take `--web` ``.
+`issue view`, `issue list`, and `search issues`. So does a GET of six
+paths through `gh api` (see "gh api" below). A spelling of one of these
+that fails its rule asks `std::bash`, with the reason, such as ``gh does
+not take `--web` ``.
 
 Every other `gh` subcommand asks `std::exec`. That includes every write (`gh pr comment`, `gh pr review`, `gh
 issue create`, `gh pr create`, `gh pr merge`), and `gh run view`. The
@@ -1399,6 +1400,56 @@ value must be one `gh` takes for that subcommand.
 Left out of every row: `--web` (opens a browser), `--watch` on `pr checks`
 (runs until the checks finish), and `--owner` on `search issues` (searches
 every repository of an owner).
+
+### gh api
+
+`gh api` is the one `gh` command where the model writes the web request
+itself. A GET of six paths has a rule, each asking the effect of the typed
+tool that reads the same data:
+
+| Path | Effect |
+|---|---|
+| `repos/O/R/pulls/N` | `prGet` |
+| `repos/O/R/pulls/N/files` | `prFiles` |
+| `repos/O/R/pulls/N/reviews` | `prReviewList` |
+| `repos/O/R/pulls/N/comments` | `prReviewCommentList` |
+| `repos/O/R/issues/N` | `issueGet` and `prGet` |
+| `repos/O/R/issues/N/comments` | `issueCommentList` |
+
+`pulls/N/comments` is how an agent reads the inline review comments on a
+pull request; no other `gh` command shows them. An issue path also asks
+`prGet`, for the reason `issue view` does: the number may be a pull
+request.
+
+The path may start with `/`. It names `O/R`, checked as `--repo` is, or
+uses `gh`'s placeholders `{owner}` and `{repo}` together, which safeBash
+fills from `origin` or a lookup, as for any `gh` read. One placeholder
+beside a name has no rule. A list path may carry `per_page`, from 1 to
+100, and `page`; any other query key, or a key given twice, has no rule. A
+single pull request or issue takes no query string. The path table and
+its checks are `_ghParseApiPath` in `lib/stdlib/safeBashGh.ts`, and
+`_ghApiPath` writes a path back from the same table.
+
+A path with a query string must be quoted. Bash reads an unquoted `?` as a
+glob, and a `gh` line with a glob has no rule.
+
+`gh api` sends a GET unless it is told otherwise, and switches to POST as
+soon as it is given a field. So the one flag allowed is `-X`/`--method`
+with `GET`, under one of its names. No rule for the field flags (`-f`,
+`-F`, `--field`, `--raw-field`, `--input`), `--paginate` and `--slurp` (no
+bound on the requests), `-H`, `--hostname`, `-i`, `--verbose`, `-p`,
+`--cache`, `--silent`, `--jq`, and `--template`. A POST asks `std::bash`.
+
+safeBash runs:
+
+```
+gh api --hostname github.com --method GET 'repos/O/R/pulls/N/comments?per_page=30&page=1'
+```
+
+The path is written from the parsed read, with the names and, for a list,
+both paging values, so `{owner}` and `{repo}` never reach `gh`, which
+would fill them from its own idea of the repository. `--hostname` pins
+the server, as `--repo github.com/...` does for the other rows.
 
 ### Aliases and extensions
 

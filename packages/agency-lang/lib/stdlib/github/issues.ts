@@ -130,10 +130,15 @@ const issueSearch: GithubEndpoint<
 // after any punctuation, `(repo:` and `-repo:` included.
 const SCOPE_QUALIFIER = /\b(repo|org|user):/i;
 
+/** True when search text names its own repository, organization, or user. */
+export function _ghHasScopeQualifier(text: string): boolean {
+  return SCOPE_QUALIFIER.test(text);
+}
+
 /** The search string ghIssueSearch sends: the user's query confined to one
  *  repository. Throws if the query carries its own repository qualifier. */
 export function _ghScopedSearchQuery(owner: string, repo: string, query: string): string {
-  if (SCOPE_QUALIFIER.test(query)) {
+  if (_ghHasScopeQualifier(query)) {
     throw new Error(
       "The search query must not contain a repo:, org:, or user: qualifier. " +
         "ghIssueSearch always searches one repository; pass owner and repo to choose it.",

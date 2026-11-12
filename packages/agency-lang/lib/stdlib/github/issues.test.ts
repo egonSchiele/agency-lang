@@ -7,6 +7,7 @@ import {
   _ghIssueComments,
   _ghIssueSearch,
   _ghScopedSearchQuery,
+  _ghHasScopeQualifier,
   _ghIssueCreate,
   _ghIssueComment,
   _ghIssueClose,
@@ -221,5 +222,15 @@ describe("_ghScopedSearchQuery", () => {
 
   it("allows a qualifier name inside a word", () => {
     expect(_ghScopedSearchQuery("o", "r", "subrepo:thing")).toBe("repo:o/r subrepo:thing");
+  });
+});
+
+describe("_ghHasScopeQualifier", () => {
+  it.each(["repo:o/r", "x org:acme", "(user:me)"])("finds a scope qualifier in %j", (text) => {
+    expect(_ghHasScopeQualifier(text)).toBe(true);
+  });
+
+  it.each(["crash in:title", "dana", "bug"])("finds none in %j", (text) => {
+    expect(_ghHasScopeQualifier(text)).toBe(false);
   });
 });

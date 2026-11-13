@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { memoryHost } from "../host/memoryHost.js";
+import { DEFAULT_READERS, outputNotice } from "../runtime/toolOutputStore.js";
 import { stripAnsi, visualWidth } from "./layout/ansi.js";
 import {
   commandDetail,
@@ -698,37 +699,53 @@ describe("result summarizers", () => {
     );
   });
 
-  it("shows the exit code and stderr for a safeBash failure, and the raw message otherwise", () => {
-    const message = JSON.stringify({
-      command: "make",
-      exitCode: 2,
-      stderr: "boom\nbang",
-      stdout: "",
-    });
-    expect(end("safeBash", { command: "make" }, message, "failure")).toBe(
+  // These messages are the text `outputFailure` in stdlib/safeBash.agency
+  // writes. `safeBashFailureText` in tests/agency/safeBash.agency checks
+  // that safeBash still writes this shape.
+  it("shows the exit code and output for a safeBash failure, and the raw message otherwise", () => {
+    expect(end("safeBash", { command: "make" }, "boom\nbang\n[exit code 2]", "failure")).toBe(
       "✗ Run make · exit 2\n  │ boom\n  │ bang",
     );
     expect(end("safeBash", { command: "make" }, "rejected by policy", "failure")).toBe(
       "✗ Run make\n  │ rejected by policy",
     );
-    const stdoutOnly = JSON.stringify({
-      command: "tsc",
-      exitCode: 2,
-      stderr: "",
-      stdout: "src/a.ts: error",
-    });
-    expect(end("safeBash", { command: "tsc" }, stdoutOnly, "failure")).toBe(
-      "✗ Run tsc · exit 2\n  │ src/a.ts: error",
+    expect(end("safeBash", { command: "false" }, "[exit code 1]", "failure")).toBe(
+      "✗ Run false · exit 1",
     );
-    const stopped = JSON.stringify({
-      command: "pytest",
-      exitCode: 1,
-      stderr: "",
-      stdout: "test_a passed",
-      timedOut: true,
-    });
+  });
+
+  it("says a safeBash command timed out, and leaves the note for the model out", () => {
+    const stopped = [
+      "test_a passed",
+      "[stopped at the time limit of 120 seconds]",
+      "The text above is the output so far. Run a narrower command.",
+    ].join("\n");
     expect(end("safeBash", { command: "pytest" }, stopped, "failure")).toBe(
       "✗ Run pytest · timed out\n  │ test_a passed",
+    );
+  });
+
+  // A stream too long to return is replaced by a notice. Only the notice's
+  // first line is for a human, whichever stream it stands for.
+  it("cuts a saved stream to its first line and keeps the other stream", () => {
+    const long = Array.from({ length: 400 }, (_, at) => `line ${at}`).join("\n");
+    const notice = outputNotice(long, "out-1", null, DEFAULT_READERS);
+    const header = notice.split("\n")[0];
+    expect(
+      end("safeBash", { command: "x" }, `short out\n${notice}\n[exit code 1]`, "failure"),
+    ).toBe(`✗ Run x · exit 1\n  │ short out\n  │ ${header}`);
+    expect(
+      end("safeBash", { command: "x" }, `${notice}\nshort err\n[exit code 1]`, "failure"),
+    ).toBe(`✗ Run x · exit 1\n  │ ${header}\n  │ short err`);
+    expect(
+      end("safeBash", { command: "x" }, `${notice}\n${notice}\n[exit code 1]`, "failure"),
+    ).toBe(`✗ Run x · exit 1\n  │ ${header}\n  │ ${header}`);
+  });
+
+  it("reads the last status line when the output holds one of its own", () => {
+    const message = "[exit code 9]\nreal output\n[exit code 2]";
+    expect(end("safeBash", { command: "x" }, message, "failure")).toBe(
+      "✗ Run x · exit 2\n  │ [exit code 9]\n  │ real output",
     );
   });
 

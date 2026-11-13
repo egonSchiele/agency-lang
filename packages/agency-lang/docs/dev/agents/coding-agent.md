@@ -8,8 +8,10 @@ prompt or its tools reaches all of them.
 
 ## The prompt is short on purpose
 
-The system prompt is one sentence, four rules about which tool to use for
-what, and a hint for each tool that goes unused without one:
+The system prompt starts with `CODING_RULES` from
+`std::agents/lib/toolkits`: one sentence and five rules about which tool to
+use for what. The agent's minimal brain uses the same text. After it comes
+a hint for each tool that goes unused without one:
 `PROGRESS_NOTE` (a sentence beside each tool call, which the agent's trace
 prints), `SAVE_DRAFT_HINT` (`saveDraft`), and `askUserHint()` (the
 `question` tool), which is added per call and is empty when nobody can
@@ -26,10 +28,30 @@ Before adding a rule to the prompt, measure it.
 
 ## The tools
 
-`buildTools()` returns the list. The file and shell tools come from
-`codingFileAndShellTools()` in `std::agents/lib/toolkits`. It carries the
-same tools as `writableFileTools()` and `shellTools()` together, built
-from the same helpers, with three differences:
+`buildTools()` returns the list. Every tool definition is sent with every
+request, so the list holds only what `bash` cannot do:
+
+- **Six file and shell tools**, from `codingFileAndShellTools()` in
+  `std::agents/lib/toolkits`: `read`, `bash`, `edit`, `write`, `readSpill`,
+  and `grepSpill`. There is no `ls`, `glob`, `grep`, or `exec`. The first
+  rule in the prompt sends listing and searching to `bash`, and safeBash
+  runs a plain `ls`, `grep`, or `cat` with the same narrow approval the
+  stdlib tool of that name asks for (`docs/dev/stdlib/safe-bash.md`).
+- **One fetch tool**, from `fetchTools()`, and none of the Wikipedia tools
+  that `webTools()` adds. `fetchMarkdown` reads a Wikipedia page like any
+  other.
+- `setAgentCwd` and `getAgentCwd`, `githubAgent`, the memory tools, the
+  search tools, `question`, and the agent's skills.
+
+On SWE-bench Verified, a coder with 16 more tools than the six took about
+1.8 times the input tokens per task and passed the same number of tasks.
+That run could not show what the removed tools are worth on a task where
+they help. What it leaves a model without is a pre-approved tool to fall
+back on when a bash command cannot be narrowed: `grep -z` raises
+`std::bash`, which the recommended policy does not approve, where the
+`grep` tool would have been approved.
+
+Three of the six differ from the stdlib functions they wrap:
 
 | Tool | Difference | Why |
 |---|---|---|
@@ -64,8 +86,9 @@ about one, because nobody is at the terminal to answer
 
 - `tests/agency/agents/codingTools.agency`: the shell tool is named
   `bash`, `read` stops at 2,000 lines, and `write` takes no `mode`.
-- `tests/agency/agents/toolkits.agency`: the coding bundle has the same
-  tools as `writableFileTools()` and `shellTools()` together.
+- `tests/agency/agents/toolkits.agency`: the coding bundle is exactly the
+  six tools, and the agent's whole list is spelled out, so a tool added to
+  either shows up as a failing test.
 - `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency`:
   the coders' tool lists have unique names and each carries `question`.
 - `lib/agents/agency-agent/brains/coordinator/tests/toolPresentations.agency`:

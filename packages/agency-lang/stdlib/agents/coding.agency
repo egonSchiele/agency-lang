@@ -3,9 +3,10 @@ import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
   codingFileAndShellTools,
+  fetchTools,
   memoryTools,
-  webTools,
   askUserHint,
+  CODING_RULES,
   PROGRESS_NOTE,
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
@@ -43,15 +44,7 @@ callback that does.
 */
 
 // Kept short on purpose. Read docs/dev/agents/coding-agent.md before adding a rule.
-// The four rules are copied in the agent's minimal brain
-// (lib/agents/agency-agent/brains/minimal/minimal.agency); change the two together.
-static const systemPrompt = """You are a coding assistant. Help users inspect files, run commands, and modify code.
-
-- Use read to examine files instead of cat or sed.
-- Use edit for targeted changes. Batch changes to one file in a single call.
-- Use write only for new files or complete rewrites.
-- Be concise in your responses.
-
+static const systemPrompt = """${CODING_RULES}
 ## Communicating with the user
 ${PROGRESS_NOTE}${SAVE_DRAFT_HINT}
 """
@@ -68,7 +61,7 @@ export def buildTools(): any[] {
     ...codingFileAndShellTools(),
     githubAgent,
     ...memoryTools(),
-    ...webTools(),
+    ...fetchTools(),
     ...searchTools(),
     ...communicationTools(),
     skills,

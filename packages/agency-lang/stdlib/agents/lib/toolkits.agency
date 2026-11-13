@@ -214,6 +214,21 @@ def execAndSpillTools(): any[] {
   return [exec.partial(useAgentCwd: true), readSpill, grepSpill]
 }
 
+// Measured against longer prompts in docs/dev/agents/coding-agent.md.
+// Read it before adding a rule.
+/** The opening of a system prompt for an agent that offers
+`codingFileAndShellTools()`: one sentence, and a rule for each tool. The
+first rule sends listing and searching to `bash`, because the bundle has no
+tool for either. */
+export static const CODING_RULES = """You are a coding assistant. Help users inspect files, run commands, and modify code.
+
+- Use bash for file operations like ls, grep, find.
+- Use read to examine files instead of cat or sed.
+- Use edit for targeted changes. Batch changes to one file in a single call.
+- Use write only for new files or complete rewrites.
+- Be concise in your responses.
+"""
+
 /** The most lines the coding bundle's `read` returns when the model gives
   no limit. A file read whole is sent again with every later request. */
 static const READ_LINE_LIMIT = 2000
@@ -249,34 +264,18 @@ def bashTool(): any {
   )
 }
 
-/** The same tools as `writableFileTools()` and `shellTools()` together, with
-three differences: `read` returns at most 2,000 lines when the model gives no
-limit, `write` always overwrites, and `safeBash` is offered as `bash` with its
-`cwd` bound to the agent's working directory. */
+/** The six tools a model needs to work on code: `read`, `bash`, `edit`,
+`write`, and the two readers for output too long to return inline,
+`readSpill` and `grepSpill`. Three are shaped for a model: `read` returns
+at most 2,000 lines when the model gives no limit, `write` always
+overwrites, and `safeBash` is offered as `bash` with its `cwd` bound to the
+agent's working directory. There is no `ls`, `glob`, `grep`, or `exec`:
+`bash` does the listing, searching, and running, and every tool definition
+is sent with every request. An agent that uses this bundle tells the model
+so with `CODING_RULES`. */
 export def codingFileAndShellTools(): any[] {
   """
-  Return the file and shell tools shaped for a coding agent.
-  """
-  return [
-    readCapped.rename("read"),
-    ...findTools(),
-    write.partial(useAgentCwd: true, mode: "overwrite"),
-    edit.partial(useAgentCwd: true),
-    bashTool(),
-    ...execAndSpillTools(),
-  ]
-}
-
-/** The six tools a model needs to work on code when `bash` does the
-listing and searching: `read`, `bash`, `edit`, `write`, and the two readers
-for output too long to return inline, `readSpill` and `grepSpill`. Both
-readers are here because the notice `bash` leaves for a long output names
-both. The four file and shell tools are the ones in
-`codingFileAndShellTools()`. Every tool definition is sent with every
-request, so a short list costs less on a long task. */
-export def minimalCodingTools(): any[] {
-  """
-  Return the smallest set of file and shell tools for a coding agent.
+  Return the file and shell tools for a coding agent.
   """
   return [
     readCapped.rename("read"),
@@ -390,6 +389,15 @@ export def githubTools(): any[] {
 // to cover: in trace wX5GvrUq the user's policy approved two of them, the
 // model used the third, and 26 of 57 minutes went to approval prompts
 // (ADI-44).
+/** For an agent that reads a page it was given the address of, and does
+not look things up. `webTools()` is this plus the Wikipedia tools. */
+export def fetchTools(): any[] {
+  """
+  Return the HTTP tool, which returns HTML as Markdown and other bodies as received.
+  """
+  return [fetchMarkdown.partial(refresh: false)]
+}
+
 /** Add search tools when an agent must discover sources before fetching them.
 The HTTP tool returns HTML as Markdown and other bodies as received.
 Its `refresh` argument is bound to false to reuse a page within a conversation. */
@@ -398,7 +406,7 @@ export def webTools(): any[] {
   Return HTTP and Wikipedia lookup tools for named sources.
   """
   return [
-    fetchMarkdown.partial(refresh: false),
+    ...fetchTools(),
     wikipediaSearch.rename("wikipedia_search"),
     wikipediaSummary.rename("wikipedia_summary"),
     wikipediaArticle.rename("wikipedia_article"),

@@ -122,10 +122,21 @@
       ]
     },
     {
-      "nodeName": "codingBundleHasTheSameTools",
-      "description": "the coding bundle carries the same tools, in the same order, as writableFileTools and shellTools, with safeBash named bash",
+      "nodeName": "codingBundleIsSixTools",
+      "description": "the coding bundle is read, bash, edit, write, and the two saved-output readers, with no ls, glob, grep, or exec",
       "input": "",
-      "expectedOutput": "true",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"readSpill\",\"grepSpill\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "codingAgentToolNames",
+      "description": "the coding agent's whole tool list: the cwd tools, the six-tool bundle, the GitHub handoff, memory, one fetch tool with no Wikipedia tools, question, and its skills tool. Search tools depend on the environment and are not offered here.",
+      "input": "",
+      "expectedOutput": "[\"setAgentCwd\",\"getAgentCwd\",\"read\",\"bash\",\"edit\",\"write\",\"readSpill\",\"grepSpill\",\"githubAgent\",\"remember\",\"recall\",\"fetchMarkdown\",\"question\",\"skills_coding\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

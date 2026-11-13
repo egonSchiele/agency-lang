@@ -99,13 +99,6 @@ def savePolicy(path: string) {
   return try _writePolicyFile(path, currentPolicy, [])
 }
 
-def get(array: any[], index: number) {
-  if (index < array.length) {
-    return success(array[index])
-  }
-  return failure("Index out of bounds: ${index} >= ${array.length}")
-}
-
 def highlightJSON(obj: Record<string, any>): string {
   return highlight(JSON.stringify(obj, null, 2), "json")
 }
@@ -119,7 +112,10 @@ node main() {
 
   const interruptEffects = try JSON.parse(cliArgs[0])
   const outputPath = cliArgs[1]
-  const existingPolicy = try JSON.parse(get(cliArgs, 2))
+  let existingPolicy: Result = failure("No existing policy was given")
+  if (cliArgs.length > 2) {
+    existingPolicy = try JSON.parse(cliArgs[2])
+  }
 
   if (interruptEffects is failure(error)) {
     print("Failed to parse interrupt effects: ${error}")

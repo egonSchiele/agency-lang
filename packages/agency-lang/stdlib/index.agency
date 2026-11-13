@@ -702,12 +702,11 @@ export def _budgetOutcome(
     }
     return guarded
   }
-  const reached = isSuccess(guarded) && guarded.value != "" && guarded.value != null
-  if (reached && keepDraft) {
-    return success(_withBudgetNote(guarded.value, name, trip))
-  }
   let draft = trip.draftValue
-  if (reached) {
+  if (isSuccess(guarded) && guarded.value != "" && guarded.value != null) {
+    if (keepDraft) {
+      return success(_withBudgetNote(guarded.value, name, trip))
+    }
     draft = guarded.value
   }
   // Built from the trip, never from `guarded`: a guard whose finalize

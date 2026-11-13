@@ -68,8 +68,8 @@ A tool also finishes every check it can make before it enters its
 region. `edit` reads the file and checks that each `oldText` matches
 (`_checkEdit`) after its interrupt is approved and before the region, so
 an edit that does not apply fails clean and the model may correct it and
-call again. The check runs after the approval because its answer says
-whether the file holds the text.
+call again. The check runs after the approval because its error tells the
+model whether the file contains the text.
 
 ## Regions inside `parallel`
 

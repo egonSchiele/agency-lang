@@ -73,6 +73,9 @@ describe("_unparsedRemoveRefusal", () => {
     "ls; /bin/rm -rf ~/*",
     "rmdir /",
     "python - <<'EOF'\nprint(1)\nEOF\nrm -rf ..",
+    "x=`rm -rf ~`",
+    'sh -c "rm -rf /"',
+    "sh -c 'rm -rf ~/*'",
   ])("refuses %s", async (source) => {
     expect(await _unparsedRemoveRefusal(source, cwd)).not.toBe("");
   });

@@ -67,8 +67,10 @@ export async function _removeRefusal(target: string, cwd: string): Promise<strin
 }
 
 /** An `rm` or `rmdir` command word, bare or after a path, and the rest of
- *  its command up to the next separator. */
-const REMOVE_COMMAND = /(?:^|[\s;&|(){}])(?:[^\s;&|(){}]*\/)?(?:rm|rmdir)\s+([^;&|()\n]*)/g;
+ *  its command up to the next separator. A backtick or a quote may come
+ *  before the word, as in `` x=`rm -rf ~` `` and `sh -c "rm -rf /"`. A
+ *  quote does not end the arguments, because `rm -rf "$HOME"` has one. */
+const REMOVE_COMMAND = /(?:^|[\s;&|(){}`"'])(?:[^\s;&|(){}`"']*\/)?(?:rm|rmdir)\s+([^;&|()`\n]*)/g;
 
 /**
  * `_removeRefusal` for a line the bash parser could not read, such as

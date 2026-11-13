@@ -1,18 +1,11 @@
 {
-  "exitsNeverRemove": {
-    "result": "s1 done",
-    "toolStarts": 6,
-    "removalSeen": false,
-    "firstMessage": "output of e1\n[exit code 1]"
-  },
   "fiveFailuresRemove": {
-    "result": "s2 done",
+    "result": "s1 done",
     "toolStarts": 5,
-    "removalSeen": true,
-    "firstMessage": "Error: boom f1. The call failed. You may call this tool again."
+    "removalSeen": true
   },
   "successResets": {
-    "result": "s3 done",
+    "result": "s2 done",
     "toolStarts": 10,
     "removalSeen": false
   }

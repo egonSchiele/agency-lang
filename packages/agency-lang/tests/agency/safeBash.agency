@@ -17,7 +17,7 @@ import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
-import { env, setEnv } from "std::system"
+import { cwd, env, setEnv } from "std::system"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -343,6 +343,29 @@ node removeRefusals() {
     removeReason("true && rm -rf /"),
     removeReason("git status | rm -rf /"),
     removeReason("rm -rf build"),
+  ]
+}
+
+// A `cd` earlier in the line changes which folder an rm names. The launch
+// folder, reached by stepping out of it, gets no std::remove, so a policy
+// that approves deletes under the launch folder cannot approve it. Every
+// row only plans.
+node removeAfterCd() {
+  const launch = cwd()
+  const parts = launch.split("/")
+  const folder = parts[parts.length - 1]
+  const out = planFor("cd .. && rm -rf ${folder}", launch)
+  const inside = planFor("cd tests && rm -rf no-such-folder-xyz", launch)
+  let saysWhy = false
+  if (out.broadReason != null) {
+    saysWhy = out.broadReason.detail.includes("refused from this folder")
+  }
+  return [
+    outcomeOf(out),
+    [e.name for e in out.effects],
+    saysWhy,
+    outcomeOf(inside),
+    [e.name for e in inside.effects],
   ]
 }
 

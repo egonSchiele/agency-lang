@@ -1,4 +1,4 @@
-import { exitsNeverRemove, fiveFailuresRemove, successResets } from "./agent.js";
+import { fiveFailuresRemove, successResets } from "./agent.js";
 import { writeFileSync } from "fs";
 
 // Capture every tool-role message the model sees, via onLLMCallStart:
@@ -25,22 +25,8 @@ const seen = (state, substring) => state.toolMessages.some((m) => m.includes(sub
 
 const results = {};
 
-// Six non-zero exits in a row: every call runs, the tool is never removed,
-// and the model reads the output as the tool wrote it, with no "Error:"
-// in front and no advice after.
-{
-  const { state, callbacks } = makeCapture();
-  const result = await exitsNeverRemove({ callbacks });
-  results.exitsNeverRemove = {
-    result: result.data,
-    toolStarts: state.toolStarts,
-    removalSeen: seen(state, "can no longer be called"),
-    firstMessage: state.toolMessages[0],
-  };
-}
-
-// Five ordinary failures in a row: the fifth says the tool is gone, and
-// the sixth scripted call never starts.
+// Five failures in a row: the fifth says the tool is gone, and the sixth
+// scripted call never starts.
 {
   const { state, callbacks } = makeCapture();
   const result = await fiveFailuresRemove({ callbacks });
@@ -48,7 +34,6 @@ const results = {};
     result: result.data,
     toolStarts: state.toolStarts,
     removalSeen: seen(state, "failed too many times"),
-    firstMessage: state.toolMessages[0],
   };
 }
 

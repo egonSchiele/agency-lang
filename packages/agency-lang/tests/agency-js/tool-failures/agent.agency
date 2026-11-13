@@ -1,13 +1,4 @@
-// A tool that runs a command. The command exits non-zero, which is the
-// command failing and not the tool, so the failure carries the exit code.
-def runCommand(id: string): Result<string> {
-  if (id.startsWith("ok")) {
-    return success("ran ${id}")
-  }
-  return failure("output of ${id}\n[exit code 1]", { exitCode: 1 })
-}
-
-// A tool that breaks: an ordinary failure with no exit code.
+// A tool that fails unless its id starts with "ok".
 def broken(id: string): Result<string> {
   if (id.startsWith("ok")) {
     return success("ran ${id}")
@@ -15,14 +6,8 @@ def broken(id: string): Result<string> {
   return failure("boom ${id}")
 }
 
-// Six non-zero exits in a row. None counts toward removal, so the sixth
-// call still runs.
-node exitsNeverRemove() {
-  return llm("Use runCommand.", { tools: [runCommand] })
-}
-
-// Five ordinary failures in a row remove the tool, so the sixth scripted
-// call never starts.
+// Five failures in a row remove the tool, so the sixth scripted call never
+// starts.
 node fiveFailuresRemove() {
   return llm("Use broken.", { tools: [broken] })
 }

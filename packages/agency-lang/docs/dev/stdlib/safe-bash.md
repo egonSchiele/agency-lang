@@ -273,20 +273,23 @@ stdlib (see `docs/dev/agents/tool-loop-guards.md`).
 ## What a failed command returns
 
 When a command that ran through bash exits non-zero, the failure's text
-is what a terminal would show: stdout, then stderr, then the exit code on
-a line of its own, then a note when there is one (the time limit, or gh
-not being logged in).
+is what a terminal would show: stdout, then stderr, then a status line,
+then a note when there is one (gh not being logged in, or what to do
+about a time limit).
 
 ```
 fatal: invalid reference: *.py
 [exit code 128]
 ```
 
-`exitFailure` builds it. Three things about it are decisions:
+A command stopped at its time limit was killed and has no exit code of
+its own, so its status line is `[stopped at the time limit of 120
+seconds]`.
+
+Two rules about the text:
 
 1. **The command is not repeated.** The model wrote it one message
-   earlier. Repeating a 2 KB inline script in every failure doubles what
-   the failure costs for the rest of the conversation.
+   earlier, and an inline script can be 2 KB.
 2. **The text that ran is never shown.** It differs from the model's text
    for a `cd`, which runs with the folder the classifier resolved, for a
    git command, which runs as the one `gitCommand` built, and for a `gh`
@@ -294,13 +297,6 @@ fatal: invalid reference: *.py
    the built text could write it next time, and `git -c ...` has no rule,
    so the copy would ask `std::bash`. The "was not run" message names the
    model's text (`label` in `runBash`) for the same reason.
-3. **The failure's data carries `exitCode`.** That is how the tool loop
-   knows the command failed and the tool did not, so the failure never
-   counts toward removing the tool and reaches the model with no `Error:`
-   in front. See "Tool failures" in `docs/dev/agents/tool-loop-guards.md`.
-
-A refusal, a rejected approval, and a command that could not be started
-carry no exit code, and are ordinary failures.
 
 ## rm and rmdir
 
@@ -342,10 +338,28 @@ as the folder. A line the bash parser cannot read has no tree to walk, so
 That check can refuse a line that was safe, and it is meant to err that
 way.
 
-What the refusal does not see: the folder a `cd` earlier in the line
-moved to. `cd / && rm -rf usr` is checked against safeBash's own folder,
-not `/`. It is friction against the obvious spelling, as the wall is, and
-the approval is where the control lives.
+The check runs twice, because a `cd` earlier in the line changes which
+folder an `rm` names:
+
+```
+cd .. && rm -rf proj
+```
+
+1. `planFor` runs it on every `rm` in the line against safeBash's own
+   folder, before anything is classified. A refused target here refuses
+   the whole line. From `/Users/a/proj` this line passes, because it
+   reads `proj` as `/Users/a/proj/proj`.
+2. `removeEffects` runs it again against the folder the classifier
+   resolved for that command, which follows the `cd`. Here `proj` is
+   `/Users/a/proj`, the launch folder. A refused target gets no
+   `std::remove`, so the line asks `std::bash`.
+
+The second check must not be dropped. `withWrites` approves `std::remove`
+for the launch folder and everything under it, so a `std::remove` naming
+the launch folder would be approved by rule and the project deleted with
+nobody asked. The `remove` tool is safe from this because `_remove`
+calls `rejectDangerousPath` again when it deletes; `rm` runs through
+bash and gets only the checks at plan time.
 
 ## Pipelines, dup redirects, and glob words
 
@@ -1807,8 +1821,8 @@ is the job's limit. See `docs/dev/stdlib/jobs.md`.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
 - `lib/stdlib/safeBashRemove.ts`: the delete refusal and the real path of
   an `rm` operand, tested in `safeBashRemove.test.ts`. The plan tests are
-  `removePlans`, `removeRefusals`, and `removeAsksLikeTheRemoveTool`. No
-  test runs an `rm`.
+  `removePlans`, `removeRefusals`, `removeAfterCd`, and
+  `removeAsksLikeTheRemoveTool`. No test runs an `rm`.
 - `lib/stdlib/grepDialect.ts`: the pattern translation, grep's output
   format, and the skipped-folders note.
 - `lib/stdlib/readDialect.ts`: what `cat`, `cat -n`, `head`, and `tail`

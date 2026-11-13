@@ -183,6 +183,17 @@
       ]
     },
     {
+      "nodeName": "removeAfterCd",
+      "description": "An rm is checked from the folder a cd earlier in the line moved to. `cd .. && rm -rf <launch folder>` gets no std::remove and asks std::bash, and the reason says the target is refused. A folder inside the launch folder, reached through a cd, still asks std::remove. Every row only plans.",
+      "input": "",
+      "expectedOutput": "[\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "removeAsksLikeTheRemoveTool",
       "description": "An rm raises std::remove with the real whole path of its target and the line the model wrote. The handler rejects it, so nothing is deleted, and the model reads the reason.",
       "input": "",

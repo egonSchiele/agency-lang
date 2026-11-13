@@ -1,0 +1,24 @@
+{
+  "sourceFile": "minimalTurn.agency",
+  "tests": [
+    {
+      "nodeName": "runsAToolAndAnswers",
+      "description": "A turn runs the bash call the model makes, puts its output in the thread, and returns the model's reply. The grounding reaches the system prompt.",
+      "input": "",
+      "expectedOutput": "\"Done from minimal!|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "bash", "args": { "command": "echo MINIMAL-BASH-RAN" } }] },
+        { "return": "Done from minimal!" }
+      ]
+    },
+    {
+      "nodeName": "offersSixTools",
+      "description": "The minimal brain's tool list is read, bash, edit, write, and the two saved-output readers that a long bash output's notice names.",
+      "input": "",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"readSpill\",\"grepSpill\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

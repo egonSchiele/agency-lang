@@ -46,9 +46,11 @@ attachments after the text; for a named target it is bare text.
 Each brain lives in its own directory under `brains/` and exports one
 function, `def <name>Brain(): AgentBrain`. `brains/registry.agency` lists
 them all in `allBrains()`; `brainByName` and `brainFlagHelp` are derived
-from that list. Two brains ship today: `coordinator` (the default; one
+from that list. Three brains ship today: `coordinator` (the default; one
 main LLM that routes to code, research, oracle, explorer, review, and writing
-subagents) and `simple` (one tool-less LLM call per turn). Each has a
+subagents), `minimal` (one coder with six tools and a short prompt, for
+benchmarks and sandboxed runs), and `simple` (one tool-less LLM call per
+turn). Each has a
 `README.md` describing itself.
 
 ## What the harness owns

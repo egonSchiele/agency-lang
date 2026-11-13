@@ -146,6 +146,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "writableFileTools",
     "shellTools",
     "codingFileAndShellTools",
+    "minimalCodingTools",
     "jobTools",
     "spillTools",
     "readOnlyGitTools",

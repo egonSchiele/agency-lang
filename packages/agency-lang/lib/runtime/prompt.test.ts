@@ -50,7 +50,7 @@ describe("failureTier", () => {
   });
 
   it("MAX_TOOL_FAILURES is the documented circuit-breaker cap", () => {
-    expect(MAX_TOOL_FAILURES).toBe(5);
+    expect(MAX_TOOL_FAILURES).toBe(10);
   });
 });
 

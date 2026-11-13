@@ -1,4 +1,4 @@
-import { fiveFailuresRemove, successResets } from "./agent.js";
+import { tenFailuresRemove, successResets } from "./agent.js";
 import { writeFileSync } from "fs";
 
 // Capture every tool-role message the model sees, via onLLMCallStart:
@@ -25,21 +25,21 @@ const seen = (state, substring) => state.toolMessages.some((m) => m.includes(sub
 
 const results = {};
 
-// Five failures in a row: the fifth says the tool is gone, and the sixth
-// scripted call never starts.
+// Ten failures in a row: the tenth says the tool is gone, and the
+// eleventh scripted call never starts.
 {
   const { state, callbacks } = makeCapture();
-  const result = await fiveFailuresRemove({ callbacks });
-  results.fiveFailuresRemove = {
+  const result = await tenFailuresRemove({ callbacks });
+  results.tenFailuresRemove = {
     result: result.data,
     toolStarts: state.toolStarts,
     removalSeen: seen(state, "failed too many times"),
   };
 }
 
-// Four failures, a success, four failures, a success: ten calls, all
-// run. Without the reset the fifth failure would remove the tool and the
-// last four calls would never start.
+// Nine failures, a success, nine failures, a success: twenty calls, all
+// run. Without the reset the tenth failure would remove the tool and the
+// last nine calls would never start.
 {
   const { state, callbacks } = makeCapture();
   const result = await successResets({ callbacks });

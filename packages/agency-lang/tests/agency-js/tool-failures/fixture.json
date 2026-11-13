@@ -1,12 +1,12 @@
 {
-  "fiveFailuresRemove": {
+  "tenFailuresRemove": {
     "result": "s1 done",
-    "toolStarts": 5,
+    "toolStarts": 10,
     "removalSeen": true
   },
   "successResets": {
     "result": "s2 done",
-    "toolStarts": 10,
+    "toolStarts": 20,
     "removalSeen": false
   }
 }

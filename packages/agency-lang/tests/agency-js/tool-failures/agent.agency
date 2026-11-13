@@ -6,14 +6,14 @@ def broken(id: string): Result<string> {
   return failure("boom ${id}")
 }
 
-// Five failures in a row remove the tool, so the sixth scripted call never
-// starts.
-node fiveFailuresRemove() {
-  return llm("Use broken.", { tools: [broken] })
+// Ten failures in a row remove the tool, so the eleventh scripted call
+// never starts. The round cap is raised so it is not what stops the loop.
+node tenFailuresRemove() {
+  return llm("Use broken.", { tools: [broken], maxToolCallRounds: 30 })
 }
 
-// A call that works resets the count: four failures, a success, four more
+// A call that works resets the count: nine failures, a success, nine more
 // failures, a success. The tool is never removed.
 node successResets() {
-  return llm("Use broken.", { tools: [broken] })
+  return llm("Use broken.", { tools: [broken], maxToolCallRounds: 30 })
 }

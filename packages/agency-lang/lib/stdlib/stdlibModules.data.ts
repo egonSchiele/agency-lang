@@ -84,6 +84,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "agencyVerifierAgent"
   ],
   "std::agents/coding": [
+    "benchVariant",
     "buildTools",
     "codingAgent"
   ],

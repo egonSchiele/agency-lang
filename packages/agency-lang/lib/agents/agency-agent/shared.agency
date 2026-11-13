@@ -323,7 +323,7 @@ let _capabilities: ResolvedCapabilities = {
   values: {
     summarize: true,
     memory: true,
-    maxTokens: 20000
+    maxTokens: 131072
   },
   sources: {
     summarize: "default",

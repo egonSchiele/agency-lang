@@ -13,7 +13,7 @@
  * cwd at startup.
  */
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
-import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
+import { benchVariant, codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
 import { agencyCodeTools, agencyDocToolsBrief } from "std::agents/lib/toolkits"
 import { getAgentCwd } from "std::index"
 import { exec } from "std::shell"
@@ -103,9 +103,11 @@ export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
 
-// The default budget for one coder dispatch.
+// The default budget for one coder dispatch. BENCHMARK BUILD: 45 minutes,
+// under the 50-minute SWE-bench agent timeout, because Pi has no budget of
+// its own.
 static const CODE_MAX_COST = $20.00
-static const CODE_MAX_TIME = 15m
+static const CODE_MAX_TIME = 45m
 
 // What the Agency coder is given on top of the stdlib coding agent's own
 // tools. The plain coder gets the stdlib tools alone.
@@ -128,6 +130,12 @@ static const SEARCH_OFF_NOTE = "Web search is turned off for this session. Do no
 // An unattended run has no reader for a formatted reply and no next turn,
 // and oneShot.md holds the rules for working that way.
 def dispatchContext(): string {
+  // BENCHMARK BUILD: a one-shot run gets the task alone, as Pi does. No
+  // oneShot.md, no search note, no AGENTS.md instructions. The "prompt"
+  // ablation variant adds them back.
+  if (_oneShot && benchVariant() != "prompt") {
+    return ""
+  }
   let style = REPL_STYLE
   if (_oneShot) {
     style = ONE_SHOT_NOTE
@@ -145,11 +153,16 @@ def runCoder(
   maxDollars: number | null,
   extras: any[],
 ): Result<string> {
+  // The "draft" ablation variant restores main's 15-minute budget.
+  let maxTime = CODE_MAX_TIME
+  if (benchVariant() == "draft") {
+    maxTime = 15m
+  }
   return codingAgent(
     task: userMsg,
     context: dispatchContext(),
     maxCost: maxDollars ?? CODE_MAX_COST,
-    maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
+    maxTime: timeBudget(maxSeconds, maxTime),
     extraTools: extras,
   )
 }

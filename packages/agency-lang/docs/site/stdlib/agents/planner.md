@@ -151,8 +151,8 @@ Generate an Agency program that composes agents to solve a complex task,
 
 **Returns:** `Result<string>`
 
-**Throws:** `std::guard`, `std::agents::planApprove`, `std::run`
+**Throws:** `std::guard`, `std::agents::planApprove`, `std::run`, `std::env`
 
-**Needs:** `fileRead`, `fileWrite`, `subprocess`
+**Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L240))

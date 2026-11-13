@@ -29,17 +29,37 @@ callback that does.
 
 ## Functions
 
+### benchVariant
+
+```ts
+benchVariant(): string
+```
+
+**Returns:** `string`
+
+**Throws:** `std::env`
+
+**Needs:** `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L76))
+
 ### buildTools
 
 ```ts
-buildTools(): any[]
+buildTools(variant: string = ""): any[]
 ```
 
 Return the coding agent's built-in tools for inspection or extension.
 
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| variant | `string` | "" | The ablation variant, or "" for the round-2 Pi match |
+
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L207))
 
 ### codingAgent
 
@@ -79,6 +99,8 @@ Called from code, this runs on the caller's thread like any function:
 
 **Returns:** `Result<string>`
 
-**Throws:** `std::guard`
+**Throws:** `std::guard`, `std::env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L112))
+**Needs:** `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L294))

@@ -15,7 +15,9 @@ import { firstMatchingLines, type GrepMatch } from "./shell.js";
 
 /** How much of a command's output comes back inline. Anything longer is
  *  saved and replaced by a preview. */
-export const MAX_STDOUT_LEN = 2000;
+// BENCHMARK BUILD: 50,000, Pi's inline limit for bash output (50 KB). The
+// "outputcap" ablation variant restores main's 2,000.
+export const MAX_STDOUT_LEN = process.env.AGENCY_BENCH_VARIANT === "outputcap" ? 2000 : 50000;
 
 /** What the model gets back for a command's output: short output as
  *  printed, long output saved under `source` (the command that ran) and

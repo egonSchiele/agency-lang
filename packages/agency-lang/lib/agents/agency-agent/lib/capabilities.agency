@@ -82,10 +82,12 @@ export static const CAPABILITY_FIELDS: CapabilityField[] = [
   adaptive thinking a hard reasoning turn can spend that whole budget
   on thinking and return an empty reply. 20000 also stays under the
   Anthropic non-streaming cutoff, which refuses maxTokens above 21333. */
+// BENCHMARK BUILD: 131072, so a long reasoning turn is not cut off; Pi asks
+// for 943717 on GLM 5.3 Flash.
 export static const CAPABILITY_DEFAULT: Capabilities = {
   summarize: true,
   memory: true,
-  maxTokens: 20000
+  maxTokens: 131072
 }
 
 /** Per-provider defaults. Any model without its own entry lands here.

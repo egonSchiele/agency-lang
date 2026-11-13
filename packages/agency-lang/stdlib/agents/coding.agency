@@ -1,17 +1,16 @@
 import { githubAgent } from "std::agents/github"
-import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
-import {
-  writableFileTools,
-  shellTools,
-  memoryTools,
-  webTools,
-  ASK_USER_HINT,
-  PROGRESS_NOTE,
- } from "std::agents/lib/toolkits"
+import { searchTools } from "std::agents/lib/search"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { memoryTools, webTools, ASK_USER_HINT, PROGRESS_NOTE } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
+import { edit, mkdir } from "std::fs"
 import { setAgentCwd, getAgentCwd } from "std::index"
+import { basename, dirname } from "std::path"
+import { safeBash } from "std::safeBash"
+import { ls, glob, grep, exec } from "std::shell"
 import { agentSkill } from "std::skills"
+import { readSpill, grepSpill } from "std::spill"
+import { env } from "std::system"
 import { systemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
@@ -42,7 +41,43 @@ nothing prints it by default. `std::agents/lib/toolkits` shows the
 callback that does.
 */
 
-static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
+// BENCHMARK BUILD (branch adit/bench-match-pi, not for merging): the prompt,
+// tools, and limits are cut to match the Pi coding agent, so a SWE-bench run
+// shows whether Agency's extra input tokens come from these or from
+// somewhere else.
+static const systemPrompt = """You are a coding assistant. Help users inspect files, run commands, and modify code.
+
+<tools>
+- read: Read file contents
+- bash: Execute bash commands (ls, grep, find, etc.)
+- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call
+- write: Create or overwrite files
+</tools>
+
+<rules>
+- Use bash for file operations like ls, grep, find.
+- Use read to examine files instead of cat or sed.
+- Use edit for targeted changes. Batch changes to one file in a single call.
+- Use write only for new files or complete rewrites.
+- Be concise in your responses.
+</rules>
+"""
+
+// ABLATION SWITCH: AGENCY_BENCH_VARIANT adds back one piece of `main` at a
+// time. Unset, the build is the round-2 Pi match.
+//   outputcap  bash shows 2,000 characters inline (lib/stdlib/spill.ts), plus grepSpill
+//   prompt     main's system prompt, closing reminder, and one-shot context
+//   searchtools  grep, glob, ls, and exec beside bash
+//   draft      saveDraft, and the coder's 15-minute budget (code.agency)
+//   alltools   the rest of main's tool list
+//   shapes     main's safeBash, read, edit, and write (filename and dir)
+//   maxtokens  a 20,000-token output cap on the coder's calls
+// Read in functions, never at static init: env() raises std::env.
+export def benchVariant(): string {
+  return env("AGENCY_BENCH_VARIANT") ?? ""
+}
+
+static const MAIN_PROMPT = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
 
 - The deliverable is a working artifact backed by real tool output, not a description. Actually run and exercise what you build.
 - Match the output contract exactly: the requested filename, path, format, and fields. Follow the task's stated whitespace and trailing-newline requirement precisely, whether it asks for one or forbids one. A near-miss fails.
@@ -57,26 +92,167 @@ static const systemPrompt = """You are an expert software engineer. Solve the ta
 ${PROGRESS_NOTE}${ASK_USER_HINT}
 """
 
-static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
+static const MAIN_FINALIZE_REMINDER = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
+
+// The round-1 prompt, which names safeBash, for the shapes variant.
+static const SHAPES_PROMPT = """You are a coding assistant. Help users inspect files, run commands, and modify code.
+
+<tools>
+- read: Read file contents
+- safeBash: Run bash commands (ls, grep, find, tests)
+- edit: Make exact text replacements in a file, several in one call
+- write: Create or overwrite files
+</tools>
+
+<rules>
+- Use safeBash to list and search files.
+- Use read to examine files instead of cat or sed.
+- Use edit for targeted changes. Batch changes to one file in a single call.
+- Use write only for new files or complete rewrites.
+- Be concise in your responses.
+</rules>
+"""
 
 static const skills = agentSkill("coding")
 
-export def buildTools(): any[] {
+// Pi's file tools take one `path`. Agency's take a filename relative to a
+// dir and refuse an absolute filename, so these split the path and call the
+// real tool, which raises the same interrupt as before.
+
+// Pi's read stops at 2000 lines when no limit is given.
+static const READ_LINE_LIMIT = 2000
+
+type PathEdit = {
+  oldText: string;
+  newText: string
+}
+
+def readPath(path: string, offset: number = 0, limit: number = 0): Result {
+  """
+  Read the contents of a file. Output stops at 2000 lines; use offset and limit for large files, and continue with offset until complete.
+
+  @param path - Path to the file to read (relative or absolute)
+  @param offset - Line number to start reading from (1-indexed)
+  @param limit - Maximum number of lines to read
+  """
+  let lines = limit
+  if (limit == 0) {
+    lines = READ_LINE_LIMIT + 1
+  }
+  const result = read(
+    filename: basename(path),
+    dir: dirname(path),
+    offset: offset,
+    limit: lines,
+    useAgentCwd: true,
+  )
+  if (isFailure(result) || limit != 0) {
+    return result
+  }
+  const text: string = result.value
+  const shown = text.split("\n")
+  if (shown.length <= READ_LINE_LIMIT) {
+    return result
+  }
+  const start = if offset == 0 then 1 else offset
+  const next = start + READ_LINE_LIMIT
+  const kept = shown.slice(0, READ_LINE_LIMIT).join("\n")
+  return success(
+    "${kept}\n\n[Showing lines ${start}-${next - 1}. Use offset=${next} to continue.]"
+  )
+}
+
+def editPath(path: string, edits: PathEdit[]): Result {
+  """
+  Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit.
+
+  @param path - Path to the file to edit (relative or absolute)
+  @param edits - One or more targeted replacements, each matched against the original file
+  """
+  let full: any[] = []
+  for (e in edits) {
+    full = [...full, { oldText: e.oldText, newText: e.newText, replaceAll: false }]
+  }
+  return edit(filename: basename(path), edits: full, dir: dirname(path), useAgentCwd: true)
+}
+
+def writePath(path: string, content: string): Result {
+  """
+  Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.
+
+  @param path - Path to the file to write (relative or absolute)
+  @param content - Content to write to the file
+  """
+  mkdir(dirname(path), useAgentCwd: true)
+  return write(
+    filename: basename(path),
+    content: content,
+    dir: dirname(path),
+    mode: "overwrite",
+    useAgentCwd: true,
+  )
+}
+
+def bashTool(variant: string): any {
+  if (variant == "outputcap") {
+    return safeBash.partial(cwd: "").rename("bash").describe(
+      "Execute a bash command in the current working directory. Returns stdout and stderr. Output over 2000 characters is saved; read it with readSpill or grepSpill. Optionally provide a timeout in seconds (default 120)."
+    )
+  }
+  return safeBash.partial(cwd: "").rename("bash").describe(
+    "Execute a bash command in the current working directory. Returns stdout and stderr. Output over 50000 characters is saved; read it with readSpill. Optionally provide a timeout in seconds (default 120)."
+  )
+}
+
+export def buildTools(variant: string = ""): any[] {
   """
   Return the coding agent's built-in tools for inspection or extension.
+
+  @param variant - The ablation variant, or "" for the round-2 Pi match
   """
-  return [
-    setAgentCwd,
-    getAgentCwd,
-    ...writableFileTools(),
-    ...shellTools(),
-    githubAgent,
-    ...memoryTools(),
-    ...webTools(),
-    ...searchTools(),
-    ...communicationTools(),
-    skills,
+  if (variant == "shapes") {
+    return [
+      read.partial(useAgentCwd: true),
+      write.partial(useAgentCwd: true),
+      edit.partial(useAgentCwd: true),
+      safeBash,
+      readSpill,
+    ]
+  }
+  let tools: any[] = [
+    readPath.rename("read"),
+    bashTool(variant),
+    editPath.rename("edit"),
+    writePath.rename("write"),
+    readSpill,
   ]
+  if (variant == "outputcap") {
+    tools = [...tools, grepSpill]
+  }
+  if (variant == "searchtools") {
+    tools = [
+      ...tools,
+      ls.partial(useAgentCwd: true, respectGitignore: true),
+      glob.partial(useAgentCwd: true, respectGitignore: true),
+      grep.partial(useAgentCwd: true, respectGitignore: true),
+      exec.partial(useAgentCwd: true),
+    ]
+  }
+  if (variant == "alltools") {
+    tools = [
+      setAgentCwd,
+      getAgentCwd,
+      ...tools,
+      grepSpill,
+      githubAgent,
+      ...memoryTools(),
+      ...webTools(),
+      ...searchTools(),
+      ...communicationTools(),
+      skills,
+    ]
+  }
+  return tools
 }
 
 def solve(
@@ -86,22 +262,28 @@ def solve(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt, expires: "llmCall")
-  const prompt = """
-${withContext(task: task, context: context)}
-
-${finalizeReminder}
-"""
-  return llm(
-    prompt,
-    llmOptions(
-    model: model,
-    provider: provider,
-    tools: [...buildTools(), ...extraTools, saveDraft],
-    spillToolResultsOver: AGENT_SPILL_OVER,
-    hostedTools: hostedSearchTools(model, provider),
-  ),
-  )
+  const variant = benchVariant()
+  let prompt = systemPrompt
+  let userPrompt = withContext(task: task, context: context)
+  if (variant == "prompt") {
+    prompt = MAIN_PROMPT
+    userPrompt = "${userPrompt}\n\n${MAIN_FINALIZE_REMINDER}"
+  }
+  if (variant == "shapes") {
+    prompt = SHAPES_PROMPT
+  }
+  systemMessage(prompt, expires: "llmCall")
+  let tools: any[] = [...buildTools(variant), ...extraTools]
+  if (variant == "draft") {
+    tools = [...tools, saveDraft]
+  }
+  // No hosted search and no loop spilling: Pi has neither. A tool result
+  // over maxToolResultChars is cut, as Pi cuts its own.
+  const options = llmOptions(model: model, provider: provider, tools: tools)
+  if (variant == "maxtokens") {
+    options.maxTokens = 20000
+  }
+  return llm(userPrompt, options)
 }
 
 /** Called from code, this runs on the caller's thread like any function:

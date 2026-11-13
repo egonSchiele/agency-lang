@@ -2,14 +2,9 @@ import test { promptFile, agencyCodePrompt, agencyTutorial } from "../../lib/age
 
 // The coordinator loads its prompts through the contained read wrapper,
 // and promptFile falls back to "" on failure — a SILENT empty system
-// prompt. These two nodes are the guard: each prompt must load
-// independently, so one healthy prompt cannot hide the other's failure.
+// prompt. This node is the guard.
 node codePromptLoads(): boolean {
   return promptFile("agency-code.md") != ""
-}
-
-node oneShotPromptLoads(): boolean {
-  return promptFile("oneShot.md") != ""
 }
 
 // The Agency coder learns the language from the tutorial. A tutorial that

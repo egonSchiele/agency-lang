@@ -24,7 +24,7 @@ coordinator sees only their final answer.
 ```
 coordinator.agency      the brain record: init, the main LLM call, routing
 prompts/                system prompts (main.md, and the Agency coder's
-                        agency-code.md and oneShot.md)
+                        agency-code.md)
 subagents/              the specialists (one file each) plus their helpers
 tests/                  Agency execution tests for this brain
 ```

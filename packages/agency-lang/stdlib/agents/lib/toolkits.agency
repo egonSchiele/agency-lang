@@ -131,8 +131,13 @@ export def readOnlyFileTools(): any[] {
   """
   Return file inspection tools rooted in the agent's working directory.
   """
+  return [read.partial(useAgentCwd: true), ...findTools()]
+}
+
+// The tools that list and search files. Every bundle with file tools
+// takes them from here, so a change to one reaches all of them.
+def findTools(): any[] {
   return [
-    read.partial(useAgentCwd: true),
     ls.partial(useAgentCwd: true, respectGitignore: true),
     glob.partial(useAgentCwd: true, respectGitignore: true),
     grep.partial(useAgentCwd: true, respectGitignore: true),
@@ -162,7 +167,65 @@ export def shellTools(): any[] {
   """
   Return command execution and saved-output readers for the agent's working directory.
   """
-  return [safeBash, exec.partial(useAgentCwd: true), readSpill, grepSpill]
+  return [safeBash, ...execAndSpillTools()]
+}
+
+// What every shell bundle carries beside its shell tool.
+def execAndSpillTools(): any[] {
+  return [exec.partial(useAgentCwd: true), readSpill, grepSpill]
+}
+
+/** The most lines the coding bundle's `read` returns when the model gives
+  no limit. A file read whole is sent again with every later request. */
+static const READ_LINE_LIMIT = 2000
+
+// The read tool with a default limit. `read` itself has none, because a
+// program that calls `read("data.csv")` wants the whole file.
+idempotent def readCapped(
+  filename: string,
+  dir: string = ".",
+  offset: number = 0,
+  limit: number = 0,
+): Result {
+  """
+  Read the contents of a file and return it as a string. At most 2000 lines are returned unless limit says otherwise; a longer file ends with a line saying which lines were shown and how many the file has, and offset reads on from there.
+
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param dir - Base directory for filename
+  @param offset - 1-indexed line to start at (0 means start of file)
+  @param limit - Maximum number of lines to return (0 means 2000)
+  """
+  let lines = limit
+  if (limit == 0) {
+    lines = READ_LINE_LIMIT
+  }
+  return read(filename: filename, dir: dir, offset: offset, limit: lines, useAgentCwd: true)
+}
+
+// safeBash under the name models know. `cwd` is bound to the agent's
+// working directory; a command that needs another folder starts with `cd`.
+def bashTool(): any {
+  return safeBash.partial(cwd: "").rename("bash").describe(
+    "Run a bash command in the working directory and return its stdout. A command that exits non-zero fails with its output and exit code, so there is no need to echo the exit status or run it again. Long output is saved; read it with readSpill or grepSpill. A command still running after timeout seconds (default 120) is stopped."
+  )
+}
+
+/** The same tools as `writableFileTools()` and `shellTools()` together, with
+three differences: `read` returns at most 2,000 lines when the model gives no
+limit, `write` always overwrites, and `safeBash` is offered as `bash` with its
+`cwd` bound to the agent's working directory. */
+export def codingFileAndShellTools(): any[] {
+  """
+  Return the file and shell tools shaped for a coding agent.
+  """
+  return [
+    readCapped.rename("read"),
+    ...findTools(),
+    write.partial(useAgentCwd: true, mode: "overwrite"),
+    edit.partial(useAgentCwd: true),
+    bashTool(),
+    ...execAndSpillTools(),
+  ]
 }
 
 /** Start a shell command in the background, read its output, and stop it.

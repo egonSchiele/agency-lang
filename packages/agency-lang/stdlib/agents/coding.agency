@@ -2,12 +2,12 @@ import { githubAgent } from "std::agents/github"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
-  writableFileTools,
-  shellTools,
+  codingFileAndShellTools,
   memoryTools,
   webTools,
   ASK_USER_HINT,
   PROGRESS_NOTE,
+  SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
@@ -42,22 +42,17 @@ nothing prints it by default. `std::agents/lib/toolkits` shows the
 callback that does.
 */
 
-static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
+// Kept short on purpose. Read docs/dev/agents/coding-agent.md before adding a rule.
+static const systemPrompt = """You are a coding assistant. Help users inspect files, run commands, and modify code.
 
-- The deliverable is a working artifact backed by real tool output, not a description. Actually run and exercise what you build.
-- Match the output contract exactly: the requested filename, path, format, and fields. Follow the task's stated whitespace and trailing-newline requirement precisely, whether it asks for one or forbids one. A near-miss fails.
-- When an exact check decides success (a numeric tolerance, an exact match, or a hidden test), list the judgment calls you made — each place the task could be read two ways. Check your solution once under each reading. When it passes under all of them, you are done: submit. Re-running a check that already passed adds no information, and every extra minute spent re-verifying a correct answer is worse than submitting it. If you find yourself checking the same property twice, stop and submit.
-- If a tool call fails because an argument was malformed or invalid, the environment has not changed — no files moved, no directory disappeared. Fix the argument and retry. Never go searching for "lost" files because one call failed.
-- Call `saveDraft` as you go, whenever you finish a meaningful step: the files you have written so far, what you verified, what is left. Your run has a cost and time budget, and if it runs out mid-task the most recent draft is what the caller receives. A run that saved nothing returns nothing.
-- For a task with more than two steps, write a short numbered plan in the same response as your first tool call, then follow it.
-- You have web search. Use it when a task needs current or external information rather than guessing or declining.
-- NEVER fabricate output you did not actually produce.
+- Use read to examine files instead of cat or sed.
+- Use edit for targeted changes. Batch changes to one file in a single call.
+- Use write only for new files or complete rewrites.
+- Be concise in your responses.
 
 ## Communicating with the user
-${PROGRESS_NOTE}${ASK_USER_HINT}
+${PROGRESS_NOTE}${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 """
-
-static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
 
 static const skills = agentSkill("coding")
 
@@ -68,8 +63,7 @@ export def buildTools(): any[] {
   return [
     setAgentCwd,
     getAgentCwd,
-    ...writableFileTools(),
-    ...shellTools(),
+    ...codingFileAndShellTools(),
     githubAgent,
     ...memoryTools(),
     ...webTools(),
@@ -87,13 +81,8 @@ def solve(
   extraTools: any[],
 ): string {
   systemMessage(systemPrompt, expires: "llmCall")
-  const prompt = """
-${withContext(task: task, context: context)}
-
-${finalizeReminder}
-"""
   return llm(
-    prompt,
+    withContext(task: task, context: context),
     llmOptions(
     model: model,
     provider: provider,

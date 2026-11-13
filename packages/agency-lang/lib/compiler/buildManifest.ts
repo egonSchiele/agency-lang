@@ -209,17 +209,30 @@ export function computeStdlibNamesHash(stdlibDir: string): string {
 // tsc-alias has rewritten every `@/` alias to a relative path by now.
 const RELATIVE_IMPORT = /(?:\bfrom\s*|\bimport\s*)["'](\.{1,2}\/[^"']+)["']/g;
 
+// A package import in compiled JS: `from "tarsec"` or `import "zod/v4"`.
+// The capture is the package name without the subpath. `node:fs` and
+// `./x.js` never match.
+const PACKAGE_IMPORT =
+  /(?:\bfrom\s*|\bimport\s*)["']((?:@[\w.-]+\/)?[\w-][\w.-]*)(?:\/[^"']*)?["']/g;
+
 function isFile(file: string): boolean {
   return fs.statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
 }
 
 /**
- * Content hash of the code `entryFile` runs: every module it reaches by
- * relative import, except those under `distLibDir/runtime/`. Only this code
- * can change what the entry emits, so an edit to the logs viewer or the TUI
- * does not rebuild every .agency file. Runtime modules are still walked, so
- * whatever they import is hashed. A match inside a string literal can only
- * add a file to the hash, which costs a rebuild, never a stale skip.
+ * Content hash of the code `entryFile` runs, plus the version of every npm
+ * package that code imports.
+ *
+ * The code is every module the entry reaches by relative import, except
+ * those under `distLibDir/runtime/`. Only this code can change what the
+ * entry emits, so an edit to the logs viewer or the TUI does not rebuild
+ * every .agency file. Runtime modules are still walked, so whatever they
+ * import is hashed. A match inside a string literal can only add a file to
+ * the hash, which costs a rebuild, never a stale skip.
+ *
+ * The versions are there because a package can change what the compiler
+ * emits without any file in dist/ changing. Upgrading tarsec, the parser
+ * library, is the example.
  *
  * A missing entry means it was renamed or moved, and a walk from it would
  * reach nothing, so every compiler edit would leave the stamp unchanged.
@@ -231,9 +244,13 @@ function isFile(file: string): boolean {
  * the writer and the checker both take this path and agree.
  */
 export function computeCompilerStamp(distLibDir: string, entryFile: string): string {
-  if (!isFile(entryFile)) {
-    return hashFiles(distLibDir, walkFiles(distLibDir, ".js", ["runtime", "agents"]));
-  }
+  const files = isFile(entryFile)
+    ? compilerModules(distLibDir, entryFile)
+    : walkFiles(distLibDir, ".js", ["runtime", "agents"]);
+  return hashBytes(hashFiles(distLibDir, files) + "\0" + packageVersions(distLibDir, files));
+}
+
+function compilerModules(distLibDir: string, entryFile: string): string[] {
   const reached: string[] = [];
   const queue = [entryFile];
   while (queue.length > 0) {
@@ -247,7 +264,50 @@ export function computeCompilerStamp(distLibDir: string, entryFile: string): str
     }
   }
   const runtimeDir = path.join(distLibDir, "runtime") + path.sep;
-  return hashFiles(distLibDir, reached.filter((f) => !f.startsWith(runtimeDir)).sort());
+  return reached.filter((f) => !f.startsWith(runtimeDir)).sort();
+}
+
+/**
+ * `name@version` for every installed npm package that `files` import, one
+ * per line, sorted. A name with no installed package is left out: a Node
+ * built-in such as `fs`, or a quoted word in a string that happens to look
+ * like an import.
+ */
+function packageVersions(distLibDir: string, files: string[]): string {
+  const names: string[] = [];
+  for (const file of files) {
+    for (const match of fs.readFileSync(file, "utf-8").matchAll(PACKAGE_IMPORT)) {
+      if (!names.includes(match[1])) {
+        names.push(match[1]);
+      }
+    }
+  }
+  const versions: string[] = [];
+  for (const name of names.sort()) {
+    const version = installedVersion(distLibDir, name);
+    if (version !== null) {
+      versions.push(`${name}@${version}`);
+    }
+  }
+  return versions.join("\n");
+}
+
+/** The version in the nearest `node_modules/<name>/package.json` at or
+ *  above `fromDir`, the same folders Node searches for a bare import. */
+function installedVersion(fromDir: string, name: string): string | null {
+  let dir = fromDir;
+  while (true) {
+    const manifest = path.join(dir, "node_modules", name, "package.json");
+    if (isFile(manifest)) {
+      const { version } = JSON.parse(fs.readFileSync(manifest, "utf-8"));
+      return typeof version === "string" ? version : null;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
 }
 
 export type FreshnessContext = {

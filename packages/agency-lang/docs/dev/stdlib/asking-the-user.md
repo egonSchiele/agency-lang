@@ -33,6 +33,12 @@ A rejected question still costs the model a round. A program that knows nobody c
 
 **Every place that offers `question` must take it from `communicationTools()`, and every prompt must take the hint from `askUserHint()`.** A bare `question` in a tool list, or `ASK_USER_HINT` spliced into a `static` prompt, stays there in a one-shot run. A `static` is built before any program can call the setter, which is why the hint is added where the prompt is sent: `systemMessage(systemPrompt + askUserHint())`.
 
+Three more rules follow from that one:
+
+1. **A static prompt must not name the tool.** A line such as "use `question` for something you cannot find" tells a one-shot model to call a tool it does not have. Say what to do without naming it, as the explorer's prompt does, and leave the naming to `askUserHint()`.
+2. **The hint goes to the call that carries the tool.** The planner's planning call offers `question`, so its prompt gets the hint. The call that writes the program does not offer it, and gets no hint.
+3. **Code with its own asking tool or its own rule about asking reads `userCanAnswer()`.** `designTool`'s author is the one case: it offers `askAndRecord` under the name `question`, to record the answers for the reviewer, and its brief has its own rule. `authorTools` and `askRule` in `stdlib/toolbox.agency` leave the tool out and swap the rule for "pick the most reasonable value, and say which one you picked" when nobody can answer. The coordinator reaches this code in a one-shot run through `writeToolFor`.
+
 ## Which agents have it, and the split to be careful about
 
 Most get it from `communicationTools()` in their own tool list: coding, github, explorer, planner, researcher, review, data, verifier, typescript/review and writing/review.

@@ -139,6 +139,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   ],
   "std::agents/lib/toolkits": [
     "setUserCanAnswer",
+    "userCanAnswer",
     "communicationTools",
     "askUserHint",
     "readOnlyFileTools",

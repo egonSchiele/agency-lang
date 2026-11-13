@@ -88,7 +88,7 @@ ${task}
 Plan:
 ${planText}
 
-${importableSurface}${askUserHint()}
+${importableSurface}
 
 ${planExample}
 
@@ -267,8 +267,10 @@ export def plannerAgent(
   let planText = plan
   if (plan == "") {
     thread(label: "plannerAgent", session: session) {
+      // The hint goes here because this is the call that carries the
+      // `question` tool. The call that writes the program does not.
       planText = llm(
-        "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}",
+        "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}${askUserHint()}",
         llmOptions(
         model: model,
         provider: provider,

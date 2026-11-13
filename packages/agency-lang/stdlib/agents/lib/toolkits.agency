@@ -128,6 +128,15 @@ export def setUserCanAnswer(canAnswer: boolean) {
   _userCanAnswer = canAnswer
 }
 
+/** For code that offers its own asking tool or writes its own rule about
+asking, and so cannot use `communicationTools()` or `askUserHint()`. */
+export def userCanAnswer(): boolean {
+  """
+  Return whether anyone can answer a question in this run. True unless a program called `setUserCanAnswer(false)`.
+  """
+  return _userCanAnswer
+}
+
 /** `question` raises an interrupt the host or a handler answers with a value.
 Use it in hosted as well as terminal agents. Approval policy rules cannot
 supply a question's reply. The list is empty after `setUserCanAnswer(false)`. */

@@ -18,6 +18,7 @@ import { question } from "std::agent"
 import { agencyCodingAgent } from "std::agents/agency/coding"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { llmOptions } from "std::agents/lib/shared"
+import { userCanAnswer } from "std::agents/lib/toolkits"
 import { now, format } from "std::date"
 import { mkdir, remove, move } from "std::fs"
 import { ls, exists } from "std::shell"
@@ -511,6 +512,30 @@ static const REQUEST_FOR_REVIEWER = "this type is fixed and a separate check has
 
 static const ASK_RULE = "- When the work depends on a fact the task does not give you, such as an address, an account, a provider, or the name of an environment variable, ask the user with the `question` tool before you write the draft. Do not search for the fact and do not invent it."
 
+// The rule for a run with nobody to ask, where the author has no
+// `question` tool.
+static const NO_ASK_RULE = "- When the work depends on a fact the task does not give you, such as an address, an account, a provider, or the name of an environment variable, nobody can be asked. Pick the most reasonable value, and say which one you picked in a comment beside it."
+
+def askRule(): string {
+  if (userCanAnswer()) {
+    return ASK_RULE
+  }
+  return NO_ASK_RULE
+}
+
+// The tools the author gets beside the coding agent's own. `question` is
+// left out when nobody can answer it.
+def authorTools(stagingDir: string, fromReviewer: boolean): any[] {
+  let tools: any[] = []
+  if (userCanAnswer()) {
+    tools.push(askAndRecord.partial(stagingDir: stagingDir).rename("question"))
+  }
+  if (fromReviewer) {
+    tools.push(cannotFix.partial(stagingDir: stagingDir))
+  }
+  return tools
+}
+
 // `drafted` is the draft the feedback is about, or "" when there is none.
 def feedbackSection(feedback: string, fromReviewer: boolean, drafted: string): string {
   if (feedback == "") {
@@ -571,7 +596,7 @@ def brief(
   return taskText(
     settings,
     REQUEST_FOR_AUTHOR,
-    ASK_RULE,
+    askRule(),
     ANSWERS_FOR_AUTHOR,
     feedbackSection(feedback, fromReviewer, drafted),
   )
@@ -808,10 +833,7 @@ def draftSource(
   // the review, and the points the user reads, are always ones the
   // author made about the draft in front of them.
   clearUnresolved(settings.stagingDir)
-  let extraTools: any[] = [askAndRecord.partial(stagingDir: settings.stagingDir).rename("question")]
-  if (fromReviewer) {
-    extraTools.push(cannotFix.partial(stagingDir: settings.stagingDir))
-  }
+  const extraTools = authorTools(settings.stagingDir, fromReviewer)
   const written = agencyCodingAgent(
     task: brief(settings, feedback, fromReviewer, drafted),
     requireMain: false,

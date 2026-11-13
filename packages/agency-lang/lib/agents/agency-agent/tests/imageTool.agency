@@ -18,8 +18,9 @@ node savesToAbsolutePath(): string {
 }
 
 node reportsWriteFailure(): boolean {
-  const msg = generateImageFile("x", "/nonexistent-dir-e51b/x.png") with approve
-  return msg.startsWith("Generated the image, but saving to /nonexistent-dir-e51b/x.png failed")
+  // `/dev/null` is not a folder, so no folder can be made there on any machine.
+  const msg = generateImageFile("x", "/dev/null/x.png") with approve
+  return msg.startsWith("Generated the image, but saving to /dev/null/x.png failed")
 }
 
 node editInputsResolveAgainstAgentCwd(): string {

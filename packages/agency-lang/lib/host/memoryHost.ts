@@ -168,6 +168,16 @@ function refuseFileOnTheWay(state: MemoryHostState, folder: string, operation: s
   }
 }
 
+/** A filename such as "." or "sub/.." names the root. Creating folders down
+ *  to it and writing would put a file where the directory goes. */
+function refuseDirItself(full: string, base: string, operation: string, filename: string): void {
+  if (full === base) {
+    throw new Error(
+      `${operation} refused: "${filename}" names the directory itself, not a file in it.`,
+    );
+  }
+}
+
 /** Mark `folder` and every folder above it as existing. */
 function makeFolders(state: MemoryHostState, folder: string, operation: string): void {
   refuseFileOnTheWay(state, folder, operation);
@@ -342,6 +352,7 @@ function locateIn(
     );
   }
   if (dirMayBeMissing) {
+    refuseDirItself(full, base, operation, filename);
     refuseFileOnTheWay(state, parentOf(full), operation);
   }
   return { dir: base, filename: full.slice(base.length + (base === "/" ? 0 : 1)) };
@@ -351,6 +362,18 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
   const store = memoryStore(state);
   const { resolve } = store;
   const locks: Record<string, Promise<void>> = {};
+  const writeUnder = (
+    root: Root,
+    target: string,
+    bytes: Uint8Array,
+    options: WriteOptions = {},
+  ): void => {
+    const full = resolve(root, target);
+    if (options.makeFolders) {
+      refuseDirItself(full, rootPath(root), "write", target);
+    }
+    store.write(full, bytes, options);
+  };
 
   return {
     root: async (dir) => {
@@ -419,9 +442,8 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       return { kind, size: state.files[full]?.length ?? 0, modifiedMs: state.clock.wallTime() };
     },
     writeText: async (root, target, content, options) =>
-      store.write(resolve(root, target), new TextEncoder().encode(content), options),
-    writeBytes: async (root, target, bytes, options) =>
-      store.write(resolve(root, target), bytes, options),
+      writeUnder(root, target, new TextEncoder().encode(content), options),
+    writeBytes: async (root, target, bytes, options) => writeUnder(root, target, bytes, options),
     // The read and the write are one synchronous step, so nothing can run
     // between them.
     updateText: async (root, target, change) => {
@@ -432,14 +454,14 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     openForWrite: async (root, target, options) => {
       const full = resolve(root, target);
       if (!state.files[full]) {
-        store.write(full, new Uint8Array(0), options);
+        store.write(full, new Uint8Array(0), { mode: options?.mode });
       }
       return store.openForWrite(full);
     },
     openForAppend: async (root, target, options) => {
       const full = resolve(root, target);
       if (!state.files[full]) {
-        store.write(full, new Uint8Array(0), options);
+        store.write(full, new Uint8Array(0), { mode: options?.mode });
       }
       return {
         append: async (data) => store.write(full, data, { mode: "append" }),

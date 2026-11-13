@@ -285,6 +285,22 @@ describe("writeText with makeFolders", () => {
     }
   });
 
+  // The refusal must not say whether something outside the dir is a file.
+  test("does not look through a link below the dir for a file on the way", () => {
+    const dir = makeDir(".ct-peek-");
+    const outside = makeDir(".ct-peek-out-");
+    try {
+      fs.writeFileSync(path.join(outside, "secret"), "x");
+      fs.symlinkSync(outside, path.join(dir, "link"));
+      const attempt = () => contained.locateSync(dir, "link/secret/sub.txt", "write", true);
+      expect(attempt).toThrow("is a symlink");
+      expect(attempt).not.toThrow("is a file");
+    } finally {
+      cleanup(dir);
+      cleanup(outside);
+    }
+  });
+
   test("makes the root and the folders inside the target", () => {
     const dir = makeDir(".ct-make-");
     try {

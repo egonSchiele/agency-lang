@@ -83,6 +83,35 @@ function registerFileTests(name: string, open: () => Workspace): void {
         expect((await host.files.stat(root, "item"))?.kind).toBe("file");
       }));
 
+    it("refuses a write whose filename names the directory itself", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await host.files.writeText(root, "item", "a file");
+        const asDir = path.posix.join(dir, "item");
+        const missing = path.posix.join(dir, "not-yet");
+        for (const name of [".", "sub/.."]) {
+          await expect(host.files.locate(asDir, name, "write", true)).rejects.toThrow();
+          await expect(host.files.locate(missing, name, "write", true)).rejects.toThrow(
+            "names the directory itself",
+          );
+          await expect(
+            host.files.writeText(await host.files.fixedRoot(missing), name, "x", {
+              makeFolders: true,
+            }),
+          ).rejects.toThrow("names the directory itself");
+        }
+        expect(await host.files.readText(root, "item")).toBe("a file");
+        expect(await host.files.stat(root, "not-yet")).toBeNull();
+      }));
+
+    it("creates no folders when opening a file", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await expect(host.files.openForWrite(root, "gone/f.bin")).rejects.toThrow();
+        await expect(host.files.openForAppend(root, "gone/f.log")).rejects.toThrow();
+        expect(await host.files.stat(root, "gone")).toBeNull();
+      }));
+
     it("lists, stats, makes, and removes directories", () =>
       withWorkspace(async ({ host, dir }) => {
         const root = await host.files.root(dir);

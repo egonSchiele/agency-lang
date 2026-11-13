@@ -219,7 +219,7 @@ export function locateSync(
   if (dirMayBeMissing) {
     const folder = path.dirname(path.resolve(realRoot.real, filename));
     if (isContained(folder, realRoot.real)) {
-      refuseFileOnTheWay(folder, operation);
+      refuseFileBelow(realRoot.real, folder, operation);
     }
   }
   let resolved: string;
@@ -227,6 +227,9 @@ export function locateSync(
     resolved = resolveUnder(realRoot, filename);
   } catch (error) {
     throw new Error(`${operation} ${teachEscape(operation, (error as Error).message)}`);
+  }
+  if (dirMayBeMissing && resolved === realRoot.real) {
+    throw new Error(dirItselfMessage(operation, filename));
   }
   return { dir: realRoot.real, filename: path.relative(realRoot.real, resolved) };
 }
@@ -269,6 +272,8 @@ export type WriteOptions = {
   makeFolders?: boolean;
   seams?: Seams;
 };
+/** The open operations create no folders, so they take no `makeFolders`. */
+export type OpenOptions = Omit<WriteOptions, "makeFolders">;
 
 const DEFAULT_FILE_MODE = 0o644;
 const NO_FOLLOW = fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
@@ -392,7 +397,7 @@ export type AppendableFile = {
 export function openForAppend(
   root: Root,
   target: string,
-  options: WriteOptions = {},
+  options: OpenOptions = {},
 ): AppendableFile {
   const resolved = resolveUnder(root, target);
   const fd = appendDescriptor(root, resolved, options.fileMode ?? DEFAULT_FILE_MODE);
@@ -424,9 +429,53 @@ export function openForAppend(
  *  and the write that follows. */
 function makeFoldersFor(root: Root, target: string): void {
   fixedRoot(root.real);
-  const folder = path.dirname(resolveUnder(root, target));
+  const resolved = resolveUnder(root, target);
+  if (resolved === root.real) {
+    throw new Error(dirItselfMessage("write", target));
+  }
+  const folder = path.dirname(resolved);
   refuseFileOnTheWay(folder, "write");
   fs.mkdirSync(folder, { recursive: true });
+}
+
+/** A filename such as "." or "sub/.." names the root. Creating folders
+ *  down to it and writing would put a file where the directory goes. */
+function dirItselfMessage(operation: "read" | "write", filename: string): string {
+  return `${operation} refused: "${filename}" names the directory itself, not a file in it.`;
+}
+
+/** `refuseFileOnTheWay` for the part of a path below a real root. It walks
+ *  down from the root and never looks through a link: at one it stops, and
+ *  `resolveUnder` refuses the link. Walking up with `stat` would follow the
+ *  link and say whether something outside the root is a file. */
+function refuseFileBelow(realRoot: string, folder: string, operation: "read" | "write"): void {
+  const relative = path.relative(realRoot, folder);
+  if (relative === "") {
+    return;
+  }
+  let current = realRoot;
+  for (const segment of relative.split(path.sep)) {
+    current = path.join(current, segment);
+    let info: Stats;
+    try {
+      info = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+    if (info.isSymbolicLink()) {
+      return;
+    }
+    if (!info.isDirectory()) {
+      throw new Error(fileOnTheWayMessage(operation, current));
+    }
+  }
+}
+
+function fileOnTheWayMessage(operation: "read" | "write", file: string): string {
+  return `${operation} refused: "${file}" is a file, so no folder can be made there.`;
 }
 
 /** Throw when `folder`, or the nearest thing above it that exists, is not a
@@ -450,9 +499,7 @@ function refuseFileOnTheWay(folder: string, operation: "read" | "write"): void {
     }
     if (info !== null) {
       if (!info.isDirectory()) {
-        throw new Error(
-          `${operation} refused: "${current}" is a file, so no folder can be made there.`,
-        );
+        throw new Error(fileOnTheWayMessage(operation, current));
       }
       return;
     }
@@ -495,7 +542,7 @@ export type WritableFile = {
 
 /** Open an existing regular file for read-write, or create it, through
  *  the same validated descriptor as every other write. */
-export function openForWrite(root: Root, target: string, options: WriteOptions = {}): WritableFile {
+export function openForWrite(root: Root, target: string, options: OpenOptions = {}): WritableFile {
   const resolved = resolveUnder(root, target);
   const fd = openOrCreate(
     root,

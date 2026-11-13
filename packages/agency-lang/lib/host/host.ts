@@ -65,6 +65,8 @@ export type WriteMode = (typeof WRITE_MODES)[number];
  *  is missing, the root included, in the same step as the write: no other
  *  call runs between the check of the root, the creation, and the write. */
 export type WriteOptions = { mode?: WriteMode; fileMode?: number; makeFolders?: boolean };
+/** The open operations create no folders, so they take no `makeFolders`. */
+export type OpenOptions = Omit<WriteOptions, "makeFolders">;
 
 /** An open file for writes at positions, from `openForWrite`. */
 export type WritableFile = {
@@ -136,10 +138,10 @@ export type HostFiles = {
    *  exist), and write the result. No other call on the same file runs
    *  between the read and the write. */
   updateText(root: Root, target: string, change: (current: string | null) => string): Promise<void>;
-  openForWrite(root: Root, target: string, options?: WriteOptions): Promise<WritableFile>;
+  openForWrite(root: Root, target: string, options?: OpenOptions): Promise<WritableFile>;
   /** A file kept open for appends, for a writer that adds a line at a
    *  time. Two handles on one file never write over each other. */
-  openForAppend(root: Root, target: string, options?: WriteOptions): Promise<AppendableFile>;
+  openForAppend(root: Root, target: string, options?: OpenOptions): Promise<AppendableFile>;
   mkdir(root: Root, target: string): Promise<void>;
   remove(root: Root, target: string): Promise<void>;
   copy(from: Located, to: Located): Promise<void>;

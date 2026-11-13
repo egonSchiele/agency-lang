@@ -1,0 +1,53 @@
+import { buildTools } from "std::agents/coding"
+
+def toolNamed(name: string): any {
+  for (tool in buildTools()) {
+    if (tool.name == name) {
+      return tool
+    }
+  }
+  return null
+}
+
+// The coder offers safeBash as `bash`, and no tool keeps the old name.
+node shellToolIsNamedBash() {
+  const names = [tool.name for tool in buildTools()]
+  return [names.includes("bash"), names.includes("safeBash")]
+}
+
+// A file of several thousand lines, read with no test fixture to keep.
+static const STDLIB = __dirname + "/../../../stdlib"
+
+// With no limit the coder's read returns 2000 lines and a last line that
+// says how many the file has. A limit the model gives is used as given.
+node readStopsAt2000Lines() {
+  const readTool = toolNamed("read")
+  handle {
+    const whole = readTool(filename: "safeBash.agency", dir: STDLIB)
+    const few = readTool(filename: "safeBash.agency", dir: STDLIB, limit: 3)
+    if (isFailure(whole) || isFailure(few)) {
+      return "FAILED"
+    }
+    const lines = whole.value.split("\n")
+    const fewLines = few.value.split("\n")
+    return [
+      lines.length,
+      lines[lines.length - 1].startsWith("... [truncated: showing 1-2000 of "),
+      fewLines.length,
+      fewLines[fewLines.length - 1].startsWith("... [truncated: showing 1-3 of "),
+    ]
+  } with approve
+}
+
+// The coder's write always overwrites: `mode` is bound, so a call that
+// names it is refused before anything is written.
+node writeTakesNoMode() {
+  const writeTool = toolNamed("write")
+  handle {
+    const result = try writeTool(filename: "never-written.txt", content: "x", dir: __dirname, mode: "append")
+    if (result is failure(why)) {
+      return why.includes("mode")
+    }
+    return "ACCEPTED A MODE"
+  } with reject
+}

@@ -355,6 +355,8 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
 
   // Shell
   safeBash: summary("Run", (a) => [text(a.command)], true, "none", safeBashFailure),
+  // The coding agent offers safeBash under this name.
+  bash: summary("Run", (a) => [text(a.command)], true, "none", safeBashFailure),
   exec: two("Run", (a) => [text(a.command), text(a.args)], exitCode),
   readSpill: one("Read", (a, lookup) => [spillOutput(a.filename, lookup), lineRange(a)]),
   grepSpill: one(

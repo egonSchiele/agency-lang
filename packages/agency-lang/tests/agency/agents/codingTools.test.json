@@ -1,0 +1,7 @@
+{
+  "tests": [
+    { "nodeName": "shellToolIsNamedBash", "description": "the coding agent offers safeBash under the name bash, and offers nothing named safeBash", "input": "", "expectedOutput": "[true,false]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "readStopsAt2000Lines", "description": "with no limit the coding agent's read returns 2000 lines and a last line giving the file's length; a limit the model gives is used as given", "input": "", "expectedOutput": "[2001,true,4,true]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "writeTakesNoMode", "description": "the coding agent's write has no mode parameter, so a call that names one is refused", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

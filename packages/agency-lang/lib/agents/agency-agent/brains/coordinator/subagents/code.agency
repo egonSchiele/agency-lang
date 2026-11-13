@@ -22,7 +22,6 @@ import { ensureSystemMessage } from "std::thread"
 
 import { AGENT_SOURCE_DIR } from "../../../lib/agentSource.agency"
 import { globalInstructionsText } from "../../../lib/globalInstructions.agency"
-import { getSearchBackend } from "../../../lib/search.agency"
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
 
@@ -92,11 +91,9 @@ ${agencyTutorial}
 </agency_tutorial>
 """
 
-// Passed as context in one-shot / autonomous mode (`agency agent -p`)
-static const ONE_SHOT_NOTE = promptFile("oneShot.md")
-
 // Set by the coordinator (`setCodeOneShot`) before the first dispatch when
-// the run is non-interactive. Gates `ONE_SHOT_NOTE`.
+// the run is non-interactive (`agency agent -p`). Gates the reply style
+// and the job tools.
 let _oneShot = false
 
 export def setCodeOneShot(oneShot: boolean) {
@@ -131,20 +128,14 @@ export static const agencyCodeAgentTools: any[] = [...codingAgentTools(), ...age
 
 static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown, and put code and command output in fenced code blocks."
 
-// The stdlib coding prompt tells the model it has web search.
-static const SEARCH_OFF_NOTE = "Web search is turned off for this session. Do not plan on searching the web."
-
-// An unattended run has no reader for a formatted reply and no next turn,
-// and oneShot.md holds the rules for working that way.
+// The user's own instructions (AGENTS.md) always go to the coder. The reply
+// style goes only to an interactive run: an unattended run has no reader
+// for a formatted reply.
 def dispatchContext(): string {
-  let style = REPL_STYLE
   if (_oneShot) {
-    style = ONE_SHOT_NOTE
+    return globalInstructionsText()
   }
-  if (getSearchBackend() == "off") {
-    style = "${style}\n\n${SEARCH_OFF_NOTE}"
-  }
-  return "${style}\n\n${globalInstructionsText()}"
+  return "${REPL_STYLE}\n\n${globalInstructionsText()}"
 }
 
 // Both coders are the stdlib coding agent. They differ in the tools they add.

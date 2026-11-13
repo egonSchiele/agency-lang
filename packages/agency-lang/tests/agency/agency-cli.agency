@@ -1,6 +1,7 @@
 // std::agency cli(): an `agency` command line run as function calls.
 import { cli, cliHandles } from "std::agency"
 import { mkdir } from "std::fs"
+import { safeBash } from "std::safeBash"
 
 const SOLUTION = """
 export def add(a: number, b: number): number {
@@ -60,6 +61,20 @@ export node testRunsTheHarness(): string {
     return "unreachable"
   } with approve
   return "unreachable"
+}
+
+// The same command through safeBash fails with the diagnostics and then the
+// status line a bash command's failure ends with, which the agent's trace
+// reads.
+export node safeBashFailureEndsWithExitCode(): any[] {
+  const dir = "./.cli-safebash-typecheck"
+  seed(dir)
+  const result = safeBash("agency typecheck bad.agency", cwd: dir) with approve
+  if (result is failure(why)) {
+    const lines = why.split("\n")
+    return [why.includes("error AG"), lines[lines.length - 1]]
+  }
+  return ["NOT A FAILURE"]
 }
 
 export node typecheckReportsErrors(): string {

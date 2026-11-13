@@ -1,4 +1,4 @@
-.PHONY: all ci test stdlib agents generated-data doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency examples eval-image
+.PHONY: all ci test stdlib agents generated-data doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency compile-agency-code slow-steps stdlib-docs examples eval-image
 
 # Resolve tsc/tsc-alias from the workspace, not from whatever happens to
 # be global. Historically `make build` was only ever reached via
@@ -40,7 +40,17 @@ define stage-stdlib-docs
 endef
 
 all:
-	pnpm run templates && $(MAKE) build && $(MAKE) generated-data && $(MAKE) diagnostics-docs && $(MAKE) compile-agency && $(MAKE) doc && $(MAKE) examples
+	pnpm run templates && $(MAKE) build && $(MAKE) generated-data && $(MAKE) diagnostics-docs && $(MAKE) -j3 slow-steps && $(MAKE) stdlib-docs
+
+# The three slowest steps of `all`. None of them reads a file another one
+# writes, so `all` runs them at the same time, and their output lines
+# interleave.
+slow-steps: compile-agency-code doc examples
+
+# Copy the doc pages into the stdlib. `all` runs this after `doc`, so the
+# copy has the pages `doc` just wrote, not the ones from the last build.
+stdlib-docs:
+	$(stage-stdlib-docs)
 
 # What CI test jobs need: `all` without `doc` and `examples`, which only
 # regenerate tracked pages under docs/site/ and take about 20s on a CI
@@ -116,9 +126,11 @@ clean:
 # the stdlib prelude (imported by every one of the 94 files) is parsed
 # once instead of once per invocation. This is the load-bearing lever for
 # the Stage C warm-make target.
-compile-agency:
+compile-agency-code:
 	$(stage-agent-sources)
 	node ./dist/scripts/agency.js compile stdlib/ $(AGENT_PATHS)
+
+compile-agency: compile-agency-code
 	$(stage-stdlib-docs)
 
 # Two TypeScript data files made from the stdlib, so the runtime reads

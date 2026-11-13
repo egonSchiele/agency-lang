@@ -4,7 +4,27 @@
     {
       "nodeName": "unknownModelGetsDefaults",
       "input": "",
-      "expectedOutput": "\"true/true/20000/default\"",
+      "expectedOutput": "\"true/true/64000/default\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "catalogModelGetsItsOwnLimit",
+      "input": "",
+      "expectedOutput": "[true,true,\"catalog\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "providerAndModelLayersBeatTheCatalog",
+      "input": "",
+      "expectedOutput": "\"20000/provider/131072/model\"",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -36,6 +36,9 @@ def capabilitySourceLabel(source: string): string {
   if (source == "default") {
     return "built-in default"
   }
+  if (source == "catalog") {
+    return "the model's own limit"
+  }
   if (source == "provider") {
     return "provider default: ${getCapabilityProvider()}"
   }

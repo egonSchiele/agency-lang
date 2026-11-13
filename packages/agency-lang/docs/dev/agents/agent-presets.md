@@ -124,6 +124,24 @@ limits have fields of their own, `reasoningEffort` comes from the effort
 rule below, and `maxTokens` comes from the capabilities settings. `rawAttributes` is
 refused until smoltalk stops it from replacing the model (smoltalk#73).
 
+The default `maxTokens` is resolved in `resolveCapabilities`
+(`lib/capabilities.agency`), lowest layer first:
+
+1. 64,000, for a model the model catalog does not know. Most models
+   reached through OpenRouter are in this case.
+2. The model's own output limit, when the catalog has one
+   (`hostedModelInfo(name).maxOutputTokens`).
+3. The provider's entry in `PROVIDER_CAPABILITIES`. Anthropic is held to
+   20,000, because its client refuses a non-streaming request above 21,333
+   and the agent does not stream. A local provider keeps a small cap.
+4. The model's entry in `MODEL_CAPABILITIES`, for a model whose limit is
+   known and is not in the catalog, such as the GLM 5.3 family at 131,072.
+
+The user's `capabilities` settings come after all four. A cap above the
+model's real limit can be refused by the provider, so add a model to
+`MODEL_CAPABILITIES` when its limit is below 64,000 and the catalog does
+not have it.
+
 `requestLlmOptions` picks the block: the session's, then the preset's, then
 `settings.model`'s. The first one set wins whole, and blocks never merge,
 because each was written for its own models. For the same reason, a model

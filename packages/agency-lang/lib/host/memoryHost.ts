@@ -292,12 +292,13 @@ function locateIn(
   dir: string,
   filename: string,
   operation: "read" | "write",
+  dirMayBeMissing: boolean = false,
 ): { dir: string; filename: string } {
   if (dir.trim() === "") {
     throw new Error(`${operation} refused: dir must not be empty.`);
   }
   const base = absolute(cwd, dir);
-  if (!state.dirs[base]) {
+  if (!dirMayBeMissing && !state.dirs[base]) {
     throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
   }
   let full: string;
@@ -344,8 +345,8 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     },
     realPath: async (p) => absolute(cwd, p),
     resolvePath: async (root, target) => resolve(root, target),
-    locate: async (dir, filename, operation) =>
-      locateIn(state, store, cwd, dir, filename, operation),
+    locate: async (dir, filename, operation, dirMayBeMissing) =>
+      locateIn(state, store, cwd, dir, filename, operation, dirMayBeMissing),
     withLock: async (root, target, work) => {
       const key = resolve(root, target);
       const previous = locks[key] ?? Promise.resolve();

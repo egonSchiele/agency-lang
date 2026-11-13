@@ -15,7 +15,9 @@ export type FileOperation = "read" | "write";
  * or `write`. The result feeds both the interrupt payload and the
  * operation, so both see the same spelling: `dir` is the real directory
  * and `filename` is the normalized relative path. An escape, or a symlink
- * below dir, throws before any interrupt exists.
+ * below dir, throws before any interrupt exists. So does a `dir` that does
+ * not exist, unless `dirMayBeMissing` is true: `write` passes it, because
+ * it creates the folders it needs once the write is approved.
  *
  * The host's `locate` runs its steps in one piece: this runs between a
  * wrapper's call and its interrupt, and a real wait there would hand the
@@ -25,9 +27,10 @@ export async function prepareContainedPath(
   dir: string,
   filename: string,
   operation: FileOperation,
+  dirMayBeMissing: boolean = false,
 ): Promise<ContainedPath> {
   const host = currentHost();
-  return host.files.locate(dir, filename, operation);
+  return host.files.locate(dir, filename, operation, dirMayBeMissing);
 }
 
 export type TildeMode = "expand" | "literal";

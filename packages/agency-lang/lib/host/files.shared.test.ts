@@ -113,6 +113,14 @@ function registerFileTests(name: string, open: () => Workspace): void {
         await expect(host.files.locate(path.posix.join(dir, "nope"), "f", "read")).rejects.toThrow(
           "does not exist",
         );
+        // A write refuses a missing dir too, unless it says it will create it.
+        await expect(host.files.locate(path.posix.join(dir, "nope"), "f", "write")).rejects.toThrow(
+          "does not exist",
+        );
+        const toCreate = await host.files.locate(path.posix.join(dir, "nope"), "f", "write", true);
+        expect(toCreate.filename).toBe("f");
+        expect(toCreate.dir.endsWith("/nope")).toBe(true);
+        expect(await host.files.stat(await host.files.root(dir), "nope")).toBeNull();
       }));
 
     it("updateText loses neither of two overlapping updates", () =>

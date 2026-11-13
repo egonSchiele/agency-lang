@@ -191,19 +191,22 @@ export function wholePath(p: string): Located {
  *  operation such as `read` or `write`: `dir` is the real directory and
  *  `filename` the normalized relative path, so the payload and the
  *  operation see one spelling. An escape, a missing directory, or a symlink
- *  below dir throws before any interrupt exists. Synchronous throughout: it
+ *  below dir throws before any interrupt exists. With `dirMayBeMissing`, a
+ *  missing directory is accepted and spelled under its nearest real
+ *  ancestor, for a write that creates it. Synchronous throughout: it
  *  runs between a wrapper's call and its interrupt, and a real wait there
  *  would hand the event loop to a concurrent branch. */
 export function locateSync(
   dir: string,
   filename: string,
   operation: "read" | "write",
+  dirMayBeMissing: boolean = false,
 ): { dir: string; filename: string } {
   if (dir.trim() === "") {
     throw new Error(`${operation} refused: dir must not be empty.`);
   }
   const realRoot = root(dir);
-  if (stat(realRoot, ".") === null) {
+  if (!dirMayBeMissing && stat(realRoot, ".") === null) {
     throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
   }
   let resolved: string;

@@ -242,7 +242,7 @@ export def write(
   useAgentCwd: boolean = false,
 ): Result raises <std::write> {
   """
-  Write content to a file.
+  Write content to a file. Folders in the path that do not exist are created.
 
   @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
@@ -252,7 +252,7 @@ export def write(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  const prepared = try _prepareContainedPath(dir, filename, "write")
+  const prepared = try _prepareContainedPath(dir, filename, "write", true)
   if (isFailure(prepared)) {
     return prepared
   }
@@ -276,7 +276,7 @@ export def writeBinary(
   useAgentCwd: boolean = false,
 ): Result raises <std::writeBinary> {
   """
-  Decode base64 data and write the bytes to a file.
+  Decode base64 data and write the bytes to a file. Folders in the path that do not exist are created.
 
   @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
@@ -286,7 +286,7 @@ export def writeBinary(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  const prepared = try _prepareContainedPath(dir, filename, "write")
+  const prepared = try _prepareContainedPath(dir, filename, "write", true)
   if (isFailure(prepared)) {
     return prepared
   }

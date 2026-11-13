@@ -36,7 +36,8 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
     fixedPath: async (p) => files.fixedPath(p),
     realPath: async (p) => files._realTarget(p),
     resolvePath: async (root, target) => files.resolveUnder(root, target),
-    locate: async (dir, filename, operation) => files.locateSync(dir, filename, operation),
+    locate: async (dir, filename, operation, dirMayBeMissing) =>
+      files.locateSync(dir, filename, operation, dirMayBeMissing),
     withLock: async (root, target, work) => {
       const key = files.resolveUnder(root, target);
       const previous = locks[key] ?? Promise.resolve();

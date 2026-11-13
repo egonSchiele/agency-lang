@@ -1,6 +1,8 @@
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict, encodeBase64 } from "./base64.js";
-import type { WriteMode } from "../host/host.js";
+import path from "#path";
+import type { Host, WriteMode } from "../host/host.js";
+import type { Root } from "../host/roots.js";
 export type { WriteMode } from "../host/host.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
@@ -218,8 +220,18 @@ export async function _write(
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
   const host = currentHost();
-  await host.files.writeText(await host.files.fixedRoot(rootDir), filename, content, { mode });
+  const root = await host.files.fixedRoot(rootDir);
+  await makeFolderFor(host, root, filename);
+  await host.files.writeText(root, filename, content, { mode });
   return true;
+}
+
+/** Create the folder a file is about to be written into, and any folder
+ *  above it that is missing, the approved directory included. The write was
+ *  approved by its whole path, and `mkdir` refuses a symlink below the
+ *  root as every contained operation does. */
+async function makeFolderFor(host: Host, root: Root, filename: string): Promise<void> {
+  await host.files.mkdir(root, path.dirname(filename));
 }
 
 export async function _writeBinary(
@@ -236,7 +248,9 @@ export async function _writeBinary(
     // Add the operation context to the shared decoder's message.
     throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  await host.files.writeBytes(await host.files.fixedRoot(rootDir), filename, bytes, { mode });
+  const root = await host.files.fixedRoot(rootDir);
+  await makeFolderFor(host, root, filename);
+  await host.files.writeBytes(root, filename, bytes, { mode });
   return true;
 }
 

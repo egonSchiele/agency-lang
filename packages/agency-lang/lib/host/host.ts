@@ -106,11 +106,14 @@ export type HostFiles = {
   resolvePath(root: Root, target: string): Promise<string>;
   /** The `dir` and `filename` an interrupt payload shows for a single-file
    *  operation. Runs its steps in one piece, with no await between them,
-   *  because it runs between a wrapper's call and its interrupt. */
+   *  because it runs between a wrapper's call and its interrupt. A missing
+   *  `dir` is refused unless `dirMayBeMissing` is true, which a write that
+   *  creates its own folders passes. */
   locate(
     dir: string,
     filename: string,
     operation: "read" | "write",
+    dirMayBeMissing?: boolean,
   ): Promise<{ dir: string; filename: string }>;
   /** Hold a lock on one path for the length of `work`. The lock belongs
    *  to the host, so it covers every run that shares it. */

@@ -1,0 +1,60 @@
+// write and writeBinary create the folders their path needs, after the
+// write is approved and never before.
+import { edit } from "std::fs"
+import { exists } from "std::shell"
+
+// A folder that does not exist yet, different on every run. Nothing here
+// deletes it: the tests only ever add files under /tmp.
+def freshDir(label: string): string {
+  return "/tmp/agency-write-folders-${label}-${Math.floor(Math.random() * 1000000000)}"
+}
+
+// Neither `dir` nor the folders inside `filename` exist. The write makes
+// all of them and the file reads back.
+node writeMakesMissingFolders(): any[] {
+  const dir = freshDir("text")
+  const written = write("a/b/c.txt", "deep", dir) with approve
+  const back = read("a/b/c.txt", dir) with approve
+  if (isFailure(back)) {
+    return [isSuccess(written), "READ FAILED"]
+  }
+  return [isSuccess(written), back.value]
+}
+
+node writeBinaryMakesMissingFolders(): any[] {
+  const dir = freshDir("binary")
+  const written = writeBinary("x/y.bin", "AQIDBA==", dir) with approve
+  const back = readBinary("x/y.bin", dir) with approve
+  if (isFailure(back)) {
+    return [isSuccess(written), "READ FAILED"]
+  }
+  return [isSuccess(written), back.value]
+}
+
+// The approver sees the folder that will be created, and a rejected write
+// creates nothing.
+node rejectedWriteMakesNoFolder(): any[] {
+  const dir = freshDir("rejected")
+  let shown = ""
+  handle {
+    write("a/b.txt", "no", dir)
+  } with (intr) {
+    shown = "${intr.data.dir}"
+    return reject()
+  }
+  return [shown.endsWith(dir.split("/tmp")[1]), exists(dir)]
+}
+
+// Only a write creates folders. An edit of a file in a missing folder is
+// still refused before anyone is asked.
+node editStillRefusesAMissingFolder(): string {
+  const dir = freshDir("edit")
+  const result = edit("f.txt", [{ oldText: "a", newText: "b", replaceAll: false }], dir) with approve
+  if (result is failure(why)) {
+    if (why.includes("does not exist")) {
+      return "refused"
+    }
+    return why
+  }
+  return "NOT REFUSED"
+}

@@ -150,6 +150,41 @@ function baseOf(p: string): string {
   return p.slice(p.lastIndexOf("/") + 1);
 }
 
+/** Throw when `folder`, or anything above it, is a file. The Node host
+ *  refuses to make a folder under a file, and this host must agree. */
+function refuseFileOnTheWay(state: MemoryHostState, folder: string, operation: string): void {
+  let current = folder;
+  while (true) {
+    if (state.files[current]) {
+      throw new Error(
+        `${operation} refused: "${current}" is a file, so no folder can be made there.`,
+      );
+    }
+    const parent = parentOf(current);
+    if (parent === current) {
+      return;
+    }
+    current = parent;
+  }
+}
+
+/** A filename such as "." or "sub/.." names the root. Creating folders down
+ *  to it and writing would put a file where the directory goes. */
+function refuseDirItself(full: string, base: string, operation: string, filename: string): void {
+  if (full === base) {
+    throw new Error(
+      `${operation} refused: "${filename}" names the directory itself, not a file in it.`,
+    );
+  }
+}
+
+/** Mark `folder` and every folder above it as existing. */
+function makeFolders(state: MemoryHostState, folder: string, operation: string): void {
+  refuseFileOnTheWay(state, folder, operation);
+  state.dirs[folder] = true;
+  addParents(state, folder);
+}
+
 function addParents(state: MemoryHostState, p: string): void {
   let current = parentOf(p);
   while (!state.dirs[current]) {
@@ -199,6 +234,9 @@ function memoryStore(state: MemoryHostState) {
   };
   const write = (full: string, bytes: Uint8Array, options: WriteOptions = {}): void => {
     const mode = options.mode ?? "overwrite";
+    if (options.makeFolders) {
+      makeFolders(state, parentOf(full), "write");
+    }
     if (state.dirs[full])
       throw new Error(`EISDIR: illegal operation on a directory, open '${full}'`);
     if (!state.dirs[parentOf(full)]) {
@@ -292,12 +330,13 @@ function locateIn(
   dir: string,
   filename: string,
   operation: "read" | "write",
+  dirMayBeMissing: boolean = false,
 ): { dir: string; filename: string } {
   if (dir.trim() === "") {
     throw new Error(`${operation} refused: dir must not be empty.`);
   }
   const base = absolute(cwd, dir);
-  if (!state.dirs[base]) {
+  if (!dirMayBeMissing && !state.dirs[base]) {
     throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
   }
   let full: string;
@@ -312,6 +351,10 @@ function locateIn(
       )}`,
     );
   }
+  if (dirMayBeMissing) {
+    refuseDirItself(full, base, operation, filename);
+    refuseFileOnTheWay(state, parentOf(full), operation);
+  }
   return { dir: base, filename: full.slice(base.length + (base === "/" ? 0 : 1)) };
 }
 
@@ -319,6 +362,18 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
   const store = memoryStore(state);
   const { resolve } = store;
   const locks: Record<string, Promise<void>> = {};
+  const writeUnder = (
+    root: Root,
+    target: string,
+    bytes: Uint8Array,
+    options: WriteOptions = {},
+  ): void => {
+    const full = resolve(root, target);
+    if (options.makeFolders) {
+      refuseDirItself(full, rootPath(root), "write", target);
+    }
+    store.write(full, bytes, options);
+  };
 
   return {
     root: async (dir) => {
@@ -344,8 +399,8 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     },
     realPath: async (p) => absolute(cwd, p),
     resolvePath: async (root, target) => resolve(root, target),
-    locate: async (dir, filename, operation) =>
-      locateIn(state, store, cwd, dir, filename, operation),
+    locate: async (dir, filename, operation, dirMayBeMissing) =>
+      locateIn(state, store, cwd, dir, filename, operation, dirMayBeMissing),
     withLock: async (root, target, work) => {
       const key = resolve(root, target);
       const previous = locks[key] ?? Promise.resolve();
@@ -387,9 +442,8 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       return { kind, size: state.files[full]?.length ?? 0, modifiedMs: state.clock.wallTime() };
     },
     writeText: async (root, target, content, options) =>
-      store.write(resolve(root, target), new TextEncoder().encode(content), options),
-    writeBytes: async (root, target, bytes, options) =>
-      store.write(resolve(root, target), bytes, options),
+      writeUnder(root, target, new TextEncoder().encode(content), options),
+    writeBytes: async (root, target, bytes, options) => writeUnder(root, target, bytes, options),
     // The read and the write are one synchronous step, so nothing can run
     // between them.
     updateText: async (root, target, change) => {
@@ -400,14 +454,14 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     openForWrite: async (root, target, options) => {
       const full = resolve(root, target);
       if (!state.files[full]) {
-        store.write(full, new Uint8Array(0), options);
+        store.write(full, new Uint8Array(0), { mode: options?.mode });
       }
       return store.openForWrite(full);
     },
     openForAppend: async (root, target, options) => {
       const full = resolve(root, target);
       if (!state.files[full]) {
-        store.write(full, new Uint8Array(0), options);
+        store.write(full, new Uint8Array(0), { mode: options?.mode });
       }
       return {
         append: async (data) => store.write(full, data, { mode: "append" }),
@@ -415,9 +469,7 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       };
     },
     mkdir: async (root, target) => {
-      const full = resolve(root, target);
-      state.dirs[full] = true;
-      addParents(state, full);
+      makeFolders(state, resolve(root, target), "mkdir");
     },
     remove: async (root, target) => store.removeTree(resolve(root, target)),
     copy: async (from: Located, to: Located) => {

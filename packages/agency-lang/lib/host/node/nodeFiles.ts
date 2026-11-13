@@ -191,26 +191,45 @@ export function wholePath(p: string): Located {
  *  operation such as `read` or `write`: `dir` is the real directory and
  *  `filename` the normalized relative path, so the payload and the
  *  operation see one spelling. An escape, a missing directory, or a symlink
- *  below dir throws before any interrupt exists. Synchronous throughout: it
+ *  below dir throws before any interrupt exists. With `dirMayBeMissing`, a
+ *  missing directory is accepted and spelled under its nearest real
+ *  ancestor, for a write that creates it. Synchronous throughout: it
  *  runs between a wrapper's call and its interrupt, and a real wait there
  *  would hand the event loop to a concurrent branch. */
 export function locateSync(
   dir: string,
   filename: string,
   operation: "read" | "write",
+  dirMayBeMissing: boolean = false,
 ): { dir: string; filename: string } {
   if (dir.trim() === "") {
     throw new Error(`${operation} refused: dir must not be empty.`);
   }
+  // With `dirMayBeMissing` the caller will create folders down to the file.
+  // The two checks below say, before anyone is asked, that a file stands
+  // where a folder would go. They run ahead of `root` and `resolveUnder`,
+  // which would report the same thing as a bare ENOTDIR.
+  if (dirMayBeMissing) {
+    refuseFileOnTheWay(path.resolve(process.cwd(), expandPath(dir, os.homedir())), operation);
+  }
   const realRoot = root(dir);
-  if (stat(realRoot, ".") === null) {
+  if (!dirMayBeMissing && stat(realRoot, ".") === null) {
     throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
+  }
+  if (dirMayBeMissing) {
+    const folder = path.dirname(path.resolve(realRoot.real, filename));
+    if (isContained(folder, realRoot.real)) {
+      refuseFileBelow(realRoot.real, folder, operation);
+    }
   }
   let resolved: string;
   try {
     resolved = resolveUnder(realRoot, filename);
   } catch (error) {
     throw new Error(`${operation} ${teachEscape(operation, (error as Error).message)}`);
+  }
+  if (dirMayBeMissing && resolved === realRoot.real) {
+    throw new Error(dirItselfMessage(operation, filename));
   }
   return { dir: realRoot.real, filename: path.relative(realRoot.real, resolved) };
 }
@@ -247,7 +266,14 @@ export type WriteMode = (typeof WRITE_MODES)[number];
  *  descriptor, where a concurrent swap would land. */
 export type Seams = { afterOpen?: () => void };
 
-export type WriteOptions = { mode?: WriteMode; fileMode?: number; seams?: Seams };
+export type WriteOptions = {
+  mode?: WriteMode;
+  fileMode?: number;
+  makeFolders?: boolean;
+  seams?: Seams;
+};
+/** The open operations create no folders, so they take no `makeFolders`. */
+export type OpenOptions = Omit<WriteOptions, "makeFolders">;
 
 const DEFAULT_FILE_MODE = 0o644;
 const NO_FOLLOW = fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
@@ -328,6 +354,9 @@ export function writeBytes(
   if (!WRITE_MODES.includes(mode)) {
     throw new Error(`Invalid mode '${mode}'. Must be one of: ${WRITE_MODES.join(", ")}.`);
   }
+  if (options.makeFolders) {
+    makeFoldersFor(root, target);
+  }
   const resolved = resolveUnder(root, target);
   const fileMode = options.fileMode ?? DEFAULT_FILE_MODE;
   const seams = options.seams ?? {};
@@ -368,7 +397,7 @@ export type AppendableFile = {
 export function openForAppend(
   root: Root,
   target: string,
-  options: WriteOptions = {},
+  options: OpenOptions = {},
 ): AppendableFile {
   const resolved = resolveUnder(root, target);
   const fd = appendDescriptor(root, resolved, options.fileMode ?? DEFAULT_FILE_MODE);
@@ -389,6 +418,97 @@ export function openForAppend(
       fs.closeSync(fd);
     },
   };
+}
+
+/** Create the folder `target` will be written into, and any folder above it
+ *  that is missing, the root included. The root is checked again first: it
+ *  was fixed in an earlier step, and a call that ran since could have put a
+ *  link at the root or at an ancestor that did not exist yet, which
+ *  `mkdir` would follow out of the approved directory. Nothing here waits,
+ *  so no other call in this process runs between that check, the creation,
+ *  and the write that follows. */
+function makeFoldersFor(root: Root, target: string): void {
+  fixedRoot(root.real);
+  const resolved = resolveUnder(root, target);
+  if (resolved === root.real) {
+    throw new Error(dirItselfMessage("write", target));
+  }
+  const folder = path.dirname(resolved);
+  refuseFileOnTheWay(folder, "write");
+  fs.mkdirSync(folder, { recursive: true });
+}
+
+/** A filename such as "." or "sub/.." names the root. Creating folders
+ *  down to it and writing would put a file where the directory goes. */
+function dirItselfMessage(operation: "read" | "write", filename: string): string {
+  return `${operation} refused: "${filename}" names the directory itself, not a file in it.`;
+}
+
+/** `refuseFileOnTheWay` for the part of a path below a real root. It walks
+ *  down from the root and never looks through a link: at one it stops, and
+ *  `resolveUnder` refuses the link. Walking up with `stat` would follow the
+ *  link and say whether something outside the root is a file. */
+function refuseFileBelow(realRoot: string, folder: string, operation: "read" | "write"): void {
+  const relative = path.relative(realRoot, folder);
+  if (relative === "") {
+    return;
+  }
+  let current = realRoot;
+  for (const segment of relative.split(path.sep)) {
+    current = path.join(current, segment);
+    let info: Stats;
+    try {
+      info = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+    if (info.isSymbolicLink()) {
+      return;
+    }
+    if (!info.isDirectory()) {
+      throw new Error(fileOnTheWayMessage(operation, current));
+    }
+  }
+}
+
+function fileOnTheWayMessage(operation: "read" | "write", file: string): string {
+  return `${operation} refused: "${file}" is a file, so no folder can be made there.`;
+}
+
+/** Throw when `folder`, or the nearest thing above it that exists, is not a
+ *  directory. A folder cannot be made under a file, and saying so here
+ *  reads better than the ENOTDIR or EEXIST `mkdir` would give. */
+function refuseFileOnTheWay(folder: string, operation: "read" | "write"): void {
+  let current = folder;
+  while (true) {
+    let info: Stats | null = null;
+    try {
+      // Follows links: `/tmp` is one on macOS, and a caller's own spelling
+      // may run through others. This check only words a refusal. `root`,
+      // `fixedRoot`, and `resolveUnder` are what refuse a link.
+      info = fs.statSync(current);
+    } catch (error) {
+      // ENOTDIR: something above `current` is a file. Keep walking up to it.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        throw error;
+      }
+    }
+    if (info !== null) {
+      if (!info.isDirectory()) {
+        throw new Error(fileOnTheWayMessage(operation, current));
+      }
+      return;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return;
+    }
+    current = parent;
+  }
 }
 
 /** Open an existing file with `flags`, or create a new one. A new file's
@@ -422,7 +542,7 @@ export type WritableFile = {
 
 /** Open an existing regular file for read-write, or create it, through
  *  the same validated descriptor as every other write. */
-export function openForWrite(root: Root, target: string, options: WriteOptions = {}): WritableFile {
+export function openForWrite(root: Root, target: string, options: OpenOptions = {}): WritableFile {
   const resolved = resolveUnder(root, target);
   const fd = openOrCreate(
     root,

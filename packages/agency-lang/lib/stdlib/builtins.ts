@@ -216,9 +216,11 @@ export async function _write(
   filename: string,
   content: string,
   mode: WriteMode = "overwrite",
+  makeFolders: boolean = false,
 ): Promise<boolean> {
   const host = currentHost();
-  await host.files.writeText(await host.files.fixedRoot(rootDir), filename, content, { mode });
+  const root = await host.files.fixedRoot(rootDir);
+  await host.files.writeText(root, filename, content, { mode, makeFolders });
   return true;
 }
 
@@ -227,6 +229,7 @@ export async function _writeBinary(
   filename: string,
   base64: string,
   mode: WriteMode = "overwrite",
+  makeFolders: boolean = false,
 ): Promise<boolean> {
   const host = currentHost();
   let bytes: Uint8Array;
@@ -236,7 +239,8 @@ export async function _writeBinary(
     // Add the operation context to the shared decoder's message.
     throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  await host.files.writeBytes(await host.files.fixedRoot(rootDir), filename, bytes, { mode });
+  const root = await host.files.fixedRoot(rootDir);
+  await host.files.writeBytes(root, filename, bytes, { mode, makeFolders });
   return true;
 }
 

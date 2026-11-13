@@ -32,6 +32,22 @@ const real = await _realDir(dir);                  // host.files.realDir(dir)
 const approved = await host.files.fixedRoot(real); // refuses if real now contains a link
 ```
 
+### A write creates the folders it needs
+
+`write` and `writeBinary` create every missing folder on the way to the file: the folders inside `filename`, and `dir` itself. A model writes `src/new/module.py` without first making `src/new`, and before this a write that failed for that reason failed inside `write`'s destructive region, where one failure makes the tool loop remove the tool (`docs/dev/agents/tool-loop-guards.md`).
+
+The folders are covered by the write's own approval. The payload names `dir` and `filename`, so the approver sees the whole path that will exist afterwards, and no separate `std::mkdir` is raised. Five rules keep that honest:
+
+1. **Nothing is created before the approval.** `locate` takes a fourth argument, `dirMayBeMissing`. With it, a `dir` that does not exist is accepted and spelled under its nearest real ancestor, which is the spelling the payload shows. Only `write` and `writeBinary` pass it. `read` and `edit` still refuse a missing `dir` before any interrupt, because there is nothing there to read or edit.
+2. **The folders are made in the same step as the write.** `writeText` and `writeBytes` take a `makeFolders` option. With it, the host checks the root again with `fixedRoot`, creates the folders, and writes, with no wait between the three. The root was fixed in an earlier step, with an `await` after it. A call that ran in that gap could put a link at the root, or at an ancestor of it that did not exist yet, and a `mkdir` in a later step would follow the link out of the approved directory. `nodeFiles.test.ts` plants both links and checks nothing is created through them.
+3. **Only the public wrappers ask for it.** `_write` takes `makeFolders` and defaults to false. `write` and `writeBinary` pass true. safeBash runs `echo hi > out/f.txt` as a call to `_write` with no shell, and leaves the default, so a redirect into a missing folder fails as it does in bash and an `&&` after it does not run.
+4. **A file where a folder would go is refused before the approval.** With `item` a file, a write to `item/sub/f.txt`, or with `dir` set to `item/sub`, fails in `locate` with a message that names the file. Both hosts refuse it again when they make the folders, so the in-memory host cannot turn a file into a folder where the Node host would fail. Below `dir` this check walks down from the root and stops at a link, which `resolveUnder` then refuses. It never looks through the link, so the refusal cannot say whether something outside `dir` is a file.
+5. **A `filename` that names `dir` itself is refused.** `"."` and `"sub/.."` resolve to the root. Making folders down to it and then writing would put a file where the directory goes, so both hosts refuse it in `locate` and again in the write.
+
+`openForWrite` and `openForAppend` take `OpenOptions`, which has no `makeFolders`. Neither host creates a folder when it opens a file.
+
+`tests/agency/write-creates-folders.agency` checks these from Agency: a write into a missing folder succeeds, a rejected one leaves the folder uncreated, a file in the path is refused with no interrupt raised, and a redirected `echo` into a missing folder still fails.
+
 `wholePath` and `fixedPath` are the same pair for whole paths. `stat` and `exists` raise no interrupt, so they resolve the caller's spelling with `root()`. `applyPatch` parses the patch before the interrupt and puts the real path of every touched file in the payload as `files`; after approval each entry goes through `fixedPath`.
 
 ## Two shapes of operation
@@ -63,7 +79,7 @@ These are the functions of `host.files`, each a promise. The synchronous module 
 - `resolvePath(root, target): string` (`resolveUnder` in the synchronous module) joins a relative target and refuses an absolute path, a `~` path, an upward escape, and any symlink below the root. `""` and `"."` mean the root. It is also how a caller gets the path a root stands for, to hand to another program: nothing outside `lib/host` reads a `Root` directly.
 - `wholePath(p): Located` splits a whole path into `{ root, target }` before the interrupt. `fixedPath(p)` does the same after it.
 - `realDir(dir)` and `realPath(p)` (`_realDir` and `_realTarget` in the synchronous module) give the Agency wrappers the real spelling for an interrupt payload.
-- `locate(dir, filename, operation)` is what `prepareContainedPath` calls for `read`, `write`, and `edit`: the real `dir` and the normalized `filename`, resolved in one piece because it runs between a wrapper's call and its interrupt.
+- `locate(dir, filename, operation)` is what `prepareContainedPath` calls for `read`, `write`, and `edit`: the real `dir` and the normalized `filename`, resolved in one piece because it runs between a wrapper's call and its interrupt. A missing `dir` throws unless the caller passes `dirMayBeMissing`.
 - `readText`, `readBytes` open the file without following a final link, require a regular file, realpath after the open and require it inside the root, and require the descriptor's `(dev, ino)` to match what is on disk. `readChunks` (`readStream` in the synchronous module) does the same validation and returns the file in pieces, for a file too large to buffer, such as a downloaded model being hashed.
 - `writeText`, `writeBytes` take a `mode` of `overwrite`, `append`, or `create-only`, an optional `fileMode`, and validate the descriptor the same way before any byte is written. Overwrite writes a sibling temporary file and renames it over the target, so a failed write leaves the old file whole. The file's mode bits are kept. The inode changes on every overwrite. Create-only writes the sibling the same way and hard-links it to the target name, which fails if anything is already there, so a new file appears complete or not at all.
 - `updateText(root, target, change)` reads a file, calls `change` with its text (`null` when the file does not exist), and writes what `change` returns, with no other call on that file in between. `edit` and `applyPatch` use it. `withLock(root, target, work)` holds a lock on one path for the length of `work`; the lock belongs to the host, so it covers every run that shares it.

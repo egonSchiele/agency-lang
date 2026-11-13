@@ -54,6 +54,64 @@ function registerFileTests(name: string, open: () => Workspace): void {
         expect(await host.files.readText(root, "m.txt")).toBe("three");
       }));
 
+    it("makes folders for a write only when asked, and never under a file", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        // Not asked: a missing folder is an error and nothing is created.
+        await expect(host.files.writeText(root, "new/deep/f.txt", "x")).rejects.toThrow();
+        expect(await host.files.stat(root, "new")).toBeNull();
+        // Asked: the folders inside the target are made.
+        await host.files.writeText(root, "new/deep/f.txt", "x", { makeFolders: true });
+        expect(await host.files.readText(root, "new/deep/f.txt")).toBe("x");
+        // Asked, and the root itself does not exist yet.
+        const later = path.posix.join(dir, "later");
+        const missing = await host.files.fixedRoot(later);
+        await host.files.writeBytes(missing, "a/b.bin", new Uint8Array([7]), { makeFolders: true });
+        expect(await host.files.readBytes(await host.files.root(later), "a/b.bin")).toEqual(
+          new Uint8Array([7]),
+        );
+        // A file where a folder would go is refused, before and after approval.
+        await host.files.writeText(root, "item", "a file");
+        await expect(
+          host.files.writeText(root, "item/sub/f.txt", "x", { makeFolders: true }),
+        ).rejects.toThrow();
+        await expect(host.files.mkdir(root, "item/sub")).rejects.toThrow();
+        await expect(
+          host.files.locate(path.posix.join(dir, "item", "sub"), "f.txt", "write", true),
+        ).rejects.toThrow("is a file");
+        await expect(host.files.locate(dir, "item/sub/f.txt", "write", true)).rejects.toThrow();
+        expect((await host.files.stat(root, "item"))?.kind).toBe("file");
+      }));
+
+    it("refuses a write whose filename names the directory itself", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await host.files.writeText(root, "item", "a file");
+        const asDir = path.posix.join(dir, "item");
+        const missing = path.posix.join(dir, "not-yet");
+        for (const name of [".", "sub/.."]) {
+          await expect(host.files.locate(asDir, name, "write", true)).rejects.toThrow();
+          await expect(host.files.locate(missing, name, "write", true)).rejects.toThrow(
+            "names the directory itself",
+          );
+          await expect(
+            host.files.writeText(await host.files.fixedRoot(missing), name, "x", {
+              makeFolders: true,
+            }),
+          ).rejects.toThrow("names the directory itself");
+        }
+        expect(await host.files.readText(root, "item")).toBe("a file");
+        expect(await host.files.stat(root, "not-yet")).toBeNull();
+      }));
+
+    it("creates no folders when opening a file", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await expect(host.files.openForWrite(root, "gone/f.bin")).rejects.toThrow();
+        await expect(host.files.openForAppend(root, "gone/f.log")).rejects.toThrow();
+        expect(await host.files.stat(root, "gone")).toBeNull();
+      }));
+
     it("lists, stats, makes, and removes directories", () =>
       withWorkspace(async ({ host, dir }) => {
         const root = await host.files.root(dir);
@@ -113,6 +171,14 @@ function registerFileTests(name: string, open: () => Workspace): void {
         await expect(host.files.locate(path.posix.join(dir, "nope"), "f", "read")).rejects.toThrow(
           "does not exist",
         );
+        // A write refuses a missing dir too, unless it says it will create it.
+        await expect(host.files.locate(path.posix.join(dir, "nope"), "f", "write")).rejects.toThrow(
+          "does not exist",
+        );
+        const toCreate = await host.files.locate(path.posix.join(dir, "nope"), "f", "write", true);
+        expect(toCreate.filename).toBe("f");
+        expect(toCreate.dir.endsWith("/nope")).toBe(true);
+        expect(await host.files.stat(await host.files.root(dir), "nope")).toBeNull();
       }));
 
     it("updateText loses neither of two overlapping updates", () =>

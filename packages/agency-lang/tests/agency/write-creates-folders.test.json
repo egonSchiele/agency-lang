@@ -1,0 +1,47 @@
+{
+  "sourceFile": "write-creates-folders.agency",
+  "tests": [
+    {
+      "nodeName": "writeMakesMissingFolders",
+      "description": "write into a dir that does not exist, with a filename two folders deep, creates every folder and the file reads back.",
+      "input": "",
+      "expectedOutput": "[true,\"deep\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "writeBinaryMakesMissingFolders",
+      "description": "writeBinary creates missing folders the same way.",
+      "input": "",
+      "expectedOutput": "[true,\"AQIDBA==\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejectedWriteMakesNoFolder",
+      "description": "The std::write payload names the folder that would be created, and rejecting the write leaves it uncreated.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "fileInThePathIsRefusedBeforeAsking",
+      "description": "A write whose path runs through an existing file is refused with a message that says so, and no std::write is raised.",
+      "input": "",
+      "expectedOutput": "[false,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "redirectStillNeedsItsFolder",
+      "description": "A redirected echo through safeBash into a folder that does not exist still fails, as in bash, and creates no folder.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "editStillRefusesAMissingFolder",
+      "description": "edit, which shares write's path preparation, still refuses a dir that does not exist before raising its interrupt.",
+      "input": "",
+      "expectedOutput": "\"refused\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

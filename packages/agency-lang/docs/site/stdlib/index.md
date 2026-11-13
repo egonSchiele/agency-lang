@@ -336,7 +336,7 @@ write(
 ): Result raises <std::write>
 ```
 
-Write content to a file.
+Write content to a file. Folders in the path that do not exist are created.
 
 **Parameters:**
 
@@ -368,7 +368,7 @@ writeBinary(
 ): Result raises <std::writeBinary>
 ```
 
-Decode base64 data and write the bytes to a file.
+Decode base64 data and write the bytes to a file. Folders in the path that do not exist are created.
 
 **Parameters:**
 

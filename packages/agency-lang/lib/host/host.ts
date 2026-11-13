@@ -61,7 +61,12 @@ export type FileStat = {
 
 export const WRITE_MODES = ["overwrite", "append", "create-only"] as const;
 export type WriteMode = (typeof WRITE_MODES)[number];
-export type WriteOptions = { mode?: WriteMode; fileMode?: number };
+/** `makeFolders` creates the file's folder, and any folder above it that
+ *  is missing, the root included, in the same step as the write: no other
+ *  call runs between the check of the root, the creation, and the write. */
+export type WriteOptions = { mode?: WriteMode; fileMode?: number; makeFolders?: boolean };
+/** The open operations create no folders, so they take no `makeFolders`. */
+export type OpenOptions = Omit<WriteOptions, "makeFolders">;
 
 /** An open file for writes at positions, from `openForWrite`. */
 export type WritableFile = {
@@ -106,11 +111,14 @@ export type HostFiles = {
   resolvePath(root: Root, target: string): Promise<string>;
   /** The `dir` and `filename` an interrupt payload shows for a single-file
    *  operation. Runs its steps in one piece, with no await between them,
-   *  because it runs between a wrapper's call and its interrupt. */
+   *  because it runs between a wrapper's call and its interrupt. A missing
+   *  `dir` is refused unless `dirMayBeMissing` is true, which a write that
+   *  creates its own folders passes. */
   locate(
     dir: string,
     filename: string,
     operation: "read" | "write",
+    dirMayBeMissing?: boolean,
   ): Promise<{ dir: string; filename: string }>;
   /** Hold a lock on one path for the length of `work`. The lock belongs
    *  to the host, so it covers every run that shares it. */
@@ -130,10 +138,10 @@ export type HostFiles = {
    *  exist), and write the result. No other call on the same file runs
    *  between the read and the write. */
   updateText(root: Root, target: string, change: (current: string | null) => string): Promise<void>;
-  openForWrite(root: Root, target: string, options?: WriteOptions): Promise<WritableFile>;
+  openForWrite(root: Root, target: string, options?: OpenOptions): Promise<WritableFile>;
   /** A file kept open for appends, for a writer that adds a line at a
    *  time. Two handles on one file never write over each other. */
-  openForAppend(root: Root, target: string, options?: WriteOptions): Promise<AppendableFile>;
+  openForAppend(root: Root, target: string, options?: OpenOptions): Promise<AppendableFile>;
   mkdir(root: Root, target: string): Promise<void>;
   remove(root: Root, target: string): Promise<void>;
   copy(from: Located, to: Located): Promise<void>;

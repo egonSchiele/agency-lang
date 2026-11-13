@@ -36,7 +36,8 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
     fixedPath: async (p) => files.fixedPath(p),
     realPath: async (p) => files._realTarget(p),
     resolvePath: async (root, target) => files.resolveUnder(root, target),
-    locate: async (dir, filename, operation) => files.locateSync(dir, filename, operation),
+    locate: async (dir, filename, operation, dirMayBeMissing) =>
+      files.locateSync(dir, filename, operation, dirMayBeMissing),
     withLock: async (root, target, work) => {
       const key = files.resolveUnder(root, target);
       const previous = locks[key] ?? Promise.resolve();
@@ -87,16 +88,16 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
       }
       files.writeText(root, target, change(current), { seams });
     },
-    openForWrite: async (root, target, writeOptions) => {
-      const open = files.openForWrite(root, target, withSeams(writeOptions));
+    openForWrite: async (root, target, openOptions) => {
+      const open = files.openForWrite(root, target, { ...openOptions, seams });
       return {
         writeAt: async (data, position) => open.writeAt(data, position),
         truncate: async (size) => open.truncate(size),
         close: async () => open.close(),
       };
     },
-    openForAppend: async (root, target, writeOptions) => {
-      const open = files.openForAppend(root, target, withSeams(writeOptions));
+    openForAppend: async (root, target, openOptions) => {
+      const open = files.openForAppend(root, target, { ...openOptions, seams });
       return {
         append: async (data) => open.append(data),
         close: async () => open.close(),

@@ -3,12 +3,13 @@ import { read } from "std::index"
 import { edit } from "std::fs"
 
 // write is destructive; a failure after its extern started must carry
-// destructiveRan. A contained filename below a missing parent passes
+// destructiveRan. A create-only write of a file that already exists passes
 // preparation but fails inside write's extern (its std::write interrupt
-// is approved), which is exactly the lifecycle this test pins.
+// is approved), which is exactly the lifecycle this test pins. Create-only
+// cannot replace the file, so a wrong pass here would not damage it.
 node writeFails() {
   handle {
-    const r = try write("nonexistent-dir-xyz/f.txt", "hi", __dirname)
+    const r = try write("stdlib-destructive.agency", "hi", __dirname, "create-only")
     if (isFailure(r)) {
       return [r.destructiveRan, r.neverStarted]
     }

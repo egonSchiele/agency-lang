@@ -63,11 +63,6 @@ The agent's trace keys its display on the tool's name, so `bash` has its
 own row in `lib/stdlib/agentToolTrace.ts`, with the same display as
 `safeBash`.
 
-`write` does not create missing parent folders. A write into a folder
-that does not exist fails inside `write`'s destructive region, and the
-tool loop then removes `write` from the conversation
-(`docs/dev/agents/tool-loop-guards.md`).
-
 ## What a dispatch adds
 
 `dispatchContext` in `code.agency` builds the context the coder gets

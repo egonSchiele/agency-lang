@@ -6,8 +6,8 @@
 //
 // Building the table parses every stdlib module, which takes about 3s, so
 // the script skips it when nothing it reads has changed since the last
-// run: the stdlib sources, the compiled code that walks their exports, and
-// the data file itself. Those hashes are kept in .agency-build/, which
+// run: the stdlib sources, the compiled code that walks their exports,
+// this script, and the data file itself. Those hashes are kept in .agency-build/, which
 // `make clean` deletes.
 //
 // It uses the compiled helpers in dist/, so it needs a build first.
@@ -36,7 +36,8 @@ const readOrNull = (file) => {
 
 const inputsHash = hashBytes(
   computeStdlibHash(path.join(packageRoot, "stdlib")) +
-    computeCompilerStamp(distLib, path.join(distLib, "stdlib", "agencyFunctions.js")),
+    computeCompilerStamp(distLib, path.join(distLib, "stdlib", "agencyFunctions.js")) +
+    hashBytes(readFileSync(fileURLToPath(import.meta.url))),
 );
 const stampFor = (text) => `${inputsHash} ${hashBytes(text ?? "")}`;
 

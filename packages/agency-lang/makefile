@@ -44,7 +44,7 @@ all:
 
 # What CI test jobs need: `all` without `doc` and `examples`, which only
 # regenerate tracked pages under docs/site/ and take about 20s on a CI
-# machine. Tests read the tracked pages. The node23-build job still runs
+# machine. Tests read the tracked pages. The node-build job still runs
 # the full `make`, so a doc generator failure still fails CI.
 ci:
 	pnpm run templates && $(MAKE) build && $(MAKE) generated-data && $(MAKE) diagnostics-docs && $(MAKE) compile-agency

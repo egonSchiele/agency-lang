@@ -1,4 +1,4 @@
-import { minimalCodingTools } from "std::agents/lib/toolkits"
+import { codingFileAndShellTools } from "std::agents/lib/toolkits"
 
 import { minimalBrain } from "../minimal.agency"
 import { threadHasSystemText, threadHasText } from "../../../tests/threadText.agency"
@@ -21,5 +21,5 @@ node runsAToolAndAnswers(): string {
 
 // The brain offers these six tools and no others.
 node offersSixTools(): string[] {
-  return [tool.name for tool in minimalCodingTools()]
+  return [tool.name for tool in codingFileAndShellTools()]
 }

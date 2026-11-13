@@ -251,11 +251,13 @@ job:
 
 ```
 interrupt rejected
-safeBash could not ask a narrower question because it has no rule for one of the commands: grep does not take `-z`. Call the grep tool instead: a policy can approve its question in advance.
+safeBash could not ask a narrower question because it has no rule for one of the commands: grep does not take `-z`. Call the grep tool instead, if you have one: a policy can approve its question in advance.
 ```
 
 The sentence does not say the tool needs no approval. safeBash cannot see
-the policy, and with no policy, or a stricter one, that would be false.
+the policy, and with no policy, or a stricter one, that would be false. It
+says "if you have one" because safeBash cannot see the caller's tool list
+either: the coding agent offers `read` and no `grep`, `ls`, or `glob`.
 Adding a verb is one line in the table.
 
 A rejected narrow question carries no reason and reads as the rejection

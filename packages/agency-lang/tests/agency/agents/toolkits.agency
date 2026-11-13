@@ -159,19 +159,19 @@ node fileAndShellToolsAreCwdBound(): boolean {
   return every(shouldBeBound, \tool -> isBoundTrue(tool, "useAgentCwd"))
 }
 
-def codingName(name: string): string {
-  if (name == "safeBash") {
-    return "bash"
-  }
-  return name
+// The coding bundle is six tools. `bash` does the listing, searching, and
+// running, so there is no ls, glob, grep, or exec.
+node codingBundleIsSixTools(): string[] {
+  return map(codingFileAndShellTools(), \tool -> tool.name)
 }
 
-// The coding bundle varies three tools and must not gain or lose one: a
-// tool added to writableFileTools or shellTools has to reach the coder too.
-node codingBundleHasTheSameTools(): boolean {
-  const expected = map([...writableFileTools(), ...shellTools()], \tool -> codingName(tool.name))
-  const actual = map(codingFileAndShellTools(), \tool -> tool.name)
-  return expected.join(",") == actual.join(",")
+// The coding agent fetches a page it was given and does not carry the
+// three Wikipedia tools that webTools() adds.
+// Search tools are left out of the comparison: which one is offered
+// depends on the API keys in the environment.
+node codingAgentToolNames(): string[] {
+  const names = map(codingTools(), \tool -> "${tool.name}")
+  return filter(names, \name -> !name.startsWith("web_search"))
 }
 
 // The model cannot include ignored files by passing respectGitignore: false.

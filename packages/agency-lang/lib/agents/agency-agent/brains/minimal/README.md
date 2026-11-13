@@ -10,12 +10,11 @@ Run it with `agency agent --brain minimal`.
 
 Benchmarks and sandboxed runs. Every tool definition and every line of the
 system prompt is sent with every request, so on a long coding task a short
-list costs much less than the coordinator's. On SWE-bench Verified, the
-tools the coordinator's coder carries beyond a list like this one took
-about 1.8 times the input tokens per task and passed the same number of
-tasks.
+list costs much less than the coordinator's. On SWE-bench Verified, a
+coder with 16 more tools than a list like this one took about 1.8 times
+the input tokens per task and passed the same number of tasks.
 
-It gives up what those tools do: GitHub, web fetch and search, memory,
+It gives up what the coordinator's other tools do: GitHub, web fetch and search, memory,
 skills, background jobs, asking the user, and saving a draft answer for a
 run that hits its budget. Use the coordinator when a task needs any of
 them.
@@ -32,15 +31,13 @@ tests/minimalTurn.agency  one scripted turn that runs a bash call, and the
                           tool list
 ```
 
-- The tools come from `minimalCodingTools()` in `std::agents/lib/toolkits`:
-  `read`, `bash`, `edit`, `write`, `readSpill`, and `grepSpill`. `read`,
-  `bash`, and `write` are the same shaped tools the stdlib coding agent
-  uses. Both saved-output readers are offered because the notice `bash`
-  leaves for a long output names both.
-- The prompt is one sentence and five rules. The first rule sends listing
-  and searching to `bash`, because this brain has no `ls`, `glob`, or
-  `grep` tool. The other four are copied from the stdlib coding agent's
-  prompt, so a change to one should be made in both.
+- The tools come from `codingFileAndShellTools()` in
+  `std::agents/lib/toolkits`: `read`, `bash`, `edit`, `write`, `readSpill`,
+  and `grepSpill`. The stdlib coding agent uses the same bundle and adds
+  its other tools around it. Both saved-output readers are offered because
+  the notice `bash` leaves for a long output names both.
+- The prompt is `CODING_RULES` from the same module: one sentence and five
+  rules. The stdlib coding agent's prompt starts with the same text.
 - The prompt does not ask for a sentence beside each tool call
   (`PROGRESS_NOTE`). The brain works in the REPL, but its trace there is
   quieter than the coordinator's: tool lines with no sentence beside

@@ -4651,7 +4651,9 @@ static const READ_TOOL_FOR_VERB: Record<string, string> = {
 }
 
 // safeBash cannot see the policy, so the sentence below does not claim the
-// tool needs no approval, only that a policy can approve its question.
+// tool needs no approval, only that a policy can approve its question. It
+// cannot see the caller's tool list either, and the coding agent has no
+// grep, ls, or glob tool, so the sentence says "if you have one".
 def toolHint(verbs: string[]): string {
   """
   Suggest equivalent read tools when every rejected command has one.
@@ -4669,7 +4671,7 @@ def toolHint(verbs: string[]): string {
   if (tools.length == 0) {
     return ""
   }
-  return " Call the ${tools.join(" or ")} tool instead: a policy can approve its question in advance."
+  return " Call the ${tools.join(" or ")} tool instead, if you have one: a policy can approve its question in advance."
 }
 
 /* What the debug event says about one plan: the decision and why. */

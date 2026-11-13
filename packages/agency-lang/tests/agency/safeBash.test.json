@@ -183,6 +183,17 @@
       ]
     },
     {
+      "nodeName": "safeBashFailureText",
+      "description": "A command that exits non-zero fails with its stdout, its stderr, and the exit code on a line of its own. The agent's trace reads that last line.",
+      "input": "",
+      "expectedOutput": "\"out\\nerr\\n[exit code 3]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "removeAfterCd",
       "description": "An rm is checked from the folder a cd earlier in the line moved to. `cd .. && rm -rf <launch folder>` gets no std::remove and asks std::bash, and the reason says the target is refused. A folder inside the launch folder, reached through a cd, still asks std::remove. Every row only plans.",
       "input": "",

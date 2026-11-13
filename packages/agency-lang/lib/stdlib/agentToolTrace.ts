@@ -259,18 +259,31 @@ function summarizeEditCount(_value: unknown, args: ToolArgs): string | null {
   return Array.isArray(args.edits) ? plural(args.edits.length, "edit", "edits") : null;
 }
 
-/** A safeBash failure is `{command, exitCode, stderr, stdout}` as JSON. */
+/** The status lines `safeBash` ends a failed command's output with
+ *  (`outputFailure` in stdlib/safeBash.agency). */
+const EXIT_STATUS = /^\[exit code (\d+)\]$/;
+const STOPPED_STATUS = /^\[stopped at the time limit of \d+ seconds\]$/;
+
+/**
+ * A safeBash failure is the command's output, then a status line, then
+ * sometimes a note for the model:
+ *
+ *   boom
+ *   [exit code 2]
+ *
+ * The trace shows the status in words and the output above it. The note is
+ * left out, because it is advice for the model. A message with no status
+ * line is an interrupt rejection or a refusal, and is printed as it is.
+ */
 function safeBashFailure(message: string): { line: string | null; detail: string | null } | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(message);
-  } catch {
-    // Not the JSON shape: an interrupt rejection or a refusal, printed as is.
-    return null;
+  const lines = message.split("\n");
+  for (let at = lines.length - 1; at >= 0; at--) {
+    const exit = EXIT_STATUS.exec(lines[at]);
+    if (exit === null && !STOPPED_STATUS.test(lines[at])) continue;
+    const line = exit === null ? "timed out" : `exit ${exit[1]}`;
+    return { line, detail: commandDetail(lines.slice(0, at).join("\n"), "") };
   }
-  if (!hasField(parsed, "exitCode") || typeof parsed.exitCode !== "number") return null;
-  const line = parsed.timedOut === true ? "timed out" : `exit ${parsed.exitCode}`;
-  return { line, detail: commandDetail(parsed.stdout, parsed.stderr) };
+  return null;
 }
 
 /** A job report's state in words, as `status` carries it. */

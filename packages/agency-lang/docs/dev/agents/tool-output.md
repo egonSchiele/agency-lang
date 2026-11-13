@@ -134,10 +134,14 @@ output's generated name, through the `spillSource` lookup in
 `formatAgentTrace` stays pure and tests pass a fake. A name the store does
 not know prints as is.
 
-Command output under a line (a failed `safeBash`, a nonzero `exec`) is
-stderr when there is any, else stdout. A spill notice is cut to its first
-line, which carries the size and exit code; the rest is written for the
-model.
+Command output under a line differs by tool. A nonzero `exec` shows
+stderr when there is any, else stdout. A failed `safeBash` is text, not
+fields: the output, then a status line (`[exit code 2]`, or `[stopped at
+the time limit of 120 seconds]`), then sometimes a note for the model.
+`safeBashFailure` shows the status in words on the tool's line, the
+output under it, and leaves the note out. A spill notice is cut to its
+first line, which carries the size and exit code; the rest is written for
+the model.
 
 `printAgentTrace` reads width and color preferences from the supplied host
 on each call. It prints each nonempty block in one write with a blank line

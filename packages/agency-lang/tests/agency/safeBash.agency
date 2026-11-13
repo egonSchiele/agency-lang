@@ -2591,6 +2591,17 @@ def loginRow(script: string): any {
   return exitAndNote(result[1])
 }
 
+// The exact text of a failed command. The agent's trace reads the status
+// line (`safeBashFailure` in lib/stdlib/agentToolTrace.ts), so a change to
+// this shape has to change that reader too.
+node safeBashFailureText() {
+  const result = safeBash("sh -c 'echo out; echo err >&2; exit 3'", cwd: STDLIB_TESTS) with approve
+  if (result is failure(why)) {
+    return why
+  }
+  return "NOT A FAILURE"
+}
+
 // A line that exits 4 gets the note only when gh printed its login message.
 // The last row prints that message from a line with no gh in it, so only
 // the check that gh ran keeps the note off.
@@ -2668,8 +2679,7 @@ node ghApiRunsWhatItAsked() {
 node timeLimitStopsTheCommand() {
   let result: any = null
   handle {
-    // The failure also holds the command's text, so the output is text
-    // the command does not spell: "A1" and "B2".
+    // "A1" and "B2" are text the command prints and does not spell.
     result = safeBash("printf 'A%s\\n' 1; sleep 20; printf 'B%s\\n' 2", timeout: 1)
   } with (intr) {
     // Every question about this line carries the limit, in milliseconds.
@@ -2679,7 +2689,11 @@ node timeLimitStopsTheCommand() {
     return approve()
   }
   if (result is failure(why)) {
-    return [why.includes("A1"), why.includes("B2"), why.includes("time limit of 1 seconds")]
+    return [
+      why.includes("A1"),
+      why.includes("B2"),
+      why.split("\n").includes("[stopped at the time limit of 1 seconds]"),
+    ]
   }
   return "NOT STOPPED"
 }

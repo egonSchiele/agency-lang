@@ -35,8 +35,8 @@ concurrency:
 # job is self-contained — it runs its own `pnpm install && make ci` (~1 min)
 # rather than sharing a build artifact, which would serialize the jobs and
 # cost about as much in upload/download as it saves. `make ci` skips
-# regenerating the tracked doc pages; `node23-build` runs the full `make`,
-# so the doc generators still run once per workflow. Do not cache build
+# regenerating the tracked doc pages; `node-build` runs the full `make`,
+# so the doc generators still run in every workflow. Do not cache build
 # output between runs: a poisoned cache entry saved by one run on main
 # would be restored by later runs, and nothing checks a restored dist/.
 # The unit, integration, and agent suites used to run serially in one job,
@@ -49,7 +49,7 @@ jobs:
   # via vitest's `--shard`, and together the shards cover every file exactly
   # once. The small sibling packages (email, mcp, github, ...) and the docs
   # build run once, on shard 1. The full suite runs on node 22.x only;
-  # `node23-build` below keeps a cheaper node 23.x signal.
+  # `node-build` below keeps a cheaper signal on node 23.x and 26.x.
   unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -110,12 +110,20 @@ jobs:
       if: matrix.shard == 1
       run: pnpm --filter '!agency-lang' -r --if-present --stream run test:run
 
-  # Node 23.x build check. The full unit suite runs on 22.x only (see
-  # `unit-tests`); this confirms the toolchain still installs, builds, and
-  # compiles the stdlib under node 23.x.
-  node23-build:
+  # Build check on newer node versions. The full unit suite runs on 22.x only
+  # (see `unit-tests`); this confirms the toolchain still installs, builds,
+  # and compiles the stdlib under each version here. 26.x is here because
+  # developers run it locally: tarsec 0.5.8 ran out of heap parsing
+  # stdlib/safeBash.agency on node 26 while 22.x CI stayed green.
+  node-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      # Keep the other version running when one fails, so a failure shows
+      # whether it is specific to one node version.
+      fail-fast: false
+      matrix:
+        node-version: [23.x, 26.x]
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -128,7 +136,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        node-version: 23.x
+        node-version: ${{ matrix.node-version }}
         cache: 'pnpm'
     - run: pnpm install
     - run: make
@@ -272,8 +280,8 @@ jobs:
   #
   # Node 23.x is intentionally NOT in this job: running the full suite on two
   # node versions doubled the runner cost and put whichever runner was slower
-  # on the critical path. The `node23-build` job still installs and builds on
-  # node 23.x, so the toolchain is not left entirely uncovered there.
+  # on the critical path. The `node-build` job still installs and builds on
+  # node 23.x and 26.x, so the toolchain is not left entirely uncovered there.
   agency-tests:
     permissions:
       contents: read

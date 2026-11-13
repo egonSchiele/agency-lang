@@ -146,6 +146,15 @@ same export walk as `learn`. CI fails when the committed table differs
 from a fresh one, so a change to stdlib exports needs `make` and a
 commit of the data file.
 
+Building the table parses every stdlib module, which takes about 3
+seconds, so the script skips it when nothing it reads has changed. It
+keeps three hashes in `.agency-build/stdlib-modules.stamp`: the stdlib
+sources, the compiled code that `agencyFunctions.js` imports, and the
+data file. If any of them differs from the last run, the script builds
+the table again. The compiled code includes the data file's own compiled
+copy, so the `make` after a table change builds it once more. That
+second build writes nothing, and the build after it skips.
+
 A module missing from the table is looked up on disk before it is
 refused. With a stale table, a module that exists still loads.
 

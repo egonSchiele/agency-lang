@@ -1,6 +1,7 @@
 {
   "tests": [
     { "nodeName": "writeFails", "description": "a failed destructive stdlib write carries destructiveRan", "input": "", "expectedOutput": "[true,false]", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "editMisses", "description": "an edit whose oldText is not in the file fails before the destructive region, with nothing written", "input": "", "expectedOutput": "[false,true]", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "readFails", "description": "a failed non-destructive stdlib read does not leak destructiveRan", "input": "", "expectedOutput": "[false]", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

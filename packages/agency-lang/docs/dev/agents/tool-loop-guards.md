@@ -255,6 +255,30 @@ tell which tools are handoffs, so the text names the handoff tools the
 round called and tells the model to call one of them again in a new
 response.
 
+## Tool failures
+
+A tool call that returns a failure is not refused: it ran. `recordFailure`
+in `prompt.ts` decides what the model reads and whether the tool stays.
+
+| The failure | The model reads | The tool |
+|---|---|---|
+| carries `destructiveRan` | `Error: <text>.` and that the tool can no longer be called | removed at once |
+| any other | `Error: <text>.` and a sentence from `TIER_SUFFIX` | removed at the tenth failure in a row (`MAX_TOOL_FAILURES`) |
+
+`toolErrorCounts` holds the count per tool. A successful call to the tool
+sets it back to zero, as an approved call does for rejections, so only
+failures in a row remove a tool. A count over the whole conversation
+would remove a tool that works: `safeBash` fails on every non-zero exit,
+so ten failing test runs spread over a hundred calls would cost the
+model its shell.
+
+The limit is ten because a model fixing a failing script runs it several
+times in a row. In about 1,000 SWE-bench runs with no limit on such
+failures, the longest run of failures from one tool was six.
+
+The loop treats every tool the same way. It has no case for what a
+particular tool returns.
+
 ## A result over the cap
 
 A tool result longer than `maxToolResultChars` is cut at the cap with the
@@ -360,6 +384,9 @@ No tool runs during a retry, and no handler is pushed or popped.
   pausing sibling, empty-id providers across rounds, and a fifth
   rejection landing beside a paused call whose approval must still be
   honored (`removalRace`).
+- Failures: `tests/agency-js/tool-failures` scripts ten failures in a
+  row (the tool is removed and the eleventh call never starts), and nine
+  failures, a success, and nine more (the tool stays).
 - A cut-off reply: `lib/runtime/prompt.cutOff.test.ts` covers each row
   of the table, three cut-off replies in a row, and a schema call.
   `tests/agency-js/cut-off-retry-resume` pauses a retry at its guard gate

@@ -48,6 +48,7 @@ export type Effect =
   | { name: "std::ls"; payload: LsPayload }
   | { name: "std::glob"; payload: GlobPayload }
   | { name: "std::exec"; payload: ExecPayload }
+  | { name: "std::remove"; payload: RemovePayload }
   | { name: "std::github::prGet"; payload: GhNumberPayload; lookup: string | null }
   | { name: "std::github::prDiff"; payload: GhNumberPayload; lookup: string | null }
   | { name: "std::github::issueGet"; payload: GhNumberPayload; lookup: string | null }
@@ -121,6 +122,20 @@ export def readEffect(payload: ReadPayload): Effect {
   """Build a file-read approval descriptor without raising it."""
   return {
     name: "std::read",
+    payload: payload
+  }
+}
+
+/** The field the remove tool's own std::remove interrupt is keyed on: the
+ real whole path of what is deleted. */
+export type RemovePayload = {
+  target: string
+}
+
+export def removeEffect(payload: RemovePayload): Effect {
+  """Build a delete approval descriptor without raising it."""
+  return {
+    name: "std::remove",
     payload: payload
   }
 }
@@ -490,6 +505,7 @@ def lookupOf(effect: Effect): string | null {
     "std::ls" => null
     "std::glob" => null
     "std::exec" => null
+    "std::remove" => null
   }
 }
 

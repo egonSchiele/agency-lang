@@ -68,7 +68,7 @@ const scripts = {
     other({ query: "same" }),
   ],
   removal: [
-    ...Array.from({ length: 5 }, (_, i) => probe({ query: `invalid-${i}`, unexpected: true })),
+    ...Array.from({ length: 10 }, (_, i) => probe({ query: `invalid-${i}`, unexpected: true })),
     probe({ query: "removed" }),
     other({ q: "still-available" }),
   ],
@@ -99,9 +99,9 @@ for (const [name, script] of Object.entries(scripts)) {
     results[name].aliasRepeatRefused = learned.replies[3].includes("It was not run");
     results[name].otherCallRan = learned.replies[4].query === "same";
   } else {
-    results[name].removedAfterFiveErrors = learned.replies[4].includes("failed too many times");
-    results[name].onlyFailedToolRemoved = learned.requests[5].tools.map((tool) => tool.name);
-    results[name].otherCallRan = learned.replies[6].query === "still-available";
+    results[name].removedAfterTenErrors = learned.replies[9].includes("failed too many times");
+    results[name].onlyFailedToolRemoved = learned.requests[10].tools.map((tool) => tool.name);
+    results[name].otherCallRan = learned.replies[11].query === "still-available";
   }
 }
 writeFileSync("__result.json", JSON.stringify(results, null, 2));

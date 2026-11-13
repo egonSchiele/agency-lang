@@ -36,9 +36,12 @@ export function unwrapToolResultForLlm(result: any, toolName: string): any {
   return result.value ?? `${toolName} ran successfully but did not return a value`;
 }
 
-/** A failed tool is removed only after this many failures (the circuit
- *  breaker against retry spirals), or immediately on the destructive tier. */
-export const MAX_TOOL_FAILURES = 5;
+/** Failures in a row that remove a tool (the circuit breaker against retry
+ *  spirals). Only in a row: a successful call resets the count, as it does
+ *  for rejections, so a tool that fails now and then over a long
+ *  conversation is never removed. The destructive tier removes a tool at
+ *  once, whatever the count. */
+export const MAX_TOOL_FAILURES = 10;
 
 /** Consecutive rejections that remove a tool. Only consecutive: a
  *  successful call resets the count, so a narrow reject rule brushed

@@ -96,6 +96,23 @@ export async function _previewEdit(
   }
 }
 
+// Throw what `_multiedit` would throw for a missing file or an edit that
+// does not apply, without writing. The edit tool calls this after the
+// interrupt is approved and before its destructive region, so an `oldText`
+// that does not match fails with nothing written and nothing marked
+// destructive, and the model may correct it and call again. It runs after
+// the approval because its error tells the model whether the file contains
+// the text.
+export async function _checkEdit(
+  rootDir: string,
+  filename: string,
+  edits: MultiEdit[],
+): Promise<void> {
+  const host = currentHost();
+  const original = await host.files.readText(await host.files.fixedRoot(rootDir), filename);
+  applyEdits(original, edits, filename);
+}
+
 export async function _multiedit(
   rootDir: string,
   filename: string,

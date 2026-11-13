@@ -4,6 +4,7 @@
 // compile with their payload contracts UNENFORCED. Measured: dropping them
 // makes `raise std::git::status("...", { wrongField: x })` typecheck clean.
 // `std::write` is covered by the auto-imported prelude.
+import { remove } from "std::fs"
 import { gitStatus } from "std::git"
 import { ghPrGet } from "std::github"
 import { WriteMode } from "std::index"
@@ -27,6 +28,7 @@ import {
   globEffect,
   execEffect,
   ExecPayload,
+  removeEffect,
   gitStatusEffect,
   gitLogEffect,
   gitDiffEffect,
@@ -63,6 +65,7 @@ import {
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _removeRefusal, _removeTargetIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
 import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery, _ghParseApiPath, _ghApiPath } from "agency-lang/stdlib-lib/safeBashGh.js"
 import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
@@ -95,8 +98,13 @@ before execution begins.
 
 Some echo, grep, cat, head, and tail commands run in process. Other commands
 run under Bash, preserving the command's control flow. Explicit destructive
-spellings such as `rm` and `git reset --hard` are refused. That list does not
+spellings such as `dd` and `git reset --hard` are refused. That list does not
 cover every way to perform a destructive action; approval rules still apply.
+
+`rm` and `rmdir` ask for `std::remove` approval for each path, as the
+`remove` function does. They are refused for the filesystem root, the home
+folder, a top-level folder, and the working directory or a folder that
+holds it.
 
 Use `planFor` to inspect the planned effects and execution without running
 the command. See `docs/dev/stdlib/safe-bash.md` for classification rules.
@@ -529,6 +537,10 @@ def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStd
   const listing = LIST_VERBS[verb]
   if (listing != null) {
     return listEffects(verb, command, cwd, listing, redirects)
+  }
+  const removal = REMOVE_VERBS[verb]
+  if (removal != null) {
+    return removeEffects(verb, command, cwd, removal, redirects)
   }
   const spec = READ_VERBS[verb]
   if (spec == null) {
@@ -3900,6 +3912,12 @@ export def planFor(source: string, cwd: string, origin: GhRepo | null = null): P
   """
   const parsed = bashParser(source)
   if (parsed is failure(why)) {
+    // With no tree, the delete refusal reads the text, so `rm -rf $X/*`,
+    // which the parser cannot read, is still refused.
+    const whyNot = unparsedRemoveRefusal(source, cwd)
+    if (whyNot != "") {
+      return refusePlan("this delete is not allowed: ${whyNot}", [])
+    }
     // Unparseable: nothing was understood, so ask the broad question and
     // hand bash the text the human will have seen.
     return broadPlan(source, [], { kind: "unparseable", detail: why })
@@ -3938,6 +3956,10 @@ export def planFor(source: string, cwd: string, origin: GhRepo | null = null): P
         return refusePlan("this command is not allowed", verbs)
       }
       return refusePlan("`${name.text}` is not allowed", verbs)
+    }
+    const whyNot = removeRefusal(command, cwd)
+    if (whyNot != "") {
+      return refusePlan("this delete is not allowed: ${whyNot}", verbs)
     }
   }
 
@@ -4159,7 +4181,103 @@ def cdTarget(command: SimpleCommand, cwd: string): Result<string> {
 }
 
 /** Commands we decline to run even when a human approves. */
-static const REFUSED_COMMANDS: string[] = ["rm", "rmdir", "dd", "shred", "mkfs", "truncate"]
+static const REFUSED_COMMANDS: string[] = ["dd", "shred", "mkfs", "truncate"]
+
+/** Commands that delete, each with the flags its rule knows. They ask
+ std::remove for each path, the question the remove tool asks, and are
+ refused only for a target `removeRefusal` names. `-i` and `-I` ask on a
+ terminal nobody is at, and `rmdir -p` deletes the folders above its
+ operand, so none of them has a rule. */
+static const REMOVE_VERBS: Record<string, FlagSpec> = {
+  rm: {
+    plain: ["r", "R", "f", "d", "v"],
+    valued: [],
+    optionsFirst: true
+  },
+  rmdir: {
+    plain: ["v"],
+    valued: [],
+    optionsFirst: true
+  }
+}
+
+// The text of one argument as bash would see it, with a variable written
+// as `$NAME` so the refusal can tell `$HOME` from a folder called HOME.
+def targetText(word: Word): string {
+  return match(word) {
+    { tag: "variable", name } => "$" + name
+    { tag: "doubleQuoted", parts } => [targetText(part) for part in parts].join("")
+    { tag: "interpolatedVariable", parts } => [targetText(part) for part in parts].join("")
+    { tag: "flag" } => ""
+    { tag: "literal", text } => text
+    { tag: "path", text } => text
+    { tag: "glob", text } => text
+    { tag: "singleQuoted", text } => text
+  }
+}
+
+@capabilities(fileRead)
+export def removeRefusal(command: SimpleCommand, cwd: string): string {
+  """
+  Why an rm or rmdir is refused, or an empty string when it is not: a target that is the filesystem root, the home folder, a top-level folder, or the working directory or a folder that holds it.
+  """
+  const name = command.command
+  if (name == null) {
+    return ""
+  }
+  if (REMOVE_VERBS[baseName(name.text)] == null) {
+    return ""
+  }
+  for (arg in command.args) {
+    const why = _removeRefusal(targetText(arg), cwd)
+    if (why != "") {
+      return why
+    }
+  }
+  return ""
+}
+
+// The same refusal for a line the bash parser could not read. The check
+// looks at the real spelling of a folder, which is a file read.
+@capabilities(fileRead)
+def unparsedRemoveRefusal(source: string, cwd: string): string {
+  return _unparsedRemoveRefusal(source, cwd)
+}
+
+// One std::remove for each path an rm or rmdir names, with the real whole
+// path the remove tool would put in its own payload. A glob, a variable,
+// or a flag the table does not list sends the line to std::bash.
+@capabilities(fileRead)
+def removeEffects(verb: string, command: SimpleCommand, cwd: string, spec: FlagSpec, redirects: Effect[]): Result<Effect[]> {
+  const split = splitFlags(verb, command, spec)
+  if (isFailure(split)) {
+    return split
+  }
+  const words: Word[] = split.value.positionals
+  if (words.length == 0) {
+    return failure("`${verb}` names no path")
+  }
+  let effects: Effect[] = []
+  for (word in words) {
+    const text = literalWordText(word)
+    if (text is failure(why)) {
+      return failure("the ${verb} path is not literal")
+    }
+    // `cwd` here follows a `cd` earlier in the line, which the refusal in
+    // planFor cannot. A target refused from this folder gets no std::remove,
+    // which a policy may approve by rule, and the line asks std::bash.
+    const whyNot = _removeRefusal(text.value, cwd)
+    if (whyNot != "") {
+      return failure("the ${verb} target is refused from this folder: ${whyNot}")
+    }
+    const target = try _removeTargetIn(text.value, cwd, tildeModeFor(word))
+    if (isFailure(target)) {
+      return target
+    }
+    effects.push(removeEffect({ target: target.value }))
+  }
+  return success([...effects, ...redirects])
+}
 
 def baseName(text: string): string {
   """
@@ -4333,7 +4451,7 @@ def resolvedPlan(first: Plan, source: string, cwd: string): Result<Plan> {
 
 /** Every effect `safeBash` can raise. `startJob` raises the same ones,
   since both ask through `approvedPlan`, so both signatures name this set. */
-export effectSet SafeBashEffects = <std::bash, std::write, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
+export effectSet SafeBashEffects = <std::bash, std::write, std::remove, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
 
 export def safeBash(
   command: string,
@@ -4699,6 +4817,13 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
       })
       return success(null)
     }
+    "std::remove" => {
+      raise std::remove("Are you sure you want to delete this file or directory? This cannot be undone.", {
+        target: effect.payload.target,
+        command: fullCommand
+      })
+      return success(null)
+    }
     "std::git::status" => {
       raise std::git::status("Show git status", {
         cwd: effect.payload.cwd,
@@ -5011,7 +5136,7 @@ def runBash(command: string, cwd: string, source: string = "", timeout: number =
   }
   if (result.exitCode != 0) {
     const note = if (isGhLoginFailure(verbs, result.exitCode, result.stderr)) then GH_LOGIN_NOTE else ""
-    return exitFailure(label, result.exitCode, result.stdout, result.stderr, label, note)
+    return exitFailure(result.exitCode, result.stdout, result.stderr, label, note)
   }
   return success(keepOutput(result.stdout, result.exitCode, label))
 }
@@ -5029,35 +5154,34 @@ def isGhLoginFailure(verbs: string[], exitCode: number, stderr: string): boolean
   return exitCode == GH_LOGIN_EXIT && verbs.includes("gh") && stderr.includes(GH_LOGIN_MARK)
 }
 
-// Include the exit code and both streams, saving long output for later
-// retrieval, and a note for the model when there is one.
-def exitFailure(command: string, exitCode: number, stdout: string, stderr: string, label: string, note: string = ""): Result<string> {
-  const fields = {
-    command: command,
-    exitCode: exitCode,
-    stderr: keepOutput(stderr, exitCode, label),
-    stdout: keepOutput(stdout, exitCode, label)
-  }
+// A failed command's text: both streams as a terminal would show them,
+// then `status` on a line of its own, then a note for the model when
+// there is one. Long output is saved for later retrieval. The command is
+// not repeated, because the model wrote it one message earlier.
+def outputFailure(exitCode: number, stdout: string, stderr: string, label: string, status: string, note: string): Result<string> {
+  const kept = [keepOutput(stdout, exitCode, label), keepOutput(stderr, exitCode, label)]
+  const streams = [text.trimEnd() for text in kept if text.trim() != ""]
+  const lines = [...streams, status]
   if (note == "") {
-    return failure(JSON.stringify(fields))
+    return failure(lines.join("\n"))
   }
-  return failure(JSON.stringify({ ...fields, note: note }))
+  return failure([...lines, note].join("\n"))
 }
 
-// The failure for a command stopped at its time limit: the output so far,
-// and what the model can do next.
+def exitFailure(exitCode: number, stdout: string, stderr: string, label: string, note: string = ""): Result<string> {
+  return outputFailure(exitCode, stdout, stderr, label, "[exit code ${exitCode}]", note)
+}
+
+// A command stopped at its time limit was killed, so it has no exit code
+// of its own to show.
 def timeoutFailure(command: string, seconds: number, stdout: string, stderr: string): Result<string> {
-  return failure(
-    JSON.stringify(
-    {
-    command: command,
-    exitCode: 1,
-    stderr: keepOutput(stderr, 1, command),
-    stdout: keepOutput(stdout, 1, command),
-    timedOut: true,
-    note: "Stopped at the time limit of ${seconds} seconds. stdout and stderr hold the output so far. Run a narrower command (one test file, or one test), or pass a larger timeout."
-  },
-  ),
+  return outputFailure(
+    1,
+    stdout,
+    stderr,
+    command,
+    "[stopped at the time limit of ${seconds} seconds]",
+    "The text above is the output so far. Run a narrower command (one test file, or one test), or pass a larger timeout.",
   )
 }
 
@@ -5073,7 +5197,7 @@ def runGrep(exec: GrepExec, command: string): Result<string> {
   }
   const results: any[] = found.value
   if (results.length == 0) {
-    return exitFailure(command, 1, "", grepNotes(exec.payload, 0), command)
+    return exitFailure(1, "", grepNotes(exec.payload, 0), command)
   }
   return success(keepOutput(grepText(exec, results), 0, command))
 }
@@ -5226,7 +5350,7 @@ def runChain(exec: ChainExec, command: string): Result<string> {
     }
   }
   if (!ok) {
-    return exitFailure(command, 1, out, lastError, command)
+    return exitFailure(1, out, lastError, command)
   }
   return success(keepOutput(out, 0, command))
 }

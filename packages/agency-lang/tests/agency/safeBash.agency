@@ -17,7 +17,7 @@ import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
 import { bash, glob } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
-import { env, setEnv } from "std::system"
+import { cwd, env, setEnv } from "std::system"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -33,9 +33,9 @@ def refusedFor(source: string): any {
 
 node refuseWall() {
   return [
-    refusedFor("rm -rf build"),
-    refusedFor("/bin/rm -rf build"),
-    refusedFor("./rm thing"),
+    refusedFor("shred -u build"),
+    refusedFor("/bin/shred -u build"),
+    refusedFor("./truncate thing"),
     refusedFor("dd if=a of=b"),
     refusedFor("git clean -fd"),
     refusedFor("git reset --hard"),
@@ -49,7 +49,7 @@ node refuseWall() {
     refusedFor("git restore -- utils.py"),
     refusedFor("git checkout -- utils.py"),
     refusedFor("git checkout -- ."),
-    refusedFor("rm -- file"),
+    refusedFor("shred -- file"),
     refusedFor("git log -- utils.py"),
   ]
 }
@@ -161,11 +161,11 @@ node wholeStringPlans() {
     planSummary("git status; xargs"),
     planSummary("xargs"),
     planSummary("echo hi; echo bye"),
-    planSummary("rm -rf build"),
-    planSummary("git status; rm -rf build"),
+    planSummary("dd if=a of=b"),
+    planSummary("git status; dd if=a of=b"),
     planSummary("cat a.txt | grep x"),
     planSummary("git status && git log"),
-    planSummary("true && rm -rf /tmp/x"),
+    planSummary("true && dd if=a of=b"),
     planSummary("(git status && git log)"),
     planSummary("git status && xargs"),
   ]
@@ -288,11 +288,102 @@ node exactlyOneQuestion() {
 }
 
 node refusedNeverRuns() {
-  const result = safeBash("rm -rf build")
+  const result = safeBash("dd if=a of=b")
   if (result is failure(why)) {
     return why
   }
   return "UNEXPECTEDLY RAN"
+}
+
+def removeSummary(source: string): any {
+  const plan = planFor(source, STDLIB_TESTS)
+  return [outcomeOf(plan), [e.name for e in plan.effects]]
+}
+
+def removeReason(source: string): any {
+  const exec = planFor(source, STDLIB_TESTS).execution
+  if (exec is { kind: "refuse", reason }) {
+    return reason
+  }
+  return "NOT REFUSED"
+}
+
+// Every row only plans. Nothing here runs an rm.
+node removePlans() {
+  return [
+    removeSummary("rm -rf build"),
+    removeSummary("rm one.txt two.txt"),
+    removeSummary("rmdir empty"),
+    removeSummary("git status && rm -f scratch.py"),
+    // A flag off the table, a glob, and a variable have no rule.
+    removeSummary("rm -i one.txt"),
+    removeSummary("rmdir -p a/b"),
+    removeSummary("rm -rf build/*.o"),
+    removeSummary("rm -rf $BUILD/out"),
+    // A path word is never a recognized command, but the wall reads it.
+    removeSummary("/bin/rm one.txt"),
+    removeSummary("/bin/rm -rf /"),
+  ]
+}
+
+// The remove tool's own refusals, for every spelling of the same folders.
+node removeRefusals() {
+  return [
+    removeReason("rm -rf /"),
+    removeReason("rm -rf /*"),
+    removeReason("rm -rf ~"),
+    removeReason("rm -rf ~/*") != "NOT REFUSED",
+    removeReason("rm -rf \"$HOME\"") != "NOT REFUSED",
+    removeReason("rm -rf $BUILD/*"),
+    removeReason("rm -rf /usr") != "NOT REFUSED",
+    removeReason("rm -rf ."),
+    removeReason("rm -rf *"),
+    removeReason("rm -rf .."),
+    removeReason("rmdir /") != "NOT REFUSED",
+    removeReason("true && rm -rf /"),
+    removeReason("git status | rm -rf /"),
+    removeReason("rm -rf build"),
+  ]
+}
+
+// A `cd` earlier in the line changes which folder an rm names. The launch
+// folder, reached by stepping out of it, gets no std::remove, so a policy
+// that approves deletes under the launch folder cannot approve it. Every
+// row only plans.
+node removeAfterCd() {
+  const launch = cwd()
+  const parts = launch.split("/")
+  const folder = parts[parts.length - 1]
+  const out = planFor("cd .. && rm -rf ${folder}", launch)
+  const inside = planFor("cd tests && rm -rf no-such-folder-xyz", launch)
+  let saysWhy = false
+  if (out.broadReason != null) {
+    saysWhy = out.broadReason.detail.includes("refused from this folder")
+  }
+  return [
+    outcomeOf(out),
+    [e.name for e in out.effects],
+    saysWhy,
+    outcomeOf(inside),
+    [e.name for e in inside.effects],
+  ]
+}
+
+// The handler records the question and rejects it, so nothing is deleted.
+// The target is the real whole path, as in the remove tool's own payload.
+node removeAsksLikeTheRemoveTool() {
+  let seen: any[] = []
+  let failed = "NOT A FAILURE"
+  handle {
+    const result = safeBash("rm -f no-such-file-xyz.txt", cwd: STDLIB_TESTS)
+    if (result is failure(why)) {
+      failed = why
+    }
+  } with (intr) {
+    seen.push([intr.effect, intr.data.target.endsWith("/tests/agency/stdlib/no-such-file-xyz.txt"), intr.data.command])
+    return reject("not today")
+  }
+  return [seen, failed.includes("not today")]
 }
 
 node sequenceRunsThroughBash() {
@@ -509,7 +600,7 @@ node planOutcomes() {
     planOutcome("xargs rm x"),
     planOutcome("echo hi"),
     planOutcome("echo hi > out.txt"),
-    planOutcome("rm -rf build"),
+    planOutcome("dd if=a of=b"),
     planOutcome("agency typecheck foo.agency"),
     planOutcome("echo hi | cat"),
   ]
@@ -560,7 +651,7 @@ node newShapes() {
     planSummary("echo hi 2>&1"),
     planSummary("echo hi 2>&1 > out.txt"),
     planSummary("echo *.md"),
-    planSummary("rm -rf x | cat"),
+    planSummary("shred x | cat"),
     planSummary("make 2>&1 | tail -100"),
     planReason("git status | head"),
     executionCommand("git    status |  git   log"),
@@ -834,7 +925,7 @@ node bashGrepOfOneFile() {
 node shellFreeNoMatchFails() {
   const result = safeBash("grep -rn nothing-matches-this .", cwd: FIXTURES)
   if (result is failure(why)) {
-    return [why.includes("\"exitCode\":1"), why.includes("skips node_modules")]
+    return [why.includes("[exit code 1]"), why.includes("skips node_modules")]
   }
   return "UNEXPECTEDLY MATCHED"
 }
@@ -1311,7 +1402,7 @@ node chainsOfInProcessCommands() {
     chainSummary("echo a; cat one.txt | head"),
     chainSummary("cat nope.txt; echo hi"),
     chainSummary("echo hi > out.txt; cat out.txt"),
-    chainSummary("cat one.txt && rm one.txt"),
+    chainSummary("cat one.txt && shred one.txt"),
     chainSummary("echo a; agency --version"),
   ]
 }
@@ -2176,9 +2267,10 @@ node gitRunsSafely() {
   const gitFolder = runNarrow("git diff /dev/null " + outside, GIT_FIXTURE + "/.git")
 
   const seen = [
-    // The pathspec failed, named the model's own text, and changed no file.
+    // The pathspec failed with git's exit code, showed none of the command
+    // safeBash built, and changed no file.
     pathspec[0],
-    pathspec[1].includes("\"command\":\"git checkout '*.py'\""),
+    pathspec[1].includes("[exit code "),
     pathspec[1].includes("core.fsmonitor"),
     fileText(GIT_FIXTURE, "a.py"),
     fileText(GIT_FIXTURE, "b.py"),
@@ -2477,10 +2569,18 @@ node ghLookupFailureRaisesNothing() {
   return [seen, failed.includes("--repo OWNER/REPO")]
 }
 
-/** A failed run's exit code and note, from the failure's JSON. */
+/** A failed run's exit code line and the note after it, from the failure's text. */
 def exitAndNote(failed: string): any {
-  const parsed = JSON.parse(failed)
-  return [parsed.exitCode, parsed.note ?? null]
+  const lines = failed.split("\n")
+  const at = lines.indexOf("[exit code 4]")
+  if (at == -1) {
+    return ["NO EXIT 4 LINE", null]
+  }
+  const note = lines.slice(at + 1).join("\n")
+  if (note == "") {
+    return [4, null]
+  }
+  return [4, note]
 }
 
 def loginRow(script: string): any {

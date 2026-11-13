@@ -1,5 +1,6 @@
 import { write } from "std::index"
 import { read } from "std::index"
+import { edit } from "std::fs"
 
 // write is destructive; a failure after its extern started must carry
 // destructiveRan. A contained filename below a missing parent passes
@@ -10,6 +11,26 @@ node writeFails() {
     const r = try write("nonexistent-dir-xyz/f.txt", "hi", __dirname)
     if (isFailure(r)) {
       return [r.destructiveRan, r.neverStarted]
+    }
+    return "unexpected success"
+  } with approve
+}
+
+// edit checks its replacements before its destructive region. An oldText
+// that is not in the file fails with nothing written, so the failure must
+// not carry destructiveRan: the tool loop removes a tool whose failure
+// does, and a model that mistyped oldText should be able to try again.
+// The missing text is built from two pieces so this file does not hold it.
+node editMisses() {
+  handle {
+    const missing = "no-such" + "-text-xyz"
+    const r = try edit(
+      "stdlib-destructive.agency",
+      [{ oldText: missing, newText: "x", replaceAll: false }],
+      __dirname,
+    )
+    if (isFailure(r)) {
+      return [r.destructiveRan, r.error.includes("oldText not found")]
     }
     return "unexpected success"
   } with approve

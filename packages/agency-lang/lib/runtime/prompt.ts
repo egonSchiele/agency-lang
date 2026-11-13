@@ -974,8 +974,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       const rawToolResult = toolResult;
       toolResult = toolResult ?? `${handler.name} ran successfully but did not return a value`;
       // An approved call is evidence the tool is not blanket-refused:
-      // only CONSECUTIVE rejections remove it.
+      // only CONSECUTIVE rejections remove it. The same goes for failures:
+      // a call that worked is evidence the tool is not broken.
       rejectionCounts[handler.name] = 0;
+      toolErrorCounts[handler.name] = 0;
       stack.setResultOnBranch(branchKey, toolResult);
       if (isAborted(toolResult) && toolResult.cause.kind === "guardTrip") {
         // An outer guard stopped the tool mid-flight. The aborted value

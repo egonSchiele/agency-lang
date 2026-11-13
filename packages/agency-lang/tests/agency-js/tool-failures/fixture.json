@@ -1,0 +1,12 @@
+{
+  "tenFailuresRemove": {
+    "result": "s1 done",
+    "toolStarts": 10,
+    "removalSeen": true
+  },
+  "successResets": {
+    "result": "s2 done",
+    "toolStarts": 20,
+    "removalSeen": false
+  }
+}

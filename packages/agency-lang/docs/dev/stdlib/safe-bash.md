@@ -58,9 +58,10 @@ A plan ends one of three ways: refused, shell-free, or handed to bash.
 `outcomeOf` names five, because it splits the bash way into `narrow` and
 `broad` and gives the in-process agency path its own name.
 
-`refuse`: the refuse wall (`isRefused`) matches `rm`, `rmdir`, `dd`,
-`shred`, `mkfs`, `truncate`, and the destructive git spellings, by command
-word including the last part of a path. The git spellings are:
+`refuse`: the refuse wall (`isRefused`) matches `dd`, `shred`, `mkfs`,
+`truncate`, and the destructive git spellings, by command word including
+the last part of a path. An `rm` or `rmdir` is refused only for some
+targets (see "rm and rmdir" below). The git spellings are:
 
 - `clean`.
 - `reset --hard`.
@@ -114,6 +115,7 @@ bash will do, and `std::bash` otherwise.
 | `grep -c hello one.txt` | real grep, through bash | `std::grep` for the one file |
 | `wc -l one.txt` | real wc, through bash | `std::read` for the one file |
 | `ls src` | real ls, through bash | `std::ls` for `src`, as the ls tool does |
+| `rm -rf build` | real rm, through bash | `std::remove` for `build`, as the remove tool does |
 | `pnpm test` | real pnpm, through bash | `std::exec`, as the exec tool does |
 
 The `pnpm test` row is a deliberate exception. A lone program line with
@@ -268,24 +270,96 @@ call this tool again.`, and the model takes the user's words for a tool
 error. The lint rule AL0004 reports that rebuild shape anywhere in the
 stdlib (see `docs/dev/agents/tool-loop-guards.md`).
 
-## A failure names the model's text
+## What a failed command returns
 
-When a command that ran through bash exits non-zero, the failure is JSON
-with `command`, `exitCode`, `stderr`, and `stdout`. `command` is the text
-the model wrote, not the text that ran. The two differ for a `cd`, which
-runs with the folder the classifier resolved, for a git command, which
-runs as the one `gitCommand` built, and for a `gh` command, which runs as
-the one `ghCommand` built:
+When a command that ran through bash exits non-zero, the failure's text
+is what a terminal would show: stdout, then stderr, then a status line,
+then a note when there is one (gh not being logged in, or what to do
+about a time limit).
 
 ```
-{"command":"git checkout '*.py'","exitCode":128,"stderr":"fatal: invalid reference: *.py", ...}
+fatal: invalid reference: *.py
+[exit code 128]
 ```
 
-Git commands fail often, and a model that read the built text could
-write it next time. `git -c ...` has no rule, because the first word
-after `git` is a flag, so the copy would ask `std::bash`. `runBash`
-already holds the model's text as `label`, for the trace, and passes it
-to `exitFailure` and to the "was not run" message.
+A command stopped at its time limit was killed and has no exit code of
+its own, so its status line is `[stopped at the time limit of 120
+seconds]`.
+
+Two rules about the text:
+
+1. **The command is not repeated.** The model wrote it one message
+   earlier, and an inline script can be 2 KB.
+2. **The text that ran is never shown.** It differs from the model's text
+   for a `cd`, which runs with the folder the classifier resolved, for a
+   git command, which runs as the one `gitCommand` built, and for a `gh`
+   command, which runs as the one `ghCommand` built. A model that read
+   the built text could write it next time, and `git -c ...` has no rule,
+   so the copy would ask `std::bash`. The "was not run" message names the
+   model's text (`label` in `runBash`) for the same reason.
+
+## rm and rmdir
+
+```
+rm -rf build
+```
+
+This asks `std::remove` with `target` set to the real whole path of
+`build`, which is the question the `remove` tool asks for the same
+folder. Then real `rm` runs through bash. One line asks once per path. A
+policy that approves `std::remove` under a folder, as `withWrites` does
+for the launch directory, approves the delete however the model spells
+it.
+
+`REMOVE_VERBS` lists the flags the rule knows: `-r`, `-R`, `-f`, `-d`, and
+`-v` for `rm`, and `-v` for `rmdir`. A flag off the list, a glob, or a
+variable makes the line unrecognized, so it asks `std::bash`: `rm -i`
+waits for an answer on a terminal nobody is at, `rmdir -p` deletes the
+folders above its operand, and the paths a glob or a variable names are
+not known until bash runs.
+
+Some targets are refused whoever approves. `removeRefusal` runs beside
+the refuse wall, on every `rm` and `rmdir` in the line, and its rule is
+the `remove` tool's own (`rejectDangerousPath` in `lib/stdlib/fs.ts`):
+
+| Target | Example |
+|---|---|
+| the filesystem root | `rm -rf /`, `rm -rf /*` |
+| the home folder, or a folder that holds it | `rm -rf ~`, `rm -rf "$HOME"/*` |
+| a top-level folder | `rm -rf /usr` |
+| the working directory, or a folder that holds it | `rm -rf .`, `rm -rf *`, `rm -rf ..` |
+| a lone variable followed by `/` or `/*` | `rm -rf $BUILD/*`, which is `/*` when `BUILD` is unset |
+
+`_removeRefusal` (`lib/stdlib/safeBashRemove.ts`) reads the argument's
+text, with each variable written as `$NAME`, so it sees a glob or a
+variable that the narrow rule cannot describe. A folder's contents count
+as the folder. A line the bash parser cannot read has no tree to walk, so
+`_unparsedRemoveRefusal` reads the words after each `rm` in the text.
+That check can refuse a line that was safe, and it is meant to err that
+way.
+
+The check runs twice, because a `cd` earlier in the line changes which
+folder an `rm` names:
+
+```
+cd .. && rm -rf proj
+```
+
+1. `planFor` runs it on every `rm` in the line against safeBash's own
+   folder, before anything is classified. A refused target here refuses
+   the whole line. From `/Users/a/proj` this line passes, because it
+   reads `proj` as `/Users/a/proj/proj`.
+2. `removeEffects` runs it again against the folder the classifier
+   resolved for that command, which follows the `cd`. Here `proj` is
+   `/Users/a/proj`, the launch folder. A refused target gets no
+   `std::remove`, so the line asks `std::bash`.
+
+The second check must not be dropped. `withWrites` approves `std::remove`
+for the launch folder and everything under it, so a `std::remove` naming
+the launch folder would be approved by rule and the project deleted with
+nobody asked. The `remove` tool is safe from this because `_remove`
+calls `rejectDangerousPath` again when it deletes; `rm` runs through
+bash and gets only the checks at plan time.
 
 ## Pipelines, dup redirects, and glob words
 
@@ -1580,7 +1654,7 @@ refuse wall and must see through both.
 
 The chain is all or nothing. One command the step planners refuse sends
 the whole line down the general path, where the refuse wall runs on
-every command and the line goes to bash. So `cat a.txt && rm a.txt` is
+every command and the line goes to bash. So `cat a.txt && shred a.txt` is
 still refused.
 
 `runChain` copies bash's run rule. `;` runs the next step whatever
@@ -1745,6 +1819,10 @@ is the job's limit. See `docs/dev/stdlib/jobs.md`.
 - `lib/host/gitEnvironment.ts`: the git environment variables, in three
   lists the shell and the git tools share.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
+- `lib/stdlib/safeBashRemove.ts`: the delete refusal and the real path of
+  an `rm` operand, tested in `safeBashRemove.test.ts`. The plan tests are
+  `removePlans`, `removeRefusals`, `removeAfterCd`, and
+  `removeAsksLikeTheRemoveTool`. No test runs an `rm`.
 - `lib/stdlib/grepDialect.ts`: the pattern translation, grep's output
   format, and the skipped-folders note.
 - `lib/stdlib/readDialect.ts`: what `cat`, `cat -n`, `head`, and `tail`

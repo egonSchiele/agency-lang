@@ -1,0 +1,19 @@
+// A tool that fails unless its id starts with "ok".
+def broken(id: string): Result<string> {
+  if (id.startsWith("ok")) {
+    return success("ran ${id}")
+  }
+  return failure("boom ${id}")
+}
+
+// Ten failures in a row remove the tool, so the eleventh scripted call
+// never starts. The round cap is raised so it is not what stops the loop.
+node tenFailuresRemove() {
+  return llm("Use broken.", { tools: [broken], maxToolCallRounds: 30 })
+}
+
+// A call that works resets the count: nine failures, a success, nine more
+// failures, a success. The tool is never removed.
+node successResets() {
+  return llm("Use broken.", { tools: [broken], maxToolCallRounds: 30 })
+}

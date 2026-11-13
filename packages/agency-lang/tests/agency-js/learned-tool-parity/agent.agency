@@ -9,6 +9,7 @@ node main(learned: boolean) {
       if (loaded is failure) { return loaded }
       tools = loaded.value
     }
-    return llm("Call the tools.", { tools: tools })
+    // The removal script runs twelve rounds, past the default cap of ten.
+    return llm("Call the tools.", { tools: tools, maxToolCallRounds: 20 })
   } with approve
 }

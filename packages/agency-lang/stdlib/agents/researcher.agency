@@ -1,6 +1,6 @@
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools, spillTools, draftTools, ASK_USER_HINT, PROGRESS_NOTE, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { webTools, spillTools, draftTools, askUserHint, PROGRESS_NOTE, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
@@ -41,7 +41,7 @@ static const systemPrompt = """You are a research analyst. Answer the task using
 - If a page will not load, try another source; do not stop on one failure.
 
 ## Communicating with the user
-${PROGRESS_NOTE}${ASK_USER_HINT}"""
+${PROGRESS_NOTE}"""
 
 static const skills = agentSkill("researcher")
 
@@ -91,7 +91,7 @@ def research(
 ): Result<string> {
   const researchTools = buildTools()
   const fresh = threadIsNew()
-  systemMessage(systemPrompt, expires: "llmCall")
+  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
   if (fresh) {
     // The conversation so far, so the question is read in its context. A
     // shared session already holds its history and is not seeded again.
@@ -131,7 +131,7 @@ def research(
   if (answerIsEmpty(answer)) {
     // Keep the sources in context and remove tools so the follow-up writes an
     // answer. The persona expired with the first call, so push it again.
-    systemMessage(systemPrompt, expires: "llmCall")
+    systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
     answer = llm(NO_ANSWER_FOLLOWUP, llmOptions(model: model, provider: provider))
     if (isFailure(answer)) {
       return answer

@@ -5,9 +5,8 @@
   guard; this module only answers turns.
 */
 import { _exit } from "agency-lang/stdlib-lib/system.js"
-import { question } from "std::agent"
 import { AgencySource } from "std::agency"
-import { spillTools, writableFileTools } from "std::agents/lib/toolkits"
+import { communicationTools, spillTools, writableFileTools } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
@@ -142,7 +141,7 @@ def turnBuiltIns(turnStart: any): any[] {
   return [
     learnTools.partial(turnStart: turnStart),
     searchSessions,
-    question,
+    ...communicationTools(),
     elapsedTime.partial(since: turnStart),
   ]
 }

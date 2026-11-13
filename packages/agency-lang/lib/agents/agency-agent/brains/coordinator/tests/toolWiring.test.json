@@ -196,6 +196,17 @@
       ]
     },
     {
+      "nodeName": "oneShotTurnOffersNoQuestion",
+      "description": "After setUserCanAnswer(false), which the harness calls for a one-shot run, the coordinator's turn tools do not include question.",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "composedOracleToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",

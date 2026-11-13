@@ -1,5 +1,5 @@
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
-import { githubTools, spillTools, ASK_USER_HINT } from "std::agents/lib/toolkits"
+import { githubTools, spillTools, askUserHint } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { systemMessage } from "std::thread"
 
@@ -36,7 +36,7 @@ checks, and comments, and posting reviews and comments.
 - Posting is visible to other people and cannot be taken back. Post only what
   the task asks for, once.
 - Report what you found or did in a few lines, with the pull request or issue
-  number and a link when you have one.${ASK_USER_HINT}
+  number and a link when you have one.
 """
 
 export def buildTools(): any[] {
@@ -53,7 +53,7 @@ def work(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt, expires: "llmCall")
+  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
   return llm(
     withContext(task: task, context: context),
     llmOptions(

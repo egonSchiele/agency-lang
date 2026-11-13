@@ -7,7 +7,7 @@ import {
   spillTools,
   SAVE_DRAFT_HINT,
   PROGRESS_NOTE,
-  ASK_USER_HINT,
+  askUserHint,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
@@ -114,7 +114,7 @@ summary, which is the fastest way to answer "what exists".
   question or apologies for length. Get to the substance.
 
 ## Communicating with the user
-${PROGRESS_NOTE}${ASK_USER_HINT}${SAVE_DRAFT_HINT}
+${PROGRESS_NOTE}${SAVE_DRAFT_HINT}
 
 """
 
@@ -142,7 +142,7 @@ def survey(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt, expires: "llmCall")
+  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
   return llm(
     withContext(task: question, context: context),
     llmOptions(

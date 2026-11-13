@@ -9,9 +9,8 @@
  * the agent gives its specialists.
  */
 import { _insideToolCall } from "agency-lang/stdlib-lib/thread.js"
-import { question } from "std::agent"
 import { agencyResearcherAgent } from "std::agents/agency/researcher"
-import { memoryTools } from "std::agents/lib/toolkits"
+import { communicationTools, memoryTools } from "std::agents/lib/toolkits"
 import { researcherAgent } from "std::agents/researcher"
 import { setMemoryId } from "std::memory"
 import { endTurn } from "std::thread"
@@ -59,7 +58,7 @@ export handoff def researchAgent(
       context: context,
       maxCost: maxDollars ?? $10.00,
       maxTime: timeBudget(maxSeconds, 10m),
-      extraTools: [...researchTools, question],
+      extraTools: [...researchTools, ...communicationTools()],
       keepDraft: false,
       offerSaveDraft: false,
     )

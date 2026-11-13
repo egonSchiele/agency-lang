@@ -12,6 +12,9 @@ import {
   memoryTools,
   spillTools,
   draftTools,
+  communicationTools,
+  askUserHint,
+  setUserCanAnswer,
  } from "std::agents/lib/toolkits"
 import { buildTools as codingTools } from "std::agents/coding"
 import { buildTools as researcherTools } from "std::agents/researcher"
@@ -237,6 +240,21 @@ def fetchDecision(method: string, scheme: string, network: string): string {
     origin: ""
   })
   return decision.type
+}
+
+def namesQuestion(tools: any[]): boolean {
+  return map(tools, \tool -> tool.name).includes("question")
+}
+
+// When a program says nobody can answer, no agent is offered `question`
+// and no prompt hint describes it. The coder stands in for every agent
+// that takes the tool from communicationTools().
+node noQuestionWhenNobodyCanAnswer(): any[] {
+  const before = [namesQuestion(communicationTools()), askUserHint() != "", namesQuestion(codingTools())]
+  setUserCanAnswer(false)
+  const after = [communicationTools().length, askUserHint(), namesQuestion(codingTools())]
+  setUserCanAnswer(true)
+  return [before, after]
 }
 
 // The recommended policy approves the researcher's fetch tool for a read

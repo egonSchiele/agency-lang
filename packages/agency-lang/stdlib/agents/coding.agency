@@ -2,6 +2,7 @@ import { githubAgent } from "std::agents/github"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
+  codingFileAndShellTools,
   memoryTools,
   webTools,
   ASK_USER_HINT,
@@ -9,12 +10,8 @@ import {
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
-import { edit } from "std::fs"
 import { setAgentCwd, getAgentCwd } from "std::index"
-import { safeBash } from "std::safeBash"
-import { ls, glob, grep, exec } from "std::shell"
 import { agentSkill } from "std::skills"
-import { readSpill, grepSpill } from "std::spill"
 import { systemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
@@ -45,12 +42,7 @@ nothing prints it by default. `std::agents/lib/toolkits` shows the
 callback that does.
 */
 
-// Kept short on purpose. On SWE-bench, a longer prompt with rules about
-// output contracts, planning, and re-checking, together with a closing
-// reminder on the task, about doubled the tokens a task took and did not
-// raise the pass rate. Beyond the four rules, the prompt carries only the
-// hint each tool needs to be used at all: progress sentences, `question`,
-// and `saveDraft`.
+// Kept short on purpose. Read docs/dev/agents/coding-agent.md before adding a rule.
 static const systemPrompt = """You are a coding assistant. Help users inspect files, run commands, and modify code.
 
 - Use read to examine files instead of cat or sed.
@@ -64,59 +56,6 @@ ${PROGRESS_NOTE}${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 
 static const skills = agentSkill("coding")
 
-/** The most lines `read` returns when the model gives no limit. A model
-  that reads a 20,000-line file whole pays for it on every later request. */
-static const READ_LINE_LIMIT = 2000
-
-// The read tool with a default limit. `read` itself has none, because a
-// program that calls `read("data.csv")` wants the whole file.
-idempotent def readCapped(
-  filename: string,
-  dir: string = ".",
-  offset: number = 0,
-  limit: number = 0,
-): Result {
-  """
-  Read the contents of a file and return it as a string. At most 2000 lines are returned unless limit says otherwise; a longer file ends with a line saying which lines were shown and how many the file has, and offset reads on from there.
-
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
-  @param dir - Base directory for filename
-  @param offset - 1-indexed line to start at (0 means start of file)
-  @param limit - Maximum number of lines to return (0 means 2000)
-  """
-  let lines = limit
-  if (limit == 0) {
-    lines = READ_LINE_LIMIT
-  }
-  return read(filename: filename, dir: dir, offset: offset, limit: lines, useAgentCwd: true)
-}
-
-// safeBash under the name models know. `cwd` is bound to the agent's
-// working directory; a command that needs another folder starts with `cd`.
-def bashTool(): any {
-  return safeBash.partial(cwd: "").rename("bash").describe(
-    "Run a bash command in the working directory and return its stdout. A command that exits non-zero fails with its output and exit code, so there is no need to echo the exit status or run it again. Long output is saved; read it with readSpill or grepSpill. A command still running after timeout seconds (default 120) is stopped."
-  )
-}
-
-// The file and shell tools. These are the bundles in
-// std::agents/lib/toolkits with three changes: `read` has a default limit,
-// `write` always overwrites, and safeBash is offered as `bash`.
-def fileAndShellTools(): any[] {
-  return [
-    readCapped.rename("read"),
-    ls.partial(useAgentCwd: true, respectGitignore: true),
-    glob.partial(useAgentCwd: true, respectGitignore: true),
-    grep.partial(useAgentCwd: true, respectGitignore: true),
-    write.partial(useAgentCwd: true, mode: "overwrite"),
-    edit.partial(useAgentCwd: true),
-    bashTool(),
-    exec.partial(useAgentCwd: true),
-    readSpill,
-    grepSpill,
-  ]
-}
-
 export def buildTools(): any[] {
   """
   Return the coding agent's built-in tools for inspection or extension.
@@ -124,7 +63,7 @@ export def buildTools(): any[] {
   return [
     setAgentCwd,
     getAgentCwd,
-    ...fileAndShellTools(),
+    ...codingFileAndShellTools(),
     githubAgent,
     ...memoryTools(),
     ...webTools(),

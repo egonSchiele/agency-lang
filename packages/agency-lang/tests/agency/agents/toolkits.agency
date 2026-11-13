@@ -3,6 +3,7 @@ import {
   readOnlyFileTools,
   writableFileTools,
   shellTools,
+  codingFileAndShellTools,
   gitTools,
   readOnlyGitTools,
   webTools,
@@ -153,6 +154,21 @@ node fileAndShellToolsAreCwdBound(): boolean {
     \tool -> !unbound.includes(tool.name),
   )
   return every(shouldBeBound, \tool -> isBoundTrue(tool, "useAgentCwd"))
+}
+
+def codingName(name: string): string {
+  if (name == "safeBash") {
+    return "bash"
+  }
+  return name
+}
+
+// The coding bundle varies three tools and must not gain or lose one: a
+// tool added to writableFileTools or shellTools has to reach the coder too.
+node codingBundleHasTheSameTools(): boolean {
+  const expected = map([...writableFileTools(), ...shellTools()], \tool -> codingName(tool.name))
+  const actual = map(codingFileAndShellTools(), \tool -> tool.name)
+  return expected.join(",") == actual.join(",")
 }
 
 // The model cannot include ignored files by passing respectGitignore: false.

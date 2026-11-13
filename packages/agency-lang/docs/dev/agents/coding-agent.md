@@ -14,23 +14,21 @@ what, and a hint for each tool that goes unused without one:
 prints), `ASK_USER_HINT` (the `question` tool), and `SAVE_DRAFT_HINT`
 (`saveDraft`).
 
-More rules cost tokens and did not buy correct answers when measured. On
-SWE-bench Verified with GLM 5.3 Flash, a prompt with rules about matching
-an output contract, listing judgment calls, planning, and not re-checking,
-together with a reminder appended to every task and a note for one-shot
-runs, took 1.96 times the input tokens per task (the median over 100
-tasks, against a control run at the same time) and passed the same number
-of tasks.
+Every rule in the prompt is sent with every request, and rules have not
+bought correct answers when measured. On SWE-bench Verified, a prompt
+with rules about matching an output contract, planning, and not
+re-checking, plus a reminder appended to every task, took about twice
+the input tokens per task and passed the same number of tasks.
 
-Before adding a rule to the prompt, measure it. The benchmark notes and
-scripts are outside the repository; `docs/dev/evals/terminal-bench.md`
-describes the in-repo way to run a suite.
+Before adding a rule to the prompt, measure it.
+`docs/dev/evals/terminal-bench.md` describes how to run a suite.
 
 ## The tools
 
-`buildTools()` returns the list. The file and shell tools are the bundles
-in `std::agents/lib/toolkits` with three differences, made in
-`fileAndShellTools`:
+`buildTools()` returns the list. The file and shell tools come from
+`codingFileAndShellTools()` in `std::agents/lib/toolkits`. It carries the
+same tools as `writableFileTools()` and `shellTools()` together, built
+from the same helpers, with three differences:
 
 | Tool | Difference | Why |
 |---|---|---|
@@ -65,6 +63,8 @@ terminal to answer it.
 
 - `tests/agency/agents/codingTools.agency`: the shell tool is named
   `bash`, `read` stops at 2,000 lines, and `write` takes no `mode`.
+- `tests/agency/agents/toolkits.agency`: the coding bundle has the same
+  tools as `writableFileTools()` and `shellTools()` together.
 - `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency`:
   the coders' tool lists have unique names and each carries `question`.
 - `lib/agents/agency-agent/brains/coordinator/tests/toolPresentations.agency`:

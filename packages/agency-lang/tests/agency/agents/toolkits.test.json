@@ -122,6 +122,17 @@
       ]
     },
     {
+      "nodeName": "codingBundleHasTheSameTools",
+      "description": "the coding bundle carries the same tools, in the same order, as writableFileTools and shellTools, with safeBash named bash",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "searchToolsRespectGitignore",
       "description": "ls, glob, and grep in the agent toolkit are bound to respectGitignore: true, so the model cannot turn it off",
       "input": "",

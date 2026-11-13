@@ -150,6 +150,31 @@ function baseOf(p: string): string {
   return p.slice(p.lastIndexOf("/") + 1);
 }
 
+/** Throw when `folder`, or anything above it, is a file. The Node host
+ *  refuses to make a folder under a file, and this host must agree. */
+function refuseFileOnTheWay(state: MemoryHostState, folder: string, operation: string): void {
+  let current = folder;
+  while (true) {
+    if (state.files[current]) {
+      throw new Error(
+        `${operation} refused: "${current}" is a file, so no folder can be made there.`,
+      );
+    }
+    const parent = parentOf(current);
+    if (parent === current) {
+      return;
+    }
+    current = parent;
+  }
+}
+
+/** Mark `folder` and every folder above it as existing. */
+function makeFolders(state: MemoryHostState, folder: string, operation: string): void {
+  refuseFileOnTheWay(state, folder, operation);
+  state.dirs[folder] = true;
+  addParents(state, folder);
+}
+
 function addParents(state: MemoryHostState, p: string): void {
   let current = parentOf(p);
   while (!state.dirs[current]) {
@@ -199,6 +224,9 @@ function memoryStore(state: MemoryHostState) {
   };
   const write = (full: string, bytes: Uint8Array, options: WriteOptions = {}): void => {
     const mode = options.mode ?? "overwrite";
+    if (options.makeFolders) {
+      makeFolders(state, parentOf(full), "write");
+    }
     if (state.dirs[full])
       throw new Error(`EISDIR: illegal operation on a directory, open '${full}'`);
     if (!state.dirs[parentOf(full)]) {
@@ -313,6 +341,9 @@ function locateIn(
       )}`,
     );
   }
+  if (dirMayBeMissing) {
+    refuseFileOnTheWay(state, parentOf(full), operation);
+  }
   return { dir: base, filename: full.slice(base.length + (base === "/" ? 0 : 1)) };
 }
 
@@ -416,9 +447,7 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       };
     },
     mkdir: async (root, target) => {
-      const full = resolve(root, target);
-      state.dirs[full] = true;
-      addParents(state, full);
+      makeFolders(state, resolve(root, target), "mkdir");
     },
     remove: async (root, target) => store.removeTree(resolve(root, target)),
     copy: async (from: Located, to: Located) => {

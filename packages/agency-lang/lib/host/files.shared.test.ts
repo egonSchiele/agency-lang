@@ -54,6 +54,35 @@ function registerFileTests(name: string, open: () => Workspace): void {
         expect(await host.files.readText(root, "m.txt")).toBe("three");
       }));
 
+    it("makes folders for a write only when asked, and never under a file", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        // Not asked: a missing folder is an error and nothing is created.
+        await expect(host.files.writeText(root, "new/deep/f.txt", "x")).rejects.toThrow();
+        expect(await host.files.stat(root, "new")).toBeNull();
+        // Asked: the folders inside the target are made.
+        await host.files.writeText(root, "new/deep/f.txt", "x", { makeFolders: true });
+        expect(await host.files.readText(root, "new/deep/f.txt")).toBe("x");
+        // Asked, and the root itself does not exist yet.
+        const later = path.posix.join(dir, "later");
+        const missing = await host.files.fixedRoot(later);
+        await host.files.writeBytes(missing, "a/b.bin", new Uint8Array([7]), { makeFolders: true });
+        expect(await host.files.readBytes(await host.files.root(later), "a/b.bin")).toEqual(
+          new Uint8Array([7]),
+        );
+        // A file where a folder would go is refused, before and after approval.
+        await host.files.writeText(root, "item", "a file");
+        await expect(
+          host.files.writeText(root, "item/sub/f.txt", "x", { makeFolders: true }),
+        ).rejects.toThrow();
+        await expect(host.files.mkdir(root, "item/sub")).rejects.toThrow();
+        await expect(
+          host.files.locate(path.posix.join(dir, "item", "sub"), "f.txt", "write", true),
+        ).rejects.toThrow("is a file");
+        await expect(host.files.locate(dir, "item/sub/f.txt", "write", true)).rejects.toThrow();
+        expect((await host.files.stat(root, "item"))?.kind).toBe("file");
+      }));
+
     it("lists, stats, makes, and removes directories", () =>
       withWorkspace(async ({ host, dir }) => {
         const root = await host.files.root(dir);

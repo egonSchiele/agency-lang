@@ -235,6 +235,68 @@ describe("readText and readBytes", () => {
   });
 });
 
+describe("writeText with makeFolders", () => {
+  // The root is fixed in one step and the write runs in a later one. A link
+  // put at the root in between must not send the new folders through it.
+  test("refuses a root that became a link after it was fixed", () => {
+    const dir = makeDir(".ct-swap-root-");
+    const outside = makeDir(".ct-swap-out-");
+    try {
+      const approved = path.join(fs.realpathSync(dir), "approved");
+      const fixed = fixedRoot(approved);
+      fs.symlinkSync(outside, approved);
+      expect(() => writeText(fixed, "new/deep/f.txt", "x", { makeFolders: true })).toThrow();
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      cleanup(dir);
+      cleanup(outside);
+    }
+  });
+
+  test("refuses a missing ancestor of the root that became a link", () => {
+    const dir = makeDir(".ct-swap-anc-");
+    const outside = makeDir(".ct-swap-out-");
+    try {
+      const ancestor = path.join(fs.realpathSync(dir), "a");
+      const fixed = fixedRoot(path.join(ancestor, "b"));
+      fs.symlinkSync(outside, ancestor);
+      expect(() => writeText(fixed, "c/f.txt", "x", { makeFolders: true })).toThrow();
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      cleanup(dir);
+      cleanup(outside);
+    }
+  });
+
+  // `/tmp` is a link on macOS. A link in the caller's spelling of a missing
+  // dir is followed as anywhere else, and is not mistaken for a file.
+  test("locates a missing dir spelled through a link", () => {
+    const dir = makeDir(".ct-alias-");
+    try {
+      const real = path.join(dir, "real");
+      fs.mkdirSync(real);
+      const alias = path.join(dir, "alias");
+      fs.symlinkSync(real, alias);
+      const located = contained.locateSync(path.join(alias, "new"), "f.txt", "write", true);
+      expect(located.dir).toBe(path.join(fs.realpathSync(real), "new"));
+      expect(located.filename).toBe("f.txt");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("makes the root and the folders inside the target", () => {
+    const dir = makeDir(".ct-make-");
+    try {
+      const fixed = fixedRoot(path.join(fs.realpathSync(dir), "not", "yet"));
+      writeText(fixed, "c/d/f.txt", "x", { makeFolders: true });
+      expect(fs.readFileSync(path.join(dir, "not", "yet", "c", "d", "f.txt"), "utf8")).toBe("x");
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
 describe("writeText modes", () => {
   test("overwrite replaces content and leaves no temporary file behind", () => {
     const dir = makeDir(".ct-over-");

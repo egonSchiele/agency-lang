@@ -1,6 +1,7 @@
 // write and writeBinary create the folders their path needs, after the
 // write is approved and never before.
-import { edit } from "std::fs"
+import { edit, mkdir } from "std::fs"
+import { safeBash } from "std::safeBash"
 import { exists } from "std::shell"
 
 // A folder that does not exist yet, different on every run. Nothing here
@@ -43,6 +44,34 @@ node rejectedWriteMakesNoFolder(): any[] {
     return reject()
   }
   return [shown.endsWith(dir.split("/tmp")[1]), exists(dir)]
+}
+
+// A file where a folder would go is refused before anyone is asked.
+node fileInThePathIsRefusedBeforeAsking(): any[] {
+  const dir = freshDir("file")
+  write("item", "a file", dir) with approve
+  let asked = false
+  let message = ""
+  handle {
+    const result = write("item/sub/f.txt", "x", dir)
+    if (result is failure(why)) {
+      message = why
+    }
+  } with (intr) {
+    asked = true
+    return approve()
+  }
+  return [asked, message.includes("is a file")]
+}
+
+// `echo hi > missing/f.txt` through safeBash runs as a write with no
+// shell. It must fail as it does in bash, which makes no folders for a
+// redirect, and leave nothing behind.
+node redirectStillNeedsItsFolder(): any[] {
+  const dir = freshDir("redirect")
+  mkdir(dir) with approve
+  const result = safeBash("echo hi > missing/f.txt", cwd: dir) with approve
+  return [isFailure(result), exists("${dir}/missing")]
 }
 
 // Only a write creates folders. An edit of a file in a missing folder is

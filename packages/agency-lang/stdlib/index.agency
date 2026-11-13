@@ -263,7 +263,7 @@ export def write(
     mode: mode
   })
   destructive {
-    return try _write(prepared.value.dir, prepared.value.filename, content, mode)
+    return try _write(prepared.value.dir, prepared.value.filename, content, mode, true)
   }
 }
 
@@ -296,7 +296,7 @@ export def writeBinary(
     mode: mode
   })
   destructive {
-    return try _writeBinary(prepared.value.dir, prepared.value.filename, base64, mode)
+    return try _writeBinary(prepared.value.dir, prepared.value.filename, base64, mode, true)
   }
 }
 

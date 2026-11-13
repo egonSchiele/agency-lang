@@ -61,7 +61,10 @@ export type FileStat = {
 
 export const WRITE_MODES = ["overwrite", "append", "create-only"] as const;
 export type WriteMode = (typeof WRITE_MODES)[number];
-export type WriteOptions = { mode?: WriteMode; fileMode?: number };
+/** `makeFolders` creates the file's folder, and any folder above it that
+ *  is missing, the root included, in the same step as the write: no other
+ *  call runs between the check of the root, the creation, and the write. */
+export type WriteOptions = { mode?: WriteMode; fileMode?: number; makeFolders?: boolean };
 
 /** An open file for writes at positions, from `openForWrite`. */
 export type WritableFile = {

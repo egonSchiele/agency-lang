@@ -34,14 +34,16 @@ const approved = await host.files.fixedRoot(real); // refuses if real now contai
 
 ### A write creates the folders it needs
 
-`write` and `writeBinary` create every missing folder on the way to the file: the folders inside `filename`, and `dir` itself. A model writes `src/new/module.py` without first making `src/new`, and a write that failed for that reason failed inside `write`'s destructive region, where one failure makes the tool loop remove the tool (`docs/dev/agents/tool-loop-guards.md`).
+`write` and `writeBinary` create every missing folder on the way to the file: the folders inside `filename`, and `dir` itself. A model writes `src/new/module.py` without first making `src/new`, and before this a write that failed for that reason failed inside `write`'s destructive region, where one failure makes the tool loop remove the tool (`docs/dev/agents/tool-loop-guards.md`).
 
-The folders are covered by the write's own approval. The payload names `dir` and `filename`, so the approver sees the whole path that will exist afterwards, and no separate `std::mkdir` is raised. Two rules keep that honest:
+The folders are covered by the write's own approval. The payload names `dir` and `filename`, so the approver sees the whole path that will exist afterwards, and no separate `std::mkdir` is raised. Four rules keep that honest:
 
 1. **Nothing is created before the approval.** `locate` takes a fourth argument, `dirMayBeMissing`. With it, a `dir` that does not exist is accepted and spelled under its nearest real ancestor, which is the spelling the payload shows. Only `write` and `writeBinary` pass it. `read` and `edit` still refuse a missing `dir` before any interrupt, because there is nothing there to read or edit.
-2. **The folders are made by the contained `mkdir`.** After approval, `_write` calls `host.files.mkdir(root, dirname(filename))` on the fixed root, so a symlink at any component below the root is refused the way it is for every other operation.
+2. **The folders are made in the same step as the write.** `writeText` and `writeBytes` take a `makeFolders` option. With it, the host checks the root again with `fixedRoot`, creates the folders, and writes, with no wait between the three. The root was fixed in an earlier step, with an `await` after it. A call that ran in that gap could put a link at the root, or at an ancestor of it that did not exist yet, and a `mkdir` in a later step would follow the link out of the approved directory. `nodeFiles.test.ts` plants both links and checks nothing is created through them.
+3. **Only the public wrappers ask for it.** `_write` takes `makeFolders` and defaults to false. `write` and `writeBinary` pass true. safeBash runs `echo hi > out/f.txt` as a call to `_write` with no shell, and leaves the default, so a redirect into a missing folder fails as it does in bash and an `&&` after it does not run.
+4. **A file where a folder would go is refused before the approval.** With `item` a file, a write to `item/sub/f.txt`, or with `dir` set to `item/sub`, fails in `locate` with a message that names the file. Both hosts refuse it again when they make the folders, so the in-memory host cannot turn a file into a folder where the Node host would fail.
 
-`tests/agency/write-creates-folders.agency` checks both: a write into a missing folder succeeds, and a rejected one leaves the folder uncreated.
+`tests/agency/write-creates-folders.agency` checks these from Agency: a write into a missing folder succeeds, a rejected one leaves the folder uncreated, a file in the path is refused with no interrupt raised, and a redirected `echo` into a missing folder still fails.
 
 `wholePath` and `fixedPath` are the same pair for whole paths. `stat` and `exists` raise no interrupt, so they resolve the caller's spelling with `root()`. `applyPatch` parses the patch before the interrupt and puts the real path of every touched file in the payload as `files`; after approval each entry goes through `fixedPath`.
 

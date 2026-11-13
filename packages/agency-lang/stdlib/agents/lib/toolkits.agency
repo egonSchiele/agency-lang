@@ -228,6 +228,24 @@ export def codingFileAndShellTools(): any[] {
   ]
 }
 
+/** The five tools a model needs to work on code when `bash` does the
+listing and searching: `read`, `bash`, `edit`, `write`, and `readSpill` for
+output too long to return inline. The four file and shell tools are the
+ones in `codingFileAndShellTools()`. Every tool definition is sent with
+every request, so a short list costs less on a long task. */
+export def minimalCodingTools(): any[] {
+  """
+  Return the smallest set of file and shell tools for a coding agent.
+  """
+  return [
+    readCapped.rename("read"),
+    bashTool(),
+    edit.partial(useAgentCwd: true),
+    write.partial(useAgentCwd: true, mode: "overwrite"),
+    readSpill,
+  ]
+}
+
 /** Start a shell command in the background, read its output, and stop it.
 Not part of `shellTools()`: an agent that exits when its turn ends would
 stop its jobs before they finish. */

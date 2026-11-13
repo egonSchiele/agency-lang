@@ -1,0 +1,25 @@
+import { minimalCodingTools } from "std::agents/lib/toolkits"
+
+import { minimalBrain } from "../minimal.agency"
+import { threadHasSystemText, threadHasText } from "../../../tests/threadText.agency"
+
+// One turn is a tool loop: the scripted model calls `bash`, the command
+// runs, and its output reaches the thread before the reply. The grounding
+// from init reaches the system prompt.
+node runsAToolAndAnswers(): string {
+  // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).
+  const brain = minimalBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({
+    interactive: false,
+    grounding: "GROUNDING-MARKER-5b2d"
+  }) with approve
+  const reply = answer("", ["say hi"]) with approve
+  return "${reply}|${threadHasSystemText("GROUNDING-MARKER-5b2d")}|${threadHasText("tool", "MINIMAL-BASH-RAN")}"
+}
+
+// The brain offers these five tools and no others.
+node offersFiveTools(): string[] {
+  return [tool.name for tool in minimalCodingTools()]
+}

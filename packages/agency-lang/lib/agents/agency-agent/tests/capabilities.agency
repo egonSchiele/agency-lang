@@ -16,6 +16,7 @@ import {
  } from "../shared.agency"
 import { saveSettings } from "../lib/settings.agency"
 import { hostedModelInfo } from "std::llm"
+import { replyRoom } from "../lib/contextBudget.agency"
 
 // Unknown model + unknown provider → pure built-in defaults. Pins the
 // 64000 maxTokens default, which the table owns.
@@ -34,8 +35,28 @@ node catalogModelGetsItsOwnLimit(): any[] {
   const resolved = resolveCapabilities("gpt-5.5", "openai", {})
   return [
     info.maxOutputTokens > 0,
-    resolved.values.maxTokens == info.maxOutputTokens,
+    resolved.values.maxTokens == Math.min(info.maxOutputTokens, replyRoom(info.contextWindow)),
     resolved.sources.maxTokens,
+  ]
+}
+
+// The room compaction leaves free: a fifth of the window, in whole tokens.
+node replyRoomIsAFifthOfTheWindow(): number[] {
+  return [replyRoom(200000), replyRoom(400000), replyRoom(1050000), replyRoom(8192)]
+}
+
+// o3's output limit is half its window. The cap is held to the room
+// compaction leaves, so input plus the cap never passes the window.
+node catalogLimitFitsInTheWindow(): any[] {
+  const info = hostedModelInfo("o3")
+  if (info == null) {
+    return ["o3 is not in the catalog"]
+  }
+  const cap = resolveCapabilities("o3", "openai", {}).values.maxTokens ?? 0
+  return [
+    info.maxOutputTokens > replyRoom(info.contextWindow),
+    cap == replyRoom(info.contextWindow),
+    Math.floor(info.contextWindow * 0.8) + cap <= info.contextWindow,
   ]
 }
 

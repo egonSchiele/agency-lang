@@ -22,6 +22,26 @@
       ]
     },
     {
+      "nodeName": "replyRoomIsAFifthOfTheWindow",
+      "input": "",
+      "expectedOutput": "[40000,80000,210000,1639]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "catalogLimitFitsInTheWindow",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "providerAndModelLayersBeatTheCatalog",
       "input": "",
       "expectedOutput": "\"20000/provider/131072/model\"",

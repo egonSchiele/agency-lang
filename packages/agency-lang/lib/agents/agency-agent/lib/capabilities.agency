@@ -14,6 +14,8 @@
 
 import { hostedModelInfo } from "std::llm"
 
+import { replyRoom } from "./contextBudget.agency"
+
 /** The total, resolved profile. Every field has a value after resolution. */
 export type Capabilities = {
   summarize: boolean;
@@ -135,7 +137,8 @@ export static const MODEL_CAPABILITIES: Record<string, CapabilityPatch> = {
     maxTokens: 1000
   },
   // Reached through OpenRouter, so not in the catalog. 131072 is the
-  // output limit OpenRouter lists for each.
+  // output limit OpenRouter lists for each, an eighth of the 1,048,576
+  // window it lists.
   "z-ai/glm-5.3": {
     maxTokens: 131072
   },
@@ -202,13 +205,20 @@ export def withMemoryFromEmbeddingOverride(
 }
 
 /** The model's own output limit from the model catalog, as a patch, or null
-  when the catalog does not know the model or its limit. */
+  when the catalog does not know the model or its limit. The limit is held
+  to the part of the window compaction leaves free. Without that, o3
+  (200,000-token window, 100,000 output) would send a request for more than
+  its window once the conversation passed 100,000 tokens, and compaction
+  does not start until 160,000. */
 def catalogPatch(modelKey: string): CapabilityPatch | null {
   const info = hostedModelInfo(modelKey)
   if (info == null || info.maxOutputTokens <= 0) {
     return null
   }
-  return { maxTokens: info.maxOutputTokens }
+  if (info.contextWindow <= 0) {
+    return { maxTokens: info.maxOutputTokens }
+  }
+  return { maxTokens: Math.min(info.maxOutputTokens, replyRoom(info.contextWindow)) }
 }
 
 /** Resolve the capability profile for (modelKey, provider) under the user's

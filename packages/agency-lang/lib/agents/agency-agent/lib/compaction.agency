@@ -6,14 +6,12 @@
 import { hostedModelInfo } from "std::llm"
 
 import { getResolvedSlots } from "../shared.agency"
+import { COMPACT_AT_SHARE } from "./contextBudget.agency"
 import {
   _applyCompaction,
   _compactionInput,
   _contextTokens,
  } from "agency-lang/stdlib-lib/agentCompaction.js"
-
-// Compact once the next request would fill this share of the window.
-static const COMPACT_AT_SHARE = 0.8
 
 // Recent messages kept as they are: this share of the window, up to
 // MAX_KEEP_TOKENS. The share matters for a small local model.

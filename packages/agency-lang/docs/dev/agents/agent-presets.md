@@ -124,6 +124,39 @@ limits have fields of their own, `reasoningEffort` comes from the effort
 rule below, and `maxTokens` comes from the capabilities settings. `rawAttributes` is
 refused until smoltalk stops it from replacing the model (smoltalk#73).
 
+The default `maxTokens` is resolved in `resolveCapabilities`
+(`lib/capabilities.agency`), lowest layer first:
+
+1. 64,000, for a model the model catalog does not know. Most models
+   reached through OpenRouter are in this case.
+2. The model's own output limit, when the catalog has one
+   (`hostedModelInfo(name).maxOutputTokens`), held to the fifth of the
+   window that compaction leaves free (`replyRoom` in
+   `lib/contextBudget.agency`). Compaction starts at 80% of the window, so
+   a larger cap would let input plus the cap pass the window before
+   compaction ran. `o3` has a 200,000-token window and a 100,000-token
+   output limit, and gets 40,000.
+3. The provider's entry in `PROVIDER_CAPABILITIES`. Anthropic is held to
+   20,000, because its client refuses a non-streaming request above 21,333
+   and the agent does not stream. A local provider keeps a small cap.
+4. The model's entry in `MODEL_CAPABILITIES`, for a model whose limit is
+   known and is not in the catalog, such as the GLM 5.3 family at 131,072.
+
+The user's `capabilities` settings come after all four.
+
+A model the catalog does not know has no known window, so the agent never
+compacts its conversation and cannot check that the cap fits. OpenRouter
+accepts a cap above the model's limit: a request with a 64,000 cap
+succeeded on three models whose whole window is 8,192 to 36,864 tokens,
+and one with a 2,000,000 cap succeeded on GLM 5.3 Flash. A host reached
+another way may refuse instead. When one does, add the model to
+`MODEL_CAPABILITIES` with a cap that fits its window.
+
+A call has a 10-minute deadline (`DEFAULT_RETRY_POLICY` in
+`lib/runtime/llmRetry.ts`), and the agent does not stream. A reply that
+takes longer is abandoned and the call is retried, so a model must write
+a whole reply inside 10 minutes whatever its cap.
+
 `requestLlmOptions` picks the block: the session's, then the preset's, then
 `settings.model`'s. The first one set wins whole, and blocks never merge,
 because each was written for its own models. For the same reason, a model

@@ -153,6 +153,7 @@ export type HostedModelInfo = {
   outputCost: number;
   contextWindow: number;
   family: string;
+  maxOutputTokens: number;
 };
 
 function toHostedInfo(model: any): HostedModelInfo {
@@ -164,6 +165,7 @@ function toHostedInfo(model: any): HostedModelInfo {
     outputCost: model.outputTokenCost ?? 0,
     contextWindow: model.maxInputTokens ?? 0,
     family: model.family ?? "",
+    maxOutputTokens: model.maxOutputTokens ?? 0,
   };
 }
 

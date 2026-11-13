@@ -272,10 +272,10 @@ stdlib (see `docs/dev/agents/tool-loop-guards.md`).
 
 ## What a failed command returns
 
-When a command that ran through bash exits non-zero, the failure's text
-is what a terminal would show: stdout, then stderr, then a status line,
-then a note when there is one (gh not being logged in, or what to do
-about a time limit).
+When a command exits non-zero, the failure's text is what a terminal
+would show: stdout, then stderr, then a status line, then a note when
+there is one (gh not being logged in, or what to do about a time limit).
+An `agency` command, which runs in process, fails with the same text.
 
 ```
 fatal: invalid reference: *.py

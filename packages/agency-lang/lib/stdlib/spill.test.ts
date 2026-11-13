@@ -18,7 +18,7 @@ describe("spill", () => {
 
   it("saves long output and reads it back by the name in the notice", () => {
     withRun(() => {
-      const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
+      const text = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
       expect(text.length).toBeGreaterThan(MAX_STDOUT_LEN);
       const notice = _keepOutput(text, 3, "make");
       expect(notice).toContain("Command exited with code 3");
@@ -43,7 +43,7 @@ describe("spill", () => {
 
   it("searches several patterns in one call, grouping the matches by pattern", () => {
     withRun(() => {
-      const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
+      const text = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
       const name = /full output saved as (\S+) ---/.exec(_keepOutput(text, 0, "cmd"))![1];
       expect(_grepSpill("line 7$", name, 10, ["line 12$", "no such line"])).toEqual([
         { pattern: "line 7$", matches: [{ file: name, line: 8, text: "line 7" }] },

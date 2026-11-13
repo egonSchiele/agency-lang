@@ -1,4 +1,4 @@
-import { question } from "std::agent"
+import { communicationTools } from "std::agents/lib/toolkits"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
@@ -52,7 +52,7 @@ export def review(userMsg: string): Result<Feedback[]> {
       feedback = mergeFeedback(feedback, agencyReviewAgent(
         codeSnippet.code,
         context: globalInstructionsText(),
-        extraTools: [question],
+        extraTools: communicationTools(),
       ))
     }
   }

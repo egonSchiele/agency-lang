@@ -244,7 +244,8 @@ export type HostedModelInfo = {
   inputCost: number;
   outputCost: number;
   contextWindow: number;
-  family: string
+  family: string;
+  maxOutputTokens: number
 }
 
 export def listHostedModels(): HostedModelInfo[] {

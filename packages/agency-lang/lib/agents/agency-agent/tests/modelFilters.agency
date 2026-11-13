@@ -2,8 +2,8 @@ import { filterHostedModels } from "../lib/modelFilters.agency"
 import { HostedModelInfo } from "std::llm"
 
 static const CATALOG: HostedModelInfo[] = [
-  { name: "cheap-oss", provider: "openrouter", openWeights: true, inputCost: 0.1, outputCost: 0.2, contextWindow: 32000, family: "x" },
-  { name: "pricey-closed", provider: "anthropic", openWeights: false, inputCost: 15.0, outputCost: 75.0, contextWindow: 200000, family: "y" }
+  { name: "cheap-oss", provider: "openrouter", openWeights: true, inputCost: 0.1, outputCost: 0.2, contextWindow: 32000, family: "x", maxOutputTokens: 0 },
+  { name: "pricey-closed", provider: "anthropic", openWeights: false, inputCost: 15.0, outputCost: 75.0, contextWindow: 200000, family: "y", maxOutputTokens: 0 }
 ]
 
 node filterByProvider(): string {

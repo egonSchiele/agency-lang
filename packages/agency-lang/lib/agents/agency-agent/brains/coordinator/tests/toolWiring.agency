@@ -26,6 +26,7 @@ import { buildTools as explorerTools } from "std::agents/explorer"
 import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
 import { buildTools as researcherOwnTools } from "std::agents/researcher"
 import { question } from "std::agent"
+import { setUserCanAnswer } from "std::agents/lib/toolkits"
 import { filter, find, map } from "std::array"
 import { now } from "std::date"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
@@ -210,6 +211,19 @@ node coordinatorTurnOffersQuestion(): string {
     return "FAIL: no question in ${names.join(", ")}"
   }
   return "ok"
+}
+
+// A one-shot run has nobody to answer, so the harness calls
+// setUserCanAnswer(false) and the coordinator's turn offers no `question`.
+node oneShotTurnOffersNoQuestion(): boolean {
+  _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
+  setUserCanAnswer(false)
+  let names: string[] = []
+  handle {
+    names = map(turnTools(now()), \tool -> "${tool.name}")
+  } with approve
+  setUserCanAnswer(true)
+  return names.includes("question")
 }
 
 // Two of the agents handed `question` at the call site rather than through

@@ -5,7 +5,7 @@
  * continues the coordinator's conversation. The docstring is written for
  * routing, not for the agent's own behaviour.
  */
-import { question } from "std::agent"
+import { communicationTools } from "std::agents/lib/toolkits"
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
@@ -51,6 +51,6 @@ export handoff def oracleAgent(
     maxTime: timeBudget(maxSeconds, 15m),
     model: getSlowModel(),
     provider: getSlowProvider(),
-    extraTools: [question],
+    extraTools: communicationTools(),
   )
 }

@@ -114,14 +114,53 @@ static const briefDiagnosticsSkill = docsToolFromEntries("diagnostics", diagnost
 static const briefStdlibSkill = docsToolFromEntries("stdlib", stdlibEntries, brief: true).rename("agencyStdlib")
 static const briefAgentSkill = docsToolFromEntries("agent", agentEntries, brief: true).rename("agencyAgent")
 
+// Whether anyone can answer a question in this run. A program that knows
+// nobody can, such as `agency agent -p`, sets it to false, and then no
+// agent is offered the tool or told about it.
+let _userCanAnswer = true
+
+export def setUserCanAnswer(canAnswer: boolean) {
+  """
+  Say whether anyone can answer a question in this run. When false, `communicationTools()` returns no tools and `askUserHint()` returns no text.
+
+  @param canAnswer - false when the run has nobody to ask, such as an unattended command-line run
+  """
+  _userCanAnswer = canAnswer
+}
+
+/** For code that offers its own asking tool or writes its own rule about
+asking, and so cannot use `communicationTools()` or `askUserHint()`. */
+export def userCanAnswer(): boolean {
+  """
+  Return whether anyone can answer a question in this run. True unless a program called `setUserCanAnswer(false)`.
+  """
+  return _userCanAnswer
+}
+
 /** `question` raises an interrupt the host or a handler answers with a value.
 Use it in hosted as well as terminal agents. Approval policy rules cannot
-supply a question's reply. */
+supply a question's reply. The list is empty after `setUserCanAnswer(false)`. */
 export def communicationTools(): any[] {
   """
-  Return the tool that asks the user a question.
+  Return the tool that asks the user a question, or no tools when nobody can answer.
   """
+  if (!_userCanAnswer) {
+    return []
+  }
   return [question]
+}
+
+/** Add this to the system prompt of an agent that offers
+`communicationTools()`. It is built per call, not spliced into a `static`
+prompt, because a program may call `setUserCanAnswer` after statics run. */
+export def askUserHint(): string {
+  """
+  Return `ASK_USER_HINT`, or an empty string when nobody can answer.
+  """
+  if (!_userCanAnswer) {
+    return ""
+  }
+  return ASK_USER_HINT
 }
 
 /** ls, glob, and grep always respect `.gitignore`. The setting is bound so

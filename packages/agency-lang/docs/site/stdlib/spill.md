@@ -48,7 +48,7 @@ How much of a command's output comes back inline. Anything longer is
 ```ts
 /** How much of a command's output comes back inline. Anything longer is
   saved and replaced by a preview (see `keepOutput`). */
-export static const MAX_STDOUT_LEN = 2000
+export static const MAX_STDOUT_LEN = 10000
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L42))

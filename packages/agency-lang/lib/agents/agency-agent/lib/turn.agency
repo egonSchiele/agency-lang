@@ -5,6 +5,7 @@
   that happens before the brain sees the message. See
   docs/dev/agents/agent-brains.md.
 */
+import { setUserCanAnswer } from "std::agents/lib/toolkits"
 import { map } from "std::array"
 import { cliPolicyHandler } from "std::policy"
 import { expandSlash } from "std::skills"
@@ -128,6 +129,9 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
   }
   const context = buildBrainContext(interactive, brain.name)
   const handler = policyHandlerFor(interactive)
+  // A one-shot run has nobody to answer, and the policy handler would
+  // reject a question, so no agent is offered the tool.
+  setUserCanAnswer(interactive)
   handle {
     brain.init(context)
     body()

@@ -1,0 +1,15 @@
+/** @module
+  @summary How a model's context window is split between the conversation
+  and the reply. Compaction keeps the conversation under one share, and the
+  output cap must fit in the rest, or a long session sends requests that
+  ask for more tokens than the window holds.
+*/
+
+// Compact once the next request would fill this share of the window.
+export static const COMPACT_AT_SHARE = 0.8
+
+/** The tokens compaction leaves free in a window of this size, which is
+  the most a reply may be capped at. */
+export def replyRoom(window: number): number {
+  return window - Math.floor(window * COMPACT_AT_SHARE)
+}

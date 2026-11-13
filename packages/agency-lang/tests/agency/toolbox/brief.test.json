@@ -31,6 +31,17 @@
       ]
     },
     {
+      "nodeName": "authorDoesNotAskWhenNobodyCanAnswer",
+      "description": "The tool author is offered question and told to ask by default. After setUserCanAnswer(false) it is offered no question tool, on a first draft or a redraft, and its rule says to pick a value and say which.",
+      "input": "",
+      "expectedOutput": "[[[\"question\",\"cannotFix\"],true],[[\"cannotFix\"],[],false,true]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "answersReachLaterReaders",
       "input": "",
       "expectedOutput": "\"pass\"",

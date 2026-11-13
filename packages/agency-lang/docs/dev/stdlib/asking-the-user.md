@@ -25,32 +25,47 @@ That is the whole implementation (`stdlib/agent.agency:66`). There is no termina
 
 **A run with no one to ask rejects it with an explanation.** Under the CLI policy handler, `agency agent -p` has nobody to ask, so the question comes back as a failure whose message is written for the model to read: take an approach that does not need an answer, or re-run interactively (`policy.agency:1188-1196`). The model reads that in the tool result and can carry on rather than the process hanging. `agency run --interactive` reaches the same outcome by a different path (`lib/runtime/interruptResolution.ts:87`). A hosted agent is not in this case — it has no terminal, but it does have a host that can answer.
 
+## When nobody can answer, no agent gets the tool
+
+A rejected question still costs the model a round. A program that knows nobody can answer calls `setUserCanAnswer(false)` (`stdlib/agents/lib/toolkits.agency`). From then on `communicationTools()` returns no tools and `askUserHint()` returns no text, so no agent is offered `question` or told about it. The setting is a module variable, so it lasts for the run and reaches every subagent that runs in it.
+
+`agency agent` calls it in `runSession` (`lib/agents/agency-agent/lib/turn.agency`) with the same `interactive` value the policy handler gets, so the tool is missing in exactly the runs where the handler would reject the question. The default is `true`: a program that never calls the setter gets the tool, and the rejection described above is what its model sees when nobody answers.
+
+**Every place that offers `question` must take it from `communicationTools()`, and every prompt must take the hint from `askUserHint()`.** A bare `question` in a tool list, or `ASK_USER_HINT` spliced into a `static` prompt, stays there in a one-shot run. A `static` is built before any program can call the setter, which is why the hint is added where the prompt is sent: `systemMessage(systemPrompt + askUserHint())`.
+
+Three more rules follow from that one:
+
+1. **A static prompt must not name the tool.** A line such as "use `question` for something you cannot find" tells a one-shot model to call a tool it does not have. Say what to do without naming it, as the explorer's prompt does, and leave the naming to `askUserHint()`.
+2. **The hint goes to the call that carries the tool.** The planner's planning call offers `question`, so its prompt gets the hint. The call that writes the program does not offer it, and gets no hint.
+3. **Code with its own asking tool or its own rule about asking reads `userCanAnswer()`.** `designTool`'s author is the one case: it offers `askAndRecord` under the name `question`, to record the answers for the reviewer, and its brief has its own rule. `authorTools` and `askRule` in `stdlib/toolbox.agency` leave the tool out and swap the rule for "pick the most reasonable value, and say which one you picked" when nobody can answer. The coordinator reaches this code in a one-shot run through `writeToolFor`.
+
 ## Which agents have it, and the split to be careful about
 
-Most get it from `communicationTools()` (`stdlib/agents/lib/toolkits.agency`): coding, github, explorer, planner, researcher, review, data, verifier, typescript/review and writing/review all claim that bundle.
+Most get it from `communicationTools()` in their own tool list: coding, github, explorer, planner, researcher, review, data, verifier, typescript/review and writing/review.
 
-Three agents do not claim it, and their callers hand them `question` at the call site instead. All three call sites are in `lib/agents/agency-agent/brains/coordinator/subagents/`:
+Three agents do not, and their callers add `communicationTools()` at the call site instead. All three call sites are in `lib/agents/agency-agent/brains/coordinator/subagents/`:
 
 | agent | call site |
 |---|---|
 | `oracleAgent` | `oracle.agency` |
 | `agencyReviewAgent` | `review.agency` |
-| `agencyResearcherAgent` | `research.agency`, as `extraTools: [...researchTools, question]` |
+| `agencyResearcherAgent` | `research.agency`, as `extraTools: [...researchTools, ...communicationTools()]` |
 
-**Adding `communicationTools()` to any of those three means dropping its call-site copy in the same change.** Two tools named `question` in one request are rejected by `assertUniqueToolNames` (`lib/runtime/prompt.ts`) before it is sent, so the dispatch fails outright. `composedOracleToolsHaveUniqueNames`, `composedAgencyReviewToolsHaveUniqueNames` and `composedAgencyResearchToolsHaveUniqueNames` in `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency` ping the composed lists for exactly this.
+**Adding `communicationTools()` to any of those three agents means dropping its call-site copy in the same change.** Two tools named `question` in one request are rejected by `assertUniqueToolNames` (`lib/runtime/prompt.ts`) before it is sent, so the dispatch fails outright. `composedOracleToolsHaveUniqueNames`, `composedAgencyReviewToolsHaveUniqueNames` and `composedAgencyResearchToolsHaveUniqueNames` in `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency` ping the composed lists for exactly this.
 
-The coordinator asks directly rather than through a subagent, so `question` is in `turnTools()` (`brains/coordinator/coordinator.agency`).
+The coordinator asks directly rather than through a subagent, so `communicationTools()` is in `turnTools()` (`brains/coordinator/coordinator.agency`).
 
 ## Wiring the tool is not enough; the prompt has to name it
 
 Every subagent carried `question` and none of them used it, because no system prompt mentioned it. A tool a model is handed but never told about is a tool it will not reach for.
 
-`ASK_USER_HINT` (`stdlib/agents/lib/toolkits.agency`) is the shared paragraph, spliced into each agent's prompt beside `SAVE_DRAFT_HINT`. It says three things: ask when only the user can tell you, ask before building on the guess, and when the question comes back rejected pick a reading, say which, and carry on.
+`ASK_USER_HINT` (`stdlib/agents/lib/toolkits.agency`) is the shared paragraph, and `askUserHint()` adds it to each agent's prompt. It says three things: ask when only the user can tell you, ask before building on the guess, and when the question comes back rejected pick a reading, say which, and carry on.
 
 Two things to watch when adding it to another agent's prompt. First, the hint says "when nobody can answer", not "when nobody is at a terminal" — a hosted agent has no terminal and can still be answered. Second, check the prompt for an existing instruction not to ask. Explorer and researcher both had one, and a flat prohibition is the more categorical of the two rules, so the tool stays unused unless the old line is narrowed.
 
 ## Tests
 
 - `tests/agency/agent-question/` — the round trip with no LLM: an approval's value comes back from the call, the prompt reaches the handler, and a rejection's reason survives to the call site.
+- `tests/agency/agents/toolkits.agency` — `noQuestionWhenNobodyCanAnswer`: after `setUserCanAnswer(false)` the bundle, the hint, and the coder's tool list all drop the tool. `oneShotTurnOffersNoQuestion` in `toolWiring.agency` checks the coordinator's turn.
 - `tests/agency/policy-ask-value-interrupt/` — the menu and `typedValue` behavior for a value-expecting raise.
 - `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency` — `subagentsOfferQuestion` and `coordinatorTurnOffersQuestion` check every list carries the tool; the composed pings check none carries it twice.

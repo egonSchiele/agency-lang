@@ -2,8 +2,8 @@
   Pure data + resolution; no I/O. A capability profile answers "what should
   the agent enable for THIS model?" — small local models get no summarizer,
   no memory, and a token cap. Resolution is per-field across
-  six layers: user model > user provider > user global > built-in model >
-  built-in provider > built-in default. See
+  seven layers: user model > user provider > user global > built-in model >
+  built-in provider > model catalog > built-in default. See
   docs/superpowers/specs/2026-07-09-model-capabilities-design.md.
 
   On-disk note for hand-editors of settings.json: field removal writes
@@ -11,6 +11,10 @@
   absent everywhere. Nulls are transient — the sanitize pass strips
   them on the next load — and an entry whose last field is removed is
   dropped from its record immediately. */
+
+import { hostedModelInfo } from "std::llm"
+
+import { replyRoom } from "./contextBudget.agency"
 
 /** The total, resolved profile. Every field has a value after resolution. */
 export type Capabilities = {
@@ -34,7 +38,7 @@ export type CapabilitySettings = {
 }
 
 /** Per-field provenance: which layer set each value. One of "default",
-  "provider", "model", "user-global", "user-provider", "user-model", and
+  "catalog" (maxTokens only), "provider", "model", "user-global", "user-provider", "user-model", and
   for memory only, "embedding-override" (see withMemoryFromEmbeddingOverride).
   A concrete type (not Record) so the /settings renderer is exhaustive. */
 export type CapabilitySources = {
@@ -78,15 +82,20 @@ export static const CAPABILITY_FIELDS: CapabilityField[] = [
 
 /** The built-in base: what a capable hosted model gets.
 
-  maxTokens is 20000, not null. Smoltalk defaults to 4096, and with
-  adaptive thinking a hard reasoning turn can spend that whole budget
-  on thinking and return an empty reply. 20000 also stays under the
-  Anthropic non-streaming cutoff, which refuses maxTokens above 21333. */
+  maxTokens is the cap for a model the catalog does not know, which
+  includes most models reached through OpenRouter. A model the catalog
+  knows gets its own limit (see `catalogPatch`). It is 64000, not null:
+  smoltalk defaults to 4096, and a hard reasoning turn can spend a small
+  budget on thinking and return an empty reply. */
 export static const CAPABILITY_DEFAULT: Capabilities = {
   summarize: true,
   memory: true,
-  maxTokens: 20000
+  maxTokens: 64000
 }
+
+// The Anthropic client refuses a non-streaming request whose maxTokens is
+// above 21333, and the agent does not stream.
+static const ANTHROPIC_MAX_TOKENS = 20000
 
 /** Per-provider defaults. Any model without its own entry lands here.
   Keys are DEMOTED provider names ("openai", never "openai-responses" —
@@ -95,7 +104,8 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
   // No embeddings endpoint. Users who want memory anyway can override;
   // it runs with Tier-2 semantic recall disabled.
   anthropic: {
-    memory: false
+    memory: false,
+    maxTokens: ANTHROPIC_MAX_TOKENS
   },
   // The safety profile for local models. Every un-curated local model
   // lands here. Small models under a JSON grammar can miss their stop
@@ -111,8 +121,11 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
   // No embeddings endpoint of its own. Naming an embedding model in the
   // embedding slot (--model embedding=mlx/<model>) turns memory on; see
   // memoryEnablePlan.
+  // maxTokens: a local server's models are not in the catalog, and the
+  // unknown-model cap is sized for hosted models.
   mlx: {
-    memory: false
+    memory: false,
+    maxTokens: 20000
   }
 }
 
@@ -122,6 +135,21 @@ export static const MODEL_CAPABILITIES: Record<string, CapabilityPatch> = {
   // 8K context; the system prompt and a modest reply must fit.
   "smollm2-135m": {
     maxTokens: 1000
+  },
+  // Reached through OpenRouter, so not in the catalog. 131072 is the
+  // output limit OpenRouter lists for each, an eighth of the 1,048,576
+  // window it lists.
+  "z-ai/glm-5.3": {
+    maxTokens: 131072
+  },
+  "z-ai/glm-5.3-flash": {
+    maxTokens: 131072
+  },
+  "z-ai/glm-5.3-flashx": {
+    maxTokens: 131072
+  },
+  "z-ai/glm-5.3-prime": {
+    maxTokens: 131072
   }
 }
 
@@ -176,10 +204,29 @@ export def withMemoryFromEmbeddingOverride(
   return applyPatch(current, { memory: true }, "embedding-override")
 }
 
+/** The model's own output limit from the model catalog, as a patch, or null
+  when the catalog does not know the model or its limit. The limit is held
+  to the part of the window compaction leaves free. Without that, o3
+  (200,000-token window, 100,000 output) would send a request for more than
+  its window once the conversation passed 100,000 tokens, and compaction
+  does not start until 160,000. */
+def catalogPatch(modelKey: string): CapabilityPatch | null {
+  const info = hostedModelInfo(modelKey)
+  if (info == null || info.maxOutputTokens <= 0) {
+    return null
+  }
+  if (info.contextWindow <= 0) {
+    return { maxTokens: info.maxOutputTokens }
+  }
+  return { maxTokens: Math.min(info.maxOutputTokens, replyRoom(info.contextWindow)) }
+}
+
 /** Resolve the capability profile for (modelKey, provider) under the user's
   overrides. Layers applied lowest to highest so later wins:
-  built-in default < built-in provider < built-in model < user global <
-  user provider < user model. `provider` must be the DEMOTED name. */
+  built-in default < model catalog < built-in provider < built-in model <
+  user global < user provider < user model. `provider` must be the DEMOTED
+  name. The catalog sits below the provider layer so a provider's limit on
+  every model, such as Anthropic's, still holds. */
 export def resolveCapabilities(
   modelKey: string,
   provider: string,
@@ -195,6 +242,7 @@ export def resolveCapabilities(
       maxTokens: "default"
     }
   }
+  out = applyPatch(out, catalogPatch(modelKey), "catalog")
   out = applyPatch(out, PROVIDER_CAPABILITIES[provider], "provider")
   out = applyPatch(out, MODEL_CAPABILITIES[modelKey], "model")
   if (user.global != null) {

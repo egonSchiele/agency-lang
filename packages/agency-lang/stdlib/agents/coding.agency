@@ -5,7 +5,7 @@ import {
   codingFileAndShellTools,
   memoryTools,
   webTools,
-  ASK_USER_HINT,
+  askUserHint,
   PROGRESS_NOTE,
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
@@ -53,7 +53,7 @@ static const systemPrompt = """You are a coding assistant. Help users inspect fi
 - Be concise in your responses.
 
 ## Communicating with the user
-${PROGRESS_NOTE}${ASK_USER_HINT}${SAVE_DRAFT_HINT}
+${PROGRESS_NOTE}${SAVE_DRAFT_HINT}
 """
 
 static const skills = agentSkill("coding")
@@ -82,7 +82,7 @@ def solve(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt, expires: "llmCall")
+  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
   return llm(
     withContext(task: task, context: context),
     llmOptions(

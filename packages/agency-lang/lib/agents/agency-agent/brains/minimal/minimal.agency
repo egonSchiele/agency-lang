@@ -1,5 +1,5 @@
 /** @module
-  @summary A coding brain with five tools and a short prompt: each turn is
+  @summary A coding brain with six tools and a short prompt: each turn is
   one tool loop in a single conversation thread, with no subagents. For
   benchmarks and sandboxed runs, where every tool definition and prompt
   line is paid for on every request.
@@ -12,8 +12,9 @@ import { AgentBrain, BrainContext } from "../brain.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
 
 // Measured against longer prompts in docs/dev/agents/coding-agent.md. The
-// bash rule is here and not in the stdlib coder's prompt because this brain
-// has no ls, glob, or grep tool.
+// last four rules are copied from `systemPrompt` in
+// stdlib/agents/coding.agency; change the two together. The bash rule is
+// only here, because this brain has no ls, glob, or grep tool.
 static const PROMPT = """You are a coding assistant. Help users inspect files, run commands, and modify code.
 
 - Use bash for file operations like ls, grep, find.
@@ -56,7 +57,7 @@ export def minimalBrain(): AgentBrain {
   return {
     name: "minimal",
     session: "minimal",
-    description: "One coder with five tools (read, bash, edit, write, readSpill) and a short prompt",
+    description: "One coder with six tools (read, bash, edit, write, readSpill, grepSpill) and a short prompt",
     startTargets: [],
     init: minimalInit,
     runTurn: minimalRunTurn

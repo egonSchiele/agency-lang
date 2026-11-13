@@ -14,10 +14,10 @@
       ]
     },
     {
-      "nodeName": "offersFiveTools",
-      "description": "The minimal brain's tool list is read, bash, edit, write, and readSpill.",
+      "nodeName": "offersSixTools",
+      "description": "The minimal brain's tool list is read, bash, edit, write, and the two saved-output readers that a long bash output's notice names.",
       "input": "",
-      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"readSpill\"]",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"readSpill\",\"grepSpill\"]",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

@@ -43,6 +43,8 @@ callback that does.
 */
 
 // Kept short on purpose. Read docs/dev/agents/coding-agent.md before adding a rule.
+// The four rules are copied in the agent's minimal brain
+// (lib/agents/agency-agent/brains/minimal/minimal.agency); change the two together.
 static const systemPrompt = """You are a coding assistant. Help users inspect files, run commands, and modify code.
 
 - Use read to examine files instead of cat or sed.

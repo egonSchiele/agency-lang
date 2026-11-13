@@ -1,0 +1,29 @@
+[
+  { "toolCall": { "name": "runCommand", "args": { "id": "e1" } } },
+  { "toolCall": { "name": "runCommand", "args": { "id": "e2" } } },
+  { "toolCall": { "name": "runCommand", "args": { "id": "e3" } } },
+  { "toolCall": { "name": "runCommand", "args": { "id": "e4" } } },
+  { "toolCall": { "name": "runCommand", "args": { "id": "e5" } } },
+  { "toolCall": { "name": "runCommand", "args": { "id": "e6" } } },
+  { "return": "s1 done" },
+
+  { "toolCall": { "name": "broken", "args": { "id": "f1" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "f2" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "f3" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "f4" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "f5" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "f6" } } },
+  { "return": "s2 done" },
+
+  { "toolCall": { "name": "broken", "args": { "id": "g1" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g2" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g3" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g4" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "ok1" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g5" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g6" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g7" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "g8" } } },
+  { "toolCall": { "name": "broken", "args": { "id": "ok2" } } },
+  { "return": "s3 done" }
+]

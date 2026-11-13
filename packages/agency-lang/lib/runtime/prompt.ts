@@ -91,6 +91,7 @@ import {
   failureTier,
   invokeOnFreshThreadStore,
   invokeOnThread,
+  isCommandExit,
   MAX_TOOL_FAILURES,
   MAX_TOOL_REJECTIONS,
   REJECTION_REMOVAL_SUFFIX,
@@ -760,13 +761,17 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     // tool when the tier or the count says so.
     const recordFailure = (
       call: InvokedCall,
-      failed: { error: string; neverStarted?: boolean; destructiveRan?: boolean },
+      failed: {
+        error: string;
+        data?: Record<string, any> | null;
+        neverStarted?: boolean;
+        destructiveRan?: boolean;
+      },
     ): { toolResult: any; invokeOutcome: "failed" } => {
       const { handler, toolCall, namedArgs, log, branchKey, marks, toolResult } = call;
       const errorMessage = failed.error;
       // Cap only what the LLM sees; statelog keeps the full message.
       const cappedError = String(capForLlm(errorMessage, handler, namedArgs));
-      toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
       log.error({
         errorType: "toolError",
         message: errorMessage,
@@ -774,6 +779,21 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         neverStarted: !!failed.neverStarted,
         destructiveRan: !!failed.destructiveRan,
       });
+      if (isCommandExit(failed)) {
+        // The command failed, not the tool: no count, and the output goes
+        // to the model as the tool wrote it.
+        pushToolReply({
+          content: cappedError,
+          toolCall,
+          handler,
+          log,
+          marks,
+          stoppedReason: cappedError,
+        });
+        stack.setResultOnBranch(branchKey, toolResult);
+        return { toolResult, invokeOutcome: "failed" };
+      }
+      toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
       const tier = failureTier(failed, handler.markers);
       const pushMessage = (suffix: string) => {
         pushToolReply({
@@ -974,8 +994,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       const rawToolResult = toolResult;
       toolResult = toolResult ?? `${handler.name} ran successfully but did not return a value`;
       // An approved call is evidence the tool is not blanket-refused:
-      // only CONSECUTIVE rejections remove it.
+      // only CONSECUTIVE rejections remove it. The same goes for failures:
+      // a call that worked is evidence the tool is not broken.
       rejectionCounts[handler.name] = 0;
+      toolErrorCounts[handler.name] = 0;
       stack.setResultOnBranch(branchKey, toolResult);
       if (isAborted(toolResult) && toolResult.cause.kind === "guardTrip") {
         // An outer guard stopped the tool mid-flight. The aborted value

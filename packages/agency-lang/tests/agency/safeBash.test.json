@@ -57,7 +57,7 @@
     },
     {
       "nodeName": "wholeStringPlans",
-      "description": "The whole string gets one plan: refused if any command anywhere is refused, one std::bash if any command is unrecognized, otherwise the union of narrow effects. Chains are walked, so `true && rm -rf /tmp/x` is refused rather than approvable.",
+      "description": "The whole string gets one plan: refused if any command anywhere is refused, one std::bash if any command is unrecognized, otherwise the union of narrow effects. Chains are walked, so `true && dd if=a of=b` is refused rather than approvable.",
       "input": "",
       "expectedOutput": "[[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"chain\",[]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"refuse\",[]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
@@ -153,7 +153,40 @@
       "nodeName": "refusedNeverRuns",
       "description": "A refused command fails without raising anything, so there is nothing to approve.",
       "input": "",
-      "expectedOutput": "\"`rm` is not allowed\"",
+      "expectedOutput": "\"`dd` is not allowed\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "removePlans",
+      "description": "rm and rmdir ask std::remove for each literal path, the question the remove tool asks, beside the other commands' own questions. A flag the table does not list (-i, rmdir -p), a glob, a variable, and a path word for the command ask std::bash. The refusal still reads a path word. Every row only plans.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[\"std::remove\"]],[\"narrow\",[\"std::remove\",\"std::remove\"]],[\"narrow\",[\"std::remove\"]],[\"narrow\",[\"std::git::status\",\"std::remove\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"refuse\",[]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "removeRefusals",
+      "description": "An rm or rmdir is refused, with the reason, for the filesystem root, the home folder, a top-level folder, and the working directory or a folder that holds it, however the folder is spelled: with a trailing /*, as ~ or $HOME, as a variable that may be unset, as . or * or .., and inside a chain or a pipe. A folder inside the working directory is not refused.",
+      "input": "",
+      "expectedOutput": "[\"this delete is not allowed: that is the filesystem root\",\"this delete is not allowed: that is the filesystem root\",\"this delete is not allowed: that is the working directory or a folder that holds it\",true,true,\"this delete is not allowed: if $BUILD is unset, that is the filesystem root\",true,\"this delete is not allowed: that is the working directory or a folder that holds it\",\"this delete is not allowed: that is the working directory or a folder that holds it\",\"this delete is not allowed: that is the working directory or a folder that holds it\",true,\"this delete is not allowed: that is the filesystem root\",\"this delete is not allowed: that is the filesystem root\",\"NOT REFUSED\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "removeAsksLikeTheRemoveTool",
+      "description": "An rm raises std::remove with the real whole path of its target and the line the model wrote. The handler rejects it, so nothing is deleted, and the model reads the reason.",
+      "input": "",
+      "expectedOutput": "[[[\"std::remove\",true,\"rm -f no-such-file-xyz.txt\"]],true]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1450,7 +1483,7 @@
     },
     {
       "nodeName": "gitRunsSafely",
-      "description": "Real git, in folders the test makes. A pathspec given to checkout fails and changes no file, and the failure names the model's text. A diff of a file outside the repository prints none of it, inside a repository, where there is none, in a bare repository, and inside a `.git` folder. A checkout, a log, and a redirected diff work.",
+      "description": "Real git, in folders the test makes. A pathspec given to checkout fails with git's exit code and changes no file, and the failure shows none of the command safeBash built. A diff of a file outside the repository prints none of it, inside a repository, where there is none, in a bare repository, and inside a `.git` folder. A checkout, a log, and a redirected diff work.",
       "input": "",
       "expectedOutput": "[\"failure\",true,false,\"a = 2\\n\",\"b = 2\\n\",\"failure\",false,\"success\",\"success\",true,\"success\",true,\"failure\",true,false,\"failure\",true,false,\"failure\",true,false]",
       "evaluationCriteria": [

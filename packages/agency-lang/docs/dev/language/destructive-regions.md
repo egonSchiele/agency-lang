@@ -64,6 +64,13 @@ from the conversation. The decision and the alternatives set aside are
 in `docs/dev/stdlib/safe-bash.md`, "Why a bash call is never
 destructive".
 
+A tool also finishes every check it can make before it enters its
+region. `edit` reads the file and checks that each `oldText` matches
+(`_checkEdit`) after its interrupt is approved and before the region, so
+an edit that does not apply fails clean and the model may correct it and
+call again. The check runs after the approval because its answer says
+whether the file holds the text.
+
 ## Regions inside `parallel`
 
 A `destructive { }` region is allowed inside a `parallel` block, directly as an arm or nested in a `seq` arm. The parallel desugar (`lib/preprocessors/parallelDesugar.ts`) keeps the region's flip when it inlines the region, and when the region is itself an arm, it puts the flip at the start of the arm's statements. The flip is written to `__activation`, so it marks the calling function, exactly as a destructive call in an arm does. Both are conservative: a failure that leaves the function after the `parallel` block says `destructiveRan: true` whichever arm did the work. The refusal that used to guard this case existed because the flip landed on the fork frame, and went away with that bug.

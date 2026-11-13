@@ -255,6 +255,45 @@ tell which tools are handoffs, so the text names the handoff tools the
 round called and tells the model to call one of them again in a new
 response.
 
+## Tool failures
+
+A tool call that returns a failure is not refused: it ran. `recordFailure`
+in `prompt.ts` decides what the model reads and whether the tool stays.
+
+| The failure | The model reads | The tool |
+|---|---|---|
+| carries `destructiveRan` | `Error: <text>.` and that the tool can no longer be called | removed at once |
+| carries an exit code in its data | the text as the tool wrote it | stays, and the failure is not counted |
+| any other | `Error: <text>.` and a sentence from `TIER_SUFFIX` | removed at the fifth failure in a row |
+
+**Failures are counted in a row.** `toolErrorCounts` holds the count per
+tool, and a successful call to the tool sets it back to zero, as an
+approved call does for rejections. `MAX_TOOL_FAILURES` (5) is a circuit
+breaker for a tool that is broken, and a call that worked shows it is
+not. A count over the whole conversation would remove a tool from a long
+run that used it correctly: five mistyped file names in a hundred calls
+would cost the model `read`.
+
+**A command's exit status is not a tool failure.** `safeBash` fails on
+every non-zero exit, which covers a failing test run, a `grep` that
+found nothing, and a script the model is still fixing. The tool worked
+in each case. It says so by putting `exitCode` in the failure's data
+(`failure(text, { exitCode: 1 })`), and `isCommandExit`
+(`lib/runtime/toolInvocation.ts`) reads it. Such a failure is never
+counted, because a model fixing a script may run it five times in a row,
+and removing its shell leaves it unable to run anything. The text reaches
+the model with no `Error:` in front and no advice after, since it is
+output and the tool wrote the exit code into it. A failure that also
+carries `destructiveRan` is not a command exit: that tier always wins.
+
+**Destructive failures remove the tool at once**, so a tool should enter
+its destructive region only when it is about to do the work. `edit`
+checks that every `oldText` matches before its region (`_checkEdit` in
+`lib/stdlib/fs.ts`). An edit that does not apply wrote nothing, and the
+model's next move is to correct `oldText` and call again, which it
+cannot do with the tool gone. The rule for regions is in
+`docs/dev/language/destructive-regions.md`.
+
 ## A result over the cap
 
 A tool result longer than `maxToolResultChars` is cut at the cap with the
@@ -360,6 +399,12 @@ No tool runs during a retry, and no handler is pushed or popped.
   pausing sibling, empty-id providers across rounds, and a fifth
   rejection landing beside a paused call whose approval must still be
   honored (`removalRace`).
+- Failures: `tests/agency-js/tool-failures` scripts six non-zero exits in
+  a row (the tool stays and the text has no `Error:`), five ordinary
+  failures in a row (the tool is removed and the sixth call never
+  starts), and four failures, a success, and four more (the tool stays).
+  `editMisses` in `tests/agency/stdlib-destructive.agency` checks that an
+  edit that does not apply fails without `destructiveRan`.
 - A cut-off reply: `lib/runtime/prompt.cutOff.test.ts` covers each row
   of the table, three cut-off replies in a row, and a schema call.
   `tests/agency-js/cut-off-retry-resume` pauses a retry at its guard gate

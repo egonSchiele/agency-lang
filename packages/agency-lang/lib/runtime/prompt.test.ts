@@ -11,6 +11,7 @@ import {
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
+  isCommandExit,
 } from "./toolInvocation.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { RuntimeContext } from "./state/context.js";
@@ -51,6 +52,24 @@ describe("failureTier", () => {
 
   it("MAX_TOOL_FAILURES is the documented circuit-breaker cap", () => {
     expect(MAX_TOOL_FAILURES).toBe(5);
+  });
+});
+
+describe("isCommandExit", () => {
+  it("is true for a failure whose data carries a numeric exit code", () => {
+    expect(isCommandExit({ data: { exitCode: 1 } })).toBe(true);
+    expect(isCommandExit({ data: { exitCode: 0 } })).toBe(true);
+  });
+
+  it("is false with no exit code, or one that is not a number", () => {
+    expect(isCommandExit({ data: {} })).toBe(false);
+    expect(isCommandExit({ data: null })).toBe(false);
+    expect(isCommandExit({})).toBe(false);
+    expect(isCommandExit({ data: { exitCode: "1" } })).toBe(false);
+  });
+
+  it("is false after destructive work, so that tier still removes the tool", () => {
+    expect(isCommandExit({ data: { exitCode: 1 }, destructiveRan: true })).toBe(false);
   });
 });
 

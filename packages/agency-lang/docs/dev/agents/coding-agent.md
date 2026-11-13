@@ -11,8 +11,9 @@ prompt or its tools reaches all of them.
 The system prompt is one sentence, four rules about which tool to use for
 what, and a hint for each tool that goes unused without one:
 `PROGRESS_NOTE` (a sentence beside each tool call, which the agent's trace
-prints), `ASK_USER_HINT` (the `question` tool), and `SAVE_DRAFT_HINT`
-(`saveDraft`).
+prints), `SAVE_DRAFT_HINT` (`saveDraft`), and `askUserHint()` (the
+`question` tool), which is added per call and is empty when nobody can
+answer.
 
 Every rule in the prompt is sent with every request, and rules have not
 bought correct answers when measured. On SWE-bench Verified, a prompt
@@ -55,9 +56,9 @@ beside the task:
   session only. A one-shot run (`agency agent -p`) has no reader for a
   formatted reply.
 
-A one-shot run gets no other note. It still carries the `question` tool,
-and a question there is rejected with a reason, because nobody is at the
-terminal to answer it.
+A one-shot run gets no other note. It has no `question` tool and no hint
+about one, because nobody is at the terminal to answer
+(`docs/dev/stdlib/asking-the-user.md`).
 
 ## Tests
 

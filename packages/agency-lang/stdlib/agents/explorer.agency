@@ -7,7 +7,7 @@ import {
   spillTools,
   SAVE_DRAFT_HINT,
   PROGRESS_NOTE,
-  ASK_USER_HINT,
+  askUserHint,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
@@ -105,8 +105,7 @@ summary, which is the fastest way to answer "what exists".
 - Don't ask the caller to narrow a broad ask. If they said
   "summarize the docs", interpret that generously — read widely,
   organize the result, deliver. A broad scope is not a missing
-  fact: use `question` for something you cannot find by reading,
-  never to turn a wide survey into a narrow one.
+  fact. Read widely instead of narrowing it.
 - Don't stop early because the answer "feels good enough" after
   reading three files. Coverage is the point. If you set out to
   read 12, read 12.
@@ -114,7 +113,7 @@ summary, which is the fastest way to answer "what exists".
   question or apologies for length. Get to the substance.
 
 ## Communicating with the user
-${PROGRESS_NOTE}${ASK_USER_HINT}${SAVE_DRAFT_HINT}
+${PROGRESS_NOTE}${SAVE_DRAFT_HINT}
 
 """
 
@@ -142,7 +141,7 @@ def survey(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt, expires: "llmCall")
+  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
   return llm(
     withContext(task: question, context: context),
     llmOptions(

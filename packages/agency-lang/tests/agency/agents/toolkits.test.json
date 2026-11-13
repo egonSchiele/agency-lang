@@ -133,6 +133,17 @@
       ]
     },
     {
+      "nodeName": "noQuestionWhenNobodyCanAnswer",
+      "description": "communicationTools, askUserHint, and the coding agent's tool list carry the question tool by default, and none of them does after setUserCanAnswer(false)",
+      "input": "",
+      "expectedOutput": "[[true,true,true],[0,\"\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "searchToolsRespectGitignore",
       "description": "ls, glob, and grep in the agent toolkit are bound to respectGitignore: true, so the model cannot turn it off",
       "input": "",

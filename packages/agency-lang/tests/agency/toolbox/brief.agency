@@ -1,4 +1,5 @@
-import test { brief, reviewBrief, askAndRecord } from "std::toolbox"
+import test { brief, reviewBrief, askAndRecord, authorTools } from "std::toolbox"
+import { setUserCanAnswer } from "std::agents/lib/toolkits"
 
 const SETTINGS = {
   purpose: "Add one to a number.",
@@ -45,6 +46,25 @@ node redraftStartsFromThePreviousDraft(): string {
     return "FAIL the reviewer's feedback is missing"
   }
   return "pass"
+}
+
+// When nobody can answer, the author gets no `question` tool, and its
+// rule tells it to pick a value and say which, not to ask.
+node authorDoesNotAskWhenNobodyCanAnswer(): any[] {
+  const dir = SETTINGS.stagingDir
+  const before = [
+    [tool.name for tool in authorTools(dir, true)],
+    brief(SETTINGS, "").includes("`question` tool"),
+  ]
+  setUserCanAnswer(false)
+  const after = [
+    [tool.name for tool in authorTools(dir, true)],
+    [tool.name for tool in authorTools(dir, false)],
+    brief(SETTINGS, "").includes("question"),
+    brief(SETTINGS, "").includes("say which one you picked"),
+  ]
+  setUserCanAnswer(true)
+  return [before, after]
 }
 
 node authorIsToldToAsk(): string {

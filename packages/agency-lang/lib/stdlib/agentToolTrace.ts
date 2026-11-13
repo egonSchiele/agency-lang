@@ -104,6 +104,8 @@ const ELAPSED_FROM_MS = 1000;
 const KILOBYTE = 1000;
 /** A spill notice starts with this; only its first line is for a human. */
 const SPILL_NOTICE_PREFIX = "[Output";
+/** The start of a spill notice's last line (`outputNotice` in toolOutputStore.ts). */
+const SPILL_NOTICE_LAST_LINE = "To read it, use the ";
 const ARGUMENT_PREVIEW_LENGTH = 50;
 const RESULT_PREVIEW_LENGTH = 100;
 /** A model sometimes drafts its whole answer beside a last tool call. */
@@ -188,8 +190,17 @@ export function spillOutput(name: unknown, lookup: SpillLookup): string | null {
 export function commandDetail(stdout: unknown, stderr: unknown): string | null {
   const chosen = [stderr, stdout].find((out) => typeof out === "string" && out.trim() !== "");
   if (typeof chosen !== "string") return null;
-  const trimmed = chosen.trimEnd();
-  return trimmed.startsWith(SPILL_NOTICE_PREFIX) ? trimmed.split("\n")[0] : trimmed;
+  return spillNoticesCut(chosen.trimEnd().split("\n")).join("\n");
+}
+
+/** The lines with each spill notice cut to its first line. A failed command's
+ *  text holds both streams, so a notice can start on any line. */
+function spillNoticesCut(lines: string[]): string[] {
+  const start = lines.findIndex((line) => line.startsWith(SPILL_NOTICE_PREFIX));
+  if (start < 0) return lines;
+  const kept = lines.slice(0, start + 1);
+  const end = lines.findIndex((line, at) => at > start && line.startsWith(SPILL_NOTICE_LAST_LINE));
+  return end < 0 ? kept : [...kept, ...spillNoticesCut(lines.slice(end + 1))];
 }
 
 function plural(count: number, one: string, many: string): string {

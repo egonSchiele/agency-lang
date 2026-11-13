@@ -141,7 +141,8 @@ the time limit of 120 seconds]`), then sometimes a note for the model.
 `safeBashFailure` shows the status in words on the tool's line, the
 output under it, and leaves the note out. A spill notice is cut to its
 first line, which carries the size and exit code; the rest is written for
-the model.
+the model. A failed `safeBash` holds both streams in one text, so a notice
+can start on any line, and each one is cut where it stands.
 
 `printAgentTrace` reads width and color preferences from the supplied host
 on each call. It prints each nonempty block in one write with a blank line

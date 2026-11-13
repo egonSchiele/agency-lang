@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { memoryHost } from "../host/memoryHost.js";
+import { DEFAULT_READERS, outputNotice } from "../runtime/toolOutputStore.js";
 import { stripAnsi, visualWidth } from "./layout/ansi.js";
 import {
   commandDetail,
@@ -722,6 +723,23 @@ describe("result summarizers", () => {
     expect(end("safeBash", { command: "pytest" }, stopped, "failure")).toBe(
       "✗ Run pytest · timed out\n  │ test_a passed",
     );
+  });
+
+  // A stream too long to return is replaced by a notice. Only the notice's
+  // first line is for a human, whichever stream it stands for.
+  it("cuts a saved stream to its first line and keeps the other stream", () => {
+    const long = Array.from({ length: 400 }, (_, at) => `line ${at}`).join("\n");
+    const notice = outputNotice(long, "out-1", null, DEFAULT_READERS);
+    const header = notice.split("\n")[0];
+    expect(
+      end("safeBash", { command: "x" }, `short out\n${notice}\n[exit code 1]`, "failure"),
+    ).toBe(`✗ Run x · exit 1\n  │ short out\n  │ ${header}`);
+    expect(
+      end("safeBash", { command: "x" }, `${notice}\nshort err\n[exit code 1]`, "failure"),
+    ).toBe(`✗ Run x · exit 1\n  │ ${header}\n  │ short err`);
+    expect(
+      end("safeBash", { command: "x" }, `${notice}\n${notice}\n[exit code 1]`, "failure"),
+    ).toBe(`✗ Run x · exit 1\n  │ ${header}\n  │ ${header}`);
   });
 
   it("reads the last status line when the output holds one of its own", () => {

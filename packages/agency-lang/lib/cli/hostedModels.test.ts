@@ -29,6 +29,7 @@ const catalog: HostedModelInfo[] = [
     outputCost: 0.2,
     contextWindow: 32000,
     family: "x",
+    maxOutputTokens: 0,
   },
   {
     name: "pricey",
@@ -38,6 +39,7 @@ const catalog: HostedModelInfo[] = [
     outputCost: 75,
     contextWindow: 200000,
     family: "y",
+    maxOutputTokens: 0,
   },
 ];
 

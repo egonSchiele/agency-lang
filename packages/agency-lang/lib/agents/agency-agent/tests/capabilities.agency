@@ -15,12 +15,58 @@ import {
   demoteProvider,
  } from "../shared.agency"
 import { saveSettings } from "../lib/settings.agency"
+import { hostedModelInfo } from "std::llm"
+import { replyRoom } from "../lib/contextBudget.agency"
 
 // Unknown model + unknown provider → pure built-in defaults. Pins the
-// 20000 maxTokens default, which the table owns.
+// 64000 maxTokens default, which the table owns.
 node unknownModelGetsDefaults(): string {
   const resolved = resolveCapabilities("some-new-model", "some-provider", {})
   return "${resolved.values.summarize}/${resolved.values.memory}/${resolved.values.maxTokens}/${resolved.sources.maxTokens}"
+}
+
+// A model the catalog knows gets its own output limit. The expected number
+// is read from the catalog, so a catalog refresh does not break this.
+node catalogModelGetsItsOwnLimit(): any[] {
+  const info = hostedModelInfo("gpt-5.5")
+  if (info == null) {
+    return ["gpt-5.5 is not in the catalog"]
+  }
+  const resolved = resolveCapabilities("gpt-5.5", "openai", {})
+  return [
+    info.maxOutputTokens > 0,
+    resolved.values.maxTokens == Math.min(info.maxOutputTokens, replyRoom(info.contextWindow)),
+    resolved.sources.maxTokens,
+  ]
+}
+
+// The room compaction leaves free: a fifth of the window, in whole tokens.
+node replyRoomIsAFifthOfTheWindow(): number[] {
+  return [replyRoom(200000), replyRoom(400000), replyRoom(1050000), replyRoom(8192)]
+}
+
+// o3's output limit is half its window. The cap is held to the room
+// compaction leaves, so input plus the cap never passes the window.
+node catalogLimitFitsInTheWindow(): any[] {
+  const info = hostedModelInfo("o3")
+  if (info == null) {
+    return ["o3 is not in the catalog"]
+  }
+  const cap = resolveCapabilities("o3", "openai", {}).values.maxTokens ?? 0
+  return [
+    info.maxOutputTokens > replyRoom(info.contextWindow),
+    cap == replyRoom(info.contextWindow),
+    Math.floor(info.contextWindow * 0.8) + cap <= info.contextWindow,
+  ]
+}
+
+// Anthropic's limit on every non-streaming request beats the catalog's
+// number for the model, and a curated model entry beats the default for a
+// model the catalog does not know.
+node providerAndModelLayersBeatTheCatalog(): string {
+  const claude = resolveCapabilities("claude-sonnet-5-5", "anthropic", {})
+  const glm = resolveCapabilities("z-ai/glm-5.3-flash", "openrouter", {})
+  return "${claude.values.maxTokens}/${claude.sources.maxTokens}/${glm.values.maxTokens}/${glm.sources.maxTokens}"
 }
 
 // Unknown local model → llama-cpp provider profile.

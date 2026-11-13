@@ -17,6 +17,7 @@ const { FIXTURE_MODELS } = vi.hoisted(() => ({
       inputTokenCost: 0.15,
       outputTokenCost: 0.6,
       maxInputTokens: 128000,
+      maxOutputTokens: 16384,
       family: "gpt-mini",
     },
     // A text model with every optional field absent → exercises the ?? defaults.
@@ -117,6 +118,7 @@ describe("hosted catalog accessor (over a fixture)", () => {
       outputCost: 0.6,
       contextWindow: 128000,
       family: "gpt-mini",
+      maxOutputTokens: 16384,
     });
     // A text model missing every optional field falls back to sane defaults —
     // guards the `?? ""` / `?? 0` / `?? false` mapping.
@@ -128,6 +130,7 @@ describe("hosted catalog accessor (over a fixture)", () => {
       outputCost: 0,
       contextWindow: 0,
       family: "",
+      maxOutputTokens: 0,
     });
   });
   it("excludes non-text models", () => {

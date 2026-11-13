@@ -5,24 +5,11 @@
   line is paid for on every request.
 */
 import { AGENT_SPILL_OVER } from "std::agents/lib/shared"
-import { minimalCodingTools } from "std::agents/lib/toolkits"
+import { codingFileAndShellTools, CODING_RULES } from "std::agents/lib/toolkits"
 import { Attachment, systemMessage } from "std::thread"
 
 import { AgentBrain, BrainContext } from "../brain.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
-
-// Measured against longer prompts in docs/dev/agents/coding-agent.md. The
-// last four rules are copied from `systemPrompt` in
-// stdlib/agents/coding.agency; change the two together. The bash rule is
-// only here, because this brain has no ls, glob, or grep tool.
-static const PROMPT = """You are a coding assistant. Help users inspect files, run commands, and modify code.
-
-- Use bash for file operations like ls, grep, find.
-- Use read to examine files instead of cat or sed.
-- Use edit for targeted changes. Batch changes to one file in a single call.
-- Use write only for new files or complete rewrites.
-- Be concise in your responses.
-"""
 
 // Per-run grounding, from BrainContext. Spliced into the system prompt.
 let _context: string = ""
@@ -40,13 +27,13 @@ def minimalRunTurn(
 ): string {
   thread(label: "minimal", session: "minimal") {
     if (first) {
-      systemMessage("${PROMPT}${_context}")
+      systemMessage("${CODING_RULES}${_context}")
       first = false
     }
     addGlobalInstructions()
     const result = llm(
       prompt,
-      tools: minimalCodingTools(),
+      tools: codingFileAndShellTools(),
       spillToolResultsOver: AGENT_SPILL_OVER,
     )
   }

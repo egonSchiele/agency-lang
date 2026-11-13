@@ -4703,7 +4703,7 @@ def runAgency(args: string[], cwd: string, source: string): Result<string> {
 
 def cliOutcome(result: ExecResult, source: string): Result<string> {
   if (result.exitCode != 0) {
-    return failure(keepOutput(result.stdout + result.stderr, result.exitCode, source))
+    return exitFailure(result.exitCode, result.stdout, result.stderr, source)
   }
   return success(keepOutput(result.stdout, 0, source))
 }

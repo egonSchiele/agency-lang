@@ -203,6 +203,62 @@ describe("computeCompilerStamp", () => {
     });
   });
 
+  function writePackage(dir: string, name: string, version: string) {
+    const pkgDir = path.join(dir, "node_modules", name);
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, "package.json"), JSON.stringify({ name, version }));
+  }
+
+  // Upgrading tarsec changes what the parser accepts without changing a
+  // byte of dist/, so the stamp has to see the version.
+  test("changes when a package the compiler imports changes version", () => {
+    withDistTree((dir, entry) => {
+      fs.writeFileSync(
+        path.join(dir, "utils", "u.js"),
+        'import { a } from "fixture-parser/sub";\nimport { b } from "@fixture/codegen";\n',
+      );
+      writePackage(dir, "fixture-parser", "1.0.0");
+      writePackage(dir, "@fixture/codegen", "2.0.0");
+      const before = computeCompilerStamp(dir, entry);
+      writePackage(dir, "fixture-parser", "1.0.1");
+      const afterParser = computeCompilerStamp(dir, entry);
+      expect(afterParser).not.toBe(before);
+      writePackage(dir, "@fixture/codegen", "2.1.0");
+      expect(computeCompilerStamp(dir, entry)).not.toBe(afterParser);
+    });
+  });
+
+  test("ignores packages only unimported modules use", () => {
+    withDistTree((dir, entry) => {
+      fs.writeFileSync(path.join(dir, "logsViewer", "view.js"), 'import "fixture-tui";\n');
+      writePackage(dir, "fixture-tui", "1.0.0");
+      const before = computeCompilerStamp(dir, entry);
+      writePackage(dir, "fixture-tui", "1.0.1");
+      expect(computeCompilerStamp(dir, entry)).toBe(before);
+    });
+  });
+
+  test("Node built-ins and names with no installed package do not break the stamp", () => {
+    withDistTree((dir, entry) => {
+      fs.writeFileSync(
+        path.join(dir, "utils", "u.js"),
+        'import fs from "fs";\nimport path from "node:path";\nimport "fixture-not-installed";\n',
+      );
+      expect(computeCompilerStamp(dir, entry)).toMatch(/^[0-9a-f]{64}$/);
+    });
+  });
+
+  test("a missing entry still sees package versions", () => {
+    withDistTree((dir) => {
+      const missing = path.join(dir, "compiler", "renamed.js");
+      fs.writeFileSync(path.join(dir, "utils", "u.js"), 'import "fixture-parser";\n');
+      writePackage(dir, "fixture-parser", "1.0.0");
+      const before = computeCompilerStamp(dir, missing);
+      writePackage(dir, "fixture-parser", "1.0.1");
+      expect(computeCompilerStamp(dir, missing)).not.toBe(before);
+    });
+  });
+
   // A renamed entry must not freeze the stamp: that would skip stale
   // output after every compiler edit.
   test("a missing entry hashes every module except runtime/ and agents/", () => {

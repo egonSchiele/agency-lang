@@ -431,10 +431,10 @@ node quotedRedirectTarget() {
 }
 
 node longOutputIsKept() {
-  // A >2000-char literal goes through the shell-free path, which keeps
-  // output the same way the bash path does — so this also pins the
-  // consistency between the two.
-  const chars = ["x" for i in range(2500)]
+  // A literal longer than MAX_STDOUT_LEN goes through the shell-free path,
+  // which keeps output the same way the bash path does — so this also pins
+  // the consistency between the two.
+  const chars = ["x" for i in range(12500)]
   const long = chars.join("")
   const result = safeBash("echo ${long}") with approve
   if (result is failure(why)) {

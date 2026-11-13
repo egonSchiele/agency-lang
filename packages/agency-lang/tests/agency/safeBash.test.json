@@ -294,9 +294,9 @@
     },
     {
       "nodeName": "longOutputIsKept",
-      "description": "Output past the cap is saved in the run and replaced by a preview that gives the exit code, names the saved output, and says to read it with readSpill. The saved text is the whole output (2500 x's plus echo's newline) and grepSpill finds its one line. The shell-free echo path keeps output the same way the bash path does.",
+      "description": "Output past the cap is saved in the run and replaced by a preview that gives the exit code, names the saved output, and says to read it with readSpill. The saved text is the whole output (12500 x's plus echo's newline) and grepSpill finds its one line. The shell-free echo path keeps output the same way the bash path does.",
       "input": "",
-      "expectedOutput": "[true,true,true,true,2501,1]",
+      "expectedOutput": "[true,true,true,true,12501,1]",
       "evaluationCriteria": [
         {
           "type": "exact"

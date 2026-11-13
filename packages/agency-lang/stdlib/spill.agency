@@ -39,7 +39,7 @@ import { _keepOutput, _readSpill, _grepSpill } from "agency-lang/stdlib-lib/spil
 
 /** How much of a command's output comes back inline. Anything longer is
   saved and replaced by a preview (see `keepOutput`). */
-export static const MAX_STDOUT_LEN = 2000
+export static const MAX_STDOUT_LEN = 10000
 
 /**
 Use this when returning command output to an LLM. Short text passes through

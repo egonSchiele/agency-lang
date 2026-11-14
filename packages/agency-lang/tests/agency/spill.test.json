@@ -23,9 +23,9 @@
     },
     {
       "nodeName": "overCapToolResultIsKept",
-      "description": "a tool result over spillToolResultsOver is saved whole, though under maxToolResultChars, and the model gets a notice naming readSpill; the saved text reads back by that name, whole and by grep",
+      "description": "a tool result over spillToolResultsOver is saved whole, though under maxToolResultChars, and the model gets a notice that gives a path and names no tool; the saved text reads back by that path, whole, by grep, and with read",
       "input": "",
-      "expectedOutput": "[true,38890,1]",
+      "expectedOutput": "[true,38890,1,38890]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [
@@ -46,17 +46,20 @@
       ]
     },
     {
-      "nodeName": "spillWithoutReadersFails",
-      "description": "spillToolResultsOver with no readSpill in the tools is refused before the request, as a failure naming readSpill",
+      "nodeName": "spillWithoutReadersRuns",
+      "description": "spillToolResultsOver with no reader in the tools is accepted: the loop does not look at the call's tools, and the result is saved under the path its notice gives",
       "input": "",
-      "expectedOutput": "[true,true]",
+      "expectedOutput": "[true,38890]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
-      "llmMocks": []
+      "llmMocks": [
+        { "toolCalls": [{ "name": "longPage" }] },
+        { "return": "done" }
+      ]
     },
     {
       "nodeName": "overCapResultWithoutReadersIsCut",
-      "description": "when the model has no readSpill tool, a result over the cap is cut with the truncation marker and nothing is saved",
+      "description": "without spillToolResultsOver, a result over the cap is cut with the truncation marker and nothing is saved",
       "input": "",
       "expectedOutput": "[true,false]",
       "evaluationCriteria": [{ "type": "exact" }],

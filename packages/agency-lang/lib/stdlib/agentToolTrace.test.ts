@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { memoryHost } from "../host/memoryHost.js";
-import { DEFAULT_READERS, outputNotice, tailNotice } from "../runtime/toolOutputStore.js";
+import { outputNotice, tailNotice } from "../runtime/toolOutputStore.js";
+
+const OUT_1 = "/tmp/agency-spill-0/2026-01-01T00-00-00-000Z-out001.log";
 import { stripAnsi, visualWidth } from "./layout/ansi.js";
 import {
   commandDetail,
@@ -736,7 +738,7 @@ describe("result summarizers", () => {
   // first line is for a human, whichever stream it stands for.
   it("cuts a saved stream to its first line and keeps the other stream", () => {
     const long = Array.from({ length: 400 }, (_, at) => `line ${at}`).join("\n");
-    const notice = outputNotice(long, "out-1", null, DEFAULT_READERS);
+    const notice = outputNotice(long, OUT_1, null);
     const header = notice.split("\n")[0];
     const exit = "Command exited with code 1";
     expect(end("safeBash", { command: "x" }, `short out\n${notice}\n${exit}`, "failure")).toBe(
@@ -753,7 +755,7 @@ describe("result summarizers", () => {
   // A command's long output reaches the model as its last 2,000 lines.
   it("shows a person the last few lines of a command's long output", () => {
     const long = Array.from({ length: 3000 }, (_, at) => `line ${at}`).join("\n");
-    const cut = tailNotice(long, "out-1", null, DEFAULT_READERS, 2000, 50_000);
+    const cut = tailNotice(long, OUT_1, null, 2000, 50_000);
     const shown = end(
       "safeBash",
       { command: "x" },
@@ -777,7 +779,7 @@ describe("result summarizers", () => {
     ).split("\n");
     expect(rows[1]).toBe("  │ [the last 20 of 1900 lines]");
     expect(rows).toHaveLength(22);
-    const wide = tailNotice("y".repeat(60_000), "out-2", null, DEFAULT_READERS, 2000, 50_000);
+    const wide = tailNotice("y".repeat(60_000), OUT_1, null, 2000, 50_000);
     const wideRows = end(
       "safeBash",
       { command: "x" },
@@ -843,6 +845,23 @@ describe("table rows", () => {
     );
     expect(formatAgentTrace(event, { ...plain, spillSource: () => null })).toBe(
       "✓ Read 2026-01-01T00-00-00-000Z-abcdef.log lines 1–200",
+    );
+  });
+
+  it("shows the spill source for a read or a command given a saved output's path", () => {
+    const options = { ...plain, spillSource: () => "pnpm test" };
+    const end = (toolName: string, args: Record<string, unknown>) =>
+      formatAgentTrace(
+        { kind: "toolEnd", toolName, args, value: "t", outcome: "success" },
+        options,
+      );
+    expect(end("readSpill", { filename: OUT_1 })).toBe("✓ Read output of pnpm test");
+    expect(end("read", { filename: OUT_1, limit: 50 })).toBe(
+      "✓ Read output of pnpm test lines 1–50",
+    );
+    expect(end("read", { filename: "a.ts" })).toBe("✓ Read a.ts");
+    expect(end("bash", { command: `tail -n 20 ${OUT_1}` })).toBe(
+      "✓ Run tail -n 20 (output of pnpm test)",
     );
   });
 

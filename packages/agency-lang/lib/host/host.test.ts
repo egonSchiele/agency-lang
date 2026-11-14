@@ -41,6 +41,11 @@ describe("FILE_WRITE_FUNCTIONS", () => {
       expect(typeof files[fn]).toBe("function");
     }
   });
+
+  it("makes the functions that create a folder need fileWrite", () => {
+    expect(functionCapability("files", "mkdir")).toBe("fileWrite");
+    expect(functionCapability("files", "privateDir")).toBe("fileWrite");
+  });
 });
 
 describe("PART_CAPABILITY", () => {

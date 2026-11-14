@@ -19,7 +19,7 @@ node runsAToolAndAnswers(): string {
   return "${reply}|${threadHasSystemText("GROUNDING-MARKER-5b2d")}|${threadHasText("tool", "MINIMAL-BASH-RAN")}"
 }
 
-// The brain offers these six tools and no others.
-node offersSixTools(): string[] {
+// The brain offers these four tools and no others.
+node offersFourTools(): string[] {
   return [tool.name for tool in codingFileAndShellTools()]
 }

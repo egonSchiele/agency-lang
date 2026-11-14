@@ -754,6 +754,48 @@ export function mkdir(root: Root, target: string): void {
   fs.mkdirSync(resolveUnder(root, target), { recursive: true });
 }
 
+/** See `HostFiles.privateDir`. `lstat` reads the folder itself, so a link
+ *  planted at the name fails the "real folder" check. */
+export function privateDir(root: Root, target: string): void {
+  const dir = resolveUnder(root, target);
+  try {
+    fs.mkdirSync(dir, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+  }
+  const info = fs.lstatSync(dir);
+  const userId = process.getuid === undefined ? null : process.getuid();
+  const problem = privateDirProblem(dir, info, userId);
+  if (problem !== null) {
+    throw new Error(problem);
+  }
+}
+
+/** Why `info` is not a folder only `userId` can use, or null when it is.
+ *  `userId` is null on Windows, which has no owner ids or Unix modes. */
+export function privateDirProblem(
+  dir: string,
+  info: { isDirectory(): boolean; uid: number; mode: number },
+  userId: number | null,
+): string | null {
+  if (!info.isDirectory()) {
+    return `'${dir}' is not a folder. Remove it.`;
+  }
+  if (userId === null) {
+    return null;
+  }
+  const fix = `Remove it, or if it is yours run: chmod 700 '${dir}'`;
+  if (info.uid !== userId) {
+    return `'${dir}' belongs to another user. ${fix}`;
+  }
+  if ((info.mode & 0o077) !== 0) {
+    return `'${dir}' can be used by other users. ${fix}`;
+  }
+  return null;
+}
+
 export function remove(root: Root, target: string): void {
   fs.rmSync(resolveUnder(root, target), { recursive: true, force: true });
 }
@@ -824,6 +866,7 @@ export const PRIMITIVES = [
   "list",
   "stat",
   "mkdir",
+  "privateDir",
   "remove",
   "copy",
   "move",
@@ -839,4 +882,5 @@ export const HELPERS = [
   "locateSync",
   "_realDir",
   "_realTarget",
+  "privateDirProblem",
 ] as const;

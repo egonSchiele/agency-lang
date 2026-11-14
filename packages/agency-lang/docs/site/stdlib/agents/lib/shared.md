@@ -108,7 +108,7 @@ Build LLM options for an agent call, using the ambient model unless overridden.
 | thinking | `boolean` | false |  |
 | validationRetries | `number` | 0 | Retries after structured-output validation fails, or zero to leave the option unset. |
 | maxToolCallRounds | `number` | 0 | Maximum tool rounds, or zero for the configured default. |
-| spillToolResultsOver | `number` | 0 | Save results above this threshold, requiring `readSpill` in tools, or zero to leave spilling unset. |
+| spillToolResultsOver | `number` | 0 | Save results above this threshold and give the model their path, or zero to leave spilling unset. The tools need something that reads a path: `read`, a shell tool built on `safeBash`, or `readSpill`. |
 
 **Returns:** `any`
 

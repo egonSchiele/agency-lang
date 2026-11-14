@@ -223,6 +223,8 @@ const nodeSystem: HostSystem = {
   tempDir: () => os.tmpdir(),
   args: () => process.argv,
   processId: () => process.pid,
+  // Windows has no getuid; its temp folder is already per user.
+  userId: () => (process.getuid === undefined ? "0" : String(process.getuid())),
   moduleDir: (moduleUrl) => path.dirname(fileURLToPath(moduleUrl)),
   isMainModule: (moduleUrl) => process.argv[1] === fileURLToPath(moduleUrl),
   installDir: () => {

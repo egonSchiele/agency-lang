@@ -14,6 +14,7 @@ import {
   list,
   stat,
   mkdir,
+  privateDir,
   remove,
   copy,
   move,
@@ -110,6 +111,7 @@ const ADAPTERS: Record<Primitive, Run> = {
   list: (r, t) => list(r, t),
   stat: (r, t) => stat(r, t),
   mkdir: (r, t) => mkdir(r, t),
+  privateDir: (r, t) => privateDir(r, t),
   remove: (r, t) => remove(r, t),
   copy: (r, t) => copy({ root: r, target: t }, { root: r, target: "copy-dest" }),
   move: (r, t) => move({ root: r, target: t }, { root: r, target: "move-dest" }),
@@ -137,7 +139,7 @@ const LINK_TARGETS = [
 /** What the positive control does for each primitive, and what proves it
  *  behaved normally. */
 function positiveTarget(name: Primitive): string {
-  if (name === "mkdir") return "sub/new";
+  if (name === "mkdir" || name === "privateDir") return "sub/new";
   if (name === "list") return "sub";
   return "inside.txt";
 }
@@ -155,7 +157,7 @@ function checkPositive(name: Primitive, fixture: Fixture, result: unknown): void
   }
   if (name === "list") expect(result).toEqual([]);
   if (name === "stat") expect((result as fs.Stats).isFile()).toBe(true);
-  if (name === "mkdir") {
+  if (name === "mkdir" || name === "privateDir") {
     expect(fs.statSync(path.join(fixture.real, "sub", "new")).isDirectory()).toBe(true);
   }
   if (name === "remove") expect(fs.existsSync(inside)).toBe(false);

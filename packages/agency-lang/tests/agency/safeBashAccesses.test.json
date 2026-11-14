@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "fileAccesses",
+      "description": "accessesOf reads one access per file effect out of a plan, in order, and skips every other effect, such as `git add` or a program. A refused line and a broad line have none. A find access names the folder searched.",
+      "input": "",
+      "expectedOutput": "[[\"read:/a.txt\",\"read:/b.txt\"],[\"read:/a.txt\"],[\"search:/src\"],[\"write:/out.txt\"],[\"remove:/src\"],[\"list:/src\"],[\"find:\"],[\"read:/a.txt\",\"read:/b.txt\"],[],[\"read:/a.txt\"],[],[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

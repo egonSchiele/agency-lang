@@ -225,13 +225,39 @@ refused plan is on the record too. The bridge is `_debug` in
 `lib/stdlib/statelog.ts`, a no-op outside a run. The data:
 
 ```
-{ command, cwd, outcome, reason, detail, verbs, effects }
+{ command, cwd, outcome, reason, detail, verbs, effects, accesses }
 ```
 
 `reason` and `detail` are the broad reason's fields or `""`; `effects` is
-the list of effect names. A session's calls are tallied with a filter
-over its JSONL for `debug` events whose message is `safeBash plan`.
-There is no dedicated event type.
+the list of effect names; `accesses` is `accessesOf(effects)` (see "File
+accesses"). A session's calls are tallied with a filter over its JSONL
+for `debug` events whose message is `safeBash plan`. There is no
+dedicated event type.
+
+## File accesses
+
+`accessesOf(effects)` in `stdlib/safeBash/actions.agency` answers "which
+files does this line touch". It reads one `FileAccess` (`mode` and
+`path`) out of each file effect, in order:
+
+| Effect | Mode | Path |
+|---|---|---|
+| `std::read` | `read` | `dir` joined with `filename` |
+| `std::grep` | `search` | `dir` joined with `file`, or `dir` when `file` is null |
+| `std::ls` | `list` | `dir` |
+| `std::glob` | `find` | `dir`, the folder searched, not the files found |
+| `std::write` | `write` | `dir` joined with `filename` |
+| `std::remove` | `remove` | `target` |
+
+An access is read from the effects every time and never stored on the
+plan, so the two cannot drift apart. Every other effect is skipped by a
+default arm.
+
+The list covers file effects only. `cat a.txt && git add a.txt` has one
+access, a read, and it also stages a file. So the list is not everything
+a line does: a caller that asks "does this line only read?" must also
+check that every effect is a file effect, as `onlyReads` in
+`stdlib/safeBash.agency` does.
 
 ## What the model reads on a rejection
 
@@ -1798,7 +1824,8 @@ The `bash`, `write`, `grep`, and `read` tools raise their own interrupts. Callin
 after `raiseAll` would ask the broad question a second time. The bypass
 is correct for one reason: the only path to an executor runs through a
 `raiseAll` that raised every effect in the plan and returned success, and
-every plan raises at least one effect. `runChain` reaches the same
+every plan raises at least one effect, except a line that only reads
+saved output (see "Saved output"). `runChain` reaches the same
 internals through each step's executor.
 
 That reason holds only if nothing else can call an executor. So the
@@ -1822,6 +1849,58 @@ through `approvedPlan`.
 command runs as a job. When it does, `raiseOne` puts "in the background"
 in the `std::bash` and `std::exec` questions, and the payload's `timeout`
 is the job's limit. See `docs/dev/stdlib/jobs.md`.
+
+## Saved output
+
+A long output is saved in the run, and its path, such as
+`/tmp/agency-spill-1000/<name>.log`, can be read like a file
+(`docs/dev/stdlib/spill.md`, "Reading saved output by path"). Five
+places handle it, and no verb's rule has a branch for it:
+
+- **The resolvers.** `resolveReadPath`, used by the read verbs and input
+  redirects, and the grep rule, which resolves through `resolveTarget`
+  because its target may be a folder, both ask `savedPathOf` before they
+  stat anything. A saved-output path becomes a `saved` `ReadSource`, or
+  a grep call with `saved` set. It keeps the folder as written, so the
+  rule's `std::read` or `std::grep` names the copy's path.
+- **`textOf` and the saved grep.** The in-process executors read a
+  `saved` source from the store by name (`_readSpill`, `_grepSaved`),
+  never from disk.
+- **`savedOutputLine`.** `planFor` lists the saved outputs a line names,
+  from its parsed words, and notes whether every word is literal. Each
+  word's text is searched with `savedPathsInText`, so a path inside a
+  longer argument is found too: `sh -c 'cat <path>'`, or
+  `--input=<path>`. A word is not literal when it holds a variable or a
+  glob, when it is a flag whose value is a glob, or when it starts with
+  an unquoted `~`. A line that does not parse is searched as text
+  instead; it asks the broad question, so the search only decides which
+  copies to write. The list becomes the plan's `savedPaths`.
+- **`savedOutputRules`.** It runs last in `planFor`, on the finished
+  plan, after `bashPlan`. A write, delete, listing or find for which
+  `inSpillFolder` is true refuses the plan. A read or search whose
+  payload names a path in `savedPaths` is dropped, and only when every
+  effect is `std::read`, `std::grep`, `std::ls` or `std::glob` and every
+  word is literal. It never adds an effect.
+- **Before a shell starts.** `runBash` and `startJob` call
+  `_prepareSpillFiles(plan.savedPaths)` right before `_bash` and
+  `_startJob`, and a failure stops the line.
+
+The two conditions on a dropped read:
+
+- **The line only reads.** The copies are written once, before the whole
+  line runs. In `ln -sf ~/.ssh/id_rsa <saved path>; cat <saved path>`
+  the `ln` asks `std::exec`, and the `cat` keeps its `std::read`.
+- **The line expands nothing.** `echo` raises no effect, so in
+  `echo "$GH_TOKEN" && wc -l <saved path>` a dropped read would leave no
+  question at all while the shell prints the variable. A variable, a
+  glob, or an assignment anywhere in the line keeps every question.
+
+A read is dropped only for a path in `savedPaths`, the list that is
+written, so the two cannot disagree. `bashPlan` still turns an empty
+effect list into `std::bash`, and `savedOutputRules` runs after it, so a
+shell plan ends with no effects only when a read of saved output was
+dropped. A program with no rule, such as `sed -n`, asks `std::exec` and
+nothing more, as it does for a file on disk.
 
 ## Files and tests
 

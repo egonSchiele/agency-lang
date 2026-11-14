@@ -158,8 +158,8 @@ def offeredTools(user: UserTools, turnStart: any): any[] {
   ]
 }
 
-// A long job read is saved and previewed, so the main agent needs the
-// readers for saved output too. The coders get them from shellTools().
+// A long job read is saved and previewed. The main agent has no shell to
+// read its path with, so it gets the readers for saved output.
 def mainJobTools(): any[] {
   const jobs = sessionJobTools()
   if (jobs.length == 0) {

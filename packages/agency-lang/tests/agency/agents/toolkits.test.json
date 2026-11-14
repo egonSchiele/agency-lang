@@ -23,8 +23,8 @@
       ]
     },
     {
-      "nodeName": "everyAgentCarriesTheReadersOnce",
-      "description": "each stdlib agent that runs commands or fetches pages offers readSpill and grepSpill exactly once, with no duplicate tool names",
+      "nodeName": "everyAgentCanReadSavedOutput",
+      "description": "each stdlib agent that runs commands or fetches pages has a tool that reads a saved output's path (read, a shell tool, or readSpill), with no duplicate tool names",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -122,10 +122,10 @@
       ]
     },
     {
-      "nodeName": "codingBundleIsSixTools",
-      "description": "the coding bundle is read, bash, edit, write, and the two saved-output readers, with no ls, glob, grep, or exec",
+      "nodeName": "codingBundleIsFourTools",
+      "description": "the coding bundle is read, bash, edit, and write, with no ls, glob, grep, or exec, and no saved-output readers: read and bash both read a saved output's path",
       "input": "",
-      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"readSpill\",\"grepSpill\"]",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -134,9 +134,9 @@
     },
     {
       "nodeName": "codingAgentToolNames",
-      "description": "the coding agent's whole tool list: the cwd tools, the six-tool bundle, the GitHub handoff, memory, one fetch tool with no Wikipedia tools, question, and its skills tool. Search tools depend on the environment and are not offered here.",
+      "description": "the coding agent's whole tool list: the cwd tools, the four-tool bundle, the GitHub handoff, memory, one fetch tool with no Wikipedia tools, question, and its skills tool. Search tools depend on the environment and are not offered here.",
       "input": "",
-      "expectedOutput": "[\"setAgentCwd\",\"getAgentCwd\",\"read\",\"bash\",\"edit\",\"write\",\"readSpill\",\"grepSpill\",\"githubAgent\",\"remember\",\"recall\",\"fetchMarkdown\",\"question\",\"skills_coding\"]",
+      "expectedOutput": "[\"setAgentCwd\",\"getAgentCwd\",\"read\",\"bash\",\"edit\",\"write\",\"githubAgent\",\"remember\",\"recall\",\"fetchMarkdown\",\"question\",\"skills_coding\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

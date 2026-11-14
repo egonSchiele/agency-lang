@@ -97,6 +97,7 @@ function browserSystem(cwd: string): HostSystem {
     tempDir: () => "/tmp",
     args: () => [],
     processId: () => 1,
+    userId: () => "0",
     // A module URL in a browser is http(s), or blob: for an inlined
     // bundle; the directory part of it serves the one caller, the
     // generated header's `__dirname`.

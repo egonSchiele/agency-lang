@@ -569,7 +569,9 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "gitRestoreEffect",
     "pendingLookups",
     "grepExecution",
-    "readExecution"
+    "readPayloadOf",
+    "readExecution",
+    "accessesOf"
   ],
   "std::shell": [
     "exec",

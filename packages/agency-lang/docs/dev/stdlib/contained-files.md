@@ -86,6 +86,7 @@ These are the functions of `host.files`, each a promise. The synchronous module 
 - `openForWrite` opens a file for writes at any offset and returns a handle with `writeAt`, `truncate`, and `close`. It is for the MLX downloader, whose chunks land out of order. The open is the same as append: no following of a final link, a real parent for a new file, and the descriptor validated before it is handed back.
 - `list(root, target)` returns one level with symlinked entries left out.
 - `stat(root, target)` returns `null` for a missing entry and for a symlink below the root, and otherwise `{ kind, size, modifiedMs }`.
+- `privateDir(root, target)` makes a folder with mode 0700, or checks an existing one: a real folder (by `lstat`, so a link fails), owned by this user, with no access for anyone else. It throws on a failed check and never changes an existing folder's mode. It is for a folder in a shared place such as `/tmp`, where another user could create it first; the saved-output copies (`spill.md`) are its user.
 - `mkdir`, `remove`, `move` never dereference. `copy` reads and writes every file through validated descriptors and refuses a source tree that contains a link anywhere.
 
 The `allowedPaths` parameter on public functions such as `gitAdd`, `say`, `mkdir`, and `statelog.evalRecord` is a different thing. It is a guardrail the program's author sets on itself, implemented by `assertContained`, and it still works the same way. Only the underscore primitives lost it, because for them it doubled as the containment switch.

@@ -104,6 +104,7 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
       };
     },
     mkdir: async (root, target) => files.mkdir(root, target),
+    privateDir: async (root, target) => files.privateDir(root, target),
     remove: async (root, target) => files.remove(root, target),
     copy: async (from, to) => files.copy(from, to),
     move: async (from, to) => files.move(from, to),

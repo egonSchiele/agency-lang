@@ -34,7 +34,7 @@ export type ExecResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L39))
 
 ## Effects
 
@@ -52,7 +52,7 @@ effect std::exec {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L46))
 
 ### std::bash
 
@@ -66,7 +66,7 @@ effect std::bash {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L55))
 
 ### std::ls
 
@@ -79,7 +79,7 @@ effect std::ls {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L62))
 
 ### std::grep
 
@@ -98,7 +98,7 @@ effect std::grep {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L68))
 
 ### std::glob
 
@@ -111,7 +111,7 @@ effect std::glob {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L80))
 
 ## Functions
 
@@ -154,7 +154,7 @@ Run an executable with separate arguments and no shell expansion.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L87))
 
 ### bash
 
@@ -195,7 +195,7 @@ Run a bash command with pipes, redirects, and globbing.
 
 **Needs:** `fileRead`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L154))
 
 ### ls
 
@@ -237,7 +237,7 @@ Symlinked entries are omitted.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L212))
 
 ### grep
 
@@ -275,7 +275,7 @@ they contain the filename. Use `filesOnly` when you only need matching paths.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | pattern | `string` |  |  |
-| path (also `dir`) | `string` | "." | Directory or single file to search. |
+| path (also `dir`) | `string` | "." | Directory or single file to search. The path from a "saved as a file" notice can be searched too, and needs no approval. |
 | flags | `string` | "" | Regex flags i, m, s, or u; use the named options for whole-word and inverted searches. |
 | maxResults | `number` | 200 |  |
 | allowedPaths | `string[]` | [] | Restrict searches to these directories, or leave empty for no restriction. |
@@ -292,7 +292,7 @@ they contain the filename. Use `filesOnly` when you only need matching paths.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L261))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L262))
 
 ### glob
 
@@ -334,7 +334,7 @@ omitted.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L334))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L343))
 
 ### stat
 
@@ -362,7 +362,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L376))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L385))
 
 ### exists
 
@@ -390,7 +390,7 @@ Return true if a file or directory exists at the given path. A symlink below dir
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L400))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L409))
 
 ### which
 
@@ -410,4 +410,4 @@ Find an executable in PATH, or return an empty string if absent.
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L424))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L433))

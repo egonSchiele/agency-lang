@@ -402,6 +402,7 @@ export const FILE_WRITE_FUNCTIONS: (keyof HostFiles)[] = [
   "openForWrite",
   "openForAppend",
   "mkdir",
+  "privateDir",
   "remove",
   "copy",
   "move",

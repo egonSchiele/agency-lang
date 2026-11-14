@@ -41,6 +41,18 @@ describe("__paramSchema", () => {
     });
   });
 
+  // A learned tool's schema is rebuilt from JSON Schema in the parent
+  // process and compared with the original as text.
+  it("writes a schema that reads the same after a JSON Schema round trip", () => {
+    const object = z.object({
+      path: __paramSchema(z.string(), "File to read", null, false),
+      limit: __paramSchema(z.number(), "Lines to return", "0", true),
+    });
+    const first = z.toJSONSchema(object);
+    const again = z.toJSONSchema(z.fromJSONSchema(first as Parameters<typeof z.fromJSONSchema>[0]));
+    expect(JSON.stringify(again)).toBe(JSON.stringify(first));
+  });
+
   it("does not add null to a type that already allows it", () => {
     const schema = tool({
       note: __paramSchema(z.union([z.string(), z.null()]), null, "null", false),

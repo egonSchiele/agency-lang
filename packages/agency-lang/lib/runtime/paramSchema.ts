@@ -19,11 +19,13 @@ export function __paramSchema(
   const text = [doc, own].filter((part) => typeof part === "string" && part !== "").join("\n");
   const description = defaultText === null ? text : joinDefault(text, defaultText);
   const nullable = addNullable ? schema.nullable() : schema;
-  const shaped = defaultText === null ? nullable : nullable.optional();
-  if (description === "") {
-    return shaped;
-  }
-  return shaped.meta({ ...(shaped.meta() ?? {}), description });
+  // The description goes on before `.optional()`. On the optional wrapper,
+  // zod writes `description` ahead of `anyOf`, and a schema rebuilt from
+  // its JSON Schema (a learned tool's, in the parent process) writes it
+  // after, so the two would not compare equal.
+  const described =
+    description === "" ? nullable : nullable.meta({ ...(nullable.meta() ?? {}), description });
+  return defaultText === null ? described : described.optional();
 }
 
 function joinDefault(text: string, defaultText: string): string {

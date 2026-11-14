@@ -57,7 +57,7 @@ Three of the six differ from the stdlib functions they wrap:
 |---|---|---|
 | `read` | Returns at most 2,000 lines when the model gives no `limit` | A file read whole is sent again with every later request. `read` itself has no default limit, because a program that calls `read("data.csv")` wants the whole file. |
 | `write` | `mode` is bound to `"overwrite"` | One fewer parameter for the model to fill in. The rule in the prompt is to use `write` for new files and complete rewrites. |
-| `bash` | `safeBash` under another name, with `cwd` bound to the agent's working directory | Models know the name. A command that needs another folder starts with `cd`, which safeBash follows. |
+| `bash` | `safeBash` under another name, with `cwd` bound to the agent's working directory and `exitIsFailure: false` | Models know the name. A command that needs another folder starts with `cd`, which safeBash follows. A command that exits non-zero comes back as a result ending `Command exited with code N`, not as a failed tool call: a failing test run is something to read (`docs/dev/stdlib/safe-bash.md`). |
 
 The agent's trace keys its display on the tool's name, so `bash` has its
 own row in `lib/stdlib/agentToolTrace.ts`, with the same display as

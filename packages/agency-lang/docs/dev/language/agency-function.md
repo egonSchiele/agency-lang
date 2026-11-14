@@ -20,6 +20,35 @@
 - **Marker, brand, and label** — `__agencyFunction`, `name`, `module`, `registeredName`, and `sourceFile` are own non-writable, non-configurable properties, defined in the constructor. They survive a raw JSON copy of a function, which is how the registry rebuilds such a copy, and an assignment or `Object.defineProperty` on them throws. `isAgencyFunction` reads the marker and is the runtime's own check. `isBranded` checks a private field, which nothing made from data carries, and is what `toolRefs` uses, since a workflow's imports are written from the label. `derive` is a private method (`docs/dev/security/trusted-modules.md`, decision 4).
 - **Capabilities** — `capabilities` carries what the function's own `@capabilities` tag names. `invoke` checks it against the run's host before argument resolution, through `enterCallable` in [lib/runtime/capabilities.ts](../../../lib/runtime/capabilities.ts), and returns the host's refusal as the call's failure when one is missing. The body, and the handlers it would push, never begin. See [capabilities.md](./capabilities.md).
 
+## What the model sees for each argument
+
+`buildToolDefinition` builds one schema entry per parameter, and
+`__paramSchema` (`lib/runtime/paramSchema.ts`) finishes each entry that has
+a `@param` line, a default, or both:
+
+- **The description sits on the argument.** `liftParamDocs`
+  (`lib/utils/paramDocs.ts`) takes each `@param` entry out of the
+  docstring, and the text becomes that argument's `description` in the JSON
+  schema. It finds entries the way `agency doc` and `.partial()` do, so an
+  `@param` line inside a fenced example is not an entry. An entry that
+  holds a `${...}` interpolation stays in the description, because its
+  text is not known at compile time. An entry for a name that is not a
+  schema argument (a block parameter, a typo) stays too.
+- **Three sources are joined, in this order:** the `@param` text, a
+  description a `@jsonSchema` tag put on the parameter's type, and
+  `Default: <value>`. The first two are joined with a newline. A string
+  default keeps its quotes (`Default: ""`). Other `@jsonSchema` keys, such
+  as `minimum`, are kept.
+- **A parameter with a default is optional.** It is left out of `required`,
+  so the model may omit it. It also accepts null, which a call treats as
+  "use the default", so a model that sends null is still valid against the
+  schema smoltalk checks arguments with.
+- **The schema must survive a JSON Schema round trip unchanged.** A learned
+  tool's schema is rebuilt from JSON Schema in the parent process and
+  compared with the original as text
+  (`tests/agency-js/learned-tool-parity`). `__paramSchema` puts the
+  description on before `.optional()` for that reason.
+
 ## What it is NOT
 
 `AgencyFunction` does **not** participate in per-call runtime-context plumbing. `ctx`, `stack`, and `threads` flow through the active `agencyStore` ALS frame (see [async-context.md](../runtime/async-context.md)). The wrapper is purely about argument resolution and tool metadata.

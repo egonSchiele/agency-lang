@@ -29,7 +29,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength, __asyncDone, __asyncFinished,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides, __rebindParameters, __releaseRebind,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __paramSchema, __takeArgOverrides, __rebindParameters, __releaseRebind,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -348,7 +348,7 @@ export const greet = __AgencyFunction.create({
   toolDefinition: {
     name: "greet",
     description: "No description provided.",
-    schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: Hello"), })
+    schema: z.object({"name": z.string(), "greeting": __paramSchema(z.string(), null, "\"Hello\"", true), })
   },
   exported: false
 }, __toolRegistry);

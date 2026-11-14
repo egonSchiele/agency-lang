@@ -896,16 +896,18 @@ safeBash(
   command: string,
   cwd: string = "",
   timeout: number = 120,
+  exitIsFailure: boolean = true,
 ): Result<string> raises <SafeBashEffects>
 ```
 
 Run Bash commands after approval of the actions they perform.
-  Return stdout on success. A nonzero exit is a failure carrying the exit
-  code, stdout, and stderr, so there is no need to echo `$?` or re-run a
-  command to learn how it exited. Read saved long output with readSpill or
-  grepSpill, not with bash. A command still running after `timeout`
-  seconds is stopped, with everything it started, and the failure carries
-  the output so far.
+  Return stdout on success. A nonzero exit is a failure carrying stdout,
+  stderr, and a last line `Command exited with code N`, so there is no need
+  to echo `$?` or re-run a command to learn how it exited. Output longer
+  than 2000 lines or 50,000 characters is saved and its last lines are
+  returned; read the rest with readSpill or grepSpill, not with bash. A
+  command still running after `timeout` seconds is stopped, with everything
+  it started, and the failure carries the output so far.
 
 **Parameters:**
 
@@ -914,6 +916,7 @@ Run Bash commands after approval of the actions they perform.
 | command | `string` |  | One or more bash commands. |
 | cwd | `string` | "" | Working directory, defaulting to the agent directory or the process directory. |
 | timeout | `number` | 120 | Seconds the command may run. Pass more for a command known to be slow, such as a full test suite. |
+| exitIsFailure | `boolean` | true | Whether a nonzero exit is a failure. When false, it is a successful result holding the same text. |
 
 **Returns:** `Result<string>`
 
@@ -949,4 +952,4 @@ Start a shell command in the background and return its job id at once, while the
 
 **Needs:** `fileRead`, `subprocess`, `env`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4584))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4598))

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { memoryHost } from "../host/memoryHost.js";
-import { DEFAULT_READERS, outputNotice } from "../runtime/toolOutputStore.js";
+import { DEFAULT_READERS, outputNotice, tailNotice } from "../runtime/toolOutputStore.js";
 import { stripAnsi, visualWidth } from "./layout/ansi.js";
 import {
   commandDetail,
@@ -703,13 +703,20 @@ describe("result summarizers", () => {
   // writes. `safeBashFailureText` in tests/agency/safeBash.agency checks
   // that safeBash still writes this shape.
   it("shows the exit code and output for a safeBash failure, and the raw message otherwise", () => {
-    expect(end("safeBash", { command: "make" }, "boom\nbang\n[exit code 2]", "failure")).toBe(
-      "✗ Run make · exit 2\n  │ boom\n  │ bang",
+    expect(
+      end("safeBash", { command: "make" }, "boom\nbang\nCommand exited with code 2", "failure"),
+    ).toBe("✗ Run make · exit 2\n  │ boom\n  │ bang");
+    // The coding agent's bash returns the same text as a result.
+    expect(
+      end("bash", { command: "make" }, "boom\nbang\nCommand exited with code 2", "success"),
+    ).toBe("✗ Run make · exit 2\n  │ boom\n  │ bang");
+    expect(end("bash", { command: "echo" }, "Command exited with code 2\nfine", "success")).toBe(
+      "✓ Run echo",
     );
     expect(end("safeBash", { command: "make" }, "rejected by policy", "failure")).toBe(
       "✗ Run make\n  │ rejected by policy",
     );
-    expect(end("safeBash", { command: "false" }, "[exit code 1]", "failure")).toBe(
+    expect(end("safeBash", { command: "false" }, "Command exited with code 1", "failure")).toBe(
       "✗ Run false · exit 1",
     );
   });
@@ -731,21 +738,70 @@ describe("result summarizers", () => {
     const long = Array.from({ length: 400 }, (_, at) => `line ${at}`).join("\n");
     const notice = outputNotice(long, "out-1", null, DEFAULT_READERS);
     const header = notice.split("\n")[0];
-    expect(
-      end("safeBash", { command: "x" }, `short out\n${notice}\n[exit code 1]`, "failure"),
-    ).toBe(`✗ Run x · exit 1\n  │ short out\n  │ ${header}`);
-    expect(
-      end("safeBash", { command: "x" }, `${notice}\nshort err\n[exit code 1]`, "failure"),
-    ).toBe(`✗ Run x · exit 1\n  │ ${header}\n  │ short err`);
-    expect(
-      end("safeBash", { command: "x" }, `${notice}\n${notice}\n[exit code 1]`, "failure"),
-    ).toBe(`✗ Run x · exit 1\n  │ ${header}\n  │ ${header}`);
+    const exit = "Command exited with code 1";
+    expect(end("safeBash", { command: "x" }, `short out\n${notice}\n${exit}`, "failure")).toBe(
+      `✗ Run x · exit 1\n  │ short out\n  │ ${header}`,
+    );
+    expect(end("safeBash", { command: "x" }, `${notice}\nshort err\n${exit}`, "failure")).toBe(
+      `✗ Run x · exit 1\n  │ ${header}\n  │ short err`,
+    );
+    expect(end("safeBash", { command: "x" }, `${notice}\n${notice}\n${exit}`, "failure")).toBe(
+      `✗ Run x · exit 1\n  │ ${header}\n  │ ${header}`,
+    );
+  });
+
+  // A command's long output reaches the model as its last 2,000 lines.
+  it("shows a person the last few lines of a command's long output", () => {
+    const long = Array.from({ length: 3000 }, (_, at) => `line ${at}`).join("\n");
+    const cut = tailNotice(long, "out-1", null, DEFAULT_READERS, 2000, 50_000);
+    const shown = end(
+      "safeBash",
+      { command: "x" },
+      `${cut}\nCommand exited with code 1`,
+      "failure",
+    );
+    const rows = shown.split("\n");
+    expect(rows[0]).toBe("✗ Run x · exit 1");
+    expect(rows[1]).toBe("  │ [the last 20 of 3000 lines]");
+    expect(rows).toHaveLength(22);
+    expect(rows[21]).toBe("  │ line 2999");
+  });
+
+  it("cuts output that was not cut for the model, and one very long line", () => {
+    const under = Array.from({ length: 1900 }, (_, at) => `line ${at}`).join("\n");
+    const rows = end(
+      "safeBash",
+      { command: "x" },
+      `${under}\nCommand exited with code 1`,
+      "failure",
+    ).split("\n");
+    expect(rows[1]).toBe("  │ [the last 20 of 1900 lines]");
+    expect(rows).toHaveLength(22);
+    const wide = tailNotice("y".repeat(60_000), "out-2", null, DEFAULT_READERS, 2000, 50_000);
+    const wideRows = end(
+      "safeBash",
+      { command: "x" },
+      `${wide}\nCommand exited with code 1`,
+      "failure",
+    ).split("\n");
+    // The one line is cut to 300 characters, which the trace then wraps.
+    const shownWide = wideRows.slice(1).join("");
+    expect(shownWide.match(/y/g)).toHaveLength(300);
+    expect(shownWide.endsWith("…")).toBe(true);
+  });
+
+  // gh's login note comes before the exit line, so the exit line is last.
+  it("reads the exit from a bash result that carries a note", () => {
+    const result = "not logged in\nGitHub CLI is not logged in.\nCommand exited with code 4";
+    expect(end("bash", { command: "gh pr view 1" }, result, "success")).toBe(
+      "✗ Run gh pr view 1 · exit 4\n  │ not logged in\n  │ GitHub CLI is not logged in.",
+    );
   });
 
   it("reads the last status line when the output holds one of its own", () => {
-    const message = "[exit code 9]\nreal output\n[exit code 2]";
+    const message = "Command exited with code 9\nreal output\nCommand exited with code 2";
     expect(end("safeBash", { command: "x" }, message, "failure")).toBe(
-      "✗ Run x · exit 2\n  │ [exit code 9]\n  │ real output",
+      "✗ Run x · exit 2\n  │ Command exited with code 9\n  │ real output",
     );
   });
 

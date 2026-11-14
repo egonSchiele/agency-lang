@@ -1,4 +1,5 @@
 import { WriteMode } from "std::index"
+import { join } from "std::path"
 
 
 /** @module
@@ -668,4 +669,67 @@ export type Plan = {
   /** The command word of every simple command planFor decided over, in
     order; "" for an assignment-only command; [] when unparseable. */
   verbs: string[]
+}
+
+/** One file a plan reads, searches, lists, finds in, writes, or removes,
+ read back out of the effect that asks about it. A `find` access names the
+ folder searched, not the files found. */
+export type FileAccess = {
+  mode: "read" | "search" | "list" | "find" | "write" | "remove";
+  path: string
+}
+
+def accessOf(effect: Effect): FileAccess | null {
+  // A default arm on purpose: a file effect added later and missed here
+  // makes onlyTouchesFiles answer false, which is the safe answer.
+  return match(effect.name) {
+    "std::read" => fileAccess("read", join(effect.payload.dir, effect.payload.filename))
+    "std::grep" => fileAccess("search", grepPath(effect.payload))
+    "std::ls" => fileAccess("list", effect.payload.dir)
+    "std::glob" => fileAccess("find", effect.payload.dir)
+    "std::write" => fileAccess("write", join(effect.payload.dir, effect.payload.filename))
+    "std::remove" => fileAccess("remove", effect.payload.target)
+    _ => null
+  }
+}
+
+def fileAccess(mode: "read" | "search" | "list" | "find" | "write" | "remove", path: string): FileAccess {
+  return { mode: mode, path: path }
+}
+
+def grepPath(payload: GrepPayload): string {
+  if (payload.file == null) {
+    return payload.dir
+  }
+  return join(payload.dir, payload.file)
+}
+
+/**
+The file accesses among a plan's effects, in order. Only file effects are
+accesses: `git checkout -- a.txt` overwrites a file, but its effect is
+`std::git::checkout`. Before trusting this list to be everything a line
+does, check `onlyTouchesFiles`.
+*/
+export def accessesOf(effects: Effect[]): FileAccess[] {
+  """
+  Return the files the given plan effects read, search, list, find in, write, or remove, in order.
+  """
+  let accesses: FileAccess[] = []
+  for (effect in effects) {
+    const access = accessOf(effect)
+    if (access != null) {
+      accesses.push(access)
+    }
+  }
+  return accesses
+}
+
+export def onlyTouchesFiles(plan: Plan): boolean {
+  """
+  True when the plan is not refused, does not ask the broad question, and every effect it raises is a file access.
+  """
+  if (plan.broadReason != null || plan.execution.kind == "refuse") {
+    return false
+  }
+  return accessesOf(plan.effects).length == plan.effects.length
 }

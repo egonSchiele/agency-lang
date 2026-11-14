@@ -62,6 +62,7 @@ import {
   StepExec,
   ChainStep,
   Join,
+  accessesOf,
  } from "./safeBash/actions.agency"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
@@ -4703,7 +4704,8 @@ def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
     reason: reason,
     detail: detail,
     verbs: plan.verbs,
-    effects: [e.name for e in plan.effects]
+    effects: [e.name for e in plan.effects],
+    accesses: accessesOf(plan.effects)
   }
 }
 

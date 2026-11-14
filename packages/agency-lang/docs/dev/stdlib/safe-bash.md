@@ -225,13 +225,40 @@ refused plan is on the record too. The bridge is `_debug` in
 `lib/stdlib/statelog.ts`, a no-op outside a run. The data:
 
 ```
-{ command, cwd, outcome, reason, detail, verbs, effects }
+{ command, cwd, outcome, reason, detail, verbs, effects, accesses }
 ```
 
 `reason` and `detail` are the broad reason's fields or `""`; `effects` is
-the list of effect names. A session's calls are tallied with a filter
-over its JSONL for `debug` events whose message is `safeBash plan`.
-There is no dedicated event type.
+the list of effect names; `accesses` is `accessesOf(effects)` (see "File
+accesses"). A session's calls are tallied with a filter over its JSONL
+for `debug` events whose message is `safeBash plan`. There is no
+dedicated event type.
+
+## File accesses
+
+`accessesOf(effects)` in `stdlib/safeBash/actions.agency` answers "which
+files does this line touch". It reads one `FileAccess` (`mode` and
+`path`) out of each file effect, in order:
+
+| Effect | Mode | Path |
+|---|---|---|
+| `std::read` | `read` | `dir` joined with `filename` |
+| `std::grep` | `search` | `dir` joined with `file`, or `dir` when `file` is null |
+| `std::ls` | `list` | `dir` |
+| `std::glob` | `find` | `dir`, the folder searched, not the files found |
+| `std::write` | `write` | `dir` joined with `filename` |
+| `std::remove` | `remove` | `target` |
+
+An access is read from the effects every time and never stored on the
+plan, so the two cannot drift apart. Every other effect is skipped by a
+default arm. A file effect added later and missed there makes
+`onlyTouchesFiles` answer false, which is the safe answer.
+
+The list covers file effects only. `cat a.txt && git add a.txt` has one
+access, a read, and it also stages a file. A caller that asks "does this
+line only read under this folder?" must first check
+`onlyTouchesFiles(plan)`: true when the plan is not refused, does not ask
+the broad question, and every effect is a file access.
 
 ## What the model reads on a rejection
 

@@ -1020,7 +1020,7 @@ node grepFilterStages() {
 def filesOf(found: any): any {
   return match(found) {
     { kind: "stdin" } => "stdin"
-    { kind: "files", paths } => [p.filename for p in paths]
+    { kind: "files", paths } => [p.source.filename for p in paths]
   }
 }
 

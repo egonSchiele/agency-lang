@@ -579,19 +579,50 @@ export type GrepRender = {
 export type GrepExec = {
   kind: "grep";
   payload: GrepPayload;
-  render: GrepRender
+  render: GrepRender;
+  /** The saved output searched, by name, when the path is one. The
+    search then reads the store, never the disk. */
+  saved: string | null
 }
 
 /**
 Build the search execution from the same payload used by `grepEffect`.
 */
-export def grepExecution(payload: GrepPayload, render: GrepRender): GrepExec {
+export def grepExecution(payload: GrepPayload, render: GrepRender, saved: string | null = null): GrepExec {
   """Build a grep execution plan without running the search."""
   return {
     kind: "grep",
     payload: payload,
-    render: render
+    render: render,
+    saved: saved
   }
+}
+
+/** A saved output named by path: the folder part as the command wrote it,
+ with its trailing separator, and the saved name. */
+export type SavedPath = {
+  folder: string;
+  name: string
+}
+
+/** Where a resolved read path's bytes are: a file on disk, or a saved
+ output in the store. A saved source keeps the folder as written so a
+ rule can name the copy's path in its effect, but it is read by name. */
+export type ReadSource =
+  | { kind: "disk"; dir: string; filename: string }
+  | { kind: "saved"; folder: string; name: string }
+
+/** The std::read payload for a source: the file, or the copy's path. */
+export def readPayloadOf(source: ReadSource): ReadPayload {
+  """Return the read approval payload that names this source."""
+  return match(source) {
+    { kind: "disk", dir, filename } => readPayload(dir, filename)
+    { kind: "saved", folder, name } => readPayload(folder, name)
+  }
+}
+
+def readPayload(dir: string, filename: string): ReadPayload {
+  return { dir: dir, filename: filename }
 }
 
 /** How the shell-free path prints a file: whole, numbered (cat -n), the
@@ -610,7 +641,7 @@ export type ReadView =
  approval means. */
 export type ReadExec = {
   kind: "read";
-  payloads: ReadPayload[];
+  sources: ReadSource[];
   view: ReadView
 }
 
@@ -635,13 +666,13 @@ export type ChainExec = {
 }
 
 /**
-Build file reads from the same payloads used by `readEffect`.
+Build file reads from the sources whose payloads `readEffect` asks about.
 */
-export def readExecution(payloads: ReadPayload[], view: ReadView): ReadExec {
+export def readExecution(sources: ReadSource[], view: ReadView): ReadExec {
   """Build a file-read execution plan without reading files."""
   return {
     kind: "read",
-    payloads: payloads,
+    sources: sources,
     view: view
   }
 }
@@ -668,7 +699,10 @@ export type Plan = {
   broadReason: BroadReason | null;
   /** The command word of every simple command planFor decided over, in
     order; "" for an assignment-only command; [] when unparseable. */
-  verbs: string[]
+  verbs: string[];
+  /** Every saved output the line names. A shell line gets a fresh copy of
+    each before it starts, and a read is left unasked only for these. */
+  savedPaths: SavedPath[]
 }
 
 /** One file a plan reads, searches, lists, finds in, writes, or removes,

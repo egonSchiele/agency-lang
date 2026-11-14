@@ -63,7 +63,11 @@ import {
   ChainStep,
   Join,
   accessesOf,
+  SavedPath,
+  ReadSource,
+  readPayloadOf,
  } from "./safeBash/actions.agency"
+import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _spillPathsIn, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _removeRefusal, _removeTargetIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
@@ -411,10 +415,7 @@ def inputRedirectRead(redirect: Redirect, cwd: string): Result<ReadPayload> {
   if (isFailure(path)) {
     return path
   }
-  return success({
-    dir: path.value.dir,
-    filename: path.value.filename
-  })
+  return success(readPayloadOf(path.value.source))
 }
 
 // The payload must name the target without evaluating shell variables.
@@ -660,7 +661,7 @@ def execArgText(word: Word): Result<string> {
 }
 
 def readEffects(paths: ReadPath[]): Effect[] {
-  return [readEffect({ dir: path.dir, filename: path.filename }) for path in paths]
+  return [readEffect(readPayloadOf(path.source)) for path in paths]
 }
 
 def fileReadEffects(verb: string, found: FileRead, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
@@ -961,8 +962,11 @@ type GrepCall = {
   /** The pattern as the command wrote it. */
   pattern: string;
   /** The resolved path. Its `argument` is "" when -r searched "." because
-   no path was written, since grep then prints bare names. */
-  target: PathTarget
+   no path was written, since grep then prints bare names. For a saved
+   output, `dir` is the folder as written and `file` the name. */
+  target: PathTarget;
+  /** The saved output's name when the path is one, else null. */
+  saved: string | null
 }
 
 /** The pattern, and the words after it that name paths. */
@@ -1042,6 +1046,18 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
   if (text is failure(why)) {
     return failure("the grep path is not literal")
   }
+  const saved = savedPathOf(text.value)
+  if (saved != null) {
+    return success({
+      kind: "search",
+      call: {
+        split: args,
+        pattern: words.value.pattern,
+        target: { dir: saved.folder, file: saved.name, argument: text.value },
+        saved: saved.name
+      }
+    })
+  }
   const target = resolveTarget(text.value, pathWord, cwd)
   if (isFailure(target)) {
     return target
@@ -1051,7 +1067,8 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
     call: {
       split: args,
       pattern: words.value.pattern,
-      target: target.value
+      target: target.value,
+      saved: null
     }
   })
 }
@@ -1077,7 +1094,8 @@ def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> 
         dir: here.value.dir,
         file: here.value.file,
         argument: ""
-      }
+      },
+      saved: null
     }
   })
 }
@@ -1237,9 +1255,10 @@ def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<Plan> {
   }
   return success({
     effects: [grepEffect(payload)],
-    execution: grepExecution(payload, render),
+    execution: grepExecution(payload, render, call.saved),
     broadReason: null,
-    verbs: verbNames([command])
+    verbs: verbNames([command]),
+    savedPaths: []
   })
 }
 
@@ -1388,11 +1407,10 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
   }
 }
 
-/** One resolved path of a read verb. `argument` is the path as bash hands
- it to the program. */
+/** One resolved path of a read verb: where its bytes are, and the path as
+ bash hands it to the program. */
 type ReadPath = {
-  dir: string;
-  filename: string;
+  source: ReadSource;
   argument: string
 }
 
@@ -1451,6 +1469,13 @@ def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Res
   """
   Resolve a literal read path to a regular file, failing for directories or special files.
   """
+  const saved = savedPathOf(text)
+  if (saved != null) {
+    return success({
+      source: { kind: "saved", folder: saved.folder, name: saved.name },
+      argument: text
+    })
+  }
   const target = resolveTarget(text, word, cwd)
   if (isFailure(target)) {
     return target
@@ -1460,10 +1485,16 @@ def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Res
     return failure("${subject} would read a directory")
   }
   return success({
-    dir: target.value.dir,
-    filename: file,
+    source: { kind: "disk", dir: target.value.dir, filename: file },
     argument: target.value.argument
   })
+}
+
+// The one saved-output check the read verbs, input redirects, and grep
+// share. It runs before anything is statted, because the copy may not
+// exist yet: a saved output is read from the store by name.
+def savedPathOf(text: string): SavedPath | null {
+  return _spillPathParts(text)
 }
 
 @capabilities(fileRead)
@@ -3425,7 +3456,8 @@ def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
     effects: effects,
     execution: { kind: "chain", steps: steps },
     broadReason: null,
-    verbs: verbNames([link.command for link in links.value])
+    verbs: verbNames([link.command for link in links.value]),
+    savedPaths: []
   })
 }
 
@@ -3505,12 +3537,13 @@ def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command
   if (isFailure(view)) {
     return view
   }
-  const payloads: ReadPayload[] = [{ dir: path.dir, filename: path.filename } for path in paths]
+  const sources: ReadSource[] = [path.source for path in paths]
   return success({
-    effects: [readEffect(payload) for payload in payloads],
-    execution: readExecution(payloads, view.value),
+    effects: readEffects(paths),
+    execution: readExecution(sources, view.value),
     broadReason: null,
-    verbs: verbNames([command])
+    verbs: verbNames([command]),
+    savedPaths: []
   })
 }
 
@@ -3569,14 +3602,17 @@ def refusePlan(reason: string, verbs: string[]): Plan {
       reason: reason
     },
     broadReason: null,
-    verbs: verbs
+    verbs: verbs,
+    savedPaths: []
   }
 }
 
 def bashPlan(command: string, effects: Effect[], verbs: string[], broadReason: BroadReason | null): Plan {
   // Spawning a shell always raises at least one effect, so a log of
   // effects is a complete audit of shell invocations. A string of nothing
-  // but echoes would otherwise raise nothing and still start a shell.
+  // but echoes would otherwise raise nothing and still start a shell. The
+  // one exception is made later, in `savedOutputRules`: a line that only
+  // reads can lose the reads of saved output it named, and end with none.
   const raised = if effects.length == 0 then [BASH_EFFECT] else effects
   return {
     effects: raised,
@@ -3585,7 +3621,8 @@ def bashPlan(command: string, effects: Effect[], verbs: string[], broadReason: B
       command: command
     },
     broadReason: broadReason,
-    verbs: verbs
+    verbs: verbs,
+    savedPaths: []
   }
 }
 
@@ -3763,7 +3800,8 @@ def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
         args: args
       },
       broadReason: null,
-      verbs: verbNames([command])
+      verbs: verbNames([command]),
+      savedPaths: []
     })
     failure(why) => success(refusePlan(CLI_NOT_AVAILABLE, verbNames([command])))
   }
@@ -3857,7 +3895,8 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
       content: text.value
     },
     broadReason: null,
-    verbs: verbNames([command])
+    verbs: verbNames([command]),
+    savedPaths: []
   },
   )
 }
@@ -3883,7 +3922,8 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
     effects: [writeEffect(prepared.value)],
     execution: writeExecution(prepared.value),
     broadReason: null,
-    verbs: verbNames([command])
+    verbs: verbNames([command]),
+    savedPaths: []
   },
   )
 }
@@ -3911,6 +3951,120 @@ export def planFor(source: string, cwd: string, origin: GhRepo | null = null): P
   @param cwd - The working directory used to resolve paths during classification.
   @param origin - The repository a `gh` command acts on when it names none. Left null, such a command's std::github effects name no repository and say which folder to look it up in.
   """
+  // Last, on the finished plan, so that every kind of plan and every verb
+  // passes through the same saved-output rules.
+  return savedOutputRules(planLine(source, cwd, origin), savedPathsIn(source))
+}
+
+/** Every saved output a line names: each literal word of each command
+  that is a saved-output path, and each one a scan of the raw text finds.
+  The scan is what covers a line that does not parse. */
+def savedPathsIn(source: string): SavedPath[] {
+  const found: SavedPath[] = [..._spillPathsIn(source), ...savedPathsInWords(source)]
+  let unique: SavedPath[] = []
+  for (saved in found) {
+    if (!isSavedPathIn(saved.folder, saved.name, unique)) {
+      unique.push(saved)
+    }
+  }
+  return unique
+}
+
+def savedPathsInWords(source: string): SavedPath[] {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return []
+  }
+  let found: SavedPath[] = []
+  for (entry in flattenCommands(parsed.value)) {
+    for (word in commandWords(entry.command)) {
+      const saved = savedWordPath(word)
+      if (saved != null) {
+        found.push(saved)
+      }
+    }
+  }
+  return found
+}
+
+def savedWordPath(word: Word): SavedPath | null {
+  const text = literalWordText(word)
+  if (text is failure(why)) {
+    return null
+  }
+  return savedPathOf(text.value)
+}
+
+/* The command name, its arguments, and its redirect targets. */
+def commandWords(command: SimpleCommand): Word[] {
+  let words: Word[] = []
+  if (command.command != null) {
+    words.push(command.command)
+  }
+  return [...words, ...command.args, ...[redirect.target for redirect in command.redirects]]
+}
+
+def isSavedPathIn(folder: string, name: string, paths: SavedPath[]): boolean {
+  for (saved in paths) {
+    if (saved.folder == folder && saved.name == name) {
+      return true
+    }
+  }
+  return false
+}
+
+static const SPILL_FOLDER_REFUSAL = "That folder holds copies of saved output, and safeBash does not write to it, delete from it, or list it. A file in it can be read with read, cat, tail, head, grep, wc or any other command."
+
+/**
+The saved-output rules, applied to a finished plan. A write, delete,
+listing, or find inside a saved-output folder refuses the plan. When every
+effect of the plan is a read, a search, a listing, or a find, a read or a
+search of a path in `savedPaths` is dropped: it asks nothing.
+
+This is safe only because the bytes such a command reads are the store's.
+In process, `textOf` and the saved grep read the store by name. In a
+shell, three things hold together: the line only reads, so no command in
+it can change a copy; `_prepareSpillFiles` rewrites every path in
+`savedPaths` from the store just before the shell starts, and fails the
+line for a folder that is not this machine's; and that folder belongs to
+this user alone. A read is dropped only for a path in `savedPaths`, the
+same list `_prepareSpillFiles` writes, so the two cannot disagree.
+
+A shell plan whose only effects were dropped here runs with no effects.
+That is the one exception to "every shell start raises an effect".
+*/
+def savedOutputRules(plan: Plan, savedPaths: SavedPath[]): Plan {
+  for (access in accessesOf(plan.effects)) {
+    if (access.mode != "read" && access.mode != "search" && _inSpillFolder(access.path)) {
+      return refusePlan(SPILL_FOLDER_REFUSAL, plan.verbs)
+    }
+  }
+  if (!onlyReads(plan.effects)) {
+    return { ...plan, savedPaths: savedPaths }
+  }
+  const kept = [effect for effect in plan.effects if !readsSavedOutput(effect, savedPaths)]
+  return { ...plan, effects: kept, savedPaths: savedPaths }
+}
+
+static const READ_EFFECTS: string[] = ["std::read", "std::grep", "std::ls", "std::glob"]
+
+def onlyReads(effects: Effect[]): boolean {
+  const others = [effect for effect in effects if !READ_EFFECTS.includes(effect.name)]
+  return others.length == 0
+}
+
+// Matched on the payload's folder and name exactly as the rule built them
+// from a saved source, so only a path in `savedPaths` is ever dropped.
+def readsSavedOutput(effect: Effect, savedPaths: SavedPath[]): boolean {
+  return match(effect.name) {
+    "std::read" => isSavedPathIn(effect.payload.dir, effect.payload.filename, savedPaths)
+    "std::grep" => isSavedPathIn(effect.payload.dir, effect.payload.file ?? "", savedPaths)
+    _ => false
+  }
+}
+
+/* Plan one line, before the saved-output rules. */
+def planLine(source: string, cwd: string, origin: GhRepo | null): Plan {
   const parsed = bashParser(source)
   if (parsed is failure(why)) {
     // With no tree, the delete refusal reads the text, so `rm -rf $X/*`,
@@ -4570,7 +4724,7 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
     { kind: "chain" } => runChain(exec, command)
-    { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs)
+    { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs, plan.savedPaths)
     // Unreachable — approvedPlan already returned a refusal. The arm
     // exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
@@ -4595,7 +4749,7 @@ def startedMessage(id: string): string {
   return "Started ${id}. It keeps running while you work. Do not call jobOutput right away: a job that just started has printed nothing. Call jobOutput with the id ${id} when you need its result, or pass wait to block until it ends."
 }
 
-@capabilities(fileRead, subprocess)
+@capabilities(fileRead, fileWrite, subprocess)
 export def startJob(
   command: string,
   cwd: string = "",
@@ -4622,7 +4776,12 @@ export def startJob(
     // does in runBash, and it is safe for the reason runBash's comment
     // gives: the only path here runs through an approvedPlan that raised
     // every effect in the plan and returned success. Do not add a caller
-    // that skips approvedPlan.
+    // that skips approvedPlan. The saved-output copies are written first,
+    // for the reason runBash gives.
+    const copied = try _prepareSpillFiles(plan.savedPaths)
+    if (copied is failure(why)) {
+      return failure("`${command}` was not run: ${why}")
+    }
     const started = try _startJob(text, command, dir, minutes * 60000)
     if (started is failure(why)) {
       return failure("`${command}` was not run: ${why}")
@@ -5116,8 +5275,8 @@ Requires Bash on the search path. Successful stderr is omitted from the
 result. Nonzero exits return failures, including grep's "no match" and
 diff's "files differ" statuses. Long output is saved with a preview.
 */
-@capabilities(fileRead, subprocess)
-def runBash(command: string, cwd: string, source: string = "", timeout: number = 120, verbs: string[] = []): Result<string> {
+@capabilities(fileRead, fileWrite, subprocess)
+def runBash(command: string, cwd: string, source: string = "", timeout: number = 120, verbs: string[] = [], savedPaths: SavedPath[] = []): Result<string> {
   """
   Execute a Bash command after its planned effects have been approved.
   Return stdout on success, or an exit failure with output on nonzero exit.
@@ -5134,7 +5293,8 @@ def runBash(command: string, cwd: string, source: string = "", timeout: number =
   // and only while that reason holds: the narrow interrupt REPLACES the
   // broad one, and the only path into this function runs through a
   // `raiseAll` that raised every effect in the plan and returned success.
-  // Every plan raises at least one effect, so no classification bug can
+  // Every plan raises at least one effect, except a line that only reads
+  // saved output (see `savedOutputRules`), so no classification bug can
   // turn into an ungated shell call. Do not add a caller that skips
   // `raiseAll`, and do not copy this call anywhere else.
   // `source` is the command as the model wrote it, which can differ from
@@ -5143,6 +5303,12 @@ def runBash(command: string, cwd: string, source: string = "", timeout: number =
   // both name the model's text. A model that read the rewritten text in a
   // failure could copy it, and `git -c ...` has no rule.
   const label = if (source == "") then command else source
+  // The copies first, right before the shell starts: a read of a saved
+  // output is unasked only because the shell will read the store's text.
+  const copied = try _prepareSpillFiles(savedPaths)
+  if (copied is failure(why)) {
+    return failure("`${label}` was not run: ${why}")
+  }
   const attempt = try _bash(command, cwd, timeout * 1000, "", {})
   if (attempt is failure(why)) {
     return failure("`${label}` was not run: ${why}")
@@ -5253,6 +5419,11 @@ def grepResults(exec: GrepExec): Result<any[]> {
     filesOnly: payload.filesOnly,
     invert: payload.invert
   }
+  // A saved output is searched in the store, the same search grepSpill
+  // runs, and never on disk.
+  if (exec.saved != null) {
+    return try _grepSaved(exec.saved, query, payload.maxResults)
+  }
   return try _grep(payload.dir, ".", query, payload.maxResults, [], true, payload.file)
 }
 
@@ -5294,14 +5465,25 @@ def printRead(exec: ReadExec): Result<string> {
   // a failure here is a race or a permission error, and `_read`'s own
   // message says which.
   let joined = ""
-  for (payload in exec.payloads) {
-    const text = try _read(payload.dir, payload.filename)
+  for (source in exec.sources) {
+    const text = textOf(source)
     if (isFailure(text)) {
       return text
     }
     joined = joined + text.value
   }
   return success(_renderReadView(joined, exec.view))
+}
+
+/** The text a source holds. The only place that chooses between the disk
+ and the store: a saved source is read from the store by name, and its
+ folder is never used to reach the disk. */
+@capabilities(fileRead)
+def textOf(source: ReadSource): Result<string> {
+  return match(source) {
+    { kind: "disk", dir, filename } => try _read(dir, filename)
+    { kind: "saved", name } => try _readSpill(name, 0, 0)
+  }
 }
 
 // Report skipped folders and any match limit reached by the in-process grep.

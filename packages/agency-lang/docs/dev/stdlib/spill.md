@@ -63,6 +63,41 @@ What `safeBash` returns is at most 50,000 characters and a notice, under the loo
 
 **The preview is bounded by characters.** `previewHead` and `previewTail` each stop after `PREVIEW_CHARS`, or less when the notice has to fit a smaller limit, and a single line is cut at `PREVIEW_LINE_LEN`. Fifteen lines from each end of 200-character lines would make a preview three times longer than the output it replaced. The tail never reaches back into lines the head showed, so a two-line output is not printed twice.
 
+## Reading saved output by path
+
+A saved output can also be read as a file. Its path is the temp folder, then `agency-spill-<user id>`, then the name:
+
+```
+/tmp/agency-spill-1000/2026-11-13T04-05-06-123Z-a1b2c3.log
+```
+
+`spillFolder(host)` builds the folder from `host.system.tempDir()` as the host gives it, never a real path, so on a Mac it starts `/var/folders/…` and never `/private/var/folders/…`. `spillPathParts(path)` recognizes a path by its last two parts only: an `agency-spill-<digits>` folder and a name `isOutputName` accepts. A path written on another machine is recognized too. `…/x.log/../../etc/passwd` is not a saved output, because its last part is `passwd`.
+
+The store stays the only source of truth. A file on disk is a copy, written at the moment a real program is about to read it, and rewritten every time. There are three ways a saved output is read by path:
+
+1. **safeBash in process.** A lone `cat`, `head`, `tail` or `grep`, or a chain of them, reads the store by name. Nothing is written to disk.
+2. **safeBash in a shell.** Before `_bash` or `_startJob` starts a shell, `_prepareSpillFiles` writes a copy of every saved output the line names. The line fails before the shell starts when a name is no longer in the store, when the path's folder is another machine's (the message gives this machine's path), or when the folder is not this user's alone.
+3. **The stdlib's `read`.** `read` asks `_savedOutputAt(dir, filename)` before anything else, and for a saved output returns `_readSpill(name, offset, limit)` with no interrupt. This branch never touches the disk.
+
+`readSpill` and `grepSpill` stay, and take a name.
+
+**No approval for the read.** Reading saved output asks nothing, for the reason the readers ask nothing. In a shell this is safe only because the bytes the program reads are the store's, and three things make that true together:
+
+- The read question is left out only on a line that only reads: every effect is `std::read`, `std::grep`, `std::ls` or `std::glob`. In `ln -sf ~/.ssh/id_rsa <saved output>; cat <saved output>` the `ln` could change the copy after it is written, so the `cat` keeps its `std::read`.
+- `_prepareSpillFiles` rewrites each copy from the store just before the shell starts.
+- The folder belongs to this user alone. On Linux `/tmp` is shared, and another user could create `/tmp/agency-spill-1000` first and swap a copy for a link between the write and the read. `host.files.privateDir` creates the folder with mode 0700, or checks an existing one: a real folder, owned by this user, with no access for anyone else. It never fixes an existing folder's mode, because by then someone else may have planted a file.
+
+The rules are in `savedOutputRules` in `stdlib/safeBash.agency`; `safe-bash.md` has the details.
+
+**What is accepted.**
+
+- A background job an earlier line started, approved for a command that names the folder, could change a copy in the moment between the write and a later line's read.
+- A line that names a saved output no longer in the store fails, even when it only mentions it (`git log -- <old path>`). A model that names an old path is usually about to read it.
+- `exec` writes no copy. `exec("wc", ["-l", <saved output>])` asks `std::exec` and fails with "No such file".
+- `sed -n` has no rule in safeBash, so it asks `std::exec`, as it does for a file on disk.
+
+**Reading it back does not save it again.** `storeOutput` returns the name of an entry that already holds the same text. Without this, `cat <saved output>` or a long `read` of one would store a second copy, and a second copy of a large output pushes the first one out.
+
 ## What a saved output is called
 
 Every entry carries a `source` beside its name: the command `safeBash` ran, as the user typed it, or for a tool result the loop spilled, the tool's name and its first string argument (`fetchMarkdown https://…`). The notice names it in its first line, and the agent's trace shows `output of <source>` when `readSpill` or `grepSpill` reads it back, since the generated name means nothing to a person. `storeOutput` cuts the source to `SPILL_SOURCE_CHARS`. An entry saved before the field existed reads back with no source, and the trace falls back to the name. The tool-loop rule is a fixed heuristic in `lib/runtime/toolInvocation.ts` (`spillSource`), not a lookup in the trace renderer's table, so the runtime does not depend on the renderer.
@@ -81,10 +116,12 @@ A `fork` or `parallel` branch runs on a copy of the globals, so an output saved 
 
 ## Where the pieces are
 
-- `lib/runtime/toolOutputStore.ts`: the store shape and key, `MAX_STORE_CHARS`, `storeOutput`, `findOutput`, `isOutputName`, `missingOutputMessage`, `spillReaders`, `isSpillReader`, and `outputNotice` with the preview helpers.
+- `lib/runtime/toolOutputStore.ts`: the store shape and key, `MAX_STORE_CHARS`, `storeOutput`, `findOutput`, `isOutputName`, `missingOutputMessage`, `spillReaders`, `isSpillReader`, `outputNotice` with the preview helpers, and the path functions `spillFolder`, `spillPathParts`, `inSpillFolder`, `spillPathsIn`.
 - `lib/runtime/toolInvocation.ts`: `spillSettings`, which reads the call's option and tools once, and `capToolResultForLlm`, which applies the rules in the table above.
 - `lib/runtime/prompt.ts`: `capForLlm`, the one closure the three cap sites (a result, a failure message, a rejection reason) call, with the spill settings found once per call.
-- `lib/stdlib/spill.ts`: `MAX_STDOUT_LEN`, `_keepOutput`, `_readSpill`, `_grepSpill` over `currentRun()`.
+- `lib/stdlib/spill.ts`: `MAX_STDOUT_LEN`, `_keepOutput`, `_readSpill`, `_grepSpill` over `currentRun()`; `_grepSaved` for safeBash's in-process grep; `_savedOutputAt` for `read`; `_prepareSpillFiles` and `writeCopy`.
+- `stdlib/index.agency`: the saved-output branch at the top of `read`.
+- Tests for reading by path: `tests/agency/safeBashSavedOutput.agency`, the path cases in `lib/runtime/toolOutputStore.test.ts`, and `privateDir` in `lib/host/node/nodeFiles.test.ts`.
 - `stdlib/spill.agency`: `keepOutput`, `readSpill`, `grepSpill`.
 - `stdlib/safeBash.agency` calls `keepOutput` on every output path.
 - `stdlib/agents/lib/toolkits.agency`: `shellTools()` with the readers, and `spillTools()` for the agents that fetch without it.

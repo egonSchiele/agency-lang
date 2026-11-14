@@ -5,6 +5,7 @@
  * is per run, carried by every checkpoint, copied into a fork branch, and
  * shared by a tool call. See docs/dev/stdlib/spill.md.
  */
+import type { Host } from "../host/host.js";
 import type { Run } from "./asyncContext.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { toHex } from "../utils/hash.js";
@@ -45,6 +46,60 @@ const OUTPUT_NAME = /^[0-9A-Za-z][0-9A-Za-z_-]*\.log$/;
 
 export function isOutputName(name: string): boolean {
   return OUTPUT_NAME.test(name);
+}
+
+/** The start of the saved-output folder's name; the user id follows. */
+export const SPILL_FOLDER_PREFIX = "agency-spill-";
+
+const SPILL_FOLDER_NAME = new RegExp(`^${SPILL_FOLDER_PREFIX}[0-9]+$`);
+
+/** A saved output named by path: the folder part as written, with its
+ *  trailing separator, and the saved name. */
+export type SavedPath = { folder: string; name: string };
+
+/** The folder a run's saved outputs are copied into: the temp folder, then
+ *  `agency-spill-<user id>`, with a trailing separator. The spelling is the
+ *  temp folder as the host gives it, never a real path, so the notices and
+ *  the check in `prepareSpillFiles` compare the same text. */
+export function spillFolder(host: Host): string {
+  const temp = host.system.tempDir().replace(/\/+$/, "");
+  return `${temp}/${SPILL_FOLDER_PREFIX}${host.system.userId()}/`;
+}
+
+/** The saved output a path names, or null. The whole path must end in an
+ *  `agency-spill-<id>` folder and a saved-output name, whatever comes
+ *  before, so a path written on another machine is recognized too. */
+export function spillPathParts(path: string): SavedPath | null {
+  const parts = path.split("/");
+  if (parts.length < 2) return null;
+  const name = parts[parts.length - 1];
+  if (!isOutputName(name) || !SPILL_FOLDER_NAME.test(parts[parts.length - 2])) return null;
+  return { folder: path.slice(0, path.length - name.length), name };
+}
+
+/** Whether a path is an `agency-spill-<id>` folder or anything below one,
+ *  judged by its parts, so a real spelling such as `/private/var/…` counts. */
+export function inSpillFolder(path: string): boolean {
+  return path.split("/").some((part) => SPILL_FOLDER_NAME.test(part));
+}
+
+// A run of characters that is not a separator in the shell, then the
+// folder, then a name. The end must be one of those separators or the end
+// of the text, so a longer path that starts the same way does not match.
+const SPILL_PATH_IN_TEXT = new RegExp(
+  `[^\\s'"\`;|&<>()]*${SPILL_FOLDER_PREFIX}[0-9]+/[0-9A-Za-z][0-9A-Za-z_-]*\\.log(?=$|[\\s'"\`;|&<>()])`,
+  "g",
+);
+
+/** Every saved-output path in raw command text, for a line that does not
+ *  parse. A line that parses takes its paths from its parsed words. */
+export function spillPathsIn(text: string): SavedPath[] {
+  const found: SavedPath[] = [];
+  for (const match of text.matchAll(SPILL_PATH_IN_TEXT)) {
+    const parts = spillPathParts(match[0]);
+    if (parts !== null) found.push(parts);
+  }
+  return found;
 }
 
 /** The two reader tools a model was offered, by the names it sees them
@@ -110,6 +165,11 @@ export function spillSourceLabel(source: string | null): string | null {
  *  cap is kept alone, because the notice will already have promised it. */
 export function storeOutput(run: Run, text: string, source: string): string {
   const store = readStore(run);
+  // Reading a saved output back (`cat` of its path, or `read`) would
+  // otherwise save it again, and a second copy of a large output pushes
+  // the first one out.
+  const same = store.entries.find((entry) => entry.text === text);
+  if (same !== undefined) return same.name;
   while (store.entries.length > 0 && storedChars(store) + text.length > MAX_STORE_CHARS) {
     store.entries.shift();
   }

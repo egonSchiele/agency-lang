@@ -1825,7 +1825,8 @@ The `bash`, `write`, `grep`, and `read` tools raise their own interrupts. Callin
 after `raiseAll` would ask the broad question a second time. The bypass
 is correct for one reason: the only path to an executor runs through a
 `raiseAll` that raised every effect in the plan and returned success, and
-every plan raises at least one effect. `runChain` reaches the same
+every plan raises at least one effect, except a line that only reads
+saved output (see "Saved output"). `runChain` reaches the same
 internals through each step's executor.
 
 That reason holds only if nothing else can call an executor. So the
@@ -1849,6 +1850,55 @@ through `approvedPlan`.
 command runs as a job. When it does, `raiseOne` puts "in the background"
 in the `std::bash` and `std::exec` questions, and the payload's `timeout`
 is the job's limit. See `docs/dev/stdlib/jobs.md`.
+
+## Saved output
+
+A long output is saved in the run, and its path, such as
+`/tmp/agency-spill-1000/<name>.log`, can be read like a file
+(`docs/dev/stdlib/spill.md`, "Reading saved output by path"). Five
+places handle it, and no verb's rule has a branch for it:
+
+- **The resolvers.** `resolveReadPath`, used by the read verbs and input
+  redirects, and the grep rule, which resolves through `resolveTarget`
+  because its target may be a folder, both ask `savedPathOf` before they
+  stat anything. A saved-output path becomes a `saved` `ReadSource`, or
+  a grep call with `saved` set. It keeps the folder as written, so the
+  rule's `std::read` or `std::grep` names the copy's path.
+- **`textOf` and the saved grep.** The in-process executors read a
+  `saved` source from the store by name (`_readSpill`, `_grepSaved`),
+  never from disk.
+- **`savedPathsIn`.** `planFor` lists every saved output a line names:
+  each literal word of each command, and each path a scan of the raw
+  text finds, which covers a line that does not parse. The list is the
+  plan's `savedPaths`.
+- **`savedOutputRules`.** It runs last in `planFor`, on the finished
+  plan, after `bashPlan`. A write, delete, listing or find for which
+  `inSpillFolder` is true refuses the plan: the folder holds only the
+  copies written so far, and a listing would read as the list of saved
+  outputs. When every effect is `std::read`, `std::grep`, `std::ls` or
+  `std::glob`, a read or search whose payload names a path in
+  `savedPaths` is dropped. It never adds an effect.
+- **Before a shell starts.** `runBash` and `startJob` call
+  `_prepareSpillFiles(plan.savedPaths)` right before `_bash` and
+  `_startJob`, and a failure stops the line.
+
+The read is dropped only on a line that only reads, because the copies
+are written once, before the whole line runs. In
+`ln -sf ~/.ssh/id_rsa <saved output>; cat <saved output>` the `ln` asks
+`std::exec`, and the `cat` keeps its `std::read`: otherwise approving the
+link would read the key with no read question. A read is dropped only for
+a path in `savedPaths`, the same list that is written, so the two cannot
+disagree about a path.
+
+`bashPlan` still turns an empty effect list into `std::bash`. Because
+`savedOutputRules` runs after it, a shell plan ends with no effects only
+when a read of saved output was dropped. `echo <saved path> | cat` still
+asks `std::bash`. A program with no rule, such as `sed -n` or `python`,
+asks `std::exec` and nothing more, as it does for a file on disk.
+
+A path whose folder is not this machine's, such as one saved before a
+resume on another machine, reads the store in process, and fails before
+a shell starts with a message that gives this machine's path.
 
 ## Files and tests
 

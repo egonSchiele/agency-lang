@@ -1,0 +1,67 @@
+{
+  "tests": [
+    {
+      "nodeName": "inProcessReads",
+      "description": "A lone head, tail, grep, or cat of a saved-output path reads the store with no question and writes no copy. A folder from another machine still reads the store by name, and a name not in the store says it is no longer available. Reading a whole saved output back keeps one copy in the store. A chain that also reads a file on disk asks about that file only.",
+      "input": "",
+      "expectedOutput": "[[\"line1\\nline2\\n\",\"line3000\\n\",\"2999:line2999\\n\",true,\"line1\\n\",true,false],[],[\"std::read:a.txt\"]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "realProgramsReadTheCopy",
+      "description": "A line that only reads saved output runs in bash with no question, after a copy is written, and prints what the same line prints on a real file with the same text. A copy changed on disk is rewritten from the store before the next line.",
+      "input": "",
+      "expectedOutput": "[true,true,true,[],true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "programsWithNoRuleAskTheirOwnQuestion",
+      "description": "sed has no rule, so a read of saved output with it asks std::exec and nothing more, and prints the right lines. A line that only names a saved output still asks std::bash, because no read of saved output was dropped.",
+      "input": "",
+      "expectedOutput": "[\"line2\\nline3\\n\",true,[\"std::exec\",\"std::bash\"]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "copiesBeforeEveryShell",
+      "description": "A line safeBash cannot parse gets its copy before bash runs, found by a scan of the text, and a background job gets its copy before it starts.",
+      "input": "",
+      "expectedOutput": "[\"unparseable\",true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "otherMachinePathFailsBeforeTheShell",
+      "description": "A real program given a saved-output path from another machine's folder fails before any shell starts, with a message that names the path on this machine.",
+      "input": "",
+      "expectedOutput": "[true,[]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aLineThatWritesKeepsItsReadQuestion",
+      "description": "In `ln -sf <file> <saved output>; cat <saved output>`, the line does more than read, so the cat keeps its std::read question. With std::read rejected the line fails, so an approved link cannot turn into an unasked read.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "theFolderMustBePrivate",
+      "description": "A saved-output folder that other users can use, and a link planted where the folder goes, each fail the line before the shell starts.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "lookalikesAndRefusals",
+      "description": "A path that continues past a saved-output name is not a saved output. A look-alike folder reads the store in process and fails before a real program runs. A redirect into the folder, a delete of a saved output, and a listing of the folder are refused.",
+      "input": "",
+      "expectedOutput": "[[\"std::bash\"],\"line1\\n\",true,\"refuse\",\"refuse\",\"refuse\",\"refuse\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "readToolReadsSavedOutput",
+      "description": "The stdlib's read takes a saved-output path as the whole filename, or the folder as dir, with offset and limit, and asks nothing. A folder from another machine reads the store by name.",
+      "input": "",
+      "expectedOutput": "[[\"line1\\nline2\\n... [truncated: showing 1-2 of 3001 lines]\",\"line2999\\nline3000\\n\",\"line3000\\n\"],[]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

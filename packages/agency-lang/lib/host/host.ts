@@ -143,6 +143,13 @@ export type HostFiles = {
    *  time. Two handles on one file never write over each other. */
   openForAppend(root: Root, target: string, options?: OpenOptions): Promise<AppendableFile>;
   mkdir(root: Root, target: string): Promise<void>;
+  /** Make `target` a folder only this user can use, or check that it is
+   *  one already: a real folder, owned by this user, with no access for
+   *  anyone else (mode 0700). Its parent must exist. Throws, naming the
+   *  folder, when an existing one fails a check; it never changes an
+   *  existing folder's mode. For a folder in a shared place such as
+   *  `/tmp`, where another user could create it first. */
+  privateDir(root: Root, target: string): Promise<void>;
   remove(root: Root, target: string): Promise<void>;
   copy(from: Located, to: Located): Promise<void>;
   move(from: Located, to: Located): Promise<void>;
@@ -202,6 +209,9 @@ export type HostSystem = {
    *  program's own arguments. */
   args(): string[];
   processId(): number;
+  /** The id of the user the process runs as, for a name in a shared
+   *  folder such as `/tmp`. A fixed `"0"` where there is none. */
+  userId(): string;
   /** The directory of the module whose `import.meta.url` is given. */
   moduleDir(moduleUrl: string): string;
   /** Where the agency-lang package is installed, for the files it ships

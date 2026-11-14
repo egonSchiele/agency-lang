@@ -13,6 +13,7 @@ import {
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
+import { _savedOutputAt, _readSpill } from "agency-lang/stdlib-lib/spill.js"
 import { _formatDuration } from "agency-lang/stdlib-lib/date.js"
 import {
   syntaxHighlight as _syntaxHighlight,
@@ -209,14 +210,22 @@ export idempotent def read(
   useAgentCwd: boolean = false,
 ): Result raises <std::read> {
   """
-  Read the contents of a file and return it as a string.
+  Read the contents of a file and return it as a string. A path from a "saved as a file" notice, which holds output too long to return at once, can be read here too, as the whole path in filename; it needs no approval.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused, except the path of saved output. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
   @param useAgentCwd - Resolve a relative dir against the agent working directory
   """
+  // Saved output is text the conversation was already handed, read from
+  // the store by name as readSpill reads it, with no question. This never
+  // touches the disk, so a mistake here could return the wrong saved text
+  // but could not read a file without asking.
+  const saved = _savedOutputAt(dir, filename)
+  if (saved != null) {
+    return try _readSpill(saved, offset, limit)
+  }
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }

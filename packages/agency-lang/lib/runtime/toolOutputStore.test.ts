@@ -13,7 +13,56 @@ import {
   outputNotice,
   spillReaders,
   storeOutput,
+  spillPathParts,
+  spillPathsIn,
+  inSpillFolder,
+  spillFolder,
 } from "./toolOutputStore.js";
+import { memoryHost } from "../host/memoryHost.js";
+
+const NAME = "2026-11-13T04-05-06-123Z-a1b2c3.log";
+
+describe("saved-output paths", () => {
+  it("spillPathParts takes a whole path ending in the folder and a saved name", () => {
+    expect(spillPathParts(`/tmp/agency-spill-1000/${NAME}`)).toEqual({
+      folder: "/tmp/agency-spill-1000/",
+      name: NAME,
+    });
+    expect(spillPathParts(`/var/folders/ab/T/agency-spill-501/${NAME}`)).toEqual({
+      folder: "/var/folders/ab/T/agency-spill-501/",
+      name: NAME,
+    });
+    expect(spillPathParts(`/tmp/agency-spill-1000/${NAME}/../../etc/passwd`)).toBeNull();
+    expect(spillPathParts(`/tmp/agency-spill-1000/notes.txt`)).toBeNull();
+    expect(spillPathParts(`/tmp/agency-spill-x/${NAME}`)).toBeNull();
+    expect(spillPathParts(`/tmp/other/${NAME}`)).toBeNull();
+    expect(spillPathParts(NAME)).toBeNull();
+  });
+
+  it("inSpillFolder is true for the folder and anything below it", () => {
+    expect(inSpillFolder("/tmp/agency-spill-1000")).toBe(true);
+    expect(inSpillFolder("/tmp/agency-spill-1000/")).toBe(true);
+    expect(inSpillFolder("/tmp/agency-spill-1000/notes.txt")).toBe(true);
+    expect(inSpillFolder("/private/var/folders/T/agency-spill-501/x.log")).toBe(true);
+    expect(inSpillFolder("/tmp/agency-spill-notes/x")).toBe(false);
+    expect(inSpillFolder("/home/me/project/a.txt")).toBe(false);
+  });
+
+  it("spillPathsIn finds whole paths in raw text and nothing longer", () => {
+    const path = `/tmp/agency-spill-1000/${NAME}`;
+    expect(spillPathsIn(`wc -l ${path} | head; cat "${path}"`)).toEqual([
+      { folder: "/tmp/agency-spill-1000/", name: NAME },
+      { folder: "/tmp/agency-spill-1000/", name: NAME },
+    ]);
+    expect(spillPathsIn(`cat ${path}.bak`)).toEqual([]);
+    expect(spillPathsIn(`cat ${path}/x`)).toEqual([]);
+    expect(spillPathsIn("echo hi")).toEqual([]);
+  });
+
+  it("spillFolder is the temp folder as given, the prefix, and the user id", () => {
+    expect(spillFolder(memoryHost())).toBe("/tmp/agency-spill-0/");
+  });
+});
 
 function withRun<T>(fn: (run: Run) => T): T {
   const ctx = makeMockCtx();
@@ -63,6 +112,16 @@ describe("toolOutputStore", () => {
       "pnpm test",
     );
     expect(notice.startsWith('[Output of "pnpm test" too long to return in full:')).toBe(true);
+  });
+
+  it("gives the same text the name it already has, and keeps one copy", () => {
+    withRun((run) => {
+      const big = "b".repeat(MAX_STORE_CHARS * 0.6);
+      const first = storeOutput(run, big, "make");
+      const again = storeOutput(run, big, "cat it");
+      expect(again).toBe(first);
+      expect(findOutput(run, first)).toBe(big);
+    });
   });
 
   it("stores text under a fresh name and finds it again", () => {

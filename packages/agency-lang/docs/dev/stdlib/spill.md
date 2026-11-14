@@ -77,12 +77,12 @@ The store is the only source of truth. A file on disk is a copy, written just be
 
 1. **safeBash in process.** A lone `cat`, `head`, `tail` or `grep`, or a chain of them, reads the store by name and writes nothing.
 2. **safeBash in a shell.** Right before `_bash` or `_startJob`, `_prepareSpillFiles` writes a copy of every saved output the line names. It fails the line for a name no longer in the store, a folder that is another machine's, a relative temp folder, or a folder that is not this user's alone (`host.files.privateDir`, mode 0700, never fixed in place).
-3. **The stdlib's `read`.** It returns a page of the stored text (`_readSavedOutput`), under `MAX_STDOUT_LEN` characters so the tool loop does not save it again, with no interrupt.
+3. **The stdlib's `read` and `grep`.** `read` returns a page of the stored text (`_readSavedOutput`), under `MAX_STDOUT_LEN` characters so the tool loop does not save it again. `grep` given the path searches the stored text (`_grepSaved`). Neither raises an interrupt or reads the disk. `ls` and `glob` have no such branch: a saved output is one file with a known path.
 4. **`readSpill` and `grepSpill`**, which take the path or the bare name.
 
 None of these asks for approval, for the reason in "No effects". In a shell that holds only under the rules in `safe-bash.md`, "Saved output": the line only reads, expands nothing, and gets its copies from the same list that decides which reads are dropped.
 
-`storeOutput` returns the name of an entry that already holds the same text, so reading a saved output back never stores a second copy.
+`storeOutput` returns the name of an entry that already holds the same text, so reading a saved output back never stores a second copy. The entry moves to the newest place in the array, because a notice is about to promise its name again. It keeps the source it was first saved with.
 
 **Accepted risks and gaps.**
 

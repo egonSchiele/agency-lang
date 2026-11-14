@@ -11,7 +11,7 @@ import {
   spillFolder,
   spillPath,
   spillPathParts,
-  spillPathsIn,
+  savedPathsInText,
   storeOutput,
   tailNotice,
   type SavedPath,
@@ -66,7 +66,7 @@ export function _readSpill(name: string, offset: number, limit: number): string 
 }
 
 /** Room kept under `MAX_STDOUT_LEN` for the line that ends a cut page. */
-const PAGE_NOTE_CHARS = 200;
+const PAGE_NOTE_CHARS = 500;
 
 /**
  * What `read` returns for a saved output: the lines `offset` and `limit`
@@ -76,14 +76,15 @@ const PAGE_NOTE_CHARS = 200;
  * it again. A first line too long for the page is cut, and the note says
  * how to read the rest of it.
  */
-export function _readSavedOutput(nameOrPath: string, offset: number, limit: number): string {
-  const lines = saved(nameOrPath).split("\n");
+export function _readSavedOutput(name: string, offset: number, limit: number): string {
+  const lines = saved(name).split("\n");
   const budget = MAX_STDOUT_LEN - PAGE_NOTE_CHARS;
   const start = offset > 0 ? offset - 1 : 0;
   const end = limit > 0 ? Math.min(lines.length, start + limit) : lines.length;
   if (start < end && lines[start].length > budget) {
     const line = lines[start];
-    return `${line.slice(0, budget)}\n... [line ${start + 1} is cut at ${budget} of ${line.length} characters; read the rest of it with a shell command such as: sed -n '${start + 1}p' <file> | cut -c ${budget + 1}-]`;
+    const path = spillPath(currentRun().ctx.host, name);
+    return `${line.slice(0, budget)}\n... [line ${start + 1} is cut at ${budget} of ${line.length} characters; read the rest of it with a shell command such as: head -n ${start + 1} '${path}' | tail -n 1 | cut -c ${budget + 1}-]`;
   }
   let used = 0;
   let stop = start;
@@ -128,7 +129,7 @@ export function _grepSaved(name: string, query: GrepQuery, maxResults: number): 
   return searchText(saved(name), name, query, maxResults);
 }
 
-/** `spillPathParts`, `inSpillFolder` and `spillPathsIn` from the store,
+/** `spillPathParts`, `inSpillFolder` and `savedPathsInText` from the store,
  *  for safeBash's Agency code, which imports only from stdlib-lib. */
 export function _spillPathParts(path: string): SavedPath | null {
   return spillPathParts(path);
@@ -138,8 +139,8 @@ export function _inSpillFolder(path: string): boolean {
   return inSpillFolder(path);
 }
 
-export function _spillPathsIn(text: string): SavedPath[] {
-  return spillPathsIn(text);
+export function _savedPathsInText(text: string): SavedPath[] {
+  return savedPathsInText(text, spillFolder(currentRun().ctx.host));
 }
 
 /** The saved-output name `read(filename, dir)` points at, or null: the

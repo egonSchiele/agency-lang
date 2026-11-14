@@ -114,6 +114,32 @@ export function spillPathsIn(text: string): SavedPath[] {
   return found;
 }
 
+/** Every saved-output path in command text: one word with its quotes
+ *  removed, or a whole line. A path in `here`, this machine's folder, is
+ *  taken whole first, so a folder with a space in its name is still found
+ *  inside a longer word such as the argument of `sh -c 'cat <path>'`. The
+ *  rest is scanned word by word, which finds a path from another machine. */
+export function savedPathsInText(text: string, here: string): SavedPath[] {
+  const found: SavedPath[] = [];
+  let rest = "";
+  let from = 0;
+  let at = text.indexOf(here);
+  while (at !== -1) {
+    let end = at + here.length;
+    while (end < text.length && !SHELL_SEPARATOR.test(text[end])) {
+      end++;
+    }
+    const name = text.slice(at + here.length, end);
+    if (isOutputName(name)) {
+      found.push({ folder: here, name });
+      rest += `${text.slice(from, at)} `;
+      from = end;
+    }
+    at = text.indexOf(here, end);
+  }
+  return [...found, ...spillPathsIn(rest + text.slice(from))];
+}
+
 /** How the last line of `outputNotice` starts; the trace finds the end of
  *  a notice by it. */
 export const SPILL_NOTICE_LAST_LINE = "--- full output saved as a file: ";
@@ -173,7 +199,11 @@ export function storeOutput(run: Run, text: string, source: string): string {
   // otherwise save it again, and a second copy of a large output pushes
   // the first one out.
   const same = store.entries.find((entry) => entry.text === text);
-  if (same !== undefined) return same.name;
+  if (same !== undefined) {
+    // The caller is about to promise this name, so it becomes the newest.
+    store.entries = [...store.entries.filter((entry) => entry !== same), same];
+    return same.name;
+  }
   while (store.entries.length > 0 && storedChars(store) + text.length > MAX_STORE_CHARS) {
     store.entries.shift();
   }

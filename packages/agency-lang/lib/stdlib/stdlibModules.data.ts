@@ -571,8 +571,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "grepExecution",
     "readPayloadOf",
     "readExecution",
-    "accessesOf",
-    "onlyTouchesFiles"
+    "accessesOf"
   ],
   "std::shell": [
     "exec",

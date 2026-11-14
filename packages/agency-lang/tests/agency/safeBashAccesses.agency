@@ -1,6 +1,6 @@
 import { mkdir, remove } from "std::fs"
 import { planFor } from "std::safeBash"
-import { accessesOf, onlyTouchesFiles } from "std::safeBash/actions"
+import { accessesOf } from "std::safeBash/actions"
 
 static const FIXTURE = __dirname + "/stdlib/__safebash_accesses__"
 
@@ -10,10 +10,7 @@ def accessSummary(source: string): any {
   const plan = planFor(source, FIXTURE)
   const accesses = accessesOf(plan.effects)
   const cut = FIXTURE.length
-  return {
-    accesses: ["${a.mode}:${a.path.slice(cut)}" for a in accesses],
-    onlyFiles: onlyTouchesFiles(plan)
-  }
+  return ["${a.mode}:${a.path.slice(cut)}" for a in accesses]
 }
 
 node fileAccesses() {

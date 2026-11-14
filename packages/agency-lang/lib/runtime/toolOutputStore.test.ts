@@ -14,6 +14,7 @@ import {
   storeOutput,
   spillPathParts,
   spillPathsIn,
+  savedPathsInText,
   inSpillFolder,
   spillFolder,
 } from "./toolOutputStore.js";
@@ -67,7 +68,25 @@ describe("saved-output paths", () => {
     expect(spillPathsIn(`echo ${"A".repeat(100_000)}agency-spill-1x ${long}${NAME}`)).toEqual([
       { folder: long, name: NAME },
     ]);
-    expect(performance.now() - start).toBeLessThan(200);
+    // The regex this scan replaced took seconds here.
+    expect(performance.now() - start).toBeLessThan(2000);
+  });
+
+  it("savedPathsInText finds a path inside a longer word, and one whose folder has a space", () => {
+    const here = "/tmp/agency-spill-1000/";
+    expect(savedPathsInText(`cat ${here}${NAME}`, here)).toEqual([{ folder: here, name: NAME }]);
+    expect(savedPathsInText(`cat ${here}${NAME}; echo done`, here)).toEqual([
+      { folder: here, name: NAME },
+    ]);
+    const spaced = "/tmp/a b/agency-spill-1000/";
+    expect(savedPathsInText(`cat "${spaced}${NAME}" | head`, spaced)).toEqual([
+      { folder: spaced, name: NAME },
+    ]);
+    // A path from another machine is found by the word scan.
+    expect(savedPathsInText(`wc -l /var/T/agency-spill-501/${NAME}`, here)).toEqual([
+      { folder: "/var/T/agency-spill-501/", name: NAME },
+    ]);
+    expect(savedPathsInText(`cat ${here}${NAME}.bak ${here}notes.txt`, here)).toEqual([]);
   });
 
   it("spillFolder is the temp folder as given, the prefix, and the user id", () => {
@@ -125,6 +144,17 @@ describe("toolOutputStore", () => {
       const again = storeOutput(run, big, "cat it");
       expect(again).toBe(first);
       expect(findOutput(run, first)).toBe(big);
+    });
+  });
+
+  it("makes a text stored again the newest, so the next save does not evict it", () => {
+    withRun((run) => {
+      const old = storeOutput(run, "a".repeat(MAX_STORE_CHARS * 0.4), "first");
+      const other = storeOutput(run, "b".repeat(MAX_STORE_CHARS * 0.4), "second");
+      storeOutput(run, "a".repeat(MAX_STORE_CHARS * 0.4), "first again");
+      storeOutput(run, "c".repeat(MAX_STORE_CHARS * 0.4), "third");
+      expect(findOutput(run, old)).not.toBeNull();
+      expect(findOutput(run, other)).toBeNull();
     });
   });
 

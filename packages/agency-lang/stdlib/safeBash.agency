@@ -67,7 +67,7 @@ import {
   ReadSource,
   readPayloadOf,
  } from "./safeBash/actions.agency"
-import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _spillPathsIn, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
+import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _savedPathsInText, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _removeRefusal, _removeTargetIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
@@ -3953,7 +3953,8 @@ export def planFor(source: string, cwd: string, origin: GhRepo | null = null): P
   """
   // Last, on the finished plan, so that every kind of plan and every verb
   // passes through the same saved-output rules.
-  return savedOutputRules(planLine(source, cwd, origin), savedOutputLine(source))
+  const parsed = bashParser(source)
+  return savedOutputRules(planLine(source, parsed, cwd, origin), savedOutputLine(source, parsed))
 }
 
 /** What the saved-output rules need to know about a line: the saved
@@ -3968,10 +3969,9 @@ type SavedOutputLine = {
  shell will see them once quotes are removed. A line that does not parse
  asks the broad question, so nothing on it is free; a scan of its text
  only decides which copies to write. */
-def savedOutputLine(source: string): SavedOutputLine {
-  const parsed = bashParser(source)
+def savedOutputLine(source: string, parsed: Result<BashAST>): SavedOutputLine {
   if (parsed is failure(why)) {
-    return { paths: uniquePaths(_spillPathsIn(source)), literal: false }
+    return { paths: uniquePaths(_savedPathsInText(source)), literal: false }
   }
   let paths: SavedPath[] = []
   let literal = true
@@ -3983,21 +3983,21 @@ def savedOutputLine(source: string): SavedOutputLine {
       if (!isLiteralWord(word)) {
         literal = false
       }
-      const saved = savedWordPath(word)
-      if (saved != null) {
-        paths.push(saved)
-      }
+      paths = [...paths, ...savedWordPaths(word)]
     }
   }
   return { paths: uniquePaths(paths), literal: literal }
 }
 
-/* A word the shell passes on as written: no variable and no glob. */
+/* A word the shell passes on as written: no variable, no glob, and no
+ leading `~`, which bash replaces with a home folder. */
 def isLiteralWord(word: Word): boolean {
-  if (word.tag == "flag") {
-    return true
+  return match(word) {
+    { tag: "flag" } => word.valueIsGlob != true
+    { tag: "literal", text } => !text.startsWith("~")
+    { tag: "path", text } => !text.startsWith("~")
+    _ => !isFailure(literalWordText(word))
   }
-  return !isFailure(literalWordText(word))
 }
 
 def uniquePaths(found: SavedPath[]): SavedPath[] {
@@ -4010,12 +4010,18 @@ def uniquePaths(found: SavedPath[]): SavedPath[] {
   return unique
 }
 
-def savedWordPath(word: Word): SavedPath | null {
+/* The saved outputs a word names. The word's text is searched, not
+ matched whole, because a path can sit inside a longer argument: the
+ command text of `sh -c 'cat <path>'`, or the value of `--input=<path>`. */
+def savedWordPaths(word: Word): SavedPath[] {
+  if (word is { tag: "flag" }) {
+    return _savedPathsInText(word.flagValue ?? "")
+  }
   const text = literalWordText(word)
   if (text is failure(why)) {
-    return null
+    return []
   }
-  return savedPathOf(text.value)
+  return _savedPathsInText(text.value)
 }
 
 /* The command name, its arguments, and its redirect targets. */
@@ -4091,8 +4097,7 @@ def readsSavedOutput(effect: Effect, savedPaths: SavedPath[]): boolean {
 }
 
 /* Plan one line, before the saved-output rules. */
-def planLine(source: string, cwd: string, origin: GhRepo | null): Plan {
-  const parsed = bashParser(source)
+def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRepo | null): Plan {
   if (parsed is failure(why)) {
     // With no tree, the delete refusal reads the text, so `rm -rf $X/*`,
     // which the parser cannot read, is still refused.

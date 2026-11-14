@@ -713,8 +713,7 @@ export type FileAccess = {
 }
 
 def accessOf(effect: Effect): FileAccess | null {
-  // A default arm on purpose: a file effect added later and missed here
-  // makes onlyTouchesFiles answer false, which is the safe answer.
+  // Every effect that is not a file effect has no access.
   return match(effect.name) {
     "std::read" => fileAccess("read", join(effect.payload.dir, effect.payload.filename))
     "std::grep" => fileAccess("search", grepPath(effect.payload))
@@ -748,8 +747,7 @@ def join(dir: string, name: string): string {
 /**
 The file accesses among a plan's effects, in order. Only file effects are
 accesses: `git checkout -- a.txt` overwrites a file, but its effect is
-`std::git::checkout`. Before trusting this list to be everything a line
-does, check `onlyTouchesFiles`.
+`std::git::checkout`. So the list is not everything a line does.
 */
 export def accessesOf(effects: Effect[]): FileAccess[] {
   """
@@ -763,14 +761,4 @@ export def accessesOf(effects: Effect[]): FileAccess[] {
     }
   }
   return accesses
-}
-
-export def onlyTouchesFiles(plan: Plan): boolean {
-  """
-  True when the plan is not refused, does not ask the broad question, and every effect it raises is a file access.
-  """
-  if (plan.broadReason != null || plan.execution.kind == "refuse") {
-    return false
-  }
-  return accessesOf(plan.effects).length == plan.effects.length
 }

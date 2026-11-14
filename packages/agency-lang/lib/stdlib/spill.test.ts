@@ -121,13 +121,11 @@ describe("spill", () => {
   it("cuts one line longer than the page, and says how to read the rest of it", () => {
     withRun(() => {
       const text = `${"y".repeat(120_000)}\nsecond`;
-      const name = savedPath(_keepOutput(text, 0, "cmd"))
-        .split("/")
-        .pop()!;
-      const shown = _readSavedOutput(name, 0, 0);
+      const path = savedPath(_keepOutput(text, 0, "cmd"));
+      const shown = _readSavedOutput(path.split("/").pop()!, 0, 0);
       expect(shown.length).toBeLessThanOrEqual(MAX_STDOUT_LEN);
       expect(shown).toMatch(/line 1 is cut at \d+ of 120000 characters/);
-      expect(shown).toMatch(/cut -c \d+-/);
+      expect(shown).toContain(`head -n 1 '${path}' | tail -n 1 | cut -c `);
     });
   });
 

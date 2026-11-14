@@ -163,7 +163,7 @@ node fileAndShellToolsAreCwdBound(): boolean {
   return every(shouldBeBound, \tool -> isBoundTrue(tool, "useAgentCwd"))
 }
 
-// The coding bundle is six tools. `bash` does the listing, searching, and
+// The coding bundle is four tools. `bash` does the listing, searching, and
 // running, so there is no ls, glob, grep, or exec.
 node codingBundleIsFourTools(): string[] {
   return map(codingFileAndShellTools(), \tool -> tool.name)

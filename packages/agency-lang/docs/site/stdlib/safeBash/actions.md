@@ -1339,8 +1339,7 @@ Return the files the given plan effects read, search, list, find in, write, or r
 
 The file accesses among a plan's effects, in order. Only file effects are
 accesses: `git checkout -- a.txt` overwrites a file, but its effect is
-`std::git::checkout`. Before trusting this list to be everything a line
-does, check `onlyTouchesFiles`.
+`std::git::checkout`. So the list is not everything a line does.
 
 **Parameters:**
 
@@ -1350,22 +1349,4 @@ does, check `onlyTouchesFiles`.
 
 **Returns:** `FileAccess[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L754))
-
-### onlyTouchesFiles
-
-```ts
-onlyTouchesFiles(plan: Plan): boolean
-```
-
-True when the plan is not refused, does not ask the broad question, and every effect it raises is a file access.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| plan | [Plan](#plan) |  |
-
-**Returns:** `boolean`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L768))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L752))

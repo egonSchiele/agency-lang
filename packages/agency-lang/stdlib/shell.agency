@@ -12,6 +12,7 @@ import {
   _bash,
   _searchTarget,
  } from "agency-lang/stdlib-lib/shell.js"
+import { _savedOutputAt, _grepSaved } from "agency-lang/stdlib-lib/spill.js"
 
 
 /** @module
@@ -277,7 +278,7 @@ export idempotent def grep(
   and anything .gitignore ignores. To search an ignored folder, pass it as path.
   Narrow path or refine the pattern when results reach maxResults.
 
-  @param path - Directory or single file to search.
+  @param path - Directory or single file to search. The path from a "saved as a file" notice can be searched too, and needs no approval.
   @param flags - Regex flags i, m, s, or u; use the named options for whole-word and inverted searches.
   @param allowedPaths - Restrict searches to these directories, or leave empty for no restriction.
   @param useAgentCwd - Resolve a relative path against the agent working directory when set.
@@ -286,6 +287,20 @@ export idempotent def grep(
   @param invert - Return nonmatching lines.
   @param respectGitignore - Honor .gitignore during directory searches; false includes ignored files.
   """
+  const query = {
+    pattern: pattern,
+    flags: flags,
+    ignoreCase: ignoreCase,
+    wholeWord: wholeWord,
+    filesOnly: filesOnly,
+    invert: invert
+  }
+  // Saved output is text the conversation was already handed, so it is
+  // searched in the store with no question. This branch never reads the disk.
+  const saved = _savedOutputAt("", path)
+  if (saved != null) {
+    return try _grepSaved(saved, query, maxResults)
+  }
   if (useAgentCwd) {
     path = applyAgentCwd(path)
   }
@@ -305,14 +320,6 @@ export idempotent def grep(
     invert: invert
   })
 
-  const query = {
-    pattern: pattern,
-    flags: flags,
-    ignoreCase: ignoreCase,
-    wholeWord: wholeWord,
-    filesOnly: filesOnly,
-    invert: invert
-  }
   return try _grep(
     target.value.dir,
     ".",

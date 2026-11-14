@@ -251,14 +251,13 @@ files does this line touch". It reads one `FileAccess` (`mode` and
 
 An access is read from the effects every time and never stored on the
 plan, so the two cannot drift apart. Every other effect is skipped by a
-default arm. A file effect added later and missed there makes
-`onlyTouchesFiles` answer false, which is the safe answer.
+default arm.
 
 The list covers file effects only. `cat a.txt && git add a.txt` has one
-access, a read, and it also stages a file. A caller that asks "does this
-line only read under this folder?" must first check
-`onlyTouchesFiles(plan)`: true when the plan is not refused, does not ask
-the broad question, and every effect is a file access.
+access, a read, and it also stages a file. So the list is not everything
+a line does: a caller that asks "does this line only read?" must also
+check that every effect is a file effect, as `onlyReads` in
+`stdlib/safeBash.agency` does.
 
 ## What the model reads on a rejection
 
@@ -1868,10 +1867,14 @@ places handle it, and no verb's rule has a branch for it:
   `saved` source from the store by name (`_readSpill`, `_grepSaved`),
   never from disk.
 - **`savedOutputLine`.** `planFor` lists the saved outputs a line names,
-  from its parsed words, and notes whether every word is literal. A line
-  that does not parse is scanned as text instead (`spillPathsIn`); it
-  asks the broad question, so the scan only decides which copies to
-  write. The list becomes the plan's `savedPaths`.
+  from its parsed words, and notes whether every word is literal. Each
+  word's text is searched with `savedPathsInText`, so a path inside a
+  longer argument is found too: `sh -c 'cat <path>'`, or
+  `--input=<path>`. A word is not literal when it holds a variable or a
+  glob, when it is a flag whose value is a glob, or when it starts with
+  an unquoted `~`. A line that does not parse is searched as text
+  instead; it asks the broad question, so the search only decides which
+  copies to write. The list becomes the plan's `savedPaths`.
 - **`savedOutputRules`.** It runs last in `planFor`, on the finished
   plan, after `bashPlan`. A write, delete, listing or find for which
   `inSpillFolder` is true refuses the plan. A read or search whose

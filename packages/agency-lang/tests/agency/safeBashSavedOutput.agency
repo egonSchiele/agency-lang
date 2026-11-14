@@ -1,6 +1,6 @@
 import { mkdir, remove } from "std::fs"
 import { planFor, outcomeOf, safeBash, startJob } from "std::safeBash"
-import { bash } from "std::shell"
+import { bash, grep } from "std::shell"
 import { keepOutput } from "std::spill"
 import { env, setEnv } from "std::system"
 
@@ -170,6 +170,10 @@ node copiesBeforeEveryShell() {
   const old = useTemp(TEMP)
   const name = savedName()
   const path = "${TEMP}/agency-spill-${userId()}/${name}"
+  // A path inside a longer argument is found, and gets its copy.
+  const nested = safeBash("sh -c 'cat ${path} | wc -l'") with approve
+  const afterNested = text(nested).trim() == "3000" && copyExists(path)
+  bash("rm -f '${path}'") with approve
   // A line safeBash cannot parse asks std::bash, and still gets its copy.
   const unparsed = "wc -l ${path} && echo $((1 + 1))"
   const reason = planFor(unparsed, FIXTURE).broadReason
@@ -185,7 +189,7 @@ node copiesBeforeEveryShell() {
   const afterJob = copyExists(path)
   restoreTemp(old)
   remove(FIXTURE) with approve
-  return [kind, afterUnparsed, afterJob]
+  return [kind, afterUnparsed, afterJob, afterNested]
 }
 
 node otherMachinePathFailsBeforeTheShell() {
@@ -241,6 +245,10 @@ node aLineWithAnExpansionKeepsItsReadQuestion() {
       text(safeBash("echo \"$HOME\" && wc -l ${path}")),
       text(safeBash("echo $HOME && wc -l ${path}")),
       text(safeBash("echo /* && wc -l ${path}")),
+      // bash replaces a leading ~ with a home folder, and expands a glob
+      // in a flag's value.
+      text(safeBash("echo ~ && wc -l ${path}")),
+      text(safeBash("echo --x=* && wc -l ${path}")),
     ]
   } with (intr) {
     seen.push(intr.effect)
@@ -317,6 +325,13 @@ node lookalikesAndRefusals() {
   return results
 }
 
+def matchCount(found: Result): number {
+  if (found is failure(why)) {
+    return -1
+  }
+  return found.value.length
+}
+
 node readToolReadsSavedOutput() {
   resetFixture()
   const old = useTemp(TEMP)
@@ -329,6 +344,8 @@ node readToolReadsSavedOutput() {
       text(read(folder + name, limit: 2)),
       text(read(name, dir: folder, offset: 2999)),
       text(read("${OTHER_MACHINE}${name}", offset: 3000, useAgentCwd: true)),
+      // The stdlib's grep searches the store too.
+      matchCount(grep("^line2999$", folder + name)),
     ]
   } with (intr) {
     seen.push(intr.effect)

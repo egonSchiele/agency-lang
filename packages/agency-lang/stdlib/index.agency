@@ -13,7 +13,7 @@ import {
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
-import { _savedOutputAt, _readSpill } from "agency-lang/stdlib-lib/spill.js"
+import { _savedOutputAt, _readSavedOutput } from "agency-lang/stdlib-lib/spill.js"
 import { _formatDuration } from "agency-lang/stdlib-lib/date.js"
 import {
   syntaxHighlight as _syntaxHighlight,
@@ -224,7 +224,7 @@ export idempotent def read(
   // but could not read a file without asking.
   const saved = _savedOutputAt(dir, filename)
   if (saved != null) {
-    return try _readSpill(saved, offset, limit)
+    return try _readSavedOutput(saved, offset, limit)
   }
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)

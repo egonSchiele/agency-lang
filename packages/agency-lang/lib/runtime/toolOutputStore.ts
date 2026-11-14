@@ -71,9 +71,13 @@ export function spillFolder(host: Host): string {
  *  before, so a path written on another machine is recognized too. */
 export function spillPathParts(path: string): SavedPath | null {
   const parts = path.split("/");
-  if (parts.length < 2) return null;
+  if (parts.length < 2) {
+    return null;
+  }
   const name = parts[parts.length - 1];
-  if (!isOutputName(name) || !SPILL_FOLDER_NAME.test(parts[parts.length - 2])) return null;
+  if (!isOutputName(name) || !SPILL_FOLDER_NAME.test(parts[parts.length - 2])) {
+    return null;
+  }
   return { folder: path.slice(0, path.length - name.length), name };
 }
 
@@ -83,21 +87,30 @@ export function inSpillFolder(path: string): boolean {
   return path.split("/").some((part) => SPILL_FOLDER_NAME.test(part));
 }
 
-// A run of characters that is not a separator in the shell, then the
-// folder, then a name. The end must be one of those separators or the end
-// of the text, so a longer path that starts the same way does not match.
-const SPILL_PATH_IN_TEXT = new RegExp(
-  `[^\\s'"\`;|&<>()]*${SPILL_FOLDER_PREFIX}[0-9]+/[0-9A-Za-z][0-9A-Za-z_-]*\\.log(?=$|[\\s'"\`;|&<>()])`,
-  "g",
-);
+/** A character that ends a word in shell text. */
+const SHELL_SEPARATOR = /[\s'"`;|&<>()]/;
 
-/** Every saved-output path in raw command text, for a line that does not
- *  parse. A line that parses takes its paths from its parsed words. */
+/** Every saved-output path in raw command text: each word that holds the
+ *  folder prefix, taken whole between shell separators, so a longer path
+ *  that starts the same way does not count. Each word is scanned once,
+ *  so a long line costs time in proportion to its length. */
 export function spillPathsIn(text: string): SavedPath[] {
   const found: SavedPath[] = [];
-  for (const match of text.matchAll(SPILL_PATH_IN_TEXT)) {
-    const parts = spillPathParts(match[0]);
-    if (parts !== null) found.push(parts);
+  let at = text.indexOf(SPILL_FOLDER_PREFIX);
+  while (at !== -1) {
+    let start = at;
+    while (start > 0 && !SHELL_SEPARATOR.test(text[start - 1])) {
+      start--;
+    }
+    let end = at;
+    while (end < text.length && !SHELL_SEPARATOR.test(text[end])) {
+      end++;
+    }
+    const parts = spillPathParts(text.slice(start, end));
+    if (parts !== null) {
+      found.push(parts);
+    }
+    at = text.indexOf(SPILL_FOLDER_PREFIX, end);
   }
   return found;
 }

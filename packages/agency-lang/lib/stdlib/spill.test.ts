@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
 import type { Run } from "../runtime/asyncContext.js";
-import { _grepSpill, _keepOutput, _readSpill, MAX_STDOUT_LEN } from "./spill.js";
+import {
+  _grepSpill,
+  _keepOutput,
+  _prepareSpillFiles,
+  _readSavedOutput,
+  _readSpill,
+  MAX_STDOUT_LEN,
+} from "./spill.js";
+import { storeOutput } from "../runtime/toolOutputStore.js";
+import { memoryHost } from "../host/memoryHost.js";
 
 const savedPath = (notice: string) => /saved as a file: (\S+) /.exec(notice)![1];
 
@@ -87,6 +96,37 @@ describe("spill", () => {
       for (const bad of ["../x.log", "/etc/passwd", ".hidden.log", "notes.txt", "a/b.log"]) {
         expect(() => _readSpill(bad, 0, 0)).toThrow("not a saved output");
       }
+    });
+  });
+
+  it("returns at most MAX_STDOUT_LEN characters of a saved output to read, and says where to go on", () => {
+    withRun(() => {
+      const line = "x".repeat(59);
+      const text = Array.from({ length: 3000 }, () => line).join("\n");
+      const name = savedPath(_keepOutput(text, 0, "cmd"))
+        .split("/")
+        .pop()!;
+      // 2000 lines of 60 characters is over the agents' spill threshold,
+      // which would save the slice again; the read stops short of it.
+      for (const shown of [_readSavedOutput(name, 0, 0), _readSavedOutput(name, 0, 2000)]) {
+        expect(shown.length).toBeLessThanOrEqual(MAX_STDOUT_LEN + 200);
+        expect(shown).toMatch(
+          /\[truncated: showing 1-\d+ of 3000 lines; read on with offset \d+\]$/,
+        );
+      }
+      expect(_readSavedOutput(name, 2990, 0).split("\n")).toHaveLength(11);
+    });
+  });
+
+  it("refuses to write a copy under a temp folder that is not an absolute path", async () => {
+    const ctx = makeMockCtx();
+    const host = memoryHost();
+    ctx.host = { ...host, system: { ...host.system, tempDir: () => "tmp" } };
+    await inFrameOf(ctx, ctx.stateStack, async (run: Run) => {
+      const name = storeOutput(run, "saved", "cmd");
+      await expect(_prepareSpillFiles([{ folder: "tmp/agency-spill-0/", name }])).rejects.toThrow(
+        "not an absolute path",
+      );
     });
   });
 

@@ -46,11 +46,16 @@ export function _keepOutput(text: string, exitCode: number | null, source: strin
   return tailNotice(text, path, exitCode, MAX_STDOUT_LINES, MAX_STDOUT_LEN);
 }
 
+/** A path from the root, on Unix or Windows. */
+const ABSOLUTE_PATH = /^([A-Za-z]:)?[\\/]/;
+
 /** The saved text for a name, or for the path a notice gave. */
 function saved(nameOrPath: string): string {
   const name = spillPathParts(nameOrPath)?.name ?? nameOrPath;
   const text = findOutput(currentRun(), name);
-  if (text === null) throw new Error(missingOutputMessage(name));
+  if (text === null) {
+    throw new Error(missingOutputMessage(name));
+  }
   return text;
 }
 
@@ -58,6 +63,30 @@ function saved(nameOrPath: string): string {
  *  rules as `read`. Takes the name or the path from the notice. */
 export function _readSpill(name: string, offset: number, limit: number): string {
   return sliceLines(saved(name), offset, limit);
+}
+
+/**
+ * What `read` returns for a saved output: the lines `offset` and `limit`
+ * choose, stopping before `MAX_STDOUT_LEN` characters, with a last line
+ * saying where to read on when it stopped short of the end. The tool loop
+ * would save a longer result again, under the same name, and hand the
+ * model a notice that points back at the file it just read.
+ */
+export function _readSavedOutput(nameOrPath: string, offset: number, limit: number): string {
+  const lines = saved(nameOrPath).split("\n");
+  const start = offset > 0 ? offset - 1 : 0;
+  const end = limit > 0 ? Math.min(lines.length, start + limit) : lines.length;
+  let used = 0;
+  let stop = start;
+  while (stop < end && (stop === start || used + lines[stop].length + 1 <= MAX_STDOUT_LEN)) {
+    used += lines[stop].length + 1;
+    stop++;
+  }
+  const shown = lines.slice(start, stop).join("\n");
+  if (stop >= lines.length) {
+    return shown;
+  }
+  return `${shown}\n... [truncated: showing ${start + 1}-${stop} of ${lines.length} lines; read on with offset ${stop + 1}]`;
 }
 
 /** One pattern's matches, when a search names several. */
@@ -120,13 +149,21 @@ export function _savedOutputAt(dir: string, filename: string): string | null {
  * folder that is not this user's alone.
  */
 export async function _prepareSpillFiles(paths: SavedPath[]): Promise<void> {
-  if (paths.length === 0) return;
   const run = currentRun();
   const host = run.ctx.host;
   const here = spillFolder(host);
   for (const { folder, name } of paths) {
     const text = findOutput(run, name);
-    if (text === null) throw new Error(missingOutputMessage(name));
+    if (text === null) {
+      throw new Error(missingOutputMessage(name));
+    }
+    // The copy is written against the process's folder and the shell runs
+    // in the agent's, so a relative path could name two different files.
+    if (!ABSOLUTE_PATH.test(here)) {
+      throw new Error(
+        `The temp folder ${here} is not an absolute path, so a copy of saved output written there may not be the file the command reads. Set TMPDIR to an absolute path.`,
+      );
+    }
     if (folder !== here) {
       throw new Error(`Saved output ${name} is at ${here}${name} on this machine.`);
     }

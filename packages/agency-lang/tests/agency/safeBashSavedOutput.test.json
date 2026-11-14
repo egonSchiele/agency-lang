@@ -60,7 +60,7 @@
       "nodeName": "readToolReadsSavedOutput",
       "description": "The stdlib's read takes a saved-output path as the whole filename, or the folder as dir, with offset and limit, and asks nothing. A folder from another machine reads the store by name.",
       "input": "",
-      "expectedOutput": "[[\"line1\\nline2\\n... [truncated: showing 1-2 of 3001 lines]\",\"line2999\\nline3000\\n\",\"line3000\\n\"],[]]",
+      "expectedOutput": "[[\"line1\\nline2\\n... [truncated: showing 1-2 of 3001 lines; read on with offset 3]\",\"line2999\\nline3000\\n\",\"line3000\\n\"],[]]",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

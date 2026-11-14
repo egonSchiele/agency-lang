@@ -761,12 +761,16 @@ export function privateDir(root: Root, target: string): void {
   try {
     fs.mkdirSync(dir, { mode: 0o700 });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
   }
   const info = fs.lstatSync(dir);
   const userId = process.getuid === undefined ? null : process.getuid();
   const problem = privateDirProblem(dir, info, userId);
-  if (problem !== null) throw new Error(problem);
+  if (problem !== null) {
+    throw new Error(problem);
+  }
 }
 
 /** Why `info` is not a folder only `userId` can use, or null when it is.
@@ -776,11 +780,19 @@ export function privateDirProblem(
   info: { isDirectory(): boolean; uid: number; mode: number },
   userId: number | null,
 ): string | null {
-  if (!info.isDirectory()) return `'${dir}' is not a folder. Remove it.`;
-  if (userId === null) return null;
+  if (!info.isDirectory()) {
+    return `'${dir}' is not a folder. Remove it.`;
+  }
+  if (userId === null) {
+    return null;
+  }
   const fix = `Remove it, or if it is yours run: chmod 700 '${dir}'`;
-  if (info.uid !== userId) return `'${dir}' belongs to another user. ${fix}`;
-  if ((info.mode & 0o077) !== 0) return `'${dir}' can be used by other users. ${fix}`;
+  if (info.uid !== userId) {
+    return `'${dir}' belongs to another user. ${fix}`;
+  }
+  if ((info.mode & 0o077) !== 0) {
+    return `'${dir}' can be used by other users. ${fix}`;
+  }
   return null;
 }
 

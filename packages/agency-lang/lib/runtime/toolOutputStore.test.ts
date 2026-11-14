@@ -60,6 +60,16 @@ describe("saved-output paths", () => {
     expect(spillPathsIn("echo hi")).toEqual([]);
   });
 
+  it("spillPathsIn takes linear time on a long token", () => {
+    const start = performance.now();
+    expect(spillPathsIn(`echo ${"A".repeat(100_000)}`)).toEqual([]);
+    const long = `/${"A".repeat(100_000)}/agency-spill-1/`;
+    expect(spillPathsIn(`echo ${"A".repeat(100_000)}agency-spill-1x ${long}${NAME}`)).toEqual([
+      { folder: long, name: NAME },
+    ]);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
   it("spillFolder is the temp folder as given, the prefix, and the user id", () => {
     expect(spillFolder(memoryHost())).toBe("/tmp/agency-spill-0/");
   });

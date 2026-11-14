@@ -92,6 +92,8 @@ The rules are in `savedOutputRules` in `stdlib/safeBash.agency`; `safe-bash.md` 
 **What is accepted.**
 
 - A background job an earlier line started, approved for a command that names the folder, could change a copy in the moment between the write and a later line's read.
+- Tool calls in one round run at the same time. If one call runs an approved program that writes into the folder, such as `ln -sf ~/.ssh/id_rsa <saved path>` under an "always approve when" rule for `ln`, and another call only reads the same saved path, the write can land between the second call's copy and its read. Either call needs an approved program that writes to a path it is given, so this is the same class of risk as the background job above. A per-run lock around the copy and the shell start would close it, at the cost of running shell calls one at a time.
+- A relative `TMPDIR` fails the line: the copy is written against the process's folder, and the shell runs in the agent's.
 - A line that names a saved output no longer in the store fails, even when it only mentions it (`git log -- <old path>`). A model that names an old path is usually about to read it.
 - `exec` writes no copy. `exec("wc", ["-l", <saved output>])` asks `std::exec` and fails with "No such file".
 - `sed -n` has no rule in safeBash, so it asks `std::exec`, as it does for a file on disk.

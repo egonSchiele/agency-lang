@@ -434,7 +434,7 @@ node longOutputIsKept() {
   // A literal longer than MAX_STDOUT_LEN goes through the shell-free path,
   // which keeps output the same way the bash path does — so this also pins
   // the consistency between the two.
-  const chars = ["x" for i in range(12500)]
+  const chars = ["x" for i in range(60000)]
   const long = chars.join("")
   const result = safeBash("echo ${long}") with approve
   if (result is failure(why)) {
@@ -453,7 +453,8 @@ node longOutputIsKept() {
     grepHits = matches.length
   }
   return [
-    notice.length < 2000,
+    // The end of the one long line comes back, then the notice.
+    notice.length < 51000,
     notice.includes("Command exited with code 0"),
     notice.includes("full output saved as "),
     // The notice must name the readSpill call exactly as the tool takes it.
@@ -925,7 +926,7 @@ node bashGrepOfOneFile() {
 node shellFreeNoMatchFails() {
   const result = safeBash("grep -rn nothing-matches-this .", cwd: FIXTURES)
   if (result is failure(why)) {
-    return [why.includes("[exit code 1]"), why.includes("skips node_modules")]
+    return [why.includes("Command exited with code 1"), why.includes("skips node_modules")]
   }
   return "UNEXPECTEDLY MATCHED"
 }
@@ -2270,7 +2271,7 @@ node gitRunsSafely() {
     // The pathspec failed with git's exit code, showed none of the command
     // safeBash built, and changed no file.
     pathspec[0],
-    pathspec[1].includes("[exit code "),
+    pathspec[1].includes("Command exited with code "),
     pathspec[1].includes("core.fsmonitor"),
     fileText(GIT_FIXTURE, "a.py"),
     fileText(GIT_FIXTURE, "b.py"),
@@ -2572,7 +2573,7 @@ node ghLookupFailureRaisesNothing() {
 /** A failed run's exit code line and the note after it, from the failure's text. */
 def exitAndNote(failed: string): any {
   const lines = failed.split("\n")
-  const at = lines.indexOf("[exit code 4]")
+  const at = lines.indexOf("Command exited with code 4")
   if (at == -1) {
     return ["NO EXIT 4 LINE", null]
   }
@@ -2600,6 +2601,15 @@ node safeBashFailureText() {
     return why
   }
   return "NOT A FAILURE"
+}
+
+// The coding agent's bash tool passes exitIsFailure: false. A non-zero exit
+// then comes back as a result with the same text, and a refusal is still a
+// failure.
+node exitAsResult() {
+  const exited = safeBash("sh -c 'echo out; echo err >&2; exit 3'", cwd: STDLIB_TESTS, exitIsFailure: false) with approve
+  const refused = safeBash("sh -c 'exit 3'", cwd: STDLIB_TESTS, exitIsFailure: false) with reject
+  return [isSuccess(exited), exited.value, isFailure(refused)]
 }
 
 // A line that exits 4 gets the note only when gh printed its login message.

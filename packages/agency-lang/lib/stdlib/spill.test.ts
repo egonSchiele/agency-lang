@@ -18,12 +18,16 @@ describe("spill", () => {
 
   it("saves long output and reads it back by the name in the notice", () => {
     withRun(() => {
-      const text = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
-      expect(text.length).toBeGreaterThan(MAX_STDOUT_LEN);
+      const text = Array.from({ length: 3000 }, (_, i) => `line ${i}`).join("\n");
+      expect(text.length).toBeLessThan(MAX_STDOUT_LEN);
       const notice = _keepOutput(text, 3, "make");
-      expect(notice).toContain("Command exited with code 3");
-      expect(notice.startsWith('[Output of "make" too long')).toBe(true);
-      const name = /full output saved as (\S+) ---/.exec(notice)![1];
+      // The last 2000 lines come back, then the notice.
+      expect(notice.startsWith("line 1000\nline 1001\n")).toBe(true);
+      expect(notice).toContain(
+        "line 2999\n\n[Showing lines 1001-3000 of 3000. The full output saved as",
+      );
+      expect(notice.endsWith("Command exited with code 3.]")).toBe(true);
+      const name = /full output saved as (\S+) /.exec(notice)![1];
       expect(_readSpill(name, 0, 0)).toBe(text);
       expect(_readSpill(name, 2, 1)).toContain("line 1");
       expect(_grepSpill("line 49.$", name, 10)).toEqual([
@@ -41,10 +45,26 @@ describe("spill", () => {
     });
   });
 
+  it("cuts at the character limit too, and shows the end of one very long line", () => {
+    withRun(() => {
+      const wide = Array.from({ length: 100 }, (_, i) => `${i}:${"x".repeat(999)}`).join("\n");
+      const cut = _keepOutput(wide, null, "cmd");
+      expect(cut).toContain("\n\n[Showing lines 52-100 of 100. The full output saved as");
+      expect(cut).not.toContain("Command exited");
+      const oneLine = _keepOutput(`${"a".repeat(MAX_STDOUT_LEN)}END`, null, "cmd");
+      expect(oneLine).toContain(
+        `END\n\n[Showing the last ${MAX_STDOUT_LEN} characters of line 1 of 1. The full output saved as`,
+      );
+      // A trailing newline is not a line of its own.
+      const exact = `${Array.from({ length: 2000 }, (_, i) => `l${i}`).join("\n")}\n`;
+      expect(_keepOutput(exact, 0, "cmd")).toBe(exact);
+    });
+  });
+
   it("searches several patterns in one call, grouping the matches by pattern", () => {
     withRun(() => {
-      const text = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
-      const name = /full output saved as (\S+) ---/.exec(_keepOutput(text, 0, "cmd"))![1];
+      const text = Array.from({ length: 3000 }, (_, i) => `line ${i}`).join("\n");
+      const name = /full output saved as (\S+) /.exec(_keepOutput(text, 0, "cmd"))![1];
       expect(_grepSpill("line 7$", name, 10, ["line 12$", "no such line"])).toEqual([
         { pattern: "line 7$", matches: [{ file: name, line: 8, text: "line 7" }] },
         { pattern: "line 12$", matches: [{ file: name, line: 13, text: "line 12" }] },

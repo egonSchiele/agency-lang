@@ -4,7 +4,7 @@
       "nodeName": "stdToolEntry",
       "description": "a std:: tool's entry: module, name, description without @param lines, parameters, schema, return type; no prompt",
       "input": "",
-      "expectedOutput": "[\"std::math\",\"round\",true,false,[[\"num\",\"number\",null,null],[\"precision\",\"number\",\"0\",\"Number of digits after the decimal point.\"]],\"Default: 0\",\"number\",[]]",
+      "expectedOutput": "[\"std::math\",\"round\",true,false,[[\"num\",\"number\",null,null],[\"precision\",\"number\",\"0\",\"Number of digits after the decimal point.\"]],\"Number of digits after the decimal point. Default: 0\",\"number\",[]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -15,7 +15,7 @@
       "nodeName": "localToolEntry",
       "description": "a local tool's entry, read with one std::read",
       "input": "",
-      "expectedOutput": "[\"./notes.agency\",\"Find notes whose title matches the query.\",[[\"query\",\"string\",null,\"Text to match against note titles\"]],{\"type\":\"string\"},\"Result<Note[]>\",[\"std::read\"]]",
+      "expectedOutput": "[\"./notes.agency\",\"Find notes whose title matches the query.\",[[\"query\",\"string\",null,\"Text to match against note titles\"]],{\"description\":\"Text to match against note titles\",\"type\":\"string\"},\"Result<Note[]>\",[\"std::read\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"

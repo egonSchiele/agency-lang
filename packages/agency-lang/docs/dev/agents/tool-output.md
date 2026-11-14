@@ -136,12 +136,16 @@ not know prints as is.
 
 Command output under a line differs by tool. A nonzero `exec` shows
 stderr when there is any, else stdout. A failed `safeBash` is text, not
-fields: the output, then a status line (`[exit code 2]`, or `[stopped at
-the time limit of 120 seconds]`), then sometimes a note for the model.
-`safeBashFailure` shows the status in words on the tool's line, the
-output under it, and leaves the note out. A spill notice is cut to its
-first line, which carries the size and exit code; the rest is written for
-the model. A failed `safeBash` holds both streams in one text, so a notice
+fields: the output, then a status line (`Command exited with code 2`, or
+`[stopped at the time limit of 120 seconds]`), then sometimes a note for
+the model. `safeBashFailure` shows the status in words on the tool's line,
+the output under it, and leaves the note out. The coding agents' `bash`
+returns a non-zero exit as a result with the same text, and `commandResult`
+shows it the same way when the result's last line is the status line. A
+command's long output reaches the model as its last 2,000 lines and a
+notice; `tailNoticeCut` shows a person the last 20 and the total. A spill
+notice from the tool loop is cut to its first line, which carries the size;
+the rest is written for the model. A failed `safeBash` holds both streams in one text, so a notice
 can start on any line, and each one is cut where it stands.
 
 `printAgentTrace` reads width and color preferences from the supplied host

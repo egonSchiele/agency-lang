@@ -281,8 +281,21 @@ An `agency` command, which runs in process, fails with the same text.
 
 ```
 fatal: invalid reference: *.py
-[exit code 128]
+Command exited with code 128
 ```
+
+The two streams are joined before the long-output cut (`failedOutput`), so
+a long failure is saved once and its last lines come back (`spill.md`).
+
+The failure carries `data: { type: "commandExit", exitCode }`. That is how
+`safeBash` tells a command's own exit from a refusal, a rejection, or a
+time limit. With `exitIsFailure: false`, `safeBash` returns such a failure
+as a success holding the same text. The coding agents' `bash` tool binds
+that (`bashTool` in `stdlib/agents/lib/toolkits.agency`): a failing test
+run is a result for the model to read, so it does not get the tool loop's
+"The call failed" wording and does not count toward the loop's limit on
+failures in a row. The rule is that this choice lives in the tool. The
+tool loop has no case for any tool's result.
 
 A command stopped at its time limit was killed and has no exit code of
 its own, so its status line is `[stopped at the time limit of 120

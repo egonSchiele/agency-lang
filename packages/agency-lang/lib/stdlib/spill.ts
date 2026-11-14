@@ -6,27 +6,35 @@ import {
   DEFAULT_READERS,
   findOutput,
   missingOutputMessage,
-  outputNotice,
   storeOutput,
+  tailNotice,
 } from "../runtime/toolOutputStore.js";
 import { sliceLines } from "./builtins.js";
 import { compileGrepQuery } from "./grepQuery.js";
 import { firstMatchingLines, type GrepMatch } from "./shell.js";
 
-/** How much of a command's output comes back inline. Anything longer is
- *  saved and replaced by a preview. */
-export const MAX_STDOUT_LEN = 10_000;
+/** How much of a command's output comes back inline: this many characters
+ *  and `MAX_STDOUT_LINES` lines, whichever is reached first. Anything
+ *  longer is saved, and its last lines come back. */
+export const MAX_STDOUT_LEN = 50_000;
+export const MAX_STDOUT_LINES = 2_000;
+
+function lineCount(text: string): number {
+  let count = 1;
+  for (let i = 0; i < text.length - 1; i++) {
+    if (text[i] === "\n") count++;
+  }
+  return count;
+}
 
 /** What the model gets back for a command's output: short output as
  *  printed, long output saved under `source` (the command that ran) and
- *  replaced by the notice. An empty source means none was given. */
+ *  replaced by its last lines and a notice. An empty source means none
+ *  was given. */
 export function _keepOutput(text: string, exitCode: number | null, source: string = ""): string {
-  if (text.length <= MAX_STDOUT_LEN) return text;
-  const run = currentRun();
-  const name = storeOutput(run, text, source);
-  // The notice fits the same cap as inline output, so a long source never
-  // pushes it past what a short command would have returned.
-  return outputNotice(text, name, exitCode, DEFAULT_READERS, MAX_STDOUT_LEN, source);
+  if (text.length <= MAX_STDOUT_LEN && lineCount(text) <= MAX_STDOUT_LINES) return text;
+  const name = storeOutput(currentRun(), text, source);
+  return tailNotice(text, name, exitCode, DEFAULT_READERS, MAX_STDOUT_LINES, MAX_STDOUT_LEN);
 }
 
 function saved(name: string): string {

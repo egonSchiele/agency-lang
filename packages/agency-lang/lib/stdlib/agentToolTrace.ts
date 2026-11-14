@@ -106,6 +106,9 @@ const KILOBYTE = 1000;
 const SPILL_NOTICE_PREFIX = "[Output";
 /** The start of a spill notice's last line (`outputNotice` in toolOutputStore.ts). */
 const SPILL_NOTICE_LAST_LINE = "To read it, use the ";
+/** The notice under a command's last lines, with the total line count. */
+const TAIL_NOTICE = /^\[Showing (?:lines \d+-\d+|the last \d+ characters of line \d+) of (\d+)\. /;
+const TAIL_DETAIL_LINES = 20;
 const ARGUMENT_PREVIEW_LENGTH = 50;
 const RESULT_PREVIEW_LENGTH = 100;
 /** A model sometimes drafts its whole answer beside a last tool call. */
@@ -190,7 +193,22 @@ export function spillOutput(name: unknown, lookup: SpillLookup): string | null {
 export function commandDetail(stdout: unknown, stderr: unknown): string | null {
   const chosen = [stderr, stdout].find((out) => typeof out === "string" && out.trim() !== "");
   if (typeof chosen !== "string") return null;
-  return spillNoticesCut(chosen.trimEnd().split("\n")).join("\n");
+  return tailNoticeCut(spillNoticesCut(chosen.trimEnd().split("\n"))).join("\n");
+}
+
+/** A command's long output reaches the model as its last lines and a
+ *  notice (`tailNotice` in toolOutputStore.ts), up to 2,000 lines. A person
+ *  reading the trace gets the last few and how many there were. */
+function tailNoticeCut(lines: string[]): string[] {
+  const at = lines.findIndex((line) => TAIL_NOTICE.test(line));
+  if (at < 0) return lines;
+  const shown = lines.slice(0, at).filter((line, index) => index < at - 1 || line !== "");
+  const count = TAIL_NOTICE.exec(lines[at])![1];
+  return [
+    `[the last ${Math.min(shown.length, TAIL_DETAIL_LINES)} of ${count} lines]`,
+    ...shown.slice(-TAIL_DETAIL_LINES),
+    ...lines.slice(at + 1),
+  ];
 }
 
 /** The lines with each spill notice cut to its first line. A failed command's
@@ -272,7 +290,7 @@ function summarizeEditCount(_value: unknown, args: ToolArgs): string | null {
 
 /** The status lines `safeBash` ends a failed command's output with
  *  (`outputFailure` in stdlib/safeBash.agency). */
-const EXIT_STATUS = /^\[exit code (\d+)\]$/;
+const EXIT_STATUS = /^Command exited with code (\d+)$/;
 const STOPPED_STATUS = /^\[stopped at the time limit of \d+ seconds\]$/;
 
 /**
@@ -280,7 +298,7 @@ const STOPPED_STATUS = /^\[stopped at the time limit of \d+ seconds\]$/;
  * sometimes a note for the model:
  *
  *   boom
- *   [exit code 2]
+ *   Command exited with code 2
  *
  * The trace shows the status in words and the output above it. The note is
  * left out, because it is advice for the model. A message with no status
@@ -296,6 +314,22 @@ function safeBashFailure(message: string): { line: string | null; detail: string
   }
   return null;
 }
+
+/** The coding agent's `bash` returns a command that exited non-zero as a
+ *  result, with the same text a `safeBash` failure carries. The trace
+ *  shows it the way it shows that failure. */
+function exitedNonZero(value: unknown): { line: string | null; detail: string | null } | null {
+  // Only the last line counts: a command that exited 0 can print anything.
+  if (typeof value !== "string" || !EXIT_STATUS.test(value.slice(value.lastIndexOf("\n") + 1))) {
+    return null;
+  }
+  return safeBashFailure(value);
+}
+const commandResult: CustomSummary = {
+  custom: (value) => exitedNonZero(value)?.line ?? null,
+  failsWhen: (value) => exitedNonZero(value) !== null,
+  detail: (value) => exitedNonZero(value)?.detail ?? null,
+};
 
 /** A job report's state in words, as `status` carries it. */
 const jobStatus: CustomSummary = {
@@ -380,7 +414,7 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   // Shell
   safeBash: summary("Run", (a) => [text(a.command)], true, "none", safeBashFailure),
   // The coding agent offers safeBash under this name.
-  bash: summary("Run", (a) => [text(a.command)], true, "none", safeBashFailure),
+  bash: summary("Run", (a) => [text(a.command)], true, commandResult, safeBashFailure),
   exec: two("Run", (a) => [text(a.command), text(a.args)], exitCode),
   readSpill: one("Read", (a, lookup) => [spillOutput(a.filename, lookup), lineRange(a)]),
   grepSpill: one(

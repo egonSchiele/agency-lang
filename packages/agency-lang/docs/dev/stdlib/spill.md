@@ -1,6 +1,6 @@
 # `std::spill`: where long tool output goes
 
-`safeBash` used to cut a command's output at 2000 characters. That hid whether a build had finished, and the model re-ran the build through bash to find out. Now output past the cap is saved and the model gets a preview: the exit code, a few lines from each end, and the name the output was saved under. The same can happen to any tool result, when the `llm()` call sets `spillToolResultsOver`: in trace `wX5GvrUq` a 106 KB page from `fetchMarkdown` was cut at the loop's cap with a bare `[tool result truncated]` marker and nothing to read the rest with. With the option set, the loop saves it the same way.
+`safeBash` used to cut a command's output at 2000 characters. That hid whether a build had finished, and the model re-ran the build through bash to find out. Now output past the cap is saved, and the model gets its last lines and the name the output was saved under. The same can happen to any tool result, when the `llm()` call sets `spillToolResultsOver`: in trace `wX5GvrUq` a 106 KB page from `fetchMarkdown` was cut at the loop's cap with a bare `[tool result truncated]` marker and nothing to read the rest with. With the option set, the loop saves it the same way.
 
 `lib/runtime/toolOutputStore.ts` owns the store and the notice. `stdlib/spill.agency` is the three functions the Agency side sees: `keepOutput`, which `safeBash` calls on every output, and the two readers, `readSpill` and `grepSpill`. `lib/stdlib/spill.ts` joins the two.
 
@@ -49,11 +49,19 @@ The marker counts toward the limit, so a cut result is never longer than `maxToo
 
 **No effects.** There is no write, so there is no `std::spill::write`. There is no `std::spill::read` either: the store holds only text the model's conversation was handed a name for, so reading it exposes nothing the thread does not already hold, and an interrupt that is always approved is noise in `agency interrupts` and in the policy table. A policy that wants to stop the model reading saved output refuses the two tools by name.
 
-**Two caps, two numbers.** `MAX_STDOUT_LEN` (10,000) is what `safeBash` hands back inline for each of stdout and stderr. `maxToolResultChars` (100,000 by default) is the loop's limit for any tool, because a page or a file is mostly wanted. The loop's limit also covers file reads and fetched pages, so it is not lowered to match the command cap: a read of 2,000 lines is often 10,000 to 20,000 characters.
+**Two caps, two shapes.** A command's output comes back inline up to `MAX_STDOUT_LINES` (2,000) lines and `MAX_STDOUT_LEN` (50,000) characters, whichever is reached first. `maxToolResultChars` (100,000 by default) is the loop's limit for any tool.
 
-`MAX_STDOUT_LEN` is set from what commands print. Over 10,700 bash calls on SWE-bench Verified, 89% printed under 2,000 characters, 11% printed 2,000 to 10,000, and 0.2% printed more. At a cap of 2,000, two thirds of the tasks had at least one output saved, and each one costs the model a second call to read it.
+**A command's long output keeps its end.** `keepOutput` saves the whole output and returns its last lines within the two limits, then one line from `tailNotice`:
 
-A `safeBash` notice is under 2,000 characters when it reaches the loop, so it is never saved twice, unless the call sets `spillToolResultsOver` and either it or `maxToolResultChars` is below that. Then the notice is saved again and the model gets a notice pointing at a notice. Nobody sets a value that low on purpose, and special-casing `safeBash` would be another hidden rule.
+```
+[Showing lines 4012-6011 of 6011. The full output saved as 2026-…-a1b2c3.log can be read with readSpill(filename: "…"), with offset and limit to take a slice. To search it, use grepSpill(pattern, filename: "…"). Neither needs approval. Command exited with code 0.]
+```
+
+A command that prints a lot says how it went at the end: a test summary, a compiler's error count. The loop's notice for any other tool result still shows a few lines from each end, because for a page or a file the start matters as much. One line longer than the character limit comes back as its last 50,000 characters. The name is followed by a space, so a model copies it without punctuation.
+
+The limits follow Pi's (2,000 lines or 50 KB, tail kept). On SWE-bench Verified, with a cap of 10,000 characters and a preview of about 1,900, the 20 runs in 497 that had an output cut passed 55% of the time against 75% for the rest.
+
+What `safeBash` returns is at most 50,000 characters and a notice, under the loop's default limit, so it is not saved twice unless the call sets `spillToolResultsOver` or `maxToolResultChars` below that. Then the model gets a notice pointing at a notice. Special-casing `safeBash` in the loop would be another hidden rule.
 
 **The preview is bounded by characters.** `previewHead` and `previewTail` each stop after `PREVIEW_CHARS`, or less when the notice has to fit a smaller limit, and a single line is cut at `PREVIEW_LINE_LEN`. Fifteen lines from each end of 200-character lines would make a preview three times longer than the output it replaced. The tail never reaches back into lines the head showed, so a two-line output is not printed twice.
 
@@ -88,5 +96,5 @@ A `fork` or `parallel` branch runs on a copy of the globals, so an output saved 
 ## Things that are easy to miss
 
 - A saved entry and the message naming it land in the same checkpoint, because both are state of the same run. The model can only hold a name the store does not have after an eviction, or after a resume from a checkpoint older than the save, and the miss message covers both.
-- A failing `runBash` sends stdout and stderr through `keepOutput` separately, so one failing build can produce two entries. `cliOutcome` in `safeBash.agency` joins the streams first and produces one.
+- A failed command's stdout and stderr are joined before `keepOutput` (`failedOutput` in `safeBash.agency`), so one failing build produces one entry and the lines that come back are the end of stderr.
 - The table's first row depends on the reader check. A tool that wraps `readSpill` in a function of its own is not a reader to the loop, so its long results are saved again. Offer the readers themselves.

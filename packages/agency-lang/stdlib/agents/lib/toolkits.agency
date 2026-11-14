@@ -259,8 +259,8 @@ idempotent def readCapped(
 // safeBash under the name models know. `cwd` is bound to the agent's
 // working directory; a command that needs another folder starts with `cd`.
 def bashTool(): any {
-  return safeBash.partial(cwd: "").rename("bash").describe(
-    "Run a bash command in the working directory and return its stdout. A command that exits non-zero fails with its output and exit code, so there is no need to echo the exit status or run it again. Long output is saved; read it with readSpill or grepSpill. A command still running after timeout seconds (default 120) is stopped."
+  return safeBash.partial(cwd: "", exitIsFailure: false).rename("bash").describe(
+    "Run a bash command in the working directory. Returns stdout. When the command exits non-zero, returns stdout and stderr, then a last line `Command exited with code N`. Output is cut to its last 2000 lines or 50,000 characters; when it is cut, the full output is saved and the last line says how to read it with readSpill or search it with grepSpill. A command still running after timeout seconds is stopped."
   )
 }
 

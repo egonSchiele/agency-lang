@@ -72,9 +72,9 @@
     },
     {
       "nodeName": "readToolReadsSavedOutput",
-      "description": "The stdlib's read takes a saved-output path as the whole filename, or the folder as dir, with offset and limit, and asks nothing. A folder from another machine reads the store by name. The stdlib's grep searches a saved-output path in the store, and asks nothing.",
+      "description": "The stdlib's read takes a saved-output path as the whole filename, or the folder as dir, with offset and limit, and asks nothing. A folder from another machine reads the store by name. The stdlib's grep searches a saved-output path in the store, and asks nothing. With allowedPaths bound, grep gives the path its ordinary checks and fails, since no copy is on disk.",
       "input": "",
-      "expectedOutput": "[[\"line1\\nline2\\n... [truncated: showing 1-2 of 3001 lines; read on with offset 3]\",\"line2999\\nline3000\\n\",\"line3000\\n\",1],[]]",
+      "expectedOutput": "[[\"line1\\nline2\\n... [truncated: showing 1-2 of 3001 lines; read on with offset 3]\",\"line2999\\nline3000\\n\",\"line3000\\n\",1,-1],[]]",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

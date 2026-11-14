@@ -297,8 +297,10 @@ export idempotent def grep(
   }
   // Saved output is text the conversation was already handed, so it is
   // searched in the store with no question. This branch never reads the disk.
+  // With `allowedPaths` set, the developer has said where this tool may
+  // search, so the path goes through the ordinary checks below instead.
   const saved = _savedOutputAt("", path)
-  if (saved != null) {
+  if (saved != null && allowedPaths.length == 0) {
     return try _grepSaved(saved, query, maxResults)
   }
   if (useAgentCwd) {

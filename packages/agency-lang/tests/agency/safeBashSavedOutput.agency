@@ -346,6 +346,9 @@ node readToolReadsSavedOutput() {
       text(read("${OTHER_MACHINE}${name}", offset: 3000, useAgentCwd: true)),
       // The stdlib's grep searches the store too.
       matchCount(grep("^line2999$", folder + name)),
+      // With an allow-list, the path gets the ordinary checks, and no
+      // copy is on disk to search.
+      matchCount(grep("^line2999$", folder + name, allowedPaths: [FIXTURE])),
     ]
   } with (intr) {
     seen.push(intr.effect)

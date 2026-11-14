@@ -118,6 +118,20 @@ describe("spill", () => {
     });
   });
 
+  it("shows a first line that exactly fills the page, so the next offset moves on", () => {
+    withRun(() => {
+      const first = "z".repeat(MAX_STDOUT_LEN - 500);
+      const second = "s".repeat(1000);
+      const name = savedPath(_keepOutput(`${first}\n${second}`, 0, "cmd"))
+        .split("/")
+        .pop()!;
+      expect(_readSavedOutput(name, 0, 0)).toBe(
+        `${first}\n... [truncated: showing 1-1 of 2 lines; read on with offset 2]`,
+      );
+      expect(_readSavedOutput(name, 2, 0)).toBe(second);
+    });
+  });
+
   it("cuts one line longer than the page, and says how to read the rest of it", () => {
     withRun(() => {
       const text = `${"y".repeat(120_000)}\nsecond`;

@@ -88,8 +88,14 @@ export function _readSavedOutput(name: string, offset: number, limit: number): s
   }
   let used = 0;
   let stop = start;
-  while (stop < end && used + lines[stop].length + 1 <= budget) {
-    used += lines[stop].length + 1;
+  // A newline is counted only between lines, so a first line of exactly
+  // `budget` characters fits, and every page shows at least one line.
+  while (stop < end) {
+    const cost = lines[stop].length + (stop > start ? 1 : 0);
+    if (used + cost > budget) {
+      break;
+    }
+    used += cost;
     stop++;
   }
   const shown = lines.slice(start, stop).join("\n");

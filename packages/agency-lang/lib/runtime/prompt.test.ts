@@ -18,7 +18,7 @@ import { meteredDispatch } from "./recordPaidUsage.js";
 import type { GraphState } from "./types.js";
 import type { Run } from "./asyncContext.js";
 import { inFrameOf, makeMockCtx } from "./__tests__/testHelpers.js";
-import { findOutput, findOutputSource } from "./toolOutputStore.js";
+import { findOutput, findOutputSource, spillPath } from "./toolOutputStore.js";
 import { GlobalStore } from "./state/globalStore.js";
 
 describe("failureTier", () => {
@@ -157,10 +157,11 @@ describe("capToolResultForLlm", () => {
   }
   const page = { name: "longPage", module: "page.agency", registeredName: "longPage" };
   const reader = { name: "readSpill", module: "stdlib/spill.agency", registeredName: "readSpill" };
-  const spillOver = (run: Run, over: number) => spillSettings(run, over, {}, [page, reader]);
+  const spillOver = (run: Run, over: number) => spillSettings(run, over, {});
   const storedEntries = (run: Run) =>
     (run.globals.get(GlobalStore.INTERNAL_MODULE, "__toolOutput")?.entries ?? []).length;
-  const savedName = (notice: string) => /full output saved as (\S+) ---/.exec(notice)![1];
+  const savedPath = (notice: string) => /saved as a file: (\S+) \(read it/.exec(notice)![1];
+  const savedName = (notice: string) => savedPath(notice).split("/").pop()!;
 
   it("saves a spilled tool result under the tool name and its first string argument", () => {
     withRun((run) => {
@@ -191,9 +192,8 @@ describe("capToolResultForLlm", () => {
 
   it("cuts an over-limit result when spilling is off, even with the readers offered", () => {
     withRun((run) => {
-      // The call offers readSpill, but only spillToolResultsOver turns
-      // spilling on: the tool list never changes what happens to a result.
-      expect(spillSettings(run, undefined, {}, [page, reader])).toBeNull();
+      // Only spillToolResultsOver turns spilling on.
+      expect(spillSettings(run, undefined, {})).toBeNull();
       const out = capToolResultForLlm("a".repeat(5000), 100, null, page, {}) as string;
       expect(out.length).toBeLessThanOrEqual(100);
       expect(out.startsWith("a")).toBe(true);
@@ -223,7 +223,8 @@ describe("capToolResultForLlm", () => {
       expect(out).toContain("30000 characters");
       const name = savedName(out);
       expect(findOutput(run, name)).toBe(text);
-      expect(out).toContain(`readSpill(filename: "${name}")`);
+      expect(out).toContain(`saved as a file: ${spillPath(run.ctx.host, name)} `);
+      expect(out).not.toContain("readSpill");
     });
   });
 
@@ -241,14 +242,14 @@ describe("capToolResultForLlm", () => {
       const text = Array.from({ length: 5000 }, (_, index) => `line ${index}`).join("\n");
       const out = capToolResultForLlm(text, 500, spillOver(run, 100), page, {}) as string;
       expect(out.length).toBeLessThanOrEqual(500);
-      expect(out).toContain(`readSpill(filename: "${savedName(out)}")`);
+      expect(findOutput(run, savedName(out))).toBe(text);
     });
   });
 
   it("saves with no limit, and does not cut the notice", () => {
     withRun((run) => {
       const out = capToolResultForLlm("a".repeat(5000), 0, spillOver(run, 100), page, {}) as string;
-      expect(out).toContain(`readSpill(filename: "${savedName(out)}")`);
+      expect(findOutput(run, savedName(out))).toBe("a".repeat(5000));
       expect(storedEntries(run)).toBe(1);
     });
   });
@@ -270,16 +271,12 @@ describe("capToolResultForLlm", () => {
     });
   });
 
-  it("names the readers by the names the model sees them under", () => {
+  it("names the path and no tool, so it does not depend on the call's tools", () => {
     withRun((run) => {
-      const renamed = {
-        name: "read_saved",
-        module: "stdlib/spill.agency",
-        registeredName: "readSpill",
-      };
-      const spill = spillSettings(run, 100, {}, [page, renamed]);
-      const out = capToolResultForLlm("a".repeat(5000), 100_000, spill, page, {}) as string;
-      expect(out).toContain(`read_saved(filename: "${savedName(out)}")`);
+      const out = capToolResultForLlm("a".repeat(5000), 100_000, spillOver(run, 100), page, {});
+      const path = savedPath(out as string);
+      expect(path).toBe(spillPath(run.ctx.host, savedName(out as string)));
+      expect(out).not.toContain("readSpill");
       expect(out).not.toContain("grepSpill");
     });
   });
@@ -310,45 +307,25 @@ describe("spillSettings", () => {
     const ctx = makeMockCtx();
     return inFrameOf(ctx, ctx.stateStack, fn);
   }
-  const spill = "stdlib/spill.agency";
-  const page = {
-    name: "fetchMarkdown",
-    module: "stdlib/http.agency",
-    registeredName: "fetchMarkdown",
-  };
-  const read = { name: "readSpill", module: spill, registeredName: "readSpill" };
-  const grep = { name: "grepSpill", module: spill, registeredName: "grepSpill" };
-
   it("is off when the option is unset, 0, or negative", () => {
     withRun((run) => {
-      expect(spillSettings(run, undefined, {}, [page])).toBeNull();
-      expect(spillSettings(run, 0, {}, [page])).toBeNull();
-      expect(spillSettings(run, -1, {}, [page])).toBeNull();
+      expect(spillSettings(run, undefined, {})).toBeNull();
+      expect(spillSettings(run, 0, {})).toBeNull();
+      expect(spillSettings(run, -1, {})).toBeNull();
     });
   });
 
-  it("names the readers the call offers", () => {
+  it("is on above 0, whatever tools the call has", () => {
     withRun((run) => {
-      const settings = spillSettings(run, 20_000, {}, [page, read, grep]);
-      expect(settings?.over).toBe(20_000);
-      expect(settings?.readers).toEqual({ read: "readSpill", grep: "grepSpill" });
-    });
-  });
-
-  it("refuses a call whose tools have no readSpill, naming the tools it has", () => {
-    withRun((run) => {
-      const lookalike = { name: "readOutput", module: "mine.agency", registeredName: "readOutput" };
-      expect(() => spillSettings(run, 20_000, {}, [page, lookalike])).toThrow(
-        "its tools (fetchMarkdown, readOutput) do not include readSpill",
-      );
+      expect(spillSettings(run, 20_000, {})?.over).toBe(20_000);
     });
   });
 
   it("refuses a value set with setLlmOptions", () => {
     withRun((run) => {
-      expect(() =>
-        spillSettings(run, undefined, { spillToolResultsOver: 20_000 }, [page, read]),
-      ).toThrow("spillToolResultsOver is set per llm() call, not with setLlmOptions.");
+      expect(() => spillSettings(run, undefined, { spillToolResultsOver: 20_000 })).toThrow(
+        "spillToolResultsOver is set per llm() call, not with setLlmOptions.",
+      );
     });
   });
 });

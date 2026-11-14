@@ -2,7 +2,13 @@ import { isPlainObject } from "../utils/isPlainObject.js";
 import type { Host } from "../host/host.js";
 import { currentRun } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
-import { findOutputSource } from "../runtime/toolOutputStore.js";
+import {
+  SPILL_NOTICE_LAST_LINE,
+  findOutputSource,
+  spillPathParts,
+  spillPathsIn,
+} from "../runtime/toolOutputStore.js";
+import { _savedOutputAt } from "./spill.js";
 import { stripControlCharacters } from "../utils/controlCharacters.js";
 import { formatElapsed } from "../utils/formatElapsed.js";
 import { color, plainColor, RESET } from "../utils/termcolors.js";
@@ -104,8 +110,6 @@ const ELAPSED_FROM_MS = 1000;
 const KILOBYTE = 1000;
 /** A spill notice starts with this; only its first line is for a human. */
 const SPILL_NOTICE_PREFIX = "[Output";
-/** The start of a spill notice's last line (`outputNotice` in toolOutputStore.ts). */
-const SPILL_NOTICE_LAST_LINE = "To read it, use the ";
 /** The notice under a command's last lines, with the total line count. */
 const TAIL_NOTICE = /^\[Showing (?:lines \d+-\d+|the last \d+ characters of line \d+) of (\d+)\. /;
 const TAIL_DETAIL_LINES = 20;
@@ -181,11 +185,33 @@ export function flag(args: ToolArgs, key: string, word: string): string | null {
   return args[key] === true ? word : null;
 }
 
-/** `output of <source>` for a saved output the store knows, else the name. */
-export function spillOutput(name: unknown, lookup: SpillLookup): string | null {
-  if (typeof name !== "string" || name === "") return null;
+/** `output of <source>` for a saved output the store knows, else the name.
+ *  Takes the name or the path a notice gave. */
+export function spillOutput(nameOrPath: unknown, lookup: SpillLookup): string | null {
+  if (typeof nameOrPath !== "string" || nameOrPath === "") return null;
+  const name = spillPathParts(nameOrPath)?.name ?? nameOrPath;
   const source = lookup(name);
   return source === null ? name : `output of ${source}`;
+}
+
+/** A `read` of a saved output shows what produced it, like `readSpill`. */
+function readTarget(args: ToolArgs, lookup: SpillLookup): string | null {
+  const name = typeof args.filename === "string" ? args.filename : "";
+  const dir = typeof args.dir === "string" ? args.dir : "";
+  const saved = _savedOutputAt(dir, name);
+  return saved === null ? filePath(args) : spillOutput(saved, lookup);
+}
+
+/** A command with each saved-output path in it shown as what produced it. */
+function commandText(command: unknown, lookup: SpillLookup): string | null {
+  if (typeof command !== "string") return text(command);
+  let shown = command;
+  for (const saved of spillPathsIn(command)) {
+    const source = lookup(saved.name);
+    if (source !== null)
+      shown = shown.replace(`${saved.folder}${saved.name}`, `(output of ${source})`);
+  }
+  return text(shown);
 }
 
 /** What a command printed, for a human: stderr when there is any, else
@@ -394,7 +420,7 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   explorerAgent: { kind: "agent", label: "Explorer" },
 
   // Files
-  read: one("Read", (a) => [filePath(a), lineRange(a)]),
+  read: one("Read", (a, lookup) => [readTarget(a, lookup), lineRange(a)]),
   ls: one("List", (a) => [text(a.dir), flag(a, "recursive", "recursive")], {
     one: "entry",
     many: "entries",
@@ -417,9 +443,21 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   edit: one("Edit", (a) => [filePath(a)], { custom: summarizeEditCount }),
 
   // Shell
-  safeBash: summary("Run", (a) => [text(a.command)], true, "none", safeBashFailure),
+  safeBash: summary(
+    "Run",
+    (a, lookup) => [commandText(a.command, lookup)],
+    true,
+    "none",
+    safeBashFailure,
+  ),
   // The coding agent offers safeBash under this name.
-  bash: summary("Run", (a) => [text(a.command)], true, commandResult, safeBashFailure),
+  bash: summary(
+    "Run",
+    (a, lookup) => [commandText(a.command, lookup)],
+    true,
+    commandResult,
+    safeBashFailure,
+  ),
   exec: two("Run", (a) => [text(a.command), text(a.args)], exitCode),
   readSpill: one("Read", (a, lookup) => [spillOutput(a.filename, lookup), lineRange(a)]),
   grepSpill: one(

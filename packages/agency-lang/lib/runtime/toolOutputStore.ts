@@ -102,13 +102,14 @@ export function spillPathsIn(text: string): SavedPath[] {
   return found;
 }
 
-/** The two reader tools a model was offered, by the names it sees them
- *  under. `grep` is null when only `readSpill` was offered. */
-export type SpillReaders = { read: string; grep: string | null };
+/** How the last line of `outputNotice` starts; the trace finds the end of
+ *  a notice by it. */
+export const SPILL_NOTICE_LAST_LINE = "--- full output saved as a file: ";
 
-/** The names `safeBash` puts in its notice. It does not know the call's
- *  tool list, and `shellTools()` hands the readers out beside it. */
-export const DEFAULT_READERS: SpillReaders = { read: "readSpill", grep: "grepSpill" };
+/** The path a notice gives for a saved output on this run's host. */
+export function spillPath(host: Host, name: string): string {
+  return `${spillFolder(host)}${name}`;
+}
 
 const SPILL_MODULE = "stdlib/spill.agency";
 
@@ -124,15 +125,6 @@ function isReader(tool: ToolIdentity, reader: "readSpill" | "grepSpill"): boolea
  *  the store, so the loop never saves it a second time. */
 export function isSpillReader(tool: ToolIdentity): boolean {
   return isReader(tool, "readSpill") || isReader(tool, "grepSpill");
-}
-
-/** The readers among `tools`, or null when `readSpill` is not one of
- *  them: then nothing the loop saved could be read back. */
-export function spillReaders(tools: ToolIdentity[]): SpillReaders | null {
-  const read = tools.find((tool) => isReader(tool, "readSpill"));
-  if (read === undefined) return null;
-  const grep = tools.find((tool) => isReader(tool, "grepSpill"));
-  return { read: read.name, grep: grep === undefined ? null : grep.name };
 }
 
 function readStore(run: Run): ToolOutputStore {
@@ -200,7 +192,7 @@ export function findOutputSource(run: Run, name: string): string | null {
  *  cause, since the model can do the same thing about each. */
 export function missingOutputMessage(name: string): string {
   if (!isOutputName(name)) {
-    return `'${name}' is not a saved output name: expected the name from a "full output saved as" notice, with no directory part`;
+    return `'${name}' is not a saved output: expected the path or the name from a "saved as a file" notice`;
   }
   return `Saved output ${name} is no longer available. Call the tool again if you need it.`;
 }
@@ -242,16 +234,16 @@ function previewTail(lines: string[], skip: number, budget: number): string[] {
 /**
  * What stands in for a command's long output: its last lines, up to
  * `maxLines` lines and `maxChars` characters, then one line saying which
- * lines those are, the name the whole output was saved under, and how to
- * read the rest with `readers`. The end is kept because a command that
- * prints a lot says how it went in its last lines: a test summary, a
- * compiler's error count. `exitCode` is null when there is none to show.
+ * lines those are and the path the whole output can be read at. The notice
+ * names no tool: each reader says in its own description that it takes the
+ * path. The end is kept because a command that prints a lot says how it
+ * went in its last lines: a test summary, a compiler's error count.
+ * `exitCode` is null when there is none to show.
  */
 export function tailNotice(
   text: string,
-  name: string,
+  path: string,
   exitCode: number | null,
-  readers: SpillReaders,
   maxLines: number,
   maxChars: number,
 ): string {
@@ -265,12 +257,8 @@ export function tailNotice(
     start--;
   }
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
-  const search =
-    readers.grep === null
-      ? " It needs no approval."
-      : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
-  // The name is followed by a space, so it can be copied without punctuation.
-  const rest = `The full output saved as ${name} can be read with ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}${exit}`;
+  // The path is followed by a space, so it can be copied without punctuation.
+  const rest = `The full output is saved as a file: ${path} (read it like any file).${exit}`;
   const total = lines.length;
   if (start === total) {
     // The last line alone is longer than the limit, so show its end.
@@ -281,18 +269,17 @@ export function tailNotice(
 
 /**
  * The preview that stands in for a long output: what happened, a glimpse of
- * both ends, the name it was saved under, and how to read the rest with
- * `readers`. `exitCode` is null for a tool result that is not a command's
- * output. The preview shrinks so the notice fits in `maxChars`; only when
- * the text around the preview is longer than that on its own does the
- * notice come out longer, and the caller cuts it. `source` names what
- * produced the output in the first line.
+ * both ends, and the path the whole output can be read at. `exitCode` is
+ * null for a tool result that is not a command's output. The preview
+ * shrinks so the notice fits in `maxChars`; only when the text around the
+ * preview is longer than that on its own does the notice come out longer,
+ * and the caller cuts it. `source` names what produced the output in the
+ * first line.
  */
 export function outputNotice(
   text: string,
-  name: string,
+  path: string,
   exitCode: number | null,
-  readers: SpillReaders,
   maxChars: number = Infinity,
   source: string | null = null,
 ): string {
@@ -300,10 +287,6 @@ export function outputNotice(
   const label = spillSourceLabel(source);
   const of = label === null ? "" : ` of "${label}"`;
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
-  const search =
-    readers.grep === null
-      ? " It needs no approval."
-      : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
   const notice = (head: string[], tail: string[], headCount: number, tailCount: number) =>
     [
       `[Output${of} too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
@@ -311,8 +294,7 @@ export function outputNotice(
       head.join("\n"),
       `--- last ${tailCount} lines ---`,
       tail.join("\n"),
-      `--- full output saved as ${name} ---`,
-      `To read it, use the ${readers.read} tool: ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}`,
+      `${SPILL_NOTICE_LAST_LINE}${path} (read it like any file) ---`,
     ].join("\n");
   // The line counts are not known until the preview is built, so the text
   // around it is measured with both at their largest.

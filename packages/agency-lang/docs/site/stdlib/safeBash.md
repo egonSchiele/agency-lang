@@ -904,8 +904,9 @@ Run Bash commands after approval of the actions they perform.
   Return stdout on success. A nonzero exit is a failure carrying stdout,
   stderr, and a last line `Command exited with code N`, so there is no need
   to echo `$?` or re-run a command to learn how it exited. Output longer
-  than 2000 lines or 50,000 characters is saved and its last lines are
-  returned; read the rest with readSpill or grepSpill, not with bash. A
+  than 2000 lines or 50,000 characters is saved as a file and its last lines
+  are returned, with the file's path. Read that path like any file, with
+  tail, grep, sed -n or any other command, or with read. A
   command still running after `timeout` seconds is stopped, with everything
   it started, and the failure carries the output so far.
 
@@ -952,4 +953,4 @@ Start a shell command in the background and return its job id at once, while the
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4753))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4754))

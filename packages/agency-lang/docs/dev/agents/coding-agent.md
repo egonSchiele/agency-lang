@@ -31,9 +31,11 @@ Before adding a rule to the prompt, measure it.
 `buildTools()` returns the list. Every tool definition is sent with every
 request, so the list holds only what `bash` cannot do:
 
-- **Six file and shell tools**, from `codingFileAndShellTools()` in
-  `std::agents/lib/toolkits`: `read`, `bash`, `edit`, `write`, `readSpill`,
-  and `grepSpill`. There is no `ls`, `glob`, `grep`, or `exec`. The first
+- **Four file and shell tools**, from `codingFileAndShellTools()` in
+  `std::agents/lib/toolkits`: `read`, `bash`, `edit`, and `write`. There
+  is no `ls`, `glob`, `grep`, or `exec`, and no saved-output readers: a
+  long output's notice gives a path that `read` and `bash` both read
+  (`docs/dev/stdlib/spill.md`). The first
   rule in the prompt sends listing and searching to `bash`, and safeBash
   runs a plain `ls`, `grep`, or `cat` with the same narrow approval the
   stdlib tool of that name asks for (`docs/dev/stdlib/safe-bash.md`).
@@ -82,7 +84,7 @@ about one, because nobody is at the terminal to answer
 - `tests/agency/agents/codingTools.agency`: the shell tool is named
   `bash`, `read` stops at 2,000 lines, and `write` takes no `mode`.
 - `tests/agency/agents/toolkits.agency`: the coding bundle is exactly the
-  six tools, and the agent's whole list is spelled out, so a tool added to
+  four tools, and the agent's whole list is spelled out, so a tool added to
   either shows up as a failing test.
 - `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency`:
   the coders' tool lists have unique names and each carries `question`.

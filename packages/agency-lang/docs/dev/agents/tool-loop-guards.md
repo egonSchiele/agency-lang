@@ -286,7 +286,7 @@ A tool result longer than `maxToolResultChars` is cut at the cap with the
 call sets `spillToolResultsOver`, a result longer than that or than the cap
 is not cut: the loop saves the whole text in the run's output store and
 sends the model the same preview `safeBash` gives for long command output,
-a few lines from each end and a name to read the rest with `readSpill`. A
+a few lines from each end and the path to read the rest at. A
 result from `readSpill` or `grepSpill` itself is already saved, so it is
 cut with a marker saying to read a smaller slice. Which tools the call
 offers never changes any of this. The rules, the store, and the readers

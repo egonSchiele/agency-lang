@@ -4,12 +4,12 @@
 import type { Host } from "../host/host.js";
 import { currentRun } from "../runtime/asyncContext.js";
 import {
-  DEFAULT_READERS,
   SPILL_FOLDER_PREFIX,
   findOutput,
   inSpillFolder,
   missingOutputMessage,
   spillFolder,
+  spillPath,
   spillPathParts,
   spillPathsIn,
   storeOutput,
@@ -40,18 +40,22 @@ function lineCount(text: string): number {
  *  was given. */
 export function _keepOutput(text: string, exitCode: number | null, source: string = ""): string {
   if (text.length <= MAX_STDOUT_LEN && lineCount(text) <= MAX_STDOUT_LINES) return text;
-  const name = storeOutput(currentRun(), text, source);
-  return tailNotice(text, name, exitCode, DEFAULT_READERS, MAX_STDOUT_LINES, MAX_STDOUT_LEN);
+  const run = currentRun();
+  const name = storeOutput(run, text, source);
+  const path = spillPath(run.ctx.host, name);
+  return tailNotice(text, path, exitCode, MAX_STDOUT_LINES, MAX_STDOUT_LEN);
 }
 
-function saved(name: string): string {
+/** The saved text for a name, or for the path a notice gave. */
+function saved(nameOrPath: string): string {
+  const name = spillPathParts(nameOrPath)?.name ?? nameOrPath;
   const text = findOutput(currentRun(), name);
   if (text === null) throw new Error(missingOutputMessage(name));
   return text;
 }
 
 /** The saved output, whole or a slice of lines; the same offset and limit
- *  rules as `read`. */
+ *  rules as `read`. Takes the name or the path from the notice. */
 export function _readSpill(name: string, offset: number, limit: number): string {
   return sliceLines(saved(name), offset, limit);
 }

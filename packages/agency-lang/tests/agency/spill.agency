@@ -12,8 +12,9 @@ def big(fill: string): string {
   return fill.repeat(300000)
 }
 
+/** The path a notice gives, which the readers take as it is. */
 def spilledName(notice: string): string {
-  const after = notice.split("full output saved as ")[1]
+  const after = notice.split("saved as a file: ")[1]
   return after.split(" ")[0]
 }
 
@@ -88,7 +89,7 @@ def noticeInThread(): string {
     return ""
   }
   for (message in messages.value) {
-    if (message.role == "tool" && message.content.includes("full output saved as")) {
+    if (message.role == "tool" && message.content.includes("saved as a file: ")) {
       return message.content
     }
   }
@@ -99,18 +100,18 @@ node overCapToolResultIsKept() {
   // The mock calls longPage, which returns about 38,000 characters against
   // a spill value of 20,000, under the default 100,000 limit. The loop saves
   // it whole and the model gets a notice. The node then reads the saved text
-  // back by the name in that notice, which is what the model would do with
-  // readSpill.
+  // back by the path in that notice, which is what the model would do.
   llm("read the page", {
     tools: [longPage, readSpill, grepSpill],
     spillToolResultsOver: 20000
   })
   const notice = noticeInThread()
-  const name = spilledName(notice)
+  const path = spilledName(notice)
   return [
-    notice.includes("readSpill(filename: \"${name}\")"),
-    lengthOf(readSpill(name)),
-    matchCount(grepSpill("^line 3999$", filename: name)),
+    !notice.includes("readSpill"),
+    lengthOf(readSpill(path)),
+    matchCount(grepSpill("^line 3999$", filename: path)),
+    lengthOf(read(path)),
   ]
 }
 
@@ -138,7 +139,7 @@ node readersWithoutSpillAreCut() {
   const content = toolMessageInThread()
   return [
     content.includes("[tool result truncated: showing"),
-    content.includes("full output saved as"),
+    content.includes("saved as a file"),
   ]
 }
 
@@ -149,16 +150,17 @@ def spillWithoutReaders(): string {
   })
 }
 
-node spillWithoutReadersFails() {
-  // Spilling with no readSpill offered is refused before the request: the
-  // model could never read a saved result back.
+node spillWithoutReadersRuns() {
+  // The loop does not look at the call's tools: the notice gives a path,
+  // and read, safeBash and readSpill each take one. A call that offers
+  // none of them still runs; its model gets a path it cannot follow.
   const result = spillWithoutReaders()
-  return [isFailure(result), isFailure(result) && result.error.includes("readSpill")]
+  const path = spilledName(noticeInThread())
+  return [!isFailure(result), lengthOf(readSpill(path))]
 }
 
 node overCapResultWithoutReadersIsCut() {
-  // With no readSpill offered, nothing saved could be read back, so the
-  // loop cuts the result at the cap.
+  // Without spillToolResultsOver, the loop cuts the result at the cap.
   llm("read the page", {
     tools: [longPage],
     maxToolResultChars: 20000
@@ -166,6 +168,6 @@ node overCapResultWithoutReadersIsCut() {
   const content = toolMessageInThread()
   return [
     content.includes("[tool result truncated: showing"),
-    content.includes("full output saved as"),
+    content.includes("saved as a file"),
   ]
 }

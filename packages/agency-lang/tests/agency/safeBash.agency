@@ -456,17 +456,17 @@ node longOutputIsKept() {
     // The end of the one long line comes back, then the notice.
     notice.length < 51000,
     notice.includes("Command exited with code 0"),
-    notice.includes("full output saved as "),
-    // The notice must name the readSpill call exactly as the tool takes it.
-    notice.includes("readSpill(filename: \"${name}\")"),
+    notice.includes("saved as a file: "),
+    // The notice gives the path and names no tool.
+    name.includes("/agency-spill-") && !notice.includes("readSpill"),
     savedLength,
     grepHits,
   ]
 }
 
-/** The name a "full output saved as" notice carries. */
+/** The path a "saved as a file" notice gives, which the readers take. */
 def spilledName(notice: string): string {
-  const after = notice.split("full output saved as ")[1]
+  const after = notice.split("saved as a file: ")[1]
   return after.split(" ")[0]
 }
 

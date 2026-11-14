@@ -390,7 +390,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
 
   const toolResultCap = resultCap(callMaxToolResultChars, stackMaxToolResultChars, ctx);
   // Throws before the first request, so nothing reaches smoltalk.
-  const spill = spillSettings(run, callSpillOver, stackDefaults, exposedFunctions);
+  const spill = spillSettings(run, callSpillOver, stackDefaults);
   const capForLlm = toolResultCapper(toolResultCap, spill);
 
   // Restore or initialize messages.

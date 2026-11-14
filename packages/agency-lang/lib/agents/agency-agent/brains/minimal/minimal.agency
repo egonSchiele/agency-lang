@@ -1,5 +1,5 @@
 /** @module
-  @summary A coding brain with six tools and a short prompt: each turn is
+  @summary A coding brain with four tools and a short prompt: each turn is
   one tool loop in a single conversation thread, with no subagents. For
   benchmarks and sandboxed runs, where every tool definition and prompt
   line is paid for on every request.
@@ -44,7 +44,7 @@ export def minimalBrain(): AgentBrain {
   return {
     name: "minimal",
     session: "minimal",
-    description: "One coder with six tools (read, bash, edit, write, readSpill, grepSpill) and a short prompt",
+    description: "One coder with four tools (read, bash, edit, write) and a short prompt",
     startTargets: [],
     init: minimalInit,
     runTurn: minimalRunTurn

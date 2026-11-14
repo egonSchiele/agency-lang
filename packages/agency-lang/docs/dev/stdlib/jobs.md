@@ -118,7 +118,8 @@ already read.
 session only (`sessionJobTools()` in `subagents/code.agency`): a one-shot
 run exits when its turn ends, which would stop its jobs. The main agent
 also gets `readSpill` and `grepSpill`, because a long read is saved and
-previewed, and the coders already have both.
+previewed and the main agent has no shell to read its path with. The
+coders read the path with `read` or `bash`.
 
 **The jobs message.** `mainAgent` calls `addJobsNote()` each turn. It adds
 a system message, which expires when the turn's `llm()` call returns,

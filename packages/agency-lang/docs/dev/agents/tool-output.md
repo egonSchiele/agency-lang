@@ -129,8 +129,10 @@ reader finds the call in the log. The generic, search, and subagent
 headings keep the name always, since it is their only label.
 
 `readSpill` and `grepSpill` show `output of <source>` in place of the saved
-output's generated name, through the `spillSource` lookup in
-`TraceOptions`. `_printAgentTrace` supplies it from the current run's store;
+output's generated name or path, through the `spillSource` lookup in
+`TraceOptions`. So does `read` given a saved output's path, and `bash` or
+`safeBash` show `(output of <source>)` in place of each saved-output path
+in the command. `_printAgentTrace` supplies it from the current run's store;
 `formatAgentTrace` stays pure and tests pass a fake. A name the store does
 not know prints as is.
 

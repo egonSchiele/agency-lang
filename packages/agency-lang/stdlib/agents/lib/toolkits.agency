@@ -201,12 +201,13 @@ export def writableFileTools(): any[] {
 // the agent working directory (resolveCwd in std::safeBash).
 /** `safeBash` parses pipelines and raises effects for recognized operations.
 `exec` runs one binary with arguments. Both use the agent's working directory.
-The saved-output readers retrieve output too large to return inline. */
+Output too long to return inline is saved, and its notice gives a path that
+`safeBash` reads like any file, so the bundle has no separate readers. */
 export def shellTools(): any[] {
   """
-  Return command execution and saved-output readers for the agent's working directory.
+  Return command execution tools for the agent's working directory.
   """
-  return [modelSafeBash(), ...execAndSpillTools()]
+  return [modelSafeBash(), exec.partial(useAgentCwd: true)]
 }
 
 // safeBash as every agent's model gets it. `exitIsFailure` is bound, so
@@ -215,11 +216,6 @@ export def shellTools(): any[] {
 // no match), not a tool call that failed.
 def modelSafeBash(): any {
   return safeBash.partial(exitIsFailure: false)
-}
-
-// What every shell bundle carries beside its shell tool.
-def execAndSpillTools(): any[] {
-  return [exec.partial(useAgentCwd: true), readSpill, grepSpill]
 }
 
 // Measured against longer prompts in docs/dev/agents/coding-agent.md.
@@ -252,7 +248,7 @@ idempotent def readCapped(
   """
   Read the contents of a file and return it as a string. At most 2000 lines are returned unless limit says otherwise; a longer file ends with a line saying which lines were shown and how many the file has, and offset reads on from there.
 
-  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused. To reach another directory, pass it as dir.
+  @param filename - Relative path inside dir; absolute paths, ~, escapes, and symlink components are refused, except the path of output too long to return, which a notice gives. To reach another directory, pass it as dir.
   @param dir - Base directory for filename
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means 2000)
@@ -268,13 +264,13 @@ idempotent def readCapped(
 // working directory; a command that needs another folder starts with `cd`.
 def bashTool(): any {
   return modelSafeBash().partial(cwd: "").rename("bash").describe(
-    "Run a bash command in the working directory. Returns stdout. When the command exits non-zero, returns stdout and stderr, then a last line `Command exited with code N`. Output is cut to its last 2000 lines or 50,000 characters; when it is cut, the full output is saved and the last line says how to read it with readSpill or search it with grepSpill. A command still running after timeout seconds is stopped."
+    "Run a bash command in the working directory. Returns stdout. When the command exits non-zero, returns stdout and stderr, then a last line `Command exited with code N`. Output is cut to its last 2000 lines or 50,000 characters; when it is cut, the full output is saved as a file, and the last line gives its path, which can be read like any file with read, tail, grep or any other command. A command still running after timeout seconds is stopped."
   )
 }
 
-/** The six tools a model needs to work on code: `read`, `bash`, `edit`,
-`write`, and the two readers for output too long to return inline,
-`readSpill` and `grepSpill`. Three are shaped for a model: `read` returns
+/** The four tools a model needs to work on code: `read`, `bash`, `edit`,
+and `write`. Output too long to return inline is saved, and its notice
+gives a path that `read` and `bash` both read. Three are shaped for a model: `read` returns
 at most 2,000 lines when the model gives no limit, `write` always
 overwrites, and `safeBash` is offered as `bash` with its `cwd` bound to the
 agent's working directory. There is no `ls`, `glob`, `grep`, or `exec`:
@@ -290,7 +286,6 @@ export def codingFileAndShellTools(): any[] {
     bashTool(),
     edit.partial(useAgentCwd: true),
     write.partial(useAgentCwd: true, mode: "overwrite"),
-    ...spillTools(),
   ]
 }
 
@@ -304,8 +299,8 @@ export def jobTools(): any[] {
   return [startJob, jobOutput, stopJob]
 }
 
-/** Add these when an agent enables `spillToolResultsOver`, so it can retrieve
-long tool results. `shellTools` already includes them. */
+/** Add these when an agent enables `spillToolResultsOver` and has neither
+`read` nor a shell tool, so it can read a saved tool result by its path. */
 export def spillTools(): any[] {
   """
   Return tools for reading and searching saved tool output.

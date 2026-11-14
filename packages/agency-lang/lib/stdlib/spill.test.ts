@@ -3,6 +3,8 @@ import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
 import type { Run } from "../runtime/asyncContext.js";
 import { _grepSpill, _keepOutput, _readSpill, MAX_STDOUT_LEN } from "./spill.js";
 
+const savedPath = (notice: string) => /saved as a file: (\S+) /.exec(notice)![1];
+
 function withRun<T>(fn: (run: Run) => T): T {
   const ctx = makeMockCtx();
   return inFrameOf(ctx, ctx.stateStack, fn);
@@ -16,7 +18,7 @@ describe("spill", () => {
     });
   });
 
-  it("saves long output and reads it back by the name in the notice", () => {
+  it("saves long output and reads it back by the path or the name in the notice", () => {
     withRun(() => {
       const text = Array.from({ length: 3000 }, (_, i) => `line ${i}`).join("\n");
       expect(text.length).toBeLessThan(MAX_STDOUT_LEN);
@@ -24,12 +26,15 @@ describe("spill", () => {
       // The last 2000 lines come back, then the notice.
       expect(notice.startsWith("line 1000\nline 1001\n")).toBe(true);
       expect(notice).toContain(
-        "line 2999\n\n[Showing lines 1001-3000 of 3000. The full output saved as",
+        "line 2999\n\n[Showing lines 1001-3000 of 3000. The full output is saved as a file: ",
       );
       expect(notice.endsWith("Command exited with code 3.]")).toBe(true);
-      const name = /full output saved as (\S+) /.exec(notice)![1];
+      const path = savedPath(notice);
+      const name = path.split("/").pop()!;
+      expect(_readSpill(path, 0, 0)).toBe(text);
       expect(_readSpill(name, 0, 0)).toBe(text);
       expect(_readSpill(name, 2, 1)).toContain("line 1");
+      expect(_grepSpill("line 490$", path, 10)).toHaveLength(1);
       expect(_grepSpill("line 49.$", name, 10)).toEqual([
         { file: name, line: 491, text: "line 490" },
         { file: name, line: 492, text: "line 491" },
@@ -49,11 +54,13 @@ describe("spill", () => {
     withRun(() => {
       const wide = Array.from({ length: 100 }, (_, i) => `${i}:${"x".repeat(999)}`).join("\n");
       const cut = _keepOutput(wide, null, "cmd");
-      expect(cut).toContain("\n\n[Showing lines 52-100 of 100. The full output saved as");
+      expect(cut).toContain(
+        "\n\n[Showing lines 52-100 of 100. The full output is saved as a file: ",
+      );
       expect(cut).not.toContain("Command exited");
       const oneLine = _keepOutput(`${"a".repeat(MAX_STDOUT_LEN)}END`, null, "cmd");
       expect(oneLine).toContain(
-        `END\n\n[Showing the last ${MAX_STDOUT_LEN} characters of line 1 of 1. The full output saved as`,
+        `END\n\n[Showing the last ${MAX_STDOUT_LEN} characters of line 1 of 1. The full output is saved as a file: `,
       );
       // A trailing newline is not a line of its own.
       const exact = `${Array.from({ length: 2000 }, (_, i) => `l${i}`).join("\n")}\n`;
@@ -64,7 +71,9 @@ describe("spill", () => {
   it("searches several patterns in one call, grouping the matches by pattern", () => {
     withRun(() => {
       const text = Array.from({ length: 3000 }, (_, i) => `line ${i}`).join("\n");
-      const name = /full output saved as (\S+) /.exec(_keepOutput(text, 0, "cmd"))![1];
+      const name = savedPath(_keepOutput(text, 0, "cmd"))
+        .split("/")
+        .pop()!;
       expect(_grepSpill("line 7$", name, 10, ["line 12$", "no such line"])).toEqual([
         { pattern: "line 7$", matches: [{ file: name, line: 8, text: "line 7" }] },
         { pattern: "line 12$", matches: [{ file: name, line: 13, text: "line 12" }] },
@@ -76,7 +85,7 @@ describe("spill", () => {
   it("refuses a name that is not a saved output name", () => {
     withRun(() => {
       for (const bad of ["../x.log", "/etc/passwd", ".hidden.log", "notes.txt", "a/b.log"]) {
-        expect(() => _readSpill(bad, 0, 0)).toThrow("not a saved output name");
+        expect(() => _readSpill(bad, 0, 0)).toThrow("not a saved output");
       }
     });
   });

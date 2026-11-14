@@ -48,7 +48,7 @@ function, `def <name>Brain(): AgentBrain`. `brains/registry.agency` lists
 them all in `allBrains()`; `brainByName` and `brainFlagHelp` are derived
 from that list. Three brains ship today: `coordinator` (the default; one
 main LLM that routes to code, research, oracle, explorer, review, and writing
-subagents), `minimal` (one coder with six tools and a short prompt, for
+subagents), `minimal` (one coder with four tools and a short prompt, for
 benchmarks and sandboxed runs), and `simple` (one tool-less LLM call per
 turn). Each has a
 `README.md` describing itself.

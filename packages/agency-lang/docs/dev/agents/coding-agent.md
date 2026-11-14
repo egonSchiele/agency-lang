@@ -33,9 +33,7 @@ request, so the list holds only what `bash` cannot do:
 
 - **Four file and shell tools**, from `codingFileAndShellTools()` in
   `std::agents/lib/toolkits`: `read`, `bash`, `edit`, and `write`. There
-  is no `ls`, `glob`, `grep`, or `exec`, and no saved-output readers: a
-  long output's notice gives a path that `read` and `bash` both read
-  (`docs/dev/stdlib/spill.md`). The first
+  is no `ls`, `glob`, `grep`, or `exec`. The first
   rule in the prompt sends listing and searching to `bash`, and safeBash
   runs a plain `ls`, `grep`, or `cat` with the same narrow approval the
   stdlib tool of that name asks for (`docs/dev/stdlib/safe-bash.md`).

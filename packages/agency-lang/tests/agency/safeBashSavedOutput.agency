@@ -18,7 +18,7 @@ def savedText(): string {
 /** The saved name: the last part of the path the notice gives. */
 def savedName(): string {
   const notice = keepOutput(savedText(), 0, "generate")
-  const path = notice.split("saved as a file: ")[1].split(" ")[0]
+  const path = notice.split("saved as a file: ")[1].split(" (read it like any file)")[0]
   const parts = path.split("/")
   return parts[parts.length - 1]
 }
@@ -225,6 +225,50 @@ node aLineThatWritesKeepsItsReadQuestion() {
   restoreTemp(old)
   remove(FIXTURE) with approve
   return [result.startsWith("FAILED"), seen.includes("std::read")]
+}
+
+node aLineWithAnExpansionKeepsItsReadQuestion() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const path = "${TEMP}/agency-spill-${userId()}/${name}"
+  // echo raises nothing, but the shell expands the variable, so a line
+  // with no question left could print a secret the process inherited.
+  let seen: string[] = []
+  let results: string[] = []
+  handle {
+    results = [
+      text(safeBash("echo \"$HOME\" && wc -l ${path}")),
+      text(safeBash("echo $HOME && wc -l ${path}")),
+      text(safeBash("echo /* && wc -l ${path}")),
+    ]
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [[r.startsWith("FAILED") for r in results], seen]
+}
+
+node aTempFolderWithASpaceWorks() {
+  resetFixture()
+  const spaced = FIXTURE + "/tmp dir"
+  mkdir(spaced) with approve
+  const old = useTemp(spaced)
+  const name = savedName()
+  const path = "${spaced}/agency-spill-${userId()}/${name}"
+  let seen: string[] = []
+  let result = ""
+  handle {
+    result = text(safeBash("wc -l \"${path}\""))
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [result.trim().startsWith("3000"), seen]
 }
 
 node theFolderMustBePrivate() {

@@ -163,11 +163,9 @@ export function stringifyToolResult(result: any, indent?: number): string {
 export type SpillSettings = { over: number; run: Run };
 
 /** The spill settings of one `llm()` call, or null when
- *  `spillToolResultsOver` is unset or not above 0. The call's tools are
- *  not looked at: the notice gives a path, and `read`, `safeBash` and the
- *  spill readers each take one. `branchDefaults` is what `setLlmOptions`
- *  set; the option is per call, so it is refused there. See
- *  docs/dev/stdlib/spill.md. */
+ *  `spillToolResultsOver` is unset or not above 0. `branchDefaults` is
+ *  what `setLlmOptions` set; the option is per call, so it is refused
+ *  there. See docs/dev/stdlib/spill.md. */
 export function spillSettings(
   run: Run,
   perCall: number | undefined,

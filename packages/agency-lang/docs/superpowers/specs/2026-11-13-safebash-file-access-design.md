@@ -168,6 +168,7 @@ It uses `accessesOf` (see "File accesses as data") to see what each effect touch
 - A `write`, `remove`, `list` or `find` access inside a saved-output folder fails the plan (see the next section).
 - **When the line only reads**, a `read` or `search` access of a path in `savedPaths` is dropped. "Only reads" means every effect of the plan is `std::read`, `std::grep`, `std::ls` or `std::glob`. So `cat <saved output>` in process, and `wc -l <saved output>` and `grep -c x <saved output> | head` in bash, ask nothing.
 - **When the line does anything else**, every effect is kept. In `ln -sf a <saved output>; cat <saved output>` the `cat` keeps its `std::read` for the copy's path.
+- **When any word of the line is not literal** (a variable, a glob, an assignment), every effect is kept. `echo` raises nothing, so `echo "$GH_TOKEN" && wc -l <saved output>` would otherwise run with no question while the shell prints the variable.
 
 `savedOutputRules` only drops or keeps effects; it never adds one. A program with no rule, such as `python parse.py <saved output>` or `sed -n '2,3p' <saved output>`, asks `std::exec` and nothing more, as it does for a file on disk. An approved `sed` can read any file under that same approval, so a `std::read` for the copy would protect nothing.
 

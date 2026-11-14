@@ -92,8 +92,7 @@ const SHELL_SEPARATOR = /[\s'"`;|&<>()]/;
 
 /** Every saved-output path in raw command text: each word that holds the
  *  folder prefix, taken whole between shell separators, so a longer path
- *  that starts the same way does not count. Each word is scanned once,
- *  so a long line costs time in proportion to its length. */
+ *  that starts the same way does not count. */
 export function spillPathsIn(text: string): SavedPath[] {
   const found: SavedPath[] = [];
   let at = text.indexOf(SPILL_FOLDER_PREFIX);

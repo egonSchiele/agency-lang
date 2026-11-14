@@ -43,6 +43,20 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aLineWithAnExpansionKeepsItsReadQuestion",
+      "description": "echo raises nothing, but the shell expands a variable or a glob, so `echo \"$HOME\" && wc -l <saved output>` would print what nobody was asked about. A line with any expansion keeps its questions, and with every question rejected it does not run.",
+      "input": "",
+      "expectedOutput": "[[true,true,true],[\"std::read\",\"std::read\",\"std::read\"]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aTempFolderWithASpaceWorks",
+      "description": "With a temp folder whose path has a space, a quoted saved-output path reads with no question. The saved paths come from the parsed words, so no part of the path is taken for a path of its own.",
+      "input": "",
+      "expectedOutput": "[true,[]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "theFolderMustBePrivate",
       "description": "A saved-output folder that other users can use, and a link planted where the folder goes, each fail the line before the shell starts.",
       "input": "",

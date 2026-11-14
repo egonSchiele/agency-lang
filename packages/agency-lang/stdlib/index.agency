@@ -218,10 +218,8 @@ export idempotent def read(
   @param limit - Maximum number of lines to return (0 means read to end of file)
   @param useAgentCwd - Resolve a relative dir against the agent working directory
   """
-  // Saved output is text the conversation was already handed, read from
-  // the store by name as readSpill reads it, with no question. This never
-  // touches the disk, so a mistake here could return the wrong saved text
-  // but could not read a file without asking.
+  // Saved output is text the conversation was already handed, so it is
+  // read from the store with no question. This branch never reads the disk.
   const saved = _savedOutputAt(dir, filename)
   if (saved != null) {
     return try _readSavedOutput(saved, offset, limit)

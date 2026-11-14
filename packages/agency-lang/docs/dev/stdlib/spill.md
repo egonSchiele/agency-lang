@@ -29,7 +29,7 @@ The globals have every property the store needs, the ones the guide's state isol
 
 The marker counts toward the limit, so a cut result is never longer than `maxToolResultChars` either.
 
-**The loop never looks at the call's tools.** The notice gives a path and names no tool, and each reader takes the path in its own code: `read`, `safeBash`, `readSpill` and `grepSpill`. So there is nothing for the loop to look up, and a call that sets `spillToolResultsOver` is not refused for its tool list. The cost is a lost guard: a caller who turns saving on and offers nothing that reads a path gets a model that cannot follow the notice, which shows up the first time they run it. `spillSettings` in `toolInvocation.ts` reads only the option. The check that a result came from `readSpill` or `grepSpill` (`isSpillReader`) looks at the tool that produced it. Their own result is never saved again, because `readSpill(name)` with no offset or limit returns the whole entry, and saving it again would hand the model a notice naming a copy. A `read` or `cat` of a saved output is not on that list; `storeOutput` gives text it already holds the name it has, so those do not make a copy either.
+**The loop never looks at the call's tools.** The notice gives a path and names no tool, and each reader takes the path in its own code. `spillSettings` in `toolInvocation.ts` reads only the option, so a call that turns saving on with no reader in its tools gets a model that cannot follow the notice. `isSpillReader` looks at the tool that produced a result: a result from `readSpill` or `grepSpill` is cut, never saved again, because it is already in the store.
 
 **With spilling on, a result over either number is saved.** A result is saved when it is longer than `spillToolResultsOver` or longer than `maxToolResultChars`, whichever is smaller. Saving only above the spill value would make `spillToolResultsOver: 50000` with `maxToolResultChars: 20000` cut every result between the two, with nothing to read the rest with. It also means a user who lowers the limit (in `agency.json`, with `--max-tool-result-chars`, or with `setLlmOptions`) still gets spilling at their limit. So with spilling off, nothing is saved and anything over the limit is cut; with spilling on, nothing is cut except a reader's own result.
 
@@ -71,34 +71,26 @@ A saved output can also be read as a file. Its path is the temp folder, then `ag
 /tmp/agency-spill-1000/2026-11-13T04-05-06-123Z-a1b2c3.log
 ```
 
-`spillFolder(host)` builds the folder from `host.system.tempDir()` as the host gives it, never a real path, so on a Mac it starts `/var/folders/…` and never `/private/var/folders/…`. `spillPathParts(path)` recognizes a path by its last two parts only: an `agency-spill-<digits>` folder and a name `isOutputName` accepts. A path written on another machine is recognized too. `…/x.log/../../etc/passwd` is not a saved output, because its last part is `passwd`.
+`spillFolder(host)` builds the folder from `host.system.tempDir()` as the host gives it, never a real path, so on a Mac it starts `/var/folders/…`. `spillPathParts(path)` recognizes a path by its last two parts: an `agency-spill-<digits>` folder and a name `isOutputName` accepts. A path written on another machine is recognized too.
 
-The store stays the only source of truth. A file on disk is a copy, written at the moment a real program is about to read it, and rewritten every time. There are three ways a saved output is read by path:
+The store is the only source of truth. A file on disk is a copy, written just before a real program reads it. Four readers take the path:
 
-1. **safeBash in process.** A lone `cat`, `head`, `tail` or `grep`, or a chain of them, reads the store by name. Nothing is written to disk.
-2. **safeBash in a shell.** Before `_bash` or `_startJob` starts a shell, `_prepareSpillFiles` writes a copy of every saved output the line names. The line fails before the shell starts when a name is no longer in the store, when the path's folder is another machine's (the message gives this machine's path), or when the folder is not this user's alone.
-3. **The stdlib's `read`.** `read` asks `_savedOutputAt(dir, filename)` before anything else, and for a saved output returns `_readSpill(name, offset, limit)` with no interrupt. This branch never touches the disk.
+1. **safeBash in process.** A lone `cat`, `head`, `tail` or `grep`, or a chain of them, reads the store by name and writes nothing.
+2. **safeBash in a shell.** Right before `_bash` or `_startJob`, `_prepareSpillFiles` writes a copy of every saved output the line names. It fails the line for a name no longer in the store, a folder that is another machine's, a relative temp folder, or a folder that is not this user's alone (`host.files.privateDir`, mode 0700, never fixed in place).
+3. **The stdlib's `read`.** It returns a page of the stored text (`_readSavedOutput`), under `MAX_STDOUT_LEN` characters so the tool loop does not save it again, with no interrupt.
+4. **`readSpill` and `grepSpill`**, which take the path or the bare name.
 
-`readSpill` and `grepSpill` stay, and take the path or the bare name.
+None of these asks for approval, for the reason in "No effects". In a shell that holds only under the rules in `safe-bash.md`, "Saved output": the line only reads, expands nothing, and gets its copies from the same list that decides which reads are dropped.
 
-**No approval for the read.** Reading saved output asks nothing, for the reason the readers ask nothing. In a shell this is safe only because the bytes the program reads are the store's, and three things make that true together:
+`storeOutput` returns the name of an entry that already holds the same text, so reading a saved output back never stores a second copy.
 
-- The read question is left out only on a line that only reads: every effect is `std::read`, `std::grep`, `std::ls` or `std::glob`. In `ln -sf ~/.ssh/id_rsa <saved output>; cat <saved output>` the `ln` could change the copy after it is written, so the `cat` keeps its `std::read`.
-- `_prepareSpillFiles` rewrites each copy from the store just before the shell starts.
-- The folder belongs to this user alone. On Linux `/tmp` is shared, and another user could create `/tmp/agency-spill-1000` first and swap a copy for a link between the write and the read. `host.files.privateDir` creates the folder with mode 0700, or checks an existing one: a real folder, owned by this user, with no access for anyone else. It never fixes an existing folder's mode, because by then someone else may have planted a file.
+**Accepted risks and gaps.**
 
-The rules are in `savedOutputRules` in `stdlib/safeBash.agency`; `safe-bash.md` has the details.
-
-**What is accepted.**
-
-- A background job an earlier line started, approved for a command that names the folder, could change a copy in the moment between the write and a later line's read.
-- Tool calls in one round run at the same time. If one call runs an approved program that writes into the folder, such as `ln -sf ~/.ssh/id_rsa <saved path>` under an "always approve when" rule for `ln`, and another call only reads the same saved path, the write can land between the second call's copy and its read. Either call needs an approved program that writes to a path it is given, so this is the same class of risk as the background job above. A per-run lock around the copy and the shell start would close it, at the cost of running shell calls one at a time.
-- A relative `TMPDIR` fails the line: the copy is written against the process's folder, and the shell runs in the agent's.
-- A line that names a saved output no longer in the store fails, even when it only mentions it (`git log -- <old path>`). A model that names an old path is usually about to read it.
-- `exec` writes no copy. `exec("wc", ["-l", <saved output>])` asks `std::exec` and fails with "No such file".
-- `sed -n` has no rule in safeBash, so it asks `std::exec`, as it does for a file on disk.
-
-**Reading it back does not save it again.** `storeOutput` returns the name of an entry that already holds the same text. Without this, `cat <saved output>` or a long `read` of one would store a second copy, and a second copy of a large output pushes the first one out.
+- A background job an earlier line started, or a tool call running at the same time, could change a copy between the write and a read, if it runs an approved program that writes into the folder.
+- A line that names a saved output no longer in the store fails, even when it only mentions it.
+- `exec` writes no copy, so `exec("wc", ["-l", <saved path>])` fails with "No such file".
+- `sed -n` has no rule in safeBash, so it asks `std::exec`, as for any file.
+- Copies stay in the temp folder until the system cleans it. The same text is in every checkpoint and saved session.
 
 ## What a saved output is called
 

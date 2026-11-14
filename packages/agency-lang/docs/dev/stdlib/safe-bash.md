@@ -1867,38 +1867,37 @@ places handle it, and no verb's rule has a branch for it:
 - **`textOf` and the saved grep.** The in-process executors read a
   `saved` source from the store by name (`_readSpill`, `_grepSaved`),
   never from disk.
-- **`savedPathsIn`.** `planFor` lists every saved output a line names:
-  each literal word of each command, and each path a scan of the raw
-  text finds, which covers a line that does not parse. The list is the
-  plan's `savedPaths`.
+- **`savedOutputLine`.** `planFor` lists the saved outputs a line names,
+  from its parsed words, and notes whether every word is literal. A line
+  that does not parse is scanned as text instead (`spillPathsIn`); it
+  asks the broad question, so the scan only decides which copies to
+  write. The list becomes the plan's `savedPaths`.
 - **`savedOutputRules`.** It runs last in `planFor`, on the finished
   plan, after `bashPlan`. A write, delete, listing or find for which
-  `inSpillFolder` is true refuses the plan: the folder holds only the
-  copies written so far, and a listing would read as the list of saved
-  outputs. When every effect is `std::read`, `std::grep`, `std::ls` or
-  `std::glob`, a read or search whose payload names a path in
-  `savedPaths` is dropped. It never adds an effect.
+  `inSpillFolder` is true refuses the plan. A read or search whose
+  payload names a path in `savedPaths` is dropped, and only when every
+  effect is `std::read`, `std::grep`, `std::ls` or `std::glob` and every
+  word is literal. It never adds an effect.
 - **Before a shell starts.** `runBash` and `startJob` call
   `_prepareSpillFiles(plan.savedPaths)` right before `_bash` and
   `_startJob`, and a failure stops the line.
 
-The read is dropped only on a line that only reads, because the copies
-are written once, before the whole line runs. In
-`ln -sf ~/.ssh/id_rsa <saved output>; cat <saved output>` the `ln` asks
-`std::exec`, and the `cat` keeps its `std::read`: otherwise approving the
-link would read the key with no read question. A read is dropped only for
-a path in `savedPaths`, the same list that is written, so the two cannot
-disagree about a path.
+The two conditions on a dropped read:
 
-`bashPlan` still turns an empty effect list into `std::bash`. Because
-`savedOutputRules` runs after it, a shell plan ends with no effects only
-when a read of saved output was dropped. `echo <saved path> | cat` still
-asks `std::bash`. A program with no rule, such as `sed -n` or `python`,
-asks `std::exec` and nothing more, as it does for a file on disk.
+- **The line only reads.** The copies are written once, before the whole
+  line runs. In `ln -sf ~/.ssh/id_rsa <saved path>; cat <saved path>`
+  the `ln` asks `std::exec`, and the `cat` keeps its `std::read`.
+- **The line expands nothing.** `echo` raises no effect, so in
+  `echo "$GH_TOKEN" && wc -l <saved path>` a dropped read would leave no
+  question at all while the shell prints the variable. A variable, a
+  glob, or an assignment anywhere in the line keeps every question.
 
-A path whose folder is not this machine's, such as one saved before a
-resume on another machine, reads the store in process, and fails before
-a shell starts with a message that gives this machine's path.
+A read is dropped only for a path in `savedPaths`, the list that is
+written, so the two cannot disagree. `bashPlan` still turns an empty
+effect list into `std::bash`, and `savedOutputRules` runs after it, so a
+shell plan ends with no effects only when a read of saved output was
+dropped. A program with no rule, such as `sed -n`, asks `std::exec` and
+nothing more, as it does for a file on disk.
 
 ## Files and tests
 

@@ -1350,7 +1350,7 @@ does, check `onlyTouchesFiles`.
 
 **Returns:** `FileAccess[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L756))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L754))
 
 ### onlyTouchesFiles
 
@@ -1368,4 +1368,4 @@ True when the plan is not refused, does not ask the broad question, and every ef
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L770))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L768))

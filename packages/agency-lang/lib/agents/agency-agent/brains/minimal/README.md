@@ -34,8 +34,7 @@ tests/minimalTurn.agency  one scripted turn that runs a bash call, and the
 - The tools come from `codingFileAndShellTools()` in
   `std::agents/lib/toolkits`: `read`, `bash`, `edit`, and `write`. The
   stdlib coding agent uses the same bundle and adds its other tools around
-  it. A long output's notice gives a path, which `read` and `bash` both
-  read, so there are no separate readers for saved output.
+  it.
 - The prompt is `CODING_RULES` from the same module: one sentence and five
   rules. The stdlib coding agent's prompt starts with the same text.
 - The prompt does not ask for a sentence beside each tool call

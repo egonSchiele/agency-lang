@@ -65,20 +65,29 @@ export function _readSpill(name: string, offset: number, limit: number): string 
   return sliceLines(saved(name), offset, limit);
 }
 
+/** Room kept under `MAX_STDOUT_LEN` for the line that ends a cut page. */
+const PAGE_NOTE_CHARS = 200;
+
 /**
  * What `read` returns for a saved output: the lines `offset` and `limit`
- * choose, stopping before `MAX_STDOUT_LEN` characters, with a last line
- * saying where to read on when it stopped short of the end. The tool loop
- * would save a longer result again, under the same name, and hand the
- * model a notice that points back at the file it just read.
+ * choose, the whole page under `MAX_STDOUT_LEN` characters, with a last
+ * line saying where to read on when it stopped short of the end. A page
+ * stays under the tool loop's spill threshold, so the loop does not save
+ * it again. A first line too long for the page is cut, and the note says
+ * how to read the rest of it.
  */
 export function _readSavedOutput(nameOrPath: string, offset: number, limit: number): string {
   const lines = saved(nameOrPath).split("\n");
+  const budget = MAX_STDOUT_LEN - PAGE_NOTE_CHARS;
   const start = offset > 0 ? offset - 1 : 0;
   const end = limit > 0 ? Math.min(lines.length, start + limit) : lines.length;
+  if (start < end && lines[start].length > budget) {
+    const line = lines[start];
+    return `${line.slice(0, budget)}\n... [line ${start + 1} is cut at ${budget} of ${line.length} characters; read the rest of it with a shell command such as: sed -n '${start + 1}p' <file> | cut -c ${budget + 1}-]`;
+  }
   let used = 0;
   let stop = start;
-  while (stop < end && (stop === start || used + lines[stop].length + 1 <= MAX_STDOUT_LEN)) {
+  while (stop < end && used + lines[stop].length + 1 <= budget) {
     used += lines[stop].length + 1;
     stop++;
   }

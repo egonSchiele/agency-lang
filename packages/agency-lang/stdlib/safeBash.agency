@@ -3953,14 +3953,54 @@ export def planFor(source: string, cwd: string, origin: GhRepo | null = null): P
   """
   // Last, on the finished plan, so that every kind of plan and every verb
   // passes through the same saved-output rules.
-  return savedOutputRules(planLine(source, cwd, origin), savedPathsIn(source))
+  return savedOutputRules(planLine(source, cwd, origin), savedOutputLine(source))
 }
 
-/** Every saved output a line names: each literal word of each command
-  that is a saved-output path, and each one a scan of the raw text finds.
-  The scan is what covers a line that does not parse. */
-def savedPathsIn(source: string): SavedPath[] {
-  const found: SavedPath[] = [..._spillPathsIn(source), ...savedPathsInWords(source)]
+/** What the saved-output rules need to know about a line: the saved
+  outputs it names, and whether every word is literal, so the shell will
+  expand nothing. */
+type SavedOutputLine = {
+  paths: SavedPath[];
+  literal: boolean
+}
+
+/* The saved outputs of a line that parses come from its words, as the
+ shell will see them once quotes are removed. A line that does not parse
+ asks the broad question, so nothing on it is free; a scan of its text
+ only decides which copies to write. */
+def savedOutputLine(source: string): SavedOutputLine {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return { paths: uniquePaths(_spillPathsIn(source)), literal: false }
+  }
+  let paths: SavedPath[] = []
+  let literal = true
+  for (entry in flattenCommands(parsed.value)) {
+    if (entry.command.assignments.length > 0) {
+      literal = false
+    }
+    for (word in commandWords(entry.command)) {
+      if (!isLiteralWord(word)) {
+        literal = false
+      }
+      const saved = savedWordPath(word)
+      if (saved != null) {
+        paths.push(saved)
+      }
+    }
+  }
+  return { paths: uniquePaths(paths), literal: literal }
+}
+
+/* A word the shell passes on as written: no variable and no glob. */
+def isLiteralWord(word: Word): boolean {
+  if (word.tag == "flag") {
+    return true
+  }
+  return !isFailure(literalWordText(word))
+}
+
+def uniquePaths(found: SavedPath[]): SavedPath[] {
   let unique: SavedPath[] = []
   for (saved in found) {
     if (!isSavedPathIn(saved.folder, saved.name, unique)) {
@@ -3968,23 +4008,6 @@ def savedPathsIn(source: string): SavedPath[] {
     }
   }
   return unique
-}
-
-def savedPathsInWords(source: string): SavedPath[] {
-  const parsed = bashParser(source)
-  if (parsed is failure(why)) {
-    return []
-  }
-  let found: SavedPath[] = []
-  for (entry in flattenCommands(parsed.value)) {
-    for (word in commandWords(entry.command)) {
-      const saved = savedWordPath(word)
-      if (saved != null) {
-        found.push(saved)
-      }
-    }
-  }
-  return found
 }
 
 def savedWordPath(word: Word): SavedPath | null {
@@ -4018,28 +4041,32 @@ static const SPILL_FOLDER_REFUSAL = "That folder holds copies of saved output, a
 /**
 The saved-output rules, applied to a finished plan. A write, delete,
 listing, or find inside a saved-output folder refuses the plan. When every
-effect of the plan is a read, a search, a listing, or a find, a read or a
-search of a path in `savedPaths` is dropped: it asks nothing.
+effect of the plan is a read, a search, a listing, or a find, and every
+word of the line is literal, a read or a search of a path in `savedPaths`
+is dropped: it asks nothing.
 
-This is safe only because the bytes such a command reads are the store's.
-In process, `textOf` and the saved grep read the store by name. In a
-shell, three things hold together: the line only reads, so no command in
-it can change a copy; `_prepareSpillFiles` rewrites every path in
-`savedPaths` from the store just before the shell starts, and fails the
-line for a folder that is not this machine's; and that folder belongs to
-this user alone. A read is dropped only for a path in `savedPaths`, the
-same list `_prepareSpillFiles` writes, so the two cannot disagree.
+This is safe only because the line does nothing but read the store's
+bytes. In process, `textOf` and the saved grep read the store by name. In
+a shell, four things hold together: the line only reads, so no command in
+it can change a copy; it expands no variable or glob, so a command that
+raises nothing, such as `echo "$GH_TOKEN"`, cannot print what it was not
+asked about; `_prepareSpillFiles` rewrites every path in `savedPaths` from
+the store just before the shell starts, and fails the line for a folder
+that is not this machine's; and that folder belongs to this user alone. A
+read is dropped only for a path in `savedPaths`, the same list
+`_prepareSpillFiles` writes, so the two cannot disagree.
 
 A shell plan whose only effects were dropped here runs with no effects.
 That is the one exception to "every shell start raises an effect".
 */
-def savedOutputRules(plan: Plan, savedPaths: SavedPath[]): Plan {
+def savedOutputRules(plan: Plan, line: SavedOutputLine): Plan {
+  const savedPaths = line.paths
   for (access in accessesOf(plan.effects)) {
     if (access.mode != "read" && access.mode != "search" && _inSpillFolder(access.path)) {
       return refusePlan(SPILL_FOLDER_REFUSAL, plan.verbs)
     }
   }
-  if (!onlyReads(plan.effects)) {
+  if (!line.literal || !onlyReads(plan.effects)) {
     return { ...plan, savedPaths: savedPaths }
   }
   const kept = [effect for effect in plan.effects if !readsSavedOutput(effect, savedPaths)]

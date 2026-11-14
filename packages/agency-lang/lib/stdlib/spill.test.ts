@@ -109,12 +109,25 @@ describe("spill", () => {
       // 2000 lines of 60 characters is over the agents' spill threshold,
       // which would save the slice again; the read stops short of it.
       for (const shown of [_readSavedOutput(name, 0, 0), _readSavedOutput(name, 0, 2000)]) {
-        expect(shown.length).toBeLessThanOrEqual(MAX_STDOUT_LEN + 200);
+        expect(shown.length).toBeLessThanOrEqual(MAX_STDOUT_LEN);
         expect(shown).toMatch(
           /\[truncated: showing 1-\d+ of 3000 lines; read on with offset \d+\]$/,
         );
       }
       expect(_readSavedOutput(name, 2990, 0).split("\n")).toHaveLength(11);
+    });
+  });
+
+  it("cuts one line longer than the page, and says how to read the rest of it", () => {
+    withRun(() => {
+      const text = `${"y".repeat(120_000)}\nsecond`;
+      const name = savedPath(_keepOutput(text, 0, "cmd"))
+        .split("/")
+        .pop()!;
+      const shown = _readSavedOutput(name, 0, 0);
+      expect(shown.length).toBeLessThanOrEqual(MAX_STDOUT_LEN);
+      expect(shown).toMatch(/line 1 is cut at \d+ of 120000 characters/);
+      expect(shown).toMatch(/cut -c \d+-/);
     });
   });
 

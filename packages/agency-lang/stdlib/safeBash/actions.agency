@@ -738,8 +738,6 @@ def grepPath(payload: GrepPayload): string {
 }
 
 // A payload's dir is already resolved, so a separator is all a join needs.
-// A plain string join keeps these functions pure: std::path's join goes
-// through the host.
 def join(dir: string, name: string): string {
   if (dir.endsWith("/")) {
     return dir + name

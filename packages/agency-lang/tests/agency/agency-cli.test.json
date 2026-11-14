@@ -26,7 +26,7 @@
       "nodeName": "safeBashFailureEndsWithExitCode",
       "description": "an agency command that fails through safeBash returns its diagnostics and ends with the same exit code line as a bash command.",
       "input": "",
-      "expectedOutput": "[true,\"[exit code 1]\"]",
+      "expectedOutput": "[true,\"Command exited with code 1\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

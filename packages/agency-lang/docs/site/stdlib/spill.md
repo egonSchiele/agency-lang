@@ -6,8 +6,9 @@ description: "Where long tool output goes, and how to read it back."
 # spill
 
 Use saved output to inspect long command results without sending the whole
-  text to the model at once. Output past `MAX_STDOUT_LEN` is saved and replaced
-  by a preview with the exit code, the first and last lines, and a saved name.
+  text to the model at once. A command's output past `MAX_STDOUT_LINES` lines
+  or `MAX_STDOUT_LEN` characters is saved, and what comes back is its last
+  lines and a saved name.
 
   Saved output survives checkpoints and resumes. The store holds about a
   million characters and removes its oldest entries when full. Reading a
@@ -42,16 +43,26 @@ Use saved output to inspect long command results without sending the whole
 
 ### MAX_STDOUT_LEN
 
-How much of a command's output comes back inline. Anything longer is
-  saved and replaced by a preview (see `keepOutput`).
+How much of a command's output comes back inline: this many characters
+  and `MAX_STDOUT_LINES` lines, whichever is reached first. Anything longer
+  is saved and its last lines come back (see `keepOutput`).
 
 ```ts
-/** How much of a command's output comes back inline. Anything longer is
-  saved and replaced by a preview (see `keepOutput`). */
-export static const MAX_STDOUT_LEN = 10000
+/** How much of a command's output comes back inline: this many characters
+  and `MAX_STDOUT_LINES` lines, whichever is reached first. Anything longer
+  is saved and its last lines come back (see `keepOutput`). */
+export static const MAX_STDOUT_LEN = 50000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L44))
+
+### MAX_STDOUT_LINES
+
+```ts
+export static const MAX_STDOUT_LINES = 2000
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L45))
 
 ## Functions
 
@@ -61,24 +72,24 @@ export static const MAX_STDOUT_LEN = 10000
 keepOutput(text: string, exitCode: number | null, source: string = ""): string
 ```
 
-Save long command output and return a preview with its saved name.
+Save long command output and return its last lines with its saved name.
 
 Use this when returning command output to an LLM. Short text passes through
-unchanged. Long text becomes a preview that includes the exit code and a
-saved name. Include `readSpill` and `grepSpill` in the model's tools so it can
-inspect the complete output.
+unchanged. Long text is saved, and what comes back is its last lines, then a
+line saying which lines those are and the saved name. Include `readSpill` and
+`grepSpill` in the model's tools so it can inspect the complete output.
 
 **Parameters:**
 
 | Name | Type | Default | Description |
 |---|---|---|---|
 | text | `string` |  |  |
-| exitCode | `number \| null` |  | The command's exit code, or null for one still running. The preview names a code only when there is one. |
+| exitCode | `number \| null` |  | The command's exit code, or null when there is none to show. The notice names a code only when there is one. |
 | source | `string` | "" | The command that produced the output, or an empty string when none applies. |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L53))
 
 ### readSpill
 
@@ -98,7 +109,7 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L63))
 
 ### grepSpill
 
@@ -125,4 +136,4 @@ Search saved tool output using JavaScript regular expressions. Returns matching
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L78))

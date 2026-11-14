@@ -180,6 +180,46 @@ function previewTail(lines: string[], skip: number, budget: number): string[] {
 }
 
 /**
+ * What stands in for a command's long output: its last lines, up to
+ * `maxLines` lines and `maxChars` characters, then one line saying which
+ * lines those are, the name the whole output was saved under, and how to
+ * read the rest with `readers`. The end is kept because a command that
+ * prints a lot says how it went in its last lines: a test summary, a
+ * compiler's error count. `exitCode` is null when there is none to show.
+ */
+export function tailNotice(
+  text: string,
+  name: string,
+  exitCode: number | null,
+  readers: SpillReaders,
+  maxLines: number,
+  maxChars: number,
+): string {
+  const lines = (text.endsWith("\n") ? text.slice(0, -1) : text).split("\n");
+  let start = lines.length;
+  let used = 0;
+  while (start > 0 && lines.length - start < maxLines) {
+    const next = lines[start - 1].length + 1;
+    if (used + next > maxChars) break;
+    used += next;
+    start--;
+  }
+  const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
+  const search =
+    readers.grep === null
+      ? " It needs no approval."
+      : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
+  // The name is followed by a space, so it can be copied without punctuation.
+  const rest = `The full output saved as ${name} can be read with ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}${exit}`;
+  const total = lines.length;
+  if (start === total) {
+    // The last line alone is longer than the limit, so show its end.
+    return `${lines[total - 1].slice(-maxChars)}\n\n[Showing the last ${maxChars} characters of line ${total} of ${total}. ${rest}]`;
+  }
+  return `${lines.slice(start).join("\n")}\n\n[Showing lines ${start + 1}-${total} of ${total}. ${rest}]`;
+}
+
+/**
  * The preview that stands in for a long output: what happened, a glimpse of
  * both ends, the name it was saved under, and how to read the rest with
  * `readers`. `exitCode` is null for a tool result that is not a command's

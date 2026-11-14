@@ -247,6 +247,7 @@ export { Schema, __validateType } from "./schema.js";
 export { __invalidArgument } from "./invalidArgument.js";
 export { __coarseTypeTest } from "./typeTest.js";
 export { __checkParams, __descriptorCheck, __schemaCheck } from "./paramChecks.js";
+export { __paramSchema } from "./paramSchema.js";
 export { __takeArgOverrides } from "./argOverrides.js";
 export { __rebindParameters, __releaseRebind } from "./rebind.js";
 export type { RebindSpec } from "./rebind.js";

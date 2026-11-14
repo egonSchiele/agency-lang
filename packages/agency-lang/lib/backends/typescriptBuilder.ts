@@ -45,6 +45,7 @@ import { UNWRAP_REACHED_CODEGEN } from "@/types/access.js";
 import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
+import { liftParamSegments } from "@/utils/docStringParams.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -259,6 +260,13 @@ function walkMarkTopLevel(value: unknown): unknown {
  *  type to check against. The checks table, the preamble store, and the
  *  step-0 names list all have to agree on this set, and `__checkParams`
  *  throws when they do not, so it is decided in one place. */
+/** A default as a tool's schema shows it. A string keeps its quotes, so an
+ *  empty one reads `Default: ""` and not as a label with nothing after it. */
+function defaultLabel(value: Expression): string {
+  const text = expressionToString(value);
+  return value.type === "string" || value.type === "multiLineString" ? JSON.stringify(text) : text;
+}
+
 function isCheckedParam(param: FunctionParameter): boolean {
   return param.validated === true && param.typeHint !== undefined;
 }
@@ -2063,8 +2071,10 @@ export class TypeScriptBuilder {
    *                validator (lib/typeChecker/toolBlockBinding.ts).
    *   - `scalar` : a regular field — type derived from the declared hint
    *                (`string` is the historical default for untyped params).
-   *                Optional params get `.nullable().describe("Default: ...")`
-   *                appended so the LLM understands the value can be omitted.
+   *                A param with a `@param` line in the docstring, a default,
+   *                or both is finished by `__paramSchema`, which puts the
+   *                description on the argument and makes a param with a
+   *                default optional.
    *   - `array`  : a variadic param whose element type is non-function. The
    *                emitted schema is `z.array(<element>)` so the LLM supplies
    *                the whole spread as a single array via the named-array
@@ -2073,6 +2083,7 @@ export class TypeScriptBuilder {
   private paramSchemaContribution(
     param: FunctionParameter,
     pendingAliases: Set<string>,
+    doc: string | null,
   ): { kind: "drop" } | { kind: "scalar"; zod: string } | { kind: "array"; zod: string } {
     if (isFunctionTyped(param)) return { kind: "drop" };
 
@@ -2088,26 +2099,38 @@ export class TypeScriptBuilder {
               value: "string",
             });
       const elementZod = this.zodSchemaFor(elementHint, pendingAliases);
-      return { kind: "array", zod: `z.array(${elementZod})` };
+      const arrayZod = `z.array(${elementZod})`;
+      return {
+        kind: "array",
+        zod:
+          doc === null
+            ? arrayZod
+            : `__paramSchema(${arrayZod}, ${JSON.stringify(doc)}, null, false)`,
+      };
     }
 
     const typeHint = param.typeHint || {
       type: "primitiveType" as const,
       value: "string",
     };
-    let zod = this.zodSchemaFor(typeHint, pendingAliases);
-    if (param.defaultValue) {
-      const defaultStr = expressionToString(param.defaultValue);
-      // A widened optional param (`x?: T` → `T | null`) is already nullable;
-      // only add `.nullable()` for params whose type is not already nullable
-      // (e.g. an explicit default `x: T = 5`), so the LLM may omit them.
-      const alreadyNullable =
-        typeHint.type === "unionType" &&
-        typeHint.types.some((t) => t.type === "primitiveType" && t.value === "null");
-      if (!alreadyNullable) zod += ".nullable()";
-      zod += `.describe(${JSON.stringify("Default: " + defaultStr)})`;
+    const zod = this.zodSchemaFor(typeHint, pendingAliases);
+    if (!param.defaultValue && doc === null) {
+      return { kind: "scalar", zod };
     }
-    return { kind: "scalar", zod };
+    // A widened optional param (`x?: T` → `T | null`) is already nullable;
+    // only a param whose type is not (an explicit default `x: T = 5`) has
+    // null added, so a model that sends null for "use the default" is valid.
+    const alreadyNullable =
+      typeHint.type === "unionType" &&
+      typeHint.types.some((t) => t.type === "primitiveType" && t.value === "null");
+    const defaultText = param.defaultValue
+      ? JSON.stringify(defaultLabel(param.defaultValue))
+      : "null";
+    const addNullable = !!param.defaultValue && !alreadyNullable;
+    return {
+      kind: "scalar",
+      zod: `__paramSchema(${zod}, ${JSON.stringify(doc)}, ${defaultText}, ${addNullable})`,
+    };
   }
 
   /**
@@ -2232,9 +2255,15 @@ export class TypeScriptBuilder {
     // treatment alias consts get — a def declared BEFORE a type it
     // references used to TDZ-crash (probe-confirmed).
     const pendingAliases = this.pendingAliasesFor(node.loc?.start);
+    // Each `@param name - text` line of the docstring moves onto that
+    // argument in the schema, and out of the tool description.
+    const lifted = liftParamSegments(
+      node.docString ? node.docString.segments : [],
+      parameters.filter((p) => !isFunctionTyped(p)).map((p) => p.name),
+    );
     const contributions = parameters.map((p) => ({
       param: p,
-      contribution: this.paramSchemaContribution(p, pendingAliases),
+      contribution: this.paramSchemaContribution(p, pendingAliases, lifted.params[p.name] ?? null),
     }));
 
     // Declaration order is preserved by iterating `parameters` directly;
@@ -2254,7 +2283,7 @@ export class TypeScriptBuilder {
     // Trim leading/trailing indentation from doc-string segments before
     // emission so the LLM sees clean text, while keeping the AST
     // untouched for faithful formatter round-trips.
-    const trimmedDocSegments = node.docString ? trimDocStringSegments(node.docString.segments) : [];
+    const trimmedDocSegments = trimDocStringSegments(lifted.segments);
     return ts.obj({
       name: ts.str(functionName),
       description:

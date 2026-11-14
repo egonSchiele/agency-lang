@@ -275,14 +275,29 @@ stdlib (see `docs/dev/agents/tool-loop-guards.md`).
 ## What a failed command returns
 
 When a command exits non-zero, the failure's text is what a terminal
-would show: stdout, then stderr, then a status line, then a note when
+would show: stdout, then stderr, then a status line, with a note when
 there is one (gh not being logged in, or what to do about a time limit).
 An `agency` command, which runs in process, fails with the same text.
 
 ```
 fatal: invalid reference: *.py
-[exit code 128]
+Command exited with code 128
 ```
+
+The exit line is always the last line. A note, such as the one for gh not
+being logged in, goes on the line before it. The two streams are joined
+before the long-output cut (`failedOutput`), so a long failure is saved
+once and its last lines come back (`spill.md`).
+
+The failure carries `data: { type: "commandExit", exitCode }`, which tells
+a command's own exit from a refusal, a rejection, or a time limit. With
+`exitIsFailure: false`, `safeBash` returns such a failure as a success
+holding the same text. Every agent's model gets `safeBash` with that bound
+(`modelSafeBash` in `stdlib/agents/lib/toolkits.agency`), so the model
+never sees the argument. A failing test run or a grep with no match is
+then a result to read: it gets no "The call failed" wording from the tool
+loop and does not count toward the loop's limit on failures in a row. The
+choice lives in the tool; the tool loop has no case for any tool's result.
 
 A command stopped at its time limit was killed and has no exit code of
 its own, so its status line is `[stopped at the time limit of 120

@@ -29,7 +29,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength, __asyncDone, __asyncFinished,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides, __rebindParameters, __releaseRebind,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __paramSchema, __takeArgOverrides, __rebindParameters, __releaseRebind,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -498,7 +498,7 @@ export const schedule = __AgencyFunction.create({
   toolDefinition: {
     name: "schedule",
     description: "No description provided.",
-    schema: z.object({"label": z.string(), "when": Stamp.nullable().describe("Default: 2026-10-16T09:00:00"), })
+    schema: z.object({"label": z.string(), "when": __paramSchema(Stamp, null, "\"2026-10-16T09:00:00\"", true), })
   },
   exported: false
 }, __toolRegistry);

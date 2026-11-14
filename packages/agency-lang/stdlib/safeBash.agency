@@ -4457,19 +4457,33 @@ export def safeBash(
   command: string,
   cwd: string = "",
   timeout: number = 120,
+  exitIsFailure: boolean = true,
 ): Result<string> raises <SafeBashEffects> {
   """
   Run Bash commands after approval of the actions they perform.
-  Return stdout on success. A nonzero exit is a failure carrying the exit
-  code, stdout, and stderr, so there is no need to echo `$?` or re-run a
-  command to learn how it exited. Read saved long output with readSpill or
-  grepSpill, not with bash. A command still running after `timeout`
-  seconds is stopped, with everything it started, and the failure carries
-  the output so far.
+  Return stdout on success. A nonzero exit is a failure carrying stdout,
+  stderr, and a last line `Command exited with code N`, so there is no need
+  to echo `$?` or re-run a command to learn how it exited. Output longer
+  than 2000 lines or 50,000 characters is saved and its last lines are
+  returned; read the rest with readSpill or grepSpill, not with bash. A
+  command still running after `timeout` seconds is stopped, with everything
+  it started, and the failure carries the output so far.
 
   @param command - One or more bash commands.
   @param cwd - Working directory, defaulting to the agent directory or the process directory.
   @param timeout - Seconds the command may run. Pass more for a command known to be slow, such as a full test suite.
+  @param exitIsFailure - Whether a nonzero exit is a failure. When false, it is a successful result holding the same text.
+  """
+  const outcome = runApproved(command, cwd, timeout)
+  if (!exitIsFailure && isFailure(outcome) && outcome.data.type == EXIT_FAILURE) {
+    return success(outcome.error)
+  }
+  return outcome
+}
+
+def runApproved(command: string, cwd: string, timeout: number): Result<string> {
+  """
+  Plan a command, raise its approvals, and run it.
   """
   const dir = resolveCwd(cwd)
   const approved = approvedPlan(command, dir, timeout * 1000, null)
@@ -5160,31 +5174,33 @@ def isGhLoginFailure(verbs: string[], exitCode: number, stderr: string): boolean
 // then `status` on a line of its own, then a note for the model when
 // there is one. Long output is saved for later retrieval. The command is
 // not repeated, because the model wrote it one message earlier.
-def outputFailure(exitCode: number, stdout: string, stderr: string, label: string, status: string, note: string): Result<string> {
-  const kept = [keepOutput(stdout, exitCode, label), keepOutput(stderr, exitCode, label)]
-  const streams = [text.trimEnd() for text in kept if text.trim() != ""]
-  const lines = [...streams, status]
-  if (note == "") {
-    return failure(lines.join("\n"))
-  }
-  return failure([...lines, note].join("\n"))
+// The two streams are joined before the long-output cut, so a long failure
+// is saved once and what comes back is the end of it.
+def failedOutput(stdout: string, stderr: string, label: string, ending: string[]): string {
+  const streams = [text.trimEnd() for text in [stdout, stderr] if text.trim() != ""]
+  const shown = keepOutput(streams.join("\n"), null, label)
+  const lines = [text for text in [shown, ...ending] if text != ""]
+  return lines.join("\n")
 }
 
+/** The `data.type` of a failure that is a command's own non-zero exit, as
+opposed to a refusal, a rejection, or a command stopped at its time limit. */
+static const EXIT_FAILURE = "commandExit"
+
 def exitFailure(exitCode: number, stdout: string, stderr: string, label: string, note: string = ""): Result<string> {
-  return outputFailure(exitCode, stdout, stderr, label, "[exit code ${exitCode}]", note)
+  // The exit line is last, after the note. The coding agents get this text
+  // as a result, and their trace finds the exit by reading the last line.
+  const text = failedOutput(stdout, stderr, label, [note, "Command exited with code ${exitCode}"])
+  return failure(text, { type: EXIT_FAILURE, exitCode: exitCode })
 }
 
 // A command stopped at its time limit was killed, so it has no exit code
 // of its own to show.
 def timeoutFailure(command: string, seconds: number, stdout: string, stderr: string): Result<string> {
-  return outputFailure(
-    1,
-    stdout,
-    stderr,
-    command,
+  return failure(failedOutput(stdout, stderr, command, [
     "[stopped at the time limit of ${seconds} seconds]",
     "The text above is the output so far. Run a narrower command (one test file, or one test), or pass a larger timeout.",
-  )
+  ]))
 }
 
 @capabilities(fileRead)

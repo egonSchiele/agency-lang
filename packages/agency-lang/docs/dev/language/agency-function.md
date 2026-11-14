@@ -27,25 +27,27 @@
 a `@param` line, a default, or both:
 
 - **The description sits on the argument.** `liftParamDocs`
-  (`lib/utils/docStringParams.ts`) takes each `@param name - text` entry out
-  of the docstring, and the text becomes that argument's `description` in
-  the JSON schema. The tool description no longer repeats it. An entry runs
-  to the next blank line or the next line starting with `@`. An entry that
-  touches a `${...}` interpolation stays in the description, because its
-  text is not known at compile time. `@param` for a name that is not a
+  (`lib/utils/paramDocs.ts`) takes each `@param` entry out of the
+  docstring, and the text becomes that argument's `description` in the JSON
+  schema. It finds entries the way `agency doc` and `.partial()` do, so an
+  `@param` line inside a fenced example is not an entry. An entry that
+  holds a `${...}` interpolation stays in the description, because its
+  text is not known at compile time. An entry for a name that is not a
   schema argument (a block parameter, a typo) stays too.
 - **Three sources are joined, in this order:** the `@param` text, a
   description a `@jsonSchema` tag put on the parameter's type, and
-  `Default: <value>`. The first two are joined with a newline. Other
-  `@jsonSchema` keys, such as `minimum`, are kept.
+  `Default: <value>`. The first two are joined with a newline. A string
+  default keeps its quotes (`Default: ""`). Other `@jsonSchema` keys, such
+  as `minimum`, are kept.
 - **A parameter with a default is optional.** It is left out of `required`,
   so the model may omit it. It also accepts null, which a call treats as
   "use the default", so a model that sends null is still valid against the
   schema smoltalk checks arguments with.
-
-`.partial()` drops a bound parameter's schema entry, and its description
-goes with it. `.partial()` also still removes a bound parameter's `@param`
-line from the tool description, for the entries that stayed there.
+- **The schema must survive a JSON Schema round trip unchanged.** A learned
+  tool's schema is rebuilt from JSON Schema in the parent process and
+  compared with the original as text
+  (`tests/agency-js/learned-tool-parity`). `__paramSchema` puts the
+  description on before `.optional()` for that reason.
 
 ## What it is NOT
 

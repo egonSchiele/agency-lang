@@ -45,7 +45,7 @@ import { UNWRAP_REACHED_CODEGEN } from "@/types/access.js";
 import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
-import { liftParamDocs } from "@/utils/docStringParams.js";
+import { liftParamSegments } from "@/utils/docStringParams.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -260,6 +260,13 @@ function walkMarkTopLevel(value: unknown): unknown {
  *  type to check against. The checks table, the preamble store, and the
  *  step-0 names list all have to agree on this set, and `__checkParams`
  *  throws when they do not, so it is decided in one place. */
+/** A default as a tool's schema shows it. A string keeps its quotes, so an
+ *  empty one reads `Default: ""` and not as a label with nothing after it. */
+function defaultLabel(value: Expression): string {
+  const text = expressionToString(value);
+  return value.type === "string" || value.type === "multiLineString" ? JSON.stringify(text) : text;
+}
+
 function isCheckedParam(param: FunctionParameter): boolean {
   return param.validated === true && param.typeHint !== undefined;
 }
@@ -2117,7 +2124,7 @@ export class TypeScriptBuilder {
       typeHint.type === "unionType" &&
       typeHint.types.some((t) => t.type === "primitiveType" && t.value === "null");
     const defaultText = param.defaultValue
-      ? JSON.stringify(expressionToString(param.defaultValue))
+      ? JSON.stringify(defaultLabel(param.defaultValue))
       : "null";
     const addNullable = !!param.defaultValue && !alreadyNullable;
     return {
@@ -2250,7 +2257,7 @@ export class TypeScriptBuilder {
     const pendingAliases = this.pendingAliasesFor(node.loc?.start);
     // Each `@param name - text` line of the docstring moves onto that
     // argument in the schema, and out of the tool description.
-    const lifted = liftParamDocs(
+    const lifted = liftParamSegments(
       node.docString ? node.docString.segments : [],
       parameters.filter((p) => !isFunctionTyped(p)).map((p) => p.name),
     );

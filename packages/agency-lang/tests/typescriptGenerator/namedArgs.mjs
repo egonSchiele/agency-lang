@@ -355,7 +355,7 @@ export const greet = __AgencyFunction.create({
   toolDefinition: {
     name: "greet",
     description: "No description provided.",
-    schema: z.object({"name": z.string(), "greeting": __paramSchema(z.string(), null, "Hello", true), })
+    schema: z.object({"name": z.string(), "greeting": __paramSchema(z.string(), null, "\"Hello\"", true), })
   },
   exported: false
 }, __toolRegistry);

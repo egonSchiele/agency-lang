@@ -59,8 +59,6 @@ The marker counts toward the limit, so a cut result is never longer than `maxToo
 
 A command that prints a lot says how it went at the end: a test summary, a compiler's error count. The loop's notice for any other tool result still shows a few lines from each end, because for a page or a file the start matters as much. One line longer than the character limit comes back as its last 50,000 characters. The name is followed by a space, so a model copies it without punctuation.
 
-The limits follow Pi's (2,000 lines or 50 KB, tail kept). On SWE-bench Verified, with a cap of 10,000 characters and a preview of about 1,900, the 20 runs in 497 that had an output cut passed 55% of the time against 75% for the rest.
-
 What `safeBash` returns is at most 50,000 characters and a notice, under the loop's default limit, so it is not saved twice unless the call sets `spillToolResultsOver` or `maxToolResultChars` below that. Then the model gets a notice pointing at a notice. Special-casing `safeBash` in the loop would be another hidden rule.
 
 **The preview is bounded by characters.** `previewHead` and `previewTail` each stop after `PREVIEW_CHARS`, or less when the notice has to fit a smaller limit, and a single line is cut at `PREVIEW_LINE_LEN`. Fifteen lines from each end of 200-character lines would make a preview three times longer than the output it replaced. The tail never reaches back into lines the head showed, so a two-line output is not printed twice.

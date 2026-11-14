@@ -916,7 +916,7 @@ Run Bash commands after approval of the actions they perform.
 | command | `string` |  | One or more bash commands. |
 | cwd | `string` | "" | Working directory, defaulting to the agent directory or the process directory. |
 | timeout | `number` | 120 | Seconds the command may run. Pass more for a command known to be slow, such as a full test suite. |
-| exitIsFailure | `boolean` | true | Pass false to get a nonzero exit back as a successful result holding the same text. For a model, a failing test run is a result to read, not a tool call that failed. |
+| exitIsFailure | `boolean` | true | Whether a nonzero exit is a failure. When false, it is a successful result holding the same text. |
 
 **Returns:** `Result<string>`
 

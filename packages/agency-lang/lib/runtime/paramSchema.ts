@@ -18,7 +18,12 @@ export function __paramSchema(
   const own = schema.meta()?.description;
   const text = [doc, own].filter((part) => typeof part === "string" && part !== "").join("\n");
   const description = defaultText === null ? text : joinDefault(text, defaultText);
-  const nullable = addNullable ? schema.nullable() : schema;
+  // The type's own description is now part of the joined one. Left on the
+  // type, it would be written a second time inside the `anyOf` that
+  // `.nullable()` makes.
+  const inner =
+    addNullable && typeof own === "string" ? schema.meta({ description: undefined }) : schema;
+  const nullable = addNullable ? inner.nullable() : schema;
   // The description goes on before `.optional()`. On the optional wrapper,
   // zod writes `description` ahead of `anyOf`, and a schema rebuilt from
   // its JSON Schema (a learned tool's, in the parent process) writes it

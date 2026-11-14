@@ -4472,7 +4472,7 @@ export def safeBash(
   @param command - One or more bash commands.
   @param cwd - Working directory, defaulting to the agent directory or the process directory.
   @param timeout - Seconds the command may run. Pass more for a command known to be slow, such as a full test suite.
-  @param exitIsFailure - Pass false to get a nonzero exit back as a successful result holding the same text. For a model, a failing test run is a result to read, not a tool call that failed.
+  @param exitIsFailure - Whether a nonzero exit is a failure. When false, it is a successful result holding the same text.
   """
   const outcome = runApproved(command, cwd, timeout)
   if (!exitIsFailure && isFailure(outcome) && outcome.data.type == EXIT_FAILURE) {
@@ -5176,10 +5176,10 @@ def isGhLoginFailure(verbs: string[], exitCode: number, stderr: string): boolean
 // not repeated, because the model wrote it one message earlier.
 // The two streams are joined before the long-output cut, so a long failure
 // is saved once and what comes back is the end of it.
-def failedOutput(stdout: string, stderr: string, label: string, status: string, note: string): string {
+def failedOutput(stdout: string, stderr: string, label: string, ending: string[]): string {
   const streams = [text.trimEnd() for text in [stdout, stderr] if text.trim() != ""]
   const shown = keepOutput(streams.join("\n"), null, label)
-  const lines = [text for text in [shown, status, note] if text != ""]
+  const lines = [text for text in [shown, ...ending] if text != ""]
   return lines.join("\n")
 }
 
@@ -5188,20 +5188,19 @@ opposed to a refusal, a rejection, or a command stopped at its time limit. */
 static const EXIT_FAILURE = "commandExit"
 
 def exitFailure(exitCode: number, stdout: string, stderr: string, label: string, note: string = ""): Result<string> {
-  const text = failedOutput(stdout, stderr, label, "Command exited with code ${exitCode}", note)
+  // The exit line is last, after the note. The coding agents get this text
+  // as a result, and their trace finds the exit by reading the last line.
+  const text = failedOutput(stdout, stderr, label, [note, "Command exited with code ${exitCode}"])
   return failure(text, { type: EXIT_FAILURE, exitCode: exitCode })
 }
 
 // A command stopped at its time limit was killed, so it has no exit code
 // of its own to show.
 def timeoutFailure(command: string, seconds: number, stdout: string, stderr: string): Result<string> {
-  return failure(failedOutput(
-    stdout,
-    stderr,
-    command,
+  return failure(failedOutput(stdout, stderr, command, [
     "[stopped at the time limit of ${seconds} seconds]",
     "The text above is the output so far. Run a narrower command (one test file, or one test), or pass a larger timeout.",
-  ))
+  ]))
 }
 
 @capabilities(fileRead)

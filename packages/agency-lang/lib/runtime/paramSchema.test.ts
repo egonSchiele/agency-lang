@@ -32,6 +32,15 @@ describe("__paramSchema", () => {
     expect(schema.properties.dir.description).toBe('Default: "."');
   });
 
+  it("writes a @jsonSchema description once when the argument has a default", () => {
+    const tagged = z.number().meta({ description: "Whole seconds", minimum: 1 });
+    const schema = tool({ wait: __paramSchema(tagged, "How long to wait.", "5", true) });
+    const text = JSON.stringify(schema.properties.wait);
+    expect(text.match(/Whole seconds/g)).toHaveLength(1);
+    expect(schema.properties.wait.description).toBe("How long to wait.\nWhole seconds. Default: 5");
+    expect(text).toContain('"minimum":1');
+  });
+
   it("joins the @param text with a @jsonSchema description and keeps other metadata", () => {
     const tagged = z.number().meta({ description: "Whole seconds", minimum: 1 });
     const schema = tool({ wait: __paramSchema(tagged, "How long to wait.", null, false) });

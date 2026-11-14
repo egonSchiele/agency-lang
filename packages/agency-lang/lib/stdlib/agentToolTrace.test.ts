@@ -767,6 +767,37 @@ describe("result summarizers", () => {
     expect(rows[21]).toBe("  │ line 2999");
   });
 
+  it("cuts output that was not cut for the model, and one very long line", () => {
+    const under = Array.from({ length: 1900 }, (_, at) => `line ${at}`).join("\n");
+    const rows = end(
+      "safeBash",
+      { command: "x" },
+      `${under}\nCommand exited with code 1`,
+      "failure",
+    ).split("\n");
+    expect(rows[1]).toBe("  │ [the last 20 of 1900 lines]");
+    expect(rows).toHaveLength(22);
+    const wide = tailNotice("y".repeat(60_000), "out-2", null, DEFAULT_READERS, 2000, 50_000);
+    const wideRows = end(
+      "safeBash",
+      { command: "x" },
+      `${wide}\nCommand exited with code 1`,
+      "failure",
+    ).split("\n");
+    // The one line is cut to 300 characters, which the trace then wraps.
+    const shownWide = wideRows.slice(1).join("");
+    expect(shownWide.match(/y/g)).toHaveLength(300);
+    expect(shownWide.endsWith("…")).toBe(true);
+  });
+
+  // gh's login note comes before the exit line, so the exit line is last.
+  it("reads the exit from a bash result that carries a note", () => {
+    const result = "not logged in\nGitHub CLI is not logged in.\nCommand exited with code 4";
+    expect(end("bash", { command: "gh pr view 1" }, result, "success")).toBe(
+      "✗ Run gh pr view 1 · exit 4\n  │ not logged in\n  │ GitHub CLI is not logged in.",
+    );
+  });
+
   it("reads the last status line when the output holds one of its own", () => {
     const message = "Command exited with code 9\nreal output\nCommand exited with code 2";
     expect(end("safeBash", { command: "x" }, message, "failure")).toBe(

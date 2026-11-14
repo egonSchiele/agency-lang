@@ -2570,18 +2570,18 @@ node ghLookupFailureRaisesNothing() {
   return [seen, failed.includes("--repo OWNER/REPO")]
 }
 
-/** A failed run's exit code line and the note after it, from the failure's text. */
+/** A failed run's exit code line, which must be the last line, and the
+ note on the line before it when there is one. */
 def exitAndNote(failed: string): any {
   const lines = failed.split("\n")
   const at = lines.indexOf("Command exited with code 4")
-  if (at == -1) {
-    return ["NO EXIT 4 LINE", null]
+  if (at == -1 || at != lines.length - 1) {
+    return ["NO EXIT 4 LAST LINE", null]
   }
-  const note = lines.slice(at + 1).join("\n")
-  if (note == "") {
-    return [4, null]
+  if (at > 0 && lines[at - 1].startsWith("GitHub CLI is not logged in")) {
+    return [4, lines[at - 1]]
   }
-  return [4, note]
+  return [4, null]
 }
 
 def loginRow(script: string): any {

@@ -342,7 +342,7 @@ export const fetchLike = __AgencyFunction.create({
   toolDefinition: {
     name: "fetchLike",
     description: "No description provided.",
-    schema: z.object({"baseUrl": z.string(), "path": __paramSchema(z.string(), null, "", true), })
+    schema: z.object({"baseUrl": z.string(), "path": __paramSchema(z.string(), null, "\"\"", true), })
   },
   exported: false
 }, __toolRegistry);

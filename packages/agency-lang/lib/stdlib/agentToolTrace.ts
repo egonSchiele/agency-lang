@@ -109,6 +109,7 @@ const SPILL_NOTICE_LAST_LINE = "To read it, use the ";
 /** The notice under a command's last lines, with the total line count. */
 const TAIL_NOTICE = /^\[Showing (?:lines \d+-\d+|the last \d+ characters of line \d+) of (\d+)\. /;
 const TAIL_DETAIL_LINES = 20;
+const DETAIL_LINE_CHARS = 300;
 const ARGUMENT_PREVIEW_LENGTH = 50;
 const RESULT_PREVIEW_LENGTH = 100;
 /** A model sometimes drafts its whole answer beside a last tool call. */
@@ -193,22 +194,26 @@ export function spillOutput(name: unknown, lookup: SpillLookup): string | null {
 export function commandDetail(stdout: unknown, stderr: unknown): string | null {
   const chosen = [stderr, stdout].find((out) => typeof out === "string" && out.trim() !== "");
   if (typeof chosen !== "string") return null;
-  return tailNoticeCut(spillNoticesCut(chosen.trimEnd().split("\n"))).join("\n");
+  return lastLines(spillNoticesCut(chosen.trimEnd().split("\n"))).join("\n");
 }
 
-/** A command's long output reaches the model as its last lines and a
- *  notice (`tailNotice` in toolOutputStore.ts), up to 2,000 lines. A person
- *  reading the trace gets the last few and how many there were. */
-function tailNoticeCut(lines: string[]): string[] {
+/** A person reading the trace gets the last few lines of a command's
+ *  output and how many there were, each line cut to a screen's width or
+ *  so. The model may have received up to 2,000 lines. When the output was
+ *  cut for the model too, its notice (`tailNotice` in toolOutputStore.ts)
+ *  gives the true count, and what follows the notice is kept. */
+function lastLines(lines: string[]): string[] {
   const at = lines.findIndex((line) => TAIL_NOTICE.test(line));
-  if (at < 0) return lines;
-  const shown = lines.slice(0, at).filter((line, index) => index < at - 1 || line !== "");
-  const count = TAIL_NOTICE.exec(lines[at])![1];
-  return [
-    `[the last ${Math.min(shown.length, TAIL_DETAIL_LINES)} of ${count} lines]`,
-    ...shown.slice(-TAIL_DETAIL_LINES),
-    ...lines.slice(at + 1),
-  ];
+  const body = at < 0 ? lines : lines.slice(0, lines[at - 1] === "" ? at - 1 : at);
+  const after = at < 0 ? [] : lines.slice(at + 1);
+  const total = at < 0 ? body.length : Number(TAIL_NOTICE.exec(lines[at])![1]);
+  const shown = body.slice(-TAIL_DETAIL_LINES).map(cutDetailLine);
+  if (total <= shown.length) return [...shown, ...after];
+  return [`[the last ${shown.length} of ${total} lines]`, ...shown, ...after];
+}
+
+function cutDetailLine(line: string): string {
+  return line.length <= DETAIL_LINE_CHARS ? line : `${line.slice(0, DETAIL_LINE_CHARS)}…`;
 }
 
 /** The lines with each spill notice cut to its first line. A failed command's

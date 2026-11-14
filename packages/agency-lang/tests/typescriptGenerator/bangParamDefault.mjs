@@ -498,7 +498,7 @@ export const schedule = __AgencyFunction.create({
   toolDefinition: {
     name: "schedule",
     description: "No description provided.",
-    schema: z.object({"label": z.string(), "when": __paramSchema(Stamp, null, "2026-10-16T09:00:00", true), })
+    schema: z.object({"label": z.string(), "when": __paramSchema(Stamp, null, "\"2026-10-16T09:00:00\"", true), })
   },
   exported: false
 }, __toolRegistry);

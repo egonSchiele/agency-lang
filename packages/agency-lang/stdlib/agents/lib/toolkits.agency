@@ -206,7 +206,15 @@ export def shellTools(): any[] {
   """
   Return command execution and saved-output readers for the agent's working directory.
   """
-  return [safeBash, ...execAndSpillTools()]
+  return [modelSafeBash(), ...execAndSpillTools()]
+}
+
+// safeBash as every agent's model gets it. `exitIsFailure` is bound, so
+// the harness decides and the model never sees the argument: a command
+// that exits non-zero is a result to read (a failing test run, a grep with
+// no match), not a tool call that failed.
+def modelSafeBash(): any {
+  return safeBash.partial(exitIsFailure: false)
 }
 
 // What every shell bundle carries beside its shell tool.
@@ -259,7 +267,7 @@ idempotent def readCapped(
 // safeBash under the name models know. `cwd` is bound to the agent's
 // working directory; a command that needs another folder starts with `cd`.
 def bashTool(): any {
-  return safeBash.partial(cwd: "", exitIsFailure: false).rename("bash").describe(
+  return modelSafeBash().partial(cwd: "").rename("bash").describe(
     "Run a bash command in the working directory. Returns stdout. When the command exits non-zero, returns stdout and stderr, then a last line `Command exited with code N`. Output is cut to its last 2000 lines or 50,000 characters; when it is cut, the full output is saved and the last line says how to read it with readSpill or search it with grepSpill. A command still running after timeout seconds is stopped."
   )
 }

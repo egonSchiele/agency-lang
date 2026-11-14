@@ -80,6 +80,30 @@ export function stripBoundParams(description: string, boundParamNames: string[])
   return joinSections(kept);
 }
 
+/**
+ * Take the `@param` entries of `names` out of `description`: the text
+ * without them, and each entry's text by name. The compiler puts that text
+ * on the argument in a tool's schema. An entry `mayLift` refuses stays in
+ * the description, and so does a second entry for a name already taken.
+ * `params` has no prototype, so a parameter named `constructor` is found
+ * only when it has an entry.
+ */
+export function liftParamDocs(
+  description: string,
+  names: string[],
+  mayLift: (entry: string) => boolean = () => true,
+): { description: string; params: Record<string, string> } {
+  const params: Record<string, string> = Object.create(null);
+  const kept = docSections(description).filter((section) => {
+    const name = section.param;
+    if (name === null || !names.includes(name) || name in params) return true;
+    if (!mayLift(section.lines.join("\n"))) return true;
+    params[name] = entryText(section.lines);
+    return false;
+  });
+  return { description: joinSections(kept), params };
+}
+
 /** `description` with every `@param` entry removed, whatever its name. */
 export function withoutParamDocs(description: string): string {
   return joinSections(docSections(description).filter((section) => section.param === null));

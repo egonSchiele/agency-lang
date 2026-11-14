@@ -1,6 +1,6 @@
 # The `minimal` brain
 
-One coder with six tools and a short prompt. Each turn is one tool loop in
+One coder with four tools and a short prompt. Each turn is one tool loop in
 a single conversation thread that carries over between turns. There is no
 coordinator and there are no subagents.
 
@@ -32,10 +32,10 @@ tests/minimalTurn.agency  one scripted turn that runs a bash call, and the
 ```
 
 - The tools come from `codingFileAndShellTools()` in
-  `std::agents/lib/toolkits`: `read`, `bash`, `edit`, `write`, `readSpill`,
-  and `grepSpill`. The stdlib coding agent uses the same bundle and adds
-  its other tools around it. Both saved-output readers are offered because
-  the notice `bash` leaves for a long output names both.
+  `std::agents/lib/toolkits`: `read`, `bash`, `edit`, and `write`. The
+  stdlib coding agent uses the same bundle and adds its other tools around
+  it. A long output's notice gives a path, which `read` and `bash` both
+  read, so there are no separate readers for saved output.
 - The prompt is `CODING_RULES` from the same module: one sentence and five
   rules. The stdlib coding agent's prompt starts with the same text.
 - The prompt does not ask for a sentence beside each tool call

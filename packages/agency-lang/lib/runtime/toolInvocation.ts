@@ -7,9 +7,8 @@
 import {
   isSpillReader,
   outputNotice,
-  spillReaders,
+  spillPath,
   storeOutput,
-  type SpillReaders,
   type ToolIdentity,
 } from "./toolOutputStore.js";
 import type { FuncParam, CallType } from "./agencyFunction.js";
@@ -160,38 +159,25 @@ export function stringifyToolResult(result: any, indent?: number): string {
 }
 
 /** What the call's `spillToolResultsOver` says: save a result longer than
- *  `over` in the run, and name the readers by the names the model sees. */
-export type SpillSettings = { over: number; run: Run; readers: SpillReaders };
+ *  `over` in the run. */
+export type SpillSettings = { over: number; run: Run };
 
 /** The spill settings of one `llm()` call, or null when
- *  `spillToolResultsOver` is unset or not above 0. The tool list is read
- *  only to refuse a call whose model could not read a saved result back,
- *  and to name the readers; it never changes what happens to a result.
- *  `branchDefaults` is what `setLlmOptions` set, which may not carry the
- *  option: as a default, it would make every later call without the
- *  readers throw. `LlmDefaults` has no such key, but a TypeScript caller
- *  can still put one there. See docs/dev/stdlib/spill.md. */
+ *  `spillToolResultsOver` is unset or not above 0. The call's tools are
+ *  not looked at: the notice gives a path, and `read`, `safeBash` and the
+ *  spill readers each take one. `branchDefaults` is what `setLlmOptions`
+ *  set; the option is per call, so it is refused there. See
+ *  docs/dev/stdlib/spill.md. */
 export function spillSettings(
   run: Run,
   perCall: number | undefined,
   branchDefaults: object,
-  tools: ToolIdentity[],
 ): SpillSettings | null {
   if ("spillToolResultsOver" in branchDefaults) {
     throw new Error("spillToolResultsOver is set per llm() call, not with setLlmOptions.");
   }
   if (perCall === undefined || !(perCall > 0)) return null;
-  const readers = spillReaders(tools);
-  if (readers === null) {
-    const offered = tools.map((tool) => tool.name).join(", ");
-    throw new Error(
-      `llm() was given spillToolResultsOver, but its tools (${offered}) do not include ` +
-        `readSpill from std::spill, so the model could not read a saved result back. ` +
-        `Add readSpill and grepSpill to the tools, for example with spillTools() from ` +
-        `std::agents/lib/toolkits.`,
-    );
-  }
-  return { over: perCall, run, readers };
+  return { over: perCall, run };
 }
 
 const SLICE_NOTE =
@@ -235,7 +221,8 @@ export function capToolResultForLlm(
     const saved = stringifyToolResult(result, 2);
     const source = spillSource(tool, args);
     const name = storeOutput(spill.run, saved, source);
-    const notice = outputNotice(saved, name, null, spill.readers, ceiling, source);
+    const path = spillPath(spill.run.ctx.host, name);
+    const notice = outputNotice(saved, path, null, ceiling, source);
     // The notice already fits unless the cap is too small for the text
     // around its preview; then the cap still wins.
     return notice.slice(0, ceiling);

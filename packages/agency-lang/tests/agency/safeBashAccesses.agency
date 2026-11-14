@@ -1,0 +1,41 @@
+import { mkdir, remove } from "std::fs"
+import { planFor } from "std::safeBash"
+import { accessesOf, onlyTouchesFiles } from "std::safeBash/actions"
+
+static const FIXTURE = __dirname + "/stdlib/__safebash_accesses__"
+
+// The modes and each path below the fixture, so the expected output does
+// not depend on where the test runs.
+def accessSummary(source: string): any {
+  const plan = planFor(source, FIXTURE)
+  const accesses = accessesOf(plan.effects)
+  const cut = FIXTURE.length
+  return {
+    accesses: ["${a.mode}:${a.path.slice(cut)}" for a in accesses],
+    onlyFiles: onlyTouchesFiles(plan)
+  }
+}
+
+node fileAccesses() {
+  remove(FIXTURE) with approve
+  mkdir("${FIXTURE}/src") with approve
+  write("a.txt", "one\ntwo\n", dir: FIXTURE) with approve
+  write("b.txt", "three\n", dir: FIXTURE) with approve
+  write("main.py", "print(1)\n", dir: "${FIXTURE}/src") with approve
+  const summaries = [
+    accessSummary("cat a.txt b.txt"),
+    accessSummary("wc -l a.txt"),
+    accessSummary("grep -rn x src"),
+    accessSummary("echo hi > out.txt"),
+    accessSummary("rm -rf src"),
+    accessSummary("ls src"),
+    accessSummary("find . -name '*.py'"),
+    accessSummary("cat a.txt && head -n 1 b.txt"),
+    accessSummary("pnpm test"),
+    accessSummary("cat a.txt && git add a.txt"),
+    accessSummary("cat a.txt && git checkout -- a.txt"),
+    accessSummary("eval 'cat a.txt'"),
+  ]
+  remove(FIXTURE) with approve
+  return summaries
+}

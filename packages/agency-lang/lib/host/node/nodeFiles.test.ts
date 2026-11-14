@@ -18,6 +18,8 @@ import {
   list,
   stat,
   mkdir,
+  privateDir,
+  privateDirProblem,
   remove,
   copy,
   move,
@@ -495,6 +497,53 @@ describe("list and stat", () => {
     } finally {
       cleanup(dir);
     }
+  });
+});
+
+describe("privateDir", () => {
+  test("creates a folder with mode 0700, and accepts it the next time", () => {
+    const dir = makeDir(".ct-private-");
+    try {
+      const r = root(dir);
+      privateDir(r, "p");
+      privateDir(r, "p");
+      expect(fs.statSync(path.join(dir, "p")).mode & 0o777).toBe(0o700);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("refuses a folder others can use, and leaves its mode alone", () => {
+    const dir = makeDir(".ct-private-open-");
+    try {
+      fs.mkdirSync(path.join(dir, "p"));
+      fs.chmodSync(path.join(dir, "p"), 0o777);
+      expect(() => privateDir(root(dir), "p")).toThrow(/can be used by other users.*chmod 700/);
+      expect(fs.statSync(path.join(dir, "p")).mode & 0o777).toBe(0o777);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("refuses a file at the name, and a link", () => {
+    const dir = makeDir(".ct-private-file-");
+    try {
+      fs.writeFileSync(path.join(dir, "p"), "x");
+      expect(() => privateDir(root(dir), "p")).toThrow(/is not a folder/);
+      fs.mkdirSync(path.join(dir, "real"), { mode: 0o700 });
+      fs.symlinkSync(path.join(dir, "real"), path.join(dir, "link"));
+      expect(() => privateDir(root(dir), "link")).toThrow();
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("privateDirProblem refuses a folder another user owns", () => {
+    const folder = { isDirectory: () => true, uid: 1000, mode: 0o40700 };
+    expect(privateDirProblem("/tmp/x", folder, 1001)).toMatch(/belongs to another user/);
+    expect(privateDirProblem("/tmp/x", folder, 1000)).toBeNull();
+    expect(privateDirProblem("/tmp/x", { ...folder, mode: 0o40750 }, 1000)).toMatch(/other users/);
+    expect(privateDirProblem("/tmp/x", folder, null)).toBeNull();
   });
 });
 

@@ -5,6 +5,7 @@
  * is per run, carried by every checkpoint, copied into a fork branch, and
  * shared by a tool call. See docs/dev/stdlib/spill.md.
  */
+import type { Host } from "../host/host.js";
 import type { Run } from "./asyncContext.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { toHex } from "../utils/hash.js";
@@ -47,13 +48,81 @@ export function isOutputName(name: string): boolean {
   return OUTPUT_NAME.test(name);
 }
 
-/** The two reader tools a model was offered, by the names it sees them
- *  under. `grep` is null when only `readSpill` was offered. */
-export type SpillReaders = { read: string; grep: string | null };
+/** The start of the saved-output folder's name; the user id follows. */
+export const SPILL_FOLDER_PREFIX = "agency-spill-";
 
-/** The names `safeBash` puts in its notice. It does not know the call's
- *  tool list, and `shellTools()` hands the readers out beside it. */
-export const DEFAULT_READERS: SpillReaders = { read: "readSpill", grep: "grepSpill" };
+const SPILL_FOLDER_NAME = new RegExp(`^${SPILL_FOLDER_PREFIX}[0-9]+$`);
+
+/** A saved output named by path: the folder part as written, with its
+ *  trailing separator, and the saved name. */
+export type SavedPath = { folder: string; name: string };
+
+/** The folder a run's saved outputs are copied into: the temp folder, then
+ *  `agency-spill-<user id>`, with a trailing separator. The spelling is the
+ *  temp folder as the host gives it, never a real path, so the notices and
+ *  the check in `prepareSpillFiles` compare the same text. */
+export function spillFolder(host: Host): string {
+  const temp = host.system.tempDir().replace(/\/+$/, "");
+  return `${temp}/${SPILL_FOLDER_PREFIX}${host.system.userId()}/`;
+}
+
+/** The saved output a path names, or null. The whole path must end in an
+ *  `agency-spill-<id>` folder and a saved-output name, whatever comes
+ *  before, so a path written on another machine is recognized too. */
+export function spillPathParts(path: string): SavedPath | null {
+  const parts = path.split("/");
+  if (parts.length < 2) {
+    return null;
+  }
+  const name = parts[parts.length - 1];
+  if (!isOutputName(name) || !SPILL_FOLDER_NAME.test(parts[parts.length - 2])) {
+    return null;
+  }
+  return { folder: path.slice(0, path.length - name.length), name };
+}
+
+/** Whether a path is an `agency-spill-<id>` folder or anything below one,
+ *  judged by its parts, so a real spelling such as `/private/var/…` counts. */
+export function inSpillFolder(path: string): boolean {
+  return path.split("/").some((part) => SPILL_FOLDER_NAME.test(part));
+}
+
+/** A character that ends a word in shell text. */
+const SHELL_SEPARATOR = /[\s'"`;|&<>()]/;
+
+/** Every saved-output path in raw command text: each word that holds the
+ *  folder prefix, taken whole between shell separators, so a longer path
+ *  that starts the same way does not count. Each word is scanned once,
+ *  so a long line costs time in proportion to its length. */
+export function spillPathsIn(text: string): SavedPath[] {
+  const found: SavedPath[] = [];
+  let at = text.indexOf(SPILL_FOLDER_PREFIX);
+  while (at !== -1) {
+    let start = at;
+    while (start > 0 && !SHELL_SEPARATOR.test(text[start - 1])) {
+      start--;
+    }
+    let end = at;
+    while (end < text.length && !SHELL_SEPARATOR.test(text[end])) {
+      end++;
+    }
+    const parts = spillPathParts(text.slice(start, end));
+    if (parts !== null) {
+      found.push(parts);
+    }
+    at = text.indexOf(SPILL_FOLDER_PREFIX, end);
+  }
+  return found;
+}
+
+/** How the last line of `outputNotice` starts; the trace finds the end of
+ *  a notice by it. */
+export const SPILL_NOTICE_LAST_LINE = "--- full output saved as a file: ";
+
+/** The path a notice gives for a saved output on this run's host. */
+export function spillPath(host: Host, name: string): string {
+  return `${spillFolder(host)}${name}`;
+}
 
 const SPILL_MODULE = "stdlib/spill.agency";
 
@@ -69,15 +138,6 @@ function isReader(tool: ToolIdentity, reader: "readSpill" | "grepSpill"): boolea
  *  the store, so the loop never saves it a second time. */
 export function isSpillReader(tool: ToolIdentity): boolean {
   return isReader(tool, "readSpill") || isReader(tool, "grepSpill");
-}
-
-/** The readers among `tools`, or null when `readSpill` is not one of
- *  them: then nothing the loop saved could be read back. */
-export function spillReaders(tools: ToolIdentity[]): SpillReaders | null {
-  const read = tools.find((tool) => isReader(tool, "readSpill"));
-  if (read === undefined) return null;
-  const grep = tools.find((tool) => isReader(tool, "grepSpill"));
-  return { read: read.name, grep: grep === undefined ? null : grep.name };
 }
 
 function readStore(run: Run): ToolOutputStore {
@@ -110,6 +170,11 @@ export function spillSourceLabel(source: string | null): string | null {
  *  cap is kept alone, because the notice will already have promised it. */
 export function storeOutput(run: Run, text: string, source: string): string {
   const store = readStore(run);
+  // Reading a saved output back (`cat` of its path, or `read`) would
+  // otherwise save it again, and a second copy of a large output pushes
+  // the first one out.
+  const same = store.entries.find((entry) => entry.text === text);
+  if (same !== undefined) return same.name;
   while (store.entries.length > 0 && storedChars(store) + text.length > MAX_STORE_CHARS) {
     store.entries.shift();
   }
@@ -140,7 +205,7 @@ export function findOutputSource(run: Run, name: string): string | null {
  *  cause, since the model can do the same thing about each. */
 export function missingOutputMessage(name: string): string {
   if (!isOutputName(name)) {
-    return `'${name}' is not a saved output name: expected the name from a "full output saved as" notice, with no directory part`;
+    return `'${name}' is not a saved output: expected the path or the name from a "saved as a file" notice`;
   }
   return `Saved output ${name} is no longer available. Call the tool again if you need it.`;
 }
@@ -182,16 +247,16 @@ function previewTail(lines: string[], skip: number, budget: number): string[] {
 /**
  * What stands in for a command's long output: its last lines, up to
  * `maxLines` lines and `maxChars` characters, then one line saying which
- * lines those are, the name the whole output was saved under, and how to
- * read the rest with `readers`. The end is kept because a command that
- * prints a lot says how it went in its last lines: a test summary, a
- * compiler's error count. `exitCode` is null when there is none to show.
+ * lines those are and the path the whole output can be read at. The notice
+ * names no tool: each reader says in its own description that it takes the
+ * path. The end is kept because a command that prints a lot says how it
+ * went in its last lines: a test summary, a compiler's error count.
+ * `exitCode` is null when there is none to show.
  */
 export function tailNotice(
   text: string,
-  name: string,
+  path: string,
   exitCode: number | null,
-  readers: SpillReaders,
   maxLines: number,
   maxChars: number,
 ): string {
@@ -205,12 +270,8 @@ export function tailNotice(
     start--;
   }
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
-  const search =
-    readers.grep === null
-      ? " It needs no approval."
-      : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
-  // The name is followed by a space, so it can be copied without punctuation.
-  const rest = `The full output saved as ${name} can be read with ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}${exit}`;
+  // The path is followed by a space, so it can be copied without punctuation.
+  const rest = `The full output is saved as a file: ${path} (read it like any file).${exit}`;
   const total = lines.length;
   if (start === total) {
     // The last line alone is longer than the limit, so show its end.
@@ -221,18 +282,17 @@ export function tailNotice(
 
 /**
  * The preview that stands in for a long output: what happened, a glimpse of
- * both ends, the name it was saved under, and how to read the rest with
- * `readers`. `exitCode` is null for a tool result that is not a command's
- * output. The preview shrinks so the notice fits in `maxChars`; only when
- * the text around the preview is longer than that on its own does the
- * notice come out longer, and the caller cuts it. `source` names what
- * produced the output in the first line.
+ * both ends, and the path the whole output can be read at. `exitCode` is
+ * null for a tool result that is not a command's output. The preview
+ * shrinks so the notice fits in `maxChars`; only when the text around the
+ * preview is longer than that on its own does the notice come out longer,
+ * and the caller cuts it. `source` names what produced the output in the
+ * first line.
  */
 export function outputNotice(
   text: string,
-  name: string,
+  path: string,
   exitCode: number | null,
-  readers: SpillReaders,
   maxChars: number = Infinity,
   source: string | null = null,
 ): string {
@@ -240,10 +300,6 @@ export function outputNotice(
   const label = spillSourceLabel(source);
   const of = label === null ? "" : ` of "${label}"`;
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
-  const search =
-    readers.grep === null
-      ? " It needs no approval."
-      : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
   const notice = (head: string[], tail: string[], headCount: number, tailCount: number) =>
     [
       `[Output${of} too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
@@ -251,8 +307,7 @@ export function outputNotice(
       head.join("\n"),
       `--- last ${tailCount} lines ---`,
       tail.join("\n"),
-      `--- full output saved as ${name} ---`,
-      `To read it, use the ${readers.read} tool: ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}`,
+      `${SPILL_NOTICE_LAST_LINE}${path} (read it like any file) ---`,
     ].join("\n");
   // The line counts are not known until the preview is built, so the text
   // around it is measured with both at their largest.

@@ -67,11 +67,15 @@ def agentToolLists(): any[] {
   ]
 }
 
-node everyAgentCarriesTheReadersOnce(): boolean {
+// A long result's notice gives a path. `read`, a shell tool built on
+// safeBash, and `readSpill` each take one.
+static const PATH_READERS = ["read", "bash", "safeBash", "readSpill"]
+
+node everyAgentCanReadSavedOutput(): boolean {
   for (tools in agentToolLists()) {
     const names = map(tools, \tool -> tool.name)
-    const readers = filter(names, \name -> name == "readSpill" || name == "grepSpill")
-    if (readers.length != 2) {
+    const readers = filter(names, \name -> PATH_READERS.includes(name))
+    if (readers.length == 0) {
       return false
     }
     if (unique(names, \name -> name).length != names.length) {
@@ -161,7 +165,7 @@ node fileAndShellToolsAreCwdBound(): boolean {
 
 // The coding bundle is six tools. `bash` does the listing, searching, and
 // running, so there is no ls, glob, grep, or exec.
-node codingBundleIsSixTools(): string[] {
+node codingBundleIsFourTools(): string[] {
   return map(codingFileAndShellTools(), \tool -> tool.name)
 }
 

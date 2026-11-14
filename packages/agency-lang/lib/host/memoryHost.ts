@@ -471,6 +471,10 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     mkdir: async (root, target) => {
       makeFolders(state, resolve(root, target), "mkdir");
     },
+    // One user and no modes in memory, so a folder is always private.
+    privateDir: async (root, target) => {
+      makeFolders(state, resolve(root, target), "mkdir");
+    },
     remove: async (root, target) => store.removeTree(resolve(root, target)),
     copy: async (from: Located, to: Located) => {
       const source = resolve(from.root, from.target);
@@ -597,6 +601,7 @@ function memorySystem(options: MemoryHostOptions, cwd: string): HostSystem {
     tempDir: () => "/tmp",
     args: () => [],
     processId: () => 1,
+    userId: () => "0",
     moduleDir: (moduleUrl) => parentOf(moduleUrl.replace(/^file:\/\//, "")),
     isMainModule: () => false,
     installDir: () => options.installDir ?? null,

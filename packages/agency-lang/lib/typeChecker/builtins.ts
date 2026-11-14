@@ -185,8 +185,9 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
   // (overrides agency.json `client.maxToolResultChars`). `0` disables.
   { key: "maxToolResultChars", value: optional(number) },
   // Save a tool result longer than this, or than maxToolResultChars, in the
-  // run and send the model a notice naming it. Per call only; the call's
-  // tools must include readSpill. Unset or `0`: nothing is saved.
+  // run and send the model a notice giving its path. Per call only; the
+  // call's tools need something that reads a path (read, safeBash, or
+  // readSpill). Unset or `0`: nothing is saved.
   { key: "spillToolResultsOver", value: optional(number) },
   // Refuse a tool call once the same call has returned the same result this
   // many times in a row (default 3; `0` disables). `setLlmOptions` sets the

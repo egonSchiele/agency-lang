@@ -29,11 +29,11 @@ The globals have every property the store needs, the ones the guide's state isol
 
 The marker counts toward the limit, so a cut result is never longer than `maxToolResultChars` either.
 
-**The tool list never changes what happens to a result.** Until October 2026 the loop saved a long result exactly when the call's tools included `readSpill`, and cut it otherwise. So the same call with the same options behaved differently depending on whether `shellTools()` happened to be in its tools, which nothing in the call said. Now the tools are read for two things only: to refuse a call that sets `spillToolResultsOver` without offering `readSpill`, since the model could never read a saved result back, and to name the readers in the notice. `spillSettings` in `toolInvocation.ts` does both, once per call, before the first request, so the refusal comes before any model call, on a resume too. The check that a result came from a reader looks at the tool that produced it, not at the list. A reader's own result is never saved again, because `readSpill(name)` with no offset or limit returns the whole entry, and saving the read again would hand the model a notice naming a copy, which it could read the same way.
+**The loop never looks at the call's tools.** The notice gives a path and names no tool, and each reader takes the path in its own code: `read`, `safeBash`, `readSpill` and `grepSpill`. So there is nothing for the loop to look up, and a call that sets `spillToolResultsOver` is not refused for its tool list. The cost is a lost guard: a caller who turns saving on and offers nothing that reads a path gets a model that cannot follow the notice, which shows up the first time they run it. `spillSettings` in `toolInvocation.ts` reads only the option. The check that a result came from `readSpill` or `grepSpill` (`isSpillReader`) looks at the tool that produced it. Their own result is never saved again, because `readSpill(name)` with no offset or limit returns the whole entry, and saving it again would hand the model a notice naming a copy. A `read` or `cat` of a saved output is not on that list; `storeOutput` gives text it already holds the name it has, so those do not make a copy either.
 
 **With spilling on, a result over either number is saved.** A result is saved when it is longer than `spillToolResultsOver` or longer than `maxToolResultChars`, whichever is smaller. Saving only above the spill value would make `spillToolResultsOver: 50000` with `maxToolResultChars: 20000` cut every result between the two, with nothing to read the rest with. It also means a user who lowers the limit (in `agency.json`, with `--max-tool-result-chars`, or with `setLlmOptions`) still gets spilling at their limit. So with spilling off, nothing is saved and anything over the limit is cut; with spilling on, nothing is cut except a reader's own result.
 
-**`spillToolResultsOver` is per call only.** As a branch default it would apply to every later `llm()` call, and every one of those that offers no `readSpill`, including a plain call with no tools, would throw. Per call, the option and the tool list are written side by side. `LlmDefaults` does not have the key, so the type checker refuses `setLlmOptions({ spillToolResultsOver })`; a TypeScript caller that puts it on the branch defaults anyway gets a "set per llm() call" error from `spillSettings`. The `agency.json` schema does not know the key, so it is dropped like any other unknown key. The stdlib agents pass `AGENT_SPILL_OVER` (100,000, the default limit) from `std::agents/lib/shared` through `llmOptions`, so with that limit or a lower one they save exactly the results they saved before this option existed. With a higher limit or none (`0`), they now save anything over 100,000, where before they saved at the limit or not at all.
+**`spillToolResultsOver` is per call only.** As a branch default it would apply to every later `llm()` call, including a plain call with no tools, whose model has nothing to read a path with. Per call, the option and the tool list are written side by side. `LlmDefaults` does not have the key, so the type checker refuses `setLlmOptions({ spillToolResultsOver })`; a TypeScript caller that puts it on the branch defaults anyway gets a "set per llm() call" error from `spillSettings`. The `agency.json` schema does not know the key, so it is dropped like any other unknown key. The stdlib agents pass `AGENT_SPILL_OVER` (100,000, the default limit) from `std::agents/lib/shared` through `llmOptions`, so with that limit or a lower one they save exactly the results they saved before this option existed. With a higher limit or none (`0`), they now save anything over 100,000, where before they saved at the limit or not at all.
 
 **The notice fits the limit.** `outputNotice` takes the limit. It measures the text around the preview with both line counts at their largest, then gives each end of the preview what is left, up to `PREVIEW_CHARS`. The loop still cuts the notice at the limit, which only does anything when the limit is too small for the text around the preview (about 300 characters). Then the name and the instructions at the end are lost, but nothing shorter could hold them either.
 
@@ -43,9 +43,9 @@ The marker counts toward the limit, so a cut result is never longer than `maxToo
 
 **An object result is saved indented.** A result that is not a string is measured against the cap as compact JSON, which is what the model would have seen. It is saved as `JSON.stringify(result, null, 2)`. Compact JSON is one line, and the readers work in lines: `readSpill`'s offset and limit would return the whole line, and `grepSpill` would match it whole. Indented, a 150,000-character JSON result has lines to slice and search, and the preview shows real lines from each end.
 
-**The readers are found by module and registered name.** `spillReaders` looks through the call's tools, for the refusal and the notice, for functions from `stdlib/spill.agency` whose registered name is `readSpill` or `grepSpill`. A `.rename()` or `.partial()` keeps both, so a renamed reader still counts, and the notice uses the name the model sees. A user function that happens to be called `readSpill` does not count. When only `readSpill` is offered, the notice leaves out the `grepSpill` sentence. `safeBash` does not know the call's tool list, so its notice always names the two by their own names.
+**`isSpillReader` matches by module and registered name.** A function from `stdlib/spill.agency` whose registered name is `readSpill` or `grepSpill` counts, under any `.rename()` or `.partial()`. A user function that happens to be called `readSpill` does not.
 
-**`shellTools()` carries the readers, and `spillTools()` is for agents that fetch without it.** The agents that fetch pages build their tools from `webTools()`, which has no readers, so a long page would have reached them as a cut result. Each of those agents adds `spillTools()`, which is the two readers on their own. The agents that carry `shellTools()` already have them, and adding `spillTools()` too would list each reader twice, which throws before the request is sent. `everyAgentCarriesTheReadersOnce` in `tests/agency/agents/toolkits.agency` checks every stdlib agent's tool list for the two readers and for duplicate names.
+**`spillTools()` is for agents with neither `read` nor a shell.** `shellTools()` and `codingFileAndShellTools()` carry no readers: their `safeBash` and `read` take the path. The agents that fetch pages build their tools from `webTools()`, and add `spillTools()`, the two readers on their own, so a long page can be read by its path. The coordinator's main agent has the job tools and no shell, and adds them for a long job output. `everyAgentCanReadSavedOutput` in `tests/agency/agents/toolkits.agency` checks that every stdlib agent has one of `read`, a shell tool, or `readSpill`, and no duplicate names.
 
 **No effects.** There is no write, so there is no `std::spill::write`. There is no `std::spill::read` either: the store holds only text the model's conversation was handed a name for, so reading it exposes nothing the thread does not already hold, and an interrupt that is always approved is noise in `agency interrupts` and in the policy table. A policy that wants to stop the model reading saved output refuses the two tools by name.
 
@@ -54,14 +54,51 @@ The marker counts toward the limit, so a cut result is never longer than `maxToo
 **A command's long output keeps its end.** `keepOutput` saves the whole output and returns its last lines within the two limits, then one line from `tailNotice`:
 
 ```
-[Showing lines 4012-6011 of 6011. The full output saved as 2026-…-a1b2c3.log can be read with readSpill(filename: "…"), with offset and limit to take a slice. To search it, use grepSpill(pattern, filename: "…"). Neither needs approval. Command exited with code 0.]
+[Showing lines 4012-6011 of 6011. The full output is saved as a file: /tmp/agency-spill-1000/2026-…-a1b2c3.log (read it like any file). Command exited with code 0.]
 ```
 
-A command that prints a lot says how it went at the end: a test summary, a compiler's error count. The loop's notice for any other tool result still shows a few lines from each end, because for a page or a file the start matters as much. One line longer than the character limit comes back as its last 50,000 characters. The name is followed by a space, so a model copies it without punctuation.
+A command that prints a lot says how it went at the end: a test summary, a compiler's error count. The loop's notice for any other tool result still shows a few lines from each end, because for a page or a file the start matters as much, and ends with `--- full output saved as a file: <path> (read it like any file) ---`. One line longer than the character limit comes back as its last 50,000 characters. The path is followed by a space, so a model copies it without punctuation. There is one wording, whoever writes the notice and whatever tools the model has; what can read the path is said in each reader's description.
 
 What `safeBash` returns is at most 50,000 characters and a notice, under the loop's default limit, so it is not saved twice unless the call sets `spillToolResultsOver` or `maxToolResultChars` below that. Then the model gets a notice pointing at a notice. Special-casing `safeBash` in the loop would be another hidden rule.
 
 **The preview is bounded by characters.** `previewHead` and `previewTail` each stop after `PREVIEW_CHARS`, or less when the notice has to fit a smaller limit, and a single line is cut at `PREVIEW_LINE_LEN`. Fifteen lines from each end of 200-character lines would make a preview three times longer than the output it replaced. The tail never reaches back into lines the head showed, so a two-line output is not printed twice.
+
+## Reading saved output by path
+
+A saved output can also be read as a file. Its path is the temp folder, then `agency-spill-<user id>`, then the name:
+
+```
+/tmp/agency-spill-1000/2026-11-13T04-05-06-123Z-a1b2c3.log
+```
+
+`spillFolder(host)` builds the folder from `host.system.tempDir()` as the host gives it, never a real path, so on a Mac it starts `/var/folders/…` and never `/private/var/folders/…`. `spillPathParts(path)` recognizes a path by its last two parts only: an `agency-spill-<digits>` folder and a name `isOutputName` accepts. A path written on another machine is recognized too. `…/x.log/../../etc/passwd` is not a saved output, because its last part is `passwd`.
+
+The store stays the only source of truth. A file on disk is a copy, written at the moment a real program is about to read it, and rewritten every time. There are three ways a saved output is read by path:
+
+1. **safeBash in process.** A lone `cat`, `head`, `tail` or `grep`, or a chain of them, reads the store by name. Nothing is written to disk.
+2. **safeBash in a shell.** Before `_bash` or `_startJob` starts a shell, `_prepareSpillFiles` writes a copy of every saved output the line names. The line fails before the shell starts when a name is no longer in the store, when the path's folder is another machine's (the message gives this machine's path), or when the folder is not this user's alone.
+3. **The stdlib's `read`.** `read` asks `_savedOutputAt(dir, filename)` before anything else, and for a saved output returns `_readSpill(name, offset, limit)` with no interrupt. This branch never touches the disk.
+
+`readSpill` and `grepSpill` stay, and take the path or the bare name.
+
+**No approval for the read.** Reading saved output asks nothing, for the reason the readers ask nothing. In a shell this is safe only because the bytes the program reads are the store's, and three things make that true together:
+
+- The read question is left out only on a line that only reads: every effect is `std::read`, `std::grep`, `std::ls` or `std::glob`. In `ln -sf ~/.ssh/id_rsa <saved output>; cat <saved output>` the `ln` could change the copy after it is written, so the `cat` keeps its `std::read`.
+- `_prepareSpillFiles` rewrites each copy from the store just before the shell starts.
+- The folder belongs to this user alone. On Linux `/tmp` is shared, and another user could create `/tmp/agency-spill-1000` first and swap a copy for a link between the write and the read. `host.files.privateDir` creates the folder with mode 0700, or checks an existing one: a real folder, owned by this user, with no access for anyone else. It never fixes an existing folder's mode, because by then someone else may have planted a file.
+
+The rules are in `savedOutputRules` in `stdlib/safeBash.agency`; `safe-bash.md` has the details.
+
+**What is accepted.**
+
+- A background job an earlier line started, approved for a command that names the folder, could change a copy in the moment between the write and a later line's read.
+- Tool calls in one round run at the same time. If one call runs an approved program that writes into the folder, such as `ln -sf ~/.ssh/id_rsa <saved path>` under an "always approve when" rule for `ln`, and another call only reads the same saved path, the write can land between the second call's copy and its read. Either call needs an approved program that writes to a path it is given, so this is the same class of risk as the background job above. A per-run lock around the copy and the shell start would close it, at the cost of running shell calls one at a time.
+- A relative `TMPDIR` fails the line: the copy is written against the process's folder, and the shell runs in the agent's.
+- A line that names a saved output no longer in the store fails, even when it only mentions it (`git log -- <old path>`). A model that names an old path is usually about to read it.
+- `exec` writes no copy. `exec("wc", ["-l", <saved output>])` asks `std::exec` and fails with "No such file".
+- `sed -n` has no rule in safeBash, so it asks `std::exec`, as it does for a file on disk.
+
+**Reading it back does not save it again.** `storeOutput` returns the name of an entry that already holds the same text. Without this, `cat <saved output>` or a long `read` of one would store a second copy, and a second copy of a large output pushes the first one out.
 
 ## What a saved output is called
 
@@ -81,15 +118,17 @@ A `fork` or `parallel` branch runs on a copy of the globals, so an output saved 
 
 ## Where the pieces are
 
-- `lib/runtime/toolOutputStore.ts`: the store shape and key, `MAX_STORE_CHARS`, `storeOutput`, `findOutput`, `isOutputName`, `missingOutputMessage`, `spillReaders`, `isSpillReader`, and `outputNotice` with the preview helpers.
+- `lib/runtime/toolOutputStore.ts`: the store shape and key, `MAX_STORE_CHARS`, `storeOutput`, `findOutput`, `isOutputName`, `missingOutputMessage`, `isSpillReader`, `outputNotice`, `tailNotice`, `spillPath` with the preview helpers, and the path functions `spillFolder`, `spillPathParts`, `inSpillFolder`, `spillPathsIn`.
 - `lib/runtime/toolInvocation.ts`: `spillSettings`, which reads the call's option and tools once, and `capToolResultForLlm`, which applies the rules in the table above.
 - `lib/runtime/prompt.ts`: `capForLlm`, the one closure the three cap sites (a result, a failure message, a rejection reason) call, with the spill settings found once per call.
-- `lib/stdlib/spill.ts`: `MAX_STDOUT_LEN`, `_keepOutput`, `_readSpill`, `_grepSpill` over `currentRun()`.
+- `lib/stdlib/spill.ts`: `MAX_STDOUT_LEN`, `_keepOutput`, `_readSpill`, `_grepSpill` over `currentRun()`; `_grepSaved` for safeBash's in-process grep; `_savedOutputAt` for `read`; `_prepareSpillFiles` and `writeCopy`.
+- `stdlib/index.agency`: the saved-output branch at the top of `read`.
+- Tests for reading by path: `tests/agency/safeBashSavedOutput.agency`, the path cases in `lib/runtime/toolOutputStore.test.ts`, and `privateDir` in `lib/host/node/nodeFiles.test.ts`.
 - `stdlib/spill.agency`: `keepOutput`, `readSpill`, `grepSpill`.
 - `stdlib/safeBash.agency` calls `keepOutput` on every output path.
-- `stdlib/agents/lib/toolkits.agency`: `shellTools()` with the readers, and `spillTools()` for the agents that fetch without it.
+- `stdlib/agents/lib/toolkits.agency`: `shellTools()` and `codingFileAndShellTools()`, which read the path through `safeBash` and `read`, and `spillTools()` for the agents with neither.
 - `stdlib/agents/lib/shared.agency`: `AGENT_SPILL_OVER` and the `spillToolResultsOver` parameter of `llmOptions`.
-- Tests: `lib/runtime/toolOutputStore.test.ts`, the `capToolResultForLlm` cases in `lib/runtime/prompt.test.ts`, `lib/stdlib/spill.test.ts`, `tests/agency/spill.agency` (eviction, a miss, a checkpoint round trip, a result saved through the loop, a result cut though the readers are offered, the refusal without `readSpill`, and a result cut without the readers), `longOutputIsKept` and `spillToolsTakeNamesOnly` in `tests/agency/safeBash.agency`, and `everyAgentCarriesTheReadersOnce` in `tests/agency/agents/toolkits.agency`.
+- Tests: `lib/runtime/toolOutputStore.test.ts`, the `capToolResultForLlm` cases in `lib/runtime/prompt.test.ts`, `lib/stdlib/spill.test.ts`, `tests/agency/spill.agency` (eviction, a miss, a checkpoint round trip, a result saved through the loop, a result cut though the readers are offered, a call with no reader that still saves, and a result cut with spilling off), `longOutputIsKept` and `spillToolsTakeNamesOnly` in `tests/agency/safeBash.agency`, and `everyAgentCanReadSavedOutput` in `tests/agency/agents/toolkits.agency`.
 
 ## Things that are easy to miss
 

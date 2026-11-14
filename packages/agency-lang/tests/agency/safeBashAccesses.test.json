@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "fileAccesses",
+      "description": "accessesOf reads one access per file effect out of a plan, in order, and skips every other effect. onlyTouchesFiles is false when the plan also does something that is not a file access, such as `git add` or a program, false for a refused line, and false for a broad line. A find access names the folder searched.",
+      "input": "",
+      "expectedOutput": "[{\"accesses\":[\"read:/a.txt\",\"read:/b.txt\"],\"onlyFiles\":true},{\"accesses\":[\"read:/a.txt\"],\"onlyFiles\":true},{\"accesses\":[\"search:/src\"],\"onlyFiles\":true},{\"accesses\":[\"write:/out.txt\"],\"onlyFiles\":true},{\"accesses\":[\"remove:/src\"],\"onlyFiles\":true},{\"accesses\":[\"list:/src\"],\"onlyFiles\":true},{\"accesses\":[\"find:\"],\"onlyFiles\":true},{\"accesses\":[\"read:/a.txt\",\"read:/b.txt\"],\"onlyFiles\":true},{\"accesses\":[],\"onlyFiles\":false},{\"accesses\":[\"read:/a.txt\"],\"onlyFiles\":false},{\"accesses\":[],\"onlyFiles\":false},{\"accesses\":[],\"onlyFiles\":false}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

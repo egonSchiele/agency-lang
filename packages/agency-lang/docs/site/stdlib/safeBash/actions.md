@@ -572,11 +572,47 @@ A lone grep, run through the grep tool's own search with no shell.
 export type GrepExec = {
   kind: "grep";
   payload: GrepPayload;
-  render: GrepRender
+  render: GrepRender;
+  /** The saved output searched, by name, when the path is one. The
+    search then reads the store, never the disk. */
+  saved?: string
 }
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L578))
+
+### SavedPath
+
+A saved output named by path: the folder part as the command wrote it,
+ with its trailing separator, and the saved name.
+
+```ts
+/** A saved output named by path: the folder part as the command wrote it,
+ with its trailing separator, and the saved name. */
+export type SavedPath = {
+  folder: string;
+  name: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L602))
+
+### ReadSource
+
+Where a resolved read path's bytes are: a file on disk, or a saved
+ output in the store. A saved source keeps the folder as written so a
+ rule can name the copy's path in its effect, but it is read by name.
+
+```ts
+/** Where a resolved read path's bytes are: a file on disk, or a saved
+ output in the store. A saved source keeps the folder as written so a
+ rule can name the copy's path in its effect, but it is read by name. */
+export type ReadSource =
+  | { kind: "disk"; dir: string; filename: string }
+  | { kind: "saved"; folder: string; name: string }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L610))
 
 ### ReadView
 
@@ -597,7 +633,7 @@ export type ReadView =
   | { kind: "tail"; lines: number }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L600))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L631))
 
 ### ReadExec
 
@@ -613,12 +649,12 @@ A lone cat of one or more files, or a head or tail of one, run
  approval means. */
 export type ReadExec = {
   kind: "read";
-  payloads: ReadPayload[];
+  sources: ReadSource[];
   view: ReadView
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L610))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L641))
 
 ### Join
 
@@ -631,7 +667,7 @@ How a chain step follows the one before it: `;` always runs it, `&&`
 export type Join = "seq" | "and" | "or"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L618))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L649))
 
 ### StepExec
 
@@ -644,7 +680,7 @@ The executions a chain may hold: every in-process kind, and nothing
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L622))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L653))
 
 ### ChainStep
 
@@ -655,7 +691,7 @@ export type ChainStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L624))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L655))
 
 ### ChainExec
 
@@ -671,7 +707,7 @@ export type ChainExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L631))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L662))
 
 ### RefuseExec
 
@@ -682,7 +718,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L648))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L679))
 
 ### BroadReason
 
@@ -706,7 +742,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L657))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L688))
 
 ### Plan
 
@@ -721,11 +757,38 @@ export type Plan = {
   broadReason?: BroadReason;
   /** The command word of every simple command planFor decided over, in
     order; "" for an assignment-only command; [] when unparseable. */
-  verbs: string[]
+  verbs: string[];
+  /** Every saved output the line names. A shell line gets a fresh copy of
+    each before it starts, and a read is left unasked only for these. */
+  savedPaths: SavedPath[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L663))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L694))
+
+### FileAccess
+
+One file a plan reads, searches, lists, finds in, writes, or removes,
+ read back out of the effect that asks about it. A `find` access names the
+ folder searched, not the files found.
+
+```ts
+/** One file a plan reads, searches, lists, finds in, writes, or removes,
+ read back out of the effect that asks about it. A `find` access names the
+ folder searched, not the files found. */
+export type FileAccess = {
+  mode:
+  | "read"
+  | "search"
+  | "list"
+  | "find"
+  | "write"
+  | "remove";
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L710))
 
 ## Functions
 
@@ -1202,7 +1265,11 @@ The distinct folders whose origin remote these effects still need, in the order 
 ### grepExecution
 
 ```ts
-grepExecution(payload: GrepPayload, render: GrepRender): GrepExec
+grepExecution(
+  payload: GrepPayload,
+  render: GrepRender,
+  saved: string | null = null,
+): GrepExec
 ```
 
 Build a grep execution plan without running the search.
@@ -1215,28 +1282,90 @@ Build the search execution from the same payload used by `grepEffect`.
 |---|---|---|
 | payload | [GrepPayload](#greppayload) |  |
 | render | [GrepRender](#greprender) |  |
+| saved | `string \| null` | null |
 
 **Returns:** [GrepExec](#grepexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L587))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L590))
 
-### readExecution
+### readPayloadOf
 
 ```ts
-readExecution(payloads: ReadPayload[], view: ReadView): ReadExec
+readPayloadOf(source: ReadSource): ReadPayload
 ```
 
-Build a file-read execution plan without reading files.
+Return the read approval payload that names this source.
 
-Build file reads from the same payloads used by `readEffect`.
+The std::read payload for a source: the file, or the copy's path.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| payloads | `ReadPayload[]` |  |
+| source | [ReadSource](#readsource) |  |
+
+**Returns:** [ReadPayload](#readpayload)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L615))
+
+### readExecution
+
+```ts
+readExecution(sources: ReadSource[], view: ReadView): ReadExec
+```
+
+Build a file-read execution plan without reading files.
+
+Build file reads from the sources whose payloads `readEffect` asks about.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| sources | `ReadSource[]` |  |
 | view | [ReadView](#readview) |  |
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L639))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L670))
+
+### accessesOf
+
+```ts
+accessesOf(effects: Effect[]): FileAccess[]
+```
+
+Return the files the given plan effects read, search, list, find in, write, or remove, in order.
+
+The file accesses among a plan's effects, in order. Only file effects are
+accesses: `git checkout -- a.txt` overwrites a file, but its effect is
+`std::git::checkout`. Before trusting this list to be everything a line
+does, check `onlyTouchesFiles`.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| effects | `Effect[]` |  |
+
+**Returns:** `FileAccess[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L756))
+
+### onlyTouchesFiles
+
+```ts
+onlyTouchesFiles(plan: Plan): boolean
+```
+
+True when the plan is not refused, does not ask the broad question, and every effect it raises is a file access.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| plan | [Plan](#plan) |  |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L770))

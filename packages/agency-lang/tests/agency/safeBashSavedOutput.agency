@@ -1,0 +1,296 @@
+import { mkdir, remove } from "std::fs"
+import { planFor, outcomeOf, safeBash, startJob } from "std::safeBash"
+import { bash } from "std::shell"
+import { keepOutput } from "std::spill"
+import { env, setEnv } from "std::system"
+
+// Every test here points the temp folder at a fixture, so no copy is ever
+// written into the real /tmp. The Node host reads TMPDIR on each call.
+static const FIXTURE = __dirname + "/stdlib/__safebash_saved__"
+static const TEMP = FIXTURE + "/tmp"
+static const OTHER_MACHINE = "/var/folders/zz/T/agency-spill-501/"
+
+/** 3000 numbered lines, long enough that keepOutput saves them. */
+def savedText(): string {
+  return ["line${i}" for i in range(1, 3001)].join("\n") + "\n"
+}
+
+/** The saved name: the last part of the path the notice gives. */
+def savedName(): string {
+  const notice = keepOutput(savedText(), 0, "generate")
+  const path = notice.split("saved as a file: ")[1].split(" ")[0]
+  const parts = path.split("/")
+  return parts[parts.length - 1]
+}
+
+def userId(): string {
+  const id = bash("id -u") with approve
+  return id.stdout.trim()
+}
+
+/** Point the temp folder at `temp`, and return the old value. */
+def useTemp(temp: string): string {
+  const old = env("TMPDIR") with approve
+  setEnv("TMPDIR", temp) with approve
+  return old ?? ""
+}
+
+def restoreTemp(old: string) {
+  setEnv("TMPDIR", old) with approve
+}
+
+def resetFixture() {
+  remove(FIXTURE) with approve
+  mkdir(TEMP) with approve
+  write("real.log", savedText(), dir: FIXTURE) with approve
+  write("a.txt", "on disk\n", dir: FIXTURE) with approve
+}
+
+def text(result: Result): string {
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+static const COMMANDS = ["wc -l PATH", "cat PATH | wc -l", "grep -c line2 PATH | cat", "tail -n 3 PATH | head -n 1"]
+
+/** Each command on a real file with the saved text, so a comparison does
+ not depend on GNU or BSD output. Run outside any rejecting handler. */
+def onRealFile(path: string): string[] {
+  const real = FIXTURE + "/real.log"
+  let outputs: string[] = []
+  for (command in COMMANDS) {
+    const result = safeBash(command.replace("PATH", real)) with approve
+    outputs.push(text(result).replace(real, path))
+  }
+  return outputs
+}
+
+def onSavedPath(path: string): string[] {
+  return [text(safeBash(command.replace("PATH", path))) for command in COMMANDS]
+}
+
+def copyExists(path: string): boolean {
+  const found = bash("test -f '${path}' && echo yes || echo no") with approve
+  return found.stdout.trim() == "yes"
+}
+
+node inProcessReads() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const folder = "${TEMP}/agency-spill-${userId()}/"
+  const path = folder + name
+  let seen: string[] = []
+  let results: any[] = []
+  handle {
+    results = [
+      text(safeBash("head -n 2 ${path}")),
+      text(safeBash("tail -n 1 ${path}")),
+      text(safeBash("grep -n line2999 ${path}")),
+      // Reading the whole output back keeps one copy in the store.
+      text(safeBash("cat ${path}")).includes("saved as a file: ${path} "),
+      // A folder from another machine still reads the store by name.
+      text(safeBash("head -n 1 ${OTHER_MACHINE}${name}")),
+      text(safeBash("head -n 1 ${folder}2026-01-01T00-00-00-000Z-abcdef.log")).includes("no longer available"),
+    ]
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  // In process, a saved output is never read from disk, so no copy.
+  results.push(copyExists(path))
+  // A chain that also reads a file on disk asks for that file only.
+  let chainSeen: string[] = []
+  handle {
+    safeBash("head -n 1 ${path} && cat ${FIXTURE}/a.txt")
+  } with (intr) {
+    chainSeen.push("${intr.effect}:${intr.data.filename}")
+    return approve()
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [results, seen, chainSeen]
+}
+
+node realProgramsReadTheCopy() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const path = "${TEMP}/agency-spill-${userId()}/${name}"
+  const expected = onRealFile(path)
+  let seen: string[] = []
+  let first: string[] = []
+  let again: string[] = []
+  handle {
+    first = onSavedPath(path)
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  const written = copyExists(path)
+  // A copy changed on disk is rewritten from the store before the next line.
+  bash("echo tampered > '${path}'") with approve
+  handle {
+    again = onSavedPath(path)
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  const want = expected.join("|")
+  return [first.join("|") == want, again.join("|") == want, written, seen, expected[0].trim().startsWith("3000")]
+}
+
+node programsWithNoRuleAskTheirOwnQuestion() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const path = "${TEMP}/agency-spill-${userId()}/${name}"
+  let seen: string[] = []
+  let sliced = ""
+  let echoed = ""
+  handle {
+    sliced = text(safeBash("sed -n '2,3p' ${path}"))
+    // Naming a saved output reads nothing, so this still asks std::bash.
+    echoed = text(safeBash("echo ${path} | cat"))
+  } with (intr) {
+    seen.push(intr.effect)
+    return approve()
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [sliced, echoed.trim() == path, seen]
+}
+
+node copiesBeforeEveryShell() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const path = "${TEMP}/agency-spill-${userId()}/${name}"
+  // A line safeBash cannot parse asks std::bash, and still gets its copy.
+  const unparsed = "wc -l ${path} && echo $((1 + 1))"
+  const reason = planFor(unparsed, FIXTURE).broadReason
+  let kind = "none"
+  if (reason != null) {
+    kind = reason.kind
+  }
+  safeBash(unparsed) with approve
+  const afterUnparsed = copyExists(path)
+  bash("rm -f '${path}'") with approve
+  // A background job gets its copy before it starts.
+  startJob("wc -l ${path}") with approve
+  const afterJob = copyExists(path)
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [kind, afterUnparsed, afterJob]
+}
+
+node otherMachinePathFailsBeforeTheShell() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  let seen: string[] = []
+  let failed = ""
+  handle {
+    failed = text(safeBash("wc -l ${OTHER_MACHINE}${name}"))
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  const here = "${TEMP}/agency-spill-${userId()}/${name}"
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [failed.includes("on this machine") && failed.includes(here), seen]
+}
+
+node aLineThatWritesKeepsItsReadQuestion() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const path = "${TEMP}/agency-spill-${userId()}/${name}"
+  let seen: string[] = []
+  let result = ""
+  handle {
+    result = text(safeBash("ln -sf ${FIXTURE}/a.txt ${path}; cat ${path}"))
+  } with (intr) {
+    seen.push(intr.effect)
+    if (intr.effect == "std::read") {
+      return reject("no reads")
+    }
+    return approve()
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [result.startsWith("FAILED"), seen.includes("std::read")]
+}
+
+node theFolderMustBePrivate() {
+  resetFixture()
+  const id = userId()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  bash("mkdir -p '${TEMP}/agency-spill-${id}' && chmod 777 '${TEMP}/agency-spill-${id}'") with approve
+  const open = text(safeBash("wc -l ${TEMP}/agency-spill-${id}/${name}"))
+  // A link planted where the folder should be.
+  const linked = FIXTURE + "/linked"
+  mkdir(linked) with approve
+  bash("mkdir -p '${FIXTURE}/elsewhere' && chmod 700 '${FIXTURE}/elsewhere' && ln -s '${FIXTURE}/elsewhere' '${linked}/agency-spill-${id}'") with approve
+  setEnv("TMPDIR", linked) with approve
+  const viaLink = text(safeBash("wc -l ${linked}/agency-spill-${id}/${name}"))
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [open.includes("can be used by other users"), viaLink.startsWith("FAILED")]
+}
+
+def outcome(source: string): string {
+  return outcomeOf(planFor(source, FIXTURE))
+}
+
+node lookalikesAndRefusals() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const folder = "${TEMP}/agency-spill-${userId()}/"
+  // Write the copy, so the folder exists for the listing refusal.
+  safeBash("wc -l ${folder}${name}")
+  const escape = planFor("cat ${folder}${name}/../../real.log", FIXTURE)
+  const lookalike = "/etc/x/agency-spill-501/${name}"
+  const results = [
+    // Not a saved output: the ordinary rules decide.
+    [e.name for e in escape.effects],
+    text(safeBash("head -n 1 ${lookalike}")),
+    text(safeBash("wc -l ${lookalike}")).includes("on this machine"),
+    outcome("echo x > ${folder}notes.txt"),
+    outcome("echo x > ${folder}${name}"),
+    outcome("rm ${folder}${name}"),
+    outcome("ls ${folder}"),
+  ]
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return results
+}
+
+node readToolReadsSavedOutput() {
+  resetFixture()
+  const old = useTemp(TEMP)
+  const name = savedName()
+  const folder = "${TEMP}/agency-spill-${userId()}/"
+  let seen: string[] = []
+  let results: any[] = []
+  handle {
+    results = [
+      text(read(folder + name, limit: 2)),
+      text(read(name, dir: folder, offset: 2999)),
+      text(read("${OTHER_MACHINE}${name}", offset: 3000, useAgentCwd: true)),
+    ]
+  } with (intr) {
+    seen.push(intr.effect)
+    return reject("no questions expected")
+  }
+  restoreTemp(old)
+  remove(FIXTURE) with approve
+  return [results, seen]
+}

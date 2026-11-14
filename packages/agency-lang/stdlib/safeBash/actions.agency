@@ -578,19 +578,50 @@ export type GrepRender = {
 export type GrepExec = {
   kind: "grep";
   payload: GrepPayload;
-  render: GrepRender
+  render: GrepRender;
+  /** The saved output searched, by name, when the path is one. The
+    search then reads the store, never the disk. */
+  saved: string | null
 }
 
 /**
 Build the search execution from the same payload used by `grepEffect`.
 */
-export def grepExecution(payload: GrepPayload, render: GrepRender): GrepExec {
+export def grepExecution(payload: GrepPayload, render: GrepRender, saved: string | null = null): GrepExec {
   """Build a grep execution plan without running the search."""
   return {
     kind: "grep",
     payload: payload,
-    render: render
+    render: render,
+    saved: saved
   }
+}
+
+/** A saved output named by path: the folder part as the command wrote it,
+ with its trailing separator, and the saved name. */
+export type SavedPath = {
+  folder: string;
+  name: string
+}
+
+/** Where a resolved read path's bytes are: a file on disk, or a saved
+ output in the store. A saved source keeps the folder as written so a
+ rule can name the copy's path in its effect, but it is read by name. */
+export type ReadSource =
+  | { kind: "disk"; dir: string; filename: string }
+  | { kind: "saved"; folder: string; name: string }
+
+/** The std::read payload for a source: the file, or the copy's path. */
+export def readPayloadOf(source: ReadSource): ReadPayload {
+  """Return the read approval payload that names this source."""
+  return match(source) {
+    { kind: "disk", dir, filename } => readPayload(dir, filename)
+    { kind: "saved", folder, name } => readPayload(folder, name)
+  }
+}
+
+def readPayload(dir: string, filename: string): ReadPayload {
+  return { dir: dir, filename: filename }
 }
 
 /** How the shell-free path prints a file: whole, numbered (cat -n), the
@@ -609,7 +640,7 @@ export type ReadView =
  approval means. */
 export type ReadExec = {
   kind: "read";
-  payloads: ReadPayload[];
+  sources: ReadSource[];
   view: ReadView
 }
 
@@ -634,13 +665,13 @@ export type ChainExec = {
 }
 
 /**
-Build file reads from the same payloads used by `readEffect`.
+Build file reads from the sources whose payloads `readEffect` asks about.
 */
-export def readExecution(payloads: ReadPayload[], view: ReadView): ReadExec {
+export def readExecution(sources: ReadSource[], view: ReadView): ReadExec {
   """Build a file-read execution plan without reading files."""
   return {
     kind: "read",
-    payloads: payloads,
+    sources: sources,
     view: view
   }
 }
@@ -667,5 +698,81 @@ export type Plan = {
   broadReason: BroadReason | null;
   /** The command word of every simple command planFor decided over, in
     order; "" for an assignment-only command; [] when unparseable. */
-  verbs: string[]
+  verbs: string[];
+  /** Every saved output the line names. A shell line gets a fresh copy of
+    each before it starts, and a read is left unasked only for these. */
+  savedPaths: SavedPath[]
+}
+
+/** One file a plan reads, searches, lists, finds in, writes, or removes,
+ read back out of the effect that asks about it. A `find` access names the
+ folder searched, not the files found. */
+export type FileAccess = {
+  mode: "read" | "search" | "list" | "find" | "write" | "remove";
+  path: string
+}
+
+def accessOf(effect: Effect): FileAccess | null {
+  // A default arm on purpose: a file effect added later and missed here
+  // makes onlyTouchesFiles answer false, which is the safe answer.
+  return match(effect.name) {
+    "std::read" => fileAccess("read", join(effect.payload.dir, effect.payload.filename))
+    "std::grep" => fileAccess("search", grepPath(effect.payload))
+    "std::ls" => fileAccess("list", effect.payload.dir)
+    "std::glob" => fileAccess("find", effect.payload.dir)
+    "std::write" => fileAccess("write", join(effect.payload.dir, effect.payload.filename))
+    "std::remove" => fileAccess("remove", effect.payload.target)
+    _ => null
+  }
+}
+
+def fileAccess(mode: "read" | "search" | "list" | "find" | "write" | "remove", path: string): FileAccess {
+  return { mode: mode, path: path }
+}
+
+def grepPath(payload: GrepPayload): string {
+  if (payload.file == null) {
+    return payload.dir
+  }
+  return join(payload.dir, payload.file)
+}
+
+// A payload's dir is already resolved, so a separator is all a join needs.
+// A plain string join keeps these functions pure: std::path's join goes
+// through the host.
+def join(dir: string, name: string): string {
+  if (dir.endsWith("/")) {
+    return dir + name
+  }
+  return "${dir}/${name}"
+}
+
+/**
+The file accesses among a plan's effects, in order. Only file effects are
+accesses: `git checkout -- a.txt` overwrites a file, but its effect is
+`std::git::checkout`. Before trusting this list to be everything a line
+does, check `onlyTouchesFiles`.
+*/
+export def accessesOf(effects: Effect[]): FileAccess[] {
+  """
+  Return the files the given plan effects read, search, list, find in, write, or remove, in order.
+  """
+  let accesses: FileAccess[] = []
+  for (effect in effects) {
+    const access = accessOf(effect)
+    if (access != null) {
+      accesses.push(access)
+    }
+  }
+  return accesses
+}
+
+export def onlyTouchesFiles(plan: Plan): boolean {
+  """
+  True when the plan is not refused, does not ask the broad question, and every effect it raises is a file access.
+  """
+  if (plan.broadReason != null || plan.execution.kind == "refuse") {
+    return false
+  }
+  return accessesOf(plan.effects).length == plan.effects.length
 }

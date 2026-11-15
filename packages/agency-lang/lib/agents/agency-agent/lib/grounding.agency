@@ -44,6 +44,32 @@ export def sessionFactsText(
   """
 }
 
+// The coordinator is told to answer from the block. The minimal and simple
+// brains are not: their prompts are kept as short as they can be.
+static const FACTS_RULE = "\nThe `<session_facts>` block says what you are and which models this session runs on. When the user asks your name, model, or provider, answer from it. Never say you cannot know."
+
+def factsRule(brainName: string): string {
+  if (brainName == "coordinator") {
+    return FACTS_RULE
+  }
+  return ""
+}
+
+// The grounding for this run, built once by runSession. Each turn adds this
+// same string to the conversation with ensureSystemMessage, which matches
+// by exact text, so a rebuilt block that differs is never added twice.
+let _grounding: string = ""
+
+/** Store the grounding for this run. */
+export def setGrounding(text: string) {
+  _grounding = text
+}
+
+/** The grounding stored for this run, or "" before runSession sets it. */
+export def grounding(): string {
+  return _grounding
+}
+
 export def groundingText(brainName: string): string {
   const args = parseAgentArgs()
 
@@ -51,6 +77,6 @@ export def groundingText(brainName: string): string {
 
   <session_facts>
   ${sessionFactsText(brainName, getResolvedSlots(), args.flags)}
-  </session_facts>
+  </session_facts>${factsRule(brainName)}
   ${projectContextText()}"""
 }

@@ -1,0 +1,50 @@
+/** @module
+  @summary The explorer of the Agency agent's coordinator brain. The agent
+  is `std::agents/explorer`; this file adds the reasoning model and the
+  start event. It is a handoff: it continues the coordinator's
+  conversation. The docstring is written for routing, not for the agent's
+  own behaviour.
+*/
+import { AgentSettings, reasoningChoice } from "std::agents/brains/settings"
+import { timeBudget } from "std::agents/brains/coordinator/budgets"
+import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
+import { emit } from "std::statelog"
+
+export handoff def explorerAgent(
+  settings: AgentSettings,
+  userMsg: string,
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
+): Result<string> {
+  """
+  Ask the explorer — a read-only researcher — to survey many files and
+  return a synthesized answer. Use it only when the answer genuinely
+  requires broad coverage:
+
+  - "Summarize the Agency docs" / "give me a tour of module Y"
+  - "How does Z work across the codebase?"
+
+  Do NOT use this when a handful of targeted reads would answer the
+  question — do those reads yourself with your own file tools. Do not
+  send it to "map the structure": name the specific questions you need
+  answered and the scope to cover ("all of docs/site/guide/", "the
+  lib/parsers/ module").
+
+  @param userMsg - the specific questions to answer and the scope to
+    cover, with any context from the conversation the explorer needs
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (15 minutes).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($20).
+  """
+  emit({ type: "agencyAgent.subagentStart", agent: "explorerAgent", message: userMsg })
+  const reasoning = reasoningChoice(settings)
+  return stdExplorerAgent(
+    question: userMsg,
+    context: settings.context,
+    maxCost: maxDollars ?? $20.00,
+    maxTime: timeBudget(maxSeconds, 15m),
+    model: reasoning.model,
+    provider: reasoning.provider,
+  )
+}

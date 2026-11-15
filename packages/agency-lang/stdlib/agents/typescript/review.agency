@@ -2,13 +2,11 @@ import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
 import {
-  communicationTools,
   readOnlyFileTools,
   readOnlyGitTools,
   webTools,
   spillTools,
   SAVE_DRAFT_HINT,
-  askUserHint,
 } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
@@ -95,7 +93,6 @@ export def buildTools(): any[] {
     ...spillTools(),
     ...searchTools(),
     skills,
-    ...communicationTools(),
   ]
 }
 
@@ -109,7 +106,7 @@ def judgeCode(
   extraTools: any[],
 ): Feedback[] {
   if (threadIsNew()) {
-    systemMessage(systemPrompt + askUserHint())
+    systemMessage(systemPrompt)
   }
   let guidelinesSection = ""
   if (guidelines != "") {

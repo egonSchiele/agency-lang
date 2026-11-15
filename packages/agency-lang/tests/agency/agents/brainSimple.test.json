@@ -1,0 +1,41 @@
+{
+  "sourceFile": "brainSimple.agency",
+  "tests": [
+    {
+      "nodeName": "answersWithTheContext",
+      "description": "One message is one model call, and the call's context reaches it.",
+      "input": "",
+      "expectedOutput": "\"Hi from simple!|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Hi from simple!" }]
+    },
+    {
+      "nodeName": "offersOnlyTheExtraTools",
+      "description": "The simple brain has no tools of its own, so its call offers only the extra tools.",
+      "input": "",
+      "expectedOutput": "[\"stubTool\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "usesTheModel",
+      "description": "The model in the settings is the model the call uses.",
+      "input": "",
+      "expectedOutput": "\"test-model\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "twoTurnsOneSystemPrompt",
+      "description": "Two calls on one thread add the system prompt once.",
+      "input": "",
+      "expectedOutput": "\"1 system, 2 user\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }]
+    }
+  ]
+}

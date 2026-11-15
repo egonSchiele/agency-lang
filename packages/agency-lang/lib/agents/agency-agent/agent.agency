@@ -10,7 +10,8 @@ import { getCost } from "std::thread"
 import { setSlashPalette } from "std::ui/cli"
 import { pushMessage, repl, clearScreen } from "std::ui/cli"
 
-import { brainByName, allBrains } from "./brains/registry.agency"
+import { agencyAgentBrains } from "std::agents/agency"
+
 import { agentNameFor } from "./lib/agentName.agency"
 import { parseAgentArgs } from "./lib/args.agency"
 import { mergedPalette } from "./lib/commandPalette.agency"
@@ -25,12 +26,13 @@ import { loadSettings } from "./lib/settings.agency"
 import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 import {
-  setBrain,
+  setBrainName,
   runTurn,
   runSession,
   setPolicyArg,
   resolveBrainName,
   resolveStartTarget,
+  startTargetsFor,
  } from "./lib/turn.agency"
 import { formatTurnFailure } from "./lib/utils.agency"
 import { getCapabilities } from "./shared.agency"
@@ -92,14 +94,13 @@ node main() {
   )
 
   const brainName = resolveBrainName(args.flags.brain ?? null, loadSettings())
-  const brain = brainByName(brainName)
-  if (brain == null) {
-    const names = map(allBrains(), \entry -> entry.name).join(", ")
-    print(color.red("Unknown --brain value: ${brainName}. Valid: ${names}"))
+  const brainNames = map(agencyAgentBrains(), \entry -> entry.name)
+  if (!brainNames.includes(brainName)) {
+    print(color.red("Unknown --brain value: ${brainName}. Valid: ${brainNames.join(", ")}"))
     _exit(1)
     return
   }
-  setBrain(brain)
+  setBrainName(brainName)
 
   // Positional args (everything after flags) are joined with spaces to
   // form the starting prompt. `--` ends flag parsing if a positional
@@ -114,17 +115,17 @@ node main() {
   const isOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
 
   // Group this trace under its brain wherever runs are compared.
-  setAgentName(agentNameFor(brain))
+  setAgentName(agentNameFor(brainName))
 
   // Validate the --agent target up front, before any model or session setup.
   const requestedStartTarget = args.flags.agent ?? ""
-  const resolvedStartTarget = resolveStartTarget(brain, requestedStartTarget)
+  const resolvedStartTarget = resolveStartTarget(brainName, requestedStartTarget)
   let startAgent = ""
   if (resolvedStartTarget == null) {
-    const validTargets = ["main", ...brain.startTargets].join(", ")
+    const validTargets = ["main", ...startTargetsFor(brainName)].join(", ")
     print(
       color.red(
-        "Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: ${validTargets}",
+        "Unknown --agent value: ${requestedStartTarget}. Valid for the ${brainName} brain: ${validTargets}",
       ),
     )
     _exit(1)
@@ -193,7 +194,7 @@ node main() {
     } else {
       startSession(
         chooseSession(args.flags.continue, args.flags.resume ?? null),
-        brain,
+        brainName,
       )
     }
   }
@@ -213,7 +214,7 @@ node main() {
   } else {
     setTitle("Agency Agent")
     clearScreen()
-    print(getHeader(brain.name))
+    print(getHeader(brainName))
     const notice = serverNotice(presetTable(), activePresetName())
     if (notice != "") {
       print(color.yellow(notice))

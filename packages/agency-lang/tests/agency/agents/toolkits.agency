@@ -12,11 +12,11 @@ import {
   memoryTools,
   spillTools,
   draftTools,
-  communicationTools,
-  askUserHint,
-  setUserCanAnswer,
  } from "std::agents/lib/toolkits"
 import { buildTools as codingTools } from "std::agents/coding"
+import { buildTools as githubTools } from "std::agents/github"
+import { buildTools as plannerTools } from "std::agents/planner"
+import { buildTools as writingReviewTools } from "std::agents/writing/review"
 import { buildTools as researcherTools } from "std::agents/researcher"
 import { buildTools as oracleTools } from "std::agents/oracle"
 import { buildTools as expertTools } from "std::agents/expert"
@@ -250,15 +250,26 @@ def namesQuestion(tools: any[]): boolean {
   return map(tools, \tool -> tool.name).includes("question")
 }
 
-// When a program says nobody can answer, no agent is offered `question`
-// and no prompt hint describes it. The coder stands in for every agent
-// that takes the tool from communicationTools().
-node noQuestionWhenNobodyCanAnswer(): any[] {
-  const before = [namesQuestion(communicationTools()), askUserHint() != "", namesQuestion(codingTools())]
-  setUserCanAnswer(false)
-  const after = [communicationTools().length, askUserHint(), namesQuestion(codingTools())]
-  setUserCanAnswer(true)
-  return [before, after]
+// No stdlib agent offers the `question` tool.
+node noAgentOffersQuestion(): string {
+  const agents = [
+    { name: "coding", tools: codingTools() },
+    { name: "github", tools: githubTools() },
+    { name: "explorer", tools: explorerTools() },
+    { name: "planner", tools: plannerTools() },
+    { name: "researcher", tools: researcherTools() },
+    { name: "review", tools: reviewTools() },
+    { name: "data", tools: dataTools() },
+    { name: "verifier", tools: verifierTools() },
+    { name: "typescript/review", tools: typescriptReviewTools() },
+    { name: "writing/review", tools: writingReviewTools() },
+  ]
+  for (agent in agents) {
+    if (namesQuestion(agent.tools)) {
+      return "FAIL ${agent.name} offers question"
+    }
+  }
+  return "pass"
 }
 
 // The recommended policy approves the researcher's fetch tool for a read

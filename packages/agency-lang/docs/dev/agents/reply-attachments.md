@@ -74,6 +74,6 @@ messages; smoltalk is growing a client-side merge as belt and
 suspenders).
 
 The first consumer is the agent's `generateImageFile`
-(`lib/agents/agency-agent/lib/images.agency`). A future
+(`stdlib/agents/brains/coordinator/images.agency`). A future
 `viewAttachment` on the attachment-store track reuses this channel
 unchanged.

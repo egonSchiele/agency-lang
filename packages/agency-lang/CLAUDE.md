@@ -305,7 +305,7 @@ Other process docs:
 ### Agents (`agency agent`, the stdlib agents)
 
 - `docs/dev/agents/agency-writer-prompt.md` — How the Agency writer learns the language from its system prompt, and how to measure a change to that prompt.
-- `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
+- `docs/dev/agents/agent-brains.md` — How `agencyAgent` in the stdlib and the `agency agent` harness divide the work, and what the harness passes in.
 - `docs/dev/agents/coding-agent.md` — The stdlib coding agent: why its prompt is short, how its tools differ from the bundles, and what a dispatch adds.
 - `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
 - `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.
@@ -340,7 +340,7 @@ Other process docs:
 
 - `docs/dev/stdlib/adding-a-module-to-the-agency-stdlib.md` — The pattern for adding a stdlib module, including where files go and how docs are generated.
 - `docs/dev/stdlib/agency-function-tools.md` — `runFunction` and `learn`: calling a prepared Agency function in a subprocess, and the coordinator's session records.
-- `docs/dev/stdlib/asking-the-user.md` — `question` and the `std::question` effect: why asking goes through an interrupt, and which agents carry the tool.
+- `docs/dev/stdlib/asking-the-user.md` — `question` and the `std::question` effect: why asking goes through an interrupt, and why no stdlib agent offers the tool.
 - `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.
 - `docs/dev/stdlib/contained-files.md` — The part of the host every stdlib file operation goes through, and why it refuses any symlink below its root.
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.

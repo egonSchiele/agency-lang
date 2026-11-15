@@ -1,0 +1,36 @@
+/** @module
+  @summary A coding brain of the Agency agent with four tools and a short
+  prompt: one tool loop on the caller's conversation thread, with no
+  subagents. For benchmarks and sandboxed runs, where every tool definition
+  and prompt line is paid for on every request.
+*/
+import { AgentSettings, modelOptions } from "std::agents/brains/settings"
+import { AGENT_SPILL_OVER } from "std::agents/lib/shared"
+import { codingFileAndShellTools, CODING_RULES } from "std::agents/lib/toolkits"
+import { Attachment, ensureSystemMessage, systemMessage } from "std::thread"
+
+export def minimalBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message with one tool loop over read, bash, edit, and write,
+  plus `extraTools`.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - Tools added to the four
+  """
+  ensureSystemMessage(CODING_RULES)
+  if (settings.context != "") {
+    systemMessage(settings.context, expires: "llmCall")
+  }
+  const options = {
+    ...modelOptions(settings.model, settings.provider),
+    tools: [...codingFileAndShellTools(), ...extraTools],
+    spillToolResultsOver: AGENT_SPILL_OVER
+  }
+  const reply: string = llm(prompt, options)
+  return success(reply)
+}

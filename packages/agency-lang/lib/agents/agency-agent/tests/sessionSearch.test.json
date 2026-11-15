@@ -61,6 +61,17 @@
       ]
     },
     {
+      "nodeName": "aForkKeepsTheConversationThread",
+      "description": "The save after /fork has no turn behind it and still carries the conversation's thread id.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "findsAMessageInAnEarlierSession",
       "input": "",
       "expectedOutput": "true",

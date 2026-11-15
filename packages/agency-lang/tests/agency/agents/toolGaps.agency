@@ -124,7 +124,7 @@ node codingReachesGithubThroughTheHandoff(): boolean {
 // The handoff agent is where the reads and the writes live.
 node githubAgentHasReadsAndWrites(): boolean {
   const tools = githubAgentTools()
-  return hasTool(tools, "ghPrGet") && hasTool(tools, "ghPrChecks") && hasTool(tools, "ghPrReview") && hasTool(tools, "ghIssueCreate") && hasTool(tools, "question")
+  return hasTool(tools, "ghPrGet") && hasTool(tools, "ghPrChecks") && hasTool(tools, "ghPrReview") && hasTool(tools, "ghIssueCreate")
 }
 
 // A general coder pays for no Agency tools. The agency agent's Agency

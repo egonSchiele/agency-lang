@@ -60,6 +60,7 @@ import { configureLocalModel, explicitRouterSpec, getResolvedSlots, currentProvi
 import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
 
 import {
+  conversationThread,
   forkSession,
   markTurnDone,
   recordTurn,
@@ -73,7 +74,7 @@ import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
 import { shellCommand } from "./slashCommands/shell.agency"
 import { jobsSlashCommand } from "./slashCommands/jobs.agency"
-import { currentBrain, runTurn } from "./turn.agency"
+import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = noModelChoices()
@@ -370,20 +371,11 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
-// The session thread the brain keeps its conversation in.
-def conversationSession(): string {
-  const brain = currentBrain()
-  if (brain == null) {
-    return ""
-  }
-  return brain.session
-}
-
 // Summarize the older messages and say what happened. False when the
 // summary could not be made.
-def compactAndReport(session: string, instructions: string): boolean {
+def compactAndReport(threadId: string, instructions: string): boolean {
   pushMessage(color.dim("Compacting the conversation. Press Esc to stop."))
-  const result = compactConversation(session, instructions)
+  const result = compactConversation(threadId, instructions)
   if (result is failure(reason)) {
     pushMessage(color.yellow("Could not compact the conversation: ${reason}"))
     return false
@@ -393,24 +385,24 @@ def compactAndReport(session: string, instructions: string): boolean {
 }
 
 def compactSlashCommand(instructions: string): boolean {
-  const session = conversationSession()
-  if (!canCompact(session)) {
+  const threadId = conversationThread()
+  if (!canCompact(threadId)) {
     pushMessage("Nothing to compact yet.")
     return true
   }
-  compactAndReport(session, instructions)
+  compactAndReport(threadId, instructions)
   return true
 }
 
 // Runs after the turn is marked done, so a compaction the user stops with
 // Escape does not keep the turn from being saved.
 def compactIfDue() {
-  const session = conversationSession()
-  if (!compactionDue(session) || !canCompact(session)) {
+  const threadId = conversationThread()
+  if (!compactionDue(threadId) || !canCompact(threadId)) {
     return
   }
-  if (!compactAndReport(session, "")) {
-    compactionFailed(session)
+  if (!compactAndReport(threadId, "")) {
+    compactionFailed(threadId)
   }
 }
 
@@ -462,7 +454,7 @@ export def buildStatus(): { left: string; right: string; context: string } {
   return {
     left: sessionTitle(),
     right: roundedCost,
-    context: contextStatus(conversationSession())
+    context: contextStatus(conversationThread())
   }
 }
 

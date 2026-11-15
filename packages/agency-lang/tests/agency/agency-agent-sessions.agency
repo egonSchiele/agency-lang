@@ -16,14 +16,13 @@ import test {
   renameSession,
   startSession,
  } from "../../lib/agents/agency-agent/lib/resume.agency"
-import { simpleBrain } from "../../lib/agents/agency-agent/brains/simple/simple.agency"
 
 // A rename with no turn still produces a save (the record carries the new
 // title, and the turn count is untouched); the save after it is a no-op.
 // Turn 1 would normally title the session with an LLM call; a renamed
 // session keeps its title instead.
 node renameFlow(): any {
-  startSession(null, simpleBrain())
+  startSession(null, "simple")
   const empty = renameSession("   ")
   const renamed = renameSession("minnesota   news 8/29")
   const target = recordTurn("")

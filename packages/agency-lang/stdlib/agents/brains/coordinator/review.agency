@@ -1,0 +1,69 @@
+/** @module
+  @summary The code reviewer of the Agency agent's coordinator brain. The
+  reviews live in `std::agents/review` and `std::agents/agency/review`.
+  What is left here is the agent-shaped part: pulling code snippets out of
+  a chat message, and choosing the reviewer.
+*/
+import { agencyReviewAgent } from "std::agents/agency/review"
+import { AgentSettings, modelOptions } from "std::agents/brains/settings"
+import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
+import { reviewAgent as generalReviewAgent } from "std::agents/review"
+import { setMemoryId } from "std::memory"
+import { emit } from "std::statelog"
+
+type AgencyCode = {
+  code: string
+}
+
+export def reviewAgent(settings: AgentSettings, userMsg: string, agencyTask: boolean = false): string {
+  """
+  Review code and report what is wrong with it: errors, risks, and things
+  worth changing.
+
+  @param userMsg - the code to review, or a message describing what to review.
+  @param agencyTask - true when the code is Agency code, which routes to the
+    reviewer that parses and typechecks it. Leave it false for every other
+    language, where that reviewer has nothing useful to say.
+  """
+  emit({ type: "agencyAgent.subagentStart", agent: "reviewAgent", message: userMsg })
+  if (!agencyTask) {
+    const general = generalReviewAgent(
+      work: userMsg,
+      task: "Review this code.",
+      context: settings.context,
+      model: settings.model,
+      provider: settings.provider,
+    )
+    return renderFeedback(general)
+  }
+  return renderFeedback(review(settings, userMsg))
+}
+
+export def review(settings: AgentSettings, userMsg: string): Result<Feedback[]> {
+  """
+  Review the Agency code snippets in a message, on a thread of their own.
+
+  @param settings - The call's settings
+  @param userMsg - The message that holds the code
+  """
+  thread(label: "review", summarize: true) {
+    setMemoryId("review")
+
+    const snippets: AgencyCode[] = llm(
+      `Extract any Agency code snippets from the following message: ${userMsg}`,
+      modelOptions(settings.model, settings.provider),
+    )
+
+    let feedback: Result<Feedback[]> = success([])
+
+    for (codeSnippet in snippets) {
+      feedback = mergeFeedback(feedback, agencyReviewAgent(
+        codeSnippet.code,
+        context: settings.context,
+        model: settings.model,
+        provider: settings.provider,
+      ))
+    }
+  }
+  return feedback
+}

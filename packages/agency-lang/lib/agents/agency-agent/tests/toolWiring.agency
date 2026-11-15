@@ -1,0 +1,289 @@
+/*
+ * Smoke tests for the Agency Agent's subagent wiring.
+ *
+ * These exercise the exact path that broke when `skillsDir` returned
+ * several tools all named `read`: each subagent's exported tool list is
+ * handed to a real `llm(...)` call. The runtime rejects duplicate tool
+ * names before the request is sent, so a regression to colliding names
+ * makes the corresponding `llm()` call fail and the node return "FAIL: …"
+ * instead of "ok".
+ *
+ * On PR CI this runs deterministically under AGENCY_USE_TEST_LLM_PROVIDER
+ * (no API key / network). On the post-merge real-LLM workflow the same
+ * tests run against a real provider — the assertions only depend on the
+ * call succeeding, not on the response content, so both modes pass.
+ */
+import { coordinatorTools } from "std::agents/brains/coordinator"
+import test { agencyCodeExtras } from "std::agents/brains/coordinator/code"
+import test { researchTools } from "std::agents/brains/coordinator/research"
+import { buildTools as codeTools } from "std::agents/coding"
+// The oracle and the explorer live in the stdlib now, so their tool lists
+// come from there. The check is the same: the agency agent still offers them,
+// so a duplicate name in either list still breaks this agent.
+import { buildTools as oracleTools } from "std::agents/oracle"
+import { buildTools as explorerTools } from "std::agents/explorer"
+// The two research agents researchAgent routes to. researchTools is handed to
+// whichever one runs as extraTools, so the list that reaches the provider is
+// the agent's own tools plus researchTools plus the saveDraft the agent appends.
+import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
+import { buildTools as researcherOwnTools } from "std::agents/researcher"
+import { filter, find, map } from "std::array"
+import { now } from "std::date"
+import { buildTools as agencyReviewTools } from "std::agents/agency/review"
+import { buildTools as reviewTools } from "std::agents/review"
+import { buildTools as writingReviewTools } from "std::agents/writing/review"
+
+import { cliSettings } from "../lib/answer.agency"
+import { checkBundledSkill } from "../lib/bundledSkills.agency"
+import { cliTools, sessionJobTools } from "../lib/cliTools.agency"
+import test { _setLearnedRoot } from "../lib/learned.agency"
+import { LEARNED_SKILLS_TOOL, LEARNED_TOOL_PREFIX } from "../lib/learned.agency"
+import { setInteractive } from "../lib/trace.agency"
+
+// The coordinator's whole list for one turn: its own tools, then the tools
+// the command-line agent adds. Built per turn, so a tool saved in this
+// session is callable on the next one.
+def turnTools(): any[] {
+  const settings = cliSettings()
+  return [...coordinatorTools(settings, now()), ...cliTools(now(), settings)]
+}
+
+// The Agency coder's own tools: the coding agent's, then what the wrapper adds.
+def agencyCodeAgentTools(): any[] {
+  return [...codeTools(), ...agencyCodeExtras()]
+}
+
+def pingWith(tools: any[]): string {
+  // Reject any interrupt a tool might raise. Under the deterministic
+  // provider no tools are called, so this never fires. Under a real LLM the
+  // model could decide to invoke a tool in response to the prompt; with no
+  // handler that interrupt would propagate out of the node and the tool's
+  // side effect could run. Rejecting keeps every tool side-effect-free
+  // (the tool returns a failure to the model, which then answers in text)
+  // while letting the llm() call complete. The assertion only cares that
+  // the request — built from this tool list — is accepted by the provider
+  // and the call returns, not what the model does with it.
+  let r: Result = failure("unset")
+  handle {
+    r = try llm(
+      "Reply with the single word: ok. Do not call any tools.",
+      { tools: tools },
+    )
+  } with (data) {
+    return reject()
+  }
+  if (r is failure(e)) {
+    return "FAIL: ${e}"
+  }
+  return "ok"
+}
+
+node codeToolsHaveUniqueNames() {
+  return pingWith(codeTools())
+}
+
+// What each coder really sends: the stdlib coding agent's tools, the tools
+// this agent adds, and the saveDraft the stdlib agent appends. The Agency
+// coder is the one at risk, because the brief docs tools and agencyCli join
+// the coding agent's own tools.
+node composedCodeToolsHaveUniqueNames() {
+  return pingWith([...codeTools(), saveDraft])
+}
+
+node composedAgencyCodeToolsHaveUniqueNames() {
+  return pingWith([...agencyCodeAgentTools(), saveDraft])
+}
+
+node researchToolsHaveUniqueNames() {
+  return pingWith(researchTools())
+}
+
+// Pinging a list on its own is what let a real duplicate through: researchTools
+// carried saveDraft and so did the agent receiving it, so neither list was wrong
+// by itself. These ping what each research agent actually sends.
+node composedAgencyResearchToolsHaveUniqueNames() {
+  return pingWith([...agencyResearcherOwnTools(), ...researchTools(), saveDraft])
+}
+
+node composedResearchToolsHaveUniqueNames() {
+  return pingWith([...researcherOwnTools(), ...researchTools(), saveDraft])
+}
+
+node oracleToolsHaveUniqueNames() {
+  return pingWith(oracleTools())
+}
+
+node explorerToolsHaveUniqueNames() {
+  return pingWith(explorerTools())
+}
+
+// Learned tools are offered as learned_<name>. That only keeps them from
+// shadowing a built-in tool if no built-in tool uses the prefix. Every
+// list a learned tool can join is here; PR 5 extends it when it wires a
+// subagent whose tools are not yet listed.
+node noBuiltinToolUsesTheLearnedPrefix() {
+  const builtIn: any[] = [
+    ...coordinatorTools(cliSettings(), now()),
+    ...codeTools(),
+    ...researchTools(),
+    ...oracleTools(),
+    ...explorerTools(),
+    ...agencyResearcherOwnTools(),
+    ...researcherOwnTools(),
+    ...reviewTools(),
+    ...agencyReviewTools(),
+    ...writingReviewTools(),
+  ]
+  const names = map(builtIn, \tool -> "${tool.name}")
+  const clashing = filter(names, \name -> name.startsWith(LEARNED_TOOL_PREFIX))
+  if (clashing.length > 0) {
+    return "FAIL: ${clashing.join(", ")}"
+  }
+  return "ok"
+}
+
+// The coordinator's whole list, which is the one learnSkill and writeToolFor
+// join. The runtime rejects duplicate names before the request is sent.
+node coordinatorToolsHaveUniqueNames() {
+  _setLearnedRoot("${__dirname}/learned-fixture")
+  let tools: any[] = []
+  handle {
+    tools = turnTools()
+  } with approve
+  return pingWith(tools)
+}
+
+// The coordinator builds its list per turn so a tool saved in this
+// session is callable on the next one. Before this was wired, a saved
+// tool was never offered to any agent.
+node coordinatorTurnOffersLearnedTools(): string {
+  _setLearnedRoot("${__dirname}/learned-fixture")
+  let names: string[] = []
+  handle {
+    names = map(turnTools(), \tool -> "${tool.name}")
+  } with approve
+  if (!names.includes(LEARNED_SKILLS_TOOL)) {
+    return "FAIL: no ${LEARNED_SKILLS_TOOL} in ${names.join(", ")}"
+  }
+  if (!names.includes("${LEARNED_TOOL_PREFIX}hnTop")) {
+    return "FAIL: no ${LEARNED_TOOL_PREFIX}hnTop in ${names.join(", ")}"
+  }
+  return "ok"
+}
+
+node coordinatorSkillsListPresets(): string {
+  _setLearnedRoot("${__dirname}/learned-fixture")
+  let tools: any[] = []
+  handle {
+    tools = turnTools()
+  } with approve
+  const tool = find(tools, \tool -> tool.name == "coordinator_skills")
+  if (tool == null) {
+    return "the turn's tools have no tool named coordinator_skills"
+  }
+  return match(checkBundledSkill(tool, "presets")) {
+    failure(reason) => reason
+    _ => ""
+  }
+}
+
+// No subagent offers the `question` tool.
+def offersQuestion(tools: any[]): boolean {
+  return find(tools, \tool -> "${tool.name}" == "question") != null
+}
+
+node subagentsOfferNoQuestion(): string {
+  let offering: string[] = []
+  if (offersQuestion(codeTools())) { offering.push("code") }
+  if (offersQuestion(explorerTools())) { offering.push("explorer") }
+  if (offersQuestion(reviewTools())) { offering.push("review") }
+  if (offersQuestion(researcherOwnTools())) { offering.push("researcher") }
+  if (offersQuestion(writingReviewTools())) { offering.push("writing") }
+  if (offersQuestion(oracleTools())) { offering.push("oracle") }
+  if (offersQuestion(agencyReviewTools())) { offering.push("agency review") }
+  if (offersQuestion([...agencyResearcherOwnTools(), ...researchTools()])) { offering.push("agency research") }
+  if (offering.length > 0) {
+    return "FAIL: a question tool for ${offering.join(", ")}"
+  }
+  return "ok"
+}
+
+// Without write, the coordinator passes a whole new file to codeAgent,
+// which writes it out a second time.
+node coordinatorOffersFileWrites(): string {
+  const names = map(coordinatorTools(cliSettings(), now()), \tool -> "${tool.name}")
+  for (name in ["write", "edit"]) {
+    if (!names.includes(name)) {
+      return "FAIL: no ${name} in ${names.join(", ")}"
+    }
+  }
+  return "ok"
+}
+
+// The coordinator's own list is built per turn, so the check has to build
+// one too.
+node coordinatorTurnOffersNoQuestion(): string {
+  // turnTools() scans the agent home for learned tools. Point it at the
+  // fixture, as the learned-tools node above does, so this never reads the
+  // developer's own saved tools.
+  _setLearnedRoot("${__dirname}/learned-fixture")
+  let names: string[] = []
+  handle {
+    names = map(turnTools(), \tool -> "${tool.name}")
+  } with approve
+  if (names.includes("question")) {
+    return "FAIL: question in ${names.join(", ")}"
+  }
+  return "ok"
+}
+
+// The lists the oracle and the Agency reviewer send, with the saveDraft
+// tool each agent appends.
+node composedOracleToolsHaveUniqueNames() {
+  return pingWith([...oracleTools(), saveDraft])
+}
+
+node composedAgencyReviewToolsHaveUniqueNames() {
+  return pingWith([...agencyReviewTools(), saveDraft])
+}
+
+// The coders get the job tools on top of their own in an interactive
+// session, so these are the lists that reach the provider there.
+node composedCodeToolsWithJobsHaveUniqueNames() {
+  setInteractive(true)
+  return pingWith([...codeTools(), ...sessionJobTools(), saveDraft])
+}
+
+node composedAgencyCodeToolsWithJobsHaveUniqueNames() {
+  setInteractive(true)
+  return pingWith([...agencyCodeAgentTools(), ...sessionJobTools(), saveDraft])
+}
+
+def countNamed(names: string[], name: string): number {
+  return filter(names, \each -> each == name).length
+}
+
+// An interactive session offers the job tools to the main agent and the
+// coders, once each. A one-shot run exits when its turn ends, which would
+// stop its jobs, so it offers them to neither.
+node jobToolsOnlyInInteractiveSessions(): any[] {
+  // The main agent also gets the saved-output readers, for a long job read.
+  const jobNames = ["startJob", "jobOutput", "stopJob", "readSpill", "grepSpill"]
+  _setLearnedRoot("${__dirname}/learned-fixture")
+  setInteractive(true)
+  const coderNames = map(sessionJobTools(), \tool -> "${tool.name}")
+  let mainNames: string[] = []
+  let oneShotMain: string[] = []
+  handle {
+    mainNames = map(turnTools(), \tool -> "${tool.name}")
+    setInteractive(false)
+    oneShotMain = map(turnTools(), \tool -> "${tool.name}")
+  } with approve
+  const oneShotCoder = sessionJobTools()
+  return [
+    coderNames,
+    map(jobNames, \name -> countNamed(mainNames, name)),
+    oneShotCoder.length,
+    map(jobNames, \name -> countNamed(oneShotMain, name))
+  ]
+}

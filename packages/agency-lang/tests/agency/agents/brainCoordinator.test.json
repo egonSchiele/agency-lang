@@ -1,0 +1,116 @@
+{
+  "sourceFile": "brainCoordinator.agency",
+  "tests": [
+    {
+      "nodeName": "respondsWithPromptAndContext",
+      "description": "The coordinator's request holds its bundled prompt and the call's context.",
+      "input": "",
+      "expectedOutput": "\"Hi from the agent!|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Hi from the agent!" }]
+    },
+    {
+      "nodeName": "twoTurnsOneSystemPrompt",
+      "description": "Two turns land on the caller's thread, which holds the coordinator's prompt once and both user messages.",
+      "input": "",
+      "expectedOutput": "\"1 system, 2 user\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }]
+    },
+    {
+      "nodeName": "attachesImageToTurn",
+      "description": "An image sent with the message reaches the model.",
+      "input": "",
+      "expectedOutput": "\"I see it!|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "I see it!" }]
+    },
+    {
+      "nodeName": "generatedImageIsShownToModel",
+      "description": "An image the coordinator generates is shown to the model after the tool round.",
+      "input": "",
+      "expectedOutput": "\"made it|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            {
+              "name": "generateImageFile",
+              "args": { "prompt": "a bicycle", "path": "/tmp/tra-gen-turn.png" }
+            }
+          ]
+        },
+        { "return": "made it" }
+      ]
+    },
+    {
+      "nodeName": "missingPromptIsFailure",
+      "description": "A prompt that could not be read is a failure that names coordinator.md.",
+      "input": "",
+      "expectedOutput": "\"true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "subagentStartIsEmitted",
+      "description": "Calling a subagent wrapper emits one start event with the agent's name and the message.",
+      "input": "",
+      "expectedOutput": "\"oracleAgent|is this plan sound?\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "It is sound." }]
+    },
+    {
+      "nodeName": "routerFailureIsEmitted",
+      "description": "A router call that times out sends the turn to the coordinator and is reported once for that router model.",
+      "input": "",
+      "expectedOutput": "\"first answer|second answer|1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "decide": { "answer": { "type": "choice", "choice": "research", "confidence": 0.9 } },
+          "delayMs": 10000
+        },
+        { "return": "first answer" },
+        {
+          "decide": { "answer": { "type": "choice", "choice": "research", "confidence": 0.9 } },
+          "delayMs": 10000
+        },
+        { "return": "second answer" }
+      ]
+    },
+    {
+      "nodeName": "coderGetsCoderTools",
+      "description": "The coder's request offers the coder tools from the settings, and the oracle's does not.",
+      "input": "",
+      "expectedOutput": "\"true|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "added it" }, { "return": "It is sound." }]
+    },
+    {
+      "nodeName": "reviewerGetsContextOnly",
+      "description": "Called as a tool, the reviewer's request holds the context and not the caller's own system message.",
+      "input": "",
+      "expectedOutput": "\"true|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            {
+              "name": "reviewAgent",
+              "args": { "userMsg": "x = 1", "agencyTask": false }
+            }
+          ]
+        },
+        { "return": [] },
+        { "return": "reviewed" }
+      ]
+    }
+  ]
+}

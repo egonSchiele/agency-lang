@@ -84,8 +84,8 @@ export def contextLabel(tokens: number, window: number): string {
   return "context ${Math.round(tokens / window * 100)}%"
 }
 
-export def contextStatus(session: string): string {
-  return contextLabel(_contextTokens(session), conversationWindow())
+export def contextStatus(threadId: string): string {
+  return contextLabel(_contextTokens(threadId), conversationWindow())
 }
 
 export def summaryPrompt(
@@ -160,20 +160,21 @@ def summaryCall(prompt: string): string {
   return summary
 }
 
-/** True when `session` has messages older than the part that is kept. */
-export def canCompact(session: string): boolean {
-  return _compactionInput(session, keepTokensFor(conversationWindow())) != null
+/** True when the conversation on `threadId` has messages older than the
+  part that is kept. */
+export def canCompact(threadId: string): boolean {
+  return _compactionInput(threadId, keepTokensFor(conversationWindow())) != null
 }
 
-/** Summarize the older messages of `session` and replace them. Success
-  holds how many messages the summary replaced, 0 when there was nothing
-  old enough to summarize. */
+/** Summarize the older messages of the conversation on `threadId` and
+  replace them. Success holds how many messages the summary replaced, 0
+  when there was nothing old enough to summarize. */
 export def compactConversation(
-  session: string,
+  threadId: string,
   instructions: string = "",
 ): Result<number> {
   const keepTokens = keepTokensFor(conversationWindow())
-  const input: CompactionInput | null = _compactionInput(session, keepTokens)
+  const input: CompactionInput | null = _compactionInput(threadId, keepTokens)
   if (input == null) {
     return success(0)
   }
@@ -186,19 +187,20 @@ export def compactConversation(
     return failure("The model returned an empty summary.")
   }
   _failedAtTokens = 0
-  return success(_applyCompaction(session, keepTokens, summary.value.trim()))
+  return success(_applyCompaction(threadId, keepTokens, summary.value.trim()))
 }
 
-/** True when `session` should be compacted now: it is near the window,
-  and no compaction failed since it was last this size. */
-export def compactionDue(session: string): boolean {
-  const tokens = _contextTokens(session)
+/** True when the conversation on `threadId` should be compacted now: it is
+  near the window, and no compaction failed since it was last this size. */
+export def compactionDue(threadId: string): boolean {
+  const tokens = _contextTokens(threadId)
   const window = conversationWindow()
   return shouldCompact(tokens, window) && retryDue(tokens, _failedAtTokens, window)
 }
 
-/** Note that an automatic compaction of `session` failed, so the next one
-  waits for the conversation to grow. `/compact` is not held back. */
-export def compactionFailed(session: string) {
-  _failedAtTokens = _contextTokens(session)
+/** Note that an automatic compaction of the conversation on `threadId`
+  failed, so the next one waits for the conversation to grow. `/compact`
+  is not held back. */
+export def compactionFailed(threadId: string) {
+  _failedAtTokens = _contextTokens(threadId)
 }

@@ -57,7 +57,7 @@ describe("syncAgents", () => {
       "agency-agent/agent.agency": "src",
       "agency-agent/tests/turn.agency": "test-src",
       "agency-agent/tests/turn.test.json": "{}",
-      "agency-agent/brains/coordinator/tests/agentTurn.agency": "test-src",
+      "agency-agent/lib/nested/tests/agentTurn.agency": "test-src",
     });
     const dest = tree({
       "agency-agent/tests/turn.agency": "previously-staged",
@@ -69,7 +69,7 @@ describe("syncAgents", () => {
     // directory compile treats as nothing to do.
     expect(fs.existsSync(path.join(dest, "agency-agent/tests/turn.agency"))).toBe(false);
     expect(fs.existsSync(path.join(dest, "agency-agent/tests/turn.js"))).toBe(false);
-    expect(fs.existsSync(path.join(dest, "agency-agent/brains/coordinator/tests"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "agency-agent/lib/nested/tests"))).toBe(false);
   });
 
   test("still copies handwritten .js helpers that have no .agency sibling", () => {

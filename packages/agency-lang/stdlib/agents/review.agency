@@ -1,12 +1,10 @@
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools, spillTools, githubReadTools, SAVE_DRAFT_HINT, askUserHint, PROGRESS_NOTE } from "std::agents/lib/toolkits"
+import { webTools, spillTools, githubReadTools, SAVE_DRAFT_HINT, PROGRESS_NOTE } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
-
-import { communicationTools } from "./lib/toolkits.agency"
 
 /** @module
 @summary Review a work product against a task and return findings.
@@ -42,7 +40,7 @@ export def buildTools(): any[] {
   """
   Return the reviewer's web and GitHub lookup tools.
   """
-  return [...webTools(), ...spillTools(), ...githubReadTools(), ...searchTools(), skills, ...communicationTools()]
+  return [...webTools(), ...spillTools(), ...githubReadTools(), ...searchTools(), skills]
 }
 
 def judgeWork(
@@ -54,7 +52,7 @@ def judgeWork(
   extraTools: any[],
 ): Feedback[] {
   if (threadIsNew()) {
-    systemMessage(systemPrompt + askUserHint())
+    systemMessage(systemPrompt)
   }
   const prompt = """
 Task:

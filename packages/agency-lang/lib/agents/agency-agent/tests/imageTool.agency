@@ -1,4 +1,5 @@
-import { generateImageFile, resolveEditInputs } from "../lib/images.agency"
+import { generateImageFile } from "std::agents/brains/coordinator/images"
+import test { resolveEditInputs } from "std::agents/brains/coordinator/images"
 import { setAgentCwd } from "std::index"
 import { cwd } from "std::system"
 import { getCost } from "std::thread"

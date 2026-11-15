@@ -6,6 +6,7 @@ import { __call } from "../runtime/call.js";
 import { hasInterrupts } from "../runtime/interrupts.js";
 import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
+import { stripSlug } from "../runtime/runner.js";
 import { _contentToString } from "./threads.js";
 import { printAgentTrace } from "./agentToolTrace.js";
 
@@ -31,6 +32,8 @@ export type SessionRecord = {
   title: string;
   /** The id of the session this one was forked from, when it is a fork. */
   forkedFrom?: string;
+  /** The slug id of the thread the conversation runs on, such as "t3". */
+  conversationThread?: string;
 };
 
 const META_SUFFIX = ".meta.json";
@@ -61,8 +64,10 @@ function isRecord(value: unknown): value is SessionRecord {
   const isCount = (k: string) => typeof r[k] === "number" && Number.isFinite(r[k]) && r[k] >= 0;
   // Agency writes a field that was never set as null.
   const forkIsValid = r.forkedFrom == null || isText("forkedFrom");
+  const threadIsValid = r.conversationThread == null || isText("conversationThread");
   return (
     forkIsValid &&
+    threadIsValid &&
     isText("id") &&
     isText("cwd") &&
     isText("brain") &&
@@ -133,15 +138,14 @@ type ThreadJSON = {
 
 /**
  * The user and assistant messages of a saved session's conversation
- * thread: the thread the brain opens with `thread(session: name)`. Tool
- * calls and results are left out.
+ * thread, named by its slug id. Tool calls and results are left out.
  */
-export function _readTranscript(checkpointJson: unknown, session: string): TranscriptMessage[] {
+export function _readTranscript(checkpointJson: unknown, threadId: string): TranscriptMessage[] {
   const cp = Checkpoint.fromJSON(checkpointJson);
-  if (!cp) {
+  if (!cp || threadId === "") {
     return [];
   }
-  const thread = sessionThread(cp, session);
+  const thread = savedThread(cp, threadId);
   if (!thread) {
     return [];
   }
@@ -160,10 +164,10 @@ export function _readTranscript(checkpointJson: unknown, session: string): Trans
 
 // Every frame on the saved stack carries the thread store; the outermost
 // frame's copy is the one the REPL was waiting in.
-function sessionThread(cp: Checkpoint, session: string): ThreadJSON | null {
+function savedThread(cp: Checkpoint, threadId: string): ThreadJSON | null {
+  const rawId = stripSlug(threadId);
   for (const frame of cp.stack.stack ?? []) {
-    const id = frame.threads?.sessions?.[session];
-    const thread = id == null ? null : frame.threads?.threads[id];
+    const thread = frame.threads?.threads[rawId];
     if (thread) {
       return thread as ThreadJSON;
     }
@@ -237,7 +241,6 @@ export function matchingMessages(
  */
 export async function _searchSessions(
   dir: string,
-  session: string,
   query: string,
   skipId: string,
   limit: number,
@@ -249,7 +252,10 @@ export async function _searchSessions(
     if (hits.length >= limit) {
       break;
     }
-    const transcript = _readTranscript(await _readCheckpointFile(dir, record.id), session);
+    const transcript = _readTranscript(
+      await _readCheckpointFile(dir, record.id),
+      record.conversationThread ?? "",
+    );
     const matches = matchingMessages(transcript, words).slice(0, MAX_HITS_PER_SESSION);
     hits.push(
       ...matches.map((match) => ({

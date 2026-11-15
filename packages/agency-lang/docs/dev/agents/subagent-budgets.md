@@ -13,8 +13,8 @@ not guard the turn.
 - `researchAgent`, `explorerAgent`, `oracleAgent`, `codeAgent`, and
   `agencyCodeAgent` take
   `maxSeconds` and `maxDollars`. The coordinator fills them in from the user's words.
-  Each wrapper (`brains/coordinator/subagents/*.agency`) passes
-  `maxTime: timeBudget(maxSeconds, 30m)` (`brains/coordinator/lib/budgets.agency`,
+  Each wrapper (`stdlib/agents/brains/coordinator/*.agency`) passes
+  `maxTime: timeBudget(maxSeconds, 30m)` (`stdlib/agents/brains/coordinator/budgets.agency`,
   seconds to milliseconds) and `maxCost: maxDollars ?? $50.00` to the
   stdlib agent. Unset means the default the wrapper names, which is the
   stdlib agent's own default.
@@ -180,7 +180,7 @@ it reached, and nothing in them marks the rest as unchecked. So
 findings in its data as `draft`.
 
 **The coordinator's research call fails on a budget trip.** `researchAgent`
-(`lib/agents/agency-agent/brains/coordinator/subagents/research.agency`)
+(`stdlib/agents/brains/coordinator/research.agency`)
 ends the turn with the researcher's answer (`endTurn`), so a draft the
 guard returned as a success would reach the user as the reply, with the
 note meant for a model. It passes `keepDraft: false` to `researcherAgent`

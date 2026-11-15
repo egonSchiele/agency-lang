@@ -1,27 +1,19 @@
-import { brainByName, allBrains } from "../brains/registry.agency"
+// The brain names the CLI accepts and the --agent targets each brain has.
+// The brains themselves are listed by agencyAgentBrains in std::agents/agency.
 import { brainFlagHelp } from "../lib/args.agency"
-
-node knownBrainResolves(): string {
-  const brain = brainByName("coordinator")
-  if (brain == null) {
-    return "null"
-  }
-  return "${brain.name}|${brain.startTargets.length > 0}"
-}
-
-node simpleBrainResolves(): string {
-  return "${brainByName("simple") != null}"
-}
-
-node minimalBrainResolves(): string {
-  return "${brainByName("minimal") != null}"
-}
-
-node unknownBrainIsNull(): string {
-  return "${brainByName("bogus") == null}|${allBrains().length}"
-}
+import { resolveStartTarget } from "../lib/turn.agency"
 
 node helpListsRegisteredBrains(): string {
   const help = brainFlagHelp()
   return "${help.includes("default: coordinator")}|${help.includes("coordinator: One coordinator LLM")}|${help.includes("simple: ")}"
+}
+
+// `main` is the brain's own entry. Only the coordinator has subagents to
+// start directly.
+node startTargetsOnlyForTheCoordinator(): string {
+  const main = resolveStartTarget("simple", "main")
+  const coderOnCoordinator = resolveStartTarget("coordinator", "code")
+  const coderOnSimple = resolveStartTarget("simple", "code")
+  const unknown = resolveStartTarget("coordinator", "bogus")
+  return "${main}|${coderOnCoordinator}|${coderOnSimple == null}|${unknown == null}"
 }

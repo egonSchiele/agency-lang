@@ -5,11 +5,9 @@ import {
   docsOnlyHandler,
  } from "std::agents/lib/shared"
 import {
-  communicationTools,
   readOnlyFileTools,
   writableFileTools,
   SAVE_DRAFT_HINT,
-  askUserHint,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
@@ -342,7 +340,7 @@ export def buildTools(): any[] {
   """
   Return the writing reviewer's file editing, skill, and communication tools.
   """
-  return [...writableFileTools(), skills, ...communicationTools()]
+  return [...writableFileTools(), skills]
 }
 
 def judgeText(
@@ -355,7 +353,7 @@ def judgeText(
   extraTools: any[],
 ): Feedback[] {
   if (threadIsNew()) {
-    systemMessage(systemPrompt + askUserHint())
+    systemMessage(systemPrompt)
   }
   let guidelinesSection = ""
   if (guidelines != "") {

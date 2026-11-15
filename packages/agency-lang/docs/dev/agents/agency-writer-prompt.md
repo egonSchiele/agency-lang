@@ -20,8 +20,8 @@ package is an error on the first run. `package.json` ships
 `stdlib/agents/prompts`.
 
 The coordinator's `agencyCodeAgent` gets the tutorial too. That agent is
-the general stdlib coder, and `subagents/code.agency` in the coordinator
-brain builds its prompt: the rules in `prompts/agency-code.md`, then the
+the general stdlib coder, and `stdlib/agents/brains/coordinator/code.agency`
+builds its prompt: the rules in `stdlib/agents/prompts/agency-code.md`, then the
 tutorial in an `<agency_tutorial>` block. The prompt is added when
 `agencyCodeAgent` is called and expires with the handoff, so no other
 request carries the tutorial. `agency-code.md` holds no syntax rules of

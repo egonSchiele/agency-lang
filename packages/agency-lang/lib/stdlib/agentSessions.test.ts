@@ -5,6 +5,7 @@ import {
   _listSessions,
   _saveSession,
   _readCheckpointFile,
+  _readTranscript,
   matchingMessages,
   queryWords,
   type TranscriptMessage,
@@ -53,6 +54,54 @@ describe("saved sessions", () => {
       expect(await _listSessions(dir)).toEqual([]);
       expect(await _readCheckpointFile(dir, "x")).toBeNull();
     }));
+});
+
+describe("reading a saved conversation", () => {
+  // The smallest checkpoint the schema accepts, whose one frame holds
+  // thread "3".
+  const saved = {
+    id: 1,
+    nodeId: "main",
+    globals: { store: {}, initializedModules: [] },
+    stack: {
+      stack: [
+        {
+          args: {},
+          locals: {},
+          step: 0,
+          threads: {
+            counter: 4,
+            activeStack: ["3"],
+            threads: {
+              "3": {
+                messages: [
+                  { role: "system", content: "You are an agent." },
+                  { role: "user", content: "hello" },
+                  { role: "assistant", content: "hi there" },
+                ],
+              },
+            },
+          },
+        },
+      ],
+      mode: "serialize",
+      other: {},
+      deserializeStackLength: 0,
+      nodesTraversed: [],
+    },
+  };
+
+  it("reads the user and assistant messages of the thread the id names", () => {
+    expect(_readTranscript(saved, "t3")).toEqual([
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi there" },
+    ]);
+  });
+
+  it("returns nothing for an unknown id or an empty one", () => {
+    expect(_readTranscript(saved, "t9")).toEqual([]);
+    expect(_readTranscript(saved, "")).toEqual([]);
+  });
 });
 
 describe("session search", () => {

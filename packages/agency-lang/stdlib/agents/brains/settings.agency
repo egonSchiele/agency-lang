@@ -1,0 +1,86 @@
+/** @module
+  @summary The settings the Agency agent's brains and subagent wrappers
+  share, and the model options built from them. `agencyAgent` in
+  `std::agents/agency` builds the record from its parameters.
+*/
+
+/** What a brain and its subagent wrappers need to know about one call. An
+  empty model or provider means the ambient one, which `setModel` or
+  `setLlmOptions` chose. */
+export type AgentSettings = {
+  // Extra text for every model the call runs, such as the user's own
+  // instructions. "" for none.
+  context: string;
+  // The main model. The coder, the researcher, and the reviewers run on it.
+  model: string;
+  provider: string;
+  // The coordinator's own calls, the oracle, and the explorer run on this
+  // one. "" means the main model.
+  reasoningModel: string;
+  reasoningProvider: string;
+  // The small model that sends a plain message straight to the coder or
+  // the researcher. "" means no routing.
+  routerModel: string;
+  routerProvider: string;
+  // Tools added to the coder's and the Agency coder's own.
+  coderTools: any[]
+}
+
+/** A model and its provider, as the stdlib agents take them. */
+export type ModelChoice = {
+  model: string;
+  provider: string
+}
+
+export def modelOptions(model: string, provider: string): any {
+  """
+  Return the `llm()` options that pick `model` and `provider`, or no
+  options when `model` is empty, so the ambient model stays in place. An
+  empty `provider` is left out, so the configured provider stays in place.
+
+  @param model - The model name, or "" for the ambient model
+  @param provider - The model's provider, or "" for the configured one
+  """
+  if (model == "") {
+    return {}
+  }
+  if (provider == "") {
+    return {
+      model: model
+    }
+  }
+  return {
+    model: model,
+    provider: provider
+  }
+}
+
+export def reasoningChoice(settings: AgentSettings): ModelChoice {
+  """
+  Return the reasoning model and its provider, or the main model when no
+  reasoning model is set.
+
+  @param settings - The call's settings
+  """
+  if (settings.reasoningModel == "") {
+    return {
+      model: settings.model,
+      provider: settings.provider
+    }
+  }
+  return {
+    model: settings.reasoningModel,
+    provider: settings.reasoningProvider
+  }
+}
+
+export def reasoningOptions(settings: AgentSettings): any {
+  """
+  Return the `llm()` options that pick the reasoning model, or the main
+  model when no reasoning model is set.
+
+  @param settings - The call's settings
+  """
+  const choice = reasoningChoice(settings)
+  return modelOptions(choice.model, choice.provider)
+}

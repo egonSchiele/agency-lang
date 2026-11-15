@@ -1,0 +1,34 @@
+/** @module
+  @summary The writing reviewer of the Agency agent's coordinator brain.
+  The review itself lives in `std::agents/writing/review`. That reviewer
+  reads the files a message names and applies fixes only when asked, so
+  all that is left here is the thread and memory an agent turn needs.
+*/
+import { AgentSettings } from "std::agents/brains/settings"
+import { renderFeedback } from "std::agents/lib/feedback"
+import { writingReviewAgent } from "std::agents/writing/review"
+import { setMemoryId } from "std::memory"
+import { emit } from "std::statelog"
+
+export def writingAgent(settings: AgentSettings, userMsg: string): string {
+  """
+  Review prose for readability: passages a reader will misread, lose the
+  thread in, or did not need. Reports findings by default; changes the
+  files only when the message asks for the fixes to be applied.
+
+  @param userMsg - the text to review or the files holding it, who the
+    text is for if known, and whether to apply the fixes.
+  """
+  emit({ type: "agencyAgent.subagentStart", agent: "writingAgent", message: userMsg })
+  let reply = ""
+  thread(label: "writing", summarize: true) {
+    setMemoryId("writing")
+    reply = renderFeedback(writingReviewAgent(
+      text: userMsg,
+      context: settings.context,
+      model: settings.model,
+      provider: settings.provider,
+    ))
+  }
+  return reply
+}

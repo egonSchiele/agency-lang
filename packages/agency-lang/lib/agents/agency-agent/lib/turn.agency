@@ -2,30 +2,32 @@
   @summary The harness side of a turn: which brain is selected, the one
   session wrapper that installs the policy handler, and the per-turn work
   (slash expansion, attachments, the hard stop for a subagent budget trip)
-  that happens before the brain sees the message. See
+  that happens before `agencyAgent` sees the message. See
   docs/dev/agents/agent-brains.md.
 */
-import { setUserCanAnswer } from "std::agents/lib/toolkits"
 import { map } from "std::array"
 import { cliPolicyHandler } from "std::policy"
 import { expandSlash } from "std::skills"
-import { Attachment } from "std::thread"
+import { Attachment, currentThreadId } from "std::thread"
 import { pushMessage } from "std::ui/cli"
 
-import { AgentBrain, BrainContext } from "../brains/brain.agency"
+import { answerTurn } from "./answer.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
 import { guardStopHandler } from "./budget.agency"
+import { checkCliBundles } from "./cliTools.agency"
 import { slashCommands } from "./commandPalette.agency"
-import { groundingText } from "./grounding.agency"
+import { groundingText, setGrounding } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
 import { approvingInstructionReads, withProjectContextIfMoved } from "./projectContext.agency"
+import { setConversationThread } from "./resume.agency"
 import { setMessageRewritten } from "./rewrittenMessage.agency"
 import { Settings } from "./settings.agency"
+import { START_TARGETS, runStartTarget } from "./startTargets.agency"
 
 export static const DEFAULT_BRAIN = "coordinator"
 
 // The brain this run talks to. Set once by main(); read by runTurn/runSession.
-let _brain: AgentBrain | null = null
+let _brainName: string = ""
 
 // The `--policy` argument (a built-in name or a policy-file path), or ""
 // when absent. main() sets it; policyHandlerFor() reads it.
@@ -36,17 +38,17 @@ let _policyArg: string = ""
 let _approveArg: string = ""
 let _rejectArg: string = ""
 
-export def setBrain(brain: AgentBrain) {
-  _brain = brain
+export def setBrainName(name: string) {
+  _brainName = name
 }
 
-export def currentBrain(): AgentBrain | null {
-  return _brain
+export def currentBrainName(): string {
+  return _brainName
 }
 
-// A missing brain is a harness bug: main() must call setBrain() before
+// A missing brain is a harness bug: main() must call setBrainName() before
 // runSession or runTurn.
-static const NO_BRAIN = "No brain selected: main() must call setBrain() first"
+static const NO_BRAIN = "No brain selected: main() must call setBrainName() first"
 
 export def setPolicyArg(arg: string, approve: string = "", reject: string = "") {
   _policyArg = arg
@@ -54,8 +56,17 @@ export def setPolicyArg(arg: string, approve: string = "", reject: string = "") 
   _rejectArg = reject
 }
 
+/** The `--agent` values a brain accepts besides `main`. Only the
+  coordinator brain has subagents to start. */
+export def startTargetsFor(brainName: string): string[] {
+  if (brainName == "coordinator") {
+    return START_TARGETS
+  }
+  return []
+}
+
 export def resolveStartTarget(
-  brain: AgentBrain,
+  brainName: string,
   requested: string,
 ): string | null {
   """
@@ -66,7 +77,7 @@ export def resolveStartTarget(
   if (target == "main") {
     target = ""
   }
-  if (target != "" && !brain.startTargets.includes(target)) {
+  if (target != "" && !startTargetsFor(brainName).includes(target)) {
     return null
   }
   return target
@@ -87,13 +98,6 @@ export def resolveBrainName(flag: string | null, settings: Settings): string {
     return fromSettings
   }
   return DEFAULT_BRAIN
-}
-
-def buildBrainContext(interactive: boolean, brainName: string): BrainContext {
-  return {
-    interactive: interactive,
-    grounding: groundingText(brainName)
-  }
 }
 
 /** True when the session's approvals come from the saved policy file,
@@ -118,22 +122,21 @@ def policyHandlerFor(interactive: boolean): any {
 
 export def runSession(interactive: boolean, body: () -> void raises <*>) {
   """
-  The only place a brain is called. Installs the policy handler, runs the
-  brain's `init` under it, then runs `body` (the one-shot turn or the REPL)
-  under it. Both production paths go through here.
+  The only place a turn is answered from. Builds the grounding once, then
+  installs the policy handler, checks the bundled files under it, and runs
+  `body` (the one-shot turn or the REPL) under it. Both production paths
+  go through here.
   """
-  const brain = currentBrain()
-  if (brain == null) {
+  if (_brainName == "") {
     throw(NO_BRAIN)
     return
   }
-  const context = buildBrainContext(interactive, brain.name)
+  // Built before the policy handler exists, so reading the project's
+  // AGENTS.md never prompts. Every turn adds this same string.
+  setGrounding(groundingText(_brainName))
   const handler = policyHandlerFor(interactive)
-  // A one-shot run has nobody to answer, and the policy handler would
-  // reject a question, so no agent is offered the tool.
-  setUserCanAnswer(interactive)
   handle {
-    brain.init(context)
+    checkCliBundles()
     body()
   } with handler
 }
@@ -161,8 +164,7 @@ def checkForAttachments(expanded: string): Attachment[] {
 }
 
 def dispatchToBrain(target: string, userMsg: string): string {
-  const brain = currentBrain()
-  if (brain == null) {
+  if (_brainName == "") {
     throw(NO_BRAIN)
     return ""
   }
@@ -171,10 +173,10 @@ def dispatchToBrain(target: string, userMsg: string): string {
   const expanded = withProjectContextIfMoved(expandSlash(userMsg, slashCommands()))
   setMessageRewritten(expanded != userMsg)
   if (target != "") {
-    return brain.runTurn(target, expanded)
+    return runStartTarget(target, expanded)
   }
   const attachments = checkForAttachments(expanded)
-  return brain.runTurn("", [expanded, ...attachments])
+  return answerTurn(_brainName, expanded, attachments)
 }
 
 export def runTurn(target: string, userMsg: string): string {
@@ -184,7 +186,14 @@ export def runTurn(target: string, userMsg: string): string {
   the brain continues. A whole-agent limit comes only from the `--max-time`
   and `--max-cost` flags, which the runtime enforces as a root budget.
   """
+  // The turn runs on this run's active thread, which is the conversation.
+  // Recorded before the turn too, so a turn the user cancels still leaves
+  // the id behind.
+  setConversationThread(currentThreadId())
+  let reply = ""
   handle {
-    return dispatchToBrain(target, userMsg)
+    reply = dispatchToBrain(target, userMsg)
   } with guardStopHandler
+  setConversationThread(currentThreadId())
+  return reply
 }

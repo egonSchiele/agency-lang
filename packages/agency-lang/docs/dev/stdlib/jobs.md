@@ -115,15 +115,18 @@ already read.
 
 `jobTools()` returns `startJob`, `jobOutput`, and `stopJob`. In
 `agency agent` the main agent and both coders carry them in an interactive
-session only (`sessionJobTools()` in `subagents/code.agency`): a one-shot
-run exits when its turn ends, which would stop its jobs. The main agent
+session only (`sessionJobTools()` in `lib/agents/agency-agent/lib/cliTools.agency`,
+passed to `agencyAgent` in `extraTools`): a one-shot run exits when its turn
+ends, which would stop its jobs. `agencyAgent` itself offers no job tools,
+since in a web server a run usually ends when the call returns. The main agent
 also gets `readSpill` and `grepSpill`, because a long read is saved and
 previewed and the main agent has no shell to read its path with.
 
-**The jobs message.** `mainAgent` calls `addJobsNote()` each turn. It adds
-a system message, which expires when the turn's `llm()` call returns,
+**The jobs message.** `answerTurn` in `lib/agents/agency-agent/lib/answer.agency`
+calls `addJobsNote()` before each turn's `agencyAgent` call. It adds a
+system message, which expires when the turn's first `llm()` call returns,
 listing each job that is running or ended and unread. The routed coder and
-the coder called as a tool run on the main thread and read it too.
+the coder called as a tool run on the conversation thread and read it too.
 
 **The finish line.** `_runLineRepl` prints a line when a job ends. What it
 does depends on what owns the terminal. During a turn it writes the line.

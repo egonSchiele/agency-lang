@@ -1,9 +1,0 @@
-import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
-import { isTraceEnabled } from "../../../lib/trace.agency"
-
-/** Show the subagent's brief through the shared tool display. */
-export def announce(toolName: string, userMsg: string) {
-  if (isTraceEnabled()) {
-    _printAgentTrace({ kind: "agentStart", toolName: toolName, message: userMsg })
-  }
-}

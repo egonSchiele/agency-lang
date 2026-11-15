@@ -1,12 +1,12 @@
 import { getVersion } from "std::agency"
 import { parseArgs } from "std::args"
 
-import { allBrains } from "./../brains/registry.agency"
+import { agencyAgentBrains } from "std::agents/agency"
 
 /** The --brain flag description: each name with its one-line description. */
 export def brainFlagHelp(): string {
   let lines: string[] = []
-  for (brain in allBrains()) {
+  for (brain in agencyAgentBrains()) {
     lines.push("${brain.name}: ${brain.description}")
   }
   return "Which brain answers turns (default: coordinator). One of — ${lines.join("; ")}"

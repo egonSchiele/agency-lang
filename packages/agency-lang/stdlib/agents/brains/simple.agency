@@ -1,0 +1,33 @@
+/** @module
+  @summary The simplest brain of the Agency agent: one LLM call with no
+  tools of its own, on the caller's conversation thread.
+*/
+import { AgentSettings, modelOptions } from "std::agents/brains/settings"
+import { Attachment, ensureSystemMessage, systemMessage } from "std::thread"
+
+static const SIMPLE_PROMPT = "You are a helpful assistant. Answer directly and concisely."
+
+export def simpleBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message with one LLM call. The call offers `extraTools` and
+  nothing else.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - The tools the call offers
+  """
+  ensureSystemMessage(SIMPLE_PROMPT)
+  if (settings.context != "") {
+    systemMessage(settings.context, expires: "llmCall")
+  }
+  const options = {
+    ...modelOptions(settings.model, settings.provider),
+    tools: extraTools
+  }
+  const reply: string = llm(prompt, options)
+  return success(reply)
+}

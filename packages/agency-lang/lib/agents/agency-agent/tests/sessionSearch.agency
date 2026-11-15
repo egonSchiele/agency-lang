@@ -3,34 +3,20 @@
  * checkpoint of a hand-built conversation into the test's own agent home,
  * then search it from a second session.
  */
-import { assistantMessage, userMessage } from "std::thread"
+import { assistantMessage, sessionThreadId, userMessage } from "std::thread"
 
-import { AgentBrain } from "../brains/brain.agency"
 import {
   currentSessionId,
   forkSession,
   markTurnDone,
   recordTurn,
+  setConversationThread,
   startSession,
  } from "../lib/resume.agency"
 import { SessionRecord, displayTitle, saveSession, sessionLabel } from "../lib/sessions.agency"
 import { SessionHit, TimedHit, datedHit, searchSessions } from "../lib/sessionSearch.agency"
 
-def noTurn(target: string, prompt: any): string {
-  return ""
-}
-
-def noInit(context: any) {
-}
-
-static const BRAIN: AgentBrain = {
-  name: "test",
-  session: "talk",
-  description: "",
-  startTargets: [],
-  init: noInit,
-  runTurn: noTurn
-}
+static const BRAIN = "test"
 
 // An older session whose conversation is `said` and its reply, saved on
 // disk under `id`.
@@ -51,7 +37,8 @@ def saveOlderSession(
     created: 1,
     lastActive: lastActive,
     turns: 1,
-    title: title
+    title: title,
+    conversationThread: sessionThreadId("talk")
   }
   const saved = saveSession(record, getCheckpoint(checkpoint()))
   return saved is success
@@ -130,6 +117,18 @@ node forkWritesToANewSession(): boolean {
   const savedWithoutATurn = target != null && target.record.id == currentSessionId() && target.record.turns == 1
   const remembersItsOrigin = target != null && target.record.forkedFrom == original
   return isNew && namesTheOriginal && savedWithoutATurn && remembersItsOrigin
+}
+
+// A fork is saved with no turn behind it. The save still carries the
+// conversation's thread id, so the fork's transcript can be read on resume.
+node aForkKeepsTheConversationThread(): boolean {
+  startSession(null, BRAIN)
+  setConversationThread("t7")
+  markTurnDone()
+  recordTurn("hello")
+  forkSession()
+  const target = recordTurn("")
+  return target != null && target.record.conversationThread == "t7"
 }
 
 node findsAMessageInAnEarlierSession(): boolean {

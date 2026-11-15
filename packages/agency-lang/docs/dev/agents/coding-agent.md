@@ -2,7 +2,7 @@
 
 `codingAgent` (`stdlib/agents/coding.agency`) is the stdlib agent that
 reads, writes, and runs code. `agency agent` uses it for both of its
-coders (`lib/agents/agency-agent/brains/coordinator/subagents/code.agency`),
+coders (`stdlib/agents/brains/coordinator/code.agency`),
 and any program can import it from `std::agents/coding`. A change to its
 prompt or its tools reaches all of them.
 
@@ -13,9 +13,7 @@ The system prompt starts with `CODING_RULES` from
 use for what. The agent's minimal brain uses the same text. After it comes
 a hint for each tool that goes unused without one:
 `PROGRESS_NOTE` (a sentence beside each tool call, which the agent's trace
-prints), `SAVE_DRAFT_HINT` (`saveDraft`), and `askUserHint()` (the
-`question` tool), which is added per call and is empty when nobody can
-answer.
+prints) and `SAVE_DRAFT_HINT` (`saveDraft`).
 
 Every rule in the prompt is sent with every request, and rules have not
 bought correct answers when measured. On SWE-bench Verified, a prompt
@@ -84,7 +82,9 @@ about one, because nobody is at the terminal to answer
 - `tests/agency/agents/toolkits.agency`: the coding bundle is exactly the
   four tools, and the agent's whole list is spelled out, so a tool added to
   either shows up as a failing test.
-- `lib/agents/agency-agent/brains/coordinator/tests/toolWiring.agency`:
-  the coders' tool lists have unique names and each carries `question`.
-- `lib/agents/agency-agent/brains/coordinator/tests/toolPresentations.agency`:
-  every tool the agent offers has a row in the trace table.
+- `lib/agents/agency-agent/tests/toolWiring.agency`: the coders' tool
+  lists have unique names and carry no `question`.
+- `lib/agents/agency-agent/tests/toolPresentations.agency`: every tool the
+  agent offers has a row in the trace table.
+- `tests/agency/agents/brainCoordinator.agency`: `coderGetsCoderTools`, the
+  coders get the caller's coder tools and the oracle does not.

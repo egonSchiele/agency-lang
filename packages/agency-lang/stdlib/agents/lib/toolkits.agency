@@ -1,5 +1,4 @@
 import { typecheck, parseAST, testFile } from "std::agency"
-import { question } from "std::agent"
 import { edit } from "std::fs"
 import {
   gitIsRepo,
@@ -63,10 +62,10 @@ selection happens at call time. Bundle membership describes the tools
 available; the caller's handlers still decide their interrupts.
 
 ```ts
-import { readOnlyFileTools, communicationTools } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, webTools } from "std::agents/lib/toolkits"
 
 node main() {
-  const tools = [...readOnlyFileTools(), ...communicationTools()]
+  const tools = [...readOnlyFileTools(), ...webTools()]
   const answer: string = llm("Summarize README.md", { tools: tools })
   print(answer)
 }
@@ -113,55 +112,6 @@ static const briefCliSkill = docsToolFromEntries("cli", cliEntries, brief: true)
 static const briefDiagnosticsSkill = docsToolFromEntries("diagnostics", diagnosticsEntries, brief: true).rename("agencyDiagnostics")
 static const briefStdlibSkill = docsToolFromEntries("stdlib", stdlibEntries, brief: true).rename("agencyStdlib")
 static const briefAgentSkill = docsToolFromEntries("agent", agentEntries, brief: true).rename("agencyAgent")
-
-// Whether anyone can answer a question in this run. A program that knows
-// nobody can, such as `agency agent -p`, sets it to false, and then no
-// agent is offered the tool or told about it.
-let _userCanAnswer = true
-
-export def setUserCanAnswer(canAnswer: boolean) {
-  """
-  Say whether anyone can answer a question in this run. When false, `communicationTools()` returns no tools and `askUserHint()` returns no text.
-
-  @param canAnswer - false when the run has nobody to ask, such as an unattended command-line run
-  """
-  _userCanAnswer = canAnswer
-}
-
-/** For code that offers its own asking tool or writes its own rule about
-asking, and so cannot use `communicationTools()` or `askUserHint()`. */
-export def userCanAnswer(): boolean {
-  """
-  Return whether anyone can answer a question in this run. True unless a program called `setUserCanAnswer(false)`.
-  """
-  return _userCanAnswer
-}
-
-/** `question` raises an interrupt the host or a handler answers with a value.
-Use it in hosted as well as terminal agents. Approval policy rules cannot
-supply a question's reply. The list is empty after `setUserCanAnswer(false)`. */
-export def communicationTools(): any[] {
-  """
-  Return the tool that asks the user a question, or no tools when nobody can answer.
-  """
-  if (!_userCanAnswer) {
-    return []
-  }
-  return [question]
-}
-
-/** Add this to the system prompt of an agent that offers
-`communicationTools()`. It is built per call, not spliced into a `static`
-prompt, because a program may call `setUserCanAnswer` after statics run. */
-export def askUserHint(): string {
-  """
-  Return `ASK_USER_HINT`, or an empty string when nobody can answer.
-  """
-  if (!_userCanAnswer) {
-    return ""
-  }
-  return ASK_USER_HINT
-}
 
 /** ls, glob, and grep always respect `.gitignore`. The setting is bound so
 the model cannot include ignored files by changing an argument. The model can
@@ -460,11 +410,6 @@ export def memoryTools(): any[] {
 // a tool call arrives in the same response, so it reports progress without
 // spending a model round, as a separate status tool would.
 export static const PROGRESS_NOTE = "- When you call a tool, write one short sentence in the same response saying what you are doing. That sentence is how the user follows your progress."
-
-// A model-facing instruction, spliced into an agent's prompt when the agent
-// offers the `question` tool. Without it the tool sits unused: a model that
-// has not been told to ask will guess instead.
-export static const ASK_USER_HINT = "\n\nWhen the work turns on something only the user can tell you — which account they mean, which of two readings of the request, a value you cannot look up — ask with the `question` tool, and ask before you build on the guess rather than after. Do not ask for anything you could find yourself, and do not ask the user to narrow a scope they left broad on purpose. When nobody can answer, your question comes back rejected; when that happens, pick the most reasonable reading, say which one you picked, and carry on."
 
 // A model-facing instruction, spliced into an agent's prompt when the agent
 // offers the `saveDraft` tool. Tells the model to checkpoint its best answer

@@ -1,0 +1,115 @@
+/** @module
+  @summary One turn of the command-line agent, answered by `agencyAgent`
+  from the stdlib. The harness passes in what only it has: the user's
+  global instructions, the models the run resolved to, the CLI's own tools,
+  and the job tools when a person is at the REPL. See
+  docs/dev/agents/agent-brains.md.
+*/
+import { AgencyAgentBrain, agencyAgent } from "std::agents/agency"
+import { AgentSettings } from "std::agents/brains/settings"
+import { now } from "std::date"
+import { Attachment, ensureSystemMessage } from "std::thread"
+
+import { cliTools, sessionJobTools } from "./cliTools.agency"
+import { globalInstructionsText } from "./globalInstructions.agency"
+import { grounding } from "./grounding.agency"
+import { addJobsNote } from "./jobsNote.agency"
+import { messageWasRewritten } from "./rewrittenMessage.agency"
+import { isInteractive } from "./trace.agency"
+import { getRouterModel, getRouterProvider, getSlowModel, getSlowProvider } from "../shared.agency"
+
+// A negative budget is no limit. A whole-agent limit comes from --max-cost
+// and --max-time, which the runtime enforces as a root budget.
+static const NO_LIMIT = -1
+
+// How replies are shown in the REPL. The heading rule is about the terminal
+// renderer, which drops the text after a heading that has no blank line.
+static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown. Put code and command output in fenced code blocks, and a blank line after every heading, or the renderer drops the text that follows."
+
+/** Add the reply style to the conversation thread when a person is at the
+  REPL. A one-shot run prints the reply as plain text, so it gets none. The
+  line goes on the thread and not in `context`, because `context` also
+  reaches the writing reviewer and the rewriter, which would read it as
+  part of the task the prose was written for. */
+export def addReplStyle() {
+  if (isInteractive()) {
+    ensureSystemMessage(REPL_STYLE)
+  }
+}
+
+/** The settings a turn runs with. The main model is the ambient one, which
+  pickModelsForAgent set at startup, so it is left empty here. */
+export def cliSettings(): AgentSettings {
+  return {
+    context: globalInstructionsText(),
+    model: "",
+    provider: "",
+    reasoningModel: getSlowModel(),
+    reasoningProvider: getSlowProvider(),
+    routerModel: routerModelFor(),
+    routerProvider: getRouterProvider(),
+    coderTools: sessionJobTools()
+  }
+}
+
+/** The router model, or "" when the harness rewrote this turn's message.
+  The router was measured on messages as the user typed them. */
+def routerModelFor(): string {
+  if (messageWasRewritten()) {
+    return ""
+  }
+  return getRouterModel()
+}
+
+/** The text the user reads for a subagent's result. */
+export def replyText(name: string, result: Result<string>): string {
+  if (isFailure(result)) {
+    return "${name} stopped before finishing: ${result.error}"
+  }
+  return result.value
+}
+
+export def answerTurn(
+  brainName: string,
+  message: string,
+  attachments: Attachment[],
+): string {
+  """
+  Answer one turn with agencyAgent. A failure becomes the text the user
+  reads. The grounding goes on the conversation thread, where it stays and
+  is cached, rather than in the per-call context.
+
+  @param brainName - The brain that answers
+  @param message - The user's message, after slash expansion
+  @param attachments - The files the message referenced
+  """
+  if (grounding() != "") {
+    ensureSystemMessage(grounding())
+  }
+  addJobsNote()
+  const settings = cliSettings()
+  let mainTools: any[] = []
+  // The minimal and simple brains get neither: their prompts are kept as
+  // short as they can be.
+  if (brainName == "coordinator") {
+    addReplStyle()
+    mainTools = cliTools(now(), settings)
+  }
+  const result = agencyAgent(
+    task: message,
+    context: settings.context,
+    brain: brainName as AgencyAgentBrain,
+    maxCost: NO_LIMIT,
+    maxTime: NO_LIMIT,
+    reasoningModel: settings.reasoningModel,
+    reasoningProvider: settings.reasoningProvider,
+    routerModel: settings.routerModel,
+    routerProvider: settings.routerProvider,
+    extraTools: {
+      main: mainTools,
+      coder: settings.coderTools
+    },
+    attachments: attachments,
+  )
+  return replyText("The agent", result)
+}

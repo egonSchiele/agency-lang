@@ -1,15 +1,21 @@
-import { coordinatorBrain } from "../../../lib/agents/agency-agent/brains/coordinator/coordinator.agency"
-import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/brains/coordinator/learn.agency"
+import { answerTurn } from "../../../lib/agents/agency-agent/lib/answer.agency"
+import { setGrounding } from "../../../lib/agents/agency-agent/lib/grounding.agency"
+import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/lib/learn.agency"
 import test { _setLearnedRoot } from "../../../lib/agents/agency-agent/lib/learned.agency"
+import { setInteractive } from "../../../lib/agents/agency-agent/lib/trace.agency"
+
+// The CLI's turn: agencyAgent with the coordinator brain and the CLI's own
+// tools, which include learnTools.
+def turn(message: string): string {
+  return answerTurn("coordinator", message, [])
+}
 
 node main() {
   _setLearnedRoot("${__dirname}/empty-home")
-  const brain = coordinatorBrain()
-  const init = brain.init
-  const answer = brain.runTurn
-  init({ interactive: false, grounding: "SESSION-TOOLS-GROUNDING" }) with approve
-  const first = answer("", "Learn the supplied series tool and answer ORIGINAL-REQUEST-MARKER with it.") with approve
-  const second = answer("", "Call the same series tool for GDP.") with approve
+  setInteractive(false)
+  setGrounding("SESSION-TOOLS-GROUNDING")
+  const first = turn("Learn the supplied series tool and answer ORIGINAL-REQUEST-MARKER with it.") with approve
+  const second = turn("Call the same series tool for GDP.") with approve
   return { first: first, second: second, tools: [tool.name for tool in getGeneratedTools()] }
 }
 
@@ -19,11 +25,9 @@ node freshConversation() {
 
 node failedLearningTurn() {
   _setLearnedRoot("${__dirname}/empty-home")
-  const brain = coordinatorBrain()
-  const init = brain.init
-  const answer = brain.runTurn
-  init({ interactive: false, grounding: "SESSION-TOOLS-GROUNDING" }) with approve
-  return answer("", "Learn the missing function.") with approve
+  setInteractive(false)
+  setGrounding("SESSION-TOOLS-GROUNDING")
+  return turn("Learn the missing function.") with approve
 }
 
 node failedBatches() {

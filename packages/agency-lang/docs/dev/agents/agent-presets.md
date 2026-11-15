@@ -19,8 +19,8 @@ Paths are relative to `lib/agents/agency-agent/`.
 | `lib/toolLimits.agency` | The two tool limits and where each value comes from. |
 | `lib/effort.agency` | The reasoning effort choices, the built-in default per model, and the level a run sends. |
 | `lib/session.agency` | `applyModelRequest`, `pickModelsForAgent`, `switchModel`, `switchPreset`, `saveSessionPreset`. |
-| `brains/coordinator/presetTools.agency` | The four tools. |
-| `brains/coordinator/skills/presets.md` | The skill that tells the model how to use the tools. |
+| `lib/presetTools.agency` | The four tools. |
+| `skills/presets.md` | The skill that tells the model how to use the tools. |
 
 ## How a run picks its models
 
@@ -350,14 +350,15 @@ sees one `std::write` prompt. Unlike `savePreset`, the command raises no
 approved when `useLlmOptions` set it, and an address in the preset's own
 block is already in the file.
 
-## The coordinator's skills folder
+## The agent's skills folder
 
-`brains/coordinator/skills/` holds skills about the agent itself, read
-through the `coordinator_skills` tool. `skillsDir` does not fail when a
+`skills/` holds skills about the agent itself, read through the
+`coordinator_skills` tool (`lib/cliTools.agency`). The scan reads only the
+Markdown files at the top of the folder. `skillsDir` does not fail when a
 folder is missing. It builds a tool that lists nothing. So
-`coordinatorInit` checks each bundled skills tool with
-`checkBundledSkill(tool, skillName)` and exits if the tool does not list a
-skill it should.
+`checkCliBundles`, which `runSession` calls inside the policy handler,
+checks the tool with `checkBundledSkill(tool, skillName)` and exits if the
+tool does not list a skill it should.
 
 ## Known limits
 

@@ -53,7 +53,7 @@ export def llmOptions(
   Build LLM options for an agent call, using the ambient model unless overridden.
 
   @param model - Model override, or "" for the ambient model.
-  @param provider - Provider for the override, ignored when model is empty.
+  @param provider - Provider for the override, or "" to keep the configured provider. Ignored when model is empty.
   @param hostedTools - Provider-hosted tool identifiers to enable.
   @param reasoningEffort - Requested reasoning level, or null to leave it unset.
   @param validationRetries - Retries after structured-output validation fails, or zero to leave the option unset.
@@ -68,6 +68,10 @@ export def llmOptions(
   }
   if (model != "") {
     options.model = model
+  }
+  // An empty provider is left out. Set to "", it would replace the
+  // configured provider, such as openrouter.
+  if (model != "" && provider != "") {
     options.provider = provider
   }
   if (reasoningEffort != null) {

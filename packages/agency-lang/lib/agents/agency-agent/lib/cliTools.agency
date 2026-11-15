@@ -1,0 +1,124 @@
+/** @module
+  @summary The tools only the command-line agent offers: the user's MCP
+  tools, learned tools, Claude Code skills, and saved tools, the tools that
+  save skills, tools, and presets, the session search, and in the REPL the
+  background job tools. The harness passes them to `agencyAgent`.
+*/
+import { _exit } from "agency-lang/stdlib-lib/system.js"
+import { AgencySource } from "std::agency"
+import { AgentSettings, reasoningOptions } from "std::agents/brains/settings"
+import { coordinatorTools } from "std::agents/brains/coordinator"
+import { jobTools, spillTools } from "std::agents/lib/toolkits"
+import { skillsDir } from "std::skills"
+import { endTurn } from "std::thread"
+
+import { checkBundledSkill } from "./bundledSkills.agency"
+import { claudeSkillTools } from "./claudeSkills.agency"
+import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "./learn.agency"
+import { learnedExtras } from "./learned.agency"
+import { useLlmOptions } from "./llmOptionTools.agency"
+import { getMcpTools } from "./mcp.agency"
+import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
+import { searchSessions } from "./sessionSearch.agency"
+import { isInteractive } from "./trace.agency"
+
+// Skills about the agent itself. The folder ships with the agent, so the
+// scan is approved here, as the bundled prompt reads are. An outer handler
+// that rejects the scan still wins.
+static const agentSkills = skillsDir(
+  __dirname + "/../skills",
+  "flat",
+  name: "coordinator_skills",
+) with approve
+
+/** Stop the run when the bundled skills folder is missing. A wrong path
+  does not make skillsDir fail, so the check looks for a skill the folder
+  is known to hold. Called inside the policy handler, before any turn. */
+export def checkCliBundles() {
+  const checked = checkBundledSkill(agentSkills, "presets")
+  if (checked is failure(reason)) {
+    print(color.red("Agent setup failed: ${reason}"))
+    _exit(1)
+  }
+}
+
+/** The job tools for this session: none in a one-shot run, which exits
+  when its turn ends and would stop its jobs before they finish. */
+export def sessionJobTools(): any[] {
+  if (!isInteractive()) {
+    return []
+  }
+  return jobTools()
+}
+
+// A long job read is saved and previewed. The coordinator has no shell to
+// read its path with, so it gets the readers for saved output too.
+def jobAndSpillTools(): any[] {
+  const jobs = sessionJobTools()
+  if (jobs.length == 0) {
+    return []
+  }
+  return [...jobs, ...spillTools()]
+}
+
+export def cliTools(turnStart: any, settings: AgentSettings): any[] {
+  """
+  The tools the command-line agent adds to the coordinator's own. The
+  tools that differ per user come first, since the router reads the first
+  names it is given. The learned and saved tools are read from the agent
+  home on every turn, so a tool the user saves in this session is callable
+  on the next turn.
+  """
+  return [
+    ...learnedExtras(),
+    ...getGeneratedTools(),
+    ...claudeSkillTools(),
+    ...getMcpTools(),
+    learnSkill,
+    writeToolFor,
+    agentSkills,
+    listPresets,
+    savePreset,
+    deletePreset,
+    setDefaultPreset,
+    useLlmOptions,
+    learnTools.partial(turnStart: turnStart, settings: settings),
+    searchSessions,
+    ...jobAndSpillTools(),
+  ]
+}
+
+handoff def learnTools(
+  turnStart: any,
+  settings: AgentSettings,
+  source: AgencySource,
+  names: string[] = [],
+  namespace: string = "session",
+): Result<string> {
+  """
+  Learn exported Agency functions for this conversation, then continue
+  the user's request with those tools available immediately. Read a
+  documentation URL first and resolve it to a stdlib module or Agency
+  source. An empty names list learns all supported public functions.
+
+  Learning runs the module's top-level code in a subprocess and can ask
+  for approval. Every later call also uses the normal subprocess gates.
+  Tools remain available after this conversation is resumed. They are
+  not saved in the permanent toolbox. Existing names are never replaced;
+  choose another namespace if a name is already available.
+  """
+  const before = [...coordinatorTools(settings, turnStart), ...cliTools(turnStart, settings)]
+  const offeredNames = [tool.name for tool in before]
+  const learned = learnSessionTools(source, names, namespace, offeredNames)?
+  const tools = [...coordinatorTools(settings, turnStart), ...cliTools(turnStart, settings)]
+  const answer = llm(
+    "The tools ${learned.join(", ")} are now available for this conversation. Continue the user's request using them as needed.",
+    {
+      ...reasoningOptions(settings),
+      memory: true,
+      tools: tools
+    },
+  )
+  endTurn()
+  return success(answer)
+}

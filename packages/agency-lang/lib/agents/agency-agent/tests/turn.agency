@@ -14,7 +14,8 @@ import { exists } from "std::shell"
 import { currentThreadId, getThread } from "std::thread"
 
 import { guardStopHandler } from "../lib/budget.agency"
-import { messageWasRewritten } from "../lib/rewrittenMessage.agency"
+import { cliSettings } from "../lib/answer.agency"
+import { messageWasRewritten, setMessageRewritten } from "../lib/rewrittenMessage.agency"
 import { setInteractive } from "../lib/trace.agency"
 import {
   setBrainName,
@@ -180,6 +181,25 @@ node groundingStaysOnThread(): string {
     count = facts.length
   }
   return "${count}"
+}
+
+// The router was measured on messages as the user typed them, so a turn
+// whose message the harness rewrote passes no router model.
+node rewrittenMessageGetsNoRouter(): string {
+  applyResolved(
+    {
+      router: {
+        model: "router-model",
+        provider: "openai",
+        via: "test"
+      }
+    },
+  )
+  setMessageRewritten(false)
+  const typed = cliSettings().routerModel
+  setMessageRewritten(true)
+  const rewritten = cliSettings().routerModel
+  return "${typed}|${rewritten}"
 }
 
 node resolvesBrainNamePrecedence(): string {

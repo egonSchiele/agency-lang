@@ -1,3 +1,4 @@
+import { modelOptions } from "std::agents/brains/settings"
 import { withContext, llmOptions } from "std::agents/lib/shared"
 import { renderGuidance, guidanceOrEmpty } from "std::agents/lib/expertGuidance"
 import { failOpenFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
@@ -14,6 +15,14 @@ node llmOptionsEmptyModelUntouched(): boolean {
 node llmOptionsSetsModelAndProvider(): boolean {
   const options = llmOptions("gpt-x", "openai", hostedTools: ["web_search"])
   return options.model == "gpt-x" && options.provider == "openai" && options.hostedTools.length == 1
+}
+
+// A model with no provider must not send provider: "", which would replace
+// the configured provider.
+node modelOnlyKeepsConfiguredProvider(): string {
+  const shared = llmOptions("gpt-x", "")
+  const brains = modelOptions("gpt-x", "")
+  return "${JSON.stringify(shared)}|${JSON.stringify(brains)}|${JSON.stringify(modelOptions("gpt-x", "openai"))}"
 }
 
 node llmOptionsSpillOnlyWhenSet(): boolean {

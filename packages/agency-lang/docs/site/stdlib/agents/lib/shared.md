@@ -101,7 +101,7 @@ Build LLM options for an agent call, using the ambient model unless overridden.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | model | `string` |  | Model override, or "" for the ambient model. |
-| provider | `string` |  | Provider for the override, ignored when model is empty. |
+| provider | `string` |  | Provider for the override, or "" to keep the configured provider. Ignored when model is empty. |
 | tools | `any[]` | [] |  |
 | hostedTools | `string[]` | [] | Provider-hosted tool identifiers to enable. |
 | reasoningEffort | `ReasoningEffort \| null` | null | Requested reasoning level, or null to leave it unset. |

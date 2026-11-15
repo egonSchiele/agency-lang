@@ -65,14 +65,15 @@ modelOptions(model: string, provider: string): any
 ```
 
 Return the `llm()` options that pick `model` and `provider`, or no
-  options when `model` is empty, so the ambient model stays in place.
+  options when `model` is empty, so the ambient model stays in place. An
+  empty `provider` is left out, so the configured provider stays in place.
 
 **Parameters:**
 
 | Name | Type | Default | Description |
 |---|---|---|---|
 | model | `string` |  | The model name, or "" for the ambient model |
-| provider | `string` |  | The model's provider |
+| provider | `string` |  | The model's provider, or "" for the configured one |
 
 **Returns:** `any`
 
@@ -95,7 +96,7 @@ Return the reasoning model and its provider, or the main model when no
 
 **Returns:** [ModelChoice](#modelchoice)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L58))
 
 ### reasoningOptions
 
@@ -114,4 +115,4 @@ Return the `llm()` options that pick the reasoning model, or the main
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L77))

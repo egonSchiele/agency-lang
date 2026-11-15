@@ -16,7 +16,7 @@ coordinator should handle it. One decision call on a thread of its own;
 export type Route = "research" | "code" | "coordinator"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L9))
 
 ### RouteChoice
 
@@ -32,7 +32,7 @@ export type RouteChoice = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L13))
 
 ## Functions
 
@@ -53,7 +53,7 @@ The question the router asks: one line per option, the coordinator's
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L44))
 
 ### pickRoute
 

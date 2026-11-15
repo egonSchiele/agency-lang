@@ -89,6 +89,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "rewrittenMessageGetsNoRouter",
+      "description": "A typed message gets the router model, and a message the harness rewrote gets none.",
+      "input": "",
+      "expectedOutput": "\"router-model|\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "resolvesStartTargets",
       "input": "",
       "expectedOutput": "\"true|true|true|true\"",

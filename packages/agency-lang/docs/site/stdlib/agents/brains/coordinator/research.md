@@ -13,18 +13,6 @@ a router over two stdlib agents. `agencyTopic: true` goes to
   documentation to answer from. This file adds the formatting rules and
   the memory tools the coordinator gives its specialists.
 
-## Constants
-
-### researchTools
-
-```ts
-export static const researchTools: any[] = memoryTools()
-```
-
-**Type:** `any[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/research.agency#L21))
-
 ## Functions
 
 ### researchAgent
@@ -57,4 +45,4 @@ Answer a question that needs reading rather than writing: looking something
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/research.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/research.agency#L31))

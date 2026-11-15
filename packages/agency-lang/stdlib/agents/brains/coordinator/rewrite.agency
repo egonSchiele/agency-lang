@@ -4,7 +4,7 @@
   separates the prose from the request around it and adds the thread and
   memory an agent turn needs.
 */
-import { AgentSettings } from "std::agents/brains/settings"
+import { AgentSettings, modelOptions } from "std::agents/brains/settings"
 import { writingRewriteAgent } from "std::agents/writing/rewrite"
 import { setMemoryId } from "std::memory"
 import { emit } from "std::statelog"
@@ -14,13 +14,13 @@ type RewriteRequest = {
   task: string
 }
 
-def splitRequest(userMsg: string): RewriteRequest {
+def splitRequest(settings: AgentSettings, userMsg: string): RewriteRequest {
   return llm("""A user message asks for a piece of prose to be rewritten. Separate the prose from the request around it. `text` is the prose itself, copied exactly, with the request words removed. `task` is anything the message says about who the prose is for or what it must get across, or "" if it says nothing.
 
 <message>
 ${userMsg}
 </message>
-""")
+""", modelOptions(settings.model, settings.provider))
 }
 
 export def rewriteAgent(settings: AgentSettings, userMsg: string): string {
@@ -35,7 +35,7 @@ export def rewriteAgent(settings: AgentSettings, userMsg: string): string {
   let reply = ""
   thread(label: "rewrite", summarize: true) {
     setMemoryId("rewrite")
-    const request = splitRequest(userMsg)
+    const request = splitRequest(settings, userMsg)
     const rewritten = writingRewriteAgent(
       text: request.text,
       task: request.task,

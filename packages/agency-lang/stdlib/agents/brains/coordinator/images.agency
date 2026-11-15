@@ -8,7 +8,7 @@ import { applyAgentCwd } from "std::index"
 import { basename, dirname } from "std::path"
 import { attachToReply, image, viewFile } from "std::thread"
 
-export def resolveEditInputs(images: string[]): string[] {
+def resolveEditInputs(images: string[]): string[] {
   return map(images) as inputPath {
     if (inputPath.startsWith("http://") || inputPath.startsWith("https://") || inputPath.startsWith("data:")) {
       return inputPath

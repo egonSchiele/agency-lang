@@ -3,7 +3,8 @@
 // share one system prompt, attachments and generated images reach the
 // model, the start and router events are emitted, and each subagent gets
 // what it should.
-import { coordinatorBrain, coordinatorPromptOrFailure } from "std::agents/brains/coordinator"
+import { coordinatorBrain } from "std::agents/brains/coordinator"
+import test { coordinatorPromptOrFailure } from "std::agents/brains/coordinator"
 import { codeAgent } from "std::agents/brains/coordinator/code"
 import { oracleAgent } from "std::agents/brains/coordinator/oracle"
 import { reviewAgent } from "std::agents/brains/coordinator/review"

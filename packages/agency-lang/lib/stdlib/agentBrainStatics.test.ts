@@ -3,32 +3,24 @@ import fs from "fs";
 import path from "path";
 import { parseAgencyFileCached } from "../parseCache.js";
 import { walkNodes } from "../utils/node.js";
-import { getImportedNames } from "../types/importStatement.js";
-import type { AgencyNode, AgencyProgram } from "../types.js";
+import type { AgencyNode } from "../types.js";
 
 /**
  * A static runs when its module loads, so every program that imports
  * `std::agents/agency` runs the statics of the Agency agent's modules. A
- * handler in the program's own code cannot see those reads. This test reads
- * the source instead: no static in those modules may call a function that
- * reads files or the environment, except `agentPrompt` and `agentSkill`,
- * which read only the files packaged with Agency.
+ * handler in the program's own code cannot see what they read. So a static
+ * in those modules may call only the functions listed here, each of which
+ * reads nothing but the files packaged with Agency.
  *
- * The check sees a call written directly in a static's initializer. It does
- * not see a read inside a helper that the static calls. The plan's rule that
- * the stdlib brains read no file outside the packaged prompts and skills
- * covers that case.
+ * Before adding a name, read the function and everything it calls. A
+ * function that reads the user's files or the environment does not belong
+ * here: call it inside a function instead. `searchTools`, and `buildTools`
+ * in the agents that include it, read the search API keys.
  */
-const READERS = [
-  "read",
-  "readBinary",
-  "exists",
-  "ls",
-  "glob",
-  "grep",
-  "skillsDir",
-  "commandsDir",
-  "env",
+const MAY_RUN_AT_LOAD = [
+  // Read a prompt or a skill from the packaged files.
+  "agentPrompt",
+  "agentSkill",
 ];
 
 const stdlib = path.join(process.cwd(), "stdlib");
@@ -43,15 +35,6 @@ function agencyFilesUnder(dir: string): string[] {
   });
 }
 
-/** The names a program imports from `std::fs`. */
-function fsImports(program: AgencyProgram): string[] {
-  return program.nodes.flatMap((node) =>
-    node.type === "importStatement" && node.modulePath === "std::fs"
-      ? node.importedNames.flatMap(getImportedNames)
-      : [],
-  );
-}
-
 /** The functions called anywhere in a static's initializer. */
 function calledNames(value: AgencyNode): string[] {
   const names: string[] = [];
@@ -63,20 +46,19 @@ function calledNames(value: AgencyNode): string[] {
   return names;
 }
 
-/** "file: NAME calls fn" for each static that calls a reader. */
-function readingStatics(file: string): string[] {
+/** "file: NAME calls fn" for each static that calls an unlisted function. */
+function unlistedCalls(file: string): string[] {
   const parsed = parseAgencyFileCached(file);
   if (!parsed.success) {
     throw new Error(`failed to parse ${file}`);
   }
-  const forbidden = [...READERS, ...fsImports(parsed.result)];
   const found: string[] = [];
   for (const { node } of walkNodes(parsed.result.nodes)) {
     if (node.type !== "assignment" || !node.static) {
       continue;
     }
     for (const name of calledNames(node.value)) {
-      if (forbidden.includes(name)) {
+      if (!MAY_RUN_AT_LOAD.includes(name)) {
         found.push(`${path.relative(stdlib, file)}: ${node.variableName} calls ${name}`);
       }
     }
@@ -85,11 +67,11 @@ function readingStatics(file: string): string[] {
 }
 
 describe("the Agency agent's stdlib statics", () => {
-  it("read no file or environment variable when the module loads", () => {
+  it("call only functions known to read nothing of the user's", () => {
     const files = [
       ...agencyFilesUnder(path.join(stdlib, "agents", "brains")),
       path.join(stdlib, "agents", "agency.agency"),
     ];
-    expect(files.flatMap(readingStatics)).toEqual([]);
+    expect(files.flatMap(unlistedCalls)).toEqual([]);
   });
 });

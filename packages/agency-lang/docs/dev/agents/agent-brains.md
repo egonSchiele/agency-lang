@@ -167,8 +167,9 @@ an `onEmit` callback in `lib/trace.agency`.
 ## The conversation thread
 
 No brain opens a `thread` block, so a turn runs on the run's active thread.
-After each turn, the harness `runTurn` in `lib/turn.agency` records that
-thread's id with `setConversationThread` (`lib/resume.agency`). Compaction,
+Before and after each turn, `runTurn` in `lib/turn.agency` records that
+thread's id with `setConversationThread` (`lib/resume.agency`). It records
+before the turn so that a turn the user cancels still leaves the id behind. Compaction,
 the context percentage, the session title, the resume transcript, and
 `searchSessions` read the thread the id names
 (`docs/dev/agents/agent-sessions.md`, `docs/dev/agents/agent-compaction.md`).
@@ -223,9 +224,11 @@ So the reads of the user's own files stay in the harness's modules:
 
 The stdlib modules' statics read only the packaged prompts and skills.
 `lib/stdlib/agentBrainStatics.test.ts` fails on a static in
-`stdlib/agents/brains/` or `stdlib/agents/agency.agency` that calls a
-file-reading function directly. It does not see a read inside a helper that
-a static calls.
+`stdlib/agents/brains/` or `stdlib/agents/agency.agency` that calls any
+function not on the test's list. A function goes on the list only after
+someone has read it and everything it calls. A tool list that includes
+`searchTools` is built inside a function, never in a static, because
+`searchTools` reads the search API keys from the environment.
 
 The grounding is built in `runSession` before the policy handler is
 installed, so reading the project's `AGENTS.md` never prompts. A block built

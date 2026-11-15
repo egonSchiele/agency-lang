@@ -100,7 +100,7 @@ not from the restored threads, because `restore()` replays to the saved
 point and runs nothing placed after it.
 
 The conversation is the run's active thread: a brain opens no `thread`
-block of its own, so every turn's `llm()` calls land on it. After each
+block of its own, so every turn's `llm()` calls land on it. Before and after each
 turn, `runTurn` in `lib/turn.agency` records that thread's id with
 `setConversationThread` (`lib/resume.agency`). `recordTurn` copies the id
 into the session record as `conversationThread`, before its early return

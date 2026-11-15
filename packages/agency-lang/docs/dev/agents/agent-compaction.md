@@ -32,7 +32,7 @@ line.
 
 ## Which thread
 
-The conversation is the thread whose id `runTurn` records after each turn
+The conversation is the thread whose id `runTurn` records for each turn
 (`conversationThread()` in `lib/resume.agency`), the same thread the title
 and the resume transcript read. The helpers in `lib/stdlib/agentCompaction.ts`
 take that slug id, such as `"t3"`, and return their empty value for an

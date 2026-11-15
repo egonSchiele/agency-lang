@@ -14,8 +14,9 @@
  * call succeeding, not on the response content, so both modes pass.
  */
 import { coordinatorTools } from "std::agents/brains/coordinator"
-import { agencyCodeAgentTools, codeTools } from "std::agents/brains/coordinator/code"
-import { researchTools } from "std::agents/brains/coordinator/research"
+import test { agencyCodeExtras } from "std::agents/brains/coordinator/code"
+import test { researchTools } from "std::agents/brains/coordinator/research"
+import { buildTools as codeTools } from "std::agents/coding"
 // The oracle and the explorer live in the stdlib now, so their tool lists
 // come from there. The check is the same: the agency agent still offers them,
 // so a duplicate name in either list still breaks this agent.
@@ -47,6 +48,11 @@ def turnTools(): any[] {
   return [...coordinatorTools(settings, now()), ...cliTools(now(), settings)]
 }
 
+// The Agency coder's own tools: the coding agent's, then what the wrapper adds.
+def agencyCodeAgentTools(): any[] {
+  return [...codeTools(), ...agencyCodeExtras()]
+}
+
 def pingWith(tools: any[]): string {
   // Reject any interrupt a tool might raise. Under the deterministic
   // provider no tools are called, so this never fires. Under a real LLM the
@@ -73,7 +79,7 @@ def pingWith(tools: any[]): string {
 }
 
 node codeToolsHaveUniqueNames() {
-  return pingWith(codeTools)
+  return pingWith(codeTools())
 }
 
 // What each coder really sends: the stdlib coding agent's tools, the tools
@@ -81,26 +87,26 @@ node codeToolsHaveUniqueNames() {
 // coder is the one at risk, because the brief docs tools and agencyCli join
 // the coding agent's own tools.
 node composedCodeToolsHaveUniqueNames() {
-  return pingWith([...codeTools, saveDraft])
+  return pingWith([...codeTools(), saveDraft])
 }
 
 node composedAgencyCodeToolsHaveUniqueNames() {
-  return pingWith([...agencyCodeAgentTools, saveDraft])
+  return pingWith([...agencyCodeAgentTools(), saveDraft])
 }
 
 node researchToolsHaveUniqueNames() {
-  return pingWith(researchTools)
+  return pingWith(researchTools())
 }
 
 // Pinging a list on its own is what let a real duplicate through: researchTools
 // carried saveDraft and so did the agent receiving it, so neither list was wrong
 // by itself. These ping what each research agent actually sends.
 node composedAgencyResearchToolsHaveUniqueNames() {
-  return pingWith([...agencyResearcherOwnTools(), ...researchTools, saveDraft])
+  return pingWith([...agencyResearcherOwnTools(), ...researchTools(), saveDraft])
 }
 
 node composedResearchToolsHaveUniqueNames() {
-  return pingWith([...researcherOwnTools(), ...researchTools, saveDraft])
+  return pingWith([...researcherOwnTools(), ...researchTools(), saveDraft])
 }
 
 node oracleToolsHaveUniqueNames() {
@@ -118,8 +124,8 @@ node explorerToolsHaveUniqueNames() {
 node noBuiltinToolUsesTheLearnedPrefix() {
   const builtIn: any[] = [
     ...coordinatorTools(cliSettings(), now()),
-    ...codeTools,
-    ...researchTools,
+    ...codeTools(),
+    ...researchTools(),
     ...oracleTools(),
     ...explorerTools(),
     ...agencyResearcherOwnTools(),
@@ -188,14 +194,14 @@ def offersQuestion(tools: any[]): boolean {
 
 node subagentsOfferNoQuestion(): string {
   let offering: string[] = []
-  if (offersQuestion(codeTools)) { offering.push("code") }
+  if (offersQuestion(codeTools())) { offering.push("code") }
   if (offersQuestion(explorerTools())) { offering.push("explorer") }
   if (offersQuestion(reviewTools())) { offering.push("review") }
   if (offersQuestion(researcherOwnTools())) { offering.push("researcher") }
   if (offersQuestion(writingReviewTools())) { offering.push("writing") }
   if (offersQuestion(oracleTools())) { offering.push("oracle") }
   if (offersQuestion(agencyReviewTools())) { offering.push("agency review") }
-  if (offersQuestion([...agencyResearcherOwnTools(), ...researchTools])) { offering.push("agency research") }
+  if (offersQuestion([...agencyResearcherOwnTools(), ...researchTools()])) { offering.push("agency research") }
   if (offering.length > 0) {
     return "FAIL: a question tool for ${offering.join(", ")}"
   }
@@ -245,12 +251,12 @@ node composedAgencyReviewToolsHaveUniqueNames() {
 // session, so these are the lists that reach the provider there.
 node composedCodeToolsWithJobsHaveUniqueNames() {
   setInteractive(true)
-  return pingWith([...codeTools, ...sessionJobTools(), saveDraft])
+  return pingWith([...codeTools(), ...sessionJobTools(), saveDraft])
 }
 
 node composedAgencyCodeToolsWithJobsHaveUniqueNames() {
   setInteractive(true)
-  return pingWith([...agencyCodeAgentTools, ...sessionJobTools(), saveDraft])
+  return pingWith([...agencyCodeAgentTools(), ...sessionJobTools(), saveDraft])
 }
 
 def countNamed(names: string[], name: string): number {

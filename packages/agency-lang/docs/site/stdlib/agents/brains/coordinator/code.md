@@ -50,36 +50,6 @@ ${agencyTutorial}
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L74))
 
-### agencyCodeExtras
-
-```ts
-export static const agencyCodeExtras: any[] = [...agencyDocToolsBrief(), ...agencyCodeTools(), agencyCli]
-```
-
-**Type:** `any[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L87))
-
-### codeTools
-
-```ts
-export static const codeTools: any[] = codingAgentTools()
-```
-
-**Type:** `any[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L94))
-
-### agencyCodeAgentTools
-
-```ts
-export static const agencyCodeAgentTools: any[] = [...codingAgentTools(), ...agencyCodeExtras]
-```
-
-**Type:** `any[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L96))
-
 ## Functions
 
 ### agencyCli
@@ -139,7 +109,7 @@ Hand a coding task to the coder: reading, writing, and editing code,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L117))
 
 ### agencyCodeAgent
 
@@ -172,4 +142,4 @@ Hand a task about Agency code to the Agency coder: writing, editing,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L139))

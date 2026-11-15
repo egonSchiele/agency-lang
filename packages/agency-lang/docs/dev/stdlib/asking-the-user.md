@@ -35,6 +35,6 @@ No stdlib agent offers `question`, and neither does the coordinator in `agency a
 
 - `tests/agency/agent-question/` — the round trip with no LLM: an approval's value comes back from the call, the prompt reaches the handler, and a rejection's reason survives to the call site.
 - `tests/agency/policy-ask-value-interrupt/` — the menu and `typedValue` behavior for a value-expecting raise.
-- `tests/agency/agents/toolkits.agency` — `noAgentOffersQuestion` checks the ten stdlib agents that used to offer the tool.
+- `tests/agency/agents/toolkits.agency` — `noAgentOffersQuestion` checks ten stdlib agents.
 - `lib/agents/agency-agent/tests/toolWiring.agency` — `subagentsOfferNoQuestion` and `coordinatorTurnOffersNoQuestion` check the coordinator's lists.
 - `tests/agency/toolbox/brief.agency` — `authorAlwaysOffersQuestion` checks `designTool`'s author.

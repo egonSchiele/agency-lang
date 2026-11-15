@@ -12,25 +12,6 @@ a turn itself or hands it to the code, research, oracle, explorer,
 
 ## Functions
 
-### coordinatorPromptOrFailure
-
-```ts
-coordinatorPromptOrFailure(prompt: Result<string>): Result<string>
-```
-
-Return the coordinator's prompt, or a failure that names the prompt file
-  when it could not be read.
-
-**Parameters:**
-
-| Name | Type | Default | Description |
-|---|---|---|---|
-| prompt | `Result<string>` |  | The result of reading the prompt file |
-
-**Returns:** `Result<string>`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator.agency#L42))
-
 ### coordinatorTools
 
 ```ts
@@ -49,7 +30,7 @@ Return the coordinator's own tools. The subagents get `settings` bound,
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator.agency#L51))
 
 ### coordinatorBrain
 
@@ -77,4 +58,4 @@ Answer one message as the coordinator: route it, or answer it with one
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator.agency#L130))

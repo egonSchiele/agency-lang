@@ -18,7 +18,9 @@ import { setMemoryId } from "std::memory"
 import { emit } from "std::statelog"
 import { endTurn } from "std::thread"
 
-export static const researchTools: any[] = memoryTools()
+def researchTools(): any[] {
+  return memoryTools()
+}
 
 static const replStyle = """Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest.
 
@@ -60,7 +62,7 @@ export handoff def researchAgent(
       maxTime: timeBudget(maxSeconds, 10m),
       model: settings.model,
       provider: settings.provider,
-      extraTools: researchTools,
+      extraTools: researchTools(),
       keepDraft: false,
       offerSaveDraft: false,
     )
@@ -72,7 +74,7 @@ export handoff def researchAgent(
       maxTime: timeBudget(maxSeconds, 30m),
       model: settings.model,
       provider: settings.provider,
-      extraTools: researchTools,
+      extraTools: researchTools(),
       keepDraft: false,
       offerSaveDraft: false,
     )

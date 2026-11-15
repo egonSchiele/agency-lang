@@ -88,7 +88,6 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "agencyVerifierAgent"
   ],
   "std::agents/brains/coordinator": [
-    "coordinatorPromptOrFailure",
     "coordinatorTools",
     "coordinatorBrain"
   ],
@@ -104,7 +103,6 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "explorerAgent"
   ],
   "std::agents/brains/coordinator/images": [
-    "resolveEditInputs",
     "generateImageFile",
     "viewImageFile"
   ],

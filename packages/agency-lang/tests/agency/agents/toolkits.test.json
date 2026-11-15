@@ -145,7 +145,7 @@
     },
     {
       "nodeName": "noAgentOffersQuestion",
-      "description": "None of the ten stdlib agents that used to offer the question tool offers it now.",
+      "description": "None of the ten stdlib agents checked offers the question tool.",
       "input": "",
       "expectedOutput": "\"pass\"",
       "evaluationCriteria": [

@@ -39,13 +39,9 @@ type TurnRoute = {
   text: string
 }
 
-export def coordinatorPromptOrFailure(prompt: Result<string>): Result<string> {
-  """
-  Return the coordinator's prompt, or a failure that names the prompt file
-  when it could not be read.
-
-  @param prompt - The result of reading the prompt file
-  """
+// The coordinator's prompt, or a failure that names the prompt file when it
+// could not be read.
+def coordinatorPromptOrFailure(prompt: Result<string>): Result<string> {
   return match(prompt) {
     failure(reason) => failure("Could not read the coordinator's prompt, coordinator.md: ${reason}")
     _ => prompt

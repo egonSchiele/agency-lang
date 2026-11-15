@@ -186,11 +186,14 @@ export def runTurn(target: string, userMsg: string): string {
   the brain continues. A whole-agent limit comes only from the `--max-time`
   and `--max-cost` flags, which the runtime enforces as a root budget.
   """
+  // The turn runs on this run's active thread, which is the conversation.
+  // Recorded before the turn too, so a turn the user cancels still leaves
+  // the id behind.
+  setConversationThread(currentThreadId())
   let reply = ""
   handle {
     reply = dispatchToBrain(target, userMsg)
   } with guardStopHandler
-  // The turn ran on this run's active thread, which is the conversation.
   setConversationThread(currentThreadId())
   return reply
 }

@@ -17,7 +17,7 @@
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
 import { AgentSettings } from "std::agents/brains/settings"
 import { timeBudget } from "std::agents/brains/coordinator/budgets"
-import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
+import { codingAgent } from "std::agents/coding"
 import { agencyCodeTools, agencyDocToolsBrief } from "std::agents/lib/toolkits"
 import { getAgentCwd } from "std::index"
 import { exec } from "std::shell"
@@ -84,16 +84,13 @@ static const CODE_MAX_TIME = 15m
 
 // What the Agency coder is given on top of the stdlib coding agent's own
 // tools. The plain coder gets the stdlib tools alone.
-export static const agencyCodeExtras: any[] = [
-  ...agencyDocToolsBrief(),
-  ...agencyCodeTools(),
-  agencyCli,
-]
-
-// The full lists, for the tests that check tool names.
-export static const codeTools: any[] = codingAgentTools()
-
-export static const agencyCodeAgentTools: any[] = [...codingAgentTools(), ...agencyCodeExtras]
+def agencyCodeExtras(): any[] {
+  return [
+    ...agencyDocToolsBrief(),
+    ...agencyCodeTools(),
+    agencyCli,
+  ]
+}
 
 static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown, and put code and command output in fenced code blocks."
 
@@ -161,5 +158,5 @@ export handoff def agencyCodeAgent(
   """
   emit({ type: "agencyAgent.subagentStart", agent: "agencyCodeAgent", message: userMsg })
   ensureSystemMessage(agencyCodePrompt)
-  return runCoder(settings, userMsg, maxSeconds, maxDollars, agencyCodeExtras)
+  return runCoder(settings, userMsg, maxSeconds, maxDollars, agencyCodeExtras())
 }

@@ -5,7 +5,7 @@
   a chat message, and choosing the reviewer.
 */
 import { agencyReviewAgent } from "std::agents/agency/review"
-import { AgentSettings } from "std::agents/brains/settings"
+import { AgentSettings, modelOptions } from "std::agents/brains/settings"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
 import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { setMemoryId } from "std::memory"
@@ -51,6 +51,7 @@ export def review(settings: AgentSettings, userMsg: string): Result<Feedback[]> 
 
     const snippets: AgencyCode[] = llm(
       `Extract any Agency code snippets from the following message: ${userMsg}`,
+      modelOptions(settings.model, settings.provider),
     )
 
     let feedback: Result<Feedback[]> = success([])

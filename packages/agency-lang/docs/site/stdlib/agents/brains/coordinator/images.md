@@ -9,22 +9,6 @@ edit an image and save it to a file, and look at an image file.
 
 ## Functions
 
-### resolveEditInputs
-
-```ts
-resolveEditInputs(images: string[]): string[]
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| images | `string[]` |  |
-
-**Returns:** `string[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/images.agency#L11))
-
 ### generateImageFile
 
 ```ts

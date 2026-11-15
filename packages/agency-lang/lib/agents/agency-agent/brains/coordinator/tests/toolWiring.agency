@@ -25,8 +25,6 @@ import { buildTools as explorerTools } from "std::agents/explorer"
 // the agent's own tools plus researchTools plus the saveDraft the agent appends.
 import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
 import { buildTools as researcherOwnTools } from "std::agents/researcher"
-import { question } from "std::agent"
-import { setUserCanAnswer } from "std::agents/lib/toolkits"
 import { filter, find, map } from "std::array"
 import { now } from "std::date"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
@@ -87,7 +85,7 @@ node researchToolsHaveUniqueNames() {
 // carried saveDraft and so did the agent receiving it, so neither list was wrong
 // by itself. These ping what each research agent actually sends.
 node composedAgencyResearchToolsHaveUniqueNames() {
-  return pingWith([...agencyResearcherOwnTools(), ...researchTools, question, saveDraft])
+  return pingWith([...agencyResearcherOwnTools(), ...researchTools, saveDraft])
 }
 
 node composedResearchToolsHaveUniqueNames() {
@@ -162,23 +160,23 @@ node coordinatorSkillsListPresets(): string {
   }
 }
 
-// Every subagent can ask the user. Most get `question` through
-// communicationTools(); the few that do not claim that bundle are handed it
-// at the call site, and those lists are pinged below, where a second copy
-// of the tool would be rejected as a duplicate name.
+// No subagent offers the `question` tool.
 def offersQuestion(tools: any[]): boolean {
   return find(tools, \tool -> "${tool.name}" == "question") != null
 }
 
-node subagentsOfferQuestion(): string {
-  let missing: string[] = []
-  if (!offersQuestion(codeTools)) { missing.push("code") }
-  if (!offersQuestion(explorerTools())) { missing.push("explorer") }
-  if (!offersQuestion(reviewTools())) { missing.push("review") }
-  if (!offersQuestion(researcherOwnTools())) { missing.push("researcher") }
-  if (!offersQuestion(writingReviewTools())) { missing.push("writing") }
-  if (missing.length > 0) {
-    return "FAIL: no question tool for ${missing.join(", ")}"
+node subagentsOfferNoQuestion(): string {
+  let offering: string[] = []
+  if (offersQuestion(codeTools)) { offering.push("code") }
+  if (offersQuestion(explorerTools())) { offering.push("explorer") }
+  if (offersQuestion(reviewTools())) { offering.push("review") }
+  if (offersQuestion(researcherOwnTools())) { offering.push("researcher") }
+  if (offersQuestion(writingReviewTools())) { offering.push("writing") }
+  if (offersQuestion(oracleTools())) { offering.push("oracle") }
+  if (offersQuestion(agencyReviewTools())) { offering.push("agency review") }
+  if (offersQuestion([...agencyResearcherOwnTools(), ...researchTools])) { offering.push("agency research") }
+  if (offering.length > 0) {
+    return "FAIL: a question tool for ${offering.join(", ")}"
   }
   return "ok"
 }
@@ -195,10 +193,9 @@ node coordinatorOffersFileWrites(): string {
   return "ok"
 }
 
-// The coordinator holds the conversation, so it asks directly rather than
-// through a subagent. Its list is built per turn, so the check has to build
+// The coordinator's own list is built per turn, so the check has to build
 // one too.
-node coordinatorTurnOffersQuestion(): string {
+node coordinatorTurnOffersNoQuestion(): string {
   // turnTools() scans the agent home for learned tools. Point it at the
   // fixture, as the learned-tools node above does, so this never reads the
   // developer's own saved tools.
@@ -207,36 +204,20 @@ node coordinatorTurnOffersQuestion(): string {
   handle {
     names = map(turnTools(now()), \tool -> "${tool.name}")
   } with approve
-  if (!names.includes("question")) {
-    return "FAIL: no question in ${names.join(", ")}"
+  if (names.includes("question")) {
+    return "FAIL: question in ${names.join(", ")}"
   }
   return "ok"
 }
 
-// A one-shot run has nobody to answer, so the harness calls
-// setUserCanAnswer(false) and the coordinator's turn offers no `question`.
-node oneShotTurnOffersNoQuestion(): boolean {
-  _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
-  setUserCanAnswer(false)
-  let names: string[] = []
-  handle {
-    names = map(turnTools(now()), \tool -> "${tool.name}")
-  } with approve
-  setUserCanAnswer(true)
-  return names.includes("question")
-}
-
-// Two of the agents handed `question` at the call site rather than through
-// the bundle (composedAgencyResearchToolsHaveUniqueNames above covers a
-// third). Adding communicationTools() to one without dropping its call-site
-// copy would send two tools named `question`, which the runtime rejects
-// before the request goes out.
+// The lists the oracle and the Agency reviewer send, with the saveDraft
+// tool each agent appends.
 node composedOracleToolsHaveUniqueNames() {
-  return pingWith([...oracleTools(), question, saveDraft])
+  return pingWith([...oracleTools(), saveDraft])
 }
 
 node composedAgencyReviewToolsHaveUniqueNames() {
-  return pingWith([...agencyReviewTools(), question, saveDraft])
+  return pingWith([...agencyReviewTools(), saveDraft])
 }
 
 // The coders get the job tools on top of their own in an interactive

@@ -30,11 +30,11 @@ the call in `thread { ... }` to keep its messages out of the current thread.
 buildTools(): any[]
 ```
 
-Return the GitHub tools with the progress and question tools.
+Return the GitHub tools and the readers for saved output.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/github.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/github.agency#L40))
 
 ### githubAgent
 
@@ -77,4 +77,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/github.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/github.agency#L71))

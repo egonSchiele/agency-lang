@@ -166,7 +166,7 @@
       ]
     },
     {
-      "nodeName": "subagentsOfferQuestion",
+      "nodeName": "subagentsOfferNoQuestion",
       "input": "",
       "expectedOutput": "\"ok\"",
       "evaluationCriteria": [
@@ -186,20 +186,9 @@
       ]
     },
     {
-      "nodeName": "coordinatorTurnOffersQuestion",
+      "nodeName": "coordinatorTurnOffersNoQuestion",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "oneShotTurnOffersNoQuestion",
-      "description": "After setUserCanAnswer(false), which the harness calls for a one-shot run, the coordinator's turn tools do not include question.",
-      "input": "",
-      "expectedOutput": "false",
       "evaluationCriteria": [
         {
           "type": "exact"

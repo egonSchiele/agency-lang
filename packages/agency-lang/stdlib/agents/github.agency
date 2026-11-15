@@ -1,9 +1,7 @@
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
-import { githubTools, spillTools, askUserHint } from "std::agents/lib/toolkits"
+import { githubTools, spillTools } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { systemMessage } from "std::thread"
-
-import { communicationTools } from "./lib/toolkits.agency"
 
 /** @module
 @summary Read and act on GitHub pull requests and issues.
@@ -41,9 +39,9 @@ checks, and comments, and posting reviews and comments.
 
 export def buildTools(): any[] {
   """
-  Return the GitHub tools with the progress and question tools.
+  Return the GitHub tools and the readers for saved output.
   """
-  return [...githubTools(), ...spillTools(), ...communicationTools()]
+  return [...githubTools(), ...spillTools()]
 }
 
 def work(
@@ -53,7 +51,7 @@ def work(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
+  systemMessage(systemPrompt, expires: "llmCall")
   return llm(
     withContext(task: task, context: context),
     llmOptions(

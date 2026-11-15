@@ -340,7 +340,7 @@ Other process docs:
 
 - `docs/dev/stdlib/adding-a-module-to-the-agency-stdlib.md` — The pattern for adding a stdlib module, including where files go and how docs are generated.
 - `docs/dev/stdlib/agency-function-tools.md` — `runFunction` and `learn`: calling a prepared Agency function in a subprocess, and the coordinator's session records.
-- `docs/dev/stdlib/asking-the-user.md` — `question` and the `std::question` effect: why asking goes through an interrupt, and which agents carry the tool.
+- `docs/dev/stdlib/asking-the-user.md` — `question` and the `std::question` effect: why asking goes through an interrupt, and why no stdlib agent offers the tool.
 - `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.
 - `docs/dev/stdlib/contained-files.md` — The part of the host every stdlib file operation goes through, and why it refuses any symlink below its root.
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.

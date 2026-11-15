@@ -13,9 +13,7 @@ The system prompt starts with `CODING_RULES` from
 use for what. The agent's minimal brain uses the same text. After it comes
 a hint for each tool that goes unused without one:
 `PROGRESS_NOTE` (a sentence beside each tool call, which the agent's trace
-prints), `SAVE_DRAFT_HINT` (`saveDraft`), and `askUserHint()` (the
-`question` tool), which is added per call and is empty when nobody can
-answer.
+prints) and `SAVE_DRAFT_HINT` (`saveDraft`).
 
 Every rule in the prompt is sent with every request, and rules have not
 bought correct answers when measured. On SWE-bench Verified, a prompt

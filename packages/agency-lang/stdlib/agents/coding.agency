@@ -5,7 +5,6 @@ import {
   codingFileAndShellTools,
   fetchTools,
   memoryTools,
-  askUserHint,
   CODING_RULES,
   PROGRESS_NOTE,
   SAVE_DRAFT_HINT,
@@ -14,8 +13,6 @@ import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
 import { systemMessage } from "std::thread"
-
-import { communicationTools } from "./lib/toolkits.agency"
 
 /** @module
 @summary Write, edit, and run code to complete a task on disk.
@@ -63,7 +60,6 @@ export def buildTools(): any[] {
     ...memoryTools(),
     ...fetchTools(),
     ...searchTools(),
-    ...communicationTools(),
     skills,
   ]
 }
@@ -75,7 +71,7 @@ def solve(
   provider: string,
   extraTools: any[],
 ): string {
-  systemMessage(systemPrompt + askUserHint(), expires: "llmCall")
+  systemMessage(systemPrompt, expires: "llmCall")
   return llm(
     withContext(task: task, context: context),
     llmOptions(

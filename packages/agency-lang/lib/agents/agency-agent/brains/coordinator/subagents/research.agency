@@ -10,7 +10,7 @@
  */
 import { _insideToolCall } from "agency-lang/stdlib-lib/thread.js"
 import { agencyResearcherAgent } from "std::agents/agency/researcher"
-import { communicationTools, memoryTools } from "std::agents/lib/toolkits"
+import { memoryTools } from "std::agents/lib/toolkits"
 import { researcherAgent } from "std::agents/researcher"
 import { setMemoryId } from "std::memory"
 import { endTurn } from "std::thread"
@@ -58,7 +58,7 @@ export handoff def researchAgent(
       context: context,
       maxCost: maxDollars ?? $10.00,
       maxTime: timeBudget(maxSeconds, 10m),
-      extraTools: [...researchTools, ...communicationTools()],
+      extraTools: researchTools,
       keepDraft: false,
       offerSaveDraft: false,
     )

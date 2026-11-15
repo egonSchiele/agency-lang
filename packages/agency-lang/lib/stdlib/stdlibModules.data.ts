@@ -138,10 +138,6 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "llmOptions"
   ],
   "std::agents/lib/toolkits": [
-    "setUserCanAnswer",
-    "userCanAnswer",
-    "communicationTools",
-    "askUserHint",
     "readOnlyFileTools",
     "writableFileTools",
     "shellTools",

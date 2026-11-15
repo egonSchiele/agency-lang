@@ -6,7 +6,7 @@
 */
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { AgencySource } from "std::agency"
-import { communicationTools, spillTools, writableFileTools } from "std::agents/lib/toolkits"
+import { spillTools, writableFileTools } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
@@ -141,7 +141,6 @@ def turnBuiltIns(turnStart: any): any[] {
   return [
     learnTools.partial(turnStart: turnStart),
     searchSessions,
-    ...communicationTools(),
     elapsedTime.partial(since: turnStart),
   ]
 }

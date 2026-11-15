@@ -1,12 +1,10 @@
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { AGENT_SPILL_OVER, llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT, askUserHint } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
-
-import { communicationTools } from "./lib/toolkits.agency"
 
 /** @module
 @summary Check completed work on disk against measurable task criteria.
@@ -38,7 +36,6 @@ export def buildTools(): any[] {
     ...readOnlyGitTools(),
     ...shellTools(),
     ...agencyCodeTools(),
-    ...communicationTools(),
     readBinary.partial(useAgentCwd: true),
     skills,
   ]
@@ -127,7 +124,7 @@ def verifyUnderBudget(
 ): Result<Feedback[]> {
   thread(label: "verifierAgent", session: session) {
     if (threadIsNew()) {
-      systemMessage(systemPrompt + askUserHint())
+      systemMessage(systemPrompt)
     }
     const criteriaString = criteriaAsString(criteria)
     /*       const authoritativeCriteria = """

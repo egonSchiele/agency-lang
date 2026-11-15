@@ -15,7 +15,7 @@ The agent home is `~/.agency-agent` or `AGENCY_AGENT_HOME`.
 
 ## The coordinator's tools
 
-`lib/agents/agency-agent/brains/coordinator/learn.agency` offers the
+`lib/agents/agency-agent/lib/learn.agency` offers the
 coordinator `learnSkill(name, description, body)`, which is
 `designSkill` in the skills directory, and
 `writeToolFor(name, purpose, request)`, which is `designTool` in the
@@ -42,12 +42,13 @@ exist is skipped without a prompt, and a rejected scan offers nothing.
 
 ## What the coordinator gets
 
-`turnTools()` in `brains/coordinator/coordinator.agency` builds the
-coordinator's list for one turn: its fixed tools, the MCP tools, then
-`learnedExtras()`. It is built per turn, not once at startup, so a tool
-saved in this session is callable on the next turn. The system prompt
-tells the model the saved tools arrive as `learned_<name>` and that
-`learned_skills` reads the skills; without that the model knows how to
+`cliTools()` in `lib/cliTools.agency` builds the tools the command-line
+agent adds to the coordinator's own for one turn: `learnedExtras()` first,
+then the saved tools, the Claude skills, the MCP tools, and the CLI's own
+tools. It is built per turn, not once at startup, so a tool saved in this
+session is callable on the next turn. The docstrings of `learnSkill` and
+`writeToolFor` tell the model the saved tools arrive as `learned_<name>` and
+that `learned_skills` reads the skills; without that the model knows how to
 save one but not that it can call one.
 
 `runTool` takes its request as `Json`, so on its own the schema the
@@ -85,9 +86,9 @@ bad name fails every LLM call that lists it.
 
 - `lib/agents/agency-agent/tests/learned.agency`, over
   `tests/learned-fixture/`.
-- `lib/agents/agency-agent/brains/coordinator/tests/learn.agency`. No
+- `lib/agents/agency-agent/tests/learn.agency`. No
   node makes a model call.
-- `brains/coordinator/tests/toolWiring.agency`: no built-in tool uses
+- `lib/agents/agency-agent/tests/toolWiring.agency`: no built-in tool uses
   the `learned_` prefix, and the coordinator's turn list offers the
   fixture's learned tools.
 - `tests/agency/toolbox/designTool.agency`:

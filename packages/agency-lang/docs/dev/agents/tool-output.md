@@ -61,7 +61,7 @@ argument has the statelog log and `--debug`.
 
 Adding a tool to an agent toolkit means adding a row to
 `TOOL_PRESENTATIONS` in `lib/stdlib/agentToolTrace.ts`. The test
-`brains/coordinator/tests/toolPresentations.agency` walks every tool the
+`lib/agents/agency-agent/tests/toolPresentations.agency` walks every tool the
 coordinator and the code agent offer and fails on a name with no row.
 
 A one-line tool that raises an interrupt shows the approval prompt before
@@ -77,7 +77,7 @@ its line. The prompt names the path, so no trace line precedes it.
   status board shares it.
 - `stdlib/agents/lib/search.agency` owns the search-provider catalog and
   exports `searchProviderName` for looking up a tool's provider label.
-- `brains/coordinator/lib/announce.agency`, under the agent directory, sends
+- The `onEmit` callback in `lib/agents/agency-agent/lib/trace.agency` sends
   subagent announcements through the same renderer and visibility rule.
 - `lib/utils/controlCharacters.ts` strips control characters for both the
   trace renderer and the TUI. The TUI re-exports the shared helper.
@@ -189,9 +189,10 @@ ones. A client result of `[]` means `0 sources`; missing or malformed sources
 mean `Sources not reported`. A hosted record with no sources omits that
 section, since absence does not establish zero results.
 
-The coordinator's subagent functions call `announce` with their tool name.
-It sends an `agentStart` event containing the brief, including for direct
-calls from code. Their registered presentation suppresses generic tool starts
+The coordinator's subagent functions pass an event with
+`type: "agencyAgent.subagentStart"`, their tool name, and the brief to
+`emit`, including for direct calls from code. The agent's `onEmit` callback
+turns it into an `agentStart` trace event. Their registered presentation suppresses generic tool starts
 and supplies a named completion or failure. This keeps one announcement per
 dispatch. Announcements obey the same visibility flags as other traces.
 

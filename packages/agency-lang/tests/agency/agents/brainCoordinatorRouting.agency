@@ -1,0 +1,162 @@
+// A turn routed by a decision model, through the coordinator brain, under a
+// scripted model. The router model comes in the settings.
+import { coordinatorBrain } from "std::agents/brains/coordinator"
+import { AgentSettings } from "std::agents/brains/settings"
+import { Attachment, currentThreadId, getThread, image } from "std::thread"
+
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+static const ROUTER_QUESTION = "Which agent should handle the user's latest message?"
+static const RESEARCHER_PERSONA = "You are a research analyst."
+
+// Every model request, in order: its messages.
+let requests: any[] = []
+
+callback("onLLMCallStart") as data {
+  requests = [...requests, data.messages]
+}
+
+def lastMessage(messages: any[]): any {
+  return messages[messages.length - 1]
+}
+
+def isRouterRequest(messages: any[]): boolean {
+  return startsWithText(lastMessage(messages), ROUTER_QUESTION)
+}
+
+def routerRequests(): number {
+  return ([messages for messages in requests if isRouterRequest(messages)]).length
+}
+
+def contentOf(message: any): string {
+  return "${message.content}"
+}
+
+def startsWithText(message: any, prefix: string): boolean {
+  const content = contentOf(message)
+  return content.startsWith(prefix)
+}
+
+def includesText(message: any, text: string): boolean {
+  const content = contentOf(message)
+  return content.includes(text)
+}
+
+// How many messages in the request start with the text.
+def countStarting(messages: any[], prefix: string): number {
+  return ([message for message in messages if startsWithText(message, prefix)]).length
+}
+
+// How many messages in the request hold the text.
+def countIncluding(messages: any[], text: string): number {
+  return ([message for message in messages if includesText(message, text)]).length
+}
+
+def settingsWith(routerModel: string): AgentSettings {
+  return {
+    context: "",
+    model: "",
+    provider: "",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: routerModel,
+    routerProvider: "openrouter",
+    coderTools: []
+  }
+}
+
+// The conversation's messages. The brain runs on the caller's thread, so
+// the conversation is the test node's active thread.
+def mainThread(): any[] {
+  return getThread(currentThreadId(), 0, 1000) catch []
+}
+
+// The reply text, or the failure's message.
+def textOf(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+// One turn with the router model set, the way agencyAgent sends it:
+// [message, ...attachments].
+def routed(parts: (string | Attachment)[]): string {
+  const result = coordinatorBrain(parts, settingsWith("jev-1.14"), []) with approve
+  return textOf(result)
+}
+
+node slotUnsetAsksNoRouter(): string {
+  const result = coordinatorBrain(["find the release date of node 24"], settingsWith(""), []) with approve
+  return "${textOf(result)}|${routerRequests()}"
+}
+
+// The researcher runs with the user's message as its task, and the
+// coordinator model is never asked: the only other request is the
+// researcher's, with its persona.
+node confidentResearchGoesToTheResearcher(): string {
+  const reply = routed(["find the release date of node 24"])
+  const second = requests[1]
+  const isResearcher = countStarting(second, RESEARCHER_PERSONA) == 1
+  const taskIsTheMessage = includesText(lastMessage(second), "find the release date of node 24")
+  return "${reply}|${requests.length}|${isResearcher}|${taskIsTheMessage}"
+}
+
+// The coder runs on the conversation thread, not a thread of its own, so
+// its reply is the conversation's last message.
+node confidentCodeGoesToTheCoder(): string {
+  const reply = routed(["add a --verbose flag to the build script"])
+  const taskIsTheMessage = includesText(
+    lastMessage(requests[1]),
+    "add a --verbose flag to the build script",
+  )
+  const onMain = contentOf(lastMessage(mainThread())) == reply
+  return "${reply}|${requests.length}|${taskIsTheMessage}|${onMain}"
+}
+
+node coordinatorRouteRunsTheCoordinator(): string {
+  const reply = routed(["hello there"])
+  return "${reply}|${requests.length}|${routerRequests()}|${isRouterRequest(requests[1])}"
+}
+
+node anAttachmentIsNotRouted(): string {
+  const reply = routed(["look at this", image(PNG, "image/png", base64: true)])
+  return "${reply}|${routerRequests()}"
+}
+
+node aLongMessageIsNotRouted(): string {
+  let long = ""
+  for (i in range(0, 900)) {
+    long = "${long}0123456789"
+  }
+  const reply = routed([long])
+  return "${reply}|${routerRequests()}"
+}
+
+// The coordinator's other tools are on its line; the routed subagents are
+// not, being options of their own.
+node theQuestionNamesTheCoordinatorsTools(): string {
+  const reply = routed(["hello there"])
+  const question = contentOf(lastMessage(requests[0]))
+  const toolsLine = question.substring(question.indexOf("Its other tools:"))
+  return "${toolsLine.includes("oracleAgent")}|${toolsLine.includes("researchAgent")}|${toolsLine.includes("codeAgent,")}"
+}
+
+// The next turn goes to the coordinator, whose request holds the routed
+// turn's prompt and reply and no researcher persona.
+node theNextTurnSeesTheRoutedTurn(): string {
+  const first = routed(["find the release date of node 24"])
+  const second = routed(["and the one before it?"])
+  const coordinator = requests[requests.length - 1]
+  const sawPrompt = countIncluding(coordinator, "find the release date of node 24") > 0
+  const sawReply = ([message for message in coordinator if message.content == first]).length
+  return "${second}|${sawPrompt}|${sawReply}|${countStarting(coordinator, RESEARCHER_PERSONA)}"
+}
+
+// The researcher pauses on a read approval. The test answers it through the
+// checkpoint, so the brain runs again from its saved frame; the router is
+// still asked once. Asked again, it would take the next mock, a text
+// mock, and fail.
+node aResumedTurnDoesNotAskAgain(): string {
+  const result = coordinatorBrain(["summarize the notes file"], settingsWith("jev-1.14"), [])
+  return "${textOf(result)}|${routerRequests()}"
+}

@@ -2,7 +2,7 @@
 // calls sit in the "router" scope, the module's name.
 import { currentThreadId, getThread, userMessage } from "std::thread"
 
-import { pickRoute, routeQuestion } from "../brains/coordinator/router.agency"
+import { pickRoute, routeQuestion } from "std::agents/brains/coordinator/router"
 
 static const MODEL = "jev-1.14"
 static const PROVIDER = "openrouter"

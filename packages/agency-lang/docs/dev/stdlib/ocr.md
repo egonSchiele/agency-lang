@@ -94,6 +94,6 @@ because `attachToReply` silently drops there.
 - `stdlib/ocr.agency`, `lib/stdlib/ocr.ts`, `lib/stdlib/visionOcr.jxa`, `lib/stdlib/ocr.test.ts`
 - `lib/stdlib/approvedPath.ts`, the post-approval validation shared by `viewFile` and `readTextWithModel`
 - `stdlib/thread.agency` (`viewFile`), `lib/stdlib/thread.ts` (`_viewFilePrecheck`, `_insideToolCall`)
-- `lib/agents/agency-agent/lib/images.agency` (`viewImageFile`, the agent-cwd wrapper)
+- `stdlib/agents/brains/coordinator/images.agency` (`viewImageFile`, the agent-cwd wrapper)
 - `tests/agency/ocr.agency`, `tests/agency/attach-to-reply.agency`, `tests/agency-js/ocr-cloud/`
 - `packages/tesseract-local/`

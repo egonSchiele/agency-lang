@@ -31,5 +31,5 @@ drops the rest shows where.
 ## Files
 
 - `stdlib/agents/writing/rewrite.agency` — the agent and its `evalMain`
-- `lib/agents/agency-agent/brains/coordinator/subagents/rewrite.agency` — the CLI subagent
+- `stdlib/agents/brains/coordinator/rewrite.agency` — the coordinator brain's subagent
 - `evals/writing-rewrite/lib/rewriteGraders.ts`, `templates.ts` — graders and judge prompts

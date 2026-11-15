@@ -1,111 +1,98 @@
 {
-  "sourceFile": "turn.agency",
   "tests": [
     {
-      "nodeName": "plainMessageReachesBrain",
+      "nodeName": "plainMessageReachesTheModel",
+      "description": "A plain message reaches the model as the bare text and is not marked rewritten.",
       "input": "",
-      "expectedOutput": "\"stub reply|true|array|0|false\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "expectedOutput": "\"stub reply|text|hello there|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "stub reply" }]
     },
     {
       "nodeName": "slashCommandExpands",
+      "description": "A slash command is expanded before the model sees it and marked rewritten.",
       "input": "",
       "expectedOutput": "\"false|true|true\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "ok" }]
     },
     {
       "nodeName": "mainTargetGetsAttachment",
+      "description": "An image path in the message is read and attached for a model that takes images.",
       "input": "",
-      "expectedOutput": "\"array|1|true\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "expectedOutput": "\"array:1|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "ok" }]
     },
     {
       "nodeName": "namedTargetGetsBareTextWithoutReading",
+      "description": "A named target gets the message as bare text, and no attachment read is attempted.",
       "input": "",
-      "expectedOutput": "\"stub reply|worker|text|0|0\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "expectedOutput": "\"It is sound.|0\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "It is sound." }]
     },
     {
-      "nodeName": "budgetTripIsHardStopAndBrainContinues",
+      "nodeName": "budgetTripIsHardStop",
+      "description": "The harness's guard handler rejects a budget trip no inner handler owns, so the guarded work stops with a failure.",
       "input": "",
-      "expectedOutput": "\"stopped|sub\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
+      "expectedOutput": "\"stopped\"",
+      "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": "costly reply"
-        }
-      ]
+      "llmMocks": [{ "return": "costly reply" }]
     },
     {
       "nodeName": "textOnlyModelDropsAttachment",
+      "description": "A text-only model gets the message with no attachment.",
       "input": "",
-      "expectedOutput": "\"array|0\"",
-      "evaluationCriteria": [
+      "expectedOutput": "\"text\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "ok" }]
+    },
+    {
+      "nodeName": "sessionPolicyDecidesTheAgentsInterrupts",
+      "description": "Under the CLI policy with nobody present, a write the agent attempts is rejected and the file is not written.",
+      "input": "",
+      "expectedOutput": "\"I could not write it.|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
         {
-          "type": "exact"
-        }
+          "toolCalls": [
+            {
+              "name": "write",
+              "args": { "filename": "/tmp/turn-policy-write.txt", "content": "should not exist" }
+            }
+          ]
+        },
+        { "return": "I could not write it." }
       ]
     },
     {
-      "nodeName": "sessionRunsInitAndPolicyWins",
+      "nodeName": "groundingStaysOnThread",
+      "description": "The grounding is added once, even after the working directory changes between turns.",
       "input": "",
-      "expectedOutput": "\"true|rejected|rejected|rejected|1|true\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "sessionPassesInteractiveContext",
-      "input": "",
-      "expectedOutput": "\"true|true|true|true|1\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "expectedOutput": "\"1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }]
     },
     {
       "nodeName": "resolvesBrainNamePrecedence",
       "input": "",
       "expectedOutput": "\"flag-brain|settings-brain|settings-brain|coordinator\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "resolvesStartTargets",
       "input": "",
       "expectedOutput": "\"true|true|true|true\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

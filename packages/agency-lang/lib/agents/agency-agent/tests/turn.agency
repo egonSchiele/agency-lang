@@ -1,41 +1,57 @@
 /*
- * Harness tests: the work that happens around a brain (slash expansion,
- * attachments, the hard stop for a budget trip) and the session wrapper
- * that installs the policy handler around init and every turn. Uses stub
- * brains; no real coordinator involved.
+ * Harness tests: the work that happens around agencyAgent (slash
+ * expansion, attachments, the hard stop for a budget trip, the grounding)
+ * and the session wrapper that installs the policy handler around every
+ * turn. The turns run the simple brain or the coordinator brain under a
+ * scripted model, and the prompt each request carried is read from the
+ * onLLMCallStart callback.
  *
  * `slashCommandExpands` depends on the working directory being
  * packages/agency-lang, whose .claude/commands/check-tests.md is the
  * fixture (projectCommands is a static read of ${cwd()}/.claude/commands).
  */
+import { exists } from "std::shell"
+import { currentThreadId, getThread } from "std::thread"
+
+import { guardStopHandler } from "../lib/budget.agency"
+import { messageWasRewritten } from "../lib/rewrittenMessage.agency"
 import { setInteractive } from "../lib/trace.agency"
 import {
-  setBrain,
+  setBrainName,
   runTurn,
   runSession,
   setPolicyArg,
   resolveBrainName,
   resolveStartTarget,
  } from "../lib/turn.agency"
-import { messageWasRewritten } from "../lib/rewrittenMessage.agency"
 import { applyResolved } from "../shared.agency"
-import {
-  recordingBrain,
-  selfApprovingBrain,
-  guardedBrain,
-  initCount,
-  lastTarget,
-  lastPromptKind,
-  lastText,
-  lastAttachmentCount,
-  lastContextInteractive,
-  lastGrounding,
-  initPolicyOutcome,
- } from "./stubBrains.agency"
 
 static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
+// The prompt of every model request, in order.
+let prompts: any[] = []
+
+callback("onLLMCallStart") as data {
+  prompts = [...prompts, data.prompt]
+}
+
 let _readBinaryInterrupts = 0
+
+// "text" for a bare message, or "array:<n>" for a message with n
+// attachments after it.
+def promptShape(prompt: any): string {
+  return match(prompt) {
+    text: string => "text"
+    parts: any[] => "array:${parts.length - 1}"
+  }
+}
+
+def promptText(prompt: any): string {
+  return match(prompt) {
+    text: string => text
+    parts: any[] => "${parts[0]}"
+  }
+}
 
 // The CLI policy is the inner handler and approves std::readBinary. Every
 // approval is only a vote, so this outer handler sees an attempted read,
@@ -50,27 +66,27 @@ def auditReadBinary(intr: any): any {
   return pass()
 }
 
-// A plain message reaches the brain on the main target, as the array form
-// with zero attachments, and is not marked rewritten.
-node plainMessageReachesBrain(): string {
-  setBrain(recordingBrain())
+// A plain message reaches the model as the bare text, and is not marked
+// rewritten.
+node plainMessageReachesTheModel(): string {
+  setBrainName("simple")
   const reply = runTurn("", "hello there") with approve
-  return "${reply}|${lastTarget() == ""}|${lastPromptKind()}|${lastAttachmentCount()}|${messageWasRewritten()}"
+  return "${reply}|${promptShape(prompts[0])}|${promptText(prompts[0])}|${messageWasRewritten()}"
 }
 
-// A project slash command is expanded by the harness before the brain sees
+// A project slash command is expanded by the harness before the model sees
 // it, and marked rewritten so the router leaves it alone.
 node slashCommandExpands(): string {
-  setBrain(recordingBrain())
+  setBrainName("simple")
   runTurn("", "/check-tests") with approve
-  const text = lastText()
+  const text = promptText(prompts[0])
   return "${text.startsWith("/")}|${text.includes("Please review the tests you have written")}|${messageWasRewritten()}"
 }
 
 // An image path on the main target is detected, read, and attached by the
 // harness. (The "📎 attached" line goes to the UI and is not asserted here.)
 node mainTargetGetsAttachment(): string {
-  setBrain(recordingBrain())
+  setBrainName("simple")
   applyResolved(
     {
       main: {
@@ -82,53 +98,45 @@ node mainTargetGetsAttachment(): string {
   )
   writeBinary("turn-a.png", PNG, "/tmp") with approve
   runTurn("", "look at /tmp/turn-a.png") with approve
-  return "${lastPromptKind()}|${lastAttachmentCount()}|${lastText() == "look at /tmp/turn-a.png"}"
+  return "${promptShape(prompts[0])}|${promptText(prompts[0]) == "look at /tmp/turn-a.png"}"
 }
 
-// The same message to a named target arrives as bare text AND no read was
+// A message to a named target arrives as bare text AND no read was
 // attempted. The outer audit is essential: detectAttachments turns a
 // rejected read into a skipped attachment, so prompt shape alone is not
 // evidence that detection was bypassed.
 node namedTargetGetsBareTextWithoutReading(): string {
-  setBrain(recordingBrain())
+  setBrainName("coordinator")
   setPolicyArg("${__dirname}/stubPolicy.json")
   writeBinary("turn-b.png", PNG, "/tmp") with approve
   let reply = ""
   handle {
     runSession(false) {
-      reply = runTurn("worker", "look at /tmp/turn-b.png")
+      reply = runTurn("oracle", "look at /tmp/turn-b.png")
     }
   } with auditReadBinary
-  return "${reply}|${lastTarget()}|${lastPromptKind()}|${lastAttachmentCount()}|${_readBinaryInterrupts}"
+  return "${reply}|${_readBinaryInterrupts}"
 }
 
-// Approve everything the harness raises around the turn, but leave a
-// std::guard trip to the harness's own handler: a blanket approve would
-// answer the trip itself.
-def approveExceptGuard(intr: any): any {
-  if (intr.effect == "std::guard") {
-    return pass()
-  }
-  return approve()
-}
-
-// A budget trip inside the brain stops that step, not the turn: the harness
-// rejects the trip and the brain's reply is built from the failure. If the
-// harness passed instead, the turn would park on an unanswered interrupt.
-node budgetTripIsHardStopAndBrainContinues(): string {
+// A budget trip that no inner handler owns is a hard stop: the harness
+// handler rejects it, so the guarded work returns a failure instead of
+// parking on an unanswered interrupt.
+node budgetTripIsHardStop(): string {
   setInteractive(false)
-  setBrain(guardedBrain())
-  let reply = ""
+  let outcome = ""
   handle {
-    reply = runTurn("", "hello")
-  } with approveExceptGuard
-  return reply
+    const result = guard(cost: 0.000001, label: "sub") {
+      return llm("Reply with a long answer.")
+    }
+    outcome = if isFailure(result) then "stopped" else "ran"
+  } with guardStopHandler
+  return outcome
 }
 
 // The unit tests for modalityFilter prove its internals. This integration
-// case proves the harness still calls it before handing the main turn over.
+// case proves the harness still calls it before the turn is answered.
 node textOnlyModelDropsAttachment(): string {
-  setBrain(recordingBrain())
+  setBrainName("simple")
   applyResolved(
     {
       main: {
@@ -140,36 +148,38 @@ node textOnlyModelDropsAttachment(): string {
   )
   writeBinary("turn-text-only.png", PNG, "/tmp") with approve
   runTurn("", "look at /tmp/turn-text-only.png") with approve
-  return "${lastPromptKind()}|${lastAttachmentCount()}"
+  return promptShape(prompts[0])
 }
 
-// Session wrapper: init runs once before two turns. The rejecting CLI policy
-// beats the brain's own approval during BOTH init and each turn.
-node sessionRunsInitAndPolicyWins(): string {
-  setBrain(selfApprovingBrain())
+// The CLI policy handler decides every interrupt a turn raises. With
+// nobody present, a write it has no rule for is rejected, and the file is
+// not written.
+node sessionPolicyDecidesTheAgentsInterrupts(): string {
+  setBrainName("coordinator")
   setPolicyArg("${__dirname}/stubPolicy.json")
-  let firstReply = ""
-  let secondReply = ""
-  let initBeforeTurn = false
+  let reply = ""
   runSession(false) {
-    initBeforeTurn = initCount() == 1
-    firstReply = runTurn("", "first")
-    secondReply = runTurn("", "second")
+    reply = runTurn("", "write the file")
   }
-  return "${initBeforeTurn}|${initPolicyOutcome()}|${firstReply}|${secondReply}|${initCount()}|${!lastContextInteractive()}"
+  const written = exists("turn-policy-write.txt", "/tmp") with approve
+  return "${reply}|${written}"
 }
 
-// A separate interactive session proves runSession builds and passes the
-// actual BrainContext rather than coordinator tests succeeding only because
-// they manually supplied one.
-node sessionPassesInteractiveContext(): string {
-  setBrain(recordingBrain())
+// The grounding is built once and added once, even after the working
+// directory changes between turns, because its text holds the directory.
+node groundingStaysOnThread(): string {
+  setBrainName("simple")
   setPolicyArg("${__dirname}/stubPolicy.json")
-  let bodyRan = false
-  runSession(true) {
-    bodyRan = true
+  let count = -1
+  runSession(false) {
+    runTurn("", "first")
+    setAgentCwd("/tmp")
+    runTurn("", "second")
+    const messages = getThread(currentThreadId(), 0, 200) catch []
+    const facts = [message for message in messages if message.role == "system" && message.content.includes("<session_facts>")]
+    count = facts.length
   }
-  return "${lastContextInteractive()}|${lastGrounding().includes("Current date:")}|${lastGrounding().includes("Current working directory:")}|${bodyRan}|${initCount()}"
+  return "${count}"
 }
 
 node resolvesBrainNamePrecedence(): string {
@@ -187,10 +197,9 @@ node resolvesBrainNamePrecedence(): string {
 }
 
 node resolvesStartTargets(): string {
-  const brain = recordingBrain()
-  const emptyMain = resolveStartTarget(brain, "")
-  const namedMain = resolveStartTarget(brain, "main")
-  const worker = resolveStartTarget(brain, "worker")
-  const invalid = resolveStartTarget(brain, "bogus")
-  return "${emptyMain == ""}|${namedMain == ""}|${worker == "worker"}|${invalid == null}"
+  const emptyMain = resolveStartTarget("coordinator", "")
+  const namedMain = resolveStartTarget("coordinator", "main")
+  const coder = resolveStartTarget("coordinator", "code")
+  const invalid = resolveStartTarget("coordinator", "bogus")
+  return "${emptyMain == ""}|${namedMain == ""}|${coder == "code"}|${invalid == null}"
 }

@@ -1,0 +1,52 @@
+/** @module
+  @summary The rewriter of the Agency agent's coordinator brain. The
+  rewrite lives in `std::agents/writing/rewrite`. This wrapper only
+  separates the prose from the request around it and adds the thread and
+  memory an agent turn needs.
+*/
+import { AgentSettings } from "std::agents/brains/settings"
+import { writingRewriteAgent } from "std::agents/writing/rewrite"
+import { setMemoryId } from "std::memory"
+import { emit } from "std::statelog"
+
+type RewriteRequest = {
+  text: string;
+  task: string
+}
+
+def splitRequest(userMsg: string): RewriteRequest {
+  return llm("""A user message asks for a piece of prose to be rewritten. Separate the prose from the request around it. `text` is the prose itself, copied exactly, with the request words removed. `task` is anything the message says about who the prose is for or what it must get across, or "" if it says nothing.
+
+<message>
+${userMsg}
+</message>
+""")
+}
+
+export def rewriteAgent(settings: AgentSettings, userMsg: string): string {
+  """
+  Rewrite prose for readability and return the rewritten text. Runs the
+  writing reviewer, then applies its findings; text the reviewer finds
+  nothing wrong with comes back unchanged.
+
+  @param userMsg - the text to rewrite, and who it is for if known.
+  """
+  emit({ type: "agencyAgent.subagentStart", agent: "rewriteAgent", message: userMsg })
+  let reply = ""
+  thread(label: "rewrite", summarize: true) {
+    setMemoryId("rewrite")
+    const request = splitRequest(userMsg)
+    const rewritten = writingRewriteAgent(
+      text: request.text,
+      task: request.task,
+      context: settings.context,
+      model: settings.model,
+      provider: settings.provider,
+    )
+    reply = match(rewritten) {
+      success(value) => value
+      failure(err) => "rewrite failed: ${err}"
+    }
+  }
+  return reply
+}

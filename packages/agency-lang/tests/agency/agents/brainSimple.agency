@@ -1,0 +1,71 @@
+// The simple brain from std::agents/brains/simple, under a scripted model.
+import { simpleBrain } from "std::agents/brains/simple"
+import { AgentSettings } from "std::agents/brains/settings"
+import { currentThreadId, getThread } from "std::thread"
+
+// Every model request, in order.
+let calls: any[] = []
+
+callback("onLLMCallStart") as data {
+  calls = [...calls, data]
+}
+
+def settingsWith(context: string, model: string): AgentSettings {
+  return {
+    context: context,
+    model: model,
+    provider: "openai",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: "",
+    routerProvider: "",
+    coderTools: []
+  }
+}
+
+def requestHasSystemText(call: any, text: string): boolean {
+  for (message in call.messages) {
+    const content = "${message.content}"
+    if (message.role == "system" && content.includes(text)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** A tool that does nothing, to see which lists it reaches. */
+def stubTool(note: string): string {
+  """
+  Return the note.
+
+  @param note - Any text
+  """
+  return note
+}
+
+// One message is one call, and the context reaches it.
+node answersWithTheContext(): string {
+  const reply = simpleBrain(["hello"], settingsWith("CTX-MARKER-1c9e", ""), []) catch "failed"
+  return "${reply}|${requestHasSystemText(calls[0], "CTX-MARKER-1c9e")}"
+}
+
+// The call offers the extra tools and nothing else.
+node offersOnlyTheExtraTools(): string[] {
+  simpleBrain(["hello"], settingsWith("", ""), [stubTool])
+  return [tool.name for tool in calls[0].tools]
+}
+
+node usesTheModel(): string {
+  simpleBrain(["hello"], settingsWith("", "test-model"), [])
+  return "${calls[0].model}"
+}
+
+// Two calls on one thread add the prompt once.
+node twoTurnsOneSystemPrompt(): string {
+  simpleBrain(["one"], settingsWith("", ""), [])
+  simpleBrain(["two"], settingsWith("", ""), [])
+  const messages = getThread(currentThreadId(), 0, 200) catch []
+  const systems = [message for message in messages if message.role == "system"]
+  const users = [message for message in messages if message.role == "user"]
+  return "${systems.length} system, ${users.length} user"
+}

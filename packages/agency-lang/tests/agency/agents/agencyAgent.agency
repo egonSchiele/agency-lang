@@ -1,0 +1,136 @@
+// agencyAgent from std::agents/agency, under a scripted model.
+import { agencyAgent, agencyAgentBrains } from "std::agents/agency"
+import { exists } from "std::shell"
+import { currentThreadId, getThread } from "std::thread"
+
+static const PROMPT_PHRASE = "Agency-language assistant"
+
+// Every model request, in order.
+let calls: any[] = []
+
+callback("onLLMCallStart") as data {
+  calls = [...calls, data]
+}
+
+def textOf(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+def requestHas(call: any, role: string, text: string): boolean {
+  for (message in call.messages) {
+    const content = "${message.content}"
+    if (message.role == role && content.includes(text)) {
+      return true
+    }
+  }
+  return false
+}
+
+def toolNames(call: any): string[] {
+  return [tool.name for tool in call.tools]
+}
+
+/** A tool that does nothing, to see which lists it reaches. */
+def stubA(note: string): string {
+  """
+  Return the note.
+
+  @param note - Any text
+  """
+  return note
+}
+
+/** Another tool that does nothing. */
+def stubB(note: string): string {
+  """
+  Return the note.
+
+  @param note - Any text
+  """
+  return note
+}
+
+node defaultBrainAnswers(): string {
+  const result = agencyAgent("hello") with approve
+  return textOf(result)
+}
+
+node eachBrainAnswers(): string {
+  const minimal = agencyAgent("hello", brain: "minimal") with approve
+  const simple = agencyAgent("hello", brain: "simple") with approve
+  return "${textOf(minimal)}|${textOf(simple)}"
+}
+
+node brainCount(): number {
+  return agencyAgentBrains().length
+}
+
+// Two calls from code continue one thread: the prompt is there once, and
+// the second request holds the first message.
+node secondCallSeesFirst(): string {
+  agencyAgent("first message") with approve
+  agencyAgent("second message") with approve
+  const messages = getThread(currentThreadId(), 0, 200) catch []
+  const prompts = [message for message in messages if message.role == "system" && message.content.includes(PROMPT_PHRASE)]
+  return "${prompts.length}|${requestHas(calls[1], "user", "first message")}"
+}
+
+// Called as a tool, it starts on a fresh thread: its request does not hold
+// the outer conversation's message.
+node asToolStartsFresh(): string {
+  const answer = llm("the outer question", { tools: [agencyAgent] }) with approve
+  return "${answer}|${requestHas(calls[1], "user", "the outer question")}"
+}
+
+// The caller's handler decides the agent's interrupts: a rejected write
+// leaves no file behind.
+node callerHandlerRejects(): string {
+  handle {
+    agencyAgent("write the file")
+  } with (intr) {
+    if (intr.effect == "std::write") {
+      return reject()
+    }
+    return approve()
+  }
+  const written = exists("agency-agent-rejected-write.txt", "/tmp") with approve
+  return "${written}"
+}
+
+// `main` reaches the model that answers; `coder` reaches the coder.
+node extraToolsReachTheRightAgent(): string {
+  agencyAgent("add a flag", extraTools: { main: [stubA], coder: [stubB] }) with approve
+  const coordinator = toolNames(calls[0])
+  const coder = toolNames(calls[1])
+  return "${coordinator.includes("stubA")}|${coordinator.includes("stubB")}|${coder.includes("stubB")}|${coder.includes("stubA")}"
+}
+
+node simpleBrainOffersOnlyMain(): string[] {
+  agencyAgent("hello", brain: "simple", extraTools: { main: [stubA], coder: [stubB] }) with approve
+  return toolNames(calls[0])
+}
+
+// The context is in the request and gone from the thread afterwards.
+node contextReachesModel(): string {
+  agencyAgent("hello", context: "CTX-MARKER-7f") with approve
+  const messages = getThread(currentThreadId(), 0, 200) catch []
+  const left = [message for message in messages if message.content.includes("CTX-MARKER-7f")]
+  return "${requestHas(calls[0], "system", "CTX-MARKER-7f")}|${left.length}"
+}
+
+node budgetTripIsFailure(): string {
+  const result = agencyAgent("hello", maxCost: $0.000001) with approve
+  if (result is failure(reason)) {
+    return "${reason.includes("cost")}"
+  }
+  return "did not trip"
+}
+
+// A negative limit is no limit, so the CLI can pass -1 for both.
+node noLimitRuns(): string {
+  const result = agencyAgent("hello", maxCost: -1, maxTime: -1) with approve
+  return textOf(result)
+}

@@ -297,5 +297,5 @@ re-entering the scope on the way in. There is no orphaned tool call for
 - `tests/agency-js/end-turn/` — the end-to-end suite for `endTurn` and
   `handBack`.
 - `stdlib/agents/oracle.agency`, `explorer.agency`, `coding.agency`,
-  `github.agency`, the two researchers, and the coordinator wrappers under `lib/agents/agency-agent/brains/coordinator/subagents/`
+  `github.agency`, the two researchers, and the coordinator wrappers under `stdlib/agents/brains/coordinator/`
   — the handoff functions that ship.

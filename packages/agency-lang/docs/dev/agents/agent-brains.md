@@ -1,221 +1,264 @@
-# The Agency agent's harness and brains
+# The Agency agent: `agencyAgent` and the `agency agent` harness
 
-The Agency agent (`agency agent`, source in `lib/agents/agency-agent/`) is
-split into two parts. The **harness** is everything a user of the command
-line sees and everything that keeps the agent safe: flags, the REPL, the
-approval policy handler, the hard stop for a subagent budget trip, slash commands,
-attachments. The **brain** is the part that answers a turn. There can be
-several brains; `--brain <name>` picks one. This note explains the split,
-the record a brain must provide, where the safety boundary sits, and how to
-add a brain.
+The Agency agent comes in two parts.
 
-## Why the split exists
+- **`agencyAgent`** in `std::agents/agency` (`stdlib/agents/agency.agency`)
+  answers one message. Any program can call it from code or give it to a
+  model as a tool. It reads none of the user's files, installs no handler,
+  and prints nothing.
+- **The harness** is `agency agent` on the command line
+  (`lib/agents/agency-agent/`). It owns everything a person at the terminal
+  sees and everything that keeps the run safe: flags, the REPL, slash
+  commands, saved sessions, settings, presets, the approval policy handler,
+  and the reads of the user's own files. It calls `agencyAgent` once per
+  turn and passes in what only it has.
 
-We want to try different designs for "how does the agent answer a turn"
-(one coordinator LLM with subagents, a single tool-less call, something
-else) without rewriting the parts every design shares. Before the split,
-the coordinator module owned both the routing *and* pieces of the harness
-(the budget-trip handler, slash expansion, attachment detection), so a second
-design would have had to copy them. Now the harness owns those, and a brain
-is a small record it calls.
+This note covers the function and its parameters, how settings reach the
+subagents, what the harness passes in, and where the safety boundary sits.
 
-## The brain record
-
-A brain is a value of type `AgentBrain` (`brains/brain.agency`):
+## The function
 
 ```
-export type BrainContext = {
-  interactive: boolean   // false for --print, piped stdin, or a query without -i
-  grounding: string      // date, working directory, AGENTS.md block; harness-built
-}
-
-export type AgentBrain = {
-  name: string           // the --brain value; shown in the header
-  description: string    // one line, shown in --help
-  startTargets: string[] // valid --agent values; "" (main) is always valid
-  init: (BrainContext) -> void raises <*>
-  runTurn: (string, string | (string | Attachment)[]) -> string raises <*>
-}
+@guarded(cost: maxCost, time: maxTime)
+export def agencyAgent(
+  task: string,
+  context: string = "",
+  brain: AgencyAgentBrain = "coordinator",
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+  model: string = "",
+  provider: string = "",
+  reasoningModel: string = "",
+  reasoningProvider: string = "",
+  routerModel: string = "",
+  routerProvider: string = "",
+  extraTools: AgentExtraTools = {},
+  attachments: Attachment[] = [],
+): Result<string>
 ```
 
-`init` runs once per session, before any turn. `runTurn(target, prompt)`
-answers one turn: `target` is `""` (the brain's main entry) or one of
-`startTargets`. For the main target the prompt is an array that may carry
-attachments after the text; for a named target it is bare text.
+- `task` is the message. With attachments, the brain gets
+  `[task, ...attachments]`.
+- `context` is extra text, such as the user's instructions. Each brain adds
+  it as a system message that expires with the call, and each subagent
+  wrapper passes it to its stdlib agent.
+- `brain` picks one of three brains (`stdlib/agents/brains/`):
+  - `coordinator`, the default: one model that answers itself or hands
+    the turn to the code, Agency code, research, oracle, explorer, review,
+    writing, and rewrite subagents.
+  - `minimal`: one coder with four tools and a short prompt, for
+    benchmarks and sandboxed runs.
+  - `simple`: one LLM call with no tools of its own.
 
-Each brain lives in its own directory under `brains/` and exports one
-function, `def <name>Brain(): AgentBrain`. `brains/registry.agency` lists
-them all in `allBrains()`; `brainByName` and `brainFlagHelp` are derived
-from that list. Three brains ship today: `coordinator` (the default; one
-main LLM that routes to code, research, oracle, explorer, review, and writing
-subagents), `minimal` (one coder with four tools and a short prompt, for
-benchmarks and sandboxed runs), and `simple` (one tool-less LLM call per
-turn). Each has a
-`README.md` describing itself.
+  `agencyAgentBrains()` lists them with a one-line description each.
+- `maxCost` and `maxTime` are the budget for the whole call. A negative
+  value means no limit, because `guard` pushes no guard for a negative
+  limit (`pushGuardImpl` in `lib/stdlib/thread.ts`). `null` is not
+  accepted: `guard` throws when both limits are `null`.
+- `model` and `provider` pick the main model, which the coder, the
+  researchers, and the reviewers run on. Empty means the ambient model.
+- `reasoningModel` and `reasoningProvider` pick the model for the
+  coordinator's own calls, the oracle, and the explorer. Empty means the
+  main model.
+- `routerModel` and `routerProvider` pick the decision model that can send
+  a plain message straight to the coder or the researcher
+  (`docs/dev/agents/agent-router.md`). Empty means no routing.
+- `extraTools` is a record. `main` is added to the tools of the model that
+  answers the turn, and `coder` to the tools of the two coders. Only the
+  coordinator brain has coders.
 
-## What the harness owns
+The function has one mode. Nothing in it asks whether a person is present.
+It offers no background job tools, because a job belongs to the run and is
+stopped when the run ends, and in a web server the run usually ends when the
+call returns. A caller whose run stays alive passes the job tools in
+`extraTools`.
+
+`agencyAgent` is a plain `def`, not a handoff. Called from code, its brains
+run on the caller's active thread, so a second call continues the first
+one's conversation. Each brain adds its own prompt with
+`ensureSystemMessage`, so a thread holds it once. Called as a tool, it
+starts on a fresh thread, as every ordinary tool does
+(`docs/dev/runtime/threads.md`).
+
+### Progress events
+
+The function prints nothing. Callers follow it through the runtime
+callbacks (`onToolCallStart`, `onToolCallEnd`, `onLLMCallEnd`, and the
+rest), and through `emit` from `std::statelog`:
+
+- Each subagent wrapper emits
+  `{ type: "agencyAgent.subagentStart", agent, message }` when it starts.
+- The coordinator emits
+  `{ type: "agencyAgent.routerFailed", model, provider, error }` when the
+  router model fails, once per router model (`failureNotice` in
+  `stdlib/agents/brains/coordinator/router.agency`).
+
+## How settings reach the subagents
+
+`agencyAgent` builds one `AgentSettings` record
+(`stdlib/agents/brains/settings.agency`) from its parameters. The subagent
+wrappers in `stdlib/agents/brains/coordinator/` take it as their first
+parameter:
+
+```
+export handoff def oracleAgent(
+  settings: AgentSettings,
+  userMsg: string,
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
+): Result<string>
+```
+
+`settings` comes first because Agency refuses a parameter with no default
+after a defaulted one (AG6039). `coordinatorTools(settings, turnStart)`
+binds it on each wrapper with `.partial(settings: settings)`. A bound
+parameter is left out of the tool's schema, so the model sees only
+`userMsg` and the budget parameters. `tests/agency/agents/brainCoordinatorTools.agency`
+checks this.
+
+## What the harness passes in
 
 Paths in this section are relative to `lib/agents/agency-agent/`.
 
-- `agent.agency`: parses flags, picks the brain, validates `--agent`
-  against `brain.startTargets` (`main` means `""`), sets up models, memory,
-  and MCP, and then runs either one turn or the REPL, both through
-  `runSession` (below).
-- `lib/turn.agency`: the selected brain (`setBrain` / `currentBrain`),
-  `runSession`, and the harness `runTurn`. The harness `runTurn` runs one
-  turn as: parse the budget clue out of the message, then inside the budget
-  guard: expand a slash command, and for the main target only, detect and
-  attach files the message mentions, then hand the result to
-  `brain.runTurn`.
-- `lib/repl.agency`: the interactive terminal. It calls the harness
-  `runTurn` and never a brain directly.
-- `lib/grounding.agency`: builds the grounding text with `groundingText`.
-  The project block (date, cwd, project instructions) is
-  `projectContextText` in `lib/projectContext.agency`. The coordinator
-  gives the same block to a coder started directly with `--agent code`.
-  The instructions come from the agent's
-  working directory (`projectDir`: the folder set with `setAgentCwd`, which
-  starts as the launch directory) and each parent up to the folder that holds `.git`,
-  the same walk the Claude Code skills use (`projectFolders`). Each folder
-  gives its `AGENTS.md`, or else its `CLAUDE.md`, also when the
-  `AGENTS.md` cannot be read. The blocks are ordered root first, so the
-  nearest folder's rules are read last. Outside a repository only the
-  working directory is read.
+`answerTurn` in `lib/answer.agency` builds each turn's call:
 
-  A coder can change the agent's working directory with `setAgentCwd`. The
-  block was built for the old folder, and the prompts call it
-  authoritative, so `withProjectContextIfMoved` puts the new folder's block
-  above the next user message. The harness calls it in `dispatchToBrain`,
-  once per turn. A coder that changes folder and keeps working in the same
-  turn does not get the new block until the next message.
+- `context` is the global instructions, `globalInstructionsText()`.
+- The main model is left empty: `pickModelsForAgent` already set the
+  ambient one. The reasoning and router models come from the resolved
+  slots. `routerModelFor()` passes no router model when the harness
+  rewrote the message, such as a slash command that became its skill's
+  text.
+- `maxCost` and `maxTime` are `-1`. A whole-agent limit comes from
+  `--max-cost` and `--max-time`, which the runtime enforces as a root
+  budget.
+- `extraTools.main` is `cliTools()` (`lib/cliTools.agency`) for the
+  coordinator brain, and nothing for the other two. It holds the tools that
+  differ per user (learned tools, saved tools, Claude Code skills, MCP
+  tools), then the CLI's own (`learnSkill`, `writeToolFor`, the presets
+  skill and tools, `useLlmOptions`, `learnTools`, `searchSessions`), then,
+  in the REPL, the job tools and the readers for saved output.
+- `extraTools.coder` is `sessionJobTools()`: the job tools in the REPL, and
+  nothing in a one-shot run.
 
-  The reads are approved with `with approve`. The harness builds its
-  grounding in `runSession` before it installs the policy handler, so no
-  rule in the agent policy can stop those reads. A block built later, for
-  a moved folder or for a coder started with `--agent code`, is read
-  inside a turn, under the handler, where an inner `with approve` does not
-  get past the policy. So the handler `runSession` installs is the policy
-  handler wrapped in `approvingInstructionReads`: while
-  `projectContextText` reads the instruction files, a `std::read` of
-  `AGENTS.md` or `CLAUDE.md` that no rule decides is approved instead of
-  asking the user. A `reject` rule still wins, and that folder's
-  instructions are left out. The wrapper checks the rules the session
-  started with, so a "reject always" answer given during the session does
-  not reach it. A root policy is a separate handler and can still reject
-  the read.
-- `lib/commandPalette.agency`: `promptCommands` holds the commands that
-  ship with the agent and expand to a prompt, such as `/init`. They come
-  last in `slashCommands()`, so a skill or command file of the same name
-  replaces one. `/init` names the file to write, `AGENTS.md` in the
-  repository root, because that is the one folder every start directory
-  in the project reads.
-- `lib/globalInstructions.agency`: reads optional `AGENTS.md` from
-  `POLICY_DIR` at startup. This uses the same agent-home override as
-  settings and history. Both brains add it before each LLM call with
-  `expires: "llmCall"`. Subagents receive it through their context arguments, scoped to
-  the current request. Earlier request text remains in their conversation
-  history. The static text reloads on restart, while the expiring system
-  message leaves the thread before a completed turn is saved. Resumed
-  conversations therefore use the current global file. Keep it out of the persistent grounding block,
-  which a restored session would retain.
-- `lib/agentName.agency`: `agentNameFor(brain)` returns
-  `"agency-agent/<brain name>"`. `main()` passes it to `setAgentName`, so
-  every trace is grouped by the brain that produced it.
+The grounding block goes on the conversation thread, not in `context`. It
+holds the session facts, the date, the working directory, and the project
+`AGENTS.md`. `runSession` builds it once with `groundingText` and stores it
+with `setGrounding` (`lib/grounding.agency`). Each turn adds that stored
+string with `ensureSystemMessage`. Two reasons:
 
-Selection is a runtime value rather than a separate entry file per brain.
-The launcher in `lib/cli/runBundledAgent.ts` hard-codes one entry point, and
-a flag lets the same session code, header, and settings serve every brain. `resolveBrainName` picks `--brain`, else the `brain` key in
-`settings.json`, else `coordinator`. It checks the runtime shape of the
-setting, since the file is hand-editable.
+- A system message that stays on the thread is cached by the provider. A
+  message that expires is sent again, uncached, every turn.
+- The text holds the date, the directory, and the models.
+  `ensureSystemMessage` matches by exact text, so a block rebuilt every
+  turn would be added a second time whenever one of those changed.
+
+A moved working directory is handled by `withProjectContextIfMoved`, which
+puts the new folder's block above the next message. The `--agent code`
+start target keeps its own project block the same way, in
+`lib/startTargets.agency`.
+
+The `--agent` start targets (`code`, `agencyCode`, `research`, `oracle`,
+`explorer`, `review`, `writing`, `rewrite`) call one stdlib wrapper
+directly, through `runStartTarget`. Only the coordinator brain has them.
+
+The harness prints the subagent start line and the router failure line from
+an `onEmit` callback in `lib/trace.agency`.
+
+## The conversation thread
+
+No brain opens a `thread` block, so a turn runs on the run's active thread.
+After each turn, the harness `runTurn` in `lib/turn.agency` records that
+thread's id with `setConversationThread` (`lib/resume.agency`). Compaction,
+the context percentage, the session title, the resume transcript, and
+`searchSessions` read the thread the id names
+(`docs/dev/agents/agent-sessions.md`, `docs/dev/agents/agent-compaction.md`).
 
 ## The safety boundary
 
 The rule, in one sentence: **`runSession` in `lib/turn.agency` owns the
-outermost `handle ... with cliPolicyHandler`; `brain.init(...)` and
-`brain.runTurn(...)` are called only inside it; and both production paths
-(one-shot and the REPL) go through `runSession`.**
+outermost `handle ... with cliPolicyHandler`, every turn is answered inside
+it, and both production paths (one-shot and the REPL) go through
+`runSession`.**
 
 ```
 export def runSession(interactive: boolean, body: () -> void raises <*>) {
-  const brain = currentBrain()   // null here is a harness bug and throws
-  ...
-  const context = buildBrainContext(interactive)
+  setGrounding(groundingText(_brainName))
   const handler = policyHandlerFor(interactive)
   handle {
-    brain.init(context)
+    checkCliBundles()
     body()          // the one-shot turn, or the whole REPL
   } with handler
 }
 ```
 
-The `interactive` flag is also threaded into the policy handler
+`agencyAgent` installs no handler of its own. The only reads it approves are
+of the files packaged with Agency, through `agentPrompt` and `agentSkill`,
+which is what every stdlib agent does. So the harness policy decides every
+interrupt a turn raises. `tests/turn.agency`
+(`sessionPolicyDecidesTheAgentsInterrupts`) runs a turn whose model writes a
+file under the CLI policy, and the write is rejected.
+
+Handlers in Agency are not try/catch. When a function raises an interrupt,
+every handler up the chain is consulted, and if any one of them rejects,
+the interrupt is rejected. So code inside a turn that wraps its own work in
+`with approve` still cannot get past the policy handler.
+
+The `interactive` flag is threaded into the policy handler
 (`cliPolicyHandler(interactive: ...)`). In a one-shot run there is no user
 at a terminal, so an interrupt the policy does not decide is rejected with
-a reason string instead of prompted. The reason becomes the failing call's
-error, and the tool loop feeds it back to the model so it can take another
-approach. Before this, an undecided effect in `-p` mode raised a
-prompt nobody could answer: the pending prompt starved the event loop and
-the process died with exit 13 ("unsettled top-level await").
+a reason the model reads, instead of a prompt nobody can answer.
 
-Why this is enough: handlers in Agency are not try/catch. When a function
-raises an interrupt, *every* handler up the chain is consulted, and if any
-one of them rejects, the interrupt is rejected. So a brain that wraps its
-own work in `with approve` still cannot get past the harness policy. The
-policy handler sits outside the brain and gets its vote. `tests/turn.agency`
-proves this with a stub brain that approves its own interrupt during `init`
-and during two turns and is rejected each time. Note that a function type's
-`raises <*>` is a type-checker annotation only; the safety comes from where
-the handler is installed, not from the type.
+## Statics read the user's files only in the harness
 
-There is a corollary about module statics. `registry.agency` imports every
-brain, and Agency initializes the whole import closure at startup
-(`docs/dev/compiler/init-topsort.md`), so every registered brain's top-level statics
-run whether or not that brain was selected. Two consequences:
+A `static const` runs once per process, when its module loads, and every
+module in the import closure runs its statics at startup
+(`docs/dev/compiler/init-topsort.md`). A static in a stdlib module that read
+the user's files would read them in every program that imports the module.
+So the reads of the user's own files stay in the harness's modules:
 
-1. Brain statics must do nothing effectful, with two exceptions, both
-   `static const ... with approve`: bundled file reads (the coordinator's
-   system prompts, the code subagent's skill files), and the scans of the
-   user's own skill and command folders (`.claude/commands` in
-   `lib/commandPalette.agency`, and the Claude Code skill folders in
-   `lib/claudeSkills.agency`). These run before the agent policy exists, so
-   nothing in it can stop them; see `docs/dev/agents/claude-skills.md`.
-2. Those reads must *not* move into `init`. `init` runs inside the policy
-   handler, and an inner `with approve` cannot get past an outer policy, so
-   a read there would prompt the user under `--policy minimal` (which has no
-   `std::read` rule) or fail in a non-interactive run. `init` only validates
-   that the static reads succeeded, takes the grounding, and does other
-   policy-neutral setup.
+- the global `AGENTS.md` (`lib/globalInstructions.agency`),
+- the Claude Code skills and `.claude/commands` (`lib/claudeSkills.agency`,
+  `lib/commandPalette.agency`),
+- the bundled presets skill (`lib/cliTools.agency`).
+
+The stdlib modules' statics read only the packaged prompts and skills.
+`lib/stdlib/agentBrainStatics.test.ts` fails on a static in
+`stdlib/agents/brains/` or `stdlib/agents/agency.agency` that calls a
+file-reading function directly. It does not see a read inside a helper that
+a static calls.
+
+The grounding is built in `runSession` before the policy handler is
+installed, so reading the project's `AGENTS.md` never prompts. A block built
+later, for a moved folder or for a coder started with `--agent code`, is
+read inside a turn. So the handler `runSession` installs is the policy
+handler wrapped in `approvingInstructionReads`: while `projectContextText`
+reads the instruction files, a `std::read` of `AGENTS.md` or `CLAUDE.md`
+that no rule decides is approved instead of asking the user. A `reject`
+rule still wins.
 
 ## Adding a brain
 
-1. Create `brains/<name>/<name>.agency` exporting `def <name>Brain():
-   AgentBrain`. Keep statics side-effect free (bundled reads excepted, as
-   above). `brains/simple/simple.agency` is the smallest example.
-2. Add one line to `allBrains()` in `brains/registry.agency`.
-3. Put tests under `brains/<name>/tests/`. Call `init` before `runTurn`,
-   the way the harness does. Bind `brain.init` and `brain.runTurn` to
-   locals before calling them `with approve`: calling a record field with
-   `with approve` directly does not compile correctly today.
-4. Add a `README.md` for the brain.
-
-The registry test (`tests/registry.agency`) counts brains, so update its
-expected count.
+1. Create `stdlib/agents/brains/<name>.agency` exporting
+   `def <name>Brain(prompt, settings: AgentSettings, extraTools: any[]): Result<string>`.
+   Read no user file in a static. `stdlib/agents/brains/simple.agency` is
+   the smallest example.
+2. Add it to `AgencyAgentBrain`, to the `match` in `agencyAgent`, and to
+   `agencyAgentBrains()` in `stdlib/agents/agency.agency`.
+3. Add a test under `tests/agency/agents/`, as `brainSimple.agency` does.
 
 ## Known limits
 
-- There is no `/brain` slash command to switch mid-session. A brain owns
-  thread state that would not survive the switch, so pick a brain per run.
+- There is no `/brain` slash command to switch mid-session. Pick a brain
+  per run.
 - Attachments are detected only for the main target. Named targets get bare
   text.
-- There are no per-brain slash commands.
+- A library user who has memory on gets the coordinator's memory calls: it
+  sets the memory id to `"main"` and passes `memory: true`, and the
+  research wrapper offers the memory tools. Memory is off in `agency agent`.
 
-## Two compiler bugs met while building this
+## A compiler bug met while building this
 
-Both are worked around in the agent and worth their own issues:
-
-- A `match` *expression* inside a block body keeps its value on the enclosing
-  function's stack, so a local assigned from it (or an outer `let`) reads
-  back `null` inside the block. `oneShotAgent` uses `if (result is
-  success(r))` instead.
-- `record.field(args) with approve` produces invalid JavaScript. Tests bind
-  the field to a local first.
+A `match` *expression* inside a block body keeps its value on the enclosing
+function's stack, so a local assigned from it (or an outer `let`) reads
+back `null` inside the block. `oneShotAgent` in `agent.agency` uses
+`if (result is success(r))` instead.

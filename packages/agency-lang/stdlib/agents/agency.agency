@@ -1,0 +1,132 @@
+/** @module
+@summary The Agency agent as a function: an assistant that answers a task
+itself or hands it to a coder, a researcher, reviewers, and other subagents.
+
+```ts
+import { agencyAgent } from "std::agents/agency"
+
+node main() {
+  const reply = agencyAgent("Add a --json flag to the report command", maxCost: $5.00)
+  print(reply)
+}
+```
+
+A model can call it as a tool:
+
+```ts
+const answer = llm(prompt, tools: [agencyAgent])
+```
+
+`agencyAgent` is a plain function, not a handoff. Called from code, it
+continues the caller's conversation thread, so a second call sees the
+first. Called as a tool, it starts on a fresh thread.
+
+It reads none of the user's own files. A caller that wants the user's
+instructions or tools passes them in, through `context` and `extraTools`.
+It installs no handler, so the caller's handlers decide every interrupt
+it raises. It prints nothing. A caller follows its progress through the
+runtime callbacks, and through `onEmit`, which receives an event with
+`type: "agencyAgent.subagentStart"` when a subagent starts and
+`type: "agencyAgent.routerFailed"` when the router model fails.
+
+`agency agent` on the command line is a caller of this function.
+*/
+import { AgentSettings } from "std::agents/brains/settings"
+import { coordinatorBrain } from "std::agents/brains/coordinator"
+import { minimalBrain } from "std::agents/brains/minimal"
+import { simpleBrain } from "std::agents/brains/simple"
+import { guarded } from "std::decorators"
+import { Attachment } from "std::thread"
+
+/** Which brain answers. */
+export type AgencyAgentBrain = "coordinator" | "minimal" | "simple"
+
+/** Extra tools, one optional list per agent that can take them. */
+export type AgentExtraTools = {
+  // Added to the tools of the model that answers the turn.
+  main?: any[];
+  // Added to the tools of the coder and the Agency coder. Only the
+  // coordinator brain has them.
+  coder?: any[]
+}
+
+/** A brain's name and its one-line description. */
+export type BrainInfo = {
+  name: AgencyAgentBrain;
+  description: string
+}
+
+export def agencyAgentBrains(): BrainInfo[] {
+  """
+  Return the brains `agencyAgent` can run, each with a one-line description.
+  """
+  return [
+    {
+      name: "coordinator",
+      description: "One coordinator LLM that routes to code, Agency code, research, oracle, explorer, review, writing, and rewrite subagents"
+    },
+    {
+      name: "minimal",
+      description: "One coder with four tools (read, bash, edit, write) and a short prompt"
+    },
+    {
+      name: "simple",
+      description: "One tool-less LLM call per turn, in a single thread"
+    },
+  ]
+}
+
+@guarded(cost: maxCost, time: maxTime)
+export def agencyAgent(
+  task: string,
+  context: string = "",
+  brain: AgencyAgentBrain = "coordinator",
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+  model: string = "",
+  provider: string = "",
+  reasoningModel: string = "",
+  reasoningProvider: string = "",
+  routerModel: string = "",
+  routerProvider: string = "",
+  extraTools: AgentExtraTools = {},
+  attachments: Attachment[] = [],
+): Result<string> {
+  """
+  Hand a task to the Agency agent, a general assistant that can read and
+  edit code, run commands, look things up, and review code and prose. It
+  answers small requests itself and hands larger ones to its subagents.
+  Returns its reply.
+
+  @param task - What the user wants, as they would say it to an assistant
+  @param context - Extra text for the agent, such as the user's own instructions, or ""
+  @param brain - Which brain answers: "coordinator", "minimal", or "simple"
+  @param maxCost - Cost budget in USD. A negative value means no limit.
+  @param maxTime - Time budget in milliseconds. A negative value means no limit.
+  @param model - The main model, or "" for the ambient model
+  @param provider - The main model's provider
+  @param reasoningModel - The model for the coordinator, the oracle, and the explorer, or "" for the main model
+  @param reasoningProvider - The reasoning model's provider
+  @param routerModel - A small model that sends a plain message straight to the coder or the researcher, or "" for no routing
+  @param routerProvider - The router model's provider
+  @param extraTools - Extra tools: `main` for the model that answers, `coder` for the coders
+  @param attachments - Images or files sent with the task
+  """
+  const settings: AgentSettings = {
+    context: context,
+    model: model,
+    provider: provider,
+    reasoningModel: reasoningModel,
+    reasoningProvider: reasoningProvider,
+    routerModel: routerModel,
+    routerProvider: routerProvider,
+    coderTools: extraTools.coder ?? []
+  }
+  const mainTools = extraTools.main ?? []
+  const message: string | (string | Attachment)[] = if attachments.length == 0 then task else [task, ...attachments]
+  return match(brain) {
+    "minimal" => minimalBrain(message, settings, mainTools)
+    "simple" => simpleBrain(message, settings, mainTools)
+    _ => coordinatorBrain(message, settings, mainTools)
+  }
+}

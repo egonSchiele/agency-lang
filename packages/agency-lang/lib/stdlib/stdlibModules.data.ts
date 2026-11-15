@@ -62,6 +62,10 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::agent": [
     "question"
   ],
+  "std::agents/agency": [
+    "agencyAgentBrains",
+    "agencyAgent"
+  ],
   "std::agents/agency/coding": [
     "buildTools",
     "agencyCodingAgent"
@@ -82,6 +86,58 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::agents/agency/verifier": [
     "buildTools",
     "agencyVerifierAgent"
+  ],
+  "std::agents/brains/coordinator": [
+    "coordinatorPromptOrFailure",
+    "coordinatorTools",
+    "coordinatorBrain"
+  ],
+  "std::agents/brains/coordinator/budgets": [
+    "timeBudget"
+  ],
+  "std::agents/brains/coordinator/code": [
+    "agencyCli",
+    "codeAgent",
+    "agencyCodeAgent"
+  ],
+  "std::agents/brains/coordinator/explorer": [
+    "explorerAgent"
+  ],
+  "std::agents/brains/coordinator/images": [
+    "resolveEditInputs",
+    "generateImageFile",
+    "viewImageFile"
+  ],
+  "std::agents/brains/coordinator/oracle": [
+    "oracleAgent"
+  ],
+  "std::agents/brains/coordinator/research": [
+    "researchAgent"
+  ],
+  "std::agents/brains/coordinator/review": [
+    "reviewAgent",
+    "review"
+  ],
+  "std::agents/brains/coordinator/rewrite": [
+    "rewriteAgent"
+  ],
+  "std::agents/brains/coordinator/router": [
+    "routeQuestion",
+    "pickRoute"
+  ],
+  "std::agents/brains/coordinator/writing": [
+    "writingAgent"
+  ],
+  "std::agents/brains/minimal": [
+    "minimalBrain"
+  ],
+  "std::agents/brains/settings": [
+    "modelOptions",
+    "reasoningChoice",
+    "reasoningOptions"
+  ],
+  "std::agents/brains/simple": [
+    "simpleBrain"
   ],
   "std::agents/coding": [
     "buildTools",

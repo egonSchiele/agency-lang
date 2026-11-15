@@ -1,0 +1,21 @@
+{
+  "sourceFile": "brainCoordinatorTools.agency",
+  "tests": [
+    {
+      "nodeName": "toolNamesMatch",
+      "description": "The coordinator's own tools are the subagents, the image tools, the file tools, and elapsedTime, with no job tool and no CLI-only tool.",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "settingsAreHidden",
+      "description": "No tool schema the model receives has a settings or since parameter, because both are bound.",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "ok" }]
+    }
+  ]
+}

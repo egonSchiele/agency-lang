@@ -1,0 +1,59 @@
+// The minimal brain from std::agents/brains/minimal, under a scripted model.
+import { minimalBrain } from "std::agents/brains/minimal"
+import { AgentSettings } from "std::agents/brains/settings"
+
+// Every model request, in order.
+let calls: any[] = []
+
+callback("onLLMCallStart") as data {
+  calls = [...calls, data]
+}
+
+def settingsWith(context: string, model: string): AgentSettings {
+  return {
+    context: context,
+    model: model,
+    provider: "openai",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: "",
+    routerProvider: "",
+    coderTools: []
+  }
+}
+
+def requestHasSystemText(call: any, text: string): boolean {
+  for (message in call.messages) {
+    const content = "${message.content}"
+    if (message.role == "system" && content.includes(text)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** A tool that does nothing, to see which lists it reaches. */
+def stubTool(note: string): string {
+  """
+  Return the note.
+
+  @param note - Any text
+  """
+  return note
+}
+
+node answersWithTheContext(): string {
+  const reply = minimalBrain(["say hi"], settingsWith("CTX-MARKER-5b2d", ""), []) catch "failed"
+  return "${reply}|${requestHasSystemText(calls[0], "CTX-MARKER-5b2d")}"
+}
+
+// The four tools, then the extra ones.
+node offersFourToolsAndTheExtras(): string[] {
+  minimalBrain(["say hi"], settingsWith("", ""), [stubTool])
+  return [tool.name for tool in calls[0].tools]
+}
+
+node usesTheModel(): string {
+  minimalBrain(["say hi"], settingsWith("", "test-model"), [])
+  return "${calls[0].model}"
+}

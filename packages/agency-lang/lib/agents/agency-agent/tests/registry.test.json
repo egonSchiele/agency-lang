@@ -1,10 +1,13 @@
 {
   "sourceFile": "registry.agency",
   "tests": [
-    { "nodeName": "knownBrainResolves", "input": "", "expectedOutput": "\"coordinator|true\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "simpleBrainResolves", "input": "", "expectedOutput": "\"true\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "minimalBrainResolves", "input": "", "expectedOutput": "\"true\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "unknownBrainIsNull", "input": "", "expectedOutput": "\"true|3\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "helpListsRegisteredBrains", "input": "", "expectedOutput": "\"true|true|true\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "helpListsRegisteredBrains", "input": "", "expectedOutput": "\"true|true|true\"", "evaluationCriteria": [{ "type": "exact" }] },
+    {
+      "nodeName": "startTargetsOnlyForTheCoordinator",
+      "description": "main resolves to the brain's own entry for any brain, a subagent target resolves only for the coordinator, and an unknown target is refused.",
+      "input": "",
+      "expectedOutput": "\"|code|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
   ]
 }

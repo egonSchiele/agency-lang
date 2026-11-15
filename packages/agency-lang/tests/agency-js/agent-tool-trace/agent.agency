@@ -1,4 +1,4 @@
-import { announce } from "../../../lib/agents/agency-agent/brains/coordinator/lib/announce.agency"
+import { emit } from "std::statelog"
 import {
   setInteractive,
   setVerbose,
@@ -22,8 +22,10 @@ def read(filename: string, dir: string = ".", offset: number = 0, limit: number 
   return "file text"
 }
 
+// The stdlib wrappers report their start with this event, and the CLI's
+// trace prints it from an onEmit callback.
 def researchAgent(userMsg: string): string {
-  announce("researchAgent", userMsg)
+  emit({ type: "agencyAgent.subagentStart", agent: "researchAgent", message: userMsg })
   return "Research fixture result"
 }
 

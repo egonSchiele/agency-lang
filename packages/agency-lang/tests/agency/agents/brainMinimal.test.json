@@ -1,0 +1,32 @@
+{
+  "sourceFile": "brainMinimal.agency",
+  "tests": [
+    {
+      "nodeName": "answersWithTheContext",
+      "description": "A message is one tool loop, and the call's context reaches it.",
+      "input": "",
+      "expectedOutput": "\"Done from minimal!|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Done from minimal!" }]
+    },
+    {
+      "nodeName": "offersFourToolsAndTheExtras",
+      "description": "The minimal brain offers read, bash, edit, and write, then the extra tools.",
+      "input": "",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"stubTool\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "usesTheModel",
+      "description": "The model in the settings is the model the call uses.",
+      "input": "",
+      "expectedOutput": "\"test-model\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    }
+  ]
+}

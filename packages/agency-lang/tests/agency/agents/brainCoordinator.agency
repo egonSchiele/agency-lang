@@ -1,0 +1,172 @@
+// The coordinator brain from std::agents/brains/coordinator, under a
+// scripted model: the prompt and the context reach the model, two turns
+// share one system prompt, attachments and generated images reach the
+// model, the start and router events are emitted, and each subagent gets
+// what it should.
+import { coordinatorBrain, coordinatorPromptOrFailure } from "std::agents/brains/coordinator"
+import { codeAgent } from "std::agents/brains/coordinator/code"
+import { oracleAgent } from "std::agents/brains/coordinator/oracle"
+import { reviewAgent } from "std::agents/brains/coordinator/review"
+import { AgentSettings } from "std::agents/brains/settings"
+import { currentThreadId, getThread, image, listThreads, systemMessage } from "std::thread"
+
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+static const PROMPT_PHRASE = "Agency-language assistant"
+
+// Every model request, in order.
+let calls: any[] = []
+
+callback("onLLMCallStart") as data {
+  calls = [...calls, data]
+}
+
+// Every event passed to emit, in order.
+let events: any[] = []
+
+callback("onEmit") as data {
+  events = [...events, data]
+}
+
+def settingsWith(context: string, routerModel: string, coderTools: any[]): AgentSettings {
+  return {
+    context: context,
+    model: "",
+    provider: "",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: routerModel,
+    routerProvider: "openrouter",
+    coderTools: coderTools
+  }
+}
+
+def plainSettings(): AgentSettings {
+  return settingsWith("", "", [])
+}
+
+def textOf(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+// True when a message in the request holds the text.
+def requestHas(call: any, role: string, text: string): boolean {
+  for (message in call.messages) {
+    const content = "${message.content}"
+    if (message.role == role && content.includes(text)) {
+      return true
+    }
+  }
+  return false
+}
+
+def toolNames(call: any): string[] {
+  return [tool.name for tool in call.tools]
+}
+
+/** A tool that does nothing, to see which lists it reaches. */
+def stubTool(note: string): string {
+  """
+  Return the note.
+
+  @param note - Any text
+  """
+  return note
+}
+
+node respondsWithPromptAndContext(): string {
+  const result = coordinatorBrain(["hello"], settingsWith("CTX-MARKER-7f3a", "", []), []) with approve
+  const sawPrompt = requestHas(calls[0], "system", PROMPT_PHRASE)
+  const sawContext = requestHas(calls[0], "system", "CTX-MARKER-7f3a")
+  return "${textOf(result)}|${sawPrompt}|${sawContext}"
+}
+
+// Two turns run on the caller's thread, which holds the prompt once.
+node twoTurnsOneSystemPrompt(): string {
+  coordinatorBrain(["one"], plainSettings(), []) with approve
+  coordinatorBrain(["two"], plainSettings(), []) with approve
+  const messages = getThread(currentThreadId(), 0, 200) catch []
+  const prompts = [message for message in messages if message.role == "system" && message.content.includes(PROMPT_PHRASE)]
+  const users = [message for message in messages if message.role == "user"]
+  return "${prompts.length} system, ${users.length} user"
+}
+
+// The thread reader renders attachment parts as "[image attachment]", so
+// finding that placeholder in a user message proves the multimodal array
+// reached the llm() turn.
+def threadHasImagePlaceholder(): boolean {
+  const threads = listThreads(lazySummarize: false)
+  if (isFailure(threads)) {
+    return false
+  }
+  for (info in threads.value) {
+    const messages = getThread(info.id, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        if (message.role == "user" && message.content.includes("[image attachment]")) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+node attachesImageToTurn(): string {
+  const result = coordinatorBrain(["look at this", image(PNG, "image/png", base64: true)], plainSettings(), []) with approve
+  return "${textOf(result)}|${threadHasImagePlaceholder()}"
+}
+
+// The model calls generateImageFile; after the tool round the generated
+// image must be shown to the model.
+node generatedImageIsShownToModel(): string {
+  const result = coordinatorBrain(["draw me a bicycle"], plainSettings(), []) with approve
+  return "${textOf(result)}|${threadHasImagePlaceholder()}"
+}
+
+node missingPromptIsFailure(): string {
+  const result = coordinatorPromptOrFailure(failure("gone"))
+  if (result is failure(reason)) {
+    return "${reason.includes("coordinator.md")}"
+  }
+  return "no failure"
+}
+
+node subagentStartIsEmitted(): string {
+  oracleAgent(plainSettings(), "is this plan sound?") with approve
+  const starts = [event for event in events if event.type == "agencyAgent.subagentStart"]
+  if (starts.length != 1) {
+    return "FAIL ${starts.length} start events"
+  }
+  return "${starts[0].agent}|${starts[0].message}"
+}
+
+// A router model that times out is reported once per router model, and the
+// turn still goes to the coordinator.
+node routerFailureIsEmitted(): string {
+  const settings = settingsWith("", "jev-1.14", [])
+  const first = coordinatorBrain(["find the release date of node 24"], settings, []) with approve
+  const second = coordinatorBrain(["and the one before it?"], settings, []) with approve
+  const failures = [event for event in events if event.type == "agencyAgent.routerFailed"]
+  return "${textOf(first)}|${textOf(second)}|${failures.length}"
+}
+
+// The coders get the coder tools; the oracle does not.
+node coderGetsCoderTools(): string {
+  const settings = settingsWith("", "", [stubTool])
+  codeAgent(settings, "add a flag") with approve
+  oracleAgent(settings, "is this plan sound?") with approve
+  return "${toolNames(calls[0]).includes("stubTool")}|${toolNames(calls[1]).includes("stubTool")}"
+}
+
+// Called as a tool, the reviewer starts on a fresh thread: it gets the
+// context and not the caller's own system messages.
+node reviewerGetsContextOnly(): string {
+  systemMessage("GROUNDING-MARKER-1c9e")
+  const settings = settingsWith("CTX-MARKER-7f", "", [])
+  llm("review my code", { tools: [reviewAgent.partial(settings: settings)] }) with approve
+  const reviewer = calls[1]
+  return "${requestHas(reviewer, "user", "CTX-MARKER-7f") || requestHas(reviewer, "system", "CTX-MARKER-7f")}|${requestHas(reviewer, "system", "GROUNDING-MARKER-1c9e")}"
+}

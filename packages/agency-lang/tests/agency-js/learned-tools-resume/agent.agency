@@ -3,7 +3,7 @@ import {
   _sessionOnSubmit,
   _readCheckpointFile,
 } from "agency-lang/stdlib-lib/agentSessions.js"
-import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/brains/coordinator/learn.agency"
+import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/lib/learn.agency"
 import { env } from "std::system"
 import { assistantMessage, userMessage } from "std::thread"
 import { fakeRepl } from "./loop.js"

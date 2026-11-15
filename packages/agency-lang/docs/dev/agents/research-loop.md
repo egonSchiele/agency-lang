@@ -50,7 +50,7 @@ Guarding against false information needs a different mechanism.
 ## The research tools carry no `print`
 
 The agency agent's `researchTools`
-(`lib/agents/agency-agent/brains/coordinator/subagents/research.agency`)
+(`stdlib/agents/brains/coordinator/research.agency`)
 are the memory and todo tools. Do not add `print`: given it, models wrote
 the whole report to the terminal and replied "the full answer is printed
 above", so the reply held no findings. The reply is the only place an

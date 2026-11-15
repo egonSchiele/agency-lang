@@ -1,10 +1,10 @@
-import test { promptFile, agencyCodePrompt, agencyTutorial } from "../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
+import { agencyCodePrompt, agencyCodeRules, agencyTutorial } from "std::agents/brains/coordinator/code"
 
-// The coordinator loads its prompts through the contained read wrapper,
-// and promptFile falls back to "" on failure — a SILENT empty system
-// prompt. This node is the guard.
+// The Agency coder's rules are read from the packaged prompts, and a file
+// that did not ship reads as "" — a SILENT empty system prompt. This node
+// is the guard.
 node codePromptLoads(): boolean {
-  return promptFile("agency-code.md") != ""
+  return agencyCodeRules != "" && agencyCodePrompt.includes(agencyCodeRules)
 }
 
 // The Agency coder learns the language from the tutorial. A tutorial that

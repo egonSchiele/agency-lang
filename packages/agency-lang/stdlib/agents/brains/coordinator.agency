@@ -1,0 +1,183 @@
+/** @module
+  @summary The coordinator brain of the Agency agent: one model that answers
+  a turn itself or hands it to the code, research, oracle, explorer,
+  review, writing, and rewrite subagents. An optional router model sends a
+  plain message straight to the coder or the researcher. See
+  docs/dev/agents/agent-brains.md.
+*/
+import { AgentSettings, reasoningOptions } from "std::agents/brains/settings"
+import { agencyCodeAgent, codeAgent } from "std::agents/brains/coordinator/code"
+import { explorerAgent } from "std::agents/brains/coordinator/explorer"
+import { generateImageFile, viewImageFile } from "std::agents/brains/coordinator/images"
+import { oracleAgent } from "std::agents/brains/coordinator/oracle"
+import { researchAgent } from "std::agents/brains/coordinator/research"
+import { reviewAgent } from "std::agents/brains/coordinator/review"
+import { rewriteAgent } from "std::agents/brains/coordinator/rewrite"
+import { Route, pickRoute } from "std::agents/brains/coordinator/router"
+import { writingAgent } from "std::agents/brains/coordinator/writing"
+import { writableFileTools } from "std::agents/lib/toolkits"
+import { elapsedTime, now } from "std::date"
+import { setMemoryId } from "std::memory"
+import { agentPrompt } from "std::skills"
+import { emit } from "std::statelog"
+import { Attachment, ensureSystemMessage, systemMessage } from "std::thread"
+
+// The coordinator's prompt, read from the files packaged with Agency.
+static const COORDINATOR_PROMPT = agentPrompt("coordinator.md")
+
+// The tools a turn can be routed to, one per arm of the `match` in
+// coordinatorBrain. Each is an option of its own in the router's question,
+// so the coordinator's line leaves them out.
+static const ROUTED_TOOLS = ["researchAgent", "codeAgent"]
+
+// A message longer than this is not routed. The router was not measured on
+// long messages, such as a message with a whole command's output above it.
+static const ROUTE_MAX_CHARS = 8000
+
+type TurnRoute = {
+  route: Route;
+  text: string
+}
+
+export def coordinatorPromptOrFailure(prompt: Result<string>): Result<string> {
+  """
+  Return the coordinator's prompt, or a failure that names the prompt file
+  when it could not be read.
+
+  @param prompt - The result of reading the prompt file
+  """
+  return match(prompt) {
+    failure(reason) => failure("Could not read the coordinator's prompt, coordinator.md: ${reason}")
+    _ => prompt
+  }
+}
+
+export def coordinatorTools(settings: AgentSettings, turnStart: any): any[] {
+  """
+  Return the coordinator's own tools. The subagents get `settings` bound,
+  so the model does not see it, and `elapsedTime` counts from `turnStart`.
+
+  @param settings - The call's settings
+  @param turnStart - When the turn started
+  """
+  // The read-only file tools let the coordinator answer a question that
+  // hinges on a few files from its own context, instead of paying for a
+  // subagent dispatch. `write` and `edit` are here for the same reason: a
+  // file whose content the coordinator already has should not cost a
+  // codeAgent dispatch. Anything that needs a build or tests still goes
+  // to codeAgent.
+  return [
+    researchAgent.partial(settings: settings),
+    codeAgent.partial(settings: settings),
+    agencyCodeAgent.partial(settings: settings),
+    reviewAgent.partial(settings: settings),
+    oracleAgent.partial(settings: settings),
+    explorerAgent.partial(settings: settings),
+    writingAgent.partial(settings: settings),
+    rewriteAgent.partial(settings: settings),
+    generateImageFile,
+    viewImageFile,
+    ...writableFileTools(),
+    elapsedTime.partial(since: turnStart),
+  ]
+}
+
+// The message when the prompt is plain text, else "". A message with
+// attachments arrives as [message, ...attachments], so one part is a plain
+// message.
+def plainText(prompt: string | (string | Attachment)[]): string {
+  return match(prompt) {
+    plain: string => plain
+    parts: (string | Attachment)[] => {
+      if (parts.length == 1) {
+        return "${parts[0]}"
+      }
+      return ""
+    }
+  }
+}
+
+// Which agent takes the turn. Only a plain-text message of a routable
+// length is asked about, and only when there is a router model. The router
+// reads the caller's tools first, since it cannot otherwise know about
+// them. See docs/dev/agents/agent-router.md.
+def routeFor(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  builtIns: any[],
+  extraTools: any[],
+): TurnRoute {
+  const text = plainText(prompt)
+  if (settings.routerModel == "" || text == "" || text.length > ROUTE_MAX_CHARS) {
+    return {
+      route: "coordinator",
+      text: text
+    }
+  }
+  const tools = [...extraTools, ...builtIns]
+  const names = [tool.name for tool in tools if !ROUTED_TOOLS.includes(tool.name)]
+  const choice = pickRoute(text, names, settings.routerModel, settings.routerProvider)
+  if (choice.notice != "") {
+    emit({
+      type: "agencyAgent.routerFailed",
+      model: settings.routerModel,
+      provider: settings.routerProvider,
+      error: choice.notice
+    })
+  }
+  return {
+    route: choice.route,
+    text: text
+  }
+}
+
+export def coordinatorBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message as the coordinator: route it, or answer it with one
+  tool loop over the subagents, the file tools, and `extraTools`. Runs on
+  the caller's thread.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - Tools added to the coordinator's own
+  """
+  const systemPrompt = coordinatorPromptOrFailure(COORDINATOR_PROMPT)?
+  // The prompt tells the model to watch the clock (elapsedTime), so it must
+  // be in its tool list. elapsedTime is anchored to this turn's start.
+  const turnStart = now()
+  const builtIns = coordinatorTools(settings, turnStart)
+  const routed = routeFor(prompt, settings, builtIns, extraTools)
+  setMemoryId("main")
+  ensureSystemMessage(systemPrompt)
+  if (settings.context != "") {
+    // The routed subagents and the subagents called as tools run on this
+    // thread and read it too.
+    systemMessage(settings.context, expires: "llmCall")
+  }
+  // A routed subagent runs here from code, on the caller's thread. Its
+  // persona expires with its llm() call; its prompt and reply stay, so the
+  // next turn sees its work.
+  let result: Result<string> = failure("the coordinator did not answer")
+  if (routed.route == "research") {
+    result = researchAgent(settings, routed.text)
+  } else if (routed.route == "code") {
+    result = codeAgent(settings, routed.text)
+  } else {
+    // The coordinator runs on the reasoning model: it holds the whole
+    // conversation and makes every routing decision.
+    const options = {
+      ...reasoningOptions(settings),
+      memory: true,
+      tools: [...builtIns, ...extraTools]
+    }
+    const reply: string = llm(prompt, options)
+    result = success(reply)
+  }
+  // The researcher sets its own memory id; the conversation keeps "main".
+  setMemoryId("main")
+  return result
+}

@@ -305,7 +305,7 @@ Other process docs:
 ### Agents (`agency agent`, the stdlib agents)
 
 - `docs/dev/agents/agency-writer-prompt.md` — How the Agency writer learns the language from its system prompt, and how to measure a change to that prompt.
-- `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
+- `docs/dev/agents/agent-brains.md` — How `agencyAgent` in the stdlib and the `agency agent` harness divide the work, and what the harness passes in.
 - `docs/dev/agents/coding-agent.md` — The stdlib coding agent: why its prompt is short, how its tools differ from the bundles, and what a dispatch adds.
 - `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
 - `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.

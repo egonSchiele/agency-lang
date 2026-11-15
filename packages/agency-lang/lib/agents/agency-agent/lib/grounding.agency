@@ -41,7 +41,24 @@ export def sessionFactsText(
   <flags>
   ${JSON.stringify(flags, null, 2)}
   </flags>
+
+  The `<session_facts>` block in this conversation says what you are and which models this session runs on. When the user asks your name, model, or provider, answer from it. Never say you cannot know.
   """
+}
+
+// The grounding for this run, built once by runSession. Each turn adds this
+// same string to the conversation with ensureSystemMessage, which matches
+// by exact text, so a rebuilt block that differs is never added twice.
+let _grounding: string = ""
+
+/** Store the grounding for this run. */
+export def setGrounding(text: string) {
+  _grounding = text
+}
+
+/** The grounding stored for this run, or "" before runSession sets it. */
+export def grounding(): string {
+  return _grounding
 }
 
 export def groundingText(brainName: string): string {

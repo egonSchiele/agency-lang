@@ -1,0 +1,69 @@
+// The coordinator brain's own tools: which they are, and that the settings
+// bound to the subagents never reach the model's schema.
+import { coordinatorTools } from "std::agents/brains/coordinator"
+import { AgentSettings } from "std::agents/brains/settings"
+import { writableFileTools } from "std::agents/lib/toolkits"
+import { now } from "std::date"
+
+// Every model request, in order.
+let calls: any[] = []
+
+callback("onLLMCallStart") as data {
+  calls = [...calls, data]
+}
+
+def plainSettings(): AgentSettings {
+  return {
+    context: "",
+    model: "",
+    provider: "",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: "",
+    routerProvider: "",
+    coderTools: []
+  }
+}
+
+// The subagents, the image tools, the file tools, and the clock. No job
+// tool and no tool that only the command line offers.
+node toolNamesMatch(): string {
+  const names = [tool.name for tool in coordinatorTools(plainSettings(), now())]
+  const expected = [
+    "researchAgent",
+    "codeAgent",
+    "agencyCodeAgent",
+    "reviewAgent",
+    "oracleAgent",
+    "explorerAgent",
+    "writingAgent",
+    "rewriteAgent",
+    "generateImageFile",
+    "viewImageFile",
+    ...[tool.name for tool in writableFileTools()],
+    "elapsedTime",
+  ]
+  const missing = [name for name in expected if !names.includes(name)]
+  const extra = [name for name in names if !expected.includes(name)]
+  if (missing.length > 0 || extra.length > 0) {
+    return "FAIL missing ${missing.join(", ")}; extra ${extra.join(", ")}"
+  }
+  return "pass"
+}
+
+// The schema the model receives for each tool has no `settings` and no
+// `since` parameter.
+node settingsAreHidden(): string {
+  llm("Reply with ok.", { tools: coordinatorTools(plainSettings(), now()) })
+  let leaked: string[] = []
+  for (tool in calls[0].tools) {
+    const params = Object.keys(tool.schema.properties ?? {})
+    if (params.includes("settings") || params.includes("since")) {
+      leaked.push(tool.name)
+    }
+  }
+  if (leaked.length > 0) {
+    return "FAIL ${leaked.join(", ")}"
+  }
+  return "pass"
+}

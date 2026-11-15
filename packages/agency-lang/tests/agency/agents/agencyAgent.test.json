@@ -1,0 +1,120 @@
+{
+  "sourceFile": "agencyAgent.agency",
+  "tests": [
+    {
+      "nodeName": "defaultBrainAnswers",
+      "description": "The coordinator brain answers by default.",
+      "input": "",
+      "expectedOutput": "\"Hi!\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Hi!" }]
+    },
+    {
+      "nodeName": "eachBrainAnswers",
+      "description": "The minimal and simple brains answer too.",
+      "input": "",
+      "expectedOutput": "\"from minimal|from simple\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "from minimal" }, { "return": "from simple" }]
+    },
+    {
+      "nodeName": "brainCount",
+      "description": "Three brains are listed.",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "secondCallSeesFirst",
+      "description": "Two calls from code continue one thread, which holds the coordinator's prompt once, and the second request holds the first message.",
+      "input": "",
+      "expectedOutput": "\"1|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }]
+    },
+    {
+      "nodeName": "asToolStartsFresh",
+      "description": "Called as a tool, agencyAgent starts on a fresh thread, and the outer call gets its result.",
+      "input": "",
+      "expectedOutput": "\"outer answer|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "agencyAgent", "args": { "task": "the inner task" } }] },
+        { "return": "inner answer" },
+        { "return": "outer answer" }
+      ]
+    },
+    {
+      "nodeName": "callerHandlerRejects",
+      "description": "A write the caller's handler rejects does not happen.",
+      "input": "",
+      "expectedOutput": "\"false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            {
+              "name": "write",
+              "args": { "filename": "/tmp/agency-agent-rejected-write.txt", "content": "should not exist" }
+            }
+          ]
+        },
+        { "return": "I could not write it." }
+      ]
+    },
+    {
+      "nodeName": "extraToolsReachTheRightAgent",
+      "description": "The main tools reach the coordinator and not the coder; the coder tools reach the coder and not the coordinator.",
+      "input": "",
+      "expectedOutput": "\"true|false|true|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "codeAgent", "args": { "userMsg": "add a flag" } }] },
+        { "return": "added it" },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "simpleBrainOffersOnlyMain",
+      "description": "The simple brain offers the main tools and ignores the coder tools.",
+      "input": "",
+      "expectedOutput": "[\"stubA\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "contextReachesModel",
+      "description": "The context is a system message in the request, and is gone from the thread after the call.",
+      "input": "",
+      "expectedOutput": "\"true|0\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "budgetTripIsFailure",
+      "description": "A cost limit the call runs past is a failure that names the cost limit.",
+      "input": "",
+      "expectedOutput": "\"true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }, { "return": "hi" }]
+    },
+    {
+      "nodeName": "noLimitRuns",
+      "description": "Negative limits mean no limit, and the call answers.",
+      "input": "",
+      "expectedOutput": "\"Hi!\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Hi!" }]
+    }
+  ]
+}

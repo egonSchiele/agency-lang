@@ -1,0 +1,81 @@
+/** @module
+  @summary The `--agent` start targets: a turn sent straight to one of the
+  coordinator brain's subagents instead of the coordinator. Only the
+  coordinator brain has them.
+*/
+import { agencyCodeAgent, codeAgent } from "std::agents/brains/coordinator/code"
+import { explorerAgent } from "std::agents/brains/coordinator/explorer"
+import { oracleAgent } from "std::agents/brains/coordinator/oracle"
+import { researchAgent } from "std::agents/brains/coordinator/research"
+import { reviewAgent } from "std::agents/brains/coordinator/review"
+import { rewriteAgent } from "std::agents/brains/coordinator/rewrite"
+import { writingAgent } from "std::agents/brains/coordinator/writing"
+import { AgentSettings } from "std::agents/brains/settings"
+import { ensureSystemMessage } from "std::thread"
+
+import { cliSettings, replyText } from "./answer.agency"
+import { projectContextText } from "./projectContext.agency"
+
+/** The names `--agent` accepts for the coordinator brain, besides `main`. */
+export static const START_TARGETS: string[] = ["code", "agencyCode", "research", "oracle", "explorer", "review", "writing", "rewrite"]
+
+// The project block a coder started directly gets. Built on the coder's
+// first turn and reused after, because ensureSystemMessage matches by exact
+// text and the block holds the date and the directory.
+let _projectBlock: string = ""
+
+// The coder runs on the conversation thread, so a later turn sees the files
+// it read on earlier ones. It gets the project block the coordinator's own
+// conversation carries.
+def coderTurn(settings: AgentSettings, target: string, message: string): string {
+  if (_projectBlock == "") {
+    _projectBlock = projectContextText()
+  }
+  ensureSystemMessage(_projectBlock)
+  if (target == "agencyCode") {
+    return replyText("The Agency coder", agencyCodeAgent(settings, message))
+  }
+  return replyText("The coder", codeAgent(settings, message))
+}
+
+// The oracle and the explorer are handoffs: as tools they continue the
+// caller's thread. Started directly, each gets a thread of its own. The
+// thread is the CLI's display choice: if the stdlib agents opened it, every
+// direct call from a user program would get a labelled, summarized thread
+// too.
+def oracleTurn(settings: AgentSettings, message: string): string {
+  let reply = ""
+  thread(label: "oracle", summarize: true) {
+    reply = replyText("The oracle", oracleAgent(settings, message))
+  }
+  return reply
+}
+
+def explorerTurn(settings: AgentSettings, message: string): string {
+  let reply = ""
+  thread(label: "explorer", summarize: true) {
+    reply = replyText("The explorer", explorerAgent(settings, message))
+  }
+  return reply
+}
+
+export def runStartTarget(target: string, message: string): string {
+  """
+  Send one turn straight to the subagent `target` names.
+
+  @param target - One of START_TARGETS
+  @param message - The user's message
+  """
+  const settings = cliSettings()
+  return match(target) {
+    "code" => coderTurn(settings, "code", message)
+    "agencyCode" => coderTurn(settings, "agencyCode", message)
+    "research" => replyText("The researcher", researchAgent(settings, message))
+    "oracle" => oracleTurn(settings, message)
+    "explorer" => explorerTurn(settings, message)
+    "review" => reviewAgent(settings, message)
+    "writing" => writingAgent(settings, message)
+    "rewrite" => rewriteAgent(settings, message)
+    _ => "Unknown start target: ${target}"
+  }
+}

@@ -1,8 +1,62 @@
+## Nov 15 2026 — v0.40.0
+
+Highlights: the Agency agent is now a stdlib function, `agencyAgent`. Also background jobs and a clearer approval prompt. Finally, the Agency coding agent uses fewer tokens.
+
+### Breaking
+
+- **`bash` and `exec` stop a command after 2 minutes by default.** Pass `timeout: 0` for no limit.
+- **The stdlib coding agent has 14 tools, down from 42.** The git tools, `ls`, `glob`, `grep`, `exec`, and the Wikipedia tools are gone, because `bash` and `fetchMarkdown` cover them.
+- **No stdlib agent offers the `question` tool.** `communicationTools`, `askUserHint`, and `ASK_USER_HINT` are removed.
+- **`glob` and a recursive `ls` skip files that `.gitignore` ignores.** Pass `respectGitignore: false` to see them. If you specify a gitignore'd folder specifically though, it will still get searched.
+- **A failed `safeBash` command returns plain text, not JSON.** The text is stdout, then stderr, then a last line such as `Command exited with code 2`.
+- **`shellTools()` and `codingFileAndShellTools()` no longer include `readSpill` and `grepSpill`.** We've switched to a design where we print the path to a file for the agent to read, and we'll create the file if the agent decides to read it. This pattern is more familiar to models than `spill` tools, which they struggled with.
+- **A `gh api` line that `safeBash` does not recognize asks `std::bash`,** not `std::exec`.
+- **`agency agent` sessions saved before this version cannot be resumed.**
+
+### Agent
+
+- **New `agencyAgent` in `std::agents/agency`** lets you run the Agency agent from your own code.
+- **New `--brain minimal` runs one coder with `read`, `bash`, `edit`, and `write` and a short prompt**.
+- **Background jobs.** `startJob` starts a shell command and returns at once, and you can use `jobOutput`, `stopJob`, and `listJobs` in `std::jobs` to read and stop it. In the agent, `/jobs` lists jobs or stops one.
+- Nicer looking approval prompt, and the chance to widen the approval when reading a specific file, to one of the parent dirs.
+- **Slash commands can take arguments,** and you can hit tab to fill in the highlighted command.
+- **The output token cap comes from the model,** not a flat 20,000. An unknown model gets 64,000, and Anthropic and MLX stay at 20,000.
+- Much much shorter prompt for the coding agent.
+- `read` stops at 2,000 lines when the model gives no limit, and `write` always overwrites.
+- **A failing bash command comes back to the coder as a normal result, not a failure.** There are legitimate reasons a bash call may return a non-zero exit code, like a failed test run. These should not count as a tool failure.
+- **The tool loop removes a tool only after 10 failures in a row,** up from 5 in the whole conversation. A failed `edit` no longer removes `edit`. Without this and the above change, if tests failed 5 times in a row, we'd remove the bash tool, which was ridiculous.
+
+### LLM
+
+- **A reasoning model gets its own reasoning back on the next request.** This made the agent faster and cheaper. Great optimization.
+- **A reply that the output limit cut off before it held any text is retried.** This can happen if the reasoning uses up all the output tokens. We retry with a note asking the model to reason more briefly. After two retries the call fails.
+- **A `@param` line in a docstring becomes that argument's description in the tool schema.**
+- An optional parameter is marked optional in the tool schema.
+
+### Safe Bash
+
+- **`gh` support in safebash.** `gh` reads run with no prompt under `recommended`. `gh pr view`, `pr diff`, `pr checks`, `pr list`, `issue view`, `issue list`, `search issues`, and `gh api` reads of pull requests and issues ask the matching `std::github` effects.
+- **A command has a time limit, 120 seconds by default,** and stopping it stops everything it started.
+- **`rm` and `rmdir` ask `std::remove` for each path,** like the `remove` tool. They are refused for the root dir, the home folder, and the cwd.
+- **Long bash output keeps its end.** We used to show the model the start, but for bash, the end is more useful. We show up to 2,000 lines or 50,000 characters, and the rest can be read as spill (see spill change above).
+- **A failed `agency` command ends with its exit code line,** like any other command.
+
+### Standard library
+
+- **`write` and `writeBinary` create the folders their path needs,** under the same `std::write` approval.
+
+### Fixes
+
+- **`agency policy gen -p existing.json` loads the existing policy.** It always started from an empty one before.
+- **`make` no longer runs out of memory on Node 26.** tarsec 0.6.0 parses large files with far less memory.
+
 ## Nov 10 2026 — v0.39.2
+
 - **A decision call now sees tool results in its state,** each with the name and arguments of the call it answers. Before, tool results were left out. This means a tool result can now reach the decision provider, so run the decision call in its own `thread` if the thread holds results that should stay local.
 - Fix memory use in local models hosting: free a finished request's share of the batch, so 16 requests at once to a 27B model stay under 40 GB.
 
 ## Nov 10 2026 — v0.39.1
+
 - Fix memory leak in local models hosting: stop cache_arrays from keeping each step's arrays alive.
 
 ## Nov 10 2026 — v0.39.0

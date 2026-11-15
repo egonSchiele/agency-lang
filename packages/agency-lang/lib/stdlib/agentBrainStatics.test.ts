@@ -6,11 +6,13 @@ import { walkNodes } from "../utils/node.js";
 import type { AgencyNode } from "../types.js";
 
 /**
- * A static runs when its module loads, so every program that imports
- * `std::agents/agency` runs the statics of the Agency agent's modules. A
- * handler in the program's own code cannot see what they read. So a static
- * in those modules may call only the functions listed here, each of which
- * reads nothing but the files packaged with Agency.
+ * A top-level variable is set before any of the program's own code runs: a
+ * static when its module loads, a plain `let` or `const` when a run starts.
+ * So every program that imports `std::agents/agency` runs the top-level
+ * variables of the Agency agent's modules, and a handler in the program's
+ * own code cannot see what they read. A top-level variable in those
+ * modules may call only the functions listed here, each of which reads
+ * nothing but the files packaged with Agency.
  *
  * Before adding a name, read the function and everything it calls. A
  * function that reads the user's files or the environment does not belong
@@ -46,27 +48,32 @@ function calledNames(value: AgencyNode): string[] {
   return names;
 }
 
-/** "file: NAME calls fn" for each static that calls an unlisted function. */
+/** "file: NAME calls fn" for each top-level variable that calls an unlisted function. */
 function unlistedCalls(file: string): string[] {
+  return topLevelCalls(file)
+    .filter((call) => !MAY_RUN_AT_LOAD.includes(call.name))
+    .map((call) => `${path.relative(stdlib, file)}: ${call.variable} calls ${call.name}`);
+}
+
+/** Each function call in the initializer of a top-level variable, static or not. */
+function topLevelCalls(file: string): { variable: string; name: string }[] {
   const parsed = parseAgencyFileCached(file);
   if (!parsed.success) {
     throw new Error(`failed to parse ${file}`);
   }
-  const found: string[] = [];
-  for (const { node } of walkNodes(parsed.result.nodes)) {
-    if (node.type !== "assignment" || !node.static) {
-      continue;
-    }
-    for (const name of calledNames(node.value)) {
-      if (!MAY_RUN_AT_LOAD.includes(name)) {
-        found.push(`${path.relative(stdlib, file)}: ${node.variableName} calls ${name}`);
-      }
-    }
-  }
-  return found;
+  return parsed.result.nodes.flatMap((node) =>
+    node.type === "assignment"
+      ? calledNames(node.value).map((name) => ({ variable: node.variableName, name }))
+      : [],
+  );
 }
 
-describe("the Agency agent's stdlib statics", () => {
+describe("the Agency agent's top-level variables", () => {
+  it("are seen by this check", () => {
+    const calls = topLevelCalls(path.join(stdlib, "agents", "brains", "coordinator.agency"));
+    expect(calls).toContainEqual({ variable: "COORDINATOR_PROMPT", name: "agentPrompt" });
+  });
+
   it("call only functions known to read nothing of the user's", () => {
     const files = [
       ...agencyFilesUnder(path.join(stdlib, "agents", "brains")),

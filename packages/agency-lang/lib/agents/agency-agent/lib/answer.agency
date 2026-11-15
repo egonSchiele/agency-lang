@@ -15,17 +15,32 @@ import { globalInstructionsText } from "./globalInstructions.agency"
 import { grounding } from "./grounding.agency"
 import { addJobsNote } from "./jobsNote.agency"
 import { messageWasRewritten } from "./rewrittenMessage.agency"
+import { isInteractive } from "./trace.agency"
 import { getRouterModel, getRouterProvider, getSlowModel, getSlowProvider } from "../shared.agency"
 
 // A negative budget is no limit. A whole-agent limit comes from --max-cost
 // and --max-time, which the runtime enforces as a root budget.
 static const NO_LIMIT = -1
 
+// How replies are shown in the REPL. The heading rule is about the terminal
+// renderer, which drops the text after a heading that has no blank line.
+static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks, and put code and command output in fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest."
+
+/** The text every model of a turn gets: the reply style when a person is at
+  the REPL, then the user's global instructions. A one-shot run has no
+  reader for a formatted reply, so it gets the instructions alone. */
+def cliContext(): string {
+  if (!isInteractive()) {
+    return globalInstructionsText()
+  }
+  return "${REPL_STYLE}\n\n${globalInstructionsText()}"
+}
+
 /** The settings a turn runs with. The main model is the ambient one, which
   pickModelsForAgent set at startup, so it is left empty here. */
 export def cliSettings(): AgentSettings {
   return {
-    context: globalInstructionsText(),
+    context: cliContext(),
     model: "",
     provider: "",
     reasoningModel: getSlowModel(),

@@ -16,15 +16,21 @@ node main() {
 }
 ```
 
-A model can call it as a tool:
+A model can call it as a tool. Bind what your program decides, such as the
+budget, so the model sees only the task and cannot change the rest:
 
 ```ts
-const answer = llm(prompt, tools: [agencyAgent])
+const agent = agencyAgent.partial(maxCost: $5.00, maxTime: 10m)
+const answer = llm(prompt, tools: [agent])
 ```
 
 `agencyAgent` is a plain function, not a handoff. Called from code, it
 continues the caller's conversation thread, so a second call sees the
 first. Called as a tool, it starts on a fresh thread.
+
+The agent's system prompt stays on the thread it ran on. To keep it away
+from your program's other `llm()` calls, call `agencyAgent` inside a
+`thread { }` block.
 
 It reads none of the user's own files. A caller that wants the user's
 instructions or tools passes them in, through `context` and `extraTools`.
@@ -47,7 +53,7 @@ Which brain answers.
 export type AgencyAgentBrain = "coordinator" | "minimal" | "simple"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L48))
 
 ### AgentExtraTools
 
@@ -64,7 +70,7 @@ export type AgentExtraTools = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L51))
 
 ### BrainInfo
 
@@ -78,7 +84,7 @@ export type BrainInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L60))
 
 ## Functions
 
@@ -92,7 +98,7 @@ Return the brains `agencyAgent` can run, each with a one-line description.
 
 **Returns:** `BrainInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L65))
 
 ### agencyAgent
 
@@ -120,6 +126,11 @@ Hand a task to the Agency agent, a general assistant that can read and
   answers small requests itself and hands larger ones to its subagents.
   Returns its reply.
 
+A negative `maxCost` or `maxTime` means no limit. A model that is given
+  this function as a tool fills in every parameter it can see, so bind the
+  budgets, the models, and `extraTools` with `.partial` before you hand it
+  to `llm()`.
+
 **Parameters:**
 
 | Name | Type | Default | Description |
@@ -127,8 +138,8 @@ Hand a task to the Agency agent, a general assistant that can read and
 | task | `string` |  | What the user wants, as they would say it to an assistant |
 | context | `string` | "" | Extra text for the agent, such as the user's own instructions, or "" |
 | brain | [AgencyAgentBrain](#agencyagentbrain) | "coordinator" | Which brain answers: "coordinator", "minimal", or "simple" |
-| maxCost | `number` | $50.00 | Cost budget in USD. A negative value means no limit. |
-| maxTime | `number` | 30m | Time budget in milliseconds. A negative value means no limit. |
+| maxCost | `number` | $50.00 | Cost budget in USD |
+| maxTime | `number` | 30m | Time budget in milliseconds |
 | model | `string` | "" | The main model, or "" for the ambient model |
 | provider | `string` | "" | The main model's provider |
 | reasoningModel | `string` | "" | The model for the coordinator, the oracle, and the explorer, or "" for the main model |
@@ -142,4 +153,4 @@ Hand a task to the Agency agent, a general assistant that can read and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L90))

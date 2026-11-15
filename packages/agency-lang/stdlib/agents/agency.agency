@@ -11,15 +11,21 @@ node main() {
 }
 ```
 
-A model can call it as a tool:
+A model can call it as a tool. Bind what your program decides, such as the
+budget, so the model sees only the task and cannot change the rest:
 
 ```ts
-const answer = llm(prompt, tools: [agencyAgent])
+const agent = agencyAgent.partial(maxCost: $5.00, maxTime: 10m)
+const answer = llm(prompt, tools: [agent])
 ```
 
 `agencyAgent` is a plain function, not a handoff. Called from code, it
 continues the caller's conversation thread, so a second call sees the
 first. Called as a tool, it starts on a fresh thread.
+
+The agent's system prompt stays on the thread it ran on. To keep it away
+from your program's other `llm()` calls, call `agencyAgent` inside a
+`thread { }` block.
 
 It reads none of the user's own files. A caller that wants the user's
 instructions or tools passes them in, through `context` and `extraTools`.
@@ -76,6 +82,10 @@ export def agencyAgentBrains(): BrainInfo[] {
   ]
 }
 
+/** A negative `maxCost` or `maxTime` means no limit. A model that is given
+  this function as a tool fills in every parameter it can see, so bind the
+  budgets, the models, and `extraTools` with `.partial` before you hand it
+  to `llm()`. */
 @guarded(cost: maxCost, time: maxTime)
 export def agencyAgent(
   task: string,
@@ -101,8 +111,8 @@ export def agencyAgent(
   @param task - What the user wants, as they would say it to an assistant
   @param context - Extra text for the agent, such as the user's own instructions, or ""
   @param brain - Which brain answers: "coordinator", "minimal", or "simple"
-  @param maxCost - Cost budget in USD. A negative value means no limit.
-  @param maxTime - Time budget in milliseconds. A negative value means no limit.
+  @param maxCost - Cost budget in USD
+  @param maxTime - Time budget in milliseconds
   @param model - The main model, or "" for the ambient model
   @param provider - The main model's provider
   @param reasoningModel - The model for the coordinator, the oracle, and the explorer, or "" for the main model

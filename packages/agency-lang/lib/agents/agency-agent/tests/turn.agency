@@ -202,6 +202,16 @@ node rewrittenMessageGetsNoRouter(): string {
   return "${typed}|${rewritten}"
 }
 
+// The terminal reply style is the harness's, and only a REPL session has a
+// reader for it.
+node replStyleOnlyInTheRepl(): string {
+  setInteractive(true)
+  const repl = cliSettings().context.includes("terminal REPL")
+  setInteractive(false)
+  const oneShot = cliSettings().context.includes("terminal REPL")
+  return "${repl}|${oneShot}"
+}
+
 node resolvesBrainNamePrecedence(): string {
   const flagWins = resolveBrainName("flag-brain", {
     brain: "settings-brain"

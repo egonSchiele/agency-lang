@@ -92,10 +92,8 @@ def agencyCodeExtras(): any[] {
   ]
 }
 
-static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown, and put code and command output in fenced code blocks."
-
 // Both coders are the stdlib coding agent. They differ in the tools they
-// add. The coder gets the reply style and the call's context.
+// add.
 def runCoder(
   settings: AgentSettings,
   userMsg: string,
@@ -105,7 +103,7 @@ def runCoder(
 ): Result<string> {
   return codingAgent(
     task: userMsg,
-    context: "${REPL_STYLE}\n\n${settings.context}",
+    context: settings.context,
     maxCost: maxDollars ?? CODE_MAX_COST,
     maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
     model: settings.model,

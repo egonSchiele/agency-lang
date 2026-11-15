@@ -201,7 +201,7 @@ thread, so the coordinator reads them on a later turn.
 
 The user's message is not pushed as a message of its own. The thread gets
 the subagent's prompt, which for the researcher is the user's text followed
-by the REPL style notes and the global instructions. When the coordinator
+by the researcher's style notes and the call's context. When the coordinator
 calls a subagent as a tool, the user's message is on the thread as well.
 
 `researchAgent` sets the memory id to `"research"`; `coordinatorBrain` sets

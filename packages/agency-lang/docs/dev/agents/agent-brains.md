@@ -122,7 +122,11 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 
 `answerTurn` in `lib/answer.agency` builds each turn's call:
 
-- `context` is the global instructions, `globalInstructionsText()`.
+- `context` is `cliContext()`: in the REPL, a line on how to format a reply
+  for the terminal, then the global instructions
+  (`globalInstructionsText()`). A one-shot run gets the instructions alone.
+  The stdlib brains say nothing about how a reply is displayed, because a
+  caller such as a web back end shows it some other way.
 - The main model is left empty: `pickModelsForAgent` already set the
   ambient one. The reasoning and router models come from the resolved
   slots. `routerModelFor()` passes no router model when the harness

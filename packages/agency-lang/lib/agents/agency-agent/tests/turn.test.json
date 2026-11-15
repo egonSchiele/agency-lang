@@ -96,6 +96,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "replStyleOnlyInTheRepl",
+      "description": "The context carries the terminal reply style in the REPL and not in a one-shot run.",
+      "input": "",
+      "expectedOutput": "\"true|false\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "resolvesStartTargets",
       "input": "",
       "expectedOutput": "\"true|true|true|true\"",

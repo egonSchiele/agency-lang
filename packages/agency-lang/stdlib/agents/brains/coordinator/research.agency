@@ -22,9 +22,7 @@ def researchTools(): any[] {
   return memoryTools()
 }
 
-static const replStyle = """Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest.
-
-For a question spanning more than two sources, list the sources you plan to check in the same response as your first search.
+static const researchStyle = """For a question spanning more than two sources, list the sources you plan to check in the same response as your first search.
 
 Keep replies brief. Cite sources. Show, do not lecture."""
 
@@ -52,7 +50,7 @@ export handoff def researchAgent(
   """
   emit({ type: "agencyAgent.subagentStart", agent: "researchAgent", message: userMsg })
   setMemoryId("research")
-  const context = "${replStyle}\n\n${settings.context}"
+  const context = "${researchStyle}\n\n${settings.context}"
   let answer: Result<string> = failure("no research ran")
   if (agencyTopic) {
     answer = agencyResearcherAgent(

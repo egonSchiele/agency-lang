@@ -53,10 +53,8 @@ export def learnSkill(name: string, description: string, body: string): string {
   until they accept. In a one-shot run the review is rejected, so nothing
   is saved.
 
-  This saves a skill or notes to your learned catalog. You can use
-  `learned_skills` to read your saved skills. The user reviews every
-  draft, and nothing is saved until they accept it. Never say a skill or
-  tool was saved unless the reply said so.
+  Read your saved skills with `learned_skills`. Never say a skill was
+  saved unless the reply says so.
 
   @param name - Kebab-case name, also the filename: lowercase letters, digits, and hyphens
   @param description - One line telling the reading agent when to use the skill
@@ -80,10 +78,8 @@ export def writeToolFor(name: string, purpose: string, request: string): string 
   and shown to the user, who accepts it or sends feedback. Takes several
   model calls. In a one-shot run nothing is saved.
 
-  This saves a tool to your learned catalog. Learned tools have the name
-  format `learned_<name>`. The user reviews every draft, and nothing is
-  saved until they accept it. Never say a skill or tool was saved unless
-  the reply said so.
+  The saved tool is offered as `learned_<name>`. Never say a tool was
+  saved unless the reply says so.
 
   @param name - camelCase name: a lowercase letter, then letters and digits
   @param purpose - What the tool should do, in plain language. State only what the user said; ask the user first for anything the tool needs that they have not told you

@@ -13,7 +13,7 @@ import { writingAgent } from "std::agents/brains/coordinator/writing"
 import { AgentSettings } from "std::agents/brains/settings"
 import { ensureSystemMessage } from "std::thread"
 
-import { cliSettings, replyText } from "./answer.agency"
+import { addReplStyle, cliSettings, replyText } from "./answer.agency"
 import { projectContextText } from "./projectContext.agency"
 
 /** The names `--agent` accepts for the coordinator brain, besides `main`. */
@@ -32,10 +32,16 @@ def coderTurn(settings: AgentSettings, target: string, message: string): string 
     _projectBlock = projectContextText()
   }
   ensureSystemMessage(_projectBlock)
+  addReplStyle()
   if (target == "agencyCode") {
     return replyText("The Agency coder", agencyCodeAgent(settings, message))
   }
   return replyText("The coder", codeAgent(settings, message))
+}
+
+def researchTurn(settings: AgentSettings, message: string): string {
+  addReplStyle()
+  return replyText("The researcher", researchAgent(settings, message))
 }
 
 // The oracle and the explorer are handoffs: as tools they continue the
@@ -70,7 +76,7 @@ export def runStartTarget(target: string, message: string): string {
   return match(target) {
     "code" => coderTurn(settings, "code", message)
     "agencyCode" => coderTurn(settings, "agencyCode", message)
-    "research" => replyText("The researcher", researchAgent(settings, message))
+    "research" => researchTurn(settings, message)
     "oracle" => oracleTurn(settings, message)
     "explorer" => explorerTurn(settings, message)
     "review" => reviewAgent(settings, message)

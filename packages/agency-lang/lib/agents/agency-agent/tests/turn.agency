@@ -202,14 +202,36 @@ node rewrittenMessageGetsNoRouter(): string {
   return "${typed}|${rewritten}"
 }
 
-// The terminal reply style is the harness's, and only a REPL session has a
-// reader for it.
+def styleMessages(): number {
+  const messages = getThread(currentThreadId(), 0, 200) catch []
+  return [message for message in messages if message.role == "system" && message.content.includes("terminal REPL")].length
+}
+
+// The terminal reply style goes on the conversation thread, once, and only
+// in the REPL. It is never in the context, which also reaches the writing
+// reviewer and the rewriter. The simple brain gets no style line at all.
 node replStyleOnlyInTheRepl(): string {
-  setInteractive(true)
-  const repl = cliSettings().context.includes("terminal REPL")
-  setInteractive(false)
-  const oneShot = cliSettings().context.includes("terminal REPL")
-  return "${repl}|${oneShot}"
+  setPolicyArg("${__dirname}/stubPolicy.json")
+  let oneShot = -1
+  let simple = -1
+  let repl = -1
+  let inContext = true
+  setBrainName("coordinator")
+  runSession(false) {
+    setInteractive(false)
+    runTurn("", "first") with approve
+    oneShot = styleMessages()
+    setInteractive(true)
+    setBrainName("simple")
+    runTurn("", "second") with approve
+    simple = styleMessages()
+    setBrainName("coordinator")
+    runTurn("", "third") with approve
+    runTurn("", "fourth") with approve
+    repl = styleMessages()
+    inContext = cliSettings().context.includes("terminal REPL")
+  }
+  return "${oneShot}|${simple}|${repl}|${inContext}"
 }
 
 node resolvesBrainNamePrecedence(): string {

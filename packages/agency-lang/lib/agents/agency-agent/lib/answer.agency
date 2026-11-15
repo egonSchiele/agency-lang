@@ -24,23 +24,24 @@ static const NO_LIMIT = -1
 
 // How replies are shown in the REPL. The heading rule is about the terminal
 // renderer, which drops the text after a heading that has no blank line.
-static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks, and put code and command output in fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest."
+static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown. Put code and command output in fenced code blocks, and a blank line after every heading, or the renderer drops the text that follows."
 
-/** The text every model of a turn gets: the reply style when a person is at
-  the REPL, then the user's global instructions. A one-shot run has no
-  reader for a formatted reply, so it gets the instructions alone. */
-def cliContext(): string {
-  if (!isInteractive()) {
-    return globalInstructionsText()
+/** Add the reply style to the conversation thread when a person is at the
+  REPL. A one-shot run prints the reply as plain text, so it gets none. The
+  line goes on the thread and not in `context`, because `context` also
+  reaches the writing reviewer and the rewriter, which would read it as
+  part of the task the prose was written for. */
+export def addReplStyle() {
+  if (isInteractive()) {
+    ensureSystemMessage(REPL_STYLE)
   }
-  return "${REPL_STYLE}\n\n${globalInstructionsText()}"
 }
 
 /** The settings a turn runs with. The main model is the ambient one, which
   pickModelsForAgent set at startup, so it is left empty here. */
 export def cliSettings(): AgentSettings {
   return {
-    context: cliContext(),
+    context: globalInstructionsText(),
     model: "",
     provider: "",
     reasoningModel: getSlowModel(),
@@ -88,7 +89,10 @@ export def answerTurn(
   addJobsNote()
   const settings = cliSettings()
   let mainTools: any[] = []
+  // The minimal and simple brains get neither: their prompts are kept as
+  // short as they can be.
   if (brainName == "coordinator") {
+    addReplStyle()
     mainTools = cliTools(now(), settings)
   }
   const result = agencyAgent(

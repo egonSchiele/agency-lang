@@ -122,10 +122,17 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 
 `answerTurn` in `lib/answer.agency` builds each turn's call:
 
-- `context` is `cliContext()`: in the REPL, a line on how to format a reply
-  for the terminal, then the global instructions
-  (`globalInstructionsText()`). A one-shot run gets the instructions alone.
-  The stdlib brains say nothing about how a reply is displayed, because a
+- `context` is the global instructions, `globalInstructionsText()`, and
+  nothing else. `context` reaches every subagent, including the writing
+  reviewer and the rewriter, which read it as part of the task their prose
+  was written for.
+- In the REPL, for the coordinator brain, `addReplStyle()` adds one line on
+  how to format a reply for the terminal to the conversation thread, as the
+  grounding is added. The minimal and simple brains get no such line. The
+  coordinator, the coders, and the researcher run on that thread and see
+  it. The review, writing, and rewrite subagents open their own thread and
+  do not. A one-shot run prints plain text and gets no such line. The
+  stdlib brains say nothing about how a reply is displayed, because a
   caller such as a web back end shows it some other way.
 - The main model is left empty: `pickModelsForAgent` already set the
   ambient one. The reasoning and router models come from the resolved

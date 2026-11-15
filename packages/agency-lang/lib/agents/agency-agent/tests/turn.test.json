@@ -97,10 +97,12 @@
     },
     {
       "nodeName": "replStyleOnlyInTheRepl",
-      "description": "The context carries the terminal reply style in the REPL and not in a one-shot run.",
+      "description": "The terminal reply style is on the coordinator's thread once in the REPL. It is absent in a one-shot run and for the simple brain, and never in the context.",
       "input": "",
-      "expectedOutput": "\"true|false\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "expectedOutput": "\"0|0|1|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }, { "return": "three" }, { "return": "four" }]
     },
     {
       "nodeName": "resolvesStartTargets",

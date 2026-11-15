@@ -10,7 +10,7 @@ import { spillTools, writableFileTools } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
-import { Attachment, endTurn, systemMessage } from "std::thread"
+import { Attachment, endTurn, ensureSystemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { addGlobalInstructions } from "../../lib/globalInstructions.agency"
@@ -45,10 +45,10 @@ import { writingAgent } from "./subagents/writing.agency"
 // Per-run grounding, from BrainContext. Spliced into the system prompt.
 let _context: string = ""
 
-let first = true
-
-// The same flag for a coder started directly with --agent.
-let coderFirst = true
+// The project block a coder started directly with --agent gets. Built on
+// the coder's first turn and reused after, because ensureSystemMessage
+// matches by exact text and the block holds the date and the directory.
+let _projectBlock: string = ""
 
 // Bundled prompts are read at static-init, before the policy handler exists.
 // coordinatorInit only checks the reads succeeded.
@@ -110,8 +110,6 @@ def coordinatorInit(context: BrainContext) {
   }
   exitIfBroken(checkBundledSkill(coordinatorSkills, "presets"))
   _context = context.grounding
-  first = true
-  coderFirst = true
   // One-shot autonomy: tell the coders there is no human to answer
   // questions and no next turn, so they must drive to a finished artifact.
   setCodeOneShot(!context.interactive)
@@ -286,33 +284,28 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
   const turnStart = now()
   const user = userTools()
   const routed = routeFor(prompt, user, turnStart)
-  thread(label: "main", session: "main") {
-    setMemoryId("main")
-    if (first) {
-      const sysPrompt = MAIN_PROMPT catch ""
-      systemMessage("${sysPrompt}${_context}")
-      first = false
-    }
-    // The coordinator runs on the slow (capable) slot: it holds the whole
-    // conversation and makes every routing decision, so it gets the
-    // strongest model the user configured. High-volume work still runs on
-    // the subagents' own slots.
-    addGlobalInstructions()
-    // The routed coder, and the coder called as a tool, run on this thread
-    // and read it too.
-    addJobsNote()
-    // A routed subagent runs here from code, on the main thread. Its persona
-    // expires with its llm() call; its prompt and reply stay.
-    // Not coderTurn: it opens a `code` thread of its own, and a routed coder
-    // stays on the main thread so the next turn sees its work.
-    const result = match(routed.route) {
-      "research" => researchTurn(routed.text)
-      "code" => replyText("The coder", codeAgent(routed.text))
-      _ => llm(prompt, mainOptions(offeredTools(user, turnStart)))
-    }
-    // The researcher sets its own memory id; the main thread keeps "main".
-    setMemoryId("main")
+  // The turn runs on the caller's thread, which is the conversation.
+  setMemoryId("main")
+  const sysPrompt = MAIN_PROMPT catch ""
+  ensureSystemMessage("${sysPrompt}${_context}")
+  // The coordinator runs on the slow (capable) slot: it holds the whole
+  // conversation and makes every routing decision, so it gets the
+  // strongest model the user configured. High-volume work still runs on
+  // the subagents' own slots.
+  addGlobalInstructions()
+  // The routed coder, and the coder called as a tool, run on this thread
+  // and read it too.
+  addJobsNote()
+  // A routed subagent runs here from code, on the conversation thread. Its
+  // persona expires with its llm() call; its prompt and reply stay, so the
+  // next turn sees its work.
+  const result = match(routed.route) {
+    "research" => researchTurn(routed.text)
+    "code" => replyText("The coder", codeAgent(routed.text))
+    _ => llm(prompt, mainOptions(offeredTools(user, turnStart)))
   }
+  // The researcher sets its own memory id; the conversation keeps "main".
+  setMemoryId("main")
   return result
 }
 
@@ -337,28 +330,24 @@ def researchTurn(userMsg: string): string {
   return replyText("The researcher", researchAgent(userMsg))
 }
 
-// The coder, oracle, and explorer are handoffs: as tools they continue the
-// caller's thread. Called directly by --agent there is no caller thread
-// to continue, so give each its own. The thread is this brain's display
-// choice: if the stdlib agents opened it, every direct call from a user
-// program would get a labelled, summarized thread too. The coder's thread
-// is a session, so a later turn sees the files it read on earlier ones.
-// On its first turn it gets the project block the coordinator's own prompt
-// carries.
+// The oracle and explorer are handoffs: as tools they continue the
+// caller's thread. Called directly by --agent, each gets a thread of its
+// own. The thread is this brain's display choice: if the stdlib agents
+// opened it, every direct call from a user program would get a labelled,
+// summarized thread too.
+//
+// The coder runs on the conversation thread, so a later turn sees the files
+// it read on earlier ones. It gets the project block the coordinator's own
+// prompt carries.
 def coderTurn(target: string, userMsg: string): string {
-  let reply = ""
-  thread(label: target, session: target) {
-    if (coderFirst) {
-      systemMessage(projectContextText())
-      coderFirst = false
-    }
-    if (target == "agencyCode") {
-      reply = replyText("The Agency coder", agencyCodeAgent(userMsg))
-    } else {
-      reply = replyText("The coder", codeAgent(userMsg))
-    }
+  if (_projectBlock == "") {
+    _projectBlock = projectContextText()
   }
-  return reply
+  ensureSystemMessage(_projectBlock)
+  if (target == "agencyCode") {
+    return replyText("The Agency coder", agencyCodeAgent(userMsg))
+  }
+  return replyText("The coder", codeAgent(userMsg))
 }
 
 def oracleTurn(userMsg: string): string {
@@ -397,7 +386,6 @@ def coordinatorRunTurn(
 export def coordinatorBrain(): AgentBrain {
   return {
     name: "coordinator",
-    session: "main",
     description: "One coordinator LLM that routes to code, Agency code, research, oracle, explorer, review, writing, and rewrite subagents",
     startTargets: ["code", "agencyCode", "research", "oracle", "explorer", "review", "writing", "rewrite"],
     init: coordinatorInit,

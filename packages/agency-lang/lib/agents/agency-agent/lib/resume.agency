@@ -46,8 +46,10 @@ let _incognito = false
 let _renamed = false
 let _titlePinned = false
 
-// The brain's conversation session, for the title and the transcript.
-let _conversation = ""
+// The slug id of the thread the conversation runs on, such as "t3". The
+// harness records it after each turn. Compaction, the title, and the
+// transcript find the conversation by it.
+let _conversationThread = ""
 
 /** Where to write after a turn: the session directory and its index row. */
 export type SaveTarget = {
@@ -97,10 +99,16 @@ export def currentSessionId(): string {
   return record.id
 }
 
-/** The session thread the brain keeps its conversation in. "" in an
-  --incognito run, which has no session. */
-export def conversationSession(): string {
-  return _conversation
+/** Record the thread the conversation runs on. An empty id is ignored. */
+export def setConversationThread(id: string) {
+  if (id != "") {
+    _conversationThread = id
+  }
+}
+
+/** The slug id of the conversation's thread, or "" before the first turn. */
+export def conversationThread(): string {
+  return _conversationThread
 }
 
 /** `/fork`: from here on this run writes to a new session, a copy of the
@@ -224,7 +232,6 @@ def pickSession(): SessionRecord | null {
   conversation is printed before the restore, since nothing after
   `restore` runs. */
 export def startSession(chosen: SessionRecord | null, brain: AgentBrain) {
-  _conversation = brain.session
   if (chosen == null) {
     const t = now()
     _current = {
@@ -244,7 +251,7 @@ export def startSession(chosen: SessionRecord | null, brain: AgentBrain) {
     _exit(1)
   }
   print(color.dim("Resuming: ${chosen.title}"))
-  showTranscript(_readTranscript(cp, brain.session))
+  showTranscript(_readTranscript(cp, chosen.conversationThread ?? ""))
   restore(cp, {})
 }
 
@@ -255,6 +262,11 @@ export def recordTurn(userMsg: string): SaveTarget | null {
   const record = _current
   if (record == null || (!_turnDone && !_renamed)) {
     return null
+  }
+  // Before the early return below, so a save with no turn behind it, such
+  // as after /fork or /rename, also carries the id.
+  if (_conversationThread != "") {
+    record.conversationThread = _conversationThread
   }
   _renamed = false
   if (!_turnDone) {
@@ -270,7 +282,7 @@ export def recordTurn(userMsg: string): SaveTarget | null {
     // Title the conversation so far, the reply included, so turn 1 sees
     // the first exchange and not just the prompt. The prompt alone is the
     // fallback when the brain's thread cannot be read.
-    let source = conversationText(_conversation)
+    let source = conversationText(_conversationThread)
     if (source == "") {
       source = userMsg
     }

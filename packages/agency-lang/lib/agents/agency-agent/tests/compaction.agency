@@ -91,11 +91,17 @@ def messagesOf(session: string): ThreadMessage[] {
   return messages catch []
 }
 
+// Compaction finds the conversation by thread id. The conversations here
+// are built in named sessions, so this looks the id up by name.
+def compactSession(session: string, instructions: string = ""): Result<number> {
+  return compactConversation(sessionThreadId(session), instructions)
+}
+
 node summaryReplacesTheOlderMessages(): boolean {
   // 300 turns is about 60,000 tokens, and 20,000 are kept.
   buildConversation("compactMe", 300)
   const before = messagesOf("compactMe").length
-  const replaced = compactConversation("compactMe") catch -1
+  const replaced = compactSession("compactMe") catch -1
   const after = messagesOf("compactMe")
   const keptSystemPrompt = after[0].content == "You are a test agent."
   const summaryIsSecond = after[1].role == "user" && after[1].content.endsWith("THE SUMMARY")
@@ -107,23 +113,23 @@ node summaryReplacesTheOlderMessages(): boolean {
 
 node secondCompactionKeepsOneSummary(): boolean {
   buildConversation("compactTwice", 300)
-  compactConversation("compactTwice")
+  compactSession("compactTwice")
   buildConversation("compactTwice", 300)
-  compactConversation("compactTwice")
+  compactSession("compactTwice")
   const summaries = [message for message in messagesOf("compactTwice") if message.content.includes("Summary of the earlier conversation")]
   return summaries.length == 1 && summaries[0].content.endsWith("SECOND SUMMARY")
 }
 
 node shortConversationIsLeftAlone(): boolean {
   buildConversation("tooShort", 3)
-  const nothingOlder = !canCompact("tooShort")
-  const replaced = compactConversation("tooShort") catch -1
+  const nothingOlder = !canCompact(sessionThreadId("tooShort"))
+  const replaced = compactSession("tooShort") catch -1
   return nothingOlder && replaced == 0 && messagesOf("tooShort").length == 7
 }
 
 node longConversationCanBeCompacted(): boolean {
   buildConversation("longEnough", 300)
-  return canCompact("longEnough")
+  return canCompact(sessionThreadId("longEnough"))
 }
 
 node promptTellsTheSummarizerNotToFollowTheTranscript(): boolean {
@@ -133,11 +139,12 @@ node promptTellsTheSummarizerNotToFollowTheTranscript(): boolean {
 node failedSummaryLeavesTheThreadAlone(): boolean {
   buildConversation("emptySummary", 300)
   const before = messagesOf("emptySummary").length
-  const result = compactConversation("emptySummary")
+  const result = compactSession("emptySummary")
   return isFailure(result) && messagesOf("emptySummary").length == before
 }
 
 node unknownSessionIsNothingToCompact(): boolean {
-  const replaced = compactConversation("neverOpened") catch -1
-  return replaced == 0
+  const neverOpened = compactSession("neverOpened") catch -1
+  const unknownId = compactConversation("t999") catch -1
+  return neverOpened == 0 && unknownId == 0
 }

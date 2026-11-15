@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "twoTurnsOneThread",
+      "description": "Two turns called through _sessionOnSubmit, with no thread block, land on one thread, which holds both exchanges.",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "one"
+        },
+        {
+          "return": "two"
+        }
+      ]
+    },
+    {
+      "nodeName": "threadSurvivesCheckpoint",
+      "description": "After a turn, a checkpoint holds the turn's thread on an active stack, so a restored session continues it.",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "one"
+        }
+      ]
+    }
+  ]
+}

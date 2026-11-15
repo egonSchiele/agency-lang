@@ -5,7 +5,7 @@
 */
 import { formatDate, now } from "std::date"
 
-import { conversationSession, currentSessionId } from "./resume.agency"
+import { currentSessionId } from "./resume.agency"
 import { projectDir, relativeAge } from "./sessions.agency"
 import { _searchSessions } from "agency-lang/stdlib-lib/agentSessions.js"
 import { _realDir } from "agency-lang/stdlib-lib/fs.js"
@@ -74,10 +74,10 @@ export idempotent def searchSessions(
   @param query - The words to look for
   @param limit - The most hits to return, up to 25
   """
-  const session = conversationSession()
-  // No saved session yet means no directory, and nothing to ask about.
+  // An --incognito run has no session. No saved session yet means no
+  // directory, and nothing to ask about.
   const dir = try _realDir(projectDir()) catch ""
-  if (session == "" || dir == "") {
+  if (currentSessionId() == "" || dir == "") {
     return success([])
   }
   return interrupt std::read("Are you sure you want to search your saved sessions?", {
@@ -86,7 +86,6 @@ export idempotent def searchSessions(
   })
   const hits: TimedHit[] = _searchSessions(
     dir,
-    session,
     query,
     currentSessionId(),
     Math.min(limit, MAX_HITS),

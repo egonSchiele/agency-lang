@@ -8,6 +8,7 @@ import { agency } from "../runtime/agency.js";
 import { expiryOf } from "../runtime/state/messageMetadata.js";
 import type { MessageThread } from "../runtime/state/messageThread.js";
 import { reasoningChars } from "../runtime/reasoningSize.js";
+import { stripSlug } from "../runtime/runner.js";
 import { _contentToString } from "./threads.js";
 
 // A rough size for text the provider has not counted yet.
@@ -184,24 +185,23 @@ export function compactedMessages(plan: CompactionPlan, summary: string): smolta
   return [...plan.head, summaryMessage, ...plan.kept.map(withoutUsage)];
 }
 
-/** The thread `thread(session: name)` opens, or null before it exists. */
-function sessionThread(session: string): MessageThread | null {
+/** The thread with this slug id, such as "t3", or null when there is none. */
+function threadById(threadId: string): MessageThread | null {
   const store = agency.thread.storeMaybe();
-  const id = store?.sessions[session];
-  if (store === undefined || store === null || id === undefined) {
+  if (store === undefined || store === null || threadId === "") {
     return null;
   }
-  return store.threads[id] ?? null;
+  return store.threads[stripSlug(threadId)] ?? null;
 }
 
-/** The size of the session's next request, in tokens. 0 before the
- *  session's thread exists. */
-export function _contextTokens(session: string): number {
-  const thread = sessionThread(session);
+/** The size of the conversation's next request, in tokens. 0 for an
+ *  unknown id. */
+export function _contextTokens(threadId: string): number {
+  const thread = threadById(threadId);
   return thread === null ? 0 : contextTokens(thread.getMessages());
 }
 
-/** What the summarizer reads for a compaction of `session`. */
+/** What the summarizer reads for a compaction of a conversation. */
 export type CompactionInput = {
   transcript: string;
   /** "" when no earlier compaction left a summary. */
@@ -211,8 +211,8 @@ export type CompactionInput = {
 
 /** The text to summarize, or null when there is nothing older than
  *  `keepTokens` of recent messages. */
-export function _compactionInput(session: string, keepTokens: number): CompactionInput | null {
-  const thread = sessionThread(session);
+export function _compactionInput(threadId: string, keepTokens: number): CompactionInput | null {
+  const thread = threadById(threadId);
   const plan = thread === null ? null : planCompaction(thread.getMessages(), keepTokens);
   if (plan === null) {
     return null;
@@ -227,9 +227,9 @@ export function _compactionInput(session: string, keepTokens: number): Compactio
 /** Replace the messages `_compactionInput` described with `summary`.
  *  Returns how many messages the summary replaced, 0 when the thread no
  *  longer has anything to compact. Call it with the same `keepTokens`, and
- *  with no turn run on the session in between. */
-export function _applyCompaction(session: string, keepTokens: number, summary: string): number {
-  const thread = sessionThread(session);
+ *  with no turn run on the conversation in between. */
+export function _applyCompaction(threadId: string, keepTokens: number, summary: string): number {
+  const thread = threadById(threadId);
   const plan = thread === null ? null : planCompaction(thread.getMessages(), keepTokens);
   if (thread === null || plan === null) {
     return 0;

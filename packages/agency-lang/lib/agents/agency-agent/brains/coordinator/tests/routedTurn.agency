@@ -1,7 +1,7 @@
 // A turn routed by a decision model, through the coordinator brain, under a
 // scripted model. The router slot is set by hand: these tests are about
 // the turn, and tests/modelRequest.agency covers how the slot is set.
-import { getThread, image, listThreads } from "std::thread"
+import { currentThreadId, getThread, image } from "std::thread"
 
 import { setMessageRewritten } from "../../../lib/rewrittenMessage.agency"
 import { applyResolved, getResolvedSlots } from "../../../shared.agency"
@@ -67,16 +67,10 @@ def setRouter() {
   )
 }
 
-// The main thread's messages, found by its label. listThreads with
-// lazySummarize: false does not ask a model to summarize closed threads.
+// The conversation's messages. The brain runs on the caller's thread, so
+// the conversation is the test node's active thread.
 def mainThread(): any[] {
-  const threads = listThreads(lazySummarize: false) catch []
-  for (info in threads) {
-    if (info.label == "main") {
-      return getThread(info.id, 0, 1000) catch []
-    }
-  }
-  return []
+  return getThread(currentThreadId(), 0, 1000) catch []
 }
 
 // Each turn sends what the harness sends the main target:

@@ -7,9 +7,15 @@ import {
   userMessage,
   type Message,
 } from "smoltalk";
+import { agency } from "../runtime/agency.js";
+import { makeMockCtx } from "../runtime/__tests__/testHelpers.js";
 import { withMetadata } from "../runtime/state/messageMetadata.js";
+import { ThreadStore } from "../runtime/state/threadStore.js";
 import {
   SUMMARY_PREFIX,
+  _applyCompaction,
+  _compactionInput,
+  _contextTokens,
   compactedMessages,
   contextTokens,
   estimateTokens,
@@ -25,6 +31,33 @@ const tool = (label: string) =>
 
 const labels = (messages: Message[]) =>
   messages.map((message) => String(message.content).replace(/\.+$/, ""));
+
+describe("finding the conversation by thread id", () => {
+  // A run whose thread store holds one thread with two messages. `fn` gets
+  // the thread's slug id, such as "t0".
+  function withConversation(fn: (threadId: string) => void): Promise<void> {
+    const ctx = makeMockCtx();
+    const threads = new ThreadStore();
+    const id = threads.create();
+    threads.threads[id].setMessages([user("u1"), assistant("a1")]);
+    return agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      fn(`t${id}`);
+    });
+  }
+
+  it("measures the thread the id names", () =>
+    withConversation((threadId) => {
+      expect(_contextTokens(threadId)).toBe(50);
+    }));
+
+  it("returns the empty value for an unknown id or an empty one", () =>
+    withConversation(() => {
+      expect(_contextTokens("t99")).toBe(0);
+      expect(_contextTokens("")).toBe(0);
+      expect(_compactionInput("t99", 10)).toBeNull();
+      expect(_applyCompaction("t99", 10, "summary")).toBe(0);
+    }));
+});
 
 describe("contextTokens", () => {
   it("estimates from the text when no reply carries a count", () => {

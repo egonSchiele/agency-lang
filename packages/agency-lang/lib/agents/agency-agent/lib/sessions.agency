@@ -24,7 +24,10 @@ export type SessionRecord = {
   turns: number;
   title: string;
   // The id of the session this one was forked from, when it is a fork.
-  forkedFrom?: string
+  forkedFrom?: string;
+  // The slug id of the thread the conversation runs on, such as "t3". The
+  // transcript printed on resume is read from it.
+  conversationThread?: string
 }
 
 export static const SESSIONS_DIR = path.join(POLICY_DIR, "sessions")

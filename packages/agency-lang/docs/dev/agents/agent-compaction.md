@@ -32,9 +32,11 @@ line.
 
 ## Which thread
 
-The conversation is the session thread the brain names in
-`AgentBrain.session`, the same thread the title and the resume transcript
-read. Subagent threads are not compacted.
+The conversation is the thread whose id `runTurn` records after each turn
+(`conversationThread()` in `lib/resume.agency`), the same thread the title
+and the resume transcript read. The helpers in `lib/stdlib/agentCompaction.ts`
+take that slug id, such as `"t3"`, and return their empty value for an
+unknown id. Subagent threads are not compacted.
 
 ## How big the conversation is
 

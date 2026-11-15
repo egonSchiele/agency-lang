@@ -78,7 +78,6 @@ def recordingRunTurn(
 export def recordingBrain(): AgentBrain {
   return {
     name: "recording",
-    session: "recording",
     description: "test stub that records its arguments",
     startTargets: ["worker"],
     init: recordingInit,
@@ -118,7 +117,6 @@ def selfApprovingRunTurn(
 export def selfApprovingBrain(): AgentBrain {
   return {
     name: "self-approving",
-    session: "self-approving",
     description: "test stub that pre-approves its own interrupt",
     startTargets: [],
     init: selfApprovingInit,
@@ -144,7 +142,6 @@ def guardedRunTurn(
 export def guardedBrain(): AgentBrain {
   return {
     name: "guarded",
-    session: "guarded",
     description: "test stub whose one LLM call runs under a tiny cost guard",
     startTargets: [],
     init: recordingInit,

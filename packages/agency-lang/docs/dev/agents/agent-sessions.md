@@ -17,7 +17,7 @@ which keeps the logging the agent was built with. Without the check the
 header would say nothing is logged while `log.jsonl` fills up.
 
 The saved thing is a runtime checkpoint, not a transcript: restoring it
-brings back the conversation, every subagent's session thread, the agent's
+brings back the conversation, every subagent's thread, the agent's
 `let` globals, and the LLM options, and execution continues from the saved
 point.
 
@@ -97,9 +97,17 @@ as one would be the session's first.
 A resumed run prints the saved conversation before it restores. It is
 read from the checkpoint file (`_readTranscript` in `agentSessions.ts`),
 not from the restored threads, because `restore()` replays to the saved
-point and runs nothing placed after it. The thread is the one the brain
-opens with `thread(session: ...)`; each brain names it in its
-`AgentBrain.session` field, and the title refresh reads the same thread.
+point and runs nothing placed after it.
+
+The conversation is the run's active thread: a brain opens no `thread`
+block of its own, so every turn's `llm()` calls land on it. After each
+turn, `runTurn` in `lib/turn.agency` records that thread's id with
+`setConversationThread` (`lib/resume.agency`). `recordTurn` copies the id
+into the session record as `conversationThread`, before its early return
+for a save with no turn behind it, so a save after `/fork` or `/rename`
+carries it too. The resume transcript is read from the thread that id
+names. The title refresh, compaction, and the context percentage read the
+same thread.
 `showTranscript` in `transcript.agency` draws the messages with the same
 renderers the live turns use.
 
@@ -148,10 +156,10 @@ carries. It finds messages in the sessions saved for this project
 directory, so the model can answer "what did we decide last week?".
 
 - **What is read.** `_searchSessions` in `agentSessions.ts` reads the 50
-  most recently used sessions, newest first. For each it reads the
-  conversation thread with `_readTranscript`, the same reader the resume
-  transcript uses, so only user and assistant text is searched. The
-  running session is left out.
+  most recently used sessions, newest first. For each it reads the thread
+  its record's `conversationThread` names, with `_readTranscript`, the
+  same reader the resume transcript uses, so only user and assistant text
+  is searched. The running session is left out.
 - **What matches.** A message that holds every word of the query, in any
   order and letter case. No index is kept and no model is called.
 - **What comes back.** Up to 3 hits a session and 25 in all. A hit is the
@@ -166,9 +174,8 @@ directory, so the model can answer "what did we decide last week?".
   rule is not specific to this tool: it also lets the model's ordinary
   `read` tool open the checkpoint files there, which hold every tool
   result, every subagent thread, and the program state.
-- **Other brains.** A session's conversation is read from the running
-  brain's session thread. A session saved by another brain keeps its
-  conversation under another name, so it gives no hits.
+- **Records with no thread id.** A record saved before the id was
+  recorded has no `conversationThread`, so its session gives no hits.
 - **Compacted sessions.** Messages a compaction removed are not in the
   checkpoint. What can be found of them is the text of the summary that
   replaced them.

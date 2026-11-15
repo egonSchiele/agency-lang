@@ -5,7 +5,8 @@
  * user input, no policy handler.
  */
 import { coordinatorBrain } from "../coordinator.agency"
-import { threadHasSystemText } from "../../../tests/threadText.agency"
+import { activeThreadCounts, threadHasSystemText } from "../../../tests/threadText.agency"
+import { sessionThreadId } from "std::thread"
 import {
   switchModel,
   reactToSlotChange,
@@ -37,6 +38,18 @@ node respondsToAMessage(): string {
   init({ interactive: false, grounding: "GROUNDING-MARKER-7f3a" }) with approve
   const reply = answer("", "hello") with approve
   return "${reply}|${threadHasSystemText("GROUNDING-MARKER-7f3a")}|${threadHasSystemText("Agency-language assistant")}"
+}
+
+// Two turns run on the caller's thread, which holds the system prompt once.
+// No thread is opened under the old session name.
+node twoTurnsOneSystemPrompt(): string {
+  const brain = coordinatorBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({ interactive: false, grounding: "GROUNDING-MARKER-7f3a" }) with approve
+  answer("", "one") with approve
+  answer("", "two") with approve
+  return "${activeThreadCounts("GROUNDING-MARKER-7f3a")}|${sessionThreadId("main")}"
 }
 
 // The brain row moved behind --verbose; the default header renders

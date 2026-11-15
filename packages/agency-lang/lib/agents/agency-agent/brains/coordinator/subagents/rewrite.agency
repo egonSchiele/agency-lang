@@ -32,7 +32,7 @@ export def rewriteAgent(userMsg: string): string {
   """
   announce("rewriteAgent", userMsg)
   let reply = ""
-  thread(label: "rewrite", summarize: true, session: "rewrite") {
+  thread(label: "rewrite", summarize: true) {
     setMemoryId("rewrite")
     const request = splitRequest(userMsg)
     const rewritten = writingRewriteAgent(

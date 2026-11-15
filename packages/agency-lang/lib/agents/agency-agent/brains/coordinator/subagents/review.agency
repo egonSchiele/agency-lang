@@ -38,7 +38,7 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
 }
 
 export def review(userMsg: string): Result<Feedback[]> {
-  thread(label: "review", summarize: true, session: "review") {
+  thread(label: "review", summarize: true) {
     setMemoryId("review")
 
     const snippets: AgencyCode[] = llm(

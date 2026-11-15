@@ -1,6 +1,26 @@
 {
   "tests": [
     {
+      "nodeName": "twoTurnsOneSystemPrompt",
+      "description": "Two turns land on the caller's thread, which holds the system prompt once and both user messages. No session named main is opened.",
+      "input": "",
+      "expectedOutput": "\"1 system, 2 user|\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "one"
+        },
+        {
+          "return": "two"
+        }
+      ]
+    },
+    {
       "nodeName": "respondsToAMessage",
       "input": "",
       "expectedOutput": "\"Hi from the agent!|true|true\"",

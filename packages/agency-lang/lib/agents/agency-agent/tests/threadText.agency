@@ -4,7 +4,7 @@
  * without triggering the on-demand LLM summarization of closed threads
  * (which would burn mocks).
  */
-import { getThread, listThreads } from "std::thread"
+import { currentThreadId, getThread, listThreads } from "std::thread"
 
 export def threadHasText(role: string, needle: string): boolean {
   const threads = listThreads(lazySummarize: false)
@@ -26,4 +26,13 @@ export def threadHasText(role: string, needle: string): boolean {
 
 export def threadHasSystemText(needle: string): boolean {
   return threadHasText("system", needle)
+}
+
+/** On the active thread: how many system messages contain `needle`, and
+  how many user messages there are, as "1 system, 2 user". */
+export def activeThreadCounts(needle: string): string {
+  const messages = getThread(currentThreadId(), 0, 200) catch []
+  const systems = [message for message in messages if message.role == "system" && message.content.includes(needle)]
+  const users = [message for message in messages if message.role == "user"]
+  return "${systems.length} system, ${users.length} user"
 }

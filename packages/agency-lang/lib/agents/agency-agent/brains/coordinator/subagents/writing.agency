@@ -20,7 +20,7 @@ export def writingAgent(userMsg: string): string {
   """
   announce("writingAgent", userMsg)
   let reply = ""
-  thread(label: "writing", summarize: true, session: "writing") {
+  thread(label: "writing", summarize: true) {
     setMemoryId("writing")
     reply = renderFeedback(writingReviewAgent(
       text: userMsg,

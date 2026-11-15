@@ -14,6 +14,15 @@
       ]
     },
     {
+      "nodeName": "twoTurnsOneSystemPrompt",
+      "description": "Two turns land on the caller's thread, which holds the system prompt once and both user messages.",
+      "input": "",
+      "expectedOutput": "\"1 system, 2 user\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }]
+    },
+    {
       "nodeName": "offersFourTools",
       "description": "The minimal brain's tool list is read, bash, edit, and write. A long bash output's notice gives a path that read and bash both read.",
       "input": "",

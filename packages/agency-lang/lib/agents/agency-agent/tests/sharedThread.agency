@@ -1,0 +1,52 @@
+// The REPL calls each turn through `_sessionOnSubmit`. With no `thread`
+// block around a turn, its `llm()` call lands on the run's active thread.
+// These nodes check that two turns called that way land on the same
+// thread, and that the thread is still active in a checkpoint taken after
+// a turn, which is what a saved session holds.
+import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
+import { currentThreadId, getThread } from "std::thread"
+
+let turnThreads: string[] = []
+
+def turn(line: string): string {
+  const reply = llm(line)
+  turnThreads.push(currentThreadId())
+  return reply
+}
+
+// The REPL's afterTurn returns where to save. Null skips the save.
+def noSave(line: string): any {
+  return null
+}
+
+node twoTurnsOneThread(): string {
+  _installSessionHooks(turn, noSave)
+  _sessionOnSubmit("first")
+  _sessionOnSubmit("second")
+  if (turnThreads.length != 2 || turnThreads[0] == "" || turnThreads[0] != turnThreads[1]) {
+    return "FAIL turns ran on threads ${turnThreads.join(", ")}"
+  }
+  const messages = getThread(turnThreads[0], 0, 100)
+  if (isFailure(messages)) {
+    return "FAIL could not read the thread: ${messages.error}"
+  }
+  const roles = [message.role for message in messages.value]
+  if (roles.join(",") != "user,assistant,user,assistant") {
+    return "FAIL the thread holds ${roles.join(",")}"
+  }
+  return "pass"
+}
+
+node threadSurvivesCheckpoint(): string {
+  _installSessionHooks(turn, noSave)
+  _sessionOnSubmit("first")
+  const saved: any = getCheckpoint(checkpoint())
+  // The checkpoint stores raw thread ids. The slug form adds a leading "t".
+  const raw = turnThreads[0].slice(1)
+  for (frame in saved.stack.stack) {
+    if (frame.threads != null && frame.threads.activeStack.includes(raw)) {
+      return "pass"
+    }
+  }
+  return "FAIL no frame has thread ${raw} active"
+}

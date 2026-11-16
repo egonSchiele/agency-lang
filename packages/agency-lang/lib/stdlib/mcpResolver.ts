@@ -1,34 +1,31 @@
+import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "#path";
 import { globalNodeModulesRoots } from "../runtime/localProvider.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 
 const PKG = "@agency-lang/mcp";
 
-/** Resolve @agency-lang/mcp to the absolute path of its main entry, searching:
- *  an explicit AGENCY_MCP_PATH override first (dev/test + advanced installs),
- *  then local require paths, then each global node_modules root (npm i -g /
- *  pnpm add -g). Null if not reachable. Resolution only — never imports the
- *  package (that is the bridge's job). The override mirrors llama-cpp's
- *  AGENCY_LLAMA_PROVIDER_MODULE escape hatch; agency-lang does not depend on
- *  the package, so it is NOT resolvable from a monorepo checkout without it. */
+// The conditions Node matches when `import()` resolves a package. mcpBridge.mjs
+// loads the package with `import()`, so the entry found here must be the one
+// `import()` would pick. `require.resolve` matches "require" instead, and
+// rejects a package whose exports only list "import".
+const IMPORT_CONDITIONS = ["node", "import", "module-sync", "node-addons", "default"];
+
+/** Find the file `import("@agency-lang/mcp")` would load, searching: an
+ *  explicit AGENCY_MCP_PATH override first, then the node_modules directories
+ *  Node walks from agency-lang, then each global node_modules root (npm i -g /
+ *  pnpm add -g). Null if the package is not installed in any of them. This
+ *  only locates the file; mcpBridge.mjs imports it. agency-lang does not
+ *  depend on the package, so a monorepo checkout finds it only through the
+ *  override. */
 export function resolveMcpEntry(): string | null {
   const override = process.env.AGENCY_MCP_PATH;
   if (override) {
     return override;
   }
-  try {
-    return createRequire(import.meta.url).resolve(PKG);
-  } catch {
-    /* not local — try global roots */
-  }
-  for (const root of globalNodeModulesRoots()) {
-    try {
-      return createRequire(path.join(root, "..", "_resolver.js")).resolve(PKG);
-    } catch {
-      /* try the next root */
-    }
-  }
-  return null;
+  const localDirs = createRequire(import.meta.url).resolve.paths(PKG) ?? [];
+  return firstEntry(localDirs) ?? firstEntry(globalNodeModulesRoots());
 }
 
 export function isMcpAvailable(): boolean {
@@ -45,4 +42,78 @@ export function exposeResolvedMcpPath(): void {
   if (entry !== null) {
     process.env.AGENCY_MCP_PATH = entry;
   }
+}
+
+function firstEntry(nodeModulesDirs: string[]): string | null {
+  for (const dir of nodeModulesDirs) {
+    const entry = packageEntry(path.join(dir, PKG));
+    if (entry !== null) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/** The file `import()` loads for the package in `pkgDir`, or null when the
+ *  package is not there or names no entry for `import()`. */
+function packageEntry(pkgDir: string): string | null {
+  const pkgJsonPath = path.join(pkgDir, "package.json");
+  if (!fs.existsSync(pkgJsonPath)) {
+    return null;
+  }
+  const pkgJson: unknown = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  if (!isPlainObject(pkgJson)) {
+    return null;
+  }
+  const target =
+    pkgJson.exports === undefined ? mainTarget(pkgJson.main) : rootExportTarget(pkgJson.exports);
+  if (target === null) {
+    return null;
+  }
+  const entry = path.join(pkgDir, target);
+  return fs.existsSync(entry) ? entry : null;
+}
+
+function mainTarget(main: unknown): string {
+  return typeof main === "string" ? main : "index.js";
+}
+
+/** The target of the "." subpath. `exports` is either a map of subpaths
+ *  (keys starting with "."), or the "." target written directly: a string, an
+ *  array, or an object of conditions. */
+function rootExportTarget(exports: unknown): string | null {
+  if (isPlainObject(exports) && Object.keys(exports).some((key) => key.startsWith("."))) {
+    return conditionalTarget(exports["."]);
+  }
+  return conditionalTarget(exports);
+}
+
+/** Resolve a target the way Node does for `import()`: a string is the path;
+ *  an array is tried in order; an object is a list of conditions, tried in
+ *  the order written, skipping the ones `import()` does not match. */
+function conditionalTarget(target: unknown): string | null {
+  if (typeof target === "string") {
+    return target.startsWith("./") ? target : null;
+  }
+  if (Array.isArray(target)) {
+    for (const option of target) {
+      const resolved = conditionalTarget(option);
+      if (resolved !== null) {
+        return resolved;
+      }
+    }
+    return null;
+  }
+  if (isPlainObject(target)) {
+    for (const condition of Object.keys(target)) {
+      if (!IMPORT_CONDITIONS.includes(condition)) {
+        continue;
+      }
+      const resolved = conditionalTarget(target[condition]);
+      if (resolved !== null) {
+        return resolved;
+      }
+    }
+  }
+  return null;
 }

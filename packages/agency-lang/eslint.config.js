@@ -13,6 +13,8 @@ const SCREEN_PAINT_MESSAGE =
 const FS_IMPORTERS = {
   "lib/stdlib/modelBackend.ts":
     "recognizes a model directory, including a Hugging Face cache snapshot whose entries are symlinks into blobs/; reads names and sizes only, never contents",
+  "lib/stdlib/mcpResolver.ts":
+    "reads @agency-lang/mcp's package.json in the node_modules directories Node would search, never a path an Agency program chose",
 };
 
 const FS_MODULES = ["fs", "fs/promises", "node:fs", "node:fs/promises"];

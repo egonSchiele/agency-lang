@@ -25,7 +25,7 @@ Each server has a login mode in the manager:
 - **Ask first.** When a connection needs a login, the package starts one and waits up to `authTimeout`. It hands the login URL to `onOAuthRequired`, or opens the browser when there is no callback. `mcp()`, `mcpRaw()`, `loadMcpTools`, `loadMcpToolsWithStatus`, and `npx @agency-lang/mcp auth` use this mode.
 - **Never on its own.** When a connection needs a login, it fails at once with `NeedsLoginError`, and the record becomes `needsLogin`.
 
-A server gets "never on its own" the first time one of the 0.0.6 exports (`connectServer`, `startLogin`) is called for it. It keeps that mode for the rest of the process, including when `mcpRaw()` is later called for it. The rule covers every connection the manager builds, including the one `callTool` builds when a server has no connection, for example after a log out. The agent uses only the 0.0.6 exports, so nothing in the agent starts a login except the menu.
+A server gets "never on its own" the first time one of the 0.0.6 exports (`connectServer`, `startLogin`, `logout`, `disconnectServer`) is called for it. It keeps that mode for the rest of the process, including when `mcpRaw()` is later called for it. The rule covers every connection the manager builds, including the one `callTool` builds when a server has no connection, for example after a log out. The agent uses only the 0.0.6 exports, so nothing in the agent starts a login except the menu.
 
 ## Logging in
 
@@ -45,7 +45,9 @@ Only one login can be in progress in the whole process, because every callback p
 
 When an access token expires, the SDK refreshes it with the saved refresh token, and the tool call goes through. The provider builds its redirect URL from the port, so the refresh never needs a running callback page.
 
-When the server rejects the refresh token, the SDK calls `invalidateCredentials('tokens')`. The provider deletes the saved login only when the file still holds the token the server rejected. A `fetch` wrapper on the transport (`watchingRefreshes` in `oauthConnector.ts`) records that token, because the SDK does not pass it. Two tool calls can refresh at the same moment, and many servers give out a new refresh token on every refresh. Without this check, the second call's rejected old token would delete the login the first call just saved.
+Several tool calls can find the access token expired at the same moment, and the SDK refreshes inside each call. Many servers give out a new refresh token on every refresh and refuse the old one. So the connector sends a server's refresh requests one at a time (`oneRefreshAtATime` in `oauthConnector.ts`), and each one uses the newest refresh token. The SDK saves a refresh's new token only after the response comes back, so the connector also remembers the last change it saw, in case the file has not caught up yet.
+
+When the server rejects the refresh token, the SDK calls `invalidateCredentials('tokens')`. The provider deletes the saved login only when the file still holds the token the server rejected. A `fetch` wrapper on the transport (`watchingRefreshes`) records that token, because the SDK does not pass it. Without this check, a rejected old token could delete a login another call had just saved.
 
 A call whose login cannot be refreshed fails with `MCP server "<name>" needs a new login.`, and the record becomes `needsLogin`. The call never opens a browser.
 

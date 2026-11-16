@@ -1,8 +1,12 @@
-import { glob, ls, grep } from "std::shell"
+import { glob, ls } from "std::shell"
 import { sortBy } from "std::array"
 
 // The fixture's .gitignore names itself, ignored.md, and out/. Those files
 // are committed with `git add -f`, because a plain `git add` skips them.
+//
+// These cases check that the Agency wrappers skip ignored files by default
+// and pass respectGitignore through. Which folders are searched is tested on
+// _glob, _ls, and _grep in lib/stdlib/shell.test.ts.
 def fixtures(): string {
   return __dirname + "/gitignore-fixtures"
 }
@@ -32,31 +36,10 @@ node globIncludesIgnoredWhenAsked() {
   return globIn("**/*.md", fixtures(), respectGitignore: false)
 }
 
-node globSearchesNamedIgnoredFolder() {
-  return globIn("*.md", fixtures() + "/out")
-}
-
-node globSearchesFolderNamedInPattern() {
-  return globIn("out/*.md", fixtures())
-}
-
 node lsRecursiveSkipsIgnored() {
   return lsIn(fixtures())
 }
 
 node lsRecursiveIncludesIgnoredWhenAsked() {
   return lsIn(fixtures(), respectGitignore: false)
-}
-
-node lsPlainShowsIgnored() {
-  return lsIn(fixtures(), recursive: false)
-}
-
-node lsRecursiveListsNamedIgnoredFolder() {
-  return lsIn(fixtures() + "/out")
-}
-
-node grepSearchesNamedIgnoredFolder() {
-  const hits = grep("needle", fixtures() + "/out", filesOnly: true) catch [] with approve
-  return hits
 }

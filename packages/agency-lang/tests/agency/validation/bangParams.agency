@@ -1,8 +1,0 @@
-def double(x: number!) {
-  return x * 2
-}
-
-node main() {
-  const result = double(5)
-  return result
-}

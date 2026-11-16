@@ -15,33 +15,33 @@ def hasTool(tools: any[], name: string): boolean {
 
 // The worst gap: the Agency verifier ran a program and judged its return
 // value while unable to see any file the program wrote.
-node agencyVerifierCanSeeFiles(): boolean {
+def agencyVerifierCanSeeFiles(): boolean {
   const tools = agencyVerifierTools()
   return hasTool(tools, "read") && hasTool(tools, "safeBash")
 }
 
 // The verifier is told to compute values and inspect bytes.
-node verifierCanComputeAndReadBytes(): boolean {
+def verifierCanComputeAndReadBytes(): boolean {
   const tools = verifierTools()
   return hasTool(tools, "safeBash") && hasTool(tools, "readBinary")
 }
 
 // The Agency writer could not look up the AG#### codes its own retry prompt
 // quoted at it, nor check a draft before spending an attempt on it.
-node agencyCodingHasDocsAndTypecheck(): boolean {
+def agencyCodingHasDocsAndTypecheck(): boolean {
   const tools = agencyCodingTools()
   return hasTool(tools, "agencyDiagnostics") && hasTool(tools, "typecheck") && hasTool(tools, "read")
 }
 
 // It gets targeted fetch but deliberately no search: an open-ended search
 // for Agency syntax returns other languages' idioms.
-node agencyCodingFetchesButDoesNotSearch(): boolean {
+def agencyCodingFetchesButDoesNotSearch(): boolean {
   const tools = agencyCodingTools()
   return hasTool(tools, "fetchMarkdown") && !hasTool(tools, "web_search_brave")
 }
 
 // The coding agent could search the web but not fetch what it found.
-node codingCanFetch(): boolean {
+def codingCanFetch(): boolean {
   return hasTool(codingTools(), "fetchMarkdown")
 }
 
@@ -56,7 +56,7 @@ node codingCanFetch(): boolean {
 // readOnlyGitTools) rather than hand-listed, so a git tool added later
 // is automatically asserted absent from these agents; the exact pin on
 // readOnlyGitTools itself lives in toolkits.agency.
-node historyReadersHaveGitButCannotCommit(): boolean {
+def historyReadersHaveGitButCannotCommit(): boolean {
   const lists = [agencyCodingTools(), verifierTools(), agencyVerifierTools()]
   const readNames = map(readOnlyGitTools(), \tool -> tool.name)
   const writeNames = filter(map(gitTools(), \tool -> tool.name), \name -> !readNames.includes(name))
@@ -66,7 +66,7 @@ node historyReadersHaveGitButCannotCommit(): boolean {
 }
 
 // Both reviewers can look things up now, and still cannot change anything.
-node reviewersLookUpButCannotWrite(): boolean {
+def reviewersLookUpButCannotWrite(): boolean {
   const plain = reviewTools()
   const agency = agencyReviewTools()
   const canLookUp = hasTool(plain, "fetchMarkdown") && hasTool(agency, "agencyGuide")
@@ -76,7 +76,7 @@ node reviewersLookUpButCannotWrite(): boolean {
 
 // No agent may offer two tools with the same name: providers reject that,
 // and .partial() preserves the base name so it is easy to do by accident.
-node noAgentHasDuplicateToolNames(): boolean {
+def noAgentHasDuplicateToolNames(): boolean {
   const lists = [
     codingTools(),
     verifierTools(),
@@ -99,7 +99,7 @@ node noAgentHasDuplicateToolNames(): boolean {
 // set is derived (githubTools minus githubReadTools) rather than hand-listed,
 // so a write tool added later is automatically asserted absent from the
 // read bundle.
-node githubBundlesSplitReadsFromWrites(): boolean {
+def githubBundlesSplitReadsFromWrites(): boolean {
   const reads = githubReadTools()
   const all = githubTools()
   const readNames = map(reads, \tool -> tool.name)
@@ -114,7 +114,7 @@ node githubBundlesSplitReadsFromWrites(): boolean {
 // eighteen GitHub tools, whose schemas would ride on every request. The
 // agency agent's coders build their lists from this one, so this is also
 // what `agency agent` gets.
-node codingReachesGithubThroughTheHandoff(): boolean {
+def codingReachesGithubThroughTheHandoff(): boolean {
   const tools = codingTools()
   const ownNames = map(githubTools(), \tool -> tool.name)
   const carriesNone = every(ownNames, \name -> !hasTool(tools, name))
@@ -122,14 +122,14 @@ node codingReachesGithubThroughTheHandoff(): boolean {
 }
 
 // The handoff agent is where the reads and the writes live.
-node githubAgentHasReadsAndWrites(): boolean {
+def githubAgentHasReadsAndWrites(): boolean {
   const tools = githubAgentTools()
   return hasTool(tools, "ghPrGet") && hasTool(tools, "ghPrChecks") && hasTool(tools, "ghPrReview") && hasTool(tools, "ghIssueCreate")
 }
 
 // A general coder pays for no Agency tools. The agency agent's Agency
 // coder adds them at its call site.
-node codingHasNoAgencyTools(): boolean {
+def codingHasNoAgencyTools(): boolean {
   const tools = codingTools()
   return !hasTool(tools, "agencyGuide") && !hasTool(tools, "agencyStdlib") && !hasTool(tools, "typecheck")
 }
@@ -137,7 +137,7 @@ node codingHasNoAgencyTools(): boolean {
 // The reviewer can read a pull request but still posts nothing: the write
 // set is derived from the bundles so a write tool added later is asserted
 // absent here without editing this test.
-node reviewerReadsGithubButCannotPost(): boolean {
+def reviewerReadsGithubButCannotPost(): boolean {
   const tools = reviewTools()
   const readNames = map(githubReadTools(), \tool -> tool.name)
   const writeNames = filter(map(githubTools(), \tool -> tool.name), \name -> !readNames.includes(name))
@@ -148,17 +148,40 @@ node reviewerReadsGithubButCannotPost(): boolean {
 
 // Only the GitHub and review agents carry GitHub tools. Handing them to
 // every agent is a deliberate change to this test, not a side effect.
-node explorerHasNoGithub(): boolean {
+def explorerHasNoGithub(): boolean {
   return !hasTool(explorerTools(), "ghPrGet") && !hasTool(explorerTools(), "ghIssueGet")
 }
 
 // A tool author needs nothing from the caller's project, so designTool
 // asks for the writer without its file and git tools. The docs and the
 // typecheck stay.
-node agencyWriterCanLeaveTheProjectOut(): boolean {
+def agencyWriterCanLeaveTheProjectOut(): boolean {
   const withProject = agencyCodingTools()
   const without = agencyCodingTools(projectTools: false)
   const dropped = !hasTool(without, "read") && !hasTool(without, "grep") && !hasTool(without, "gitLog")
   const kept = hasTool(without, "typecheck") && hasTool(without, "agencyStdlib")
   return hasTool(withProject, "grep") && dropped && kept
+}
+
+// Each test case runs in its own process, and loading these agents takes
+// over ten seconds, so every check runs in this one case. A failing check
+// shows up as its key in the diff.
+node main() {
+  return {
+    agencyVerifierCanSeeFiles: agencyVerifierCanSeeFiles(),
+    verifierCanComputeAndReadBytes: verifierCanComputeAndReadBytes(),
+    agencyCodingHasDocsAndTypecheck: agencyCodingHasDocsAndTypecheck(),
+    agencyCodingFetchesButDoesNotSearch: agencyCodingFetchesButDoesNotSearch(),
+    codingCanFetch: codingCanFetch(),
+    historyReadersHaveGitButCannotCommit: historyReadersHaveGitButCannotCommit(),
+    reviewersLookUpButCannotWrite: reviewersLookUpButCannotWrite(),
+    noAgentHasDuplicateToolNames: noAgentHasDuplicateToolNames(),
+    githubBundlesSplitReadsFromWrites: githubBundlesSplitReadsFromWrites(),
+    codingReachesGithubThroughTheHandoff: codingReachesGithubThroughTheHandoff(),
+    githubAgentHasReadsAndWrites: githubAgentHasReadsAndWrites(),
+    codingHasNoAgencyTools: codingHasNoAgencyTools(),
+    reviewerReadsGithubButCannotPost: reviewerReadsGithubButCannotPost(),
+    explorerHasNoGithub: explorerHasNoGithub(),
+    agencyWriterCanLeaveTheProjectOut: agencyWriterCanLeaveTheProjectOut()
+  }
 }

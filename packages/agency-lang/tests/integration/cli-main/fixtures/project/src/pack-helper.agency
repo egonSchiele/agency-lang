@@ -1,3 +1,0 @@
-export def helper(value: string): string {
-  return value + "-local"
-}

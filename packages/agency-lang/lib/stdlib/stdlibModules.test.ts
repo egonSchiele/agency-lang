@@ -1,13 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { _prepareFunctions, _stdlibModuleTable } from "./agencyFunctions.js";
+import { _prepareFunctions } from "./agencyFunctions.js";
 import { STDLIB_MODULES } from "./stdlibModules.data.js";
 import { isKnownStdlibModule, missingModuleMessage } from "./stdlibModules.js";
 
+// Whether stdlibModules.data.ts matches the stdlib folder is checked by the
+// node-build CI job, which runs `make` and fails on a diff to the file.
 describe("stdlibModules.data.ts", () => {
-  it("matches the stdlib folder (run `make` when this fails)", () => {
-    expect(STDLIB_MODULES).toEqual(_stdlibModuleTable());
-  }, 60_000);
-
   it("knows where exec lives", () => {
     expect(STDLIB_MODULES["std::shell"]).toContain("exec");
     expect(isKnownStdlibModule("std::shell")).toBe(true);

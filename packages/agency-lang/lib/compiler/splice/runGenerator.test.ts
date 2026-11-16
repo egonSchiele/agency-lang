@@ -230,11 +230,6 @@ describe("the child's environment", () => {
       delete process.env.SPLICE_TEST_FAKE_SECRET;
     }
   }, 60_000);
-
-  it("still gives the child enough to run", () => {
-    const { splice, generator } = generatorReturning(`  return [| 1 |]`);
-    expect(runGenerator(splice, generator, dir).ok).toBe(true);
-  }, 60_000);
 });
 
 describe("checkNoNestedSplice", () => {

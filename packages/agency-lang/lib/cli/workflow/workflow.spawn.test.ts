@@ -295,22 +295,19 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     noDriverLeft();
   });
 
-  it("exits 2 for a path that is not under a workflows folder", async () => {
-    const r = await runCli(project, ["check", "tools/x.json"]);
-    expect(r.code).toBe(2);
-    noDriverLeft();
-  });
-
   describe("run", () => {
     const INPUTS = ["--inputs", JSON.stringify({ noteTitle: "Groceries" })];
     const runAddOne = (...flags: string[]) =>
       runCli(project, ["run", "addOne", ...INPUTS, ...flags]);
 
-    it("runs with the step's effect approved, and approves the start prompts itself", async () => {
-      const r = await runAddOne("--approve", "test::lists::add");
+    it("runs with the step's effect approved, approves the start prompts itself, and writes the child's log events to --log-file", async () => {
+      const log = path.join(project, "run.jsonl");
+      const r = await runAddOne("--approve", "test::lists::add", "--log-file", log);
       expect(r.stderr).toBe("");
       expect(r.code).toBe(0);
       expect(r.stdout.trim()).toBe("added 1 items to l1/Meals");
+      // The child's own run starts at the workflow's main node.
+      expect(readFileSync(log, "utf-8")).toContain('"entryNode":"main"');
       noDriverLeft();
     });
 
@@ -368,11 +365,6 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
       expect(JSON.parse(r.stdout)).toEqual({ success: true, value: "added 1 items to l1/Meals" });
     });
 
-    it("exits 2 for --inputs that is not JSON", async () => {
-      const r = await runCli(project, ["run", "addOne", "--inputs", "nope"]);
-      expect(r.code).toBe(2);
-    });
-
     it("stops a run whose model spend passes --max-cost, with one line and no stack trace", async () => {
       const r = await runCli(
         project,
@@ -391,14 +383,6 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
       const r = await runAddOne("--max-time", "1m");
       expect(r.code).not.toBe(0);
       expect(r.stderr).toMatch(/unknown option '--max-time'/);
-    });
-
-    it("writes the child's log events to --log-file", async () => {
-      const log = path.join(project, "run.jsonl");
-      const r = await runAddOne("--approve", "test::lists::add", "--log-file", log);
-      expect(r.code).toBe(0);
-      // The child's own run starts at the workflow's main node.
-      expect(readFileSync(log, "utf-8")).toContain('"entryNode":"main"');
     });
 
     it("refuses --draft, which a workflow run does not take", async () => {

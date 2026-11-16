@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME, AGENCY_RUN_POLICY } from "@/constants.js";
 import { memoryHost } from "@/host/memoryHost.js";
+import { signCheckpoint, verifyCheckpointChecksum } from "./checkpointChecksum.js";
 import { removeHeldCheckpoint, resumeCommand, saveHeldCheckpoint } from "./heldCheckpoint.js";
 import { interrupt } from "./interrupts.js";
 import type { Interrupt } from "./interrupts.js";
@@ -60,6 +61,25 @@ describe("a held checkpoint's file", () => {
     expect(other.seen).toEqual(new Set(["a"]));
   });
 
+  // The checksum is made over live values and checked over the saved
+  // form, so both must hash the same.
+  it("still verifies after the save when it was signed, and not when a Set in it was edited", async () => {
+    const h = host({ AGENCY_CHECKPOINT_KEY: "k".repeat(32) });
+    const surfaced = held("trace-9", { when: new Date(86_400_000), seen: new Set(["a"]) });
+    signCheckpoint(surfaced.checkpoint!, h.settings);
+    surfaced.checkpoint = JSON.parse(
+      JSON.stringify(surfaced.checkpoint, nativeTypeReplacer),
+      nativeTypeReviver,
+    );
+    const files = await saveHeldCheckpoint([surfaced], h);
+    const saved = text(h, files.checkpoint);
+    const verifies = (json: string) =>
+      verifyCheckpointChecksum(Checkpoint.fromJSON(JSON.parse(json))!, h.settings);
+    expect(verifies(saved)).toBe(true);
+    expect(saved).toContain('["a"]');
+    expect(verifies(saved.replace('["a"]', '["b"]'))).toBe(false);
+  });
+
   it("gets a made-up name when the checkpoint has no trace id", async () => {
     const h = host();
     const files = await saveHeldCheckpoint([held()], h);
@@ -82,6 +102,23 @@ describe("a held checkpoint's file", () => {
     const files = await saveHeldCheckpoint([held("trace-9")], h);
     expect(files.policy).toBe(`/home/me/.agency/held/trace-9-${h.system.processId()}.policy.json`);
     expect(text(h, files.policy!)).toBe(READ_OK);
+  });
+
+  // A checkpoint holds the program's whole state. A save that fails
+  // half way must not leave one, or a policy, that nothing will remove.
+  it("leaves nothing behind when either write fails", async () => {
+    // Each write refuses to replace a file, so a file already at one of
+    // the two names makes that write fail.
+    for (const [taken, other] of [
+      [".policy.json", ".json"],
+      [".json", ".policy.json"],
+    ]) {
+      const h = host({ [AGENCY_RUN_POLICY]: READ_OK });
+      const name = (end: string) => `/home/me/.agency/held/trace-9-${h.system.processId()}${end}`;
+      h.state.files[name(taken!)] = new TextEncoder().encode("in the way");
+      await expect(saveHeldCheckpoint([held("trace-9")], h)).rejects.toThrow();
+      expect(h.state.files[name(other!)]).toBeUndefined();
+    }
   });
 
   it("has no policy file for a policy with no rules", async () => {
@@ -127,6 +164,17 @@ describe("resumeCommand", () => {
     expect(resumeCommand({ ...files, policy: "/h/held/t-1.policy.json" }, settings)).toBe(
       "agency resume /h/held/t-1.json <program> --wait-for-response " +
         "--policy /h/held/t-1.policy.json --max-cost 2 --max-time 600000ms",
+    );
+  });
+
+  it("quotes a path a shell would split", () => {
+    const spaced = {
+      checkpoint: "/h/Agency Data/held/t-1.json",
+      policy: "/h/it's/held/t-1.policy.json",
+    };
+    expect(resumeCommand(spaced, host().settings)).toBe(
+      "agency resume '/h/Agency Data/held/t-1.json' <program> --wait-for-response " +
+        "--policy '/h/it'\\''s/held/t-1.policy.json'",
     );
   });
 

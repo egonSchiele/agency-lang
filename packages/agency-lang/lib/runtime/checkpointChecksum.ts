@@ -3,6 +3,7 @@ import { canonicalize } from "@/utils/canonicalize.js";
 import { hmacSha256, toHex } from "@/utils/hash.js";
 import type { HostSettings } from "../host/host.js";
 import { utf8ByteLength } from "../stdlib/base64.js";
+import { nativeTypeReplacer } from "./revivers/index.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 
 /** Both shapes a checkpoint travels as: the live class instance, and the
@@ -68,7 +69,13 @@ function checkpointJson(cp: SignableCheckpoint): Record<string, unknown> {
 function canonicalString(cp: SignableCheckpoint): string {
   const json = checkpointJson(cp);
   delete json.signature;
-  return DOMAIN + "\n" + canonicalize(json);
+  // A checkpoint is signed while it holds live values (a Date, a Set) and
+  // verified after a trip through a file, where they are written in the
+  // tagged form of `nativeTypeReplacer`. Both are hashed in the tagged
+  // form. Hashed as they are, a live Set would hash as `{}`, whatever it
+  // holds.
+  const encoded: unknown = JSON.parse(JSON.stringify(json, nativeTypeReplacer));
+  return DOMAIN + "\n" + canonicalize(encoded);
 }
 
 function computeMac(cp: SignableCheckpoint, key: string): string {

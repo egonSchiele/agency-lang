@@ -43,6 +43,8 @@ export async function saveHeldCheckpoint(interrupts: Interrupt[], host: Host): P
   if (checkpoint === undefined) {
     throw new Error("the held interrupts carry no checkpoint");
   }
+  // Read before any file is made, since a policy that is not JSON throws.
+  const policyText = policyWithRules(host.settings);
   const home = await host.files.root(agencyHomeDir(host));
   await host.files.mkdir(home, "");
   await host.files.privateDir(home, HELD_DIR);
@@ -52,15 +54,28 @@ export async function saveHeldCheckpoint(interrupts: Interrupt[], host: Host): P
     await host.files.writeText(dir, name, text, { mode: "create-only", fileMode: HELD_FILE_MODE });
     return host.files.resolvePath(dir, name);
   };
-  // A surfaced checkpoint holds live values (a Date, a Set), which plain
-  // JSON would flatten. The replacer writes them in the form a resume
-  // revives.
-  const file = await write(`${run}.json`, JSON.stringify(checkpoint, nativeTypeReplacer));
-  const policy = policyWithRules(host.settings);
-  return {
-    checkpoint: file,
-    policy: policy === null ? null : await write(`${run}.policy.json`, policy),
-  };
+  // The policy goes first. A failure then leaves no checkpoint behind, and
+  // a checkpoint holds the program's whole state.
+  const policyName = `${run}.policy.json`;
+  const policy = policyText === null ? null : await write(policyName, policyText);
+  try {
+    // A surfaced checkpoint holds live values (a Date, a Set), which plain
+    // JSON would flatten. The replacer writes them in the form a resume
+    // revives.
+    const text = JSON.stringify(checkpoint, nativeTypeReplacer);
+    return { checkpoint: await write(`${run}.json`, text), policy };
+  } catch (error) {
+    if (policy !== null) {
+      await host.files.remove(dir, policyName).catch(() => {});
+    }
+    throw error;
+  }
+}
+
+/** `text` as one word of a shell command: quoted when it holds anything a
+ *  shell would read as more than plain text, such as a space. */
+function shellWord(text: string): string {
+  return /^[\w/.:=@%+-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
 }
 
 /** The command that resumes from `files` under the policy and the limits
@@ -72,11 +87,11 @@ export function resumeCommand(files: HeldFiles, settings: HostSettings): string 
   // A negative cost, and a time of zero or less, mean no limit.
   const flags = [
     "--wait-for-response",
-    ...(files.policy !== null ? ["--policy", files.policy] : []),
+    ...(files.policy !== null ? ["--policy", shellWord(files.policy)] : []),
     ...(maxCost !== null && Number(maxCost) >= 0 ? ["--max-cost", maxCost] : []),
     ...(maxTime !== null && Number(maxTime) > 0 ? ["--max-time", `${maxTime}ms`] : []),
   ];
-  return `agency resume ${files.checkpoint} <program> ${flags.join(" ")}`;
+  return `agency resume ${shellWord(files.checkpoint)} <program> ${flags.join(" ")}`;
 }
 
 /** Remove the files `saveHeldCheckpoint` wrote. Refuses a path outside

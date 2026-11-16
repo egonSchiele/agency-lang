@@ -9,9 +9,16 @@ export const DEFAULT_CALLBACK_PORT = 19876;
  *  the text the user sees when they cancel a login. */
 export const LOGIN_CANCELLED = "login cancelled";
 
+/** How long a callback page listens at most, from start(). It covers a login
+ *  that is started and never finished, which would otherwise hold the port. */
+const DEFAULT_LIFETIME_MS = 30 * 60 * 1000;
+
 export type CallbackServerOptions = {
   port?: number; // default DEFAULT_CALLBACK_PORT
-  timeoutMs?: number; // default 300000 (5 minutes)
+  /** How long waitForCode waits, from its first call. Default 5 minutes. */
+  timeoutMs?: number;
+  /** How long the page listens at most, from start(). Default 30 minutes. */
+  lifetimeMs?: number;
   /** The `state` value the provider put in the login URL. */
   state: string;
 };
@@ -30,11 +37,14 @@ export class CallbackServer {
   private resolveCode!: (code: string) => void;
   private rejectCode!: (err: Error) => void;
   private timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  private lifetimeHandle: ReturnType<typeof setTimeout> | null = null;
+  private lifetimeMs: number;
   private waiting = false;
 
   constructor(opts: CallbackServerOptions) {
     this.port = opts.port ?? DEFAULT_CALLBACK_PORT;
     this.timeoutMs = opts.timeoutMs ?? 300_000;
+    this.lifetimeMs = opts.lifetimeMs ?? DEFAULT_LIFETIME_MS;
     this.state = opts.state;
     this.codePromise = new Promise<string>((resolve, reject) => {
       this.resolveCode = resolve;
@@ -46,11 +56,25 @@ export class CallbackServer {
   }
 
   async start(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       this.server = http.createServer((req, res) => this.answer(req, res));
       this.server.listen(this.port, "127.0.0.1", () => resolve());
-      this.server.on("error", reject);
+      this.server.on("error", (error: NodeJS.ErrnoException) => {
+        this.server = null;
+        reject(error.code === "EADDRINUSE" ? this.portInUse() : error);
+      });
     });
+    this.lifetimeHandle = setTimeout(() => {
+      const minutes = Math.round(this.lifetimeMs / 60_000);
+      this.rejectCode(new Error(`The login page closed after ${minutes} minutes. Start the login again.`));
+      void this.stop();
+    }, this.lifetimeMs);
+  }
+
+  private portInUse(): Error {
+    return new Error(
+      `another login is in progress (port ${this.port} is in use). Finish or cancel it, then try again.`,
+    );
   }
 
   /** The code from the browser. The first call starts the timeout. */
@@ -69,6 +93,10 @@ export class CallbackServer {
     if (this.timeoutHandle) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
+    }
+    if (this.lifetimeHandle) {
+      clearTimeout(this.lifetimeHandle);
+      this.lifetimeHandle = null;
     }
     this.rejectCode(new Error(LOGIN_CANCELLED));
     if (this.server) {

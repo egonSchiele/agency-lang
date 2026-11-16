@@ -40,7 +40,12 @@ export function withResumeCallbacks(
   if (!callbacks) {
     return metadata;
   }
-  return { ...metadata, callbacks: composeCallbacks(metadata?.callbacks, callbacks) };
+  // Composed only when there are two sets, so a lone set is handed over as
+  // it is, the way a node call and `metadata.callbacks` hand theirs over.
+  const composed = metadata?.callbacks
+    ? composeCallbacks(metadata.callbacks, callbacks)
+    : callbacks;
+  return { ...metadata, callbacks: composed };
 }
 
 export type AfterCheckpointRestored = () => void;

@@ -46,5 +46,18 @@
         "after the interrupt"
       ]
     }
+  },
+  "resumeFromCheckpoint": {
+    "wasPaused": true,
+    "result": "done",
+    "heard": [
+      "after the sleep"
+    ]
+  },
+  "rewindFrom": {
+    "result": "done",
+    "heard": [
+      "after the checkpoint"
+    ]
   }
 }

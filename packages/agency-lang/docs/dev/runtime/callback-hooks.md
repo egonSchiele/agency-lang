@@ -76,6 +76,9 @@ debugger uses it (`lib/debugger/driver.ts`). `withResumeCallbacks` in
 `lib/runtime/resumeSetup.ts` folds the top-level option into the metadata at
 each of the three entry points, so the rest of the resume path reads one
 place. When a caller uses both, both sets fire, the metadata ones first.
+The two hooks for one event run inside one function (`composeCallbacks`),
+so if the metadata hook throws, the top-level hook for that event is not
+called and the error is logged once.
 
 Fixture: `tests/agency-js/resume-callbacks`.
 

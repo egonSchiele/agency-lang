@@ -25,8 +25,13 @@ export class OAuthConnector {
   private serverName: string;
   private url: string;
   private provider: AgencyOAuthProvider;
+  private tokenStore: TokenStore;
   /** The client of a login started and not yet finished. */
   private pending: OAuthConnectResult | null = null;
+  /** The last refresh request in line. Each one waits for the one before. */
+  private refreshTurn: Promise<unknown> = Promise.resolve();
+  /** The refresh token the last successful refresh used, and the one it got. */
+  private lastRefresh: { from: string; to: string } | null = null;
 
   constructor(
     serverName: string,
@@ -36,14 +41,68 @@ export class OAuthConnector {
   ) {
     this.serverName = serverName;
     this.url = url;
+    this.tokenStore = tokenStore;
     this.provider = new AgencyOAuthProvider(serverName, tokenStore, options);
   }
 
   private createTransport(): StreamableHTTPClientTransport {
     return new StreamableHTTPClientTransport(new URL(this.url), {
       authProvider: this.provider,
-      fetch: watchingRefreshes((token) => this.provider.noteRejectedRefreshToken(token)),
+      fetch: this.oneRefreshAtATime(watchingRefreshes((token) => this.provider.noteRejectedRefreshToken(token))),
     });
+  }
+
+  /**
+   * Send refresh requests one at a time, each with the newest saved refresh
+   * token. Several tool calls can find the access token expired at once, and
+   * the SDK refreshes inside each call. A server that gives out a new refresh
+   * token on every refresh refuses the old one, so every call after the first
+   * must use the token the call before it saved.
+   */
+  private oneRefreshAtATime(send: typeof fetch): typeof fetch {
+    return (input, init) => {
+      if (refreshTokenSent(init?.body) === null) {
+        return send(input, init);
+      }
+      const turn = this.refreshTurn.then(() => this.refreshWithNewestToken(send, input, init));
+      // The next refresh waits for this one, whether it succeeded or not.
+      this.refreshTurn = turn.catch(() => undefined);
+      return turn;
+    };
+  }
+
+  private async refreshWithNewestToken(
+    send: typeof fetch,
+    input: Parameters<typeof fetch>[0],
+    init: RequestInit | undefined,
+  ): Promise<Response> {
+    const newest = await this.newestRefreshToken();
+    const body = new URLSearchParams(init?.body as URLSearchParams | string);
+    if (newest !== undefined) {
+      body.set("refresh_token", newest);
+    }
+    const used = body.get("refresh_token") ?? "";
+    const response = await send(input, { ...init, body });
+    if (response.ok) {
+      const tokens: { refresh_token?: unknown } = await response
+        .clone()
+        .json()
+        .catch(() => ({}));
+      const next = typeof tokens.refresh_token === "string" ? tokens.refresh_token : used;
+      this.lastRefresh = { from: used, to: next };
+    }
+    return response;
+  }
+
+  /** The refresh token the next refresh should send. The SDK saves a refresh's
+   *  new token only after the response comes back, so the file can still hold
+   *  the token the last refresh used up. */
+  private async newestRefreshToken(): Promise<string | undefined> {
+    const saved = (await this.tokenStore.loadTokens(this.serverName))?.refresh_token;
+    if (this.lastRefresh !== null && saved === this.lastRefresh.from) {
+      return this.lastRefresh.to;
+    }
+    return saved;
   }
 
   private createClient(): Client {

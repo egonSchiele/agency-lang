@@ -148,6 +148,20 @@ describe("OAuthConnector", () => {
     expect(server.refreshCount()).toBeGreaterThanOrEqual(2);
   });
 
+  for (const calls of [3, 4]) {
+    it(`${calls} calls at expiry all succeed and the login survives`, async () => {
+      await server.close();
+      server = await startFakeOAuthServer({ rotateRefreshTokens: true, refreshDelayMs: 50 });
+      const client = await logIn(connectorFor("linear"));
+      server.expireAccessTokens();
+      const results = await Promise.all(
+        Array.from({ length: calls }, (_, i) => client.callTool({ name: "add", arguments: { a: i, b: 1 } })),
+      );
+      expect(results.map((result) => Boolean(result.isError))).toEqual(Array(calls).fill(false));
+      expect(await store.loadTokens("linear")).toBeDefined();
+    });
+  }
+
   it("ask first still logs in", async () => {
     let url = "";
     const connector = connectorFor("linear", {

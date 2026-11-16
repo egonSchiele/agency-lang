@@ -130,13 +130,16 @@ export class McpManager {
     await pending?.connector.cancelLogin();
   }
 
-  /** Delete the saved login and disconnect. Keeps the registration. */
+  /** Delete the saved login and disconnect. Keeps the registration. A later
+   *  tool call fails with "needs login" and starts no login. */
   async logout(serverName: string): Promise<void> {
+    this.markNeverLogin(serverName);
     await this.tokenStore.deleteLogin(serverName);
     await this.replaceConnection(serverName, NEEDS_LOGIN);
   }
 
   async disconnectServer(serverName: string): Promise<void> {
+    this.markNeverLogin(serverName);
     await this.replaceConnection(serverName, null);
   }
 

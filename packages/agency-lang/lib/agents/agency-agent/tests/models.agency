@@ -126,20 +126,10 @@ node embeddingSpecWithLocalProvider(): ModelSpec {
 }
 
 // With no --provider, a model named by a flag picks the provider that
-// serves it, not openai.
-def detectedOrError(result: Result<string>): string {
-  if (result is failure(f)) {
-    return "ERR"
-  }
-  return result.value
-}
-
-node bareModelFlagUsesCatalogProvider(): string {
-  return detectedOrError(resolveDetected("claude-sonnet-5-5", "", "", ""))
-}
-
-node mainSlotModelUsesCatalogProvider(): string {
-  return detectedOrError(resolveDetected("", "claude-opus-4-8", "gpt-5.5", ""))
+// serves it. resolveDetected checks that provider's key, so the cases
+// that depend on keys are in tests/agency-js/llm-provider-defaults.
+node bareModelUsesCatalogProvider(): string {
+  return providerForModel("claude-sonnet-5-5")
 }
 
 node providerPrefixWins(): string {
@@ -150,6 +140,15 @@ node openaiModelStaysOpenai(): string {
   return providerForModel("gpt-5.5")
 }
 
-node uncatalogedModelFallsBackToOpenai(): string {
+node uncatalogedModelHasNoProvider(): string {
   return providerForModel("my-private-finetune")
+}
+
+// The fallback reads no key, so this does not depend on the environment.
+node uncatalogedModelFallsBackToOpenai(): string {
+  const r = resolveDetected("my-private-finetune", "", "", "")
+  if (r is failure(f)) {
+    return "ERR"
+  }
+  return r.value
 }

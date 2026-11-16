@@ -74,7 +74,7 @@
     {
       "nodeName": "buildLayersImmediacyOuter",
       "input": "",
-      "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"anthropic\",\"via\":\"cli:global-pin\"}",
+      "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"openai\",\"via\":\"cli:global-pin\"}",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -110,6 +110,24 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "mixedProviderSlotsEachGetTheirOwn",
+      "input": "",
+      "expectedOutput": "\"claude-opus-4-8=anthropic gpt-5.5=openai\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "uncatalogedModelTakesTheSessionProvider",
+      "input": "",
+      "expectedOutput": "\"my-private-finetune=anthropic my-private-finetune=anthropic\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "establishedProviderIsNotReplaced",
+      "input": "",
+      "expectedOutput": "\"gpt-5.5=anthropic gpt-5.5=anthropic\"",
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "defaultLayerSetsTheRouter",

@@ -162,8 +162,8 @@ export type ModelPlan = {
  *    (`pickProvider`, with openrouter as a last resort) whenever defaults
  *    are actually needed.
  *  - With no `--provider` and every model named by a flag, use the
- *    provider that serves the pinned (or main) model, so
- *    `--model claude-sonnet-5-5` goes to anthropic.
+ *    provider that serves the pinned (or main) model, and check its key.
+ *    A model the catalog does not list gets "openai", unchecked.
  *
  *  Returns the provider name whose MODELS bucket should supply defaults,
  *  or a failure whose message is ready to print. */
@@ -197,25 +197,38 @@ export def resolveDetected(
     // still wins; it's only picked when it's the only key present.
     return pickProvider(["anthropic", "google", "openai", "openrouter"])
   }
-  // Everything came from --model, so the defaults bucket is never read. The
-  // provider still fills in every chat slot whose model names none, so it
-  // must be the one that serves the model.
+  // Everything came from --model, so the defaults bucket is never read.
+  // A bare chat-slot model takes its own provider from the catalog (see
+  // parseSlotValue), so this provider only reaches a model the catalog
+  // does not list. Its key is checked unless it is the "openai"
+  // fallback, which may be served by something the catalog does not
+  // describe.
   const named = if model != "" then model else fast
-  return success(providerForModel(named))
+  const inferred = providerForModel(named)
+  if (inferred == "") {
+    return success("openai")
+  }
+  return checkProviderEnv(inferred)
+}
+
+/** The provider the model catalog lists for a model, or "" when the
+ *  catalog does not list it as a text model. */
+export def catalogProvider(model: string): string {
+  const info = hostedModelInfo(model)
+  if (info == null) {
+    return ""
+  }
+  return info.provider
 }
 
 /** The provider a model flag value names: its provider/ prefix, else the
- *  model catalog's entry, else "openai" for a name the catalog lacks. */
+ *  model catalog's entry, else "". */
 export def providerForModel(spec: string): string {
   const parsed = parseModelSpec(spec, false, knownProviders())
   if (parsed.provider != "") {
     return parsed.provider
   }
-  const info = hostedModelInfo(parsed.model)
-  if (info == null) {
-    return "openai"
-  }
-  return info.provider
+  return catalogProvider(parsed.model)
 }
 
 /** Turn the four CLI flag values plus the resolved `detected` provider

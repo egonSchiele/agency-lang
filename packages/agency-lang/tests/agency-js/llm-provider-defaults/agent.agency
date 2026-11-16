@@ -17,6 +17,9 @@ def describe(r: Result<string>): string {
 //   autoDetect          — no provider flag: detection still prefers anthropic.
 //   customNoModel       — custom provider with no model to back it: error.
 //   customWithModel     — custom provider alongside an explicit model: ok.
+//   inferredWithKey     — a bare cataloged model: its provider, key set.
+//   inferredNoKey       — a bare cataloged model whose provider has no
+//                         key: fail at startup, not on the first call.
 //   planOpenai          — forced-provider defaults; slow uses the Responses API.
 //   planAnthropic       — auto-detected defaults; empty fastProvider.
 //   planCustom          — a custom model forced onto a custom provider.
@@ -27,6 +30,8 @@ node main(): any {
     autoDetect: describe(resolveDetected("", "", "", "")),
     customNoModel: describe(resolveDetected("", "", "", "ollama")),
     customWithModel: describe(resolveDetected("my-model", "", "", "ollama")),
+    inferredWithKey: describe(resolveDetected("claude-sonnet-5-5", "", "", "")),
+    inferredNoKey: describe(resolveDetected("gemini-3.8-flash", "", "", "")),
     planOpenai: planModels("", "", "", "openai", "openai"),
     planAnthropic: planModels("", "", "", "", "anthropic"),
     planCustom: planModels("my-model", "", "", "ollama", "ollama")

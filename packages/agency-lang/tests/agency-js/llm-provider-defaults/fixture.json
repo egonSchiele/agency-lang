@@ -4,6 +4,8 @@
   "autoDetect": "anthropic",
   "customNoModel": "FAIL:--provider ollama has no built-in defaults; also pass --model (or --fastmodel/--slowmodel). Providers with defaults: openai, anthropic, google, openrouter.",
   "customWithModel": "ollama",
+  "inferredWithKey": "anthropic",
+  "inferredNoKey": "FAIL:No API key for provider 'google'. Set GEMINI_API_KEY.",
   "planOpenai": {
     "fastModel": "gpt-5.6-sol",
     "fastProvider": "openai-responses",

@@ -2,7 +2,7 @@
   specificity (per-slot then global-pin), first non-empty cell wins; built-in
   falls to `priceDefault`. Pure: layers are read-only inputs. See spec 3.2/3.3. */
 import { keys } from "std::object"
-import { Resolved, priceDefault, parseModelSpec } from "./models.agency"
+import { Resolved, catalogProvider, priceDefault, parseModelSpec } from "./models.agency"
 import { canonicalSlot, isChatSlot, providersFor, slotCanBeOff, slotKind, SLOT_OFF, SLOTS } from "./slots.agency"
 
 export type SlotValue = {
@@ -113,12 +113,24 @@ export def resolveAll(
   return success(output)
 }
 
+// A chat model with no provider/ prefix, under no fixed provider, takes
+// the provider the catalog lists for it, so `main=claude-opus-4-8` and
+// `reasoning=gpt-5.5` each go to their own provider. A model the catalog
+// does not list keeps "", and finalProvider gives it the session's.
+// A derived slot must name its provider, so it never infers one.
 def parseSlotValue(
   raw: string,
   providers: string[],
   providerEstablished: boolean,
+  inferProvider: boolean,
 ): SlotValue {
   const spec = parseModelSpec(raw, providerEstablished, providers)
+  if (inferProvider && !providerEstablished && spec.provider == "") {
+    return {
+      model: spec.model,
+      provider: catalogProvider(spec.model)
+    }
+  }
   return {
     model: spec.model,
     provider: spec.provider
@@ -136,8 +148,9 @@ def slotMapToValues(
     // A derived slot's value always parses its provider prefix. An
     // established provider describes the CHAT session, and the whole
     // point of a derived slot is to point somewhere else.
-    const established = providerEstablished && slotKind(canonical) != "derived"
-    output[canonical] = parseSlotValue(slots[key], providersFor(canonical, providers), established)
+    const isChat = slotKind(canonical) != "derived"
+    const established = providerEstablished && isChat
+    output[canonical] = parseSlotValue(slots[key], providersFor(canonical, providers), established, isChat)
   }
   return output
 }
@@ -154,7 +167,7 @@ def pinValue(pin: string, providers: string[], providerEstablished: boolean): Sl
   if (pin == "") {
     return null
   }
-  return parseSlotValue(pin, providers, providerEstablished)
+  return parseSlotValue(pin, providers, providerEstablished, true)
 }
 
 def parseLayer(raw: RawLayer, providers: string[], providerEstablished: boolean): Layer {

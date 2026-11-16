@@ -43,6 +43,16 @@ Any model flag (`--model`, `--fastmodel`, `--slowmodel`, `--provider`,
 The preset's model fields are dropped as a group, so a provider from one
 source is never paired with a model from another.
 
+A chat model named without a `provider/` prefix takes the provider the
+model catalog lists for it, unless `--provider`, the preset, or
+`settings.model.provider` fixed one (`parseSlotValue` in
+`lib/resolution.agency`). So
+`--fastmodel claude-opus-4-8 --slowmodel gpt-5.5` sends each model to its
+own provider. A model the catalog does not list takes the
+session's provider, which `resolveDetected` picks. When every model came
+from a flag, that is the provider of the pinned or main model, or
+`openai` when the catalog does not list that model either.
+
 The `router` slot (`docs/dev/agents/agent-router.md`) is set the way the
 embedding slot is: `--model router=<provider>/<model>`, `slots.router` in a
 preset, or `settings.model.slots.router`. Both are derived slots: the value
@@ -317,12 +327,10 @@ The model fields depend on where the session's provider came from:
 The last two rows differ because of how a value is read at the next
 start. Under a fixed provider, `parseModelSpec` reads the whole value as
 the model name, so `openrouter/z-ai/glm-5.3` would name a model that does
-not exist. With a detected provider, a bare name is resolved again, and
-the answer can change. A preset holding only
-`slots.reasoning: "claude-opus-4-8"` still needs a main model, so the
-provider is detected from the API keys that are set, and with only an
-OpenAI key Opus would be sent to OpenAI. So those slots carry their
-provider. Both chat slots are written, so neither falls back to a
+not exist. With a detected provider, a bare name is resolved again at
+the next start. A name the model catalog lists gets the same provider
+again, but a name it does not list takes whichever provider the API keys
+select then. So those slots carry their provider. Both chat slots are written, so neither falls back to a
 built-in default that depends on which keys are set.
 
 `flattenLayers` in `lib/resolution.agency` folds the `in-session`,

@@ -138,6 +138,13 @@ describe("the 0.0.6 exports", () => {
     expect(Object.keys(await pendingServers())).toEqual(["p1", "p2"]);
   });
 
+  it("connectServer takes only its own server's entry from the config it is given", async () => {
+    configureServers({ config: { p3: stdio, p4: stdio } });
+    expect((await connectServer("p3", { config: { p3: stdio } })).status).toBe("connected");
+    expect(Object.keys(await pendingServers())).toEqual(["p4"]);
+    await disconnectServer("p3");
+  });
+
   it("mcpRaw without a config leaves the stored config alone", async () => {
     await connectServer("e8", { config: { e8: stdio } });
     await disconnectServer("e8");

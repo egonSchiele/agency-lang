@@ -55,6 +55,19 @@ export class McpManager {
     this.config = config;
   }
 
+  /** Replace one server's entry in the stored config, and leave the others
+   *  alone. `undefined` removes the entry. */
+  setServerConfig(serverName: string, config: McpServerConfig | undefined): void {
+    // Spreading keeps an existing entry where it was, so the key order stays.
+    const next = { ...this.config };
+    if (config === undefined) {
+      delete next[serverName];
+    } else {
+      next[serverName] = config;
+    }
+    this.config = next;
+  }
+
   /** A copy of every server's record. Connects nothing. */
   records(): Record<ServerName, ServerRecord> {
     return { ...this.serverRecords };

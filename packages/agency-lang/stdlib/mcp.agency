@@ -16,7 +16,9 @@ import {
   _reconnectMcpServer,
   _configureMcpServers,
   _pendingMcpServers,
-  _markMcpServerFailed
+  _markMcpServerFailed,
+  _mcpCommandLine,
+  _mcpEnvLine
 } from "agency-lang/stdlib-lib/mcp.js"
 import { keys } from "std::object"
 
@@ -34,8 +36,9 @@ import { keys } from "std::object"
   0.0.6 or newer; `mcpPackageProblem` says when the installed one is older.
 
   Every function that can start a stdio server's command raises `mcp::connect`
-  with the server's name and command line first. A server that is not
-  approved is not started. HTTP servers start no process and raise nothing.
+  with the server's name, command line, and environment first. A server that
+  is not approved is not started. HTTP servers start no process and raise
+  nothing.
 
   ```ts
   import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
@@ -63,11 +66,15 @@ effect mcp::call {
 }
 
 // Raised before a stdio server's command starts. An HTTP server starts no
-// process, so it raises nothing.
-@always(server, command)
+// process, so it raises nothing. `command` quotes any word with a space or a
+// quote in it. `env` is the server's environment as sorted KEY=value words,
+// or "" when it has none. An always-approve rule pins all three, because a
+// variable such as NODE_OPTIONS can change what the same command runs.
+@always(server, command, env)
 effect mcp::connect {
   server: string,
-  command: string
+  command: string,
+  env: string
 }
 
 // The message a server gets when starting it was not approved.
@@ -79,15 +86,6 @@ type StartApproval = {
   refused: string[]
 }
 
-// A stdio server's command line, as the approval question shows it.
-def commandLine(config: Record<string, any>): string {
-  let parts: string[] = [config.command]
-  if (config.args != null) {
-    parts = [...parts, ...config.args]
-  }
-  return parts.join(" ")
-}
-
 // Ask before a stdio server's command starts. Succeeds with no question for
 // an HTTP server.
 def approveStart(name: string, config: Record<string, any>): Result raises <mcp::connect> {
@@ -96,7 +94,8 @@ def approveStart(name: string, config: Record<string, any>): Result raises <mcp:
   }
   return interrupt mcp::connect("Are you sure you want to start this MCP server?", {
     server: name,
-    command: commandLine(config)
+    command: _mcpCommandLine(config),
+    env: _mcpEnvLine(config)
   })
   return success(name)
 }

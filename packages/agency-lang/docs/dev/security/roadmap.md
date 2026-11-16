@@ -111,21 +111,26 @@ generator through the shell. Decide whether `--refuse-splices` becomes the
 default for anything that is not an explicit build, and whether generators
 run through `compileSandboxed`.
 
-### A4. A reconnect inside the MCP package starts a stdio command without `mcp::connect`
+### A4. A reconnect inside the MCP package starts a stdio command without `mcp::connect` — FIXED
 
 A stdio server's config is a command, and connecting runs it. Every
 `std::mcp` function that can start one (`loadMcpTools`,
 `loadMcpToolsWithStatus`, `connectMcpServers`, `connectPendingMcpServers`,
-`reconnectMcpServer`) raises `mcp::connect` with the server name and the
-command line first, so a program that hands one of them to a model cannot
-start a command its policy has not approved.
+`reconnectMcpServer`) raises `mcp::connect` first. The payload is the server
+name, the command line, and the environment, and `@always` pins all three,
+because a variable such as `NODE_OPTIONS` can change what the same command
+runs.
 
-One path is left. When a server has no connection, `McpManager.callTool` in
-`@agency-lang/mcp` builds one, and for a stdio server that starts the command
-again. It happens when a tool from an earlier connection is called after
-`disconnectServer`. The command was approved when the server first started,
-but this start raises nothing. The fix is to have `callTool` refuse a server
-with no connection, and to leave reconnecting to `std::mcp`. See
+The gap was in `@agency-lang/mcp`. When a server had no connection,
+`McpManager.callTool` built one from the stored config. `configureMcpServers`
+replaces that config and raises nothing, so a model holding it,
+`disconnectMcpServer`, and a server's tools could swap the server's command
+and then call a tool to start the new one. The only question was
+`mcp::call`, which never shows the command.
+Fixed: `callTool` no longer reconnects a server that a 0.0.6 export touched.
+The call fails with `needs a new login` or `is not connected`, and
+reconnecting is left to `std::mcp`, which asks. Servers that only `mcp()` and
+`mcpRaw()` touched still reconnect, as before. See
 `docs/dev/agents/agent-mcp.md`.
 
 ## B. The runner's handler is outermost and always present
@@ -410,7 +415,7 @@ it is what lets them become total denial rather than workdir-scoping.
 | A1 JS globals reachable | #971 | open |
 | A2 review `JS_GLOBALS` | #994 | open |
 | A3 splice execution in non-build commands | #995 | open |
-| A4 MCP package reconnect restarts a stdio command without `mcp::connect` | none | open (stdlib starts gated) |
+| A4 MCP package reconnect restarts a stdio command without `mcp::connect` | none | fixed |
 | B1 top-level `with approve` before policy | #966 | fixed |
 | B2 raise-time host policy / checkpoint integrity | spec | policy shipped; integrity open |
 | B3 sandbox flags imply no policy | #970 | open |

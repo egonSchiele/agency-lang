@@ -143,7 +143,7 @@ const EXPECTED: Record<string, string[]> = {
   "mcp::call": ["server", "tool"],
   // Starting a stdio server pins the command, so an "always" answer never
   // covers a different command under the same server name.
-  "mcp::connect": ["server", "command"],
+  "mcp::connect": ["server", "command", "env"],
   "mcp::logout": ["server"],
   // GitHub: an "always" answer pins to one repository, never the account.
   "std::github::prList": ["owner", "repo"],

@@ -17,8 +17,9 @@ Read project server settings, merge them with global settings, and load
   0.0.6 or newer; `mcpPackageProblem` says when the installed one is older.
 
   Every function that can start a stdio server's command raises `mcp::connect`
-  with the server's name and command line first. A server that is not
-  approved is not started. HTTP servers start no process and raise nothing.
+  with the server's name, command line, and environment first. A server that
+  is not approved is not started. HTTP servers start no process and raise
+  nothing.
 
   ```ts
   import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
@@ -42,7 +43,7 @@ export type McpLoadResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L53))
 
 ### McpServerState
 
@@ -60,7 +61,7 @@ export type McpServerState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L163))
 
 ## Effects
 
@@ -75,19 +76,20 @@ effect mcp::call {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L62))
 
 ### mcp::connect
 
 ```ts
-@always(server, command)
+@always(server, command, env)
 effect mcp::connect {
   server: string;
-  command: string
+  command: string;
+  env: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L74))
 
 ### mcp::logout
 
@@ -98,7 +100,7 @@ effect mcp::logout {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L172))
 
 ## Functions
 
@@ -112,7 +114,7 @@ True when the @agency-lang/mcp package is installed and reachable.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L120))
 
 ### readProjectMcpConfig
 
@@ -132,7 +134,7 @@ Read the mcpServers block from the project agency.json under `dir`.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L126))
 
 ### mergeMcpServers
 
@@ -154,7 +156,7 @@ Merge global and project mcpServers configs (project wins on collision).
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L131))
 
 ### loadMcpTools
 
@@ -182,7 +184,7 @@ Load gated MCP tools for every server in `merged`. Asks before starting
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L137))
 
 ### loadMcpToolsWithStatus
 
@@ -209,7 +211,7 @@ Load MCP tools and report which servers connected. Asks before starting
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L146))
 
 ### mcpPackageProblem
 
@@ -223,7 +225,7 @@ Return why the installed @agency-lang/mcp is too old for the server-state
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L176))
 
 ### connectMcpServers
 
@@ -249,7 +251,7 @@ Connect every server in `merged` and return each one's state. Asks before
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L186))
 
 ### configureMcpServers
 
@@ -266,7 +268,7 @@ Store the server configurations without connecting anything.
 |---|---|---|---|
 | merged | `Record<string, any>` |  | Server configurations, such as the output of mergeMcpServers. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L208))
 
 ### connectPendingMcpServers
 
@@ -283,7 +285,7 @@ Connect every stored server that has no state yet, and return their states.
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L220))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L219))
 
 ### mcpServerStates
 
@@ -296,7 +298,7 @@ Return the current state of every MCP server connected so far, with the
 
 **Returns:** `McpServerState[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L231))
 
 ### startMcpLogin
 
@@ -318,7 +320,7 @@ Start a login to an MCP server and return the URL of its login page,
 
 **Needs:** `fileRead`, `fileWrite`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L240))
 
 ### finishMcpLogin
 
@@ -339,7 +341,7 @@ Wait for the person to finish the login startMcpLogin began, then connect
 
 **Needs:** `fileRead`, `fileWrite`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L253))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L252))
 
 ### cancelMcpLogin
 
@@ -357,7 +359,7 @@ Stop a login to an MCP server that is in progress.
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L264))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L263))
 
 ### disconnectMcpServer
 
@@ -376,7 +378,7 @@ Close the connection to an MCP server and drop its tools. The saved login
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L273))
 
 ### mcpNotInstalled
 
@@ -389,7 +391,7 @@ Return the message that says @agency-lang/mcp is not installed, with the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L283))
 
 ### logoutMcpServer
 
@@ -411,7 +413,7 @@ Delete the saved login for an MCP server and disconnect from it.
 
 **Needs:** `fileWrite`, `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L293))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L292))
 
 ### reconnectMcpServer
 
@@ -439,4 +441,4 @@ Disconnect from an MCP server and connect again with its saved login.
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L307))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L306))

@@ -39,6 +39,8 @@ import {
   _configureMcpServers,
   _pendingMcpServers,
   _markMcpServerFailed,
+  _mcpCommandLine,
+  _mcpEnvLine,
 } from "./mcp.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
@@ -116,6 +118,39 @@ const connected = (names: string[]) => ({
   status: "connected",
   tools: names.map((name) => ({ name })),
   callTool: async () => "r",
+});
+
+describe("_mcpCommandLine", () => {
+  it("leaves plain words as they are", () => {
+    expect(_mcpCommandLine({ command: "npx", args: ["-y", "@scope/server-fs", "/Users/me"] })).toBe(
+      "npx -y @scope/server-fs /Users/me",
+    );
+  });
+
+  it("quotes a word with a space, so different arg lists never read the same", () => {
+    expect(_mcpCommandLine({ command: "sh", args: ["-c", "echo hi"] })).toBe('sh -c "echo hi"');
+    expect(_mcpCommandLine({ command: "sh", args: ["-c", "echo", "hi"] })).toBe("sh -c echo hi");
+  });
+
+  it("quotes a word that holds a quote", () => {
+    expect(_mcpCommandLine({ command: "node", args: ['"a"'] })).toBe('node "\\"a\\""');
+  });
+
+  it("works with no args", () => {
+    expect(_mcpCommandLine({ command: "server" })).toBe("server");
+  });
+});
+
+describe("_mcpEnvLine", () => {
+  it("is empty with no env", () => {
+    expect(_mcpEnvLine({ command: "node" })).toBe("");
+  });
+
+  it("lists the variables sorted, quoting a value that needs it", () => {
+    expect(
+      _mcpEnvLine({ command: "node", env: { TOKEN: "x", NODE_OPTIONS: "--require /tmp/p.js" } }),
+    ).toBe('"NODE_OPTIONS=--require /tmp/p.js" TOKEN=x');
+  });
 });
 
 describe("_mcpPackageProblem", () => {

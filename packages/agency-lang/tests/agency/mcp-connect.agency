@@ -1,6 +1,7 @@
 import { connectMcpServers, reconnectMcpServer } from "std::mcp"
 
-// Starting a stdio server raises mcp::connect with its name and command line.
+// Starting a stdio server raises mcp::connect with its name, command line,
+// and environment.
 node stdioServerRaisesConnect(): string {
   let seen = ""
   handle {
@@ -13,7 +14,29 @@ node stdioServerRaisesConnect(): string {
       },
     )
   } with (intr) {
-    seen = "${intr.effect}:${intr.data.server}:${intr.data.command}"
+    seen = "${intr.effect}:${intr.data.server}:${intr.data.command}:${intr.data.env}"
+    return reject()
+  }
+  return seen
+}
+
+// A word with a space is quoted, and the environment is part of the question.
+node commandAndEnvAreShown(): string {
+  let seen = ""
+  handle {
+    connectMcpServers(
+      {
+        files: {
+          command: "sh",
+          args: ["-c", "echo hi"],
+          env: {
+            NODE_OPTIONS: "--require /tmp/p.js"
+          }
+        }
+      },
+    )
+  } with (intr) {
+    seen = "${intr.data.command} | ${intr.data.env}"
     return reject()
   }
   return seen

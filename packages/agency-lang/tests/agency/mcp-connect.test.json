@@ -1,6 +1,7 @@
 {
   "tests": [
-    { "nodeName": "stdioServerRaisesConnect", "description": "starting a stdio server raises mcp::connect with its name and command line", "input": "", "expectedOutput": "\"mcp::connect:files:npx -y server-filesystem\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "stdioServerRaisesConnect", "description": "starting a stdio server raises mcp::connect with its name, command line, and an empty env", "input": "", "expectedOutput": "\"mcp::connect:files:npx -y server-filesystem:\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "commandAndEnvAreShown", "description": "a word with a space is quoted, and the environment is part of the question", "input": "", "expectedOutput": "\"sh -c \\\"echo hi\\\" | \\\"NODE_OPTIONS=--require /tmp/p.js\\\"\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "rejectedServerIsFailed", "description": "a server whose start is rejected comes back failed", "input": "", "expectedOutput": "\"failed: starting it was not approved\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "httpServerRaisesNothing", "description": "an HTTP server starts no process and raises no mcp::connect", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "reconnectAsksAgain", "description": "reconnecting a stdio server asks again, and a rejection leaves it failed", "input": "", "expectedOutput": "\"failed: starting it was not approved\"", "evaluationCriteria": [{ "type": "exact" }] }

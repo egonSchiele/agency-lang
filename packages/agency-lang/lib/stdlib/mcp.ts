@@ -169,6 +169,37 @@ export type McpServerState = {
   tools: AgencyFunction[];
 };
 
+// ── What the mcp::connect question shows ───────────────────────────────────
+// An "always approve when" answer pins these strings, so two configs that
+// start different processes must never produce the same text.
+
+/** A word as the question shows it: plain words as they are, anything else
+ *  in double quotes. A plain word has no spaces or quotes, so
+ *  ["-c", "echo hi"] and ["-c", "echo", "hi"] read differently. */
+function shownWord(word: string): string {
+  return /^[A-Za-z0-9_@%+=:,./-]+$/.test(word) ? word : JSON.stringify(word);
+}
+
+/** A stdio server's command and args, each word quoted when it needs it. */
+export function _mcpCommandLine(config: Record<string, unknown>): string {
+  const args = Array.isArray(config.args) ? config.args : [];
+  return [config.command, ...args].map((word) => shownWord(String(word))).join(" ");
+}
+
+/** A stdio server's environment as sorted KEY=value words, or "" when it has
+ *  none. It is part of the question because a variable such as NODE_OPTIONS
+ *  can decide what code the command runs. */
+export function _mcpEnvLine(config: Record<string, unknown>): string {
+  const env = config.env;
+  if (!isPlainObject(env)) {
+    return "";
+  }
+  return Object.keys(env)
+    .sort()
+    .map((key) => shownWord(`${key}=${String(env[key])}`))
+    .join(" ");
+}
+
 /** The upgrade message when the installed package is too old or its version
  *  cannot be read, or "". Also "" when the package is not installed. */
 export async function _mcpPackageProblem(): Promise<string> {

@@ -6,7 +6,7 @@ How agency-lang finds the optional `@agency-lang/mcp` package is in `docs/dev/st
 
 ## When servers connect
 
-Starting a stdio server runs its `command`, so it raises `mcp::connect { server, command }` first (see "Starting a stdio server" below). The agent's policy handler answers that question, and the handler only exists once `runSession` installs it. So the agent connects in two steps:
+Starting a stdio server runs its `command`, so it raises `mcp::connect { server, command, env }` first (see "Starting a stdio server" below). The agent's policy handler answers that question, and the handler only exists once `runSession` installs it. So the agent connects in two steps:
 
 1. **Startup**, before the handler (`maybeLoadMcp` in `main`): read the config and store it in the package with `configureMcpServers`. Nothing connects, and nothing is asked.
 2. **Each turn**, under the handler: `getMcpTools()` first calls `startPendingMcpServers()`, which connects every stored server the package has no record for (`connectPendingMcpServers`), and prints a line for each one that needs a login or failed. After the first turn, nothing is pending, so later turns connect nothing.
@@ -62,7 +62,15 @@ A call whose login cannot be refreshed fails with `MCP server "<name>" needs a n
 
 ## Starting a stdio server
 
-Every `std::mcp` function that can start a stdio server raises `mcp::connect` first: `connectMcpServers`, `connectPendingMcpServers`, `reconnectMcpServer`, `loadMcpTools`, and `loadMcpToolsWithStatus`. The payload is the server's name and its command line, the command and its args joined by spaces. `@always(server, command)` pins both, so an "always approve" answer never covers a different command under the same name. An HTTP server starts no process and raises nothing.
+Every `std::mcp` function that can start a stdio server raises `mcp::connect` first: `connectMcpServers`, `connectPendingMcpServers`, `reconnectMcpServer`, `loadMcpTools`, and `loadMcpToolsWithStatus`. The payload has three fields:
+
+- `server`, the server's name.
+- `command`, the command and its args joined by spaces. A word with a space or a quote in it is put in double quotes, so `["-c", "echo hi"]` shows as `sh -c "echo hi"` and `["-c", "echo", "hi"]` as `sh -c echo hi`.
+- `env`, the server's environment as sorted `KEY=value` words, quoted the same way, or `""` when it has none. A variable such as `NODE_OPTIONS=--require payload.js` changes what `node` or `npx` runs, so the environment is part of the question.
+
+`@always(server, command, env)` pins all three, so an "always approve" answer never covers a different command or environment under the same name. The text is built in `_mcpCommandLine` and `_mcpEnvLine` (`lib/stdlib/mcp.ts`). An HTTP server starts no process and raises nothing.
+
+The package never starts a server's command on its own after that. `connectServer` and `startLogin` take only their own server's entry from the config they are given, and a tool call on a server with no connection fails instead of reconnecting (see "Interrupts" below).
 
 A server whose start is rejected is not started. `connectMcpServers` records it in the package as failed, with the message `starting it was not approved` (`markServerFailed`). A server with a record is not pending, so the next turn does not ask again. Its menu screen offers "Reconnect", which asks again.
 
@@ -89,7 +97,7 @@ The agent needs `@agency-lang/mcp` 0.0.6 or newer. `mcpPackageProblem()` returns
 - Starting a stdio server raises `mcp::connect`. `openUrl` raises `std::openUrl`, and `logoutMcpServer` raises `mcp::logout`. The agent's policy handler answers all three like any other interrupt, because every one of them is raised during a turn or a slash command, under `runSession`'s handler. Nothing raises at startup.
 - Each MCP tool call raises `mcp::call`, because `std::mcp` gates every tool it hands out.
 - Starting, finishing, and cancelling a login raise nothing. A login only finishes when a person completes it in their browser.
-- After `disconnectServer`, a tool call the model still holds from earlier in the same turn makes the package build a new connection. For a stdio server that starts its command again with no `mcp::connect`. `docs/dev/security/roadmap.md` lists this as A4.
+- A tool call on a server with no connection never reconnects it. This happens when the model still holds a tool from earlier in the same turn, after a log out or a disconnect. The call fails with `MCP server "<name>" needs a new login.` when the record says so, and otherwise with `MCP server "<name>" is not connected. Reconnect it first.` A reconnect there would read the stored config, which `configureMcpServers` can replace without asking, so it could start a command nobody approved (`docs/dev/security/roadmap.md`, A4). Servers that only `mcp()` and `mcpRaw()` touched still reconnect, as they did in 0.0.5.
 - Nothing here is saved in a checkpoint. Server states and the stored config live in the package, and handlers are not skipped on any path, since no step here resumes from a checkpoint.
 
 ## Files

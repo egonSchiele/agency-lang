@@ -2,10 +2,12 @@
   their status, and a screen for each one to log in, log out, reconnect, or
   see its tools. The list comes from the config each time the menu opens, and
   the status comes from the @agency-lang/mcp package. Opening the menu
-  disconnects a server that was removed from the config. */
+  connects a server added to the config since startup, asking first for a
+  stdio server, and disconnects one that was removed. */
 
 import {
   McpServerState,
+  configureMcpServers,
   disconnectMcpServer,
   finishMcpLogin,
   isMcpAvailable,
@@ -23,7 +25,7 @@ import { cwd, openUrl } from "std::system"
 import { ChoiceItem, chooseOption, pushMessage } from "std::ui/cli"
 
 import { SETTINGS_PATH } from "./config.agency"
-import { stateLine, toolCountText } from "./mcp.agency"
+import { startPendingMcpServers, stateLine, toolCountText } from "./mcp.agency"
 import { getMcpServers, loadSettings } from "./settings.agency"
 
 export type RowStatus =
@@ -282,9 +284,11 @@ def serverScreen(
   }
 }
 
-/** Disconnect every server that is no longer in the config, so the model
-  stops getting the tools of a server the user removed. */
-export def disconnectRemoved(merged: Record<string, any>) {
+/** Make the package match the config as it is now. Stores it, so a server
+  added since startup is pending and the next turn connects it. Disconnects
+  every server that is no longer in it, so the model stops getting its tools. */
+export def applyConfig(merged: Record<string, any>) {
+  configureMcpServers(merged)
   const names = keys(merged)
   for (state in mcpServerStates()) {
     if (!names.includes(state.name)) {
@@ -317,7 +321,8 @@ export def mcpSlashCommand(): boolean {
     pushMessage(color.yellow("MCP: ${problem}"))
     return true
   }
-  disconnectRemoved(merged)
+  applyConfig(merged)
+  startPendingMcpServers()
   const projectFile = "${cwd()}/agency.json"
   while (true) {
     const rows = serverRows(globalServers, projectServers, mcpServerStates())

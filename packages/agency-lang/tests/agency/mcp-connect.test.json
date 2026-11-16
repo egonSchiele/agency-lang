@@ -1,0 +1,8 @@
+{
+  "tests": [
+    { "nodeName": "stdioServerRaisesConnect", "description": "starting a stdio server raises mcp::connect with its name and command line", "input": "", "expectedOutput": "\"mcp::connect:files:npx -y server-filesystem\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rejectedServerIsFailed", "description": "a server whose start is rejected comes back failed", "input": "", "expectedOutput": "\"failed: starting it was not approved\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "httpServerRaisesNothing", "description": "an HTTP server starts no process and raises no mcp::connect", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "reconnectAsksAgain", "description": "reconnecting a stdio server asks again, and a rejection leaves it failed", "input": "", "expectedOutput": "\"failed: starting it was not approved\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

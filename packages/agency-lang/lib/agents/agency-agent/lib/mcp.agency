@@ -1,14 +1,15 @@
-/** @module MCP for the agency agent: connect the configured servers at
-  startup without starting a login, and give the coordinator the tools of
-  every connected server on each turn. The @agency-lang/mcp package holds
-  each server's state, and this file keeps no copy, so a resumed session
-  shows the new process's servers. The `/mcp` menu is in mcpMenu.agency.
-  Sits above `settings.agency` (imports from it, nothing imports back), so
-  there is no import cycle. */
+/** @module MCP for the agency agent: store the configured servers at startup,
+  connect them on the first turn without starting a login, and give the
+  coordinator the tools of every connected server on each turn. The
+  @agency-lang/mcp package holds each server's state, and this file keeps no
+  copy, so a resumed session shows the new process's servers. The `/mcp` menu
+  is in mcpMenu.agency. Sits above `settings.agency` (imports from it, nothing
+  imports back), so there is no import cycle. */
 
 import {
   McpServerState,
-  connectMcpServers,
+  configureMcpServers,
+  connectPendingMcpServers,
   mcpServerStates,
   mcpPackageProblem,
   mergeMcpServers,
@@ -17,6 +18,7 @@ import {
  } from "std::mcp"
 import { keys } from "std::object"
 import { cwd } from "std::system"
+import { pushMessage } from "std::ui/cli"
 
 import { Settings, getMcpServers } from "./settings.agency"
 
@@ -63,9 +65,11 @@ export def startupLines(problem: string, states: McpServerState[]): string[] {
   return lines
 }
 
-/** Connect the configured servers. Never starts a login: a server that needs
-  one gets a line telling the user to type /mcp. No-op when @agency-lang/mcp
-  is not installed or no servers are configured. */
+/** Store the configured servers in the package, at startup. Connects nothing:
+  starting a stdio server asks the user, and the policy handler that answers
+  does not exist yet. The servers connect on the first turn. Prints the
+  package problem when there is one. No-op when @agency-lang/mcp is not
+  installed or no servers are configured. */
 export def maybeLoadMcp(settings: Settings) {
   if (!isMcpAvailable()) {
     return
@@ -75,19 +79,32 @@ export def maybeLoadMcp(settings: Settings) {
     return
   }
   const problem = mcpPackageProblem()
-  let states: McpServerState[] = []
-  if (problem == "") {
-    states = connectMcpServers(merged)
+  if (problem != "") {
+    print(color.yellow("MCP: ${problem}"))
+    return
   }
-  for (line in startupLines(problem, states)) {
-    print(color.yellow(line))
+  configureMcpServers(merged)
+}
+
+/** Connect the stored servers that have no state yet, and print a line for
+  each one that needs a login or failed. Runs under the policy handler, so a
+  stdio server's mcp::connect question is answered there. A resumed session
+  connects here too, since the package's state belongs to the process. */
+export def startPendingMcpServers() {
+  if (!isMcpAvailable()) {
+    return
+  }
+  for (line in startupLines("", connectPendingMcpServers())) {
+    pushMessage(color.yellow(line))
   }
 }
 
 /** The tools of every connected MCP server, for the coordinator's tool list.
-  Read from the package on every turn, so a login or log out in /mcp shows
-  up on the next message. */
+  Connects any stored server that has no state yet first. Read from the
+  package on every turn, so a login or log out in /mcp shows up on the next
+  message. */
 export def getMcpTools(): any[] {
+  startPendingMcpServers()
   let tools: any[] = []
   for (state in mcpServerStates()) {
     tools = [...tools, ...state.tools]

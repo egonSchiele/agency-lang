@@ -1,0 +1,59 @@
+import { connectMcpServers, reconnectMcpServer } from "std::mcp"
+
+// Starting a stdio server raises mcp::connect with its name and command line.
+node stdioServerRaisesConnect(): string {
+  let seen = ""
+  handle {
+    connectMcpServers(
+      {
+        files: {
+          command: "npx",
+          args: ["-y", "server-filesystem"]
+        }
+      },
+    )
+  } with (intr) {
+    seen = "${intr.effect}:${intr.data.server}:${intr.data.command}"
+    return reject()
+  }
+  return seen
+}
+
+// A server whose start is rejected comes back failed, and is not started.
+node rejectedServerIsFailed(): string {
+  const states = connectMcpServers({
+    files: {
+      command: "npx"
+    }
+  }) with reject
+  return "${states[0].status}: ${states[0].message}"
+}
+
+// An HTTP server starts no process, so it raises nothing.
+node httpServerRaisesNothing(): number {
+  let asked = 0
+  handle {
+    connectMcpServers(
+      {
+        remote: {
+          type: "http",
+          url: "https://remote.example/mcp"
+        }
+      },
+    )
+  } with (intr) {
+    asked = asked + 1
+    return reject()
+  }
+  return asked
+}
+
+// Reconnecting a stdio server asks again.
+node reconnectAsksAgain(): string {
+  const state = reconnectMcpServer({
+    files: {
+      command: "npx"
+    }
+  }, "files") with reject
+  return "${state.status}: ${state.message}"
+}

@@ -2,7 +2,7 @@
 // that opens a login page rejects std::openUrl, so no browser opens. The fake
 // is loaded once per process, so each node uses its own server names.
 
-import { McpServerState, connectMcpServers } from "std::mcp"
+import { McpServerState, configureMcpServers, connectMcpServers } from "std::mcp"
 import { cwd, setEnv } from "std::system"
 
 import { getMcpTools, startupLines, stateLine } from "../lib/mcp.agency"
@@ -11,7 +11,7 @@ import {
   ServerRow,
   actionsFor,
   beginLogin,
-  disconnectRemoved,
+  applyConfig,
   endLogin,
   logOut,
   reconnect,
@@ -48,10 +48,15 @@ def logIn(merged: Record<string, any>, name: string): string {
   return endLogin(name)
 }
 
-// How many of the session's MCP tools belong to one server.
+// How many of the session's MCP tools belong to one server. getMcpTools
+// starts pending servers first, so a stdio server's start is approved here.
 def toolCount(server: string): number {
+  let tools: any[] = []
+  handle {
+    tools = getMcpTools()
+  } with approve
   let count = 0
-  for (tool in getMcpTools()) {
+  for (tool in tools) {
     if (tool.name.startsWith("${server}__")) {
       count = count + 1
     }
@@ -218,11 +223,12 @@ node abandonedLoginDoesNotBlockTheNext(): boolean {
 
 node connectsAServerWithNoState(): string {
   useFakePackage()
-  return reconnect({
+  const line = reconnect({
     t7: {
       command: "ok"
     }
-  }, "t7")
+  }, "t7") with approve
+  return line
 }
 
 node failedLoginStartSaysWhy(): string {
@@ -245,11 +251,12 @@ node failedLoginStartSaysWhy(): string {
 
 node failedServerSaysWhy(): string {
   useFakePackage()
-  return reconnect({
+  const line = reconnect({
     t8: {
       command: "missing"
     }
-  }, "t8")
+  }, "t8") with approve
+  return line
 }
 
 node toolsSurviveARestore(): number {
@@ -268,14 +275,55 @@ node toolsSurviveARestore(): number {
 }
 
 // A server removed from the config while the agent runs loses its tools when
-// the menu opens.
+// the menu opens, and the next turn does not connect it again.
 node menuDropsARemovedServer(): number {
   useFakePackage()
   connectMcpServers({
     t11: {
       command: "ok"
     }
-  })
-  disconnectRemoved({})
+  }) with approve
+  applyConfig({})
   return toolCount("t11")
+}
+
+// A server added to the config since startup connects on the next turn.
+node menuConnectsAnAddedServer(): number {
+  useFakePackage()
+  applyConfig({
+    t14: {
+      command: "ok"
+    }
+  })
+  return toolCount("t14")
+}
+
+// Startup only stores the config. The first turn connects the stored servers.
+node storedServerConnectsOnTheFirstTurn(): number {
+  useFakePackage()
+  configureMcpServers({
+    t12: {
+      command: "ok"
+    }
+  })
+  return toolCount("t12")
+}
+
+// A stdio server whose start is refused is asked about once, not every turn.
+node refusedServerIsAskedOnce(): number {
+  useFakePackage()
+  configureMcpServers({
+    t13: {
+      command: "ok"
+    }
+  })
+  let asked = 0
+  handle {
+    getMcpTools()
+    getMcpTools()
+  } with (intr) {
+    asked = asked + 1
+    return reject()
+  }
+  return asked
 }

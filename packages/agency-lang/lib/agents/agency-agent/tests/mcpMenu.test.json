@@ -15,7 +15,10 @@
     { "nodeName": "connectsAServerWithNoState", "description": "Connect on a server that was never connected connects it", "input": "", "expectedOutput": "\"✔ t7 connected · 1 tool. You can use them from your next message.\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "failedLoginStartSaysWhy", "description": "a login that cannot start says why and does not wait", "input": "", "expectedOutput": "\"t10: t10 is not an OAuth server\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "failedServerSaysWhy", "description": "a reconnect that fails gives the reason", "input": "", "expectedOutput": "\"t8 failed to connect: spawn missing ENOENT\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "menuDropsARemovedServer", "description": "opening the menu disconnects a server that is no longer in the config, so its tools go away", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "menuDropsARemovedServer", "description": "opening the menu disconnects a server that is no longer in the config, and the next turn does not connect it again", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "menuConnectsAnAddedServer", "description": "a server added to the config since startup connects on the next turn", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "storedServerConnectsOnTheFirstTurn", "description": "startup only stores the config, and the first turn connects the stored servers", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "refusedServerIsAskedOnce", "description": "a stdio server whose start is refused is asked about once, not on every turn", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "toolsSurviveARestore", "description": "no Agency global holds the MCP tools, so a restore keeps the tools of a login made after the checkpoint", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

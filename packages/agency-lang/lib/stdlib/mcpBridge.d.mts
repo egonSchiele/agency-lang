@@ -48,3 +48,6 @@ export function finishLogin(serverName: string): Promise<BridgeServerState>;
 export function cancelLogin(serverName: string): Promise<void>;
 export function logout(serverName: string): Promise<{ status: "loggedOut" } | BridgeFailed>;
 export function disconnectServer(serverName: string): Promise<void>;
+export function configureServers(options: ConfigOption): Promise<void>;
+export function pendingServers(): Promise<Record<string, Record<string, unknown>>>;
+export function markServerFailed(serverName: string, message: string): Promise<void>;

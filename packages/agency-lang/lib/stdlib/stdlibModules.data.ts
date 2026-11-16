@@ -514,6 +514,8 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "loadMcpToolsWithStatus",
     "mcpPackageProblem",
     "connectMcpServers",
+    "configureMcpServers",
+    "connectPendingMcpServers",
     "mcpServerStates",
     "startMcpLogin",
     "finishMcpLogin",

@@ -318,6 +318,31 @@ export async function _disconnectMcpServer(name: string): Promise<void> {
   );
 }
 
+/** Store the server config in the package without connecting anything. */
+export async function _configureMcpServers(merged: RawMcpServers): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.configureServers({ config: merged }),
+  );
+}
+
+/** The configured servers the package has no state for yet. */
+export async function _pendingMcpServers(): Promise<RawMcpServers> {
+  return withPackage(
+    () => ({}),
+    async () => (await mcpBridge.pendingServers()) as RawMcpServers,
+  );
+}
+
+/** Record a server as failed without connecting, so it is not tried again
+ *  until the user reconnects it. */
+export async function _markMcpServerFailed(name: string, message: string): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.markServerFailed(name, message),
+  );
+}
+
 /** Delete the saved login and disconnect. */
 export async function _logoutMcpServer(name: string): Promise<ResultValue> {
   return withPackage(

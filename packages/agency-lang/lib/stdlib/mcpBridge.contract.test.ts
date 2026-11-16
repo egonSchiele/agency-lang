@@ -67,6 +67,14 @@ describe.skipIf(!BUILT)("mcpBridge <-> @agency-lang/mcp contract", () => {
     expect((await bridge.startLogin("no-such-server", { config: {} })).status).toBe("failed");
   });
 
+  it("configureServers stores a config that pendingServers lists", async () => {
+    await bridge.configureServers({ config: { pending: { command: "node" } } });
+    expect(Object.keys(await bridge.pendingServers())).toContain("pending");
+    await bridge.markServerFailed("pending", "not approved");
+    expect(Object.keys(await bridge.pendingServers())).not.toContain("pending");
+    await bridge.disconnectServer("pending");
+  });
+
   it("logout, cancelLogin, and disconnectServer are callable", async () => {
     expect(typeof bridge.logout).toBe("function");
     await bridge.cancelLogin("no-such-server");

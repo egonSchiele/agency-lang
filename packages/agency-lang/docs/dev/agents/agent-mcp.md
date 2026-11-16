@@ -4,6 +4,15 @@
 
 How agency-lang finds the optional `@agency-lang/mcp` package is in `docs/dev/stdlib/mcp-package-loading.md`.
 
+## When servers connect
+
+Starting a stdio server runs its `command`, so it raises `mcp::connect { server, command }` first (see "Starting a stdio server" below). The agent's policy handler answers that question, and the handler only exists once `runSession` installs it. So the agent connects in two steps:
+
+1. **Startup**, before the handler (`maybeLoadMcp` in `main`): read the config and store it in the package with `configureMcpServers`. Nothing connects, and nothing is asked.
+2. **Each turn**, under the handler: `getMcpTools()` first calls `startPendingMcpServers()`, which connects every stored server the package has no record for (`connectPendingMcpServers`), and prints a line for each one that needs a login or failed. After the first turn, nothing is pending, so later turns connect nothing.
+
+The connect cannot be a step after the handler is installed in `main` or `runSession`. A resume restores the checkpoint in `main`, then skips every step that already finished, including the steps inside `runSession`'s `handle` block before the REPL. A turn always runs fresh, in every process, so a resumed session connects on its first turn too. The stored config lives in the package, which a restore does not touch.
+
 ## Where server state lives
 
 The package keeps one connection manager per process (`packages/mcp/src/mcpManager.ts`). It holds one record per server:
@@ -51,6 +60,14 @@ When the server rejects the refresh token, the SDK calls `invalidateCredentials(
 
 A call whose login cannot be refreshed fails with `MCP server "<name>" needs a new login.`, and the record becomes `needsLogin`. The call never opens a browser.
 
+## Starting a stdio server
+
+Every `std::mcp` function that can start a stdio server raises `mcp::connect` first: `connectMcpServers`, `connectPendingMcpServers`, `reconnectMcpServer`, `loadMcpTools`, and `loadMcpToolsWithStatus`. The payload is the server's name and its command line, the command and its args joined by spaces. `@always(server, command)` pins both, so an "always approve" answer never covers a different command under the same name. An HTTP server starts no process and raises nothing.
+
+A server whose start is rejected is not started. `connectMcpServers` records it in the package as failed, with the message `starting it was not approved` (`markServerFailed`). A server with a record is not pending, so the next turn does not ask again. Its menu screen offers "Reconnect", which asks again.
+
+In one-shot mode (`-p`), the policy handler rejects any question its rules do not answer, so a stdio server starts only when the policy approves `mcp::connect` for it.
+
 ## Log out
 
 `logoutMcpServer(name)` raises `mcp::logout` before it deletes the saved login. Every function can be handed to a model as a tool, so deleting a credential needs an interrupt. The user picks "Log out" in the menu and then answers the approval question, so they are asked twice. A policy rule that approves `mcp::logout` skips the second question. The menu does not wrap the call in `with approve`, because the agent's `cliPolicyHandler` asks the user when no rule matches, and every handler is consulted.
@@ -59,7 +76,7 @@ Log out keeps `<server>.client.json`, the registration, so the next login does n
 
 ## The menu
 
-The `/mcp` list shows the servers in the config, which the menu reads each time it opens. A server's status comes from `mcpServerStates()`, matched by name. A server in the config with no record shows as "not connected" and offers "Connect". A record whose server is no longer in the config is not listed. Opening the menu disconnects it (`disconnectRemoved`), so the model stops getting its tools. Until the user opens `/mcp` or restarts, the tools stay, because `getMcpTools()` does not read the config on every turn.
+The `/mcp` list shows the servers in the config, which the menu reads each time it opens. A server's status comes from `mcpServerStates()`, matched by name. When the menu opens, `applyConfig` stores the config as it is now in the package, and disconnects every server that is no longer in it, so the model stops getting its tools. Storing the config also makes a server added since startup pending, and the menu then connects it, asking first for a stdio server. A record whose server is no longer in the config is not listed. Until the user opens `/mcp` or restarts, a removed server's tools stay, because `getMcpTools()` does not read the config on every turn.
 
 The actions for each kind of row are one table, `ACTIONS` in `lib/mcpMenu.agency`, and `runAction` is the one place an action key becomes a call.
 
@@ -69,11 +86,11 @@ The agent needs `@agency-lang/mcp` 0.0.6 or newer. `mcpPackageProblem()` returns
 
 ## Interrupts
 
-- `openUrl` raises `std::openUrl`, and `logoutMcpServer` raises `mcp::logout`. Both are answered by the agent's policy handler like any other interrupt.
+- Starting a stdio server raises `mcp::connect`. `openUrl` raises `std::openUrl`, and `logoutMcpServer` raises `mcp::logout`. The agent's policy handler answers all three like any other interrupt, because every one of them is raised during a turn or a slash command, under `runSession`'s handler. Nothing raises at startup.
 - Each MCP tool call raises `mcp::call`, because `std::mcp` gates every tool it hands out.
 - Starting, finishing, and cancelling a login raise nothing. A login only finishes when a person completes it in their browser.
-- Connecting, reconnecting, and starting a login take the server config as an argument and raise nothing. `docs/dev/security/roadmap.md` lists this as a gap.
-- Nothing here is saved in a checkpoint. Server states live in the package, and handlers are not skipped on any path, since no step here resumes from a checkpoint.
+- After `disconnectServer`, a tool call the model still holds from earlier in the same turn makes the package build a new connection. For a stdio server that starts its command again with no `mcp::connect`. `docs/dev/security/roadmap.md` lists this as A4.
+- Nothing here is saved in a checkpoint. Server states and the stored config live in the package, and handlers are not skipped on any path, since no step here resumes from a checkpoint.
 
 ## Files
 
@@ -84,7 +101,7 @@ The agent needs `@agency-lang/mcp` 0.0.6 or newer. `mcpPackageProblem()` returns
 | `packages/mcp/src/oauthConnector.ts` | Connect, the two-step login, and the fetch that records a rejected refresh token. |
 | `packages/mcp/src/callbackServer.ts` | The local page the browser returns to, its timeout, and cancel. |
 | `packages/mcp/src/mcp.ts` | The 0.0.6 exports. |
-| `lib/stdlib/mcp.ts`, `stdlib/mcp.agency` | The `std::mcp` functions, the gating of tools, the version check, and `mcp::logout`. |
+| `lib/stdlib/mcp.ts`, `stdlib/mcp.agency` | The `std::mcp` functions, the gating of tools, the version check, `mcp::connect`, and `mcp::logout`. |
 | `lib/stdlib/mcpVersion.ts` | The minimum package version. |
 | `lib/agents/agency-agent/lib/mcp.agency` | Startup and `getMcpTools`. |
 | `lib/agents/agency-agent/lib/mcpMenu.agency` | The `/mcp` menu. |

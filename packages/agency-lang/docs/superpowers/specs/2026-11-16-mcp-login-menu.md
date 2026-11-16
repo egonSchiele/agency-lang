@@ -74,9 +74,20 @@ Version 0.0.5 of the package has no way to do what this spec needs:
 
 ## What the user sees
 
-### At startup
+### At startup, and on the first message
 
-The agent connects the servers it can. For each server that needs a login, it prints one line:
+Startup only stores the config. The servers connect when the user sends the first message, under the agent's policy handler. A stdio server asks first, through `mcp::connect`:
+
+```
+Are you sure you want to start this MCP server?
+server: files
+command: npx -y @modelcontextprotocol/server-filesystem /tmp
+❯ approve
+  always approve when server = files, command = npx -y @modelcontextprotocol/server-filesystem /tmp
+  reject
+```
+
+An HTTP server does not ask. For each server that needs a login, the agent prints one line:
 
 ```
 MCP: linear needs you to log in. Type /mcp to log in.
@@ -330,6 +341,12 @@ export type McpServerState = {
 | `cancelMcpLogin(name)` | Stops a login in progress. | `network` |
 | `logoutMcpServer(name)` | Deletes the saved login and disconnects. Raises `mcp::logout`. Returns a `Result`. | `fileWrite, network` |
 | `reconnectMcpServer(merged, name)` | Disconnects and connects again without starting a login. Returns an `McpServerState`. | `fileRead, fileWrite, network, subprocess` |
+| `configureMcpServers(merged)` | Stores the config in the package. Connects nothing. | none |
+| `connectPendingMcpServers()` | Connects every stored server with no state yet. Returns their states. | `fileRead, fileWrite, network, subprocess` |
+| `disconnectMcpServer(name)` | Closes a server's connection and drops its tools. | `network` |
+| `mcpNotInstalled()` | Returns the not-installed message, with the install command. | none |
+
+`connectMcpServers`, `connectPendingMcpServers`, `reconnectMcpServer`, `loadMcpTools`, and `loadMcpToolsWithStatus` raise `mcp::connect` before they start a stdio server.
 
 The plan confirms each tag against `--check-capabilities`.
 
@@ -354,7 +371,7 @@ Logging in needs no new effect. The login only finishes when the user completes 
 
 #### Startup
 
-`maybeLoadMcp` calls `connectMcpServers` in place of `loadMcpToolsWithStatus`, and prints the startup lines shown above. `onMcpOAuth` is deleted. The module's two globals, `mcpTools` and `mcpServerStatus`, are deleted.
+`maybeLoadMcp` stores the config with `configureMcpServers` and connects nothing. It runs before the policy handler exists, and a stdio server's `mcp::connect` needs the handler. `getMcpTools()` runs every turn, under the handler, and first calls `connectPendingMcpServers`, which connects every stored server with no state yet and prints the lines shown above. A turn runs fresh in every process, so a resumed session connects on its first turn too. A step placed after the handler in `main` or `runSession` would be skipped on resume. `onMcpOAuth` is deleted. The module's two globals, `mcpTools` and `mcpServerStatus`, are deleted.
 
 `getMcpTools()` calls `mcpServerStates()` and returns the tools of every connected server. The agent rebuilds its tool list on every turn (`cliTools`, `lib/agents/agency-agent/lib/cliTools.agency:64`). So when the menu changes a server, its tools change on the next message. After `--resume`, the tools come from the new process's connections.
 
@@ -393,7 +410,7 @@ The menu does not wrap these calls in `with approve`. The agent runs every turn 
 - **The model cannot finish a login.** The menu belongs to the agent's harness and is never in the model's tool list. If a program hands `startMcpLogin` to a model, the login still needs a person to finish it in their browser.
 - **Calling MCP tools** still raises `mcp::call` on every call, because the new functions gate tools the same way the old ones do.
 - **No config file is written.** The menu changes only connections and saved logins.
-- **A server config passed as an argument raises no interrupt.** `connectMcpServers`, `reconnectMcpServer`, and `startMcpLogin` take the config as a value. A program that hands one of them to a model lets the model choose the `command` a stdio server runs. `loadMcpToolsWithStatus` already has this shape. This spec adds three more functions with it, and adds the gap to `docs/dev/security/roadmap.md`.
+- **Starting a stdio server raises `mcp::connect`.** Its payload is the server name and the command line, and `@always(server, command)` pins both. Every `std::mcp` function that can start one asks first: `loadMcpTools`, `loadMcpToolsWithStatus`, `connectMcpServers`, `connectPendingMcpServers`, and `reconnectMcpServer`. A program that hands one of them to a model cannot start a command its policy has not approved. A rejected server is recorded as failed, so it is not asked about again until the user picks "Reconnect". One path is left: the package rebuilds a connection inside `callTool` without asking. `docs/dev/security/roadmap.md` lists it as A4.
 
 ## Files
 

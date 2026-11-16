@@ -86,6 +86,24 @@ export async function disconnectServer(name) {
   delete records[name];
 }
 
+export async function configureServers(options) {
+  config = options.config;
+}
+
+export async function pendingServers() {
+  const pending = {};
+  for (const [name, server] of Object.entries(config)) {
+    if (!(name in records)) {
+      pending[name] = server;
+    }
+  }
+  return pending;
+}
+
+export async function markServerFailed(name, message) {
+  records[name] = { status: "failed", message };
+}
+
 export async function mcpRaw() {
   return { success: false, error: "mcpRaw is not part of the fake package" };
 }

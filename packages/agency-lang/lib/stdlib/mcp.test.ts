@@ -17,6 +17,9 @@ vi.mock("./mcpBridge.mjs", () => ({
   cancelLogin: vi.fn(async () => {}),
   logout: vi.fn(),
   disconnectServer: vi.fn(async () => {}),
+  configureServers: vi.fn(async () => {}),
+  pendingServers: vi.fn(async () => ({})),
+  markServerFailed: vi.fn(async () => {}),
 }));
 
 import * as bridge from "./mcpBridge.mjs";
@@ -33,6 +36,9 @@ import {
   _reconnectMcpServer,
   _logoutMcpServer,
   _disconnectMcpServer,
+  _configureMcpServers,
+  _pendingMcpServers,
+  _markMcpServerFailed,
 } from "./mcp.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
@@ -135,6 +141,26 @@ describe("_mcpPackageProblem", () => {
     expect(await _mcpPackageProblem()).toBe(
       "could not read the installed @agency-lang/mcp version. Run: npm install -g @agency-lang/mcp@latest",
     );
+  });
+});
+
+describe("_configureMcpServers, _pendingMcpServers, and _markMcpServerFailed", () => {
+  it("store the config, list the pending servers, and record a refusal", async () => {
+    (bridge.pendingServers as any).mockResolvedValueOnce({ files: { command: "npx" } });
+    await _configureMcpServers({ files: { command: "npx" } } as any);
+    expect(bridge.configureServers).toHaveBeenCalledWith({ config: { files: { command: "npx" } } });
+    expect(await _pendingMcpServers()).toEqual({ files: { command: "npx" } });
+    await _markMcpServerFailed("files", "not approved");
+    expect(bridge.markServerFailed).toHaveBeenCalledWith("files", "not approved");
+  });
+
+  it("list nothing when the package is not installed", async () => {
+    (resolver.isMcpAvailable as any).mockReturnValue(false);
+    try {
+      expect(await _pendingMcpServers()).toEqual({});
+    } finally {
+      (resolver.isMcpAvailable as any).mockReturnValue(true);
+    }
   });
 });
 

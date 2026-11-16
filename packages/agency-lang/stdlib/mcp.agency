@@ -13,8 +13,12 @@ import {
   _disconnectMcpServer,
   _logoutMcpServer,
   _mcpNotInstalled,
-  _reconnectMcpServer
+  _reconnectMcpServer,
+  _configureMcpServers,
+  _pendingMcpServers,
+  _markMcpServerFailed
 } from "agency-lang/stdlib-lib/mcp.js"
+import { keys } from "std::object"
 
 /** @module
   @summary Load MCP tools, report server connection status, and log in to servers.
@@ -28,6 +32,10 @@ import {
   login page with `openUrl` in between. `logoutMcpServer` deletes a saved
   login and raises `mcp::logout`. These functions need `@agency-lang/mcp`
   0.0.6 or newer; `mcpPackageProblem` says when the installed one is older.
+
+  Every function that can start a stdio server's command raises `mcp::connect`
+  with the server's name and command line first. A server that is not
+  approved is not started. HTTP servers start no process and raise nothing.
 
   ```ts
   import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
@@ -54,6 +62,62 @@ effect mcp::call {
   args: Record<string, any>
 }
 
+// Raised before a stdio server's command starts. An HTTP server starts no
+// process, so it raises nothing.
+@always(server, command)
+effect mcp::connect {
+  server: string,
+  command: string
+}
+
+// The message a server gets when starting it was not approved.
+static const NOT_APPROVED = "starting it was not approved"
+
+// The servers whose start was approved, and the names of the ones refused.
+type StartApproval = {
+  approved: Record<string, any>;
+  refused: string[]
+}
+
+// A stdio server's command line, as the approval question shows it.
+def commandLine(config: Record<string, any>): string {
+  let parts: string[] = [config.command]
+  if (config.args != null) {
+    parts = [...parts, ...config.args]
+  }
+  return parts.join(" ")
+}
+
+// Ask before a stdio server's command starts. Succeeds with no question for
+// an HTTP server.
+def approveStart(name: string, config: Record<string, any>): Result raises <mcp::connect> {
+  if (config.command == null) {
+    return success(name)
+  }
+  return interrupt mcp::connect("Are you sure you want to start this MCP server?", {
+    server: name,
+    command: commandLine(config)
+  })
+  return success(name)
+}
+
+// Ask about every stdio server in `merged`, one at a time.
+def approveStarts(merged: Record<string, any>): StartApproval raises <mcp::connect> {
+  let approval: StartApproval = {
+    approved: {},
+    refused: []
+  }
+  for (name in keys(merged)) {
+    const answer = approveStart(name, merged[name])
+    if (isFailure(answer)) {
+      approval.refused.push(name)
+    } else {
+      approval.approved[name] = merged[name]
+    }
+  }
+  return approval
+}
+
 export def isMcpAvailable(): boolean {
   """True when the @agency-lang/mcp package is installed and reachable."""
   return _isMcpAvailable()
@@ -71,20 +135,28 @@ export def mergeMcpServers(global: Record<string, any>, project: Record<string, 
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess)
-export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
-  """Load gated MCP tools for every server in `merged`. Returns [] when the
+export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] raises <mcp::connect> {
+  """Load gated MCP tools for every server in `merged`. Asks before starting
+  each stdio server, and skips one that is not approved. Returns [] when the
   package is absent, incompatible, or no servers are configured."""
-  return _loadMcpTools(merged, onOAuthRequired)
+  const approval = approveStarts(merged)
+  return _loadMcpTools(approval.approved, onOAuthRequired)
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess)
-export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult {
+export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult raises <mcp::connect> {
   """
-  Load MCP tools and report which servers connected.
+  Load MCP tools and report which servers connected. Asks before starting
+  each stdio server. A server that is not approved is "unavailable".
 
   @param merged - Server configurations, such as the output of mergeMcpServers.
   """
-  return _loadMcpToolsWithStatus(merged, onOAuthRequired)
+  const approval = approveStarts(merged)
+  let loaded = _loadMcpToolsWithStatus(approval.approved, onOAuthRequired)
+  for (name in approval.refused) {
+    loaded.status[name] = "unavailable"
+  }
+  return loaded
 }
 
 /** One MCP server's state. `message` is empty unless the status is "failed".
@@ -112,14 +184,49 @@ export def mcpPackageProblem(): string {
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess)
-export def connectMcpServers(merged: Record<string, any>): McpServerState[] {
+export def connectMcpServers(merged: Record<string, any>): McpServerState[] raises <mcp::connect> {
   """
-  Connect every server in `merged` and return each one's state. Never starts
-  a login: a server that needs one comes back with the status "needsLogin".
+  Connect every server in `merged` and return each one's state. Asks before
+  starting each stdio server; one that is not approved is "failed". Never
+  starts a login: a server that needs one comes back as "needsLogin".
 
   @param merged - Server configurations, such as the output of mergeMcpServers.
   """
-  return _connectMcpServers(merged)
+  const approval = approveStarts(merged)
+  let states = _connectMcpServers(approval.approved)
+  for (name in approval.refused) {
+    _markMcpServerFailed(name, NOT_APPROVED)
+    states.push({
+      name: name,
+      status: "failed",
+      message: NOT_APPROVED,
+      tools: []
+    })
+  }
+  return states
+}
+
+export def configureMcpServers(merged: Record<string, any>) {
+  """
+  Store the server configurations without connecting anything.
+  connectPendingMcpServers connects them later.
+
+  @param merged - Server configurations, such as the output of mergeMcpServers.
+  """
+  _configureMcpServers(merged)
+}
+
+@capabilities(fileRead, fileWrite, network, subprocess)
+export def connectPendingMcpServers(): McpServerState[] raises <mcp::connect> {
+  """
+  Connect every stored server that has no state yet, and return their states.
+  Asks before starting each stdio server, the same way connectMcpServers does.
+  """
+  const pending = _pendingMcpServers()
+  if (keys(pending).length == 0) {
+    return []
+  }
+  return connectMcpServers(pending)
 }
 
 export def mcpServerStates(): McpServerState[] {
@@ -197,13 +304,26 @@ export def logoutMcpServer(name: string): Result raises <mcp::logout> {
 }
 
 @capabilities(fileRead, fileWrite, network, subprocess)
-export def reconnectMcpServer(merged: Record<string, any>, name: string): McpServerState {
+export def reconnectMcpServer(merged: Record<string, any>, name: string): McpServerState raises <mcp::connect> {
   """
   Disconnect from an MCP server and connect again with its saved login.
+  Asks before starting a stdio server; one that is not approved is "failed".
   Never starts a login.
 
   @param merged - Server configurations, such as the output of mergeMcpServers.
   @param name - The server's name in the mcpServers config.
   """
+  if (merged[name] != null) {
+    const answer = approveStart(name, merged[name])
+    if (isFailure(answer)) {
+      _markMcpServerFailed(name, NOT_APPROVED)
+      return {
+        name: name,
+        status: "failed",
+        message: NOT_APPROVED,
+        tools: []
+      }
+    }
+  }
   return _reconnectMcpServer(merged, name)
 }

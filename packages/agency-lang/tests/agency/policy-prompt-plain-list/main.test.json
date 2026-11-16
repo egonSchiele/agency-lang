@@ -1,0 +1,54 @@
+{
+  "sourceFile": "main.agency",
+  "tests": [
+    {
+      "nodeName": "plainListIsOneLine",
+      "description": "A list of plain values is printed on one line, each item written as JSON",
+      "input": "",
+      "expectedOutput": "\"\\\"--\\\", \\\"write a.txt, then b.txt\\\", 3, true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "emptyListIsBrackets",
+      "description": "An empty list is printed as []",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "controlCharactersAreEscaped",
+      "description": "A control character in a list item does not reach the terminal",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "listInsideAnObjectHasNoBox",
+      "description": "A plain list inside an object sits on its key's row, with no table of its own",
+      "input": "",
+      "expectedOutput": "\"pass, 1 box\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "emptyFieldsAreWrittenOut",
+      "description": "A null field prints as null and an empty object as {}, not as a blank cell",
+      "input": "",
+      "expectedOutput": "\"1 1\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "noDataHasNoBody",
+      "description": "Null data and an empty object at the top still print nothing",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "listOfObjectsIsStillATable",
+      "description": "A list of objects is still printed as a table",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

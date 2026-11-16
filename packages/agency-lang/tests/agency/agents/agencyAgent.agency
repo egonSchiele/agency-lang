@@ -61,7 +61,8 @@ node defaultBrainAnswers(): string {
 node eachBrainAnswers(): string {
   const minimal = agencyAgent("hello", brain: "minimal") with approve
   const simple = agencyAgent("hello", brain: "simple") with approve
-  return "${textOf(minimal)}|${textOf(simple)}"
+  const spawning = agencyAgent("hello", brain: "spawning") with approve
+  return "${textOf(minimal)}|${textOf(simple)}|${textOf(spawning)}"
 }
 
 node brainCount(): number {

@@ -8,9 +8,12 @@
   ```
 
   It runs the minimal brain: one coder with read, bash, edit, and write. It
-  installs no handler, so every question the agent raises reaches the
+  answers none of the agent's approval questions, so each one reaches the
   program's host. Started with `--wait-for-response`, the program holds each
   one until a person answers it with `agency attach`.
+
+  The one question it answers itself is a budget that ran out. It ends the
+  agent there, with the reply it has so far.
 */
 import { agencyAgent } from "std::agents/agency"
 import { parseArgs } from "std::args"
@@ -38,12 +41,24 @@ node main() {
     return
   }
   print("Task: ${task}")
-  const reply = agencyAgent(
-    task,
-    brain: "minimal",
-    model: args.flags.model,
-    provider: args.flags.provider,
-  )
+  let reply: Result<string> = failure("no reply")
+  handle {
+    reply = agencyAgent(
+      task,
+      brain: "minimal",
+      model: args.flags.model,
+      provider: args.flags.provider,
+    )
+  } with (intr) {
+    // Every other question is left for the person who attaches.
+    if (intr.effect != "std::guard") {
+      return pass()
+    }
+    // A budget ran out. Nobody is watching to grant more, so the agent
+    // stops with its best result.
+    print("The ${intr.data.dimension} budget ran out, so the agent was stopped.")
+    return reject()
+  }
   if (reply is success(text)) {
     print(text)
   } else if (reply is failure(err)) {

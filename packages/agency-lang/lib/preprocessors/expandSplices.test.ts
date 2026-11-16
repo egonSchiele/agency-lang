@@ -119,12 +119,6 @@ describe("expandSplices", () => {
       // Still identity: the setting must not cost a file that has no splices.
       expect(result.value).toBe(program);
     });
-
-    it("off by default: the same program expands normally", () => {
-      writeDeclGenerator();
-      const result = expand(`import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`);
-      expect(result.ok).toBe(true);
-    }, 60_000);
   });
 
   it("replaces a declaration splice with the generator's declarations", () => {
@@ -153,35 +147,10 @@ describe("expandSplices", () => {
     expect(JSON.stringify(result.value)).toContain('"value":"2"');
   }, 60_000);
 
-  it("expands two splices in one file", () => {
-    // A declaration splice spreads N nodes and shifts every index after
-    // it, which is where index-based grafting breaks.
-    writeDeclGenerator();
-    write(
-      "gen2.agency",
-      `import { Code } from "std::agency"\n\nexport def makeBye(): Code {\n  return [|\n    def bye(): string {\n      return "bye"\n    }\n  |]\n}\n`,
-    );
-    const result = expand(
-      `import { makeGreet } from "./gen.agency"\nimport { makeBye } from "./gen2.agency"\n\n$( makeGreet() )\n\n$( makeBye() )\n`,
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const names = result.value.nodes
-      .filter((node) => node.type === "function")
-      .map((node) => (node as { functionName: string }).functionName);
-    expect(names).toContain("greet");
-    expect(names).toContain("bye");
-  }, 60_000);
-
-  it("refuses a program fragment in expression position", () => {
-    writeDeclGenerator();
-    const result = expand(
-      `import { makeGreet } from "./gen.agency"\n\ndef f(): number {\n  return $( makeGreet() )\n}\n`,
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.diagnostic.diagnostic).toBe("spliceFragmentKindMismatch");
-  }, 60_000);
+  // Two splices in one file, a program fragment in expression position, a
+  // generator that is not imported, and a generated export are each
+  // covered end to end by tests/agency/splices (twoSplices,
+  // refuseKindMismatch, refuseNotImported, refuseExport).
 
   it("refuses an argument that names something the host file declares", () => {
     writeExprGenerator();
@@ -208,15 +177,6 @@ describe("expandSplices", () => {
     if (!result.ok) return;
     expect(JSON.stringify(result.value)).toContain('"value":"7"');
   }, 60_000);
-
-  it("refuses a generator that is not imported", () => {
-    const result = expand(
-      `def gen(): number {\n  return 1\n}\n\ndef f(): number {\n  return $( gen() )\n}\n`,
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.diagnostic.diagnostic).toBe("spliceGeneratorNotImported");
-  });
 
   it("leaves a splice inside a code literal alone", () => {
     // The literal's body belongs to the program being generated, so its
@@ -331,20 +291,6 @@ describe("expandSplices", () => {
     if (result.ok) return;
     expect(result.diagnostic.diagnostic).toBe("spliceReferencesOuterName");
     expect(result.diagnostic.params.name).toBe("dep");
-  }, 60_000);
-
-  it("refuses a generated declaration marked export", () => {
-    // Other files learn what a module exports by reading its source, so an
-    // exported generated name would only resolve for callers willing to
-    // run the generator. Tracked as #687.
-    write(
-      "gen.agency",
-      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    export def shared(): string {\n      return "x"\n    }\n  |]\n}\n`,
-    );
-    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.diagnostic.diagnostic).toBe("spliceGeneratedExport");
   }, 60_000);
 
   it("refuses a generated re-export, which carries no exported flag", () => {

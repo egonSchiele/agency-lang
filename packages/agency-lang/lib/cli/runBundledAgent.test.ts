@@ -6,6 +6,22 @@ vi.mock("fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("fs")>();
   return { ...actual, existsSync: () => true };
 });
+// Every launch computes the agent's code identity. The real closure walk
+// parses every file the bundled agent imports, close to a second per launch.
+// Here the closure is the entry file alone; the identity is still hashed and
+// merged into the overrides by the real code.
+vi.mock("@/analysis/closure.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/analysis/closure.js")>();
+  const nodeFs = await vi.importActual<typeof import("fs")>("fs");
+  const nodePath = await vi.importActual<typeof import("path")>("path");
+  return {
+    ...actual,
+    agentClosure: (entryFile: string) => {
+      const entry = nodeFs.realpathSync(nodePath.resolve(entryFile));
+      return { baseDir: nodePath.dirname(entry), files: [entry] };
+    },
+  };
+});
 
 import { CONFIG_OVERRIDES_ENV } from "@/config/config.js";
 import * as os from "os";

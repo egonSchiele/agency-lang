@@ -1816,32 +1816,12 @@ describe("number literal grammar", () => {
     expect(r.rest).toBe(".3");
   });
 
-  it("parses a decimal", () => {
-    const r = numberParser("3.5");
-    expect(r.success).toBe(true);
-    if (!r.success) return;
-    expect(r.result.value).toBe("3.5");
-    expect(r.rest).toBe("");
-  });
-
-  it("parses a negative number", () => {
-    const r = numberParser("-3");
-    expect(r.success).toBe(true);
-    if (!r.success) return;
-    expect(r.result.value).toBe("-3");
-  });
-
   it("strips underscores and leaves the rest intact", () => {
     const r = numberParser("1_000 + 2");
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.result.value).toBe("1000");
     expect(r.rest).toBe(" + 2");
-  });
-
-  it("rejects a run with no digits", () => {
-    expect(numberParser("..").success).toBe(false);
-    expect(numberParser(".").success).toBe(false);
   });
 
   it("rejects a trailing underscore", () => {

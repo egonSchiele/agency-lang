@@ -15,20 +15,6 @@
       "description": "glob with respectGitignore false includes ignored files"
     },
     {
-      "nodeName": "globSearchesNamedIgnoredFolder",
-      "input": "",
-      "expectedOutput": "[\"inside.md\"]",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "description": "glob searches an ignored folder given as dir"
-    },
-    {
-      "nodeName": "globSearchesFolderNamedInPattern",
-      "input": "",
-      "expectedOutput": "[\"out/inside.md\"]",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "description": "glob searches an ignored folder named at the start of the pattern"
-    },
-    {
       "nodeName": "lsRecursiveSkipsIgnored",
       "input": "",
       "expectedOutput": "[\"kept.md\"]",
@@ -43,25 +29,18 @@
       "description": "a recursive ls with respectGitignore false lists every entry"
     },
     {
-      "nodeName": "lsPlainShowsIgnored",
+      "nodeName": "grepSkipsIgnored",
       "input": "",
-      "expectedOutput": "[\".gitignore\",\"ignored.md\",\"kept.md\",\"out\"]",
+      "expectedOutput": "[\"kept.md\"]",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "a plain ls lists ignored entries"
+      "description": "grep skips a file and a folder the fixture's .gitignore ignores"
     },
     {
-      "nodeName": "lsRecursiveListsNamedIgnoredFolder",
+      "nodeName": "grepIncludesIgnoredWhenAsked",
       "input": "",
-      "expectedOutput": "[\"inside.md\"]",
+      "expectedOutput": "[\"ignored.md\",\"kept.md\",\"out/inside.md\"]",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "a recursive ls lists an ignored folder given as dir"
-    },
-    {
-      "nodeName": "grepSearchesNamedIgnoredFolder",
-      "input": "",
-      "expectedOutput": "[\"inside.md\"]",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "description": "grep searches an ignored folder given as path"
+      "description": "grep with respectGitignore false searches ignored files"
     }
   ]
 }

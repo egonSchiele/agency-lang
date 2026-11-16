@@ -138,27 +138,8 @@ foo(a: "hi", extra: "oops")
     ).not.toThrow();
   });
 
-  it("should accept correct named arguments", () => {
-    expect(() =>
-      generateWithBuilder(`
-def greet(name: string, greeting: string = "Hello") {
-  print(name)
-}
-greet(name: "world", greeting: "Hi")
-`),
-    ).not.toThrow();
-  });
-
-  it("should accept reordered named arguments", () => {
-    expect(() =>
-      generateWithBuilder(`
-def greet(name: string, greeting: string = "Hello") {
-  print(name)
-}
-greet(greeting: "Hi", name: "world")
-`),
-    ).not.toThrow();
-  });
+  // Correct, reordered, and block-taking named calls compile and run in
+  // tests/agency/namedArgs, namedArgsReorder, and named-arg-with-trailing-block.
 
   it("should compile with positional after named (validated at runtime)", () => {
     expect(() =>
@@ -178,19 +159,6 @@ def greet(name: string, greeting: string = "Hello") {
   print(name)
 }
 greet(name: "world", name: "other")
-`),
-    ).not.toThrow();
-  });
-
-  it("should accept named args with block parameters", () => {
-    expect(() =>
-      generateWithBuilder(`
-def twice(label: string, block: () => string): string {
-  return block() + block()
-}
-twice(label: "test") as {
-  return "hi"
-}
 `),
     ).not.toThrow();
   });

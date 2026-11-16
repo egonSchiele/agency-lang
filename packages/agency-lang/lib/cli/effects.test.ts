@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
+  effectsCmd,
   renderEffectsList,
   renderSetDetail,
   renderEffectLookup,
@@ -110,5 +111,70 @@ describe("renderUnknownName", () => {
   it("points at the listing when nothing is close", () => {
     const out = renderUnknownName("Zzz", sets, ["minimal"]);
     expect(out).toContain("agency effects");
+  });
+});
+
+/** Run `effectsCmd` with stdout, stderr, and process.exit captured. */
+function runEffectsCmd(name?: string): { stdout: string; stderr: string; exitCode: unknown } {
+  let stdout = "";
+  let stderr = "";
+  const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+    stdout += String(chunk);
+    return true;
+  });
+  const error = vi.spyOn(console, "error").mockImplementation((message) => {
+    stderr += String(message);
+  });
+  const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+  try {
+    effectsCmd(name);
+    return { stdout, stderr, exitCode: exit.mock.calls[0]?.[0] };
+  } finally {
+    write.mockRestore();
+    error.mockRestore();
+    exit.mockRestore();
+  }
+}
+
+describe("effectsCmd", () => {
+  it("lists sets and built-in policies with no name", () => {
+    const { stdout, exitCode } = runEffectsCmd();
+    expect(exitCode).toBeUndefined();
+    expect(stdout).toContain("FileRead");
+    expect(stdout).toContain("Read-only filesystem access");
+    expect(stdout).toContain("Built-in policies:");
+    expect(stdout).toContain("with-writes");
+  });
+
+  it("describes one set with its members", () => {
+    const { stdout, exitCode } = runEffectsCmd("FileRead");
+    expect(exitCode).toBeUndefined();
+    expect(stdout).toContain("std::read");
+    expect(stdout).toContain("std::grep");
+  });
+
+  it("shows a nested set's composition", () => {
+    const { stdout } = runEffectsCmd("FileSystem");
+    expect(stdout).toContain("FileSystem = FileRead + FileWrite");
+  });
+
+  it("reverse-looks-up an effect name", () => {
+    const { stdout, exitCode } = runEffectsCmd("std::write");
+    expect(exitCode).toBeUndefined();
+    expect(stdout).toContain("FileWrite");
+    expect(stdout).toContain("FileSystem");
+  });
+
+  it("prints a built-in policy resolved against the cwd", () => {
+    const { stdout, exitCode } = runEffectsCmd("with-writes");
+    expect(exitCode).toBeUndefined();
+    expect(stdout).toContain('"std::write"');
+    expect(stdout).toContain('"action": "approve"');
+  });
+
+  it("errors on an unknown name with a near-miss hint", () => {
+    const { stderr, exitCode } = runEffectsCmd("FileReed");
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("FileRead");
   });
 });

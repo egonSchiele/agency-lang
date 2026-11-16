@@ -525,7 +525,7 @@ If you change anything in this area, make sure these still hold:
 
 ## Test locations
 
-- Fork basics, multi-interrupt, multi-cycle: `tests/agency/fork/` (top-level files like `fork-multi-interrupt`, `fork-multi-cycle-interrupt`).
+- Fork basics, multi-interrupt, multi-cycle: `tests/agency/fork/` (top-level files like `fork-multi-cycle-interrupt`). Several interrupts surfaced and answered as one batch: `tests/agency-js/fork/fork-parallel-interrupts`.
 - Fork organised by category: `tests/agency/fork/{nested,multi-cycle,control-flow,handlers,llm-tools,race}/`.
 - The deepest fork+tool composition: `tests/agency/fork/fork-llm-tool-nested.test.json` (the regression test for the slice-only capture fix).
 - Multi-tool batching: `tests/agency/fork/llm-tools/multi-tool-{all-interrupt,mixed}.test.json` and `tool-multi-cycle.test.json` in the same directory.

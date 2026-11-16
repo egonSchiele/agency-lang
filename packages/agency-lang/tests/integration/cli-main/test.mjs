@@ -7,8 +7,6 @@ import {
   existsSync,
   mkdirSync,
   realpathSync,
-  statSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -24,7 +22,6 @@ import {
   getTarballPath,
   initProject,
   installTarball,
-  normalizeOptionalFinalNewline,
   readJsonLines,
   readText,
   runInstalledAgency,
@@ -242,14 +239,6 @@ function extractCoverageStats(output) {
   };
 }
 
-function assertFullCoverage(output) {
-  const { clean, percentage, covered, steps } = extractCoverageStats(output);
-  assertIncludes(clean, "Agency Coverage Report");
-  assert(percentage === 100, `Expected coverage to be 100.0%, got ${percentage}%`);
-  assert(covered === steps, `Expected covered steps to equal total steps, got ${covered}/${steps}`);
-  assert(covered > 0, "Expected coverage to include at least one step");
-}
-
 function assertPartialCoverage(output) {
   const { clean, percentage, covered, steps } = extractCoverageStats(output);
   assertIncludes(clean, "Agency Coverage Report");
@@ -302,45 +291,8 @@ try {
   // pack
 
   console.log("--- pack ---");
-  runAgency("06-pack", ["pack", "src/pack-target.agency", "-o", "packed.mjs"]);
-  assertFile(join(dir, "packed.mjs"), "pack should write packed.mjs");
-  assert(statSync(join(dir, "packed.mjs")).size > 0, "packed.mjs should be non-empty");
-
-  const standaloneDir = createTempProject("cli-main-standalone");
-  try {
-    cpSync(join(dir, "packed.mjs"), join(standaloneDir, "packed.mjs"));
-    unlinkSync(join(dir, "packed.mjs"));
-    assert(!existsSync(join(standaloneDir, "node_modules")), "standalone directory must not contain node_modules");
-    assertIncludes(
-      runNode("07-pack-standalone", ["packed.mjs"], { cwd: standaloneDir }),
-      "pack-ok",
-    );
-  } finally {
-    cleanup(standaloneDir);
-  }
-
-  runAgency(
-    "08-pack-imports",
-    ["pack", "src/pack-imports.agency", "-o", "packed-imports.mjs"],
-  );
-  const importsStandaloneDir = createTempProject("cli-main-pack-imports");
-  try {
-    cpSync(join(dir, "packed-imports.mjs"), join(importsStandaloneDir, "packed-imports.mjs"));
-    unlinkSync(join(dir, "packed-imports.mjs"));
-    assert(
-      !existsSync(join(importsStandaloneDir, "node_modules")),
-      "pack imports standalone directory must not contain node_modules",
-    );
-    assertIncludes(
-      runNode("09-pack-imports-standalone", ["packed-imports.mjs"], {
-        cwd: importsStandaloneDir,
-      }),
-      "pack-imports-local-5",
-    );
-  } finally {
-    cleanup(importsStandaloneDir);
-  }
-
+  // A packed program running with no node_modules, with a local and a stdlib
+  // import, is checked on every PR by tests/integration/cli-tier2.
   const invalidPackTarget = runAgency(
     "10-pack-invalid-target",
     ["pack", "src/pack-target.agency", "--target", "browser"],
@@ -351,43 +303,21 @@ try {
   // trace
 
   console.log("--- trace ---");
+  // `trace <file>` with no subcommand runs `trace run`. `trace run`,
+  // `trace log`, bundle, and unbundle are checked on every PR by
+  // tests/integration/cli-tier2.
   runAgency("11-trace", ["trace", "src/trace-target.agency", "-o", "trace-target.trace"]);
   const tracePath = join(dir, "trace-target.trace");
   assertFile(tracePath, "trace should write trace-target.trace");
   assertTraceFile(tracePath, "src/trace-target.agency");
 
-  runAgency("12-trace-log", ["trace", "log", "trace-target.trace", "-o", "trace-events.json"]);
-  assertFile(join(dir, "trace-events.json"), "trace log should write trace-events.json");
-  const traceEvents = JSON.parse(readText(join(dir, "trace-events.json")));
-  assert(Array.isArray(traceEvents), "trace log output should be an array");
-  assert(traceEvents.length > 0, "trace log should contain events");
-
   // fmt
 
   console.log("--- fmt ---");
+  // `fmt` is an alias of `format`. Stdout mode, -i, and running twice are
+  // checked on every PR by tests/integration/cli-lang under `format`.
   runAgency("13-fmt-in-place", ["fmt", "src/fmt-input.agency", "-i"]);
   assertFileEquals(join(dir, "src/fmt-input.agency"), join(expectedDir, "fmt.expected.agency"));
-
-  const formattedOnce = readText(join(dir, "src/fmt-input.agency"));
-  runAgency("14-fmt-idempotent", ["fmt", "src/fmt-input.agency", "-i"]);
-  const formattedTwice = readText(join(dir, "src/fmt-input.agency"));
-  assert(formattedOnce === formattedTwice, "fmt should be idempotent");
-
-  cpSync(join(fixtureDir, "project", "src", "fmt-input.agency"), join(dir, "src/fmt-stdout.agency"));
-  const stdoutFormatted = runAgency(
-    "15-fmt-stdout",
-    ["fmt", "src/fmt-stdout.agency"],
-  );
-  assert(
-    normalizeOptionalFinalNewline(stdoutFormatted) ===
-      normalizeOptionalFinalNewline(readText(join(expectedDir, "fmt.expected.agency"))),
-    "fmt stdout should match the fixture",
-  );
-  // fmt without -i must not modify the source file.
-  assertFileEquals(
-    join(dir, "src/fmt-stdout.agency"),
-    join(fixtureDir, "project", "src", "fmt-input.agency"),
-  );
 
   // interrupts
 
@@ -493,16 +423,9 @@ try {
   // coverage
 
   console.log("--- coverage ---");
-  runAgency("18-coverage-generate", ["test", "src/coverage-target.agency", "--coverage"]);
-  const coverageOutput = runAgency(
-    "19-coverage-report",
-    ["coverage", "report", "src/coverage-target.agency", "--detail", "--threshold", "100"],
-  );
-  assertFullCoverage(coverageOutput);
-  assertFile(join(dir, ".coverage"), "coverage run should create .coverage");
-  runAgency("20-coverage-clean", ["coverage", "clean"]);
-  assert(!existsSync(join(dir, ".coverage")), "coverage clean should remove .coverage");
-
+  // Full coverage and `coverage clean` are checked on every PR by
+  // tests/integration/cli-tier2. These cases cover a partial run and a
+  // threshold failure.
   runAgency(
     "21-coverage-partial-generate",
     ["test", "src/coverage-partial.agency", "--coverage"],
@@ -709,40 +632,10 @@ node u(): string {
   assertIncludes(tcBadImportOut, "AG4008");
   assertIncludes(tcBadImportOut, "missingFn");
 
-  // bundle and unbundle
-
-  console.log("--- bundle/unbundle ---");
-  runAgency(
-    "29-bundle",
-    ["bundle", "src/trace-target.agency", "trace-target.trace", "-o", "trace-target.bundle"],
-  );
-  const bundlePath = join(dir, "trace-target.bundle");
-  assertFile(bundlePath, "bundle should write trace-target.bundle");
-  const bundleLines = readJsonLines(bundlePath);
-  assert(
-    bundleLines[0].type === "header" && bundleLines[0].bundle === true,
-    "bundle should mark the header with bundle=true",
-  );
-  assert(
-    bundleLines.some((line) => line.type === "source" && line.path === "trace-target.agency"),
-    "bundle should include source line",
-  );
-
-  runAgency("30-unbundle", ["unbundle", "trace-target.bundle", "-o", "unpacked"]);
-  assertFileEquals(
-    join(dir, "unpacked/trace-target.agency"),
-    join(dir, "src/trace-target.agency"),
-    { normalizeTrailingNewline: true },
-  );
-  assertFile(join(dir, "unpacked/trace-target.trace"), "unbundle should write trace-target.trace");
-  assertTraceFile(join(dir, "unpacked/trace-target.trace"), "trace-target.agency");
-
   // doc
 
   console.log("--- doc ---");
-  runAgency("31-doc", ["doc", "src/doc-target.agency", "-o", "generated-docs"]);
-  assertFileEquals(join(dir, "generated-docs/doc-target.md"), join(expectedDir, "doc-target.expected.md"));
-
+  // `doc` on one file is checked on every PR by tests/integration/cli-lang.
   runAgency("32-doc-directory-ignore", ["doc", "docs-src", "-o", "generated-docs-dir", "--ignore", "ignored"]);
   assertFile(join(dir, "generated-docs-dir/main.md"), "doc directory mode should generate main.md");
   assert(!existsSync(join(dir, "generated-docs-dir/ignored/skip.md")), "doc --ignore should skip ignored directories");

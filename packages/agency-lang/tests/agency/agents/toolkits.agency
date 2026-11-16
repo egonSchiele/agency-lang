@@ -71,7 +71,7 @@ def agentToolLists(): any[] {
 // safeBash, and `readSpill` each take one.
 static const PATH_READERS = ["read", "bash", "safeBash", "readSpill"]
 
-node everyAgentCanReadSavedOutput(): boolean {
+def everyAgentCanReadSavedOutput(): boolean {
   for (tools in agentToolLists()) {
     const names = map(tools, \tool -> tool.name)
     const readers = filter(names, \name -> PATH_READERS.includes(name))
@@ -85,13 +85,13 @@ node everyAgentCanReadSavedOutput(): boolean {
   return true
 }
 
-node everyBundleHasTools(): boolean {
+def everyBundleHasTools(): boolean {
   return every(allBundles(), \bundle -> bundle.length > 0)
 }
 
 // Membership, not arity: an arity check passes if someone drops grep and
 // adds two unrelated tools, which is exactly the drift this asserts against.
-node writableIsASupersetOfReadOnly(): boolean {
+def writableIsASupersetOfReadOnly(): boolean {
   const writableNames = map(writableFileTools(), \tool -> tool.name)
   const coversReadOnly = every(readOnlyFileTools(), \tool -> writableNames.includes(tool.name))
   return coversReadOnly && writableFileTools().length == readOnlyFileTools().length + 2
@@ -103,7 +103,7 @@ node writableIsASupersetOfReadOnly(): boolean {
 // test edit, not slip through a not-on-the-blocklist gap. The full git
 // bundle must also cover every read-only tool so the lists cannot
 // drift apart.
-node readOnlyGitIsTheReadHalfOfGitTools(): boolean {
+def readOnlyGitIsTheReadHalfOfGitTools(): boolean {
   const expected = [
     "gitIsRepo", "gitStatus", "gitLog", "gitDiff", "gitShow",
     "gitBranchList", "gitRemoteList", "gitBlame", "gitStashList",
@@ -150,7 +150,7 @@ def isBoundTrue(tool: any, name: string): boolean {
 // working directory. This is invisible in CI otherwise, because tests run
 // from the repo root where the two usually coincide: it shows up only as an
 // agent reading or writing outside the directory it was pointed at.
-node fileAndShellToolsAreCwdBound(): boolean {
+def fileAndShellToolsAreCwdBound(): boolean {
   // safeBash is exempt: it has no useAgentCwd parameter — its empty cwd
   // default already resolves to the agent working directory (resolveCwd in
   // std::safeBash), so there is nothing to bind. readSpill and grepSpill
@@ -165,7 +165,7 @@ node fileAndShellToolsAreCwdBound(): boolean {
 
 // The coding bundle is four tools. `bash` does the listing, searching, and
 // running, so there is no ls, glob, grep, or exec.
-node codingBundleIsFourTools(): string[] {
+def codingBundleIsFourTools(): string[] {
   return map(codingFileAndShellTools(), \tool -> tool.name)
 }
 
@@ -173,13 +173,13 @@ node codingBundleIsFourTools(): string[] {
 // three Wikipedia tools that webTools() adds.
 // Search tools are left out of the comparison: which one is offered
 // depends on the API keys in the environment.
-node codingAgentToolNames(): string[] {
+def codingAgentToolNames(): string[] {
   const names = map(codingTools(), \tool -> "${tool.name}")
   return filter(names, \name -> !name.startsWith("web_search"))
 }
 
 // The model cannot include ignored files by passing respectGitignore: false.
-node searchToolsRespectGitignore(): boolean {
+def searchToolsRespectGitignore(): boolean {
   const searchToolNames = ["ls", "glob", "grep"]
   const searchers = filter(readOnlyFileTools(), \tool -> searchToolNames.includes(tool.name))
   const allPresent = searchers.length == searchToolNames.length
@@ -189,7 +189,7 @@ node searchToolsRespectGitignore(): boolean {
 // Providers reject two tools with the same name, and .partial() preserves the
 // base name, so a bundle can collide with itself. This is the check that
 // catches it before a provider does.
-node noBundleHasDuplicateNames(): boolean {
+def noBundleHasDuplicateNames(): boolean {
   for (bundle in allBundles()) {
     const names = map(bundle, \tool -> tool.name)
     if (unique(names, \name -> name).length != names.length) {
@@ -200,7 +200,7 @@ node noBundleHasDuplicateNames(): boolean {
 }
 
 // An agent whose draft nobody reads offers no saveDraft.
-node draftToolsFollowOffer(): boolean {
+def draftToolsFollowOffer(): boolean {
   const offered = map(draftTools(true), \tool -> tool.name)
   const offeredOne = offered.length == 1 && offered[0] == "saveDraft"
   return offeredOne && draftTools(false).length == 0
@@ -208,14 +208,14 @@ node draftToolsFollowOffer(): boolean {
 
 // The wikipedia tools must not advertise a bare `search`, which collides with
 // the web-search providers in std::agents/lib/search.
-node wikipediaToolsAreRenamed(): boolean {
+def wikipediaToolsAreRenamed(): boolean {
   const names = map(webTools(), \tool -> tool.name)
   return names.includes("wikipedia_search") && !names.includes("search")
 }
 
 // The docs tools carry stable names rather than ones derived from the
 // absolute install path, which differs per machine.
-node docsToolsHaveStableNames(): boolean {
+def docsToolsHaveStableNames(): boolean {
   const names = map(agencyDocTools(), \tool -> tool.name)
   return names.includes("agencyGuide") && names.includes("agencyDiagnostics")
 }
@@ -223,7 +223,7 @@ node docsToolsHaveStableNames(): boolean {
 // The researcher gets one fetch tool, so one policy rule covers every
 // fetch it makes. Three fetch tools with three effects is how trace
 // wX5GvrUq spent 26 minutes on approval prompts (ADI-44).
-node webToolsHaveOneFetch(): boolean {
+def webToolsHaveOneFetch(): boolean {
   const names = map(webTools(), \tool -> tool.name)
   const fetches = filter(names, \name -> name == "fetch" || name == "fetchJSON" || name == "fetchMarkdown")
   return fetches.length == 1 && fetches[0] == "fetchMarkdown"
@@ -251,7 +251,7 @@ def namesQuestion(tools: any[]): boolean {
 }
 
 // No stdlib agent offers the `question` tool.
-node noAgentOffersQuestion(): string {
+def noAgentOffersQuestion(): string {
   const agents = [
     { name: "coding", tools: codingTools() },
     { name: "github", tools: githubTools() },
@@ -275,10 +275,33 @@ node noAgentOffersQuestion(): string {
 // The recommended policy approves the researcher's fetch tool for a read
 // of a public https page, and leaves a request that sends a body, a plain
 // http request, and a host on this machine or its network to the prompt.
-node recommendedApprovesTheResearcherFetch(): string {
+def recommendedApprovesTheResearcherFetch(): string {
   const approved = fetchDecision("GET", "https", "public")
   const sendsABody = fetchDecision("POST", "https", "public")
   const plainHttp = fetchDecision("GET", "http", "public")
   const local = fetchDecision("GET", "https", "local")
   return "${approved} ${sendsABody} ${plainHttp} ${local}"
+}
+
+// Each test case runs in its own process, and loading these agents takes
+// over ten seconds, so every check runs in this one case. A failing check
+// shows up as its key in the diff.
+node main() {
+  return {
+    webToolsHaveOneFetch: webToolsHaveOneFetch(),
+    recommendedApprovesTheResearcherFetch: recommendedApprovesTheResearcherFetch(),
+    everyAgentCanReadSavedOutput: everyAgentCanReadSavedOutput(),
+    everyBundleHasTools: everyBundleHasTools(),
+    writableIsASupersetOfReadOnly: writableIsASupersetOfReadOnly(),
+    readOnlyGitIsTheReadHalfOfGitTools: readOnlyGitIsTheReadHalfOfGitTools(),
+    noBundleHasDuplicateNames: noBundleHasDuplicateNames(),
+    draftToolsFollowOffer: draftToolsFollowOffer(),
+    wikipediaToolsAreRenamed: wikipediaToolsAreRenamed(),
+    docsToolsHaveStableNames: docsToolsHaveStableNames(),
+    fileAndShellToolsAreCwdBound: fileAndShellToolsAreCwdBound(),
+    codingBundleIsFourTools: codingBundleIsFourTools(),
+    codingAgentToolNames: codingAgentToolNames(),
+    noAgentOffersQuestion: noAgentOffersQuestion(),
+    searchToolsRespectGitignore: searchToolsRespectGitignore()
+  }
 }

@@ -319,9 +319,17 @@ describe("projectClient.getSpend", () => {
       url: "",
       text: vi.fn().mockResolvedValue("<html>bad</html>"),
     } as unknown as Response);
-    await expect(client().getSpend({ from: null, to: null })).rejects.toThrow(
-      "statelog request failed (HTTP 503)",
-    );
+    // A 503 is retried after real waits of 0.5 s, 2 s, and 8 s.
+    vi.useFakeTimers();
+    try {
+      const pending = expect(client().getSpend({ from: null, to: null })).rejects.toThrow(
+        "statelog request failed (HTTP 503)",
+      );
+      await vi.runAllTimersAsync();
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

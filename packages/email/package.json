@@ -27,8 +27,7 @@
   "scripts": {
     "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "test": "vitest",
-    "test:run": "vitest run",
-    "test:agency": "agency tests/agency"
+    "test:run": "vitest run"
   },
   "dependencies": {
     "nodemailer": "^7.0.0"

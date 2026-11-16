@@ -132,23 +132,18 @@ describe("rebuilding a file with a splice", () => {
     expect(expand()).toContain("get_phone");
   }, 60_000);
 
-  it("does not re-run the generator when nothing changed", () => {
+  it("does not re-run the generator when nothing changed, and gives the same output warm as cold", () => {
     // The point of the cache. The LSP rebuilds on every keystroke, so a
     // second expansion of unchanged input must cost nothing.
     const hostPath = write("host.agency", HOST);
     writeGenerator(`"steady"`);
 
-    expandAndRead(hostPath);
+    const cold = expandAndRead(hostPath);
     expect(spy.runs).toBe(1);
 
-    expandAndRead(hostPath);
+    const warm = expandAndRead(hostPath);
     expandAndRead(hostPath);
     expect(spy.runs).toBe(1);
-  }, 60_000);
-
-  it("produces the same output warm as cold", () => {
-    const hostPath = write("host.agency", HOST);
-    writeGenerator(`"same"`);
-    expect(expandAndRead(hostPath)).toBe(expandAndRead(hostPath));
+    expect(warm).toBe(cold);
   }, 60_000);
 });

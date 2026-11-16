@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import path from "#path";
 import { globalNodeModulesRoots } from "../runtime/localProvider.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
@@ -24,8 +24,25 @@ export function resolveMcpEntry(): string | null {
   if (override) {
     return override;
   }
-  const localDirs = createRequire(import.meta.url).resolve.paths(PKG) ?? [];
+  const localDirs = ancestorNodeModules(path.dirname(fileURLToPath(import.meta.url)));
   return firstEntry(localDirs) ?? firstEntry(globalNodeModulesRoots());
+}
+
+/** The node_modules directories `import()` searches for a bare name: one in
+ *  `fromDir` and one in each directory above it. Not `require.resolve.paths`,
+ *  which adds NODE_PATH; `import()` ignores NODE_PATH, and pnpm sets it to its
+ *  hidden node_modules/.pnpm/node_modules when it runs a script. */
+function ancestorNodeModules(fromDir: string): string[] {
+  const dirs: string[] = [];
+  let dir = fromDir;
+  while (true) {
+    dirs.push(path.join(dir, "node_modules"));
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return dirs;
+    }
+    dir = parent;
+  }
 }
 
 export function isMcpAvailable(): boolean {

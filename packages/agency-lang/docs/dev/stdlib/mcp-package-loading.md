@@ -13,7 +13,7 @@ Three files are involved:
 The resolver looks in three places, in this order:
 
 1. `AGENCY_MCP_PATH`, when it is already set. Tests use this, and so does an install in a place the search below does not reach.
-2. The `node_modules` directories Node would search from agency-lang itself, which covers a project install.
+2. The `node_modules` directories `import()` would search from agency-lang itself: one in the resolver's own directory and one in each directory above it. This covers a project install. It leaves out `NODE_PATH`, because `import()` ignores it. pnpm sets `NODE_PATH` to its hidden `node_modules/.pnpm/node_modules` when it runs a script, and in this repo that folder holds the workspace's copy of the package.
 3. Each global `node_modules` directory that `npm root -g` and `pnpm root -g` print.
 
 In each directory it reads `@agency-lang/mcp/package.json` and works out which file `import()` would load.

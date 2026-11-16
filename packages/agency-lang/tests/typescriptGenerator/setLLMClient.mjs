@@ -1,6 +1,6 @@
 import { SimpleOpenAIClient } from "agency-lang/runtime";
 import { z } from "agency-lang/zod";
-import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides, CheckpointEdit, StopAt } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides, CheckpointEdit, StopAt, RunNodeResult } from "agency-lang/runtime";
 import {
   goToNode, color, nanoid, smoltalk,
   RuntimeContext, MessageThread, ThreadStore, Runner,

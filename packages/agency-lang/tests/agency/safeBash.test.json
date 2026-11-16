@@ -206,9 +206,9 @@
     },
     {
       "nodeName": "removeAfterCd",
-      "description": "An rm is checked from the folder a cd earlier in the line moved to. `cd .. && rm -rf <launch folder>` gets no std::remove and asks std::bash, and the reason says the target is refused. A folder inside the launch folder, reached through a cd, still asks std::remove. Every row only plans.",
+      "description": "An rm is checked from the folder a cd earlier in the line moved to, whether the cd is on the left of && or on a line of its own. `cd .. && rm -rf <launch folder>` gets no std::remove and asks std::bash, and the reason says the target is refused. A folder inside the launch folder, reached through a cd, still asks std::remove. Every row only plans.",
       "input": "",
-      "expectedOutput": "[\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"]]",
+      "expectedOutput": "[\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"],\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1082,10 +1082,32 @@
       ]
     },
     {
-      "nodeName": "cdAnywhereElseIsBroad",
-      "description": "cd alone, before ; or ||, last in a chain, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, followed by a second cd, or on the right of || asks std::bash.",
+      "nodeName": "cdOnItsOwnLineMovesTheRest",
+      "description": "A cd alone before ; or a newline moves every command after it: a listing, a listing and a read, a second cd that moves on from the first, and a cd after a command. Each rebuilt command runs behind the resolved cd and &&.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]],true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdOnItsOwnLineStaysStrict",
+      "description": "A cd on its own line to a missing folder, with -, or with a variable asks std::bash, and so does a later command that moves again and is not last.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdAnywhereElseIsBroad",
+      "description": "cd alone, before ||, last in a chain, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, followed by a second cd, or on the right of || asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

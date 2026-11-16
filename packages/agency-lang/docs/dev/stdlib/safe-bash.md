@@ -1610,11 +1610,35 @@ This asks one `std::exec` whose `cwd` is the real `packages/agency-lang`.
 The `cd` raises nothing. Every path and every payload to its right is
 resolved against the new directory.
 
-The rule holds only for `&&`. When the `cd` fails, bash runs nothing to
-its right, so the commands there only ever run in the new directory, and
-a payload that names it is true. After `;` or `||` the next command runs
+The rule rests on `&&`. When the `cd` fails, bash runs nothing to its
+right, so the commands there only ever run in the new directory, and a
+payload that names it is true. After `;` or `||` the next command runs
 whether or not the `cd` worked, in a directory that depends on which, so
 no payload for it would be true in both cases.
+
+A `cd` alone before `;` or a newline is turned into the `&&` form. Models
+often write a line like this:
+
+```
+cd /Users/me/proj/packages/agency-lang
+sed -n 480,560p lib/importPaths.ts
+grep -n findPkgDir lib/importPaths.ts
+```
+
+`classifyAll` puts a copy of the `cd` in front of every command after it,
+and that is the text that runs:
+
+```
+cd '/Users/me/proj/packages/agency-lang' && sed -n 480,560p lib/importPaths.ts; cd '/Users/me/proj/packages/agency-lang' && grep -n findPkgDir lib/importPaths.ts
+```
+
+Each command runs in the new directory or not at all. Bash would run them
+in the old directory after a `cd` that failed, so this is stricter than
+the line as written. The copy names the absolute directory, so it moves to
+the same place whether or not the shell is already there. A second `cd`
+alone on a later line is resolved from the first and replaces it as the
+copy. The `rm` check that runs from the moved folder (see "rm and rmdir")
+sees the same folder, because the commands are classified there.
 
 `classifyAll` walks the command tree and carries the working directory
 with it. The refuse wall still reads the flat list from
@@ -1630,15 +1654,18 @@ with it. The refuse wall still reads the flat list from
 - **parentheses and pipeline stages**: each is a subshell, so the
   directory after one is the directory before it. `(cd x && a) && b`
   classifies `b` in the original directory.
-- **the top-level list**: a command that ends in another directory must
-  be the last one, so `cd x && a; b` is broad and `a; cd x && b` is not.
+- **the top-level list**: a `cd` alone that is not last moves every
+  command after it, as above. Any other command that ends in another
+  directory must be the last one, so `cd x && a; b` is broad and
+  `a; cd x && b` is not.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
 exists. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
 an assignment is unrecognized. A `cd` in any other position is a simple
 command like any other, and `execEffects` refuses it as a builtin. That
-covers `cd x` alone, a `cd` on the right of `&&`, and `cd x && cd y && a`,
-where the second `cd` is the right side of the inner `&&`.
+covers `cd x` alone as the whole line or its last command, a `cd` on the
+right of `&&`, and `cd x && cd y && a`, where the second `cd` is the right
+side of the inner `&&`.
 
 The rebuilt text does not keep the word the model wrote. Each recognized
 `cd` is rebuilt with the directory `cdTarget` resolved, as an absolute

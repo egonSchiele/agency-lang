@@ -4198,6 +4198,18 @@ type ClassifiedAll = {
 // Classify the whole string. This walks the command tree, where the refuse
 // wall reads the flat list, because a `cd` on the left of `&&` moves the
 // working directory for the commands to its right.
+//
+// A `cd` alone before `;` or a newline moves every command after it. After
+// a `cd` that failed, bash would run those commands in the old directory,
+// so each one is run behind a copy of the `cd`:
+//
+//   cd x            cd '/abs/x' && a
+//   a          =>   cd '/abs/x' && b
+//   b
+//
+// Each command then runs in `x` or not at all, as it does after `cd x &&`.
+// The copy names the absolute directory, so it moves to the same place
+// from wherever the shell is.
 @capabilities(fileRead)
 def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result<ClassifiedAll> {
   """
@@ -4205,15 +4217,31 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
+  // The directory the next command starts in, and the `cd` that moved
+  // there, which each later command runs behind.
+  let dir = cwd
+  let carried: SimpleCommand | null = null
   for (command, index in commands) {
-    const classified = classify(command, cwd, origin, false)?
+    const last = index == commands.length - 1
+    const cd = asCd(command)
+    if (cd != null && !last) {
+      const moved = cdTarget(cd, dir)?
+      carried = cdTo(cd, moved)
+      dir = moved
+      continue
+    }
+    const classified = classify(command, dir, origin, false)?
     // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
     // payload for `b` would be true in both cases.
-    if (classified.cwd != cwd && index < commands.length - 1) {
+    if (classified.cwd != dir && !last) {
       return failure("a command after `;` follows a `cd`, and its directory depends on whether the `cd` worked")
     }
     effects = [...effects, ...classified.effects]
-    rewritten.push(classified.command)
+    if (carried == null) {
+      rewritten.push(classified.command)
+    } else {
+      rewritten.push({ tag: "and", left: carried, right: classified.command })
+    }
   }
   return success({ effects: effects, commands: rewritten })
 }

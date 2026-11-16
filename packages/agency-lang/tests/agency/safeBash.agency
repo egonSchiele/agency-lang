@@ -356,17 +356,28 @@ node removeAfterCd() {
   const folder = parts[parts.length - 1]
   const out = planFor("cd .. && rm -rf ${folder}", launch)
   const inside = planFor("cd tests && rm -rf no-such-folder-xyz", launch)
-  let saysWhy = false
-  if (out.broadReason != null) {
-    saysWhy = out.broadReason.detail.includes("refused from this folder")
-  }
+  // The same two lines with the `cd` on a line of its own.
+  const outOnItsOwnLine = planFor("cd ..\nrm -rf ${folder}", launch)
+  const insideOnItsOwnLine = planFor("cd tests\nrm -rf no-such-folder-xyz", launch)
   return [
     outcomeOf(out),
     [e.name for e in out.effects],
-    saysWhy,
+    saysRefused(out),
     outcomeOf(inside),
     [e.name for e in inside.effects],
+    outcomeOf(outOnItsOwnLine),
+    [e.name for e in outOnItsOwnLine.effects],
+    saysRefused(outOnItsOwnLine),
+    outcomeOf(insideOnItsOwnLine),
+    [e.name for e in insideOnItsOwnLine.effects],
   ]
+}
+
+def saysRefused(plan: any): boolean {
+  if (plan.broadReason == null) {
+    return false
+  }
+  return plan.broadReason.detail.includes("refused from this folder")
 }
 
 // The handler records the question and rejects it, so nothing is deleted.
@@ -1506,10 +1517,48 @@ def rebuiltCdNamesTheResolvedFolder(source: string): boolean {
   return command.startsWith("cd '/") && command.endsWith("/stdlib/grep-fixtures' && ls")
 }
 
+// A `cd` alone before `;` or a newline moves every command after it, and
+// each of those runs behind a copy of the `cd`, so it runs in the new
+// folder or not at all. A second `cd` on its own line moves on from the
+// first.
+node cdOnItsOwnLineMovesTheRest() {
+  return [
+    cdSummary("cd grep-fixtures; ls"),
+    cdSummary("cd grep-fixtures\nls\ncat one.txt"),
+    cdSummary("cd grep-fixtures\ncd ../read-fixtures\nls"),
+    cdSummary("ls\ncd grep-fixtures\nls"),
+    rebuiltCdRunsBeforeEachCommand("cd grep-fixtures\nls\ncat one.txt"),
+  ]
+}
+
+// Each rebuilt command starts with the resolved `cd` and `&&`. The path
+// differs by machine, so check the pieces around it.
+def rebuiltCdRunsBeforeEachCommand(source: string): boolean {
+  const command: string = executionCommandIn(source, STDLIB_TESTS)
+  const parts = command.split("; ")
+  if (parts.length != 2) {
+    return false
+  }
+  const cdFirst = parts[0].startsWith("cd '/") && parts[1].startsWith("cd '/")
+  const listsThere = parts[0].endsWith("/stdlib/grep-fixtures' && ls")
+  const readsThere = parts[1].endsWith("/stdlib/grep-fixtures' && cat one.txt")
+  return cdFirst && listsThere && readsThere
+}
+
+// A `cd` on its own line still has to name one folder that exists, and a
+// command after it that moves again is still broad unless it comes last.
+node cdOnItsOwnLineStaysStrict() {
+  return [
+    cdSummary("cd missing\nls"),
+    cdSummary("cd -\nls"),
+    cdSummary("cd $HOME\nls"),
+    cdSummary("cd grep-fixtures\ncd ../read-fixtures && ls\nls"),
+  ]
+}
+
 node cdAnywhereElseIsBroad() {
   return [
     cdSummary("cd grep-fixtures"),
-    cdSummary("cd grep-fixtures; ls"),
     cdSummary("cd grep-fixtures || ls"),
     cdSummary("ls && cd grep-fixtures"),
     cdSummary("cd grep-fixtures | ls"),

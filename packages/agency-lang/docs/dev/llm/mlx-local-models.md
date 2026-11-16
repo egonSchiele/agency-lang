@@ -101,8 +101,8 @@ Agency reads three shapes of downloaded model, all through
 
 | layout | where | written by |
 |---|---|---|
-| `gguf` | `<modelsDir>/*.gguf` | `agency local download` |
-| `agency` | `<modelsDir>/mlx/<org>--<repo>/` with `.agency-model.json` | `agency local download` |
+| `gguf` | `<modelsDir>/*.gguf` | `agency local download`, before GGUF models had folders |
+| `agency` | `<modelsDir>/gguf/<name>/`, `<modelsDir>/mlx/<org>--<repo>/`, or `<modelsDir>/diffusers/<org>--<repo>/`, with `.agency-model.json` | `agency local download` |
 | `hub` | `<modelsDir>/models--<org>--<repo>/snapshots/<sha>/`, and the same under `<modelsDir>/hub/` | anything that uses the Hub cache |
 
 `hubSnapshotDir` in `lib/stdlib/modelBackend.ts` turns a cache folder into the

@@ -1,5 +1,6 @@
 import type { Backend } from "./modelBackend.js";
 import type { ModelKind } from "./modelKind.js";
+import { isInGgufModelDir } from "./ggufModelDir.js";
 
 /** The built-in model catalog: every entry `agency local list` shows
  *  without a download, with its backend, size, and license. */
@@ -354,7 +355,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
-  // The entries below are split across several files, so they carry no
+  // The next four entries are split across several files, so they carry no
   // sha256 (see `sha256` above).
   "qwen3.8-flash-next": {
     backend: "llama-cpp",
@@ -991,10 +992,9 @@ export function localSamplingFor(model: string): Sampling | undefined {
 
 /** Whether a catalog URI is the model a local call names. An `mlx:` URI
  *  names the repo the server serves, with any pinned revision dropped. An
- *  `hf:` URI names a GGUF file that node-llama-cpp saves as
- *  `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. A model split across
- *  several files is loaded by its first part, which node-llama-cpp saves
- *  as `hf_<owner>_<repo>.<quant>-00001-of-00006.gguf`. */
+ *  `hf:` URI names any file in the folder Agency downloads it into. A
+ *  file downloaded before those folders is matched by the name
+ *  node-llama-cpp gave it, `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. */
 function servesAs(uri: string, model: string): boolean {
   if (uri.startsWith("mlx:")) {
     return uri.slice("mlx:".length).split("@")[0] === model;
@@ -1003,7 +1003,9 @@ function servesAs(uri: string, model: string): boolean {
   if (gguf === null) {
     return false;
   }
-  const file = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
-  const unsplit = model.replace(/-00001-of-\d{5}\.gguf$/, ".gguf");
-  return unsplit === file || unsplit.endsWith(`/${file}`);
+  if (isInGgufModelDir(model, uri)) {
+    return true;
+  }
+  const legacyFile = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
+  return model === legacyFile || model.endsWith(`/${legacyFile}`);
 }

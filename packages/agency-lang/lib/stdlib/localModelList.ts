@@ -21,9 +21,10 @@ function colWidth(header: string, values: string[]): number {
 }
 
 /** The `agency local list` view: every usable model (curated + aliases) with
- *  a downloaded marker, then cache-dir files no catalog entry claims. A row
- *  is "downloaded" when the manifest maps its target URI to a file that still
- *  exists in the cache dir; its SIZE column then shows the on-disk size
+ *  a downloaded marker, then cache-dir files no catalog entry claims. A GGUF
+ *  row is "downloaded" when a model folder's record names its target URI, or
+ *  when the older manifest maps the URI to a file that still exists in the
+ *  cache dir. The row's SIZE column then shows the on-disk size
  *  rather than the catalog estimate. Compact and operational by default;
  *  `long` (the `-l` flag) adds each model's description on its own dimmed
  *  line, with a blank line between models so the descriptions stay readable.
@@ -42,11 +43,18 @@ export function formatLocalList(args: {
   const byPath = Object.fromEntries(args.files.map((f) => [f.path, f]));
   const kindOrder = (kind: ModelKind | undefined): number =>
     kind === undefined ? MODEL_KINDS.length : MODEL_KINDS.indexOf(kind);
-  // The file on disk that backs a catalog row, if any. A GGUF row goes
+  // The file on disk that backs a catalog row, if any. A GGUF row matches
+  // its folder by URI, or for a download from before those folders, goes
   // through the manifest. An MLX row matches by repo id, or by directory
   // for an alias that points straight at one.
   const fileFor = (e: ModelNameEntry): DownloadedModel | undefined => {
     if (e.backend === "llama-cpp") {
+      const folder = args.files.find(
+        (f) => f.backend === "llama-cpp" && f.layout === "agency" && f.name === e.target,
+      );
+      if (folder !== undefined) {
+        return folder;
+      }
       const manifestFile = args.manifest[e.target];
       return manifestFile === undefined ? undefined : byName[manifestFile];
     }
@@ -93,9 +101,8 @@ export function formatLocalList(args: {
       description: e.description ?? "",
     };
   });
-  // Only files claimed by a CATALOG row are excluded from OTHER FILES. The
-  // manifest also records raw-URI downloads, which have no row here — their
-  // files must stay visible.
+  // Only files claimed by a CATALOG row are excluded from OTHER FILES. A
+  // raw-URI download has no row here, and its files must stay visible.
   const claimedPaths: string[] = args.entries
     .map(fileFor)
     .filter((f): f is DownloadedModel => f !== undefined)

@@ -22,13 +22,16 @@ describe("localSamplingFor", () => {
     expect(localSamplingFor("/models/hf_unsloth_Qwen3.5-2B.Q8_0.gguf")).toBeUndefined();
   });
 
-  it("finds a GGUF split across several files by its first part", () => {
+  it("finds a GGUF in its model folder by the folder, whatever the file is called", () => {
+    const folder = "/models/gguf/unsloth--Qwen3.8-Flash-Next-GGUF--UD-Q4_K_XL";
+    expect(localSamplingFor(`${folder}/anything-00001-of-00004.gguf`)).toEqual({
+      temperature: 1.0,
+      topP: 0.95,
+      topK: 20,
+    });
+    // The same folder name outside the gguf folder is not a model folder.
     expect(
-      localSamplingFor("/models/hf_unsloth_Qwen3.8-Flash-Next.UD-Q4_K_XL-00001-of-00004.gguf"),
-    ).toEqual({ temperature: 1.0, topP: 0.95, topK: 20 });
-    // node-llama-cpp loads the first part, so no later part is a model name.
-    expect(
-      localSamplingFor("/models/hf_unsloth_Qwen3.8-Flash-Next.UD-Q4_K_XL-00002-of-00004.gguf"),
+      localSamplingFor("/elsewhere/unsloth--Qwen3.8-Flash-Next-GGUF--UD-Q4_K_XL/model.gguf"),
     ).toBeUndefined();
   });
 

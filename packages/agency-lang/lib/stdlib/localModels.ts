@@ -31,7 +31,16 @@ import {
   resolveSmoltalkLlamaCppEntry,
 } from "../runtime/localProvider.js";
 import { currentRunOrNone } from "../runtime/asyncContext.js";
-import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
+import { readDownloadManifest } from "./localModelManifest.js";
+import {
+  downloadGgufModel,
+  ggufFolders,
+  looseGgufFiles,
+  removeGgufFolder,
+  removeLooseGgufFile,
+} from "./ggufModelFiles.js";
+export { snapshotFreshness, type FreshnessProbe } from "./ggufModelFiles.js";
+import { isGgufDownloadUri } from "./ggufModelDir.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
   fetchHubSnapshot,
@@ -485,8 +494,10 @@ export function _unaliasModel(
   return { file, removed: true };
 }
 
-/** One model on disk. For a GGUF file, `name` is the file name. For an MLX
- *  model, `name` is the repo id and `path` is its directory. */
+/** One model on disk. For a GGUF model in its own folder, `name` is the URI
+ *  it was downloaded from and `path` is the folder. For a GGUF file from
+ *  before those folders, `name` is the file name. For an MLX model, `name`
+ *  is the repo id and `path` is its directory. */
 export type DownloadedModel = {
   name: string;
   path: string;
@@ -496,9 +507,11 @@ export type DownloadedModel = {
   complete: boolean;
   /** The commit an MLX model was downloaded from. Absent for GGUF. */
   revision?: string;
-  /** Which directory shape holds the files. `agency` is our own
-   *  `<modelsDir>/mlx/<org>--<repo>` or `<modelsDir>/diffusers/<org>--<repo>`
-   *  with a record. `hub` is a Hugging Face cache written by another tool,
+  /** Which directory shape holds the files. `gguf` is a loose `.gguf` file
+   *  in the models directory, from before GGUF models had folders. `agency`
+   *  is our own `<modelsDir>/gguf/<name>`, `<modelsDir>/mlx/<org>--<repo>`,
+   *  or `<modelsDir>/diffusers/<org>--<repo>`, with a record. `hub` is a
+   *  Hugging Face cache written by another tool,
    *  which we read but never write. `directory` is any other model
    *  directory, such as the target of an alias. */
   layout: "gguf" | "agency" | "hub" | "directory";
@@ -508,17 +521,23 @@ export type DownloadedModel = {
 
 export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
   const dir = resolveCacheDir(cacheDir);
-  const gguf: DownloadedModel[] = ggufEntries(dir).map((entry) => ({
-    name: entry.name,
-    path: path.join(dir, entry.name),
-    sizeBytes: entry.size,
+  const gguf = (
+    name: string,
+    file: string,
+    sizeBytes: number,
+    layout: "gguf" | "agency",
+  ): DownloadedModel => ({
+    name,
+    path: file,
+    sizeBytes,
     backend: "llama-cpp",
     complete: true,
-    layout: "gguf",
+    layout,
     kind: "chat",
-  }));
+  });
   return [
-    ...gguf,
+    ...looseGgufFiles(dir).map((f) => gguf(f.name, path.join(dir, f.name), f.size, "gguf")),
+    ...ggufFolders(dir).map((f) => gguf(f.uri, f.path, f.sizeBytes, "agency")),
     ...servedEntries(dir, "mlx"),
     ...servedEntries(dir, "diffusers"),
     ...hubEntries(dir),
@@ -735,28 +754,15 @@ function treeSizeBytes(r: Root, target: string): number {
   return sum;
 }
 
-/** The `.gguf` files directly in `dir`, by name. A missing dir has none. */
-function ggufEntries(dir: string): { name: string; size: number }[] {
-  const cache = root(dir);
-  if (stat(cache, ".") === null) {
-    return [];
-  }
-  return list(cache, ".")
-    .filter((entry) => entry.type === "file" && entry.name.endsWith(".gguf"))
-    .map((entry) => ({ name: entry.name, size: entry.size }));
+/** Delete one loose `.gguf` file, from before GGUF models had folders,
+ *  from the cache dir. */
+export function _removeModel(name: string, cacheDir: string = ""): boolean {
+  return removeLooseGgufFile(resolveCacheDir(cacheDir), name);
 }
 
-/** Delete one model file from the cache dir. `name` must be a plain file
- *  name inside it: `resolveUnder` refuses `..` and symlinks, and a missing
- *  file or a non-file returns false. */
-export function _removeModel(name: string, cacheDir: string = ""): boolean {
-  const cache = root(resolveCacheDir(cacheDir));
-  const info = stat(cache, name);
-  if (info === null || !info.isFile()) {
-    return false;
-  }
-  remove(cache, name);
-  return true;
+/** Delete the folder a GGUF model was downloaded into, with every file in it. */
+export function _removeGgufModel(uri: string, cacheDir: string = ""): boolean {
+  return removeGgufFolder(resolveCacheDir(cacheDir), uri);
 }
 
 /** Delete a served model's directory from the cache. Only a directory under
@@ -778,7 +784,8 @@ export function _removeServedModel(
 }
 
 /** Where a resolved model's files are on disk, or null when nothing is
- *  there. A GGUF model is found through the download manifest; an MLX model
+ *  there. A GGUF model is found through the record in its folder, or for
+ *  one downloaded before those folders, the download manifest; an MLX model
  *  through its record under the cache, or the directory it points at.
  *  `insideCache` is false for a ControlNet, whose files are listed with the
  *  models but live in `client.controlnetsDir`, where remove cannot reach. */
@@ -808,8 +815,14 @@ export function _modelFilesOnDisk(
     if (isGgufPath(resolved.target)) {
       return found((f) => f.path === path.resolve(resolved.target));
     }
+    const folder = found(
+      (f) => f.backend === "llama-cpp" && f.layout === "agency" && f.name === resolved.target,
+    );
+    if (folder !== null) {
+      return folder;
+    }
     const fileName = readDownloadManifest(dir)[resolved.target];
-    return fileName === undefined ? null : found((f) => f.name === fileName);
+    return fileName === undefined ? null : found((f) => f.layout === "gguf" && f.name === fileName);
   }
   if (isServedUri(resolved.target)) {
     const { backend, repo } = parseServedUri(resolved.target);
@@ -1300,18 +1313,6 @@ export function pinnedSha256(
   return CURATED_LOCAL_MODELS[value]?.sha256;
 }
 
-/** Was the resolved file freshly downloaded (not already cached)? */
-export type FreshnessProbe = (resolved: string) => boolean;
-
-/** Snapshot the cache dir, returning a probe that reports whether a resolved
- *  path is newly downloaded. node-llama-cpp stores models FLAT in `dir` with a
- *  prefixed filename — no per-repo subdirs (verified against its
- *  `buildHuggingFaceFilePrefix`) — so matching by basename is correct. */
-export function snapshotFreshness(dir: string): FreshnessProbe {
-  const present = ggufEntries(dir).map((entry) => entry.name);
-  return (resolved) => !present.includes(path.basename(resolved));
-}
-
 /** `client.mlx.downloadConcurrency` from the project config, else 8. The
  *  config schema requires a positive integer. */
 export function configuredDownloadConcurrency(): number {
@@ -1478,20 +1479,12 @@ export async function _downloadModel(
   requireSupport();
   const target = model.target;
   const dir = resolveCacheDir(cacheDir);
-  const mod = await loadLocalProvider();
-  // Snapshot freshness BEFORE resolving so we verify the bytes only once, right
-  // after a real download (a cache hit is skipped — the file can't change on
-  // disk between runs).
-  const wasFresh = snapshotFreshness(dir);
-  const resolved = await mod.resolveModel(target, dir);
-  const expected = pinnedSha256(value);
-  if (expected !== undefined && wasFresh(resolved)) {
-    await verifyModelFile(resolved, expected, value);
+  // A path names a file already on disk, which node-llama-cpp hands back.
+  if (!isGgufDownloadUri(target)) {
+    const mod = await loadLocalProvider();
+    return await mod.resolveModel(target, dir);
   }
-  // Record-after-verify: an invalid-hash file throws above and is never
-  // written into the manifest.
-  recordDownload(dir, target, path.basename(resolved));
-  return resolved;
+  return await downloadGgufModel(dir, target, pinnedSha256(value), value);
 }
 
 /** `--kind` is written into the record an mlx: or diffusers: download

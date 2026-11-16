@@ -338,6 +338,28 @@ describe("runRemove", () => {
     expect(fs.existsSync(gguf)).toBe(false);
   });
 
+  it("with -f deletes every part of a model split across files in its folder", () => {
+    const uri = "hf:org/big:Q4_K_M";
+    const folder = path.join(models, "gguf", "org--big--Q4_K_M");
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, "part-00001-of-00002.gguf"), "xx");
+    fs.writeFileSync(path.join(folder, "part-00002-of-00002.gguf"), "xxx");
+    fs.writeFileSync(
+      path.join(folder, ".agency-model.json"),
+      JSON.stringify({
+        uri,
+        entry: "part-00001-of-00002.gguf",
+        files: { "part-00001-of-00002.gguf": 2, "part-00002-of-00002.gguf": 3 },
+      }),
+    );
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { big: uri } } }));
+
+    runRemove("big", { force: true });
+
+    expect(output[1]).toBe(`Deleted ${folder} (0.00 GB)`);
+    expect(fs.existsSync(folder)).toBe(false);
+  });
+
   it("a curated name without -f says there is no alias and where the file is", () => {
     runRemove("smollm2-135m", { force: false });
     expect(output[0]).toBe(

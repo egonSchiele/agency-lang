@@ -57,6 +57,8 @@ export const NODE_ONLY = {
   "lib/stdlib/localImageInputs.ts": "local models",
   "lib/stdlib/localModelList.ts": "local models",
   "lib/stdlib/localModelManifest.ts": "local models",
+  "lib/stdlib/ggufModelRecord.ts": "local models",
+  "lib/stdlib/ggufModelFiles.ts": "local models",
   "lib/stdlib/localModels.ts": "starts local model servers (local models)",
   "lib/stdlib/localPython.ts": "runs Python for local models",
   "lib/stdlib/localRequest.ts": "local models",

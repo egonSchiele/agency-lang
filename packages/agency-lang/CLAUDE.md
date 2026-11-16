@@ -347,6 +347,7 @@ Other process docs:
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.
 - `docs/dev/stdlib/fetch-cache.md` — The per-run fetch cache, which gives a tool call the stored result for a URL the same conversation already fetched.
 - `docs/dev/stdlib/http-timeout.md` — The 30-second limit on `std::http` fetches, and why a timeout is a `Failure` and a cancel is not.
+- `docs/dev/stdlib/mcp-package-loading.md` — How agency-lang finds and loads the optional `@agency-lang/mcp` package, and why the check must match `import()`.
 - `docs/dev/stdlib/ui-layout-widths.md` — How wide a `std::ui/table` is, which columns shrink, and the cap on `diff()`'s colored bars.
 - `docs/dev/stdlib/jobs.md` — Background jobs: `startJob` and `std::jobs`, where the job table lives, and what stops a job.
 - `docs/dev/stdlib/grep-flags.md` — `std::grep`, `ls`, and `glob`: how grep flags become regex options, the path checks, and which tools skip ignored files.

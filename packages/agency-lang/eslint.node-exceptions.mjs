@@ -71,7 +71,7 @@ export const NODE_ONLY = {
   "lib/stdlib/localRequest.ts": "local models",
   "lib/stdlib/mcp.ts": "std::mcp loads the @agency-lang/mcp package from node_modules",
   "lib/stdlib/mcpBridge.mjs": "the bridge std::mcp loads the package through",
-  "lib/stdlib/mcpResolver.ts": "finds the @agency-lang/mcp package with createRequire",
+  "lib/stdlib/mcpResolver.ts": "finds the @agency-lang/mcp package's entry file in node_modules",
   "lib/stdlib/mlxImage.ts": "local models",
   "lib/stdlib/mlxModelRecord.ts": "local models",
   "lib/stdlib/mlxServerModels.ts": "local models",

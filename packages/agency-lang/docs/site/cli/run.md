@@ -33,6 +33,67 @@ to continue from a saved checkpoint.
 - `--max-cost <dollars>` — abort the run if its LLM spend exceeds this many dollars, e.g. `--max-cost 0.50`. `0` means no paid spend at all (local models only). A negative value means no limit. A tripped budget exits with code 3 and prints the overrun.
 - `--max-time <duration>` — abort the run if its working time exceeds this duration, e.g. `--max-time 5m`. The value needs a unit: `500ms`, `30s`, `5m`, `1h`, `2d`, `1w`. Time spent waiting on a human does not count. Zero or negative means no limit. A tripped budget exits with code 3.
 - `--model <name>` — the model this run's `llm()` calls use by default, written as `model` or `provider/model`. See [choosing a model](#choosing-a-model) below.
+- `-i`, `--interactive` — prompt at the terminal for an interrupt that nothing in the program or its policy answered. See the [policies guide](../guide/policies#the-interactive-flag).
+- `--wait-for-response` — keep running and wait for [`agency attach`](./attach) to answer such an interrupt. See [waiting for an answer](#waiting-for-an-answer) below. It cannot be combined with `-i`.
+
+## Waiting for an answer
+
+A program sometimes raises an interrupt that none of its handlers answers and that its policy has no rule for. What happens next depends on how you started the program:
+
+| Flags | What happens to the interrupt |
+| --- | --- |
+| No policy flag at all | The program reports the interrupt and exits. |
+| `--policy`, `--approve`, or `--reject` | It is rejected. |
+| `--interactive` | You are prompted at the terminal. With no terminal, it is rejected. |
+| `--wait-for-response` | The program keeps running and holds the question until someone answers it. |
+
+`--wait-for-response` is for a program with no terminal of its own: one you started under `nohup`, in `tmux`, or from a scheduler. The program prints one line and waits:
+
+```
+$ agency run --wait-for-response agent.agency
+[agency] Waiting for an answer to 1 question. Run: agency attach 48213
+```
+
+You answer from any other terminal with [`agency attach 48213`](./attach).
+
+A program run this way never approves or rejects a question by itself, however long it waits. Time spent waiting does not count toward `--max-time`.
+
+The flag works together with a policy. The policy answers what it has rules for, and only the rest is held:
+
+```bash
+agency run --wait-for-response --policy recommended agent.agency
+```
+
+One case is worth knowing. An interrupt that asks for a value, such as `question()`, is held even when an approve rule matches it. A person can supply the value through `agency attach`, and a rule cannot.
+
+A program that waits has paused its run, so any [background jobs](../stdlib/jobs) it started have stopped.
+
+### Saving a checkpoint while waiting
+
+A program that holds a question keeps it in memory. If the process dies, the question and the run are lost.
+
+You can ask Agency to also save a checkpoint to disk while the program waits. Turn the setting on in `agency.json`:
+
+```json
+{
+  "spawn": {
+    "interrupts": { "preemptivelyCreateCheckpoint": true }
+  }
+}
+```
+
+It is off by default. A checkpoint holds the program's whole state, including any secret a variable holds, and Agency does not write that to disk unless you ask.
+
+With the setting on, the checkpoint goes under `~/.agency/held/`, in a file only you can read. The program prints the command that resumes from it:
+
+```
+[agency] Waiting for an answer to 1 question. Run: agency attach 48213
+If this process stops, resume it with: agency resume /home/me/.agency/held/Xq3f-48213.json <program> --wait-for-response --policy /home/me/.agency/held/Xq3f-48213.policy.json --max-cost 2
+```
+
+A checkpoint does not hold the program's policy or its cost and time limits, so the command carries them. If you started the program with `--policy`, `--approve`, or `--reject`, Agency saves the resulting policy in a second file beside the checkpoint and names it in the command. Keep the flags when you resume: without them the program comes back with no rules and no limits.
+
+Agency deletes both files once the question is answered. If the process dies first, the files stay. Resuming raises the same interrupt again, so the program's handlers and policy are consulted again, and the resumed program holds the question if they still do not answer it. Agency does not delete the files after a resume, so remove them when you no longer need them.
 
 ## Resuming a checkpoint
 

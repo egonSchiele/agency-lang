@@ -74,9 +74,23 @@ describe("the listing", () => {
       now,
     );
     expect(text.split("\n")).toEqual([
-      "  PID    PROGRAM          NODE  STARTED",
+      "  PID    PROGRAM          NODE  STARTED    STATE",
       "  48213  agent.agency     main  4m12s ago",
       "  51002  research.agency  run   38s ago",
+    ]);
+  });
+
+  it("marks a program that is holding a question", () => {
+    const text = formatListing(
+      [
+        { pid: 1, program: "a.agency", node: "main", startedAt: 0, holding: true },
+        { pid: 2, program: "b.agency", node: "main", startedAt: 0, holding: false },
+      ],
+      1000,
+    );
+    expect(text.split("\n").slice(1)).toEqual([
+      "  1    a.agency  main  1s ago   waiting",
+      "  2    b.agency  main  1s ago",
     ]);
   });
 

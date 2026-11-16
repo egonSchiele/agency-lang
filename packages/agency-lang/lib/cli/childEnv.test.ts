@@ -53,6 +53,31 @@ describe("withRootCarriers", () => {
     });
   });
 
+  test("clears a stale wait flag and held-checkpoint flag, and sets each only when asked", () => {
+    const inherited = {
+      AGENCY_RUN_POLICY_WAIT: "1",
+      AGENCY_SAVE_HELD_CHECKPOINT: "1",
+      PATH: "/bin",
+    };
+
+    expect(withRootCarriers(inherited, {})).toEqual({ PATH: "/bin" });
+    expect(withRootCarriers(inherited, { policy: { policyJson: "{}" } })).toEqual({
+      PATH: "/bin",
+      AGENCY_RUN_POLICY: "{}",
+    });
+    expect(
+      withRootCarriers(inherited, {
+        policy: { policyJson: "{}", waitForResponse: true },
+        saveHeldCheckpoint: true,
+      }),
+    ).toEqual({
+      PATH: "/bin",
+      AGENCY_RUN_POLICY: "{}",
+      AGENCY_RUN_POLICY_WAIT: "1",
+      AGENCY_SAVE_HELD_CHECKPOINT: "1",
+    });
+  });
+
   test("clears a stale entry node and sets it only when this run names one", () => {
     const inherited = { AGENCY_ENTRY_NODE: "stale", PATH: "/bin" };
 

@@ -28,25 +28,40 @@ export type ResumeFn<R extends InterruptResult> = (
 /** Decide one surfaced interrupt. */
 export type DecideFn = (interrupt: Interrupt) => Promise<InterruptResponse>;
 
+/** Decide every interrupt in a batch: one response per interrupt, in order. */
+export type DecideBatchFn = (interrupts: Interrupt[]) => Promise<InterruptResponse[]>;
+
 /**
- * Loop until the run stops pausing: for each surfaced interrupt, `decide` it,
- * then `respond` (resume) with the collected responses, and repeat. Pure of
- * transport, prompts, and policy — those live in the injected callbacks.
+ * Loop until the run stops pausing: `decideBatch` the surfaced interrupts,
+ * then `respond` (resume) with the responses, and repeat. Pure of transport,
+ * prompts, and policy — those live in the injected callbacks.
  */
+export async function resolveInterruptBatches<R extends InterruptResult>(
+  result: R,
+  respond: ResumeFn<R>,
+  decideBatch: DecideBatchFn,
+): Promise<R> {
+  while (hasInterrupts(result.data)) {
+    const interrupts = result.data;
+    result = await respond(interrupts, await decideBatch(interrupts));
+  }
+  return result;
+}
+
+/** `resolveInterruptBatches`, deciding the interrupts of a batch one at a
+ *  time, in order. */
 export async function resolveInterrupts<R extends InterruptResult>(
   result: R,
   respond: ResumeFn<R>,
   decide: DecideFn,
 ): Promise<R> {
-  while (hasInterrupts(result.data)) {
-    const interrupts = result.data;
+  return resolveInterruptBatches(result, respond, async (interrupts) => {
     const responses: InterruptResponse[] = [];
     for (const interrupt of interrupts) {
       responses.push(await decide(interrupt));
     }
-    result = await respond(interrupts, responses);
-  }
-  return result;
+    return responses;
+  });
 }
 
 export type BuildDeciderOptions = {

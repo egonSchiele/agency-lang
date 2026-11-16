@@ -51,6 +51,10 @@ export const EARLY_START_LIMIT_MS = 5 * 60_000;
 export const CONNECT_RETRY_MS = 2_000;
 const CONNECT_RETRY_STEP_MS = 50;
 
+/** The listing's word for a program that holds a question, which `agency
+ *  attach` can answer. */
+const WAITING = "waiting";
+
 export type AttachRefusal = { refused: string };
 
 /** The listing `agency debug --attach` prints with no pid. A program's
@@ -67,8 +71,9 @@ export function formatListing(records: readonly AttachRecord[], now: number, cwd
     shown(record.program),
     record.node,
     `${formatElapsed(now - record.startedAt)} ago`,
+    record.holding ? WAITING : "",
   ]);
-  const header = ["PID", "PROGRAM", "NODE", "STARTED"];
+  const header = ["PID", "PROGRAM", "NODE", "STARTED", "STATE"];
   const widths = header.map((title, column) =>
     Math.max(title.length, ...rows.map((row) => row[column]!.length)),
   );

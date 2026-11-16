@@ -9,6 +9,7 @@ export type RunPolicyFlags = {
   approve?: string;
   reject?: string;
   interactive?: boolean;
+  waitForResponse?: boolean;
   cwd: string;
 };
 
@@ -55,10 +56,17 @@ export type ResolvedRunPolicy = {
   policy: Policy;
   policyJson: string;
   interactive: boolean;
+  /** `--wait-for-response`: hold an interrupt nobody settled. */
+  waitForResponse: boolean;
 };
 
 export function resolveRunPolicy(flags: RunPolicyFlags): ResolvedRunPolicy | null {
-  const hasAny = !!flags.policy || !!flags.approve || !!flags.reject || !!flags.interactive;
+  const hasAny =
+    !!flags.policy ||
+    !!flags.approve ||
+    !!flags.reject ||
+    !!flags.interactive ||
+    !!flags.waitForResponse;
   if (!hasAny) return null;
 
   // The overlay semantics (rule order, reject-over-approve) live in
@@ -69,5 +77,10 @@ export function resolveRunPolicy(flags: RunPolicyFlags): ResolvedRunPolicy | nul
     loadBase(flags.policy, flags.cwd),
   );
 
-  return { policy, policyJson: JSON.stringify(policy), interactive: !!flags.interactive };
+  return {
+    policy,
+    policyJson: JSON.stringify(policy),
+    interactive: !!flags.interactive,
+    waitForResponse: !!flags.waitForResponse,
+  };
 }

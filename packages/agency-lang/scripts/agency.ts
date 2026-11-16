@@ -106,7 +106,7 @@ import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
 import { importKind } from "@/importPaths.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
-import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
+import { Command, InvalidArgumentError, Option } from "@/vendor/commander/index.js";
 import type { Platform } from "@/host/host.js";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
@@ -147,6 +147,7 @@ import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import { attachCommand } from "@/cli/attach.js";
+import { attachWatchCommand } from "@/cli/attachWatch.js";
 import { addDebugSessionCommands } from "@/cli/debugSession/register.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
 import type { ResolvedModelFlag } from "@/config/config.js";
@@ -178,6 +179,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   approve?: string;
   reject?: string;
   interactive?: boolean;
+  waitForResponse?: boolean;
   maxCost?: string;
   maxTime?: string;
   local?: string;
@@ -371,6 +373,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           approve: options.approve,
           reject: options.reject,
           interactive: options.interactive,
+          waitForResponse: options.waitForResponse,
           cwd: process.cwd(),
         }) ?? undefined;
     } catch (e) {
@@ -520,6 +523,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "-i, --interactive",
         "Prompt on interrupts that surface unhandled (default: reject them)",
+      )
+      .addOption(
+        new Option(
+          "--wait-for-response",
+          "Wait for `agency attach` to answer interrupts that surface unhandled (default: reject them)",
+        ).conflicts("interactive"),
       )
       .option(
         "--capture-workdir <dir>",
@@ -2144,6 +2153,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // All v1 findings are hints; hints never fail CI, so the exit code
       // stays 0. The PR that adds the first warning-severity rule adds the
       // non-zero path.
+    });
+
+  program
+    .command("attach")
+    .description("Watch a running Agency program and answer its questions")
+    .argument(
+      "[pid]",
+      "The program's pid; with no pid, list the running programs",
+      parsePositiveInt,
+    )
+    .action(async (pid: number | undefined) => {
+      process.exit(await attachWatchCommand({ pid }));
     });
 
   const debugCmd = program

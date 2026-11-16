@@ -63,14 +63,20 @@ function queuePrompt<T>(fn: () => Promise<T>): Promise<T> {
 // so the non-TTY fallback is unit-testable.
 export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
   if (!defaultHost().terminal.isInteractive()) return "reject";
-  return queuePrompt(async () =>
-    parsePromptAnswer(
-      await askLine(
-        formatInterruptPrompt(intr) +
-          `(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: `,
-      ),
-    ),
+  return queuePrompt(async () => parsePromptAnswer(await askLine(approvalQuestion(intr))));
+}
+
+/** The text of the approve/reject question for `intr`. */
+export function approvalQuestion(intr: Intr): string {
+  return (
+    formatInterruptPrompt(intr) +
+    `(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: `
   );
+}
+
+/** The text of the question for an interrupt that expects a value. */
+export function valueQuestion(intr: Intr): string {
+  return formatInterruptPrompt(intr) + `answer (empty line rejects): `;
 }
 
 // Terminal prompt for a value-expecting interrupt: the interrupt message IS
@@ -78,9 +84,7 @@ export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
 // fail-closed contract as terminalPrompt.
 export async function terminalValuePrompt(intr: Intr): Promise<InterruptResponse> {
   if (!defaultHost().terminal.isInteractive()) return reject();
-  return queuePrompt(async () =>
-    parseValueAnswer(await askLine(formatInterruptPrompt(intr) + `answer (empty line rejects): `)),
-  );
+  return queuePrompt(async () => parseValueAnswer(await askLine(valueQuestion(intr))));
 }
 
 // Map a typed line to a response for a value-expecting interrupt: the text is

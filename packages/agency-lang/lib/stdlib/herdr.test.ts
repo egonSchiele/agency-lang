@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { herdrReporter } from "./herdr.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
+import { waitFor } from "../cli/spawnTestHelpers.js";
 
 type Received = { id: string; method: string; params: Record<string, any> };
 
@@ -220,13 +221,3 @@ describe("herdrReporter", () => {
     expect(fake.received).toHaveLength(2);
   });
 });
-
-async function waitFor(condition: () => boolean): Promise<void> {
-  const deadline = Date.now() + 2000;
-  while (!condition()) {
-    if (Date.now() > deadline) {
-      throw new Error("timed out waiting for the fake Herdr server");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}

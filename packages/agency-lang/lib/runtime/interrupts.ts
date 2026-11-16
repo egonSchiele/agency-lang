@@ -41,7 +41,8 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeCoreResult, RunNodeResult } from "./types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "./types.js";
 import { tokenStatsOf, unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
-import { isAttachedResume, settleStops } from "./attachedDebugger.js";
+import { attachFunctionsFor, isAttachedResume, settleStops } from "./attachedDebugger.js";
+import { registerAttach } from "#platform";
 import { fireAgentEnd, firesAgentEnd } from "./agentEnd.js";
 import { currentRunOrNone, lineageOf, type Lineage } from "./asyncContext.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -852,6 +853,14 @@ export type ResumeCliFromCheckpointArgs = {
  * trace finalization. Like `runNode`, the result carries the run's `usage`
  * and `traceId`. */
 export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs): Promise<any> {
+  // As `runNode` does for a fresh run: a resumed program can hold a
+  // question too, and `agency attach` reaches it through this.
+  registerAttach({
+    ctx: args.ctx,
+    nodeName: args.checkpoint.nodeId,
+    host: args.ctx.host,
+    functions: attachFunctionsFor(args.ctx),
+  });
   const resolved = resolveInvocation({
     kind: "fresh",
     inheritedRunId: getSubprocessRunInfo().runId,

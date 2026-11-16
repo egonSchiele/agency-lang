@@ -25,6 +25,7 @@ import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { loadProviderModules } from "./providerModules.js";
 import { _resolveLocalEmbeddingModel } from "../stdlib/localModels.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
+import { onHeldChange } from "./heldQuestions.js";
 import type { ProviderLoadingContext, RegisterAttachArgs } from "./platform.js";
 
 /** Registers the configured LLM providers before a run starts: the
@@ -73,7 +74,11 @@ export const NO_ATTACH_VAR = "AGENCY_NO_ATTACH";
  *  has several contexts in one process, and the one running now is the
  *  one a person attaching now means. */
 const ATTACH_TARGET_SLOT = Symbol.for("agency.debug.attachTarget");
-type SharedAttachTarget = { functions: AttachFunctions };
+type SharedAttachTarget = {
+  functions: AttachFunctions;
+  /** False once the socket failed to open: nothing can connect. */
+  reachable: boolean;
+};
 
 function sharedAttachTarget(): SharedAttachTarget | null {
   const slot = process as unknown as Record<symbol, SharedAttachTarget | undefined>;
@@ -83,6 +88,12 @@ function sharedAttachTarget(): SharedAttachTarget | null {
 function setSharedAttachTarget(target: SharedAttachTarget): void {
   const slot = process as unknown as Record<symbol, SharedAttachTarget | undefined>;
   slot[ATTACH_TARGET_SLOT] = target;
+}
+
+/** Whether `agency attach` can reach this process: it registered for
+ *  attach, and its socket did not fail to open. */
+export function isAttachable(): boolean {
+  return sharedAttachTarget()?.reachable ?? false;
 }
 
 /** A sessions directory this process was refused, so a program that runs
@@ -156,10 +167,21 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     debugLine(`not attachable: could not write the record: ${(error as Error).message}`);
     return;
   }
-  const target: SharedAttachTarget = { functions };
+  const target: SharedAttachTarget = { functions, reachable: true };
   setSharedAttachTarget(target);
+  // The listing shows which programs are waiting on an answer. The record
+  // written above is kept here, so the file is never read back.
+  const stopRecordingHolds = onHeldChange((questions) => {
+    try {
+      writeRecord(dir, { ...record, holding: questions.length > 0 });
+    } catch (error) {
+      debugLine(`could not update the record: ${(error as Error).message}`);
+    }
+  });
   const failed = (reason: string): void => {
     debugLine(`not attachable: ${reason}`);
+    target.reachable = false;
+    stopRecordingHolds();
     removeRecord(dir, record.pid);
   };
   // The server reads the target when a debugger connects, so the context

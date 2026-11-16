@@ -150,6 +150,23 @@ describe("the attach server", () => {
     expect(server.current()).not.toBeNull();
   });
 
+  // A session installs a debugger, and the program would stop at its next
+  // step. `agency attach` must never cause that.
+  it("serves a watching client without opening a session, so the program runs on", async () => {
+    const mod = await freshImport(fixtureCompiled);
+    const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });
+    server = started as AttachServer;
+
+    const watching = await connect(server.socketPath);
+    const first = new Promise<unknown>((resolve) => watching.onMessage((raw) => resolve(raw)));
+    watching.send({ type: "client", kind: "watch" });
+    expect(await first).toEqual({ type: "held", questions: [] });
+
+    expect(server.current()).toBeNull();
+    expect(mod.__getDebugger()).toBeFalsy();
+    expect((await mod.main()).data).toBe(3);
+  });
+
   it("drives the program from a client, refuses a second client, and says when it ends", async () => {
     const mod = await freshImport(fixtureCompiled);
     const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });

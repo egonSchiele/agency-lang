@@ -87,6 +87,23 @@ export const AGENCY_RUN_POLICY_INTERACTIVE = "AGENCY_RUN_POLICY_INTERACTIVE";
 /** The truthy sentinel value for `AGENCY_RUN_POLICY_INTERACTIVE`. */
 export const AGENCY_RUN_POLICY_INTERACTIVE_ON = "1";
 
+/**
+ * Set to `AGENCY_CARRIER_ON` by `agency run --wait-for-response`. When
+ * present, an interrupt nobody settled is held until `agency attach` answers
+ * it. The run never approves or rejects it on its own.
+ */
+export const AGENCY_RUN_POLICY_WAIT = "AGENCY_RUN_POLICY_WAIT";
+
+/**
+ * Set to `AGENCY_CARRIER_ON` when `spawn.interrupts.preemptivelyCreateCheckpoint`
+ * is on in the config the command line read. The program then saves a held
+ * question's checkpoint under `~/.agency/held/`.
+ */
+export const AGENCY_SAVE_HELD_CHECKPOINT = "AGENCY_SAVE_HELD_CHECKPOINT";
+
+/** The value of a carrier that is either set or absent. */
+export const AGENCY_CARRIER_ON = "1";
+
 /** Env vars carrying `agency run`/`agency agent` --max-cost / --max-time to
  *  the spawned child, which installs a root guard from them. Cleared then set
  *  by the CLI, exactly like AGENCY_RUN_POLICY. Cost is dollars; time is

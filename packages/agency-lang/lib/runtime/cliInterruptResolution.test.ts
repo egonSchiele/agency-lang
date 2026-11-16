@@ -3,10 +3,20 @@ import { resolveCliInterrupts } from "./cliInterruptResolution.js";
 import type { Interrupt, InterruptResponse } from "./interrupts.js";
 import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 import {
+  AGENCY_CARRIER_ON,
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
+  AGENCY_RUN_POLICY_WAIT,
+  AGENCY_SAVE_HELD_CHECKPOINT,
 } from "@/constants.js";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
+import { tmpdir } from "os";
+import path from "path";
+import { safeDeleteDirectoryWithin } from "@/utils.js";
+import { answerHeld, heldQuestions } from "./heldQuestions.js";
+import { approve, reject } from "./interruptResponse.js";
+import { Checkpoint } from "./state/checkpointStore.js";
 
 const READ_OK = JSON.stringify({ "std::read": [{ action: "approve" }] });
 
@@ -260,6 +270,108 @@ describe("resolveCliInterrupts", () => {
         expect(seen).toEqual([[{ type: "reject", value: undefined }]]);
       },
     );
+  });
+
+  describe("--wait-for-response", () => {
+    const WAIT_ENV = {
+      [AGENCY_RUN_POLICY]: "{}",
+      [AGENCY_RUN_POLICY_WAIT]: AGENCY_CARRIER_ON,
+      [AGENCY_RUN_POLICY_INTERACTIVE]: undefined,
+      [AGENCY_SAVE_HELD_CHECKPOINT]: undefined,
+      AGENCY_IPC: undefined,
+    };
+    /** Run `fn` with the notice silenced and a throwaway Agency home. */
+    async function holding(
+      env: Record<string, string | undefined>,
+      fn: (home: string, notices: string[]) => Promise<void>,
+    ) {
+      const home = mkdtempSync(path.join(tmpdir(), "agency-held-"));
+      const notices: string[] = [];
+      const err = vi.spyOn(console, "error").mockImplementation((line) => {
+        notices.push(String(line));
+      });
+      try {
+        await withEnv({ ...WAIT_ENV, ...env, AGENCY_HOME: home }, () => fn(home, notices));
+      } finally {
+        err.mockRestore();
+        safeDeleteDirectoryWithin(tmpdir(), home);
+      }
+    }
+    const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
+    const withCheckpoint = (effect: string): Interrupt => ({
+      ...surfaced(effect),
+      checkpoint: new Checkpoint({
+        id: 0,
+        nodeId: "main",
+        stack: {
+          stack: [],
+          mode: "serialize",
+          other: {},
+          deserializeStackLength: 0,
+          nodesTraversed: [],
+        },
+        globals: { store: {}, initializedModules: [] },
+        traceId: "trace-1",
+      }),
+    });
+
+    // A waiting process never approves or rejects on its own.
+    it("holds the batch, answering nothing, until answerHeld accepts", async () => {
+      await holding({}, async (_home, notices) => {
+        const respond = vi.fn(async () => done);
+        const running = resolveCliInterrupts(withInterrupts("myapp::foo"), respond);
+        await nextTurn();
+        expect(respond).not.toHaveBeenCalled();
+        expect(heldQuestions().map((held) => held.effect)).toEqual(["myapp::foo"]);
+        expect(notices.join("\n")).toContain("Waiting for an answer to 1 question");
+
+        expect(answerHeld([{ interruptId: "id-myapp::foo", response: approve() }])).toBeNull();
+        expect(await running).toBe(done);
+        expect(respond).toHaveBeenCalledWith(
+          [surfaced("myapp::foo")],
+          [{ type: "approve", value: undefined }],
+        );
+      });
+    });
+
+    it("writes no checkpoint file when the setting is off", async () => {
+      await holding({}, async (home) => {
+        const running = resolveCliInterrupts(
+          { messages: {} as any, data: [withCheckpoint("myapp::foo")] },
+          async () => done,
+        );
+        await nextTurn();
+        expect(existsSync(path.join(home, "held"))).toBe(false);
+        answerHeld([{ interruptId: "id-myapp::foo", response: approve() }]);
+        await running;
+      });
+    });
+
+    it("saves the checkpoint while holding when the setting is on, and removes it after", async () => {
+      const settings = { [AGENCY_SAVE_HELD_CHECKPOINT]: AGENCY_CARRIER_ON, AGENCY_MAX_COST: "2" };
+      await holding(settings, async (home, notices) => {
+        const running = resolveCliInterrupts(
+          { messages: {} as any, data: [withCheckpoint("myapp::foo")] },
+          async () => done,
+        );
+        await vi.waitFor(() => expect(heldQuestions()).toHaveLength(1));
+        const dir = path.join(home, "held");
+        const files = readdirSync(dir);
+        expect(files).toEqual([`trace-1-${process.pid}.json`]);
+        const file = path.join(dir, files[0]);
+        expect(statSync(file).mode & 0o777).toBe(0o600);
+        expect(statSync(dir).mode & 0o777).toBe(0o700);
+        const saved = Checkpoint.fromJSON(JSON.parse(readFileSync(file, "utf8")));
+        expect(saved?.nodeId).toBe("main");
+        expect(notices.join("\n")).toContain(
+          `agency resume ${realpathSync(file)} <program> --wait-for-response --max-cost 2`,
+        );
+
+        answerHeld([{ interruptId: "id-myapp::foo", response: reject("no") }]);
+        await running;
+        expect(readdirSync(dir)).toEqual([]);
+      });
+    });
   });
 
   it("finding 1: interactive prompts a surfaced, policy-approved effect (no auto-approve)", async () => {

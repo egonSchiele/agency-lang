@@ -22,6 +22,7 @@ import { parseAttachMessage, type ClientKind, type Hello } from "./protocol.js";
 import { ensureSessionsDir, recordPaths, type AttachRecord } from "./registry.js";
 import { sessionChannel, type SessionChannelOptions } from "./sessionChannel.js";
 import { emptySession, statusOf } from "./sessionRules.js";
+import { serveWatch } from "./watch.js";
 
 /** macOS and the BSDs limit a Unix socket path to 104 bytes (108 on
  *  Linux). */
@@ -184,6 +185,8 @@ export async function startAttachServer(
   }
 
   let session: AttachedSession | null = null;
+  // The watching clients. No session owns them, so `stop` closes them.
+  let watching: Channel[] = [];
   const hello: Hello = {
     type: "hello",
     program: options.record.program,
@@ -191,6 +194,16 @@ export async function startAttachServer(
     pid: options.record.pid,
   };
   const admit = (channel: Channel, kind: ClientKind): void => {
+    // Before any session is opened: opening one installs a debugger, and
+    // the program would stop at its next step.
+    if (kind === "watch") {
+      watching.push(channel);
+      channel.onClose(() => {
+        watching = watching.filter((entry) => entry !== channel);
+      });
+      serveWatch(channel);
+      return;
+    }
     if (session === null && kind === "probe") {
       channel.send(statusOf(emptySession()));
       channel.close();
@@ -267,7 +280,7 @@ export async function startAttachServer(
         stop: () =>
           new Promise<void>((done) => {
             session?.detach();
-            for (const channel of [...greeting]) {
+            for (const channel of [...greeting, ...watching]) {
               channel.close();
             }
             server.close(() => {

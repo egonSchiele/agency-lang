@@ -21,7 +21,9 @@
 import { checkpointEditsSchema } from "../../runtime/state/checkpointPatch/index.js";
 import { z } from "zod";
 
+import type { HeldAnswer } from "../../runtime/heldQuestions.js";
 import type { InterruptResponse } from "../../runtime/interruptResponse.js";
+import type { SerializedInterrupt } from "../../runtime/ipcChild.js";
 import type { DebuggerCommand, DebuggerIO } from "../types.js";
 
 /** The `DebuggerIO` methods that expect an answer. */
@@ -53,8 +55,10 @@ export type NoticeMethod = (typeof NOTICE_METHODS)[number];
 /** What a connection says it is, in its first message. A `terminal` is
  *  a person's debugger, whose connection is its session; a `cli` is one
  *  visit of `agency debug session`, whose session the run holds between
- *  visits; a `probe` wants the session's state and nothing else. */
-export const CLIENT_KINDS = ["terminal", "cli", "probe"] as const;
+ *  visits; a `probe` wants the session's state and nothing else; a
+ *  `watch` is `agency attach`, which answers the questions the program
+ *  holds and never joins a debugger session. */
+export const CLIENT_KINDS = ["terminal", "cli", "probe", "watch"] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 /** The kinds that stay on the session, and so can answer a request. */
 export const PARTY_KINDS = ["terminal", "cli"] as const;
@@ -68,6 +72,27 @@ const CliStatusSchema = z
      *  connected and before the first has closed. */
     lastVisit: z.number().nullable(),
   })
+  .strict();
+
+const InterruptResponseSchema = z.union([
+  z.object({ type: z.literal("approve"), value: z.any().optional() }),
+  z.object({ type: z.literal("reject"), value: z.string().optional() }),
+]);
+
+/** A held question: an interrupt as data, without its checkpoint. */
+const SerializedInterruptSchema = z.object({
+  type: z.literal("interrupt"),
+  interruptId: z.string(),
+  runId: z.string(),
+  effect: z.string(),
+  message: z.string(),
+  data: z.any(),
+  origin: z.string(),
+  expectsValue: z.boolean().optional(),
+});
+
+const HeldAnswerSchema = z
+  .object({ interruptId: z.string(), response: InterruptResponseSchema })
   .strict();
 
 export const HelloSchema = z
@@ -124,6 +149,13 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
   /** From a CLI visit: release the CLI's hold on the session. With no
    *  terminal attached the session ends and the program runs on. */
   z.object({ type: z.literal("detach") }).strict(),
+  /** The run tells a watching client what it is holding. An empty list
+   *  means nothing is held. */
+  z.object({ type: z.literal("held"), questions: z.array(SerializedInterruptSchema) }).strict(),
+  /** A watching client answers the held batch. */
+  z.object({ type: z.literal("answers"), answers: z.array(HeldAnswerSchema) }).strict(),
+  /** The run refuses a set of answers and says why. */
+  z.object({ type: z.literal("answersRefused"), reason: z.string() }).strict(),
   z
     .object({
       type: z.literal("request"),
@@ -157,6 +189,7 @@ export type FinishedMessage = Extract<AttachMessage, { type: "finished" }>;
 export type StatusMessage = Extract<AttachMessage, { type: "status" }>;
 export type AnsweredMessage = Extract<AttachMessage, { type: "answered" }>;
 export type PartiesMessage = Extract<AttachMessage, { type: "parties" }>;
+export type HeldMessage = Extract<AttachMessage, { type: "held" }>;
 
 /** A parsed JSON value as one of our messages, or null when it is not
  *  one. The sender is the other half of this package, so a bad message is
@@ -184,12 +217,7 @@ const DebuggerCommandSchema = z.union([
   z.object({ type: z.literal("quit") }),
 ]);
 
-const InterruptResponseSchema = z.union([
-  z.object({ type: z.literal("approve"), value: z.any().optional() }),
-  z.object({ type: z.literal("reject"), value: z.string().optional() }),
-]);
-
-/** The two schemas above are written by hand, so this ties each to the
+/** These schemas are written by hand, so this ties each to the
  *  type it checks, in both directions: a command added to
  *  `DebuggerCommand` without a line here, or a field the type requires
  *  that the schema makes optional, fails to compile instead of ending
@@ -203,8 +231,15 @@ const responseSchemaMatchesType: SameShape<
   z.infer<typeof InterruptResponseSchema>,
   InterruptResponse
 > = true;
+const questionSchemaMatchesType: SameShape<
+  z.infer<typeof SerializedInterruptSchema>,
+  SerializedInterrupt
+> = true;
+const answerSchemaMatchesType: SameShape<z.infer<typeof HeldAnswerSchema>, HeldAnswer> = true;
 void commandSchemaMatchesType;
 void responseSchemaMatchesType;
+void questionSchemaMatchesType;
+void answerSchemaMatchesType;
 
 /** What each request's reply must carry. The run side checks a reply
  *  against this before handing it to the driver, so a UI that answers

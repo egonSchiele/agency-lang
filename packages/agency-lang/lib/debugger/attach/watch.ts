@@ -19,10 +19,7 @@ export function serveWatch(channel: Channel): void {
     }
     const refused = answerHeld(message.answers);
     if (refused !== null) {
-      // The batch is still held, or another client answered it first.
-      // Saying what is held now lets this client ask again or stand down.
       channel.send({ type: "answersRefused", reason: refused });
-      channel.send({ type: "held", questions: heldQuestions() });
     }
   });
 }

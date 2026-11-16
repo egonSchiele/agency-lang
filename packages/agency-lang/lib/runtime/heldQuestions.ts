@@ -42,13 +42,24 @@ const held = processSlot<HeldState>("agency.heldQuestions", () => ({
 function announce(): void {
   const questions = heldQuestions();
   for (const listener of held.get().listeners) {
-    listener(questions);
+    // A listener that throws must not keep the batch from being held or
+    // answered, or keep the listeners after it from hearing.
+    try {
+      listener(questions);
+    } catch (error) {
+      console.error(`[agency] a held-question listener failed: ${String(error)}`);
+    }
   }
 }
 
 /** Hold `interrupts` until `answerHeld` is given a valid set of answers.
  *  Keeps the process alive while it waits. */
 export function holdForAnswers(interrupts: Interrupt[]): Promise<InterruptResponse[]> {
+  // A process has one root endpoint, so one batch at a time. A second
+  // would replace the first, whose caller would then wait for ever.
+  if (held.get().batch !== null) {
+    throw new Error("a batch of questions is already held in this process");
+  }
   return new Promise((resolve) => {
     const keepAlive = setInterval(() => {}, HOLD_KEEP_ALIVE_MS);
     held.get().batch = {

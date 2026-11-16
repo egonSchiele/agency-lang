@@ -86,7 +86,8 @@ export type StartedCli = {
  *  own, so `stop` reaches both, and each exits by itself at its deadline
  *  if the test never stops it. */
 export function startCli(dir: string, args: string[], env: NodeJS.ProcessEnv = {}): StartedCli {
-  const deadline = `--require ${path.join(dir, DEADLINE_SCRIPT)}`;
+  // Quoted, for a working directory with a space in its path.
+  const deadline = `--require "${path.join(dir, DEADLINE_SCRIPT)}"`;
   const child = spawn(process.execPath, [CLI, ...args], {
     cwd: dir,
     detached: true,

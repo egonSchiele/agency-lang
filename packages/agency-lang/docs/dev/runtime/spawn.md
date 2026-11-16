@@ -73,7 +73,9 @@ The command line reads the config and carries the setting to the program as `AGE
 
 With it on, `saveHeldCheckpoint` in `lib/runtime/heldCheckpoint.ts` writes the batch's checkpoint to `~/.agency/held/<traceId>-<pid>.json` before the program starts to hold. Every interrupt in a batch carries the same checkpoint, so it writes the first one's. The folder is made with `host.files.privateDir` (mode `0700`), the file has mode `0600`, and the write refuses to replace an existing file. `removeHeldCheckpoint` deletes the file once the batch is answered, and refuses a path outside the folder.
 
-If the process dies while it holds, the file stays. `agency resume <file> <program> --wait-for-response` starts a new process that raises the same interrupt and holds it again. The resumed process registers for attach the way a fresh run does: `resumeCliFromCheckpoint` in `lib/runtime/interrupts.ts` calls `registerAttach`.
+A save that fails is reported on standard error and the batch is held with no file. A removal that fails is reported and the answers are still used.
+
+If the process dies while it holds, the file stays. A resume does not delete it, so the user removes it when they no longer need it. `agency resume <file> <program> --wait-for-response` starts a new process that raises the same interrupt and holds it again. The resumed process registers for attach the way a fresh run does: `resumeCliFromCheckpoint` in `lib/runtime/interrupts.ts` calls `registerAttach`.
 
 A surfaced interrupt's checkpoint is plain data, because the result of a node run is copied through JSON, so `saveHeldCheckpoint` writes it with `JSON.stringify` and calls no method on it.
 
@@ -83,7 +85,11 @@ A surfaced interrupt's checkpoint is plain data, because the result of a node ru
 
 Attaching is not debugging. A `watch` client never opens a debugger session, so the program does not stop for it. Ctrl-C ends the command and leaves the program as it was.
 
-The prompt is the one `--interactive` shows, from `buildDecider({ interactive: true })`, including the value prompt for a raise that expects a value. An "approve always" answer is remembered for that effect until the command exits.
+Ctrl-C or Ctrl-D at an open prompt detaches and sends no answer. The host's `readLine` returns an empty line for both, and the approval prompt reads an empty line as a rejection, so attach asks through its own `askOrClose`, which rejects with `PromptClosed`. `watch` then closes the connection without sending `answers`. The question texts are shared with the terminal prompt (`approvalQuestion` and `valueQuestion` in `lib/runtime/interruptPrompts.ts`).
+
+A client answers only the batch the program holds now. When another client answers a batch while this one has a prompt open for an earlier batch, the later `held` messages replace what this client thinks is held, and it skips the batches that came and went.
+
+The prompt reads as the one `--interactive` shows, from `buildDecider({ interactive: true })`, including the value prompt for a raise that expects a value. An "approve always" answer is remembered for that effect until the command exits.
 
 The command refuses to attach when its standard input is not a terminal. The prompt rejects a question when there is no terminal, and an attach must not answer for the person.
 

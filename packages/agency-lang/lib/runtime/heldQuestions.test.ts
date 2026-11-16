@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   answerHeld,
   heldQuestions,
@@ -103,6 +103,31 @@ describe("holding a batch", () => {
       { interruptId: "a", response: approve("typed") },
     ]);
     expect(await waiting).toEqual([approve("typed"), reject("not that one")]);
+  });
+
+  it("refuses a second batch while one is held", () => {
+    void holdForAnswers([question("a")]);
+    expect(() => holdForAnswers([question("b")])).toThrow("already held");
+    expect(heldQuestions().map((held) => held.interruptId)).toEqual(["a"]);
+  });
+
+  it("is still answered when a listener throws, and tells the listeners after it", async () => {
+    const seen: number[] = [];
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const removeBad = onHeldChange(() => {
+      throw new Error("listener broke");
+    });
+    const removeGood = onHeldChange((questions) => seen.push(questions.length));
+    try {
+      const waiting = holdForAnswers([question("a")]);
+      expect(answerHeld([{ interruptId: "a", response: approve() }])).toBeNull();
+      expect(await waiting).toEqual([approve()]);
+      expect(seen).toEqual([1, 0]);
+    } finally {
+      removeBad();
+      removeGood();
+      err.mockRestore();
+    }
   });
 
   it("calls a listener when a batch starts and when it ends, until removed", async () => {

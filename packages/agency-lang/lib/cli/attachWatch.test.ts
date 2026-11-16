@@ -6,7 +6,7 @@ import type { AttachMessage } from "@/debugger/attach/protocol.js";
 import { approve, reject } from "@/runtime/interruptResponse.js";
 import type { DecideFn } from "@/runtime/interruptResolution.js";
 import type { SerializedInterrupt } from "@/runtime/ipcChild.js";
-import { watch } from "./attachWatch.js";
+import { PromptClosed, watch } from "./attachWatch.js";
 
 function question(interruptId: string, expectsValue = false): SerializedInterrupt {
   return {
@@ -86,6 +86,45 @@ describe("agency attach", () => {
     await delivered();
     await delivered();
     expect(sent).toHaveLength(1);
+  });
+
+  // Ctrl-C or Ctrl-D at a prompt. The program must get no answer at all:
+  // a rejection the person never chose could not be undone.
+  it("detaches, sending no answers, when a prompt closes without an answer", async () => {
+    const { program, sent, shown, ended } = watching(async () => {
+      throw new PromptClosed();
+    });
+    program.send({ type: "held", questions: [question("a"), question("b")] });
+    await ended;
+    await delivered();
+    expect(sent).toEqual([{ type: "client", kind: "watch" }]);
+    expect(shown).toEqual(["Detached without answering. The program is still waiting."]);
+  });
+
+  it("skips a batch another client answered while a prompt was open", async () => {
+    const asked: string[] = [];
+    let release: () => void = () => {};
+    const { program, sent } = watching(async (interrupt) => {
+      asked.push(interrupt.interruptId);
+      if (interrupt.interruptId === "a") {
+        await new Promise<void>((resolve) => (release = resolve));
+      }
+      return approve();
+    });
+    program.send({ type: "held", questions: [question("a")] });
+    await delivered();
+    // While "a" is being asked, another client answers it, the program
+    // holds "b", another client answers that too, and it then holds "c".
+    program.send({ type: "held", questions: [] });
+    program.send({ type: "held", questions: [question("b")] });
+    program.send({ type: "held", questions: [] });
+    program.send({ type: "held", questions: [question("c")] });
+    await delivered();
+    release();
+    await delivered();
+    await delivered();
+    expect(asked).toEqual(["a", "c"]);
+    expect(sent.at(-1)).toMatchObject({ type: "answers", answers: [{ interruptId: "c" }] });
   });
 
   it("shows why the program refused the answers", async () => {

@@ -14,7 +14,7 @@ const IMPORT_CONDITIONS = ["node", "import", "module-sync", "node-addons", "defa
 
 /** Find the file `import("@agency-lang/mcp")` would load, searching: an
  *  explicit AGENCY_MCP_PATH override first, then the node_modules directories
- *  Node walks from agency-lang, then each global node_modules root (npm i -g /
+ *  `import()` searches from agency-lang, then each global node_modules root (npm i -g /
  *  pnpm add -g). Null if the package is not installed in any of them. This
  *  only locates the file; mcpBridge.mjs imports it. agency-lang does not
  *  depend on the package, so a monorepo checkout finds it only through the
@@ -72,13 +72,14 @@ function firstEntry(nodeModulesDirs: string[]): string | null {
 }
 
 /** The file `import()` loads for the package in `pkgDir`, or null when the
- *  package is not there or names no entry for `import()`. */
+ *  package is not there, names no entry for `import()`, or has a package.json
+ *  that cannot be read. */
 function packageEntry(pkgDir: string): string | null {
   const pkgJsonPath = path.join(pkgDir, "package.json");
   if (!fs.existsSync(pkgJsonPath)) {
     return null;
   }
-  const pkgJson: unknown = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  const pkgJson = readPackageJson(pkgJsonPath);
   if (!isPlainObject(pkgJson)) {
     return null;
   }
@@ -89,6 +90,20 @@ function packageEntry(pkgDir: string): string | null {
   }
   const entry = path.join(pkgDir, target);
   return fs.existsSync(entry) ? entry : null;
+}
+
+/** A broken install, such as a half-written package.json or one the user
+ *  cannot read, counts as "not in this directory", so the search moves on and
+ *  agent startup does not fail over it. */
+function readPackageJson(pkgJsonPath: string): unknown {
+  try {
+    return JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  } catch (error) {
+    console.warn(
+      `[mcp] skipping ${pkgJsonPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
 }
 
 function mainTarget(main: unknown): string {
@@ -105,9 +120,12 @@ function rootExportTarget(exports: unknown): string | null {
   return conditionalTarget(exports);
 }
 
-/** Resolve a target the way Node does for `import()`: a string is the path;
- *  an array is tried in order; an object is a list of conditions, tried in
- *  the order written, skipping the ones `import()` does not match. */
+/** Resolve a target for `import()`, covering the shapes a normal package
+ *  uses: a string is the path; an array is tried in order; an object is a
+ *  list of conditions, tried in the order written, skipping the ones
+ *  `import()` does not match. It is not all of Node's algorithm. For example,
+ *  Node stops at a matched condition whose value is null, and this moves on
+ *  to the next one. */
 function conditionalTarget(target: unknown): string | null {
   if (typeof target === "string") {
     return target.startsWith("./") ? target : null;

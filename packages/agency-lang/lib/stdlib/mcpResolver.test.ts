@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import Module from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
@@ -13,20 +14,31 @@ vi.mock("../runtime/localProvider.js", () => ({
 
 import { isMcpAvailable, exposeResolvedMcpPath, resolveMcpEntry } from "./mcpResolver.js";
 
+// Node reads NODE_PATH once, at startup. _initPaths rereads it, so a test can
+// change it.
+const nodeModule = Module as unknown as { _initPaths: () => void };
+const originalNodePath = process.env.NODE_PATH;
+
 let tmpDir: string;
 
 /** Write a fake @agency-lang/mcp into a global node_modules root under the
- *  temp dir, with an entry file at every path in `files`. */
-function installGlobally(pkgJson: Record<string, unknown>, files: string[]): string {
-  const root = path.join(tmpDir, "node_modules");
+ *  temp dir, with an entry file at every path in `files`. `pkgJson` is
+ *  written as is when it is a string, so a test can write a broken file. */
+function installGlobally(
+  pkgJson: Record<string, unknown> | string,
+  files: string[],
+  rootName = "global",
+): string {
+  const root = path.join(tmpDir, rootName, "node_modules");
   const pkgDir = path.join(root, "@agency-lang", "mcp");
   fs.mkdirSync(pkgDir, { recursive: true });
-  fs.writeFileSync(path.join(pkgDir, "package.json"), JSON.stringify(pkgJson));
+  const text = typeof pkgJson === "string" ? pkgJson : JSON.stringify(pkgJson);
+  fs.writeFileSync(path.join(pkgDir, "package.json"), text);
   for (const file of files) {
     fs.mkdirSync(path.dirname(path.join(pkgDir, file)), { recursive: true });
     fs.writeFileSync(path.join(pkgDir, file), "export {};\n");
   }
-  globalRoots.list = [root];
+  globalRoots.list.push(root);
   return pkgDir;
 }
 
@@ -37,6 +49,13 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.AGENCY_MCP_PATH;
+  if (originalNodePath === undefined) {
+    delete process.env.NODE_PATH;
+  } else {
+    process.env.NODE_PATH = originalNodePath;
+  }
+  nodeModule._initPaths();
+  vi.restoreAllMocks();
   safeDeleteDirectoryWithin(os.tmpdir(), tmpDir);
 });
 
@@ -92,6 +111,26 @@ describe("mcpResolver", () => {
   it("is unavailable when the entry file is missing", () => {
     installGlobally({ exports: { ".": { import: "./dist/src/mcp.js" } } }, []);
     expect(resolveMcpEntry()).toBeNull();
+  });
+
+  it("ignores NODE_PATH, because import() does", () => {
+    // pnpm sets NODE_PATH to its hidden node_modules/.pnpm/node_modules when
+    // it runs a script, and require.resolve.paths() searches it.
+    installGlobally({ exports: { import: "./mcp.js" } }, ["mcp.js"], "on-node-path");
+    globalRoots.list = [];
+    process.env.NODE_PATH = path.join(tmpDir, "on-node-path", "node_modules");
+    nodeModule._initPaths();
+    expect(resolveMcpEntry()).toBeNull();
+  });
+
+  it("skips a package.json it cannot parse, warns, and keeps searching", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const brokenDir = installGlobally('{ "name": "@agency-lang/mcp", ', [], "broken");
+    const pkgDir = installGlobally({ exports: { import: "./mcp.js" } }, ["mcp.js"]);
+    expect(resolveMcpEntry()).toBe(path.join(pkgDir, "mcp.js"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(path.join(brokenDir, "package.json")),
+    );
   });
 
   it("uses main when the package has no exports", () => {

@@ -10,6 +10,8 @@ The user-facing API is two functions in `std::agency`:
 
 `runFile`, `runCode`, `test`, and `testFile` in the same module are wrappers over the same machinery.
 
+A process that outlives its caller is a different thing: `spawn` in the same module, which starts a new root with no channel to the caller. See `docs/dev/runtime/spawn.md`.
+
 ## Architecture
 
 ```

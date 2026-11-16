@@ -127,6 +127,33 @@ describe("agency attach", () => {
     expect(sent.at(-1)).toMatchObject({ type: "answers", answers: [{ interruptId: "c" }] });
   });
 
+  it("starts the program's output, stops it while a prompt is open, and finishes it at the end", async () => {
+    const calls: string[] = [];
+    const output = {
+      start: () => calls.push("start"),
+      pause: () => calls.push("pause"),
+      resume: () => calls.push("resume"),
+      finish: () => calls.push("finish"),
+    };
+    const [program, client] = memoryChannelPair();
+    const shown: string[] = [];
+    const ended = watch({
+      channel: client,
+      out: (text) => shown.push(text),
+      decide: async () => {
+        calls.push("prompt");
+        return approve();
+      },
+      output,
+    });
+    program.send({ type: "held", questions: [question("a")] });
+    await delivered();
+    await delivered();
+    program.close();
+    await ended;
+    expect(calls).toEqual(["start", "pause", "prompt", "resume", "finish"]);
+  });
+
   it("shows why the program refused the answers", async () => {
     const { program, shown } = watching(async () => approve());
     program.send({ type: "answersRefused", reason: "nothing is held" });

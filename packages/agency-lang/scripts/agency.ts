@@ -148,6 +148,8 @@ import { debug } from "@/cli/debug.js";
 import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import { attachCommand } from "@/cli/attach.js";
 import { attachWatchCommand } from "@/cli/attachWatch.js";
+import { runLaunchFrom } from "@/cli/runLaunch.js";
+import { EXIT_CODE_USAGE_ERROR } from "@/constants.js";
 import { addDebugSessionCommands } from "@/cli/debugSession/register.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
 import type { ResolvedModelFlag } from "@/config/config.js";

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, onTestFailed } from "vitest";
 import type { HeldMessage } from "@/debugger/attach/protocol.js";
 import { approve, reject } from "@/runtime/interruptResponse.js";
 import {
+  ASKS,
   CLI,
   fixtureFolder,
   socketClient,
@@ -27,27 +28,6 @@ import {
 /** Long enough to compile a program and start it. */
 const START_MS = 60_000;
 const TEST_MS = 120_000;
-
-// Writes a marker, asks, and writes a second marker, or the reason it was
-// refused. Its own writes are approved in the program, so the only
-// question nobody settles is `test::ask`.
-const ASKS = `effect test::ask { label: string }
-
-def ask(): string {
-  return interrupt test::ask("May I open the door?", { label: "door" })
-  return "opened"
-}
-
-node main() {
-  write(filename: "started.txt", content: "1", dir: ".") with approve
-  const answer = ask()
-  if (isFailure(answer)) {
-    write(filename: "rejected.txt", content: answer.error, dir: ".") with approve
-  } else {
-    write(filename: "finished.txt", content: "1", dir: ".") with approve
-  }
-}
-`;
 
 const ASKS_FOR_VALUE = `effect test::pick { options: string }
 

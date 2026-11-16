@@ -1,0 +1,47 @@
+{
+  "sourceFile": "spawn.agency",
+  "tests": [
+    {
+      "nodeName": "rejectedStartWritesNothing",
+      "description": "A rejected std::spawn starts nothing and makes no folder",
+      "input": "",
+      "expectedOutput": "\"nothing on disk\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "approvingRunDoesNotApproveSpawn",
+      "description": "A handler that approves std::run does not let a program be spawned",
+      "input": "",
+      "expectedOutput": "\"not started\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "invalidPolicyFailsBeforeAsking",
+      "description": "An invalid policy fails the call with no interrupt raised",
+      "input": "",
+      "expectedOutput": "\"invalid policy, nothing raised\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "refusedInsideRunSubprocess",
+      "description": "spawn fails inside a run() subprocess",
+      "input": "",
+      "expectedOutput": "\"spawn cannot be called inside a run() subprocess.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "refusedPastTheDepthLimit",
+      "description": "spawn fails past five levels, before it raises",
+      "input": "",
+      "expectedOutput": "\"spawn is 6 levels deep, past the limit of 5.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "payloadShowsWhatTheProgramGets",
+      "description": "The std::spawn payload has the policy, both limits, the message count, and the output file",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

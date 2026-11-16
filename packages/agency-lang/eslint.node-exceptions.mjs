@@ -27,6 +27,8 @@ export const NODE_ONLY = {
   "lib/runtime/coverageCollector.ts": "tooling: writes coverage files",
   "lib/runtime/heldQuestions.ts":
     "the questions a command-line run holds for agency attach, one batch per process, kept alive by a timer",
+  "lib/runtime/outputCap.ts":
+    "limits what a detached program saves, by wrapping the process's two output streams",
   "lib/runtime/processSlot.ts": "keeps a value on process, shared by every copy of the runtime",
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
@@ -77,6 +79,8 @@ export const NODE_ONLY = {
     "std::oauth signs in through a callback server on http, and stores tokens through oauthEncryption.ts",
   "lib/stdlib/oauthEncryption.ts":
     "encrypts stored tokens with createCipheriv; no portable cipher yet",
+  "lib/stdlib/spawn.ts":
+    "starts an Agency program as a process of its own, through the agency command line (std::agency)",
   "lib/stdlib/speech.ts": "std::speech records from a raw-mode terminal and probes ffmpeg",
   "lib/stdlib/statelog.ts":
     "std::statelog reads a statelog file through lib/eval/statelogParser.ts, which uses fs",

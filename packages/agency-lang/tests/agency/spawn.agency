@@ -1,0 +1,146 @@
+// std::agency spawn(): the checks that need no running process. Every
+// case here ends before a program is started, so nothing is left running
+// and nothing is written under ~/.agency. The cases that start a real
+// program are in lib/cli/spawn.spawn.test.ts.
+import { compile, run, spawn } from "std::agency"
+import { mkdir } from "std::fs"
+import { dirname } from "std::path"
+import { exists } from "std::shell"
+import { setEnv } from "std::system"
+
+const DIR = "./.spawn-agency-test"
+const CHILD = "node main() { print(\"hello from the child\") }"
+
+def seed() {
+  mkdir(DIR) with approve
+  write("child.agency", CHILD, DIR) with approve
+}
+
+// A rejected start writes nothing: the folder that would have held the
+// output file was never made. The handler passes the path back in its
+// rejection, since that is the path this very call would have used.
+export node rejectedStartWritesNothing(): string {
+  seed()
+  handle {
+    const result = spawn(DIR, "child.agency")
+    if (result is failure(err)) {
+      const outputFile = err.split("out=")[1].split("|")[0]
+      const made = exists(dirname(outputFile)) with approve
+      if (made) {
+        return "left a folder behind"
+      }
+      return "nothing on disk"
+    }
+    return "started"
+  } with (intr) {
+    if (intr.effect == "std::spawn") {
+      return reject("out=${intr.data.outputFile}|")
+    }
+  }
+}
+
+// std::spawn is its own effect: an approval of std::run does not cover it.
+export node approvingRunDoesNotApproveSpawn(): string {
+  seed()
+  handle {
+    const result = spawn(DIR, "child.agency")
+    if (isFailure(result)) {
+      return "not started"
+    }
+    return "started"
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    return reject("only std::run is approved here")
+  }
+}
+
+// A bad policy fails the call before anything is asked. A raise would
+// come back as the handler's rejection.
+export node invalidPolicyFailsBeforeAsking(): string {
+  seed()
+  handle {
+    const result = spawn(DIR, "child.agency", policy: { "std::read": "yes" })
+    if (result is failure(err)) {
+      if (err.includes("the handler was asked")) {
+        return "raised"
+      }
+      if (err.includes("Invalid policy")) {
+        return "invalid policy, nothing raised"
+      }
+      return err
+    }
+    return "started"
+  } with (intr) {
+    return reject("the handler was asked")
+  }
+}
+
+// A run() subprocess is a sandbox tied to its parent. It cannot start a
+// process that outlives both.
+export node refusedInsideRunSubprocess(): string {
+  const childSource = """
+import { spawn } from "std::agency"
+node main() {
+  const started = spawn(".", "anything.agency")
+  if (isFailure(started)) {
+    return started.error
+  }
+  return "started"
+}
+"""
+  const compiled = compile(childSource)
+  if (isFailure(compiled)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compiled.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with approve
+}
+
+// Five levels deep already, so a sixth is refused before anything is asked.
+export node refusedPastTheDepthLimit(): string {
+  seed()
+  setEnv("AGENCY_SPAWN_DEPTH", "5") with approve
+  let outcome = "started"
+  handle {
+    const result = spawn(DIR, "child.agency")
+    if (result is failure(err)) {
+      outcome = err
+    }
+  } with (intr) {
+    return reject("the handler was asked")
+  }
+  setEnv("AGENCY_SPAWN_DEPTH", "0") with approve
+  return outcome
+}
+
+// The payload shows everything the program is started with, so a handler
+// or a person can judge it.
+export node payloadShowsWhatTheProgramGets(): boolean {
+  seed()
+  handle {
+    const result = spawn(
+      DIR,
+      "child.agency",
+      policy: { "test::ask": [{ action: "approve" }] },
+      maxCost: 2,
+      maxTime: 60s,
+      messages: [{ role: "user", content: "hello" }],
+    )
+    if (result is failure(err)) {
+      const shown = err.includes("p={\"test::ask\":[{\"action\":\"approve\"}]}|c=2|t=60000|m=1|n=child.agency|f=child.agency|node=main|d=1|")
+      const outputFile = err.split("o=")[1].split("|")[0]
+      return shown && outputFile.endsWith("/output.log")
+    }
+    return false
+  } with (intr) {
+    const d = intr.data
+    return reject("p=${JSON.stringify(d.policy)}|c=${d.maxCost}|t=${d.maxTime}|m=${d.messageCount}|n=${d.name}|f=${d.filename}|node=${d.node}|d=${d.depth}|o=${d.outputFile}|")
+  }
+}

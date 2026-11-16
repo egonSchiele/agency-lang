@@ -10,8 +10,7 @@ export type CappedStream = {
 const MEBIBYTE = 1024 * 1024;
 
 function limitNotice(limitBytes: number): string {
-  const size =
-    limitBytes % MEBIBYTE === 0 ? `${limitBytes / MEBIBYTE} MiB` : `${limitBytes} bytes`;
+  const size = limitBytes % MEBIBYTE === 0 ? `${limitBytes / MEBIBYTE} MiB` : `${limitBytes} bytes`;
   return `\n[agency] output limit of ${size} reached; nothing more is saved\n`;
 }
 

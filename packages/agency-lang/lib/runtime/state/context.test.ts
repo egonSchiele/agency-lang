@@ -287,6 +287,7 @@ describe("the count of started programs", () => {
   it("is carried by a checkpoint into the context that restores it", async () => {
     const first = await makeMockCtx().createExecutionContext({ runId: "run-1" });
     first.spawnCount = 3;
+    first.stateStack.nodesTraversed = ["main"];
     const checkpoint = Checkpoint.fromStateStack(first.stateStack, first, {
       moduleId: "m",
       scopeName: "main",

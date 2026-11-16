@@ -6,6 +6,7 @@ import * as nodePlatform from "./platform.node.js";
 import * as browserPlatform from "./platform.browser.js";
 import { memoryHost } from "../host/memoryHost.js";
 import { nodeHost } from "../host/node/nodeHost.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 describe("#platform", () => {
   it("both files match the declaration in packageImports.d.ts", () => {
@@ -104,5 +105,24 @@ describe("#platform", () => {
     nodePlatform.registerAttach({ ...args(false, nodeHost()), functions: second });
     const slot = process as unknown as Record<symbol, { functions: unknown } | undefined>;
     expect(slot[Symbol.for("agency.debug.attachTarget")]?.functions).toBe(second);
+  });
+
+  // `runNode` runs for every node a process starts, and only the first
+  // may be seeded.
+  it("takeSeedMessages gives the seed once per process, and leaves the file where it is", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-seed-"));
+    const file = path.join(dir, "seed.json");
+    fs.writeFileSync(file, JSON.stringify([{ role: "user", content: "hello" }]));
+    try {
+      const none = memoryHost().settings;
+      expect(nodePlatform.takeSeedMessages(none)).toBeNull();
+      const seeded = memoryHost({ variables: { AGENCY_SEED_MESSAGES: file } }).settings;
+      expect(nodePlatform.takeSeedMessages(seeded)).toEqual([{ role: "user", content: "hello" }]);
+      expect(nodePlatform.takeSeedMessages(seeded)).toBeNull();
+      expect(fs.existsSync(file)).toBe(true);
+      expect(browserPlatform.takeSeedMessages(seeded)).toBeNull();
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
   });
 });

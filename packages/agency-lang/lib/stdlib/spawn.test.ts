@@ -1,0 +1,256 @@
+import { describe, expect, it } from "vitest";
+import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
+import type { Command, HostSubprocess, RunOptions, RunResult } from "../host/host.js";
+import { memoryHost, type MemoryHost } from "../host/memoryHost.js";
+import {
+  _spawn,
+  _spawnCount,
+  _spawnDepth,
+  _spawnPaths,
+  spawnCommand,
+  spawnEnvironment,
+  type SpawnQuestion,
+} from "./spawn.js";
+
+const HOME = "/home/me/.agency";
+const SPAWN_DIR = `${HOME}/spawned/abc`;
+
+function question(changes: Partial<SpawnQuestion> = {}): SpawnQuestion {
+  return {
+    dir: "/work/scripts",
+    filename: "report.agency",
+    node: "main",
+    args: [],
+    policy: {},
+    maxCost: null,
+    maxTime: null,
+    messageCount: 0,
+    name: "report.agency",
+    cwd: "/work",
+    outputFile: `${SPAWN_DIR}/output.log`,
+    depth: 1,
+    ...changes,
+  };
+}
+
+type Launch = { command: Command; options: RunOptions | undefined; filesThen: string[] };
+
+/** A host whose subprocess part records each launch, and what files the
+ *  host held at that moment, and answers with `result`. */
+function hostThatLaunches(
+  result: Partial<RunResult>,
+  variables: Record<string, string> = {},
+): { host: MemoryHost; launches: Launch[] } {
+  const launches: Launch[] = [];
+  const answer: RunResult = {
+    exitCode: 0,
+    signal: null,
+    stdout: "",
+    stderr: "",
+    truncated: null,
+    timedOut: false,
+    aborted: false,
+    ...result,
+  };
+  const subprocess: HostSubprocess = {
+    run: async (command, options) => {
+      launches.push({ command, options, filesThen: Object.keys(host.state.files) });
+      return answer;
+    },
+    start: async () => {
+      throw new Error("spawn does not use start");
+    },
+    locate: async () => null,
+  };
+  const host = memoryHost({
+    variables: { AGENCY_HOME: HOME, ...variables },
+    subprocess,
+    cwd: "/work",
+  });
+  return { host, launches };
+}
+
+/** Run `fn` as a stdlib helper is run: with a current run whose context
+ *  has `host`. */
+function withRun<T>(host: MemoryHost, fn: (ctx: { spawnCount: number }) => T): T {
+  const ctx = makeMockCtx();
+  ctx.host = host;
+  ctx.spawnCount = 0;
+  return inFrameOf(ctx, ctx.stateStack, () => fn(ctx));
+}
+
+const STARTED = 'report.agency → report.js (in 100ms)\n{"pid":4242,"outputFile":"x"}\n';
+
+describe("spawnCommand", () => {
+  it("writes every flag, in order, and `--` before the program's arguments", () => {
+    const command = spawnCommand(
+      question({ maxCost: 2.5, maxTime: 90_000, args: ["--verbose", "x"], name: "nightly" }),
+      "/p/policy.json",
+      true,
+    );
+    expect(command).toEqual([
+      "run",
+      "--detach",
+      `${SPAWN_DIR}/output.log`,
+      "--wait-for-response",
+      "--policy",
+      "/p/policy.json",
+      "--name",
+      "nightly",
+      "--max-cost",
+      "2.5",
+      "--max-time",
+      "90000ms",
+      "--messages",
+      "-",
+      "/work/scripts/report.agency:main",
+      "--",
+      "--verbose",
+      "x",
+    ]);
+  });
+
+  it("leaves out the flags that have no value, and still waits for a response", () => {
+    expect(spawnCommand(question(), null, false)).toEqual([
+      "run",
+      "--detach",
+      `${SPAWN_DIR}/output.log`,
+      "--wait-for-response",
+      "--name",
+      "report.agency",
+      "/work/scripts/report.agency:main",
+      "--",
+    ]);
+  });
+});
+
+describe("spawnEnvironment", () => {
+  it("sets the depth, and drops what ties a process to its caller's run", () => {
+    const env = spawnEnvironment(
+      {
+        PATH: "/bin",
+        AGENCY_TRACE_ID: "callers-trace",
+        AGENCY_CONFIG_OVERRIDES: '{"log":{"logFile":"callers.jsonl"}}',
+        AGENCY_IPC: "1",
+        AGENCY_IPC_MAX_PAYLOAD: "100",
+        AGENCY_SPAWN_DEPTH: "1",
+        OPENAI_API_KEY: "kept",
+      },
+      2,
+    );
+    expect(env).toEqual({ PATH: "/bin", OPENAI_API_KEY: "kept", AGENCY_SPAWN_DEPTH: "2" });
+  });
+});
+
+describe("_spawnDepth and _spawnPaths", () => {
+  it("is 0 for a program a person started, and the variable's value otherwise", () => {
+    expect(withRun(hostThatLaunches({}).host, () => _spawnDepth())).toBe(0);
+    const spawned = hostThatLaunches({}, { AGENCY_SPAWN_DEPTH: "3" }).host;
+    expect(withRun(spawned, () => _spawnDepth())).toBe(3);
+    const garbled = hostThatLaunches({}, { AGENCY_SPAWN_DEPTH: "many" }).host;
+    expect(withRun(garbled, () => _spawnDepth())).toBe(0);
+  });
+
+  it("names a folder and an output file under the home, and creates nothing", () => {
+    const { host } = hostThatLaunches({});
+    const filesBefore = Object.keys(host.state.files);
+    const dirsBefore = Object.keys(host.state.dirs);
+    const paths = withRun(host, () => _spawnPaths(null, null));
+    expect(paths.dir.startsWith(`${HOME}/spawned/`)).toBe(true);
+    expect(paths.outputFile).toBe(`${paths.dir}/output.log`);
+    expect(paths.cwd).toBe("/work");
+    expect(Object.keys(host.state.files)).toEqual(filesBefore);
+    expect(Object.keys(host.state.dirs)).toEqual(dirsBefore);
+  });
+
+  it("makes the caller's own output file and working directory absolute", () => {
+    const { host } = hostThatLaunches({});
+    const paths = withRun(host, () => _spawnPaths("logs/out.log", "sub"));
+    expect(paths.outputFile).toBe("/work/logs/out.log");
+    expect(paths.cwd).toBe("/work/sub");
+  });
+});
+
+describe("_spawn", () => {
+  it("starts the program without its caller's trace, and counts the start", async () => {
+    const { host, launches } = hostThatLaunches(
+      { stdout: STARTED },
+      { AGENCY_TRACE_ID: "callers-trace", AGENCY_CONFIG_OVERRIDES: "{}" },
+    );
+    const count = await withRun(host, async (ctx) => {
+      expect(_spawnCount()).toBe(0);
+      expect(await _spawn(question(), [], SPAWN_DIR)).toEqual({ pid: 4242 });
+      return ctx.spawnCount;
+    });
+    expect(count).toBe(1);
+    const { command, options } = launches[0]!;
+    expect(command.kind === "program" && command.args.slice(1, 3)).toEqual(["run", "--detach"]);
+    expect(options?.cwd).toBe("/work");
+    expect(options?.env).toMatchObject({ AGENCY_SPAWN_DEPTH: "1" });
+    expect(options?.env).not.toHaveProperty("AGENCY_TRACE_ID");
+    expect(options?.env).not.toHaveProperty("AGENCY_CONFIG_OVERRIDES");
+    expect(options?.input).toBeUndefined();
+  });
+
+  it("sends the messages on standard input, and writes them to no file", async () => {
+    const { host, launches } = hostThatLaunches({ stdout: STARTED });
+    const messages = [{ role: "user", content: "a secret plan" }];
+    await withRun(host, () => _spawn(question({ messageCount: 1 }), messages, SPAWN_DIR));
+    const { command, options, filesThen } = launches[0]!;
+    expect(options?.input).toBe(JSON.stringify(messages));
+    expect(command.kind === "program" && command.args).toContain("--messages");
+    const held = [...filesThen, ...Object.keys(host.state.files)];
+    for (const file of held) {
+      expect(new TextDecoder().decode(host.state.files[file] ?? new Uint8Array())).not.toContain(
+        "a secret plan",
+      );
+    }
+  });
+
+  it("hands the policy over in a file that is gone afterwards", async () => {
+    const { host, launches } = hostThatLaunches({ stdout: STARTED });
+    const policy = { "test::ask": [{ action: "approve" as const }] };
+    await withRun(host, () => _spawn(question({ policy }), [], SPAWN_DIR));
+    const { command, filesThen } = launches[0]!;
+    expect(filesThen).toContain(`${SPAWN_DIR}/policy.json`);
+    expect(command.kind === "program" && command.args).toContain(`${SPAWN_DIR}/policy.json`);
+    expect(Object.keys(host.state.files)).not.toContain(`${SPAWN_DIR}/policy.json`);
+  });
+
+  it("writes no policy file for a policy with no rules", async () => {
+    const { host, launches } = hostThatLaunches({ stdout: STARTED });
+    await withRun(host, () => _spawn(question(), [], SPAWN_DIR));
+    expect(launches[0]!.filesThen).toEqual([]);
+    expect(launches[0]!.command.kind === "program" && launches[0]!.command.args).not.toContain(
+      "--policy",
+    );
+  });
+
+  it("makes no folder when the caller gave the output file and the policy has no rules", async () => {
+    const { host } = hostThatLaunches({ stdout: STARTED });
+    await withRun(host, () =>
+      _spawn(question({ outputFile: "/work/logs/out.log" }), [], SPAWN_DIR),
+    );
+    expect(Object.keys(host.state.dirs)).not.toContain(SPAWN_DIR);
+  });
+
+  it("throws the end of the error output on a failed start, counts nothing, and removes the policy", async () => {
+    const { host } = hostThatLaunches({ exitCode: 1, stderr: "report.agency: syntax error" });
+    const policy = { "test::ask": [{ action: "approve" as const }] };
+    const count = await withRun(host, async (ctx) => {
+      await expect(_spawn(question({ policy }), [], SPAWN_DIR)).rejects.toThrow(
+        "Could not start report.agency: report.agency: syntax error",
+      );
+      return ctx.spawnCount;
+    });
+    expect(count).toBe(0);
+    expect(Object.keys(host.state.files)).toEqual([]);
+  });
+
+  it("throws when the command reports no pid", async () => {
+    const { host } = hostThatLaunches({ stdout: "something else\n" });
+    await withRun(host, async () => {
+      await expect(_spawn(question(), [], SPAWN_DIR)).rejects.toThrow("did not report a pid");
+    });
+  });
+});

@@ -1,6 +1,8 @@
-# Holding a question, and `agency attach`
+# `spawn`, holding a question, and `agency attach`
 
-A program run from the command line can meet an interrupt that no handler and no policy rule settled. This doc covers the third way a run answers one: it holds the question and waits for a person to answer it from another terminal with `agency attach`. The spec is `docs/superpowers/specs/2026-11-15-start-a-program-in-its-own-process.md`.
+`spawn` in `std::agency` starts an Agency file as a process of its own. The process outlives its caller and shares nothing with the caller's run. It has its own handlers, policy, limits, trace, and checkpoints. Nothing the caller wrote can answer its questions, so a question its own policy does not settle is held until a person answers it from another terminal with `agency attach`.
+
+The first half of this doc covers holding and attaching, which work for any program run with `--wait-for-response`. The second half covers `spawn`. The spec is `docs/superpowers/specs/2026-11-15-start-a-program-in-its-own-process.md`.
 
 ## The three ways a run answers an interrupt nobody settled
 
@@ -93,8 +95,82 @@ The prompt reads as the one `--interactive` shows, from `buildDecider({ interact
 
 The command refuses to attach when its standard input is not a terminal. The prompt rejects a question when there is no terminal, and an attach must not answer for the person.
 
+When the program has an output file, attach also prints the program's output: what the file holds, and then what is added to it. `outputFollower` in `lib/cli/outputFollower.ts` polls the file's size, since `fs.watch` behaves differently on each platform. `watch` pauses it while a prompt has the terminal and lets it catch up afterwards. The path comes from the record on disk, so a symbolic link there is refused.
+
+## `spawn` and how it differs from `run()`
+
+| | `run()` | `spawn()` |
+| --- | --- | --- |
+| The child lives | until the call returns | after the caller has ended |
+| The caller's handlers | answer the child's interrupts over IPC | answer nothing the child raises |
+| The result | comes back to the caller | is not returned; `spawn` returns a pid |
+| The effect | `std::run` | `std::spawn` |
+
+A handler chain is scoped by position in the caller's code. Code that outlives its caller cannot reach back into blocks that have closed, so a spawned program is a new root.
+
+`spawn` in `stdlib/agency.agency` does its checks, builds one `SpawnQuestion` value, raises `std::spawn` with it, and then hands the same value to `_spawn` in `lib/stdlib/spawn.ts`. What was approved is what runs. A rejected start has written nothing: `_spawnPaths` only names paths, and the folder is made after the approval.
+
+### The effect
+
+`std::spawn` carries the file, the node, the arguments, the policy, both limits, the number of seed messages, the name, the working directory, the output file, and the depth. The payload has the count of the seed messages and not the messages.
+
+`std::spawn` is in no effect set in `stdlib/effectSets.agency`. `Shell` holds `std::run`, and a rule that approves running sandboxed code must not approve starting a process that outlives the program.
+
+The effect declares `@always(dir, filename)` (`docs/dev/language/effect-always-tag.md`). An "always approve when" answer to a spawn prompt therefore pins the folder and the file being started. It does not pin the policy, the limits, or the arguments.
+
+### The launch
+
+`_spawn` runs the command line: `agency run --detach <output-file> --wait-for-response …`. The command line is the one place that turns run flags into settings, so `spawn` builds a command and copies none of that logic. `spawnCommand` states the flags as rows of data, and always writes `--` before the program's arguments, so they are never read as `agency`'s.
+
+`--detach <output-file>` is a flag of `run` and `resume` (`startDetached` in `lib/cli/detached.ts`). The program starts in its own process group with both output streams appended to the file, and the command prints `{"pid", "outputFile"}` as its last line and exits. The pid is the program's own, the one `ps` shows and `agency attach` takes. The file is opened with `O_NOFOLLOW`, so a symbolic link at the path is refused. The mode `0600` applies when the file is created, and an existing file keeps its mode. `--detach` cannot be given with `-i` or `--capture-workdir`.
+
+The policy reaches the command in a file, `policy.json` in the program's folder, which `_spawn` removes once the command has returned. A policy with no rules needs no file, since `--wait-for-response` alone installs an empty policy.
+
+### The carriers
+
+`--name`, `--messages`, and `--detach` travel from the command to the program as `AGENCY_PROCESS_TITLE`, `AGENCY_SEED_MESSAGES`, and `AGENCY_OUTPUT_FILE`. `withRootCarriers` in `lib/cli/childEnv.ts` holds them as rows in `TEXT_CARRIERS`, clears each one, and sets the ones given. `runLaunchFrom` in `lib/cli/runLaunch.ts` turns the three flags into one `RunLaunch` value for `run()`.
+
+`runCliEntry` sets `process.title` from the first, so every `agency run` shows in `ps` as `agency run <name>`, with the input file's name as the default.
+
+### The environment a spawned program gets
+
+`spawnEnvironment` builds the launcher's whole environment: the caller's, without `AGENCY_TRACE_ID`, `AGENCY_CONFIG_OVERRIDES`, and every `AGENCY_IPC*` variable, and with `AGENCY_SPAWN_DEPTH` set. Those three tie a process to its caller's run. Without them the spawned program has a trace of its own and reads its own `agency.json`.
+
+### The seed
+
+`agency run --messages <file>` puts a list of messages on the program's first thread. `spawn` passes `--messages -`, and the messages travel through the launcher's standard input to the program's. They are never written to a file on that path. A person who names their own file keeps it: Agency reads it and leaves it.
+
+`takeSeedMessages` in `lib/runtime/platform.node.ts` reads the seed, and `runNode` puts it on the thread with `seedFirstThread`. The seed is taken once per process, recorded in a `processSlot`, because `runNode` runs for every node a process starts. A `run()` child inherits its parent's environment and is not seeded.
+
+`seedFrom` in `lib/runtime/seedMessages.ts` drops every tool call in the last assistant message that has no result. A conversation looks like that at the moment a model starts a process by calling a tool, and a provider refuses it. `keepToolCalls` in `lib/runtime/threadRepair.ts` does the edit, and `dropHandoffToolCall` uses the same function.
+
+`--messages` is a flag of `run` only. A resumed program's threads come from its checkpoint.
+
+### The folder
+
+A spawned program's default output file is `~/.agency/spawned/<id>/output.log`. `_spawn` makes the folder with `host.files.privateDir` (mode `0700`). When the caller names its own output file and the policy has no rules, no folder is made. Nothing removes old folders yet.
+
+### The depth and the count
+
+`MAX_SPAWN_DEPTH` is 5. The depth travels in `AGENCY_SPAWN_DEPTH`, which `withRootCarriers` leaves alone on purpose, so a shell job that runs `agency run --detach` is counted too.
+
+`MAX_SPAWNS_PER_RUN` is 500. The count is `spawnCount` on the run's `RuntimeContext`, so every branch of a `fork` shares it. It is saved in every checkpoint taken after the first start (`Checkpoint.spawnCount`), and the checkpoint's signature covers it.
+
+`restoreState` calls `adoptSpawnCount`, which keeps the larger of the live count and the saved one. A resume in a new process starts at zero and takes the saved count. A `restore()` inside a run that has started more programs since keeps its own count, because those processes were started and a restore does not un-start them. A run's spend behaves the other way: it is set back on a restore (`docs/dev/runtime/cost-is-state.md`). A count that followed spend would let a loop of `restore()` and `spawn` start processes without limit.
+
+`spawn` fails inside a `run()` subprocess, which is a sandbox tied to its parent.
+
+### The output cap
+
+A detached program saves at most 10 MiB of each output stream (`SPAWN_OUTPUT_LIMIT_BYTES`). The command that started it has exited, so the program limits itself: `runCliEntry` calls `capOutput` in `lib/runtime/outputCap.ts` when `AGENCY_OUTPUT_FILE` is set. The line written at the limit says so.
+
+The cap covers what the program itself writes. A child started through the host (`lib/host/node/nodeSubprocess.ts`) gets pipes or nothing for its output and never the program's own streams, so `std::shell` commands and shell jobs do not write to the file directly.
+
 ## Tests
 
+- `lib/stdlib/spawn.test.ts`: the command, the environment, the policy file, the seed on standard input, and the count.
+- `tests/agency/spawn.agency`: the checks that end before a program starts.
+- `lib/cli/detach.spawn.test.ts` and `lib/cli/spawn.spawn.test.ts`: the built command line starting real programs.
 - `lib/runtime/heldQuestions.test.ts`: the batch, the checks on answers, and the notice.
 - `lib/runtime/heldCheckpoint.test.ts` and `lib/runtime/cliInterruptResolution.test.ts`: the checkpoint file, with the setting on and off.
 - `lib/debugger/attach/watch.test.ts` and `lib/cli/attachWatch.test.ts`: the two ends of a watching connection, on a memory channel.

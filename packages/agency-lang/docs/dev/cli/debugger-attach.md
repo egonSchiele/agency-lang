@@ -50,6 +50,8 @@ Several clients can watch one program. Each is sent the same `held`, and the fir
 
 A debugger and a watching client can be connected to one program at the same time. They share the socket and nothing else.
 
+The record has a second optional field, `outputFile`: the file a detached program's output is saved to, which `agency attach` prints from.
+
 The record gains an optional field, `holding`, which is true while the program holds a question. `registerAttach` rewrites the record from the copy it kept each time a batch starts or ends (`writeRecord` writes a new file and renames it into place, so a reader never finds the record missing), and `formatListing` shows `waiting` for it in a `STATE` column.
 
 ## Two parties, one answer

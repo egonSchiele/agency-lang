@@ -20,9 +20,10 @@ import { applyRestoreSignal } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
-import { loadConfiguredProviders, registerAttach } from "#platform";
+import { loadConfiguredProviders, registerAttach, takeSeedMessages } from "#platform";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
-import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
+import { getSubprocessRunInfo, isIpcMode } from "./subprocessRunInfo.js";
+import { seedFirstThread } from "./seedMessages.js";
 import { TRACE_ID_ENV } from "../config/config.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
@@ -469,6 +470,12 @@ async function runNodeCore({
 
       let isResume = false;
       let threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
+      // `agency run --messages`. A `run()` child inherits its parent's
+      // environment, and must not be seeded with the parent's conversation.
+      const seed = isIpcMode(execCtx.host) ? null : takeSeedMessages(execCtx.host.settings);
+      if (seed !== null) {
+        seedFirstThread(threadStore, seed);
+      }
       while (true) {
         try {
           // Install an initial AsyncLocalStorage frame so stdlib helpers

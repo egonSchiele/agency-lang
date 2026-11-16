@@ -55,6 +55,25 @@ describe("CallbackServer", () => {
     await expect(wait).rejects.toThrow("OAuth callback timed out");
   });
 
+  it("stops on its own after its lifetime when nobody finishes the login", async () => {
+    const port = await freePort();
+    const server = new CallbackServer({ port, state: STATE, lifetimeMs: 30 });
+    await server.start();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await expect(fetch(callbackUrlFor(port))).rejects.toThrow();
+    await expect(server.waitForCode()).rejects.toThrow("Start the login again");
+  });
+
+  it("says another login holds the port when the port is in use", async () => {
+    const { server: first, url } = await startedServer();
+    const port = Number(new URL(url).port);
+    const second = new CallbackServer({ port, state: STATE });
+    await expect(second.start()).rejects.toThrow(
+      `another login is in progress (port ${port} is in use). Finish or cancel it, then try again.`,
+    );
+    await first.stop();
+  });
+
   it("stop rejects a pending waitForCode", async () => {
     const { server } = await startedServer();
     const wait = server.waitForCode();

@@ -27,6 +27,20 @@
       "expectedOutput": "[\".gitignore\",\"ignored.md\",\"kept.md\",\"out\",\"out/inside.md\"]",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "a recursive ls with respectGitignore false lists every entry"
+    },
+    {
+      "nodeName": "grepSkipsIgnored",
+      "input": "",
+      "expectedOutput": "[\"kept.md\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "grep skips a file and a folder the fixture's .gitignore ignores"
+    },
+    {
+      "nodeName": "grepIncludesIgnoredWhenAsked",
+      "input": "",
+      "expectedOutput": "[\"ignored.md\",\"kept.md\",\"out/inside.md\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "grep with respectGitignore false searches ignored files"
     }
   ]
 }

@@ -1,5 +1,9 @@
 // A validated parameter that does not fit says so in words a model can act
 // on: which argument, what type it takes, and what arrived.
+//
+// Keep the order of the calls: two calls that fail validation come before
+// two that pass, and the passing calls must still return their values. That
+// checks that a failed validated call leaves later calls working.
 
 def isPositive(value: number): Result<number> {
   if (value > 0) {

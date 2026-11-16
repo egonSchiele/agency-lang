@@ -115,7 +115,7 @@ describe("renderUnknownName", () => {
 });
 
 /** Run `effectsCmd` with stdout, stderr, and process.exit captured. */
-function runEffectsCmd(name: string): { stdout: string; stderr: string; exitCode: unknown } {
+function runEffectsCmd(name?: string): { stdout: string; stderr: string; exitCode: unknown } {
   let stdout = "";
   let stderr = "";
   const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
@@ -137,6 +137,15 @@ function runEffectsCmd(name: string): { stdout: string; stderr: string; exitCode
 }
 
 describe("effectsCmd", () => {
+  it("lists sets and built-in policies with no name", () => {
+    const { stdout, exitCode } = runEffectsCmd();
+    expect(exitCode).toBeUndefined();
+    expect(stdout).toContain("FileRead");
+    expect(stdout).toContain("Read-only filesystem access");
+    expect(stdout).toContain("Built-in policies:");
+    expect(stdout).toContain("with-writes");
+  });
+
   it("describes one set with its members", () => {
     const { stdout, exitCode } = runEffectsCmd("FileRead");
     expect(exitCode).toBeUndefined();

@@ -34,8 +34,10 @@ Each item was checked against the test it repeats.
 | `tests/agency/fork/edge-cases/fork-empty` | `tests/agency/race-empty`, which checks `fork([])` |
 | `tests/agency/stdlib/setenv-roundtrip` | `tests/agency/env-interrupt`, which does the same round trip and also checks the effects raised |
 | `tests/agency/stdlib/gitignore-search`: 5 of 9 cases (folder named as the root, folder named in the pattern, plain `ls`, `ls` and `grep` on a named folder) | `lib/stdlib/shell.test.ts`. The 4 cases kept check the Agency wrappers' default and the `respectGitignore` option |
-| `tests/agency/validation/bangParams`, `bangParamsFail`, `bangParamsMultipleCalls` | `tests/agency/validation/bangMultipleParams` |
-| `tests/integration/cli-main`: `pack` standalone and `pack` with imports, `trace log`, `fmt` run twice and stdout mode, full coverage and `coverage clean`, `bundle` and `unbundle`, single-file `doc`; plus the fixtures only they used | The pull-request suites `cli-tier2` and `cli-lang`. `cli-main` keeps one `fmt` case (the alias of `format`) and the bare `trace <file>` case (the default subcommand), since nothing else checks those forms |
+| `tests/agency/validation/bangParams`, `bangParamsFail` | `tests/agency/validation/bangMultipleParams` |
+| `tests/agency/validation/bangParamsMultipleCalls` (a failed call, then a good call that must still return its value) | `tests/agency/validation/bangParamsMessage`, whose failing calls come before passing ones that are checked exactly. A comment there now says the order matters |
+| `tests/integration/cli-main`: `pack` standalone and `pack` with imports, `trace log`, `fmt` run twice and stdout mode, full coverage and `coverage clean`, `bundle` and `unbundle`; plus the fixtures only they used | The pull-request suites `cli-tier2` and `cli-lang`. `cli-main` keeps one `fmt` case (the alias of `format`) and the bare `trace <file>` case (the default subcommand), since nothing else checks those forms |
+| `tests/integration/cli-main`: single-file `doc`, which compared the whole page with an expected file | Partly. `cli-lang` checks one function's page from the packed tarball. Types, nodes, the parameters table, and the module description are tested only in-process by `lib/cli/doc.test.ts`, so the tarball no longer checks them |
 | `tests/typecheck/redact-custom-label.agency` | Nothing referred to it |
 | `test:agency` scripts in `packages/email` and `packages/mcp` | They pointed at `tests/agency` folders that do not exist |
 
@@ -107,9 +109,9 @@ There are 1,207 `.test.json` files with 2,424 cases, plus 230 agency-js tests, o
 
 ## Question 1: tests to remove
 
-The removals are in the tables above. Four skipped tests remain, left for a later PR:
+The removals are in the tables above. Eight skipped tests remain. The four `result-*` tests wait on decision 1; the other four are left for a later PR.
 
-- `tests/agency/result/result-{extended,restore-globals,retry-new-args,retry}`: skipped since 2026-06-04. The feature still ships (`restore()` at `lib/typeChecker/builtins.ts:405`; `checkpoint` on failures at `lib/runtime/result.ts:77`). This is decision 1.
+- `tests/agency/result/result-{extended,restore-globals,retry-new-args,retry}`: four tests, skipped since 2026-06-04. The feature still ships (`restore()` at `lib/typeChecker/builtins.ts:405`; `checkpoint` on failures at `lib/runtime/result.ts:77`). This is decision 1.
 - `tests/agency/function-refs/functionRef-object-interrupt`: skipped as "not yet supported". A reviewer noticed the compiled code now handles the call, so it may pass. Not checked.
 - `tests/agency/hosted-tools/web-search`, case `searchEnabled`: flaky live search, skipped since 2026-07-20.
 - `lib/lsp/semanticTokens.test.ts:307`: skipped since 2026-09-20.

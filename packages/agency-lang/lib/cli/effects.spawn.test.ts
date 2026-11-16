@@ -19,14 +19,13 @@ async function effects(
 }
 
 // Which output each argument picks is tested in-process in effects.test.ts.
-// This file only checks that the built CLI runs the command.
+// This file checks that the built CLI runs the command and hands it the
+// name: with the name dropped, it would print the full list instead.
 describe.skipIf(!existsSync(CLI))("agency effects", () => {
-  it("lists sets and built-in policies", async () => {
-    const { code, stdout } = await effects();
+  it("passes the name to the command", async () => {
+    const { code, stdout } = await effects("FileRead");
     expect(code).toBe(0);
-    expect(stdout).toContain("FileRead");
-    expect(stdout).toContain("Read-only filesystem access");
-    expect(stdout).toContain("Built-in policies:");
-    expect(stdout).toContain("with-writes");
+    expect(stdout).toContain("std::read");
+    expect(stdout).not.toContain("Built-in policies:");
   });
 });

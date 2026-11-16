@@ -1,0 +1,89 @@
+// The spawning brain from std::agents/brains/spawning, under a scripted
+// model. No case here starts a process: the handler rejects std::spawn, and
+// its reason carries back what the start was asked with.
+import { spawningBrain, startAgent } from "std::agents/brains/spawning"
+import { AgentSettings } from "std::agents/brains/settings"
+
+// Every model request, in order.
+let calls: any[] = []
+
+callback("onLLMCallStart") as data {
+  calls = [...calls, data]
+}
+
+def settingsWith(model: string, provider: string): AgentSettings {
+  return {
+    context: "",
+    model: model,
+    provider: provider,
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: "",
+    routerProvider: "",
+    coderTools: []
+  }
+}
+
+def requestHasSystemText(call: any, text: string): boolean {
+  for (message in call.messages) {
+    const content = "${message.content}"
+    if (message.role == "system" && content.includes(text)) {
+      return true
+    }
+  }
+  return false
+}
+
+// The minimal brain's four tools, then startAgent.
+node offersTheFourToolsAndStartAgent(): string[] {
+  spawningBrain(["say hi"], settingsWith("", ""), [])
+  return [tool.name for tool in calls[0].tools]
+}
+
+// The model is told when to start an agent, and still gets the coding rules.
+node tellsTheModelAboutStartingAgents(): boolean {
+  spawningBrain(["say hi"], settingsWith("", ""), [])
+  return requestHasSystemText(calls[0], "startAgent tool")
+}
+
+// The settings are bound, so the model sees the task and the name only.
+node theModelSeesOnlyTheTaskAndTheName(): string[] {
+  spawningBrain(["say hi"], settingsWith("", ""), [])
+  for (tool in calls[0].tools) {
+    if (tool.name == "startAgent") {
+      return Object.keys(tool.schema.def.shape)
+    }
+  }
+  return ["no startAgent tool"]
+}
+
+/** What std::spawn was asked with, passed back as the rejection's reason. */
+def askedWith(model: string, provider: string, task: string): string {
+  handle {
+    const started = startAgent(settingsWith(model, provider), task, "review-pr-12")
+    if (started is failure(err)) {
+      return err
+    }
+    return "started"
+  } with (intr) {
+    if (intr.effect != "std::spawn") {
+      return reject("an effect other than std::spawn: ${intr.effect}")
+    }
+    const d = intr.data
+    return reject("file=${d.filename}|node=${d.node}|name=${d.name}|policy=${JSON.stringify(d.policy)}|args=${JSON.stringify(d.args)}|")
+  }
+}
+
+// A start raises std::spawn for the packaged program, with no approval
+// rules, so the started agent's questions all wait for a person.
+node startRaisesSpawnWithNoRules(): boolean {
+  const asked = askedWith("", "", "Review PR 12")
+  return asked.includes("file=task.agency|node=main|name=review-pr-12|policy={}|args=[\"--\",\"Review PR 12\"]|")
+}
+
+// The call's model goes to the started program, and a task that starts
+// with a dash stays a task.
+node startPassesTheModel(): boolean {
+  const asked = askedWith("test-model", "test-provider", "--help me")
+  return asked.includes("args=[\"--model\",\"test-model\",\"--provider\",\"test-provider\",\"--\",\"--help me\"]|")
+}

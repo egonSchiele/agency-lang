@@ -138,6 +138,10 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::agents/brains/simple": [
     "simpleBrain"
   ],
+  "std::agents/brains/spawning": [
+    "startAgent",
+    "spawningBrain"
+  ],
   "std::agents/coding": [
     "buildTools",
     "codingAgent"
@@ -222,6 +226,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "runApproved",
     "plannerAgent"
   ],
+  "std::agents/programs/task": [],
   "std::agents/researcher": [
     "buildTools",
     "researcherAgent"

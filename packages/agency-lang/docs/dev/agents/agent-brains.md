@@ -42,13 +42,15 @@ export def agencyAgent(
 - `context` is extra text, such as the user's instructions. Each brain adds
   it as a system message that expires with the call, and each subagent
   wrapper passes it to its stdlib agent.
-- `brain` picks one of three brains (`stdlib/agents/brains/`):
+- `brain` picks one of four brains (`stdlib/agents/brains/`):
   - `coordinator`, the default: one model that answers itself or hands
     the turn to the code, Agency code, research, oracle, explorer, review,
     writing, and rewrite subagents.
   - `minimal`: one coder with four tools and a short prompt, for
     benchmarks and sandboxed runs.
   - `simple`: one LLM call with no tools of its own.
+  - `spawning`: the minimal brain, plus a tool that starts another agent
+    as a process of its own. See "The spawning brain" below.
 
   `agencyAgentBrains()` lists them with a one-line description each.
 - `maxCost` and `maxTime` are the budget for the whole call. A negative
@@ -249,6 +251,45 @@ handler wrapped in `approvingInstructionReads`: while `projectContextText`
 reads the instruction files, a `std::read` of `AGENTS.md` or `CLAUDE.md`
 that no rule decides is approved instead of asking the user. A `reject`
 rule still wins.
+
+## The spawning brain
+
+`spawningBrain` in `stdlib/agents/brains/spawning.agency` calls
+`minimalBrain` with one more tool, `startAgent`, and one more system
+message that says when to use it: for several unrelated tasks, or for a
+task the user wants in the background.
+
+`startAgent(task, name)` calls `spawn` from `std::agency`
+(`docs/dev/runtime/spawn.md`) on a program packaged with Agency,
+`stdlib/agents/programs/task.agency`. That program runs `agencyAgent` with
+the minimal brain on the one task, prints the reply, and exits.
+`_agentProgramsDir()` in `lib/stdlib/skills.ts` finds the folder, the way
+`_agentPromptsDir()` finds the prompts.
+
+What follows from using `spawn`:
+
+- **The start is approved like any other action.** `startAgent` raises
+  `std::spawn` through `spawn`, and installs no handler. The payload shows
+  the task, in `args`. In `agency agent` the session's policy decides it, or
+  the user is asked.
+- **The model does not choose the rules.** `startAgent` takes a task and a
+  name. It passes no policy, so the started agent runs with no approval
+  rules, and every question it raises waits for a person, who answers it
+  with `agency attach`. That includes every file read. The model cannot
+  give an agent it starts more than it has itself.
+- **Nothing comes back.** The tool returns the process id, the name, and
+  the output file. The started agent's reply goes to its output file. The
+  brain's prompt tells the model to give the user the process ids.
+- **A started agent cannot start another.** It runs the minimal brain.
+- **The call's model is passed on** as `--model` and `--provider`. An
+  ambient model is not: the started program uses its own configured one.
+
+The task goes after a `--` in the program's arguments, so a task that
+starts with a dash is still read as the task.
+
+`agency run` compiles `task.agency` next to its source the first time it
+is started, as it does for any program. In a package folder that cannot be
+written to, the start fails.
 
 ## Adding a brain
 

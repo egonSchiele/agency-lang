@@ -1,0 +1,85 @@
+/** @module
+  @summary The minimal brain plus a tool that starts another agent as a separate process.
+
+  A brain of the Agency agent for a message that holds several unrelated
+  tasks. It is the minimal brain with one more tool, `startAgent`, which
+  starts another agent on a task as a process of its own.
+
+  A started agent is a separate program, started with
+  [`spawn`](/guide/spawning-processes). It keeps running after this agent's reply, and after this agent has
+  exited. Its reply does not come back here: it is saved in the process's
+  output file. It is started with no approval rules, so every question it
+  raises waits for a person, who answers it with `agency attach`.
+*/
+import { ProcessInfo, spawn } from "std::agency"
+import { minimalBrain } from "std::agents/brains/minimal"
+import { AgentSettings } from "std::agents/brains/settings"
+import { Attachment, ensureSystemMessage } from "std::thread"
+import { _agentProgramsDir } from "agency-lang/stdlib-lib/skills.js"
+
+/** The packaged program a started agent runs. */
+static const TASK_PROGRAM = "task.agency"
+
+static const SPAWN_RULES = """
+You can start other agents with the startAgent tool. Each one runs as a separate process, on one task, and keeps running after you reply.
+
+Use it when the user gives you several unrelated tasks, or asks for a task to run in the background. Start one agent for each task, and do not do those tasks yourself. Do a single task yourself.
+
+A started agent sees none of this conversation, so its task must say everything it needs to know. You will not see its result.
+
+After you start agents, tell the user each one's name, process id, and output file, and that `agency attach <process id>` shows what an agent has printed and answers its questions.
+"""
+
+/** The flags that give the started program this call's model, or none
+  when the call uses the ambient model. */
+def modelArgs(settings: AgentSettings): string[] {
+  if (settings.model == "") {
+    return []
+  }
+  if (settings.provider == "") {
+    return ["--model", settings.model]
+  }
+  return ["--model", settings.model, "--provider", settings.provider]
+}
+
+export def startAgent(
+  settings: AgentSettings,
+  task: string,
+  name: string = "agent",
+): Result<ProcessInfo> {
+  """
+  Start another agent on one task as a separate process, and return at once with its process id, its name, and the file its output is saved to. The agent keeps running after you reply. Its result does not come back to you. It sees none of this conversation, so put everything it needs in the task.
+
+  @param task - What the agent should do, with everything it needs to know
+  @param name - A short name for the process, such as "review-pr-12"
+  """
+  // `--` ends the program's own flags, so a task that starts with a dash
+  // is still read as the task.
+  return spawn(
+    _agentProgramsDir(),
+    TASK_PROGRAM,
+    args: [...modelArgs(settings), "--", task],
+    name: name,
+  )
+}
+
+export def spawningBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message with the minimal brain's tool loop, plus a tool that
+  starts another agent as a process of its own.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - Tools added to the brain's own
+  """
+  ensureSystemMessage(SPAWN_RULES)
+  return minimalBrain(
+    prompt,
+    settings,
+    [startAgent.partial(settings: settings), ...extraTools],
+  )
+}

@@ -1,0 +1,46 @@
+{
+  "sourceFile": "brainSpawning.agency",
+  "tests": [
+    {
+      "nodeName": "offersTheFourToolsAndStartAgent",
+      "description": "The spawning brain offers read, bash, edit, and write, then startAgent.",
+      "input": "",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"startAgent\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "tellsTheModelAboutStartingAgents",
+      "description": "The system prompt says when to start an agent.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "theModelSeesOnlyTheTaskAndTheName",
+      "description": "The settings are bound, so startAgent's schema has the task and the name only.",
+      "input": "",
+      "expectedOutput": "[\"task\",\"name\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "startRaisesSpawnWithNoRules",
+      "description": "startAgent raises std::spawn for the packaged task program, with an empty policy.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "startPassesTheModel",
+      "description": "startAgent passes the call's model to the program, and puts -- before the task.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

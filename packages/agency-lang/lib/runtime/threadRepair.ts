@@ -44,6 +44,35 @@ export function unansweredToolCalls(messages: MessageThread): DanglingToolCall[]
   return calls.filter((c) => !answeredIds.includes(c.id));
 }
 
+/**
+ * Rewrite the assistant message at `index` so that it carries only the
+ * tool calls `keep` accepts. When calls remain, the others are removed and
+ * the rest still pair with their tool results. When none remain, the
+ * message's text stays, and a message that was only calls is removed.
+ * Nothing is added in place of a removed call.
+ */
+export function keepToolCalls(
+  thread: MessageThread,
+  index: number,
+  keep: (call: { id: string; name: string }, position: number) => boolean,
+): void {
+  const carrier = thread.getMessages()[index] as smoltalk.AssistantMessage;
+  const json = carrier.toJSON();
+  const kept = (json.toolCalls ?? []).filter(keep);
+  if (kept.length > 0) {
+    thread.replaceAt(index, smoltalk.AssistantMessage.fromJSON({ ...json, toolCalls: kept }));
+    return;
+  }
+  const text = typeof carrier.content === "string" ? carrier.content.trim() : "";
+  if (text === "") {
+    thread.removeAt(index);
+    return;
+  }
+  // The reasoning that led to the text stays with it, so smoltalk can send
+  // it back to the model that made it.
+  thread.replaceAt(index, smoltalk.assistantMessage(text, { reasoning: carrier.reasoning }));
+}
+
 function hasAssistantTurn(messages: MessageThread): boolean {
   return messages.getMessages().some((m) => m instanceof smoltalk.AssistantMessage);
 }

@@ -148,6 +148,8 @@ import { debug } from "@/cli/debug.js";
 import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import { attachCommand } from "@/cli/attach.js";
 import { attachWatchCommand } from "@/cli/attachWatch.js";
+import { runLaunchFrom } from "@/cli/runLaunch.js";
+import { EXIT_CODE_USAGE_ERROR } from "@/constants.js";
 import { addDebugSessionCommands } from "@/cli/debugSession/register.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
 import type { ResolvedModelFlag } from "@/config/config.js";
@@ -180,6 +182,10 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   reject?: string;
   interactive?: boolean;
   waitForResponse?: boolean;
+  name?: string;
+  /** `run` only: a resumed program's threads come from its checkpoint. */
+  messages?: string;
+  detach?: string;
   maxCost?: string;
   maxTime?: string;
   local?: string;
@@ -402,6 +408,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
   ) {
     options = await withLocalModel(options);
     const { config, runPolicy, budget } = runSettings(options, input);
+    const launch = runLaunchFrom(options, input, process.cwd());
+    if ("refused" in launch) {
+      console.error(`Error: ${launch.refused}`);
+      process.exit(EXIT_CODE_USAGE_ERROR);
+    }
     run(
       config,
       input,
@@ -413,6 +424,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
       { agencyOnly: options.agencyOnly ?? false },
       entryNode,
+      launch,
     );
   }
 
@@ -529,6 +541,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
           "--wait-for-response",
           "Wait for `agency attach` to answer interrupts that surface unhandled (default: reject them)",
         ).conflicts("interactive"),
+      )
+      .option(
+        "--name <name>",
+        "The name this run shows in `ps`, as `agency run <name>` (default: the input file's name)",
+      )
+      .addOption(
+        new Option(
+          "--detach <output-file>",
+          "Start the program in the background, save its output to this file, and return at once; prints its pid as JSON",
+        ).conflicts(["interactive", "captureWorkdir"]),
       )
       .option(
         "--capture-workdir <dir>",
@@ -666,6 +688,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // same command object, so both spellings share options, action, help.
       .passThroughOptions()
       .description("Compile and run .agency file(s)")
+      .option(
+        "--messages <file>",
+        "A JSON file holding a list of messages; the program's first thread starts with them. `-` reads standard input, with --detach",
+      )
       .argument("<input>", "Path to .agency input file, optionally file.agency:nodeName")
       .argument(
         "[nodeArgs...]",

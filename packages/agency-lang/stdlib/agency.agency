@@ -22,6 +22,8 @@ import {
   _readTestFileSandbox,
  } from "agency-lang/stdlib-lib/agency.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
+import { _checkSpawnFile, _spawn, _spawnCount, _spawnDepth, _spawnPaths, _spawnProblem } from "agency-lang/stdlib-lib/spawn.js"
+import { _validatePolicy } from "agency-lang/stdlib-lib/policy.js"
 import {
   _loadTemplate,
   _holesOf,
@@ -77,6 +79,24 @@ effect std::run {
   module: string;
   function: string;
   trustedModules: string[]
+}
+// Separate from std::run on purpose, and in no effect set: a rule that
+// approves running sandboxed code must not approve starting a process that
+// outlives the program. An "always approve when" answer pins the file.
+@always(dir, filename)
+effect std::spawn {
+  dir: string;
+  filename: string;
+  node: string;
+  args: string[];
+  policy: Record<string, any>;
+  maxCost: number | null;
+  maxTime: number | null;
+  messageCount: number;
+  name: string;
+  cwd: string;
+  outputFile: string;
+  depth: number
 }
 
 /** A compiled program returned by compile; retain the full returned value for execution. */
@@ -471,6 +491,117 @@ export def runFile(
     stdout: stdout,
     maxCost: maxCost,
   )
+}
+
+/** A program started by spawn. */
+export type ProcessInfo = {
+  pid: number;
+  name: string;
+  outputFile: string
+}
+
+/** What std::spawn asks about: the program, and everything it is started with. */
+type SpawnQuestion = {
+  dir: string;
+  filename: string;
+  node: string;
+  args: string[];
+  policy: Record<string, any>;
+  maxCost: number | null;
+  maxTime: number | null;
+  messageCount: number;
+  name: string;
+  cwd: string;
+  outputFile: string;
+  depth: number
+}
+
+static const MAX_SPAWN_DEPTH = 5
+static const MAX_SPAWNS_PER_RUN = 500
+
+@capabilities(fileRead, fileWrite, subprocess, env)
+export def spawn(
+  dir: string,
+  filename: string,
+  node: string = "main",
+  args: string[] = [],
+  policy: Record<string, any> = {},
+  maxCost: number | null = null,
+  maxTime: number | null = null,
+  messages: any[] = [],
+  name: string = "",
+  cwd: string | null = null,
+  outputFile: string | null = null,
+): Result<ProcessInfo> {
+  """
+  Start an Agency file as a separate process and return at once. The process keeps running after this program ends. It has its own approval rules, given here as policy, and its own cost and time limits. A handler around this call approves the start and nothing the process does later. A question the process cannot settle waits for a person, who answers it with agency attach. What the process prints is saved to the output file in the result.
+
+  @param dir - The directory containing the file.
+  @param filename - The Agency file to run.
+  @param node - The node to start.
+  @param args - Arguments the program reads with std::args.
+  @param policy - The approval rules the process runs under. The default has no rules.
+  @param maxCost - The most the process may spend, in dollars, or null to set no limit here. A budget in the program's own agency.json still applies.
+  @param maxTime - The longest the process may work, in milliseconds, or null to set no limit here. A budget in the program's own agency.json still applies.
+  @param messages - A conversation the process's first thread starts with.
+  @param name - The name the process shows in ps. The default is the filename.
+  @param cwd - The working directory. The default is this program's.
+  @param outputFile - The file the process's output is saved to. The default is a new file under ~/.agency/spawned.
+  """
+  if (_subprocessDepth() > 0) {
+    return failure("spawn cannot be called inside a run() subprocess.")
+  }
+  const depth = _spawnDepth() + 1
+  if (depth > MAX_SPAWN_DEPTH) {
+    return failure("spawn is ${depth} levels deep, past the limit of ${MAX_SPAWN_DEPTH}.")
+  }
+  if (_spawnCount() >= MAX_SPAWNS_PER_RUN) {
+    return failure("This run has started ${MAX_SPAWNS_PER_RUN} processes, which is the limit.")
+  }
+  const valid = _validatePolicy(policy)
+  if (!valid.success) {
+    return failure("Invalid policy: ${valid.error}")
+  }
+  const problem = _spawnProblem(filename, node, maxCost, maxTime)
+  if (problem != null) {
+    return failure(problem)
+  }
+  const prepared = try _prepareContainedPath(dir, filename, "read")
+  if (isFailure(prepared)) {
+    return prepared
+  }
+  const found = try _checkSpawnFile(prepared.value.dir, prepared.value.filename)
+  if (isFailure(found)) {
+    return found
+  }
+  const paths = _spawnPaths(outputFile, cwd)
+  const shownName = if name != "" then name else filename
+  // Built once. The interrupt shows this value and _spawn starts the
+  // program from it, so what was approved is what runs.
+  const question: SpawnQuestion = {
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
+    node: node,
+    args: args,
+    policy: policy,
+    maxCost: maxCost,
+    maxTime: maxTime,
+    messageCount: messages.length,
+    name: shownName,
+    cwd: paths.cwd,
+    outputFile: paths.outputFile,
+    depth: depth
+  }
+  return interrupt std::spawn("Start ${filename} as a separate process?", question)
+  const started = try _spawn(question, messages, paths.dir)
+  if (isFailure(started)) {
+    return started
+  }
+  return success({
+    pid: started.value.pid,
+    name: question.name,
+    outputFile: question.outputFile
+  })
 }
 
 export type InterruptAnswer = {

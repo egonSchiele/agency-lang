@@ -56,6 +56,9 @@ declare module "#platform" {
    *  record in the sessions directory and a signal listener; in a
    *  browser nothing. */
   export function registerAttach(args: RegisterAttachArgs): void;
+  /** The parsed seed messages of `agency run --messages`, the first time
+   *  it is asked for in a process, and null after; in a browser, null. */
+  export function takeSeedMessages(): unknown | null;
 }
 
 declare module "#default-host" {

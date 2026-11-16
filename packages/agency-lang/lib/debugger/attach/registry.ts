@@ -33,6 +33,8 @@ export const AttachRecordSchema = z
     startedAt: z.number(),
     /** Whether the program is holding a question for `agency attach`. */
     holding: z.boolean().optional(),
+    /** The file a detached program's output is saved to. */
+    outputFile: z.string().optional(),
   })
   .strict();
 

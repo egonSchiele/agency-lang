@@ -1259,6 +1259,40 @@ describe("checkpoint signing at creation", () => {
   });
 });
 
+describe("the count of started programs in a checkpoint", () => {
+  afterEach(() => {
+    delete process.env.AGENCY_CHECKPOINT_KEY;
+  });
+  const take = (spawnCount: number) => {
+    const ctx = makeMockCtx();
+    ctx.spawnCount = spawnCount;
+    return Checkpoint.fromStateStack(ctx.stateStack, ctx, {
+      moduleId: "m",
+      scopeName: "main",
+      stepPath: "0",
+    });
+  };
+
+  it("is saved when the run has started a program, and survives a round trip", () => {
+    const json = take(3).toJSON();
+    expect(json.spawnCount).toBe(3);
+    expect(Checkpoint.fromJSON(JSON.parse(JSON.stringify(json)))?.spawnCount).toBe(3);
+  });
+
+  // A program that never spawns has checkpoints with the bytes it had.
+  it("is left out when the run has started none", () => {
+    expect(take(0).toJSON()).not.toHaveProperty("spawnCount");
+  });
+
+  it("is covered by the signature", () => {
+    process.env.AGENCY_CHECKPOINT_KEY = "0123456789abcdef0123456789abcdef";
+    const cp = take(3);
+    expect(verifyCheckpointChecksum(cp)).toBe(true);
+    cp.spawnCount = 0;
+    expect(verifyCheckpointChecksum(cp)).toBe(false);
+  });
+});
+
 describe("CheckpointStore inside a tool call", () => {
   function stackWithToolBranch(): StateStackJSON {
     return makeStackJSON([

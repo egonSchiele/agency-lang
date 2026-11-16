@@ -35,6 +35,9 @@ to continue from a saved checkpoint.
 - `--model <name>` — the model this run's `llm()` calls use by default, written as `model` or `provider/model`. See [choosing a model](#choosing-a-model) below.
 - `-i`, `--interactive` — prompt at the terminal for an interrupt that nothing in the program or its policy answered. See the [policies guide](../guide/policies#the-interactive-flag).
 - `--wait-for-response` — keep running and wait for [`agency attach`](./attach) to answer such an interrupt. See [waiting for an answer](#waiting-for-an-answer) below. It cannot be combined with `-i`.
+- `--name <name>` — the name this run shows in `ps`, as `agency run <name>`. The default is the input file's name.
+- `--detach <output-file>` — start the program in the background, save what it prints to this file, and return at once. See [running in the background](#running-in-the-background) below. It cannot be combined with `-i` or `--capture-workdir`.
+- `--messages <file>` — start the program with a conversation already on its first thread. See [starting with a conversation](#starting-with-a-conversation) below.
 
 ## Waiting for an answer
 
@@ -94,6 +97,60 @@ If this process stops, resume it with: agency resume /home/me/.agency/held/Xq3f-
 A checkpoint does not hold the program's policy or its cost and time limits, so the command carries them. If you started the program with `--policy`, `--approve`, or `--reject`, Agency saves the resulting policy in a second file beside the checkpoint and names it in the command. Keep the flags when you resume: without them the program comes back with no rules and no limits.
 
 Agency deletes both files once the question is answered. If the process dies first, the files stay. Resuming raises the same interrupt again, so the program's handlers and policy are consulted again, and the resumed program holds the question if they still do not answer it. Agency does not delete the files after a resume, so remove them when you no longer need them.
+
+## Running in the background
+
+`--detach` starts the program and returns at once. The program keeps running after the command exits, and after you close the terminal:
+
+```
+$ agency run --detach report.log --wait-for-response report.agency
+report.agency → report.js (in 187.79ms)
+{"pid":48213,"outputFile":"/home/me/project/report.log"}
+```
+
+The last line is JSON, so a script can read the process id from it.
+
+- **Output.** Everything the program prints, and its errors, are appended to the file you named. You always name the file: Agency does not pick a place to save a program's output for you. A new file is readable by you alone. The program stops saving at 10 MiB per stream and keeps running.
+- **Finding it.** The program shows in `ps` as `agency run report.agency`, or as `agency run <name>` when you pass `--name`. Stop it with `kill 48213`.
+- **Ctrl-C.** The program is in its own process group, so Ctrl-C in your terminal does not reach it.
+- **Interrupts.** A detached program has no terminal to prompt at. Add `--wait-for-response`, as above, and answer its questions with [`agency attach 48213`](./attach), which also prints the program's output.
+
+`agency resume` takes `--detach` too.
+
+The output file cannot be a symbolic link.
+
+To start a background program from Agency code, use [`spawn`](../guide/spawning-processes), which runs this command for you.
+
+## Starting with a conversation
+
+`--messages` puts a list of messages on the program's first thread before the program runs. The program's first `llm()` call then continues that conversation.
+
+```bash
+agency run --messages history.json assistant.agency
+```
+
+The file holds a JSON list of messages:
+
+```json
+[
+  { "role": "user", "content": "What is the capital of France?" },
+  { "role": "assistant", "content": "Paris." }
+]
+```
+
+Agency reads the file and leaves it where it is.
+
+Only the first thread is seeded. A `thread { }` block the program opens still starts empty.
+
+A conversation copied while a model was in the middle of calling a tool ends with a tool call that has no result, and a model provider refuses a conversation in that state. So Agency drops any tool call in the last assistant message that has no result. Nothing else in the list is changed.
+
+With `--detach`, the list can come from standard input, written as `-`:
+
+```bash
+cat history.json | agency run --detach out.log --messages - assistant.agency
+```
+
+`agency resume` does not take `--messages`. A resumed program's threads come from its checkpoint.
 
 ## Resuming a checkpoint
 

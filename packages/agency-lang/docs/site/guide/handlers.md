@@ -223,6 +223,22 @@ node main() {
 
 The same goes for two tools the model calls in one round: a handler inside one tool does not answer the other. `.preapprove()` follows the same rule.
 
+## Handlers and spawned processes
+
+A handler answers the interrupts raised while its block runs. A process started with [`spawn`](/guide/spawning-processes) keeps running after the block has ended, so the handler cannot answer what that process does.
+
+```ts
+import { spawn } from "std::agency"
+
+node main() {
+  // Approves starting report.agency. It approves nothing that
+  // report.agency does once it is running.
+  spawn("./scripts", "report.agency") with approve
+}
+```
+
+The spawned process answers its own interrupts, with the handlers in its own code and the policy you gave it when you started it.
+
 ## Raising interrupts inside a handler function
 
 Lets start with some terminology:

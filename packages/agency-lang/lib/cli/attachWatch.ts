@@ -19,7 +19,9 @@ import {
   recordPaths,
   removeStale,
   sessionsDir,
+  type AttachRecord,
 } from "@/debugger/attach/registry.js";
+import { outputFollower, type OutputFollower } from "./outputFollower.js";
 import type { HeldAnswer } from "@/runtime/heldQuestions.js";
 import { buildDecider, type DecideFn } from "@/runtime/interruptResolution.js";
 import type { SerializedInterrupt } from "@/runtime/ipcChild.js";
@@ -36,14 +38,17 @@ export type WatchOptions = {
   /** Where the lines for the person are written. */
   out: (text: string) => void;
   decide: DecideFn;
+  /** The program's saved output, when it has an output file. */
+  output?: OutputFollower;
 };
 
 /** Watch the program on `channel`: answer each batch it holds, in order,
  *  and resolve when the connection closes. The answers to one batch go
  *  back in one message, because the program resumes a batch as a whole. */
 export function watch(options: WatchOptions): Promise<void> {
-  const { channel, out, decide } = options;
+  const { channel, out, decide, output } = options;
   channel.send({ type: "client", kind: "watch" });
+  output?.start();
   // What the program holds now, from its latest `held` message.
   let current: SerializedInterrupt[] = [];
   let detached = false;
@@ -54,11 +59,18 @@ export function watch(options: WatchOptions): Promise<void> {
     // Another client can answer this batch while a prompt is open here, so
     // the batch is checked before each prompt and before the answers go.
     const answers: HeldAnswer[] = [];
-    for (const question of questions) {
-      if (questions !== current) {
-        break;
+    // The program's output stops while a prompt has the terminal, and
+    // catches up after.
+    output?.pause();
+    try {
+      for (const question of questions) {
+        if (questions !== current) {
+          break;
+        }
+        answers.push({ interruptId: question.interruptId, response: await decide(question) });
       }
-      answers.push({ interruptId: question.interruptId, response: await decide(question) });
+    } finally {
+      output?.resume();
     }
     if (questions !== current) {
       if (answers.length > 0) {
@@ -89,6 +101,8 @@ export function watch(options: WatchOptions): Promise<void> {
   });
   return new Promise((resolve) => {
     channel.onClose(() => {
+      // The rest of what the program wrote comes before the last line.
+      output?.finish();
       out(
         detached
           ? "Detached without answering. The program is still waiting."
@@ -177,6 +191,21 @@ export async function attachWatchCommand(options: AttachWatchOptions): Promise<n
     return 1;
   }
   print(`Attached to pid ${pid} (${record.program}). Press Ctrl-C to detach.`);
-  await watch({ channel, out: print, decide: attachDecider() });
+  let output: OutputFollower | undefined;
+  try {
+    output = followerFor(record);
+  } catch (error) {
+    printError(`Not showing the program's output: ${(error as Error).message}`);
+  }
+  await watch({ channel, out: print, decide: attachDecider(), output });
   return 0;
+}
+
+/** A follower for the program's saved output, or nothing when it has no
+ *  output file. Throws when the file cannot be followed. */
+function followerFor(record: AttachRecord): OutputFollower | undefined {
+  if (record.outputFile === undefined) {
+    return undefined;
+  }
+  return outputFollower(record.outputFile, (text) => process.stdout.write(text));
 }

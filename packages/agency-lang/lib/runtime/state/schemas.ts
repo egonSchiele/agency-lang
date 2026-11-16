@@ -119,6 +119,7 @@ export const checkpointSchema = z.object({
     .optional(),
   usage: z.unknown().optional(),
   traceId: z.string().optional(),
+  spawnCount: z.number().int().nonnegative().optional(),
   signature: z.string().optional(),
 });
 

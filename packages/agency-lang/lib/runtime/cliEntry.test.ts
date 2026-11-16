@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AGENCY_ENTRY_NODE,
+  AGENCY_PROCESS_TITLE,
   AGENCY_RESUME_EDITS,
   AGENCY_RESUME_FILE,
   AGENCY_RESUME_OVERRIDES,
@@ -45,6 +46,33 @@ function writeCheckpoint(value: unknown): string {
   writeFileSync(filename, JSON.stringify(value));
   return filename;
 }
+
+describe("the process title", () => {
+  const originalTitle = process.title;
+  afterEach(() => {
+    delete process.env[AGENCY_PROCESS_TITLE];
+    process.title = originalTitle;
+  });
+  const start = () =>
+    runCliEntry({ nodeNames: ["main"], startNode: async () => "ran", resume: vi.fn() });
+
+  it("is set from the carrier, so ps shows the run's name", async () => {
+    delete process.env[AGENCY_RESUME_FILE];
+    process.env[AGENCY_PROCESS_TITLE] = "agency run report";
+    await start();
+    expect(process.title).toBe("agency run report");
+    // Taken out of the environment, so a process this one starts does
+    // not inherit the title.
+    expect(process.env[AGENCY_PROCESS_TITLE]).toBeUndefined();
+  });
+
+  it("is left alone when the carrier is missing", async () => {
+    delete process.env[AGENCY_RESUME_FILE];
+    process.title = "something else";
+    await start();
+    expect(process.title).toBe("something else");
+  });
+});
 
 describe("runCliEntry", () => {
   it("starts main when no resume carrier or entry node exists", async () => {

@@ -24,6 +24,49 @@ const PROCESS_DEADLINE_MS = 120_000;
 export const DEADLINE_EXIT_CODE = 86;
 const DEADLINE_SCRIPT = "deadline.cjs";
 
+/** A program that prints a line, writes `started.txt`, asks `test::ask`,
+ *  and then writes `finished.txt`, or the reason it was refused to
+ *  `rejected.txt`. Its own writes are approved in the program, so the only
+ *  question nobody settles is `test::ask`. */
+export const ASKS = `effect test::ask { label: string }
+
+def ask(): string {
+  return interrupt test::ask("May I open the door?", { label: "door" })
+  return "opened"
+}
+
+node main() {
+  print("about to ask")
+  write(filename: "started.txt", content: "1", dir: ".") with approve
+  const answer = ask()
+  if (isFailure(answer)) {
+    write(filename: "rejected.txt", content: answer.error, dir: ".") with approve
+  } else {
+    write(filename: "finished.txt", content: "1", dir: ".") with approve
+  }
+}
+`;
+
+/** A program that writes the messages of its first thread to
+ *  `thread.json`. It makes no model call. */
+export const WRITES_THREAD = `import { currentThreadId, getThread } from "std::thread"
+
+node main() {
+  const thread = getThread(currentThreadId())
+  if (thread is success(messages)) {
+    write(filename: "thread.json", content: JSON.stringify(messages), dir: ".") with approve
+  } else {
+    write(filename: "thread.json", content: "no thread", dir: ".") with approve
+  }
+}
+`;
+
+/** A seed conversation for `--messages`. */
+export const SEED = [
+  { role: "user", content: "the seed question" },
+  { role: "assistant", content: "the seed answer" },
+];
+
 /** Resolve once `condition` holds, checking every few milliseconds, or
  *  throw naming `what` when `deadlineMs` passes first. */
 export async function waitFor(

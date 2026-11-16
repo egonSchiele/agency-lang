@@ -85,6 +85,9 @@ const EXPECTED: Record<string, string[]> = {
   "std::exec": ["command", "subcommand"],
   "std::bash": ["command", "cwd"],
   "std::run": [],
+  // Pins the file being started. The policy, the limits, and the
+  // arguments are not pinned.
+  "std::spawn": ["dir", "filename"],
   "std::git::status": ["cwd/**"],
   "std::git::log": ["cwd/**"],
   "std::git::diff": ["cwd/**"],

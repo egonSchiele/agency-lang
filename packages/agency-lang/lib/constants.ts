@@ -122,6 +122,27 @@ export const AGENCY_RESUME_EDITS = "AGENCY_RESUME_EDITS";
  *  start. Unset means `main`. */
 export const AGENCY_ENTRY_NODE = "AGENCY_ENTRY_NODE";
 
+/** The title the program gives its process, so `ps` shows it. */
+export const AGENCY_PROCESS_TITLE = "AGENCY_PROCESS_TITLE";
+/** Where the seed messages are: a file's path, or `-` for standard input. */
+export const AGENCY_SEED_MESSAGES = "AGENCY_SEED_MESSAGES";
+/** The value of `AGENCY_SEED_MESSAGES` and of `--messages` that means
+ *  standard input. */
+export const SEED_FROM_STDIN = "-";
+/** The path of the file a detached program's output is saved to. */
+export const AGENCY_OUTPUT_FILE = "AGENCY_OUTPUT_FILE";
+/** How many `spawn` calls deep this process is. Inherited on purpose: a
+ *  shell job that runs `agency run --detach` counts too. */
+export const AGENCY_SPAWN_DEPTH = "AGENCY_SPAWN_DEPTH";
+
+/** The most a detached program saves of each of its two output streams. */
+export const SPAWN_OUTPUT_LIMIT_BYTES = 10 * 1024 * 1024;
+/** How long `spawn` waits for the command that starts the program. It
+ *  covers the compile. */
+export const SPAWN_LAUNCH_TIMEOUT_MS = 2 * 60 * 1000;
+/** How much of a failed launch's error output `spawn` reports: its end. */
+export const SPAWN_ERROR_TAIL_CHARS = 2_000;
+
 /** Process exit code for a command line the program cannot act on, such as
  *  `agency run file.agency:node` naming a node the file does not have. */
 export const EXIT_CODE_USAGE_ERROR = 2;

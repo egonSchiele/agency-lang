@@ -157,6 +157,10 @@ export default defineConfig({
           text: "09. Advanced",
           items: [
             { text: "Workflows", link: "/guide/workflows" },
+            {
+              text: "Spawning Processes",
+              link: "/guide/spawning-processes",
+            },
             { text: "Callbacks", link: "/guide/callbacks" },
             { text: "Decorators", link: "/guide/decorators" },
             { text: "Partial Results", link: "/guide/partial-results" },

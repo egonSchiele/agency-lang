@@ -6,7 +6,10 @@ import {
   AGENCY_RESUME_FORCE,
   AGENCY_RESUME_OVERRIDES,
   EXIT_CODE_USAGE_ERROR,
+  SPAWN_OUTPUT_LIMIT_BYTES,
 } from "../constants.js";
+import { capOutput } from "./outputCap.js";
+import { takeLaunchSettings } from "./launchSettings.js";
 import { verifyCheckpointChecksum } from "./checkpointChecksum.js";
 import { exitProcessNow } from "./exitProcess.js";
 import type { ResumeOverrides } from "./resumeSetup.js";
@@ -91,7 +94,22 @@ function parseEdits(raw: string | undefined): CheckpointEdit[] {
   return checked.data;
 }
 
+/** What the command line asked of the process itself: its title, which
+ *  `ps` shows, and the limit on what a detached program saves to its
+ *  output file. The command that started a detached program has exited by
+ *  now, so the program limits itself. */
+function applyLaunchSettings(): void {
+  const { title, outputFile } = takeLaunchSettings();
+  if (title !== null) {
+    process.title = title;
+  }
+  if (outputFile !== null) {
+    capOutput(SPAWN_OUTPUT_LIMIT_BYTES);
+  }
+}
+
 export async function runCliEntry<T>(args: CliEntryArgs<T>): Promise<T> {
+  applyLaunchSettings();
   const filename = process.env[AGENCY_RESUME_FILE];
   if (!filename) {
     return startEntryNode(args);

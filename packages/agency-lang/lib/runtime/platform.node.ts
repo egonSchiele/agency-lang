@@ -6,7 +6,7 @@
 // under the "browser" condition. Each export here has the same name and
 // type there.
 
-import { appendFileSync, mkdirSync } from "fs";
+import { appendFileSync, mkdirSync, readFileSync } from "fs";
 import path from "path";
 import { isMainThread } from "worker_threads";
 import {
@@ -26,6 +26,11 @@ import { loadProviderModules } from "./providerModules.js";
 import { _resolveLocalEmbeddingModel } from "../stdlib/localModels.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { onHeldChange } from "./heldQuestions.js";
+import { launchSettings, takeSeedSource } from "./launchSettings.js";
+import { SEED_FROM_STDIN } from "../constants.js";
+
+/** The file descriptor of standard input. */
+const STDIN = 0;
 import type { ProviderLoadingContext, RegisterAttachArgs } from "./platform.js";
 
 /** Registers the configured LLM providers before a run starts: the
@@ -55,6 +60,31 @@ export function openLineSink(filePath: string): (line: string) => void {
  *  path for llama-cpp, the served name for mlx. */
 export function resolveLocalEmbeddingModel(provider: string, model: string): Promise<string> {
   return _resolveLocalEmbeddingModel(provider, model);
+}
+
+/** The record field for a detached program's output file, or nothing. */
+function outputFileOf(): { outputFile?: string } {
+  const outputFile = launchSettings().outputFile;
+  return outputFile === null ? {} : { outputFile };
+}
+
+/** The parsed seed a run was started with (`agency run --messages`), or
+ *  null. Returns the seed the first time it is asked for in a process, and
+ *  null every time after: `runNode` runs for every node a process starts,
+ *  including one a TypeScript helper starts, and only the first may be
+ *  seeded. A path is read and left where it is; `-` reads standard input
+ *  to its end. Throws when the seed cannot be read or is not JSON. */
+export function takeSeedMessages(): unknown | null {
+  const source = takeSeedSource();
+  if (source === null) {
+    return null;
+  }
+  const from = source === SEED_FROM_STDIN ? "standard input" : source;
+  try {
+    return JSON.parse(readFileSync(source === SEED_FROM_STDIN ? STDIN : source, "utf8"));
+  } catch (error) {
+    throw new Error(`Could not read the seed messages from ${from}: ${(error as Error).message}`);
+  }
 }
 
 /** The environment variable that keeps a program from registering for
@@ -160,6 +190,8 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     // while the machine sleeps, so a program whose first node ran after
     // a suspend would look as if it started later than it did.
     startedAt: Math.round(performance.timeOrigin),
+    // Where a detached program's output is saved, for `agency attach`.
+    ...outputFileOf(),
   };
   try {
     writeRecord(dir, record);

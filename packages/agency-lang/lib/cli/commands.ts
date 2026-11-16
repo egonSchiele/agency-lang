@@ -29,7 +29,9 @@ import { RunStrategy } from "../importStrategy.js";
 import { compileAgencyOnly } from "../compiler/compileSandboxed.js";
 import { withRootCarriers } from "./childEnv.js";
 import type { ResumeCarrier } from "./resumeCarrier.js";
-import {} from "@/constants.js";
+import { SEED_FROM_STDIN } from "@/constants.js";
+import { startDetached } from "./detached.js";
+import type { RunLaunch } from "./runLaunch.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { fileURLToPath, pathToFileURL } from "url";
 import { classifyInstall, installDirFromUrl, type InstallKind } from "./installLocation.js";
@@ -307,6 +309,8 @@ export function run(
   compileMode: { agencyOnly: boolean } = { agencyOnly: false },
   /** The node to start, from `agency run file.agency:node`. Unset means `main`. */
   entryNode?: string,
+  /** The run's title, its seed messages, and whether it starts detached. */
+  launch?: RunLaunch,
 ): void {
   let output: string;
   if (compileMode.agencyOnly) {
@@ -331,8 +335,13 @@ export function run(
   const moduleWarning = moduleTypeWarning(output);
   if (moduleWarning) console.error(moduleWarning);
 
-  console.log(`Running ${output}...`);
-  console.log("---");
+  const detachedOutputFile = launch?.detachedOutputFile;
+  // A detached start prints its report as the last line of standard
+  // output, and the program's own output goes to its file.
+  if (detachedOutputFile === undefined) {
+    console.log(`Running ${output}...`);
+    console.log("---");
+  }
 
   const env = withRootCarriers(process.env, {
     policy: runPolicy,
@@ -340,6 +349,9 @@ export function run(
     resume,
     entryNode,
     saveHeldCheckpoint: config.spawn?.interrupts?.preemptivelyCreateCheckpoint,
+    title: launch?.title,
+    seedMessages: launch?.seedMessages,
+    outputFile: detachedOutputFile,
   });
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
@@ -353,20 +365,26 @@ export function run(
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`
   // succeeds even when the CLI is installed globally.
-  const nodeProcess = spawn(
-    process.execPath,
-    [
-      ...compiledOutputNodeArgs(),
-      ...sandboxRuntimeNodeArgs(compileMode.agencyOnly),
-      output,
-      ...nodeArgs,
-    ],
-    {
-      stdio: "inherit",
-      shell: false,
+  const argv = [
+    ...compiledOutputNodeArgs(),
+    ...sandboxRuntimeNodeArgs(compileMode.agencyOnly),
+    output,
+    ...nodeArgs,
+  ];
+  if (detachedOutputFile !== undefined) {
+    startDetached({
+      argv,
       env,
-    },
-  );
+      outputFile: detachedOutputFile,
+      seedFromStdin: launch?.seedMessages === SEED_FROM_STDIN,
+    });
+    return;
+  }
+  const nodeProcess = spawn(process.execPath, argv, {
+    stdio: "inherit",
+    shell: false,
+    env,
+  });
 
   nodeProcess.on("error", (error) => {
     console.error(`Failed to run ${output}:`, error);

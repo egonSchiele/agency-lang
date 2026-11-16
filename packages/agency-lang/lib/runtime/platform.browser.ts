@@ -34,3 +34,8 @@ export async function resolveLocalEmbeddingModel(provider: string, model: string
 /** A browser has no signal to ask with and no socket to open, so a
  *  program in a page is not attachable. */
 export function registerAttach(_args: RegisterAttachArgs): void {}
+
+/** A page is not started from a command line, so it has no seed. */
+export function takeSeedMessages(): unknown | null {
+  return null;
+}

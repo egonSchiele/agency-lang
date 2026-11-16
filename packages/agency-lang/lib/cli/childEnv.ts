@@ -7,6 +7,9 @@
  */
 import {
   AGENCY_ENTRY_NODE,
+  AGENCY_OUTPUT_FILE,
+  AGENCY_PROCESS_TITLE,
+  AGENCY_SEED_MESSAGES,
   AGENCY_MAX_COST,
   AGENCY_MAX_TIME,
   AGENCY_RUN_POLICY,
@@ -31,7 +34,23 @@ export type RootCarriers = {
   resume?: ResumeCarrier;
   /** The node to start, from `agency run file.agency:node`. Unset means `main`. */
   entryNode?: string;
+  /** The process title, from `--name` or the input file's name. */
+  title?: string;
+  /** The seed, from `--messages`: a path, or `-`. */
+  seedMessages?: string;
+  /** The output file, from `--detach`. */
+  outputFile?: string;
 };
+
+/** A carrier whose value is one string, copied as it is. A new carrier of
+ *  this kind is one row here. */
+type TextCarrier = { field: "title" | "seedMessages" | "outputFile"; variable: string };
+
+const TEXT_CARRIERS: TextCarrier[] = [
+  { field: "title", variable: AGENCY_PROCESS_TITLE },
+  { field: "seedMessages", variable: AGENCY_SEED_MESSAGES },
+  { field: "outputFile", variable: AGENCY_OUTPUT_FILE },
+];
 
 export function withRootCarriers(
   env: NodeJS.ProcessEnv,
@@ -49,6 +68,13 @@ export function withRootCarriers(
   delete out[AGENCY_RESUME_EDITS];
   delete out[AGENCY_RESUME_FORCE];
   delete out[AGENCY_ENTRY_NODE];
+  for (const { field, variable } of TEXT_CARRIERS) {
+    delete out[variable];
+    const value = carriers[field];
+    if (value !== undefined) {
+      out[variable] = value;
+    }
+  }
   if (carriers.entryNode !== undefined) {
     out[AGENCY_ENTRY_NODE] = carriers.entryNode;
   }

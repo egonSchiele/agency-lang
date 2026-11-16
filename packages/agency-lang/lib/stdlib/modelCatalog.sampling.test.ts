@@ -22,6 +22,19 @@ describe("localSamplingFor", () => {
     expect(localSamplingFor("/models/hf_unsloth_Qwen3.5-2B.Q8_0.gguf")).toBeUndefined();
   });
 
+  it("finds a GGUF in its model folder by the folder, whatever the file is called", () => {
+    const folder = "/models/gguf/unsloth--Qwen3.8-Flash-Next-GGUF--UD-Q4_K_XL";
+    expect(localSamplingFor(`${folder}/anything-00001-of-00004.gguf`)).toEqual({
+      temperature: 1.0,
+      topP: 0.95,
+      topK: 20,
+    });
+    // The same folder name outside the gguf folder is not a model folder.
+    expect(
+      localSamplingFor("/elsewhere/unsloth--Qwen3.8-Flash-Next-GGUF--UD-Q4_K_XL/model.gguf"),
+    ).toBeUndefined();
+  });
+
   it("knows nothing about a model outside the catalog, or one whose entry names no sampling", () => {
     expect(localSamplingFor("/models/my-finetune.gguf")).toBeUndefined();
     expect(localSamplingFor("mlx-community/Qwen3-Embedding-4B-4bit-DWQ")).toBeUndefined();

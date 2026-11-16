@@ -1,5 +1,6 @@
 import type { Backend } from "./modelBackend.js";
 import type { ModelKind } from "./modelKind.js";
+import { isInGgufModelDir } from "./ggufModelDir.js";
 
 /** The built-in model catalog: every entry `agency local list` shows
  *  without a download, with its backend, size, and license. */
@@ -49,6 +50,13 @@ export type ModelInfo = {
    *  terms, llama) are intentionally excluded. Gemma 4 ships under apache-2.0,
    *  so it qualifies; Gemma 1–3 did not.
    *
+   *  One entry is a deliberate exception: `qwen3.8-flash-next` ships under
+   *  the Qwen Community License 1.0. A business that sells model hosting, or
+   *  an AI coding or office assistant, needs Qwen's permission to use it
+   *  commercially. Its description says so, and `agency local list` shows
+   *  the license. The catalog shape test names it, so a second exception
+   *  fails there until someone decides to allow it.
+   *
    *  This must be the license the model itself DECLARES, never one inferred
    *  from its base model. Apache-2.0 is permissive, not copyleft — its §4 lets
    *  a derivative work carry different terms — so a fine-tune of an
@@ -79,7 +87,10 @@ export type Sampling = {
 };
 
 /** Curated short-name → ModelInfo catalog. Permissive licenses only
- *  (apache-2.0 / mit). Ordered roughly by size within each grouping. */
+ *  (apache-2.0 / mit), with the one exception described on `license`.
+ *  Every repo comes from an uploader known to be legitimate: the lab
+ *  that made the model, unsloth for GGUF, or mlx-community for MLX.
+ *  Ordered roughly by size within each grouping. */
 export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── General ─────────────────────────────────────────────────────────────
   "smollm2-135m": {
@@ -173,6 +184,33 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description: "IBM's enterprise-tuned 8B. Built for retrieval, tool use, and long documents.",
     sha256: "0f45c1af986e9900bb3b6ba46a25937e1bb80426935bc242d88c9ca90e9f5c88",
   },
+  "granite-4.2-3b": {
+    backend: "llama-cpp",
+    uri: "hf:ibm-granite/granite-4.2-3b-GGUF:Q4_K_M",
+    params: "3B",
+    sizeBytes: 2244000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "IBM's small Granite 4.2. Tool use and retrieval on a laptop CPU.",
+    sha256: "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
+  "granite-4.2-8b": {
+    backend: "llama-cpp",
+    uri: "hf:ibm-granite/granite-4.2-8b-GGUF:Q4_K_M",
+    params: "8B",
+    sizeBytes: 5348000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "IBM's Granite 4.2, the newer granite-4.1-8b. Retrieval, tool use, long documents.",
+    sha256: "16a9369d0805f80b7377d25d87f937a90c05dc04ad79173a52001e42c9aab311",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
   "qwen3.5-9b": {
     backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
@@ -252,6 +290,32 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
+  "qwen3.8-27b": {
+    backend: "llama-cpp",
+    uri: "hf:unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M",
+    params: "27B",
+    sizeBytes: 16564000000,
+    kind: "chat",
+    tags: ["science"],
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description: "Alibaba's current dense 27B, the newer qwen3.5-27b. Fits one 24 GB GPU.",
+    sha256: "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
+  },
+  "granite-4.2-30b": {
+    backend: "llama-cpp",
+    uri: "hf:ibm-granite/granite-4.2-30b-GGUF:Q4_K_M",
+    params: "30B",
+    sizeBytes: 17721000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "IBM's largest Granite 4.2. Enterprise tool use and retrieval, needs ~24 GB RAM.",
+    sha256: "f299dace85d77ee0e24ca0b6720bd211b1f4cd1f65b9c0a2111e79692e29c9be",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
   "gemma-4-26b-a4b": {
     backend: "llama-cpp",
     uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
@@ -290,6 +354,54 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description: "Qwen's general MoE (3B active). 27B-class quality at 9B speed, needs ~32 GB RAM.",
     sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
+  },
+  // The next four entries are split across several files, so they carry no
+  // sha256 (see `sha256` above).
+  "qwen3.8-flash-next": {
+    backend: "llama-cpp",
+    uri: "hf:unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL",
+    params: "125B (A6B)",
+    sizeBytes: 111335000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 262144,
+    license: "qwen-community-1.0",
+    description:
+      "Alibaba's preview of the Qwen4 design, 6B active. Not Apache: a business selling model hosting or an AI coding or office assistant needs Qwen's permission to use it commercially.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
+  },
+  "glm-5.3-flash-2bit": {
+    backend: "llama-cpp",
+    uri: "hf:unsloth/GLM-5.3-Flash-GGUF:UD-Q2_K_XL",
+    params: "320B (A18B)",
+    sizeBytes: 108720000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 1048576,
+    license: "mit",
+    description: "glm-5.3-flash at 2 bits. The smallest build, at some cost in quality.",
+  },
+  "glm-5.3-flash-3bit": {
+    backend: "llama-cpp",
+    uri: "hf:unsloth/GLM-5.3-Flash-GGUF:UD-Q3_K_XL",
+    params: "320B (A18B)",
+    sizeBytes: 147536000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 1048576,
+    license: "mit",
+    description: "glm-5.3-flash at 3 bits, for a machine the 4-bit build does not fit.",
+  },
+  "glm-5.3-flash": {
+    backend: "llama-cpp",
+    uri: "hf:unsloth/GLM-5.3-Flash-GGUF:UD-Q4_K_XL",
+    params: "320B (A18B)",
+    sizeBytes: 199707000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 1048576,
+    license: "mit",
+    description: "Z.ai's MoE, 18B active. Beats GLM-5.2 on Z.ai's coding and agent benchmarks.",
   },
   "deepseek-r1-distill-llama-8b": {
     backend: "llama-cpp",
@@ -383,6 +495,20 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description: "Qwen's MoE coder (3.3B active). Strong agentic coding model.",
     sha256: "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
     sampling: { temperature: 0.7, topP: 0.8, topK: 20 },
+  },
+  // Split across several files, so no sha256.
+  "deepseek-v4-flash": {
+    backend: "llama-cpp",
+    uri: "hf:unsloth/DeepSeek-V4-Flash-0731-GGUF:UD-Q4_K_XL",
+    params: "284B (A13B)",
+    sizeBytes: 155095000000,
+    kind: "chat",
+    tags: ["coding"],
+    contextWindow: 1048576,
+    license: "mit",
+    description:
+      "DeepSeek's MoE, 13B active, in its July 2026 revision. A strong agentic coder with a 1M-token context.",
+    sampling: { temperature: 1.0, topP: 0.95 },
   },
   "nomic-embed-text": {
     backend: "llama-cpp",
@@ -622,6 +748,54 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
       "The MLX build of qwen3.5-35b-a3b. Qwen's general MoE, 3B active: fast on a 36 GB or larger Mac.",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
+  "granite-4.2-3b-mlx": {
+    backend: "mlx",
+    uri: "mlx:ibm-granite/granite-4.2-3b-q4-mlx",
+    params: "3B",
+    sizeBytes: 2066000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "IBM's own MLX build of granite-4.2-3b.",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
+  "granite-4.2-8b-mlx": {
+    backend: "mlx",
+    uri: "mlx:ibm-granite/granite-4.2-8b-q4-mlx",
+    params: "8B",
+    sizeBytes: 4953000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "IBM's own MLX build of granite-4.2-8b.",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
+  "granite-4.2-30b-mlx": {
+    backend: "mlx",
+    uri: "mlx:ibm-granite/granite-4.2-30b-q4-mlx",
+    params: "30B",
+    sizeBytes: 16476000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "IBM's own MLX build of granite-4.2-30b.",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
+  "mimo-v2.6-distill-qwen-9b-mlx": {
+    backend: "mlx",
+    uri: "mlx:mlx-community/MiMo-V2.6-Distill-Qwen-9B-OptiQ-4bit",
+    params: "9B",
+    sizeBytes: 7121000000,
+    kind: "chat",
+    tags: ["reasoning"],
+    contextWindow: 262144,
+    license: "mit",
+    description:
+      "Xiaomi's MiMo-V2.6 distilled into Qwen3.5-9B. A small reasoning model for a 16 GB Mac.",
+  },
   "qwen3-embedding-4b-mlx": {
     backend: "mlx",
     uri: "mlx:mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
@@ -818,8 +992,9 @@ export function localSamplingFor(model: string): Sampling | undefined {
 
 /** Whether a catalog URI is the model a local call names. An `mlx:` URI
  *  names the repo the server serves, with any pinned revision dropped. An
- *  `hf:` URI names a GGUF file that node-llama-cpp saves as
- *  `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. */
+ *  `hf:` URI names any file in the folder Agency downloads it into. A
+ *  file downloaded before those folders is matched by the name
+ *  node-llama-cpp gave it, `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. */
 function servesAs(uri: string, model: string): boolean {
   if (uri.startsWith("mlx:")) {
     return uri.slice("mlx:".length).split("@")[0] === model;
@@ -828,6 +1003,9 @@ function servesAs(uri: string, model: string): boolean {
   if (gguf === null) {
     return false;
   }
-  const file = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
-  return model === file || model.endsWith(`/${file}`);
+  if (isInGgufModelDir(model, uri)) {
+    return true;
+  }
+  const legacyFile = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
+  return model === legacyFile || model.endsWith(`/${legacyFile}`);
 }

@@ -17,6 +17,7 @@ import {
   _aliasModel,
   _unaliasModel,
   _removeModel,
+  _removeGgufModel,
   hasLocalModelSupport,
   formatGB,
   _refreshCatalog,
@@ -366,7 +367,12 @@ export function runRemove(
     return;
   }
   gate();
-  const removed = _removeModel(path.basename(files.path));
+  // A model in its own folder goes with every file in the folder. A loose
+  // file from before those folders is one file.
+  const removed =
+    files.layout === "agency"
+      ? _removeGgufModel(resolved.target)
+      : _removeModel(path.basename(files.path));
   console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
 }
 

@@ -19,6 +19,7 @@ import {
   hubRepoOfDirName,
   type DownloadedModel,
   _removeModel,
+  _removeGgufModel,
   _localModelsSupported,
   resolveAliasConfigPath,
   type ModelNameEntry,
@@ -95,8 +96,12 @@ describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, a kind, and tags", () => {
     const validKinds = new Set(["chat", "embedding", "speech", "image", "vision", "controlnet"]);
     const validTags = new Set(["coding", "reasoning", "writing", "science", "uncensored"]);
-    // Curated set is permissive-licensed only.
+    // Curated set is permissive-licensed only, except for the entries named
+    // here. A new non-permissive entry fails until someone adds it on purpose.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
+    const licenseExceptions: Record<string, string> = {
+      "qwen3.8-flash-next": "qwen-community-1.0",
+    };
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
       expect(info.uri, `${name}.uri`).toMatch(/^(hf|mlx|diffusers):/);
       expect(info.backend, `${name}.backend`).toBe(backendOfTarget(info.uri));
@@ -112,7 +117,11 @@ describe("curated catalog shape", () => {
       if (info.kind !== "chat") {
         expect(info.tags, `${name}.tags`).toEqual([]);
       }
-      expect(permissiveLicenses.has(info.license), `${name}.license=${info.license}`).toBe(true);
+      if (name in licenseExceptions) {
+        expect(info.license, `${name}.license`).toBe(licenseExceptions[name]);
+      } else {
+        expect(permissiveLicenses.has(info.license), `${name}.license=${info.license}`).toBe(true);
+      }
     }
   });
   it("smollm2-135m is present (integration suite depends on it)", () => {
@@ -254,6 +263,36 @@ describe("downloaded models", () => {
     expect(fs.existsSync(outside)).toBe(true);
   });
 
+  it("lists a model folder as one model with the size of all its parts, and removes it whole", () => {
+    const cache = path.join(dir, "models");
+    const folder = path.join(cache, "gguf", "org--big--Q4");
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, "big-00001-of-00002.gguf"), "xx");
+    fs.writeFileSync(path.join(folder, "big-00002-of-00002.gguf"), "xxx");
+    writeGgufModelRecord(folder, "hf:org/big:Q4", "big-00001-of-00002.gguf");
+    // A folder with no record is a download that never finished.
+    fs.mkdirSync(path.join(cache, "gguf", "org--partial--Q4"));
+
+    expect(_listDownloadedModels(cache)).toEqual([
+      {
+        name: "hf:org/big:Q4",
+        path: folder,
+        sizeBytes: 5,
+        backend: "llama-cpp",
+        complete: true,
+        layout: "agency",
+        kind: "chat",
+      },
+    ]);
+    expect(
+      _modelFilesOnDisk({ backend: "llama-cpp", target: "hf:org/big:Q4" }, cache),
+    ).toMatchObject({ path: folder, sizeBytes: 5, layout: "agency" });
+
+    expect(_removeGgufModel("hf:org/big:Q4", cache)).toBe(true);
+    expect(fs.existsSync(folder)).toBe(false);
+    expect(_removeGgufModel("hf:org/big:Q4", cache)).toBe(false);
+  });
+
   it("returns [] for a missing cache dir", () => {
     expect(_listDownloadedModels(path.join(dir, "nope"))).toEqual([]);
   });
@@ -282,6 +321,7 @@ import {
   _resolveLocalEmbeddingModel,
 } from "./localModels.js";
 import { readDownloadManifest } from "./localModelManifest.js";
+import { readGgufModelRecord, writeGgufModelRecord } from "./ggufModelRecord.js";
 import * as smoltalkPkg from "smoltalk";
 
 describe("provider register + download (fake plugin module)", () => {
@@ -328,12 +368,50 @@ describe("provider register + download (fake plugin module)", () => {
       "LlamaCPP",
     );
   });
-  it("downloads (resolves) a uri to a real path and records it in the manifest", async () => {
+  it("downloads a uri into a folder of its own and writes the folder's record", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
     const out = await _downloadModel("hf:org/repo:Q4", dir); // raw uri → no pin
-    expect(out).toBe(path.join(dir, "model.gguf"));
-    expect(fs.existsSync(out)).toBe(true);
-    expect(readDownloadManifest(dir)).toEqual({ "hf:org/repo:Q4": "model.gguf" });
+    const folder = path.join(dir, "gguf", "org--repo--Q4");
+    expect(out).toBe(path.join(folder, "model.gguf"));
+    expect(readGgufModelRecord(folder)).toEqual({
+      uri: "hf:org/repo:Q4",
+      entry: "model.gguf",
+      files: { "model.gguf": fs.statSync(out).size },
+    });
+    expect(readDownloadManifest(dir)).toEqual({});
+  });
+
+  it("a second call loads the recorded file without downloading it again", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    const out = await _downloadModel("hf:org/repo:Q4", dir);
+    // The fake rewrites the file on every download, so a changed file that
+    // survives the second call proves no download happened.
+    fs.writeFileSync(out, "kept");
+    expect(await _downloadModel("hf:org/repo:Q4", dir)).toBe(out);
+    expect(fs.readFileSync(out, "utf8")).toBe("kept");
+  });
+
+  it("loads a file downloaded before model folders, through the old manifest", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    fs.writeFileSync(path.join(dir, "old.gguf"), "old");
+    fs.writeFileSync(
+      path.join(dir, "downloads.json"),
+      JSON.stringify({ "hf:org/old:Q4": "old.gguf" }),
+    );
+    expect(await _downloadModel("hf:org/old:Q4", dir)).toBe(path.join(dir, "old.gguf"));
+    expect(fs.existsSync(path.join(dir, "gguf"))).toBe(false);
+  });
+
+  it("refuses a folder whose record names another URI", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    // hf:org/repo/Q4 and hf:org/repo:Q4 both become the folder org--repo--Q4.
+    const folder = path.join(dir, "gguf", "org--repo--Q4");
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, "model.gguf"), "other");
+    writeGgufModelRecord(folder, "hf:org/repo/Q4", "model.gguf");
+    await expect(_downloadModel("hf:org/repo:Q4", dir)).rejects.toThrow(
+      /holds hf:org\/repo\/Q4, not hf:org\/repo:Q4/,
+    );
   });
   it("registerLocalModel registers and returns the resolved path", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
@@ -397,19 +475,22 @@ describe("provider register + download (fake plugin module)", () => {
     process.chdir(dir);
     try {
       await expect(_downloadModel("mymodel", dir)).rejects.toThrow(/SHA-256 verification failed/);
-      expect(fs.existsSync(path.join(dir, "model.gguf"))).toBe(false);
-      expect(fs.existsSync(path.join(dir, "model.gguf.invalidSha"))).toBe(true);
+      const folder = path.join(dir, "gguf", "org--x--Q4");
+      expect(fs.existsSync(path.join(folder, "model.gguf"))).toBe(false);
+      expect(fs.existsSync(path.join(folder, "model.gguf.invalidSha"))).toBe(true);
+      // No record, so the folder is not a model.
+      expect(readGgufModelRecord(folder)).toBeNull();
     } finally {
       process.chdir(cwd);
     }
   });
 
-  it("does NOT re-verify an already-present (cache-hit) file", async () => {
+  it("verifies a file a crashed run left in a folder with no record", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    // Pre-create the model file so it's in the before-snapshot → treated as cached.
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "model.gguf"), "pre-existing");
-    // A deliberately-wrong pin would fail IF it verified — it must be skipped.
+    // A run interrupted during its hash check leaves the file and no record.
+    const folder = path.join(dir, "gguf", "org--x--Q4");
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, "model.gguf"), "pre-existing");
     fs.writeFileSync(
       aliasFile,
       JSON.stringify({
@@ -423,8 +504,9 @@ describe("provider register + download (fake plugin module)", () => {
     const cwd = process.cwd();
     process.chdir(dir);
     try {
-      await expect(_downloadModel("mymodel", dir)).resolves.toBe(path.join(dir, "model.gguf"));
-      expect(fs.existsSync(path.join(dir, "model.gguf.invalidSha"))).toBe(false);
+      await expect(_downloadModel("mymodel", dir)).rejects.toThrow(/SHA-256 verification failed/);
+      expect(fs.existsSync(path.join(folder, "model.gguf.invalidSha"))).toBe(true);
+      expect(readGgufModelRecord(folder)).toBeNull();
     } finally {
       process.chdir(cwd);
     }
@@ -509,6 +591,28 @@ describe("formatLocalList", () => {
     expect(tinyLine).toContain("✓");
     expect(midLine).not.toContain("✓");
     expect(out).toContain("Total downloaded: 0.10 GB");
+    expect(out).not.toContain("OTHER FILES");
+  });
+
+  it("marks an entry downloaded when a model folder's record names its URI", () => {
+    const out = formatLocalList({
+      dir: "/d",
+      entries,
+      manifest: {},
+      files: [
+        {
+          name: "hf:o/mid:Q4",
+          path: "/d/gguf/o--mid--Q4",
+          sizeBytes: 1_300_000_000,
+          backend: "llama-cpp",
+          complete: true,
+          layout: "agency",
+        },
+      ],
+    });
+    const midLine = out.split("\n").find((l) => l.includes("mid"));
+    expect(midLine).toContain("✓");
+    expect(midLine).toContain("1.30 GB");
     expect(out).not.toContain("OTHER FILES");
   });
 

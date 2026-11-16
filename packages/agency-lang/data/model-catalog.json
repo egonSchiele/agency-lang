@@ -291,6 +291,113 @@
       "description": "Qwen's MoE coder (3.3B active). Strong agentic coding model.",
       "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad"
     },
+    "granite-4.2-3b": {
+      "backend": "llama-cpp",
+      "uri": "hf:ibm-granite/granite-4.2-3b-GGUF:Q4_K_M",
+      "params": "3B",
+      "sizeBytes": 2244000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's small Granite 4.2. Tool use and retrieval on a laptop CPU.",
+      "sha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5"
+    },
+    "granite-4.2-8b": {
+      "backend": "llama-cpp",
+      "uri": "hf:ibm-granite/granite-4.2-8b-GGUF:Q4_K_M",
+      "params": "8B",
+      "sizeBytes": 5348000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's Granite 4.2, the newer granite-4.1-8b. Retrieval, tool use, long documents.",
+      "sha256": "16a9369d0805f80b7377d25d87f937a90c05dc04ad79173a52001e42c9aab311"
+    },
+    "qwen3.8-27b": {
+      "backend": "llama-cpp",
+      "uri": "hf:unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M",
+      "params": "27B",
+      "sizeBytes": 16564000000,
+      "kind": "chat",
+      "tags": [
+        "science"
+      ],
+      "contextWindow": 262144,
+      "license": "apache-2.0",
+      "description": "Alibaba's current dense 27B, the newer qwen3.5-27b. Fits one 24 GB GPU.",
+      "sha256": "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529"
+    },
+    "granite-4.2-30b": {
+      "backend": "llama-cpp",
+      "uri": "hf:ibm-granite/granite-4.2-30b-GGUF:Q4_K_M",
+      "params": "30B",
+      "sizeBytes": 17721000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's largest Granite 4.2. Enterprise tool use and retrieval, needs ~24 GB RAM.",
+      "sha256": "f299dace85d77ee0e24ca0b6720bd211b1f4cd1f65b9c0a2111e79692e29c9be"
+    },
+    "qwen3.8-flash-next": {
+      "backend": "llama-cpp",
+      "uri": "hf:unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL",
+      "params": "125B (A6B)",
+      "sizeBytes": 111335000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 262144,
+      "license": "qwen-community-1.0",
+      "description": "Alibaba's preview of the Qwen4 design, 6B active. Not Apache: a business selling model hosting or an AI coding or office assistant needs Qwen's permission to use it commercially."
+    },
+    "glm-5.3-flash-2bit": {
+      "backend": "llama-cpp",
+      "uri": "hf:unsloth/GLM-5.3-Flash-GGUF:UD-Q2_K_XL",
+      "params": "320B (A18B)",
+      "sizeBytes": 108720000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 1048576,
+      "license": "mit",
+      "description": "glm-5.3-flash at 2 bits. The smallest build, at some cost in quality."
+    },
+    "glm-5.3-flash-3bit": {
+      "backend": "llama-cpp",
+      "uri": "hf:unsloth/GLM-5.3-Flash-GGUF:UD-Q3_K_XL",
+      "params": "320B (A18B)",
+      "sizeBytes": 147536000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 1048576,
+      "license": "mit",
+      "description": "glm-5.3-flash at 3 bits, for a machine the 4-bit build does not fit."
+    },
+    "glm-5.3-flash": {
+      "backend": "llama-cpp",
+      "uri": "hf:unsloth/GLM-5.3-Flash-GGUF:UD-Q4_K_XL",
+      "params": "320B (A18B)",
+      "sizeBytes": 199707000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 1048576,
+      "license": "mit",
+      "description": "Z.ai's MoE, 18B active. Beats GLM-5.2 on Z.ai's coding and agent benchmarks."
+    },
+    "deepseek-v4-flash": {
+      "backend": "llama-cpp",
+      "uri": "hf:unsloth/DeepSeek-V4-Flash-0731-GGUF:UD-Q4_K_XL",
+      "params": "284B (A13B)",
+      "sizeBytes": 155095000000,
+      "kind": "chat",
+      "tags": [
+        "coding"
+      ],
+      "contextWindow": 1048576,
+      "license": "mit",
+      "description": "DeepSeek's MoE, 13B active, in its July 2026 revision. A strong agentic coder with a 1M-token context."
+    },
     "nomic-embed-text": {
       "backend": "llama-cpp",
       "uri": "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
@@ -430,6 +537,52 @@
       "contextWindow": 262144,
       "license": "apache-2.0",
       "description": "The MLX build of qwen3.5-4b. Small general model for a laptop."
+    },
+    "granite-4.2-3b-mlx": {
+      "backend": "mlx",
+      "uri": "mlx:ibm-granite/granite-4.2-3b-q4-mlx",
+      "params": "3B",
+      "sizeBytes": 2066000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's own MLX build of granite-4.2-3b."
+    },
+    "granite-4.2-8b-mlx": {
+      "backend": "mlx",
+      "uri": "mlx:ibm-granite/granite-4.2-8b-q4-mlx",
+      "params": "8B",
+      "sizeBytes": 4953000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's own MLX build of granite-4.2-8b."
+    },
+    "granite-4.2-30b-mlx": {
+      "backend": "mlx",
+      "uri": "mlx:ibm-granite/granite-4.2-30b-q4-mlx",
+      "params": "30B",
+      "sizeBytes": 16476000000,
+      "kind": "chat",
+      "tags": [],
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's own MLX build of granite-4.2-30b."
+    },
+    "mimo-v2.6-distill-qwen-9b-mlx": {
+      "backend": "mlx",
+      "uri": "mlx:mlx-community/MiMo-V2.6-Distill-Qwen-9B-OptiQ-4bit",
+      "params": "9B",
+      "sizeBytes": 7121000000,
+      "kind": "chat",
+      "tags": [
+        "reasoning"
+      ],
+      "contextWindow": 262144,
+      "license": "mit",
+      "description": "Xiaomi's MiMo-V2.6 distilled into Qwen3.5-9B. A small reasoning model for a 16 GB Mac."
     },
     "qwen3-embedding-4b-mlx": {
       "backend": "mlx",

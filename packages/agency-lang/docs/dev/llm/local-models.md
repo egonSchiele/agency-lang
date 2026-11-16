@@ -150,9 +150,10 @@ alias with no `kind` field takes its kind from its downloaded files.
 
 - `list` (`runList` → `formatLocalList`) is UNGATED — browsing needs no
   provider package. First line names the resolved models directory; catalog
-  rows get a `✓` + on-disk size when the manifest maps their target URI to a
-  file that still exists; files no catalog row claims (raw-URI downloads,
-  pre-manifest downloads) appear under `OTHER FILES` with their kind.
+  rows get a `✓` + on-disk size when a model folder's record names their
+  target URI, or the old manifest maps it to a file that still exists; files
+  no catalog row claims (raw-URI downloads, pre-manifest downloads) appear
+  under `OTHER FILES` with their kind.
   Rows are in kind order, and `--kind` keeps one kind.
 - `download` with no argument opens a `prompts` picker over
   `downloadChoices(_listModelNames())`, with a trailing custom choice for an
@@ -193,26 +194,71 @@ preserving the user's own aliases. The seed catalog lives at
 
 `_downloadModel(value)` resolves the URI and calls the provider's
 `resolveModel`, which downloads via `node-llama-cpp`. The download is a single
-file, or sharded, as described below. We then verify integrity:
+file, or split into parts, as described below. Every load goes through
+`_downloadModel` too, and it downloads nothing when the model is already on
+disk.
+
+### One folder per model
+
+Each URI downloads into a folder of its own, named by `ggufModelDirName` in
+`lib/stdlib/ggufModelDir.ts`:
+
+```
+<modelsDir>/
+  gguf/
+    unsloth--GLM-5.3-Flash-GGUF--UD-Q4_K_XL/
+      .agency-model.json
+      hf_unsloth_GLM-5.3-Flash.UD-Q4_K_XL-00001-of-00006.gguf
+      ...
+      hf_unsloth_GLM-5.3-Flash.UD-Q4_K_XL-00006-of-00006.gguf
+```
+
+The record, `.agency-model.json` (`lib/stdlib/ggufModelRecord.ts`), holds the
+URI, the file to load (`entry`, the path node-llama-cpp returned), and every
+`.gguf` file in the folder with its size. It is written last, after the hash
+check, so a folder without one is a download that never finished, and is not
+a model. Everything else reads the record, never a file name:
+
+- **Load:** the record's `entry`, with no call to node-llama-cpp.
+- **List:** one row per folder, sized by summing the record's files.
+- **Remove:** `_removeGgufModel` deletes the whole folder.
+- **Sampling:** `localSamplingFor` matches any file inside the folder a
+  catalog URI names.
+
+The record names its URI because two URIs can share a folder name:
+`hf:org/repo:Q4` and `hf:org/repo/Q4` both become `org--repo--Q4`. Loading
+one when the folder holds the other is refused, naming both.
+
+Downloads from before these folders are loose `.gguf` files in the models
+directory, found through `downloads.json` (`lib/stdlib/localModelManifest.ts`),
+which maps a URI to a file name. Nothing writes it any more. It is still read,
+so those files load, list, and remove without a second download.
+
+### Hash checks
+
+We then verify integrity:
 
 - A known-good SHA-256 is **pinned** per curated/catalog model (in
   `CURATED_LOCAL_MODELS` and `data/model-catalog.json`), minted by
   `scripts/genModelHashes.ts` from Hugging Face's `X-Linked-ETag` header, which
   equals the file's content sha256. We verified that end to end against a real
   download.
-- After a **fresh** download (detected via a cache-dir snapshot,
-  `snapshotFreshness` — we never re-hash an already-present file), we
-  stream-hash the file and compare it to the pin (`verifyModelFile`).
+- Before writing a folder's record, we stream-hash the file and compare it to
+  the pin (`verifyModelFile`). That includes a file already in a folder with
+  no record, such as one a run left when it was interrupted during the hash
+  check: only the record says a file was verified. A folder with a record is
+  never hashed again.
 - On a mismatch the file is renamed to `<file>.gguf.invalidSha` (kept for
   inspection, not loaded) and an error is thrown.
 - Verification is **opportunistic**. Models with no pin, meaning user aliases
   and raw URIs, are simply not verified. A user alias may opt in by setting its
   own `sha256` on the alias object. It never borrows a curated model's hash.
 
-Because we verify only freshly-downloaded files, a pin change (e.g. via
+Because a recorded model is never hashed again, a pin change (e.g. via
 `agency local refresh`) does **not** retroactively re-check a file you already
-have cached. Run `agency local remove <name> -f` to delete the file and force
-a fresh, verified re-download.
+have. Run `agency local remove <name> -f` to delete it and force a fresh,
+verified re-download. Files from before the model folders are never checked
+either.
 
 ### Updating the pins
 
@@ -235,11 +281,13 @@ snapshot.
 
 `node-llama-cpp` handles two multi-part layouts: GGUF-split keeps the parts as
 separate files; binary-split splices them into one combined file. Our pin is a
-single content sha256, which only applies to **single-file** models, and the
-entire curated Q4_K_M set is single-file. Sharded models therefore carry no pin
-and verification **skips** them. Extending coverage (per-part hashes for GGUF-split;
-compute-and-pin for binary-split) is tracked in
-[issue #348](https://github.com/egonSchiele/agency-lang/issues/348).
+single content sha256, which only applies to **single-file** models. The
+curated models of 100 GB or more (`glm-5.3-flash` and its 3-bit and 2-bit
+builds, `qwen3.8-flash-next`, `deepseek-v4-flash`) are split, so they carry no
+pin and verification **skips** them. Extending coverage (per-part hashes for
+GGUF-split; compute-and-pin for binary-split) is tracked in
+[issue #348](https://github.com/egonSchiele/agency-lang/issues/348). The
+record already lists every part, so per-part hashes would go there.
 
 ## Embeddings
 

@@ -1,0 +1,25 @@
+import { emit } from "std::statelog"
+
+effect test::gate { step: number }
+
+node main(): string {
+  emit("before the interrupt")
+  raise test::gate("ok to continue?", { step: 1 })
+  emit("after the interrupt")
+  return "done"
+}
+
+// For the pause case: a sleep long enough for the test to pause inside.
+node slow(): string {
+  emit("before the sleep")
+  sleep(400ms)
+  emit("after the sleep")
+  return "done"
+}
+
+// For the rewind case: a checkpoint to rewind to.
+node timeline(): object {
+  const cid = checkpoint()
+  emit("after the checkpoint")
+  return { value: "done", cp: getCheckpoint(cid) }
+}

@@ -54,6 +54,34 @@ fire-and-forget, strips functions, and is a no-op outside IPC. The child still
 fires its own callbacks. Because a relayed event re-forwards upward, nesting
 works automatically.
 
+## TS-passed callbacks last for one call
+
+The callbacks a TypeScript caller gives a node live on that call's execution
+context. A checkpoint cannot hold functions, so they are not saved, and a
+resume builds a new execution context with none. The caller passes them
+again on every resume:
+
+```ts
+const result = await main({ callbacks });
+await respondToInterrupts(result.data, responses, { callbacks });
+```
+
+`respondToInterrupts`, `resumeFromCheckpoint`, and `rewindFrom` all take
+`callbacks` at the top level of their options, where a node call takes them.
+A resume with no callbacks is silent: nothing fails, the caller's hooks are
+just not called.
+
+`metadata: { callbacks }` is the older place for them and still works. The
+debugger uses it (`lib/debugger/driver.ts`). `withResumeCallbacks` in
+`lib/runtime/resumeSetup.ts` folds the top-level option into the metadata at
+each of the three entry points, so the rest of the resume path reads one
+place. When a caller uses both, both sets fire, the metadata ones first.
+The two hooks for one event run inside one function (`composeCallbacks`),
+so if the metadata hook throws, the top-level hook for that event is not
+called and the error is logged once.
+
+Fixture: `tests/agency-js/resume-callbacks`.
+
 ## Errors in callback bodies
 
 `fireWithGuard` catches any JS error thrown by a callback and logs it
@@ -136,7 +164,7 @@ that dies mid-way can be resumed from its last statement. Without one,
 the host can only go back to the run's last pause or interrupt.
 `onCheckpoint` gives it that through the ordinary callbacks channel. The
 payload is `{ runId, checkpoint }`. The host stores it and later calls
-`resumeFromCheckpoint({ type: "paused", checkpoint, runId }, { metadata: { callbacks } })`.
+`resumeFromCheckpoint({ type: "paused", checkpoint, runId }, { callbacks })`.
 
 Where it fires. `debugStep` (`lib/runtime/debugger.ts`) builds a
 `Checkpoint` for every statement the runner reaches, hands it to the

@@ -32,6 +32,18 @@ const result = main(param1, param2, { callbacks })
 
 The last argument to `main()` is an options object. You can pass in a `callbacks` object here.
 
+Callbacks last for one call. If the run stops on an [interrupt](/guide/interrupts-from-typescript) and you resume it, pass the callbacks again, or none of them will be called for the rest of the run:
+
+```ts
+let result = await main(param1, param2, { callbacks })
+while (hasInterrupts(result.data)) {
+  const responses = result.data.map(() => approve())
+  result = await respondToInterrupts(result.data, responses, { callbacks })
+}
+```
+
+`resumeFromCheckpoint` and `rewindFrom` take `callbacks` in their options the same way.
+
 Note that:
 - Callback bodies cannot raise interrupts. 
 - Callbacks can't change the flow of execution.

@@ -12,6 +12,7 @@ import {
   type Run,
 } from "./asyncContext.js";
 import { exitProcess } from "./exitProcess.js";
+import type { AgencyCallbacks } from "./hooks.js";
 import {
   resolveInvocation,
   type InvocationOptions,
@@ -31,6 +32,7 @@ import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import {
   applyRestoreSignal,
   restoreForResume,
+  withResumeCallbacks,
   type ResumeMetadata,
   type ResumeOverrides,
 } from "./resumeSetup.js";
@@ -925,6 +927,9 @@ type RespondToInterruptsArgs = {
   edits?: CheckpointEdit[];
   at?: StopAt;
   metadata?: Record<string, any>;
+  /** The caller's callbacks for this resume leg. A checkpoint cannot hold
+   *  functions, so the ones the node call took do not carry over. */
+  callbacks?: AgencyCallbacks;
   // Per-invocation config override for this resume leg. The resolver keeps the
   // original interrupt.runId and ignores any supplied traceId; only the config
   // projection is applied.
@@ -1068,6 +1073,8 @@ export type ResumeFromCheckpointArgs = {
   /** Edits to the paused checkpoint before it runs on. */
   edits?: CheckpointEdit[];
   metadata?: ResumeMetadata;
+  /** The caller's callbacks for this resume leg, as on respondToInterrupts. */
+  callbacks?: AgencyCallbacks;
   abortSignal?: AbortSignal;
   pauseSignal?: AbortSignal;
   // Per-invocation config and root policy for this resume leg, with the same
@@ -1081,7 +1088,8 @@ export type ResumeFromCheckpointArgs = {
  *  the same loop as an interrupt response, so the result can again be a
  *  value, interrupts, or another paused checkpoint. Takes edits, not the
  *  old overrides; a caller who wants to replay uses rewindFrom. */
-export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Promise<any> {
+export async function resumeFromCheckpoint(given: ResumeFromCheckpointArgs): Promise<any> {
+  const args = { ...given, metadata: withResumeCallbacks(given.metadata, given.callbacks) };
   if (!args.paused.runId) {
     throw new Error("Cannot resume: the paused value has no run id");
   }
@@ -1128,8 +1136,9 @@ export async function respondToInterruptsForServe(
 /** The resume's outcome with its debug stops answered by an attached
  *  debugger (`settleStops`), unless the resume is the debugger's own. */
 async function settledResume(
-  args: RespondToInterruptsArgs,
+  given: RespondToInterruptsArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  const args = { ...given, metadata: withResumeCallbacks(given.metadata, given.callbacks) };
   const outcome = await respondToInterruptsCore(args);
   if (isAttachedResume(args.metadata)) {
     return outcome;

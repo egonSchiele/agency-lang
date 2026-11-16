@@ -128,6 +128,13 @@ const resumed = await respondToInterrupts(result.data, responses, {
 });
 ```
 
+The same goes for [callbacks](/guide/callbacks). The ones you gave `main()` are
+not called after a resume unless you pass them again:
+
+```ts
+const resumed = await respondToInterrupts(result.data, responses, { callbacks });
+```
+
 `respondToInterrupts` accepts `pauseSignal` too, so you can pause a run after
 answering its interrupts. Pausing does not call your handlers. If you pass both
 `pauseSignal` and `abortSignal` and both fire, the run is cancelled.

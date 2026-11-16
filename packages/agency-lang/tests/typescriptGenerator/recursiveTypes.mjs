@@ -91,12 +91,15 @@ function pass() { return { type: "pass" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isPaused, isDebugger };
-type __ResumeOptions = { overrides?: Record<string, unknown>; edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-type __ResumeFromCheckpointOptions = { edits?: CheckpointEdit[]; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
-export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, edits: opts?.edits, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-type __RewindOptions = { edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: __RewindOptions) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+// A resume takes `callbacks` where a node call does. A checkpoint cannot hold
+// functions, so a caller passes them again on every resume.
+type __ResumeCallbacks = Parameters<typeof _respondToInterrupts>[0]["callbacks"];
+type __ResumeOptions = { overrides?: Record<string, unknown>; edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; callbacks?: __ResumeCallbacks; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, callbacks: opts?.callbacks, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+type __ResumeFromCheckpointOptions = { edits?: CheckpointEdit[]; metadata?: Record<string, any>; callbacks?: __ResumeCallbacks; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
+export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, edits: opts?.edits, metadata: opts?.metadata, callbacks: opts?.callbacks, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+type __RewindOptions = { edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; callbacks?: __ResumeCallbacks; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: __RewindOptions) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, callbacks: opts?.callbacks, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
 const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides, edits?: CheckpointEdit[]) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides, edits });
 /** A copy of `checkpoint` with `edits` applied, validated, and re-signed, or every reason one was refused. */
 export const patchCheckpoint = (checkpoint: Checkpoint, edits: CheckpointEdit[]) => _patchCheckpoint(checkpoint, edits, __globalCtx.host.settings);

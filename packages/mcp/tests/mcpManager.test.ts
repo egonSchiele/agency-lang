@@ -115,7 +115,10 @@ describe("McpManager records, login modes, and logins", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  function managerFor(config: Record<string, McpServerConfig>, onOAuthRequired?: () => void): McpManager {
+  function managerFor(
+    config: Record<string, McpServerConfig>,
+    onOAuthRequired?: (data?: unknown) => void,
+  ): McpManager {
     manager = new McpManager(config, { tokenStoreDir: dir, callbackPort: port, onOAuthRequired });
     return manager;
   }
@@ -209,6 +212,22 @@ describe("McpManager records, login modes, and logins", () => {
     expect(fs.existsSync(path.join(dir, "linear.client.json"))).toBe(true);
     await expect(manager.callTool("linear", "add", { a: 1, b: 2 })).rejects.toBeInstanceOf(NeedsLoginError);
     expect(manager.records().linear).toEqual({ status: "needsLogin" });
+  });
+
+  it("a call after logout of a server getTools connected starts no login", async () => {
+    let asked = 0;
+    let loginUrl = "";
+    managerFor({ linear: oauthConfig(server) }, (data?: unknown) => {
+      asked += 1;
+      loginUrl = (data as { authUrl: string }).authUrl;
+    });
+    const tools = manager.getTools("linear");
+    await vi.waitFor(() => expect(loginUrl).not.toBe(""));
+    await completeLogin(loginUrl);
+    expect((await tools).success).toBe(true);
+    await manager.logout("linear");
+    await expect(manager.callTool("linear", "add", { a: 1, b: 2 })).rejects.toBeInstanceOf(NeedsLoginError);
+    expect(asked).toBe(1);
   });
 
   it("expiry on a live connection: the call fails and the record becomes needsLogin", async () => {

@@ -4,13 +4,17 @@ import ts from "typescript";
 import { parseAgency } from "../parser.js";
 import { generateTypeScript } from "./typescriptGenerator.js";
 
-// A generated module starts with `// @ts-nocheck`, so a type it names and
-// forgets to import is not an error in the module itself. The TypeScript
-// program that imports the module does not get an error either: the node's
-// result quietly becomes `any`, and every use of it type-checks.
+// The file `agency compile --ts` writes starts with `// @ts-nocheck`, so a
+// type it names and forgets to import is not an error in the file itself.
+// The TypeScript program that imports it does not get an error either: the
+// value quietly becomes `any`, and every use of it type-checks.
 //
-// This test type-checks a small caller against a generated module and asks
-// the checker what type the caller got back from a node.
+// Two checks here:
+//
+// 1. Type-check a small caller against the file and ask the checker what
+//    type the caller got back from a node.
+// 2. Type-check the module without the `@ts-nocheck` line and collect every
+//    name it uses and does not declare or import.
 
 const packageRoot = path.resolve(__dirname, "../..");
 // Neither file is written to disk. They are named inside a directory that
@@ -19,8 +23,12 @@ const modulePath = path.join(__dirname, "agent.ts");
 const callerPath = path.join(__dirname, "caller.ts");
 
 const AGENCY_SOURCE = `
-node main(name: string) {
+export def greet(name: string): string {
   return name
+}
+
+node main(name: string) {
+  return greet(name)
 }
 `;
 
@@ -31,12 +39,16 @@ const result = await main("Ada");
 const traceId: string = result.traceId;
 `;
 
+const CANNOT_FIND_NAME = 2304;
+
 type CallerCheck = {
   errors: string[];
   /** True when the caller's `result` has no real type. */
   resultIsAny: boolean;
 };
 
+/** The module text `generateTypeScript` returns, which has no
+ *  `@ts-nocheck` line. */
 function generateModule(): string {
   const parsed = parseAgency(AGENCY_SOURCE, {}, false);
   if (!parsed.success) {
@@ -45,9 +57,21 @@ function generateModule(): string {
   return generateTypeScript(parsed.result, undefined, undefined, "agent.agency");
 }
 
-/** Type-check the caller against `moduleSource`. `agency-lang/runtime`
+/** The file a user gets. `lib/compiler/buildSession.ts` adds this line when
+ *  it writes a `--ts` file. */
+function asWrittenToDisk(moduleSource: string): string {
+  return "// @ts-nocheck\n" + moduleSource;
+}
+
+function messagesOf(diagnostics: readonly ts.Diagnostic[]): string[] {
+  return diagnostics.map((diagnostic) =>
+    ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+  );
+}
+
+/** A program holding the caller and `moduleSource`. `agency-lang/runtime`
  *  resolves to the runtime's source, so the test needs no build. */
-function checkCaller(moduleSource: string): CallerCheck {
+function programWith(moduleSource: string): ts.Program {
   const virtualFiles: Record<string, string> = {
     [modulePath]: moduleSource,
     [callerPath]: CALLER_SOURCE,
@@ -70,39 +94,67 @@ function checkCaller(moduleSource: string): CallerCheck {
   const realFileExists = host.fileExists.bind(host);
   host.readFile = (fileName) => virtualFiles[fileName] ?? readRealFile(fileName);
   host.fileExists = (fileName) => fileName in virtualFiles || realFileExists(fileName);
+  return ts.createProgram([callerPath], options, host);
+}
 
-  const program = ts.createProgram([callerPath], options, host);
-  const caller = program.getSourceFile(callerPath);
-  if (!caller) {
-    throw new Error("The caller is not in the program");
+function sourceFileOf(program: ts.Program, fileName: string): ts.SourceFile {
+  const file = program.getSourceFile(fileName);
+  if (!file) {
+    throw new Error(`${fileName} is not in the program`);
   }
-  const errors = ts
-    .getPreEmitDiagnostics(program, caller)
-    .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
+  return file;
+}
 
-  const checker = program.getTypeChecker();
+function checkCaller(moduleSource: string): CallerCheck {
+  const program = programWith(moduleSource);
+  const caller = sourceFileOf(program, callerPath);
   const resultDeclaration = caller.statements
     .filter(ts.isVariableStatement)
     .flatMap((statement) => statement.declarationList.declarations)
-    .find((declaration) => declaration.name.getText() === "result");
+    .find((declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === "result");
   if (!resultDeclaration) {
     throw new Error("The caller does not declare `result`");
   }
-  const resultType = checker.getTypeAtLocation(resultDeclaration.name);
-  return { errors, resultIsAny: (resultType.flags & ts.TypeFlags.Any) !== 0 };
+  const resultType = program.getTypeChecker().getTypeAtLocation(resultDeclaration.name);
+  return {
+    errors: messagesOf(ts.getPreEmitDiagnostics(program, caller)),
+    resultIsAny: (resultType.flags & ts.TypeFlags.Any) !== 0,
+  };
 }
 
-describe("a TypeScript caller of a generated module", () => {
-  const generated = generateModule();
+/** Every "Cannot find name" error in the module. Empty for a module that
+ *  has a `@ts-nocheck` line, so pass the text without one. */
+function missingNames(moduleSource: string): string[] {
+  const program = programWith(moduleSource);
+  const diagnostics = program
+    .getSemanticDiagnostics(sourceFileOf(program, modulePath))
+    .filter((diagnostic) => diagnostic.code === CANNOT_FIND_NAME);
+  return messagesOf(diagnostics);
+}
 
-  it("gets a typed result from a node", () => {
-    expect(checkCaller(generated)).toEqual({ errors: [], resultIsAny: false });
+describe("a generated module", () => {
+  const generated = generateModule();
+  const withoutImport = generated.replace(", RunNodeResult }", " }");
+
+  it("has an import to remove, for the two cases that remove it", () => {
+    expect(withoutImport).not.toBe(generated);
   });
 
-  it("gets `any` when the module does not import RunNodeResult", () => {
+  it("gives a TypeScript caller a typed result from a node", () => {
+    expect(checkCaller(asWrittenToDisk(generated))).toEqual({ errors: [], resultIsAny: false });
+  });
+
+  it("gives the caller `any` when it does not import RunNodeResult", () => {
     // Shows that the check above can fail.
-    const withoutImport = generated.replace(", RunNodeResult }", " }");
-    expect(withoutImport).not.toBe(generated);
-    expect(checkCaller(withoutImport).resultIsAny).toBe(true);
+    expect(checkCaller(asWrittenToDisk(withoutImport)).resultIsAny).toBe(true);
+  });
+
+  it("declares or imports every name it uses", () => {
+    expect(missingNames(generated)).toEqual([]);
+  });
+
+  it("reports a name it does not import", () => {
+    // Shows that the check above can fail.
+    expect(missingNames(withoutImport)).toContain("Cannot find name 'RunNodeResult'.");
   });
 });

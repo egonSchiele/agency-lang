@@ -703,8 +703,8 @@ Start an Agency file as a separate process and return at once. The process keeps
 | node | `string` | "main" | The node to start. |
 | args | `string[]` | [] | Arguments the program reads with std::args. |
 | policy | `Record<string, any>` | {} | The approval rules the process runs under. The default has no rules. |
-| maxCost | `number \| null` | null | The most the process may spend, in dollars, or null for no limit. |
-| maxTime | `number \| null` | null | The longest the process may work, in milliseconds, or null for no limit. |
+| maxCost | `number \| null` | null | The most the process may spend, in dollars, or null to set no limit here. A budget in the program's own agency.json still applies. |
+| maxTime | `number \| null` | null | The longest the process may work, in milliseconds, or null to set no limit here. A budget in the program's own agency.json still applies. |
 | messages | `any[]` | [] | A conversation the process's first thread starts with. |
 | name | `string` | "" | The name the process shows in ps. The default is the filename. |
 | cwd | `string \| null` | null | The working directory. The default is this program's. |

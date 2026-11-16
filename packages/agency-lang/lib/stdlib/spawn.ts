@@ -23,6 +23,7 @@ import { program } from "./abortable.js";
 /** The folder under Agency's home that holds a folder per spawned program. */
 const SPAWNED_DIR = "spawned";
 const OUTPUT_FILE = "output.log";
+const AGENCY_SUFFIX = ".agency";
 const POLICY_FILE = "policy.json";
 /** Only the user reads the policy a program was started with. */
 const POLICY_FILE_MODE = 0o600;
@@ -81,10 +82,16 @@ export function _spawnCount(): number {
  *  `<file>:<node>`, and a node that is not a plain name would make the
  *  command read a different file than the one the approver was shown. */
 export function _spawnProblem(
+  filename: string,
   node: string,
   maxCost: number | null,
   maxTime: number | null,
 ): string | null {
+  // The compiled file takes the source's name with `.agency` replaced. A
+  // source with another name would be written over by its own output.
+  if (!filename.endsWith(AGENCY_SUFFIX)) {
+    return `"${filename}" is not an Agency file: its name must end in ${AGENCY_SUFFIX}.`;
+  }
   if (!LEGAL_IDENTIFIER.test(node)) {
     return `"${node}" is not a node name.`;
   }

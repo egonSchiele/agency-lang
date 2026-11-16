@@ -72,7 +72,11 @@ node main() {
 - **`maxCost`** is the most the process may spend on LLM calls, in dollars.
 - **`maxTime`** is the longest it may work. Time it spends waiting for a person does not count.
 
-With no limits, the process has none. Set them.
+A limit you leave out is not set. The process then has only the [budget](/guide/agency-config-file) in its own `agency.json`, if there is one. Set them.
+
+::: warning
+If your `agency.json` sets a fixed `traceFile`, a process spawned from the same project writes to that same file, and empties it when it starts. Use `traceDir` instead, which gives each run its own file.
+:::
 
 ## Approving a start
 

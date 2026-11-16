@@ -541,8 +541,8 @@ export def spawn(
   @param node - The node to start.
   @param args - Arguments the program reads with std::args.
   @param policy - The approval rules the process runs under. The default has no rules.
-  @param maxCost - The most the process may spend, in dollars, or null for no limit.
-  @param maxTime - The longest the process may work, in milliseconds, or null for no limit.
+  @param maxCost - The most the process may spend, in dollars, or null to set no limit here. A budget in the program's own agency.json still applies.
+  @param maxTime - The longest the process may work, in milliseconds, or null to set no limit here. A budget in the program's own agency.json still applies.
   @param messages - A conversation the process's first thread starts with.
   @param name - The name the process shows in ps. The default is the filename.
   @param cwd - The working directory. The default is this program's.
@@ -562,7 +562,7 @@ export def spawn(
   if (!valid.success) {
     return failure("Invalid policy: ${valid.error}")
   }
-  const problem = _spawnProblem(node, maxCost, maxTime)
+  const problem = _spawnProblem(filename, node, maxCost, maxTime)
   if (problem != null) {
     return failure(problem)
   }

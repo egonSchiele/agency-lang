@@ -136,9 +136,9 @@ describe("a node name that would change the file", () => {
 
   it("is refused before the interrupt", () => {
     for (const node of TRICKS) {
-      expect(_spawnProblem(node, null, null)).toContain("is not a node name");
+      expect(_spawnProblem("report.agency", node, null, null)).toContain("is not a node name");
     }
-    expect(_spawnProblem("main", null, null)).toBeNull();
+    expect(_spawnProblem("report.agency", "main", null, null)).toBeNull();
   });
 
   it("is refused by the command builder too", () => {
@@ -148,13 +148,23 @@ describe("a node name that would change the file", () => {
   });
 });
 
+// The compiled file is the source's name with `.agency` replaced, so a
+// source named anything else would be written over by its own output.
+describe("a file whose name does not end in .agency", () => {
+  it("is refused before the interrupt", () => {
+    for (const filename of ["report", "report.agency.txt", "notes.md"]) {
+      expect(_spawnProblem(filename, "main", null, null)).toContain("is not an Agency file");
+    }
+  });
+});
+
 describe("the limits", () => {
   it("are checked before the interrupt", () => {
-    expect(_spawnProblem("main", -1, null)).toContain("maxCost");
-    expect(_spawnProblem("main", Number.NaN, null)).toContain("maxCost");
-    expect(_spawnProblem("main", null, 0.2)).toContain("maxTime");
-    expect(_spawnProblem("main", null, -5)).toContain("maxTime");
-    expect(_spawnProblem("main", 0, 1)).toBeNull();
+    expect(_spawnProblem("report.agency", "main", -1, null)).toContain("maxCost");
+    expect(_spawnProblem("report.agency", "main", Number.NaN, null)).toContain("maxCost");
+    expect(_spawnProblem("report.agency", "main", null, 0.2)).toContain("maxTime");
+    expect(_spawnProblem("report.agency", "main", null, -5)).toContain("maxTime");
+    expect(_spawnProblem("report.agency", "main", 0, 1)).toBeNull();
   });
 });
 

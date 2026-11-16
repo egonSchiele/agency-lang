@@ -150,6 +150,11 @@ The program takes the three out of its environment as soon as it starts (`takeLa
 
 `spawnEnvironment` builds the launcher's whole environment: the caller's, without `AGENCY_TRACE_ID`, `AGENCY_CONFIG_OVERRIDES`, and every `AGENCY_IPC*` variable, and with `AGENCY_SPAWN_DEPTH` set. Those three tie a process to its caller's run. Without them the spawned program has a trace of its own and reads its own `agency.json`.
 
+Two things follow from the program reading its own `agency.json`:
+
+- A `null` limit sets no limit in the launch command. A `budget` in the program's `agency.json` still applies, as it would for `agency run` with no limit flags.
+- A fixed `traceFile` in a config both programs read is one file for both. The spawned program empties it when it starts, as every fresh run does, and the caller's trace is lost. `traceDir` gives each run its own file.
+
 ### The seed
 
 `agency run --messages <file>` puts a list of messages on the program's first thread. `spawn` passes `--messages -`, and the messages travel through the launcher's standard input to the program's. They are never written to a file on that path. A person who names their own file keeps it: Agency reads it and leaves it.
@@ -184,13 +189,15 @@ The limit is close and not exact. Three cases let a run start a few more than 50
 
 `_spawnProblem` refuses a `node` that is not a plain name, and a limit that is negative or not a number, before anything is asked. The node check is a safety check. The command's target is `<file>:<node>`, and `parseTarget` treats the whole string as a filename when the text after the last colon is not a name. A node such as `x/../../other.agency` would then make the command run a file other than the one the approver was shown, and an "always approve when" rule pins only `dir` and `filename`. `spawnCommand` checks the same thing again: the target it built must read back as the approved file and node.
 
+`_spawnProblem` also refuses a `filename` that does not end in `.agency`. The compiled file takes the source's name with `.agency` replaced, so a source named `report` would be written over by its own output.
+
 `_checkSpawnFile` refuses a `filename` that is not a regular file in `dir`, so nobody is asked to approve a file that is not there. Whether the file declares the node is not checked. That would mean parsing the file before the approval, and the launcher reports a missing node in the program's output file.
 
 ### What is checked after the approval
 
 A person can take a while to answer, and the file or a folder above it could be swapped for a symbolic link in that time. So `_spawn` calls `_checkSpawnFile` again before it launches. The check goes through `host.files.fixedRoot`, which refuses a link at any part of the approved folder's path, and a contained `stat`, which refuses one below it.
 
-The launcher is a separate process and reads the file a moment later, by its path. That last gap is not closed.
+The launcher is a separate process and reads the file a moment later, by its path. That last gap is not closed. The launcher also compiles as `agency run` does: it writes the compiled file beside the source and follows a symbolic link at that path.
 
 ### The output cap
 

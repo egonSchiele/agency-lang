@@ -7,8 +7,10 @@ import type {
   OAuthClientInformationMixed,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { execFile } from "child_process";
+import { randomBytes } from "crypto";
 import { promisify } from "util";
-import { CallbackServer } from "./callbackServer.js";
+import { CallbackServer, callbackUrlFor } from "./callbackServer.js";
+import { NeedsLoginError } from "./needsLogin.js";
 import { TokenStore } from "./tokenStore.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,16 +43,29 @@ export type OAuthProviderOptions = {
   timeoutMs?: number;
   clientId?: string;
   clientSecret?: string;
-  /** Override the callback server port (default 19876). Use 0 for random port in tests. */
+  /** The callback page's port (default 19876). */
   port?: number;
+  /** What a connection does when it needs a login. Default "askFirst". */
+  loginMode?: LoginMode;
 };
+
+/** "askFirst" starts a login and waits for it, as 0.0.5 did. "never" fails
+ *  with NeedsLoginError instead, and only startLogin starts a login. */
+export type LoginMode = "askFirst" | "never";
+
+/** The scopes the SDK may pass to invalidateCredentials. */
+type CredentialScope = "all" | "client" | "tokens" | "verifier" | "discovery";
 
 export class AgencyOAuthProvider implements OAuthClientProvider {
   private serverName: string;
   private store: TokenStore;
   private options: OAuthProviderOptions;
   private callbackServer: CallbackServer | null = null;
-  private _callbackUrl: string | null = null;
+  private lastState: string | null = null;
+  /** True between startLogin and the end of that login. */
+  private startingLogin = false;
+  private loginUrl: string | null = null;
+  private rejectedRefreshToken: string | null = null;
 
   constructor(
     serverName: string,
@@ -62,42 +77,64 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
     this.options = options;
   }
 
-  /**
-   * Start the callback server before connect() so the redirect URL is
-   * known when the SDK reads clientMetadata for dynamic registration.
-   * Called by OAuthConnector before client.connect().
-   */
-  async prepare(): Promise<void> {
-    this.callbackServer = new CallbackServer({
-      port: this.options.port,
-      timeoutMs: this.options.timeoutMs,
-    });
-    this._callbackUrl = await this.callbackServer.start();
+  /** Mark a login as being started: tokens() returns nothing, so the SDK goes
+   *  straight to a new login, and redirectToAuthorization keeps the URL. */
+  beginLogin(): void {
+    this.startingLogin = true;
+    this.loginUrl = null;
+  }
+
+  endLogin(): void {
+    this.startingLogin = false;
+  }
+
+  /** The login page URL kept by the last redirectToAuthorization of a login
+   *  being started, or null. */
+  get pendingLoginUrl(): string | null {
+    return this.loginUrl;
   }
 
   /**
-   * Wait for the authorization code from the callback server.
-   * Returns the code string. Rejects on timeout or cancellation.
+   * Wait for the authorization code from the callback page. Rejects on
+   * timeout or cancellation, or when no page is running.
    */
   async waitForAuthCode(): Promise<string> {
     if (!this.callbackServer) {
-      throw new Error(`OAuth flow for "${this.serverName}" not started — call prepare() first`);
+      throw new Error(`No login in progress for "${this.serverName}"`);
     }
     return this.callbackServer.waitForCode();
   }
 
+  /** A new `state` value for each login. The SDK puts it in the login URL. */
   state(): string {
-    if (!this.callbackServer) {
-      throw new Error(`OAuth flow for "${this.serverName}" not started — call prepare() first`);
-    }
-    return this.callbackServer.state;
+    this.lastState = randomBytes(32).toString("hex");
+    return this.lastState;
   }
 
   get redirectUrl(): string {
-    if (!this._callbackUrl) {
-      throw new Error(`OAuth flow for "${this.serverName}" not started — call prepare() first`);
+    return callbackUrlFor(this.options.port);
+  }
+
+  /** Record the refresh token the server last refused. invalidateCredentials
+   *  deletes the saved login only when it still holds this token. */
+  noteRejectedRefreshToken(token: string): void {
+    this.rejectedRefreshToken = token;
+  }
+
+  async invalidateCredentials(scope: CredentialScope): Promise<void> {
+    if (scope === "all") {
+      await this.store.deleteTokens(this.serverName);
+      return;
     }
-    return this._callbackUrl;
+    if (scope !== "tokens") {
+      return;
+    }
+    // Another call may have saved a newer login after this one refreshed
+    // with the old token. Keep that login.
+    const saved = await this.store.loadTokens(this.serverName);
+    if (saved?.refresh_token !== undefined && saved.refresh_token === this.rejectedRefreshToken) {
+      await this.store.deleteLogin(this.serverName);
+    }
   }
 
   get clientMetadata(): OAuthClientMetadata {
@@ -143,6 +180,9 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
   }
 
   async tokens(): Promise<OAuthTokens | undefined> {
+    if (this.startingLogin) {
+      return undefined;
+    }
     return this.store.loadTokens(this.serverName);
   }
 
@@ -151,20 +191,44 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
   }
 
   async redirectToAuthorization(authorizationUrl: URL): Promise<void> {
-    // Set up a completion promise for the onOAuthRequired callback
+    if (this.startingLogin) {
+      await this.startCallbackPage();
+      this.loginUrl = authorizationUrl.toString();
+      return;
+    }
+    if (this.options.loginMode === "never") {
+      throw new NeedsLoginError(this.serverName);
+    }
+    await this.startCallbackPage();
+    await this.askFirst(authorizationUrl);
+  }
+
+  private async startCallbackPage(): Promise<void> {
+    if (this.callbackServer) {
+      await this.callbackServer.stop();
+    }
+    this.callbackServer = new CallbackServer({
+      port: this.options.port,
+      timeoutMs: this.options.timeoutMs,
+      state: this.lastState ?? this.state(),
+    });
+    await this.callbackServer.start();
+  }
+
+  /** The 0.0.5 login: hand the URL to onOAuthRequired, or open the browser. */
+  private async askFirst(authorizationUrl: URL): Promise<void> {
     let resolveComplete: () => void;
     let rejectComplete: (err: Error) => void;
     const completePromise = new Promise<void>((resolve, reject) => {
       resolveComplete = resolve;
       rejectComplete = reject;
     });
+    // Drops the rejection only when the callback never awaits `complete`.
+    completePromise.catch(() => {});
 
-    // Wire callback server completion to the complete promise
-    if (this.callbackServer) {
-      this.callbackServer.waitForCode()
-        .then(() => resolveComplete())
-        .catch((err) => rejectComplete(err));
-    }
+    this.callbackServer!.waitForCode()
+      .then(() => resolveComplete())
+      .catch((err) => rejectComplete(err));
 
     if (this.options.onOAuthRequired) {
       await this.options.onOAuthRequired({
@@ -204,10 +268,10 @@ export class AgencyOAuthProvider implements OAuthClientProvider {
 
   async cleanup(): Promise<void> {
     if (this.callbackServer) {
-      await this.callbackServer.stop();
+      const server = this.callbackServer;
       this.callbackServer = null;
+      await server.stop();
     }
-    this._callbackUrl = null;
     await this.store.deleteCodeVerifier(this.serverName);
   }
 }

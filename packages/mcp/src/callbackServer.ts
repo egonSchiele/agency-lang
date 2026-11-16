@@ -74,6 +74,9 @@ export class CallbackServer {
     if (this.server) {
       const server = this.server;
       this.server = null;
+      // A browser keeps its connection open. An open connection would keep
+      // answering on this port and keep the process alive.
+      server.closeAllConnections();
       return new Promise<void>((resolve) => server.close(() => resolve()));
     }
   }

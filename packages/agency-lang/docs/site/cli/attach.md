@@ -56,6 +56,21 @@ $ agency attach
 
 When several interrupts are raised at the same moment, the program holds them together. You answer each one in turn, and the program resumes once you have answered all of them.
 
+## Seeing the program's output
+
+A program started with [`--detach`](./run#running-in-the-background), or with [`spawn`](../guide/spawning-processes), saves what it prints to a file. When you attach to one, the command first prints what the file holds, and then prints what the program adds to it while you watch.
+
+```
+$ agency attach 48213
+Attached to pid 48213 (report.js). Press Ctrl-C to detach.
+Reading the sales data...
+Found 1,204 rows.
+```
+
+The output stops while a prompt is open, so it does not write over the question, and catches up once you have answered.
+
+A program started in a terminal prints to that terminal and has no output file. Attaching to it shows its questions and nothing else.
+
 ## Detaching
 
 Press Ctrl-C to detach. The program keeps running.

@@ -5,7 +5,7 @@ description: "The Agency agent as a program that does one task and exits."
 
 # task
 
-The spawning brain starts it as a process of its own, once per task.
+The spawntest brain starts it as a process of its own, once per task.
 
   ```
   agency run --detach task.log --wait-for-response task.agency -- "Summarize the README"
@@ -16,5 +16,5 @@ The spawning brain starts it as a process of its own, once per task.
   program's host. Started with `--wait-for-response`, the program holds each
   one until a person answers it with `agency attach`.
 
-  The one question it answers itself is a budget that ran out. It ends the
-  agent there, with the reply it has so far.
+  The agent stops at `agencyAgent`'s own budget, $50 and 30 minutes, with
+  the reply it has so far.

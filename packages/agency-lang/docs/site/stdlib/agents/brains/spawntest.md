@@ -1,9 +1,9 @@
 ---
-name: "spawning"
-description: "The minimal brain plus a tool that starts another agent as a separate process."
+name: "spawntest"
+description: "A trial brain: the minimal brain plus a tool that starts another agent as a separate process."
 ---
 
-# spawning
+# spawntest
 
 A brain of the Agency agent for a message that holds several unrelated
   tasks. It is the minimal brain with one more tool, `startAgent`, which
@@ -43,12 +43,12 @@ Start another agent on one task as a separate process, and return at once with i
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/spawning.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/spawntest.agency#L56))
 
-### spawningBrain
+### spawntestBrain
 
 ```ts
-spawningBrain(
+spawntestBrain(
   prompt: string | (string | Attachment)[],
   settings: AgentSettings,
   extraTools: any[],
@@ -72,4 +72,4 @@ Answer one message with the minimal brain's tool loop, plus a tool that
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/spawning.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/spawntest.agency#L78))

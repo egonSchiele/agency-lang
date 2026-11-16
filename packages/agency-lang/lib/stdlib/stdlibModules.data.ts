@@ -138,9 +138,9 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::agents/brains/simple": [
     "simpleBrain"
   ],
-  "std::agents/brains/spawning": [
+  "std::agents/brains/spawntest": [
     "startAgent",
-    "spawningBrain"
+    "spawntestBrain"
   ],
   "std::agents/coding": [
     "buildTools",

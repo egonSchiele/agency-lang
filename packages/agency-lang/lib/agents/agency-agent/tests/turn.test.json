@@ -96,6 +96,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "onlyTheSpawntestBrainGetsTheModelByName",
+      "description": "The spawntest brain is given the main model by name, and another brain gets the ambient model.",
+      "input": "",
+      "expectedOutput": "\"main-model/openai|/\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "replStyleOnlyInTheRepl",
       "description": "The terminal reply style is on the coordinator's thread once in the REPL. It is absent in a one-shot run and for the simple brain, and never in the context.",
       "input": "",

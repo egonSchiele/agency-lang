@@ -1,9 +1,9 @@
 {
-  "sourceFile": "brainSpawning.agency",
+  "sourceFile": "brainSpawntest.agency",
   "tests": [
     {
       "nodeName": "offersTheFourToolsAndStartAgent",
-      "description": "The spawning brain offers read, bash, edit, and write, then startAgent.",
+      "description": "The spawntest brain offers read, bash, edit, and write, then startAgent.",
       "input": "",
       "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"startAgent\"]",
       "evaluationCriteria": [{ "type": "exact" }],
@@ -12,9 +12,9 @@
     },
     {
       "nodeName": "tellsTheModelAboutStartingAgents",
-      "description": "The system prompt says when to start an agent.",
+      "description": "The system prompt says when to start an agent, and still holds the coding rules.",
       "input": "",
-      "expectedOutput": "true",
+      "expectedOutput": "\"true|true\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "hi" }]
@@ -40,6 +40,13 @@
       "description": "startAgent passes the call's model to the program, and puts -- before the task.",
       "input": "",
       "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "startPassesTheContext",
+      "description": "The call's context is one seed message, and is not in the arguments.",
+      "input": "",
+      "expectedOutput": "\"true|true|false\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

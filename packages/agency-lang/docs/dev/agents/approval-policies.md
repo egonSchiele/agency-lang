@@ -122,7 +122,7 @@ Without it, a person at the folder step would pick a number from a list
 they cannot see.
 
 The body is the interrupt's data as a table, one row a field
-(`prettyPrintInterruptData` in `stdlib/policy.agency`). Three rules keep it
+(`prettyPrintInterruptData` in `stdlib/policy.agency`). Two rules keep it
 short and exact:
 
 - A list of plain values, such as a command's arguments, goes on one line:
@@ -132,8 +132,6 @@ short and exact:
 - A field set to nothing prints as `null`, and an empty object as `{}`. A
   blank cell would read as if the value were missing, and the person could
   not tell "no limit" from "not shown".
-- Paths are printed whole. The answers below the body name folders in
-  full, and one prompt should not spell a folder two ways.
 
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body

@@ -1,5 +1,5 @@
 /** @module
-  @summary The minimal brain plus a tool that starts another agent as a separate process.
+  @summary A trial brain: the minimal brain plus a tool that starts another agent as a separate process.
 
   A brain of the Agency agent for a message that holds several unrelated
   tasks. It is the minimal brain with one more tool, `startAgent`, which
@@ -30,8 +30,9 @@ A started agent sees none of this conversation, so its task must say everything 
 After you start agents, tell the user each one's name, process id, and output file, and that `agency attach <process id>` shows what an agent has printed and answers its questions.
 """
 
-/** The flags that give the started program this call's model, or none
-  when the call uses the ambient model. */
+/** The flags that name this call's model to the started program. A started
+  program cannot see this program's ambient model, so a call with no model
+  of its own passes none, and the started program uses its configured one. */
 def modelArgs(settings: AgentSettings): string[] {
   if (settings.model == "") {
     return []
@@ -40,6 +41,16 @@ def modelArgs(settings: AgentSettings): string[] {
     return ["--model", settings.model]
   }
   return ["--model", settings.model, "--provider", settings.provider]
+}
+
+/** The call's context as the conversation the started agent begins with.
+  It goes there and not in the arguments, which any user of the machine
+  can read in the process list. */
+def contextMessages(settings: AgentSettings): any[] {
+  if (settings.context == "") {
+    return []
+  }
+  return [{ role: "system", content: settings.context }]
 }
 
 export def startAgent(
@@ -59,11 +70,12 @@ export def startAgent(
     _agentProgramsDir(),
     TASK_PROGRAM,
     args: [...modelArgs(settings), "--", task],
+    messages: contextMessages(settings),
     name: name,
   )
 }
 
-export def spawningBrain(
+export def spawntestBrain(
   prompt: string | (string | Attachment)[],
   settings: AgentSettings,
   extraTools: any[],

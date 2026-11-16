@@ -14,7 +14,7 @@ import { exists } from "std::shell"
 import { currentThreadId, getThread } from "std::thread"
 
 import { guardStopHandler } from "../lib/budget.agency"
-import { cliSettings } from "../lib/answer.agency"
+import { cliSettings, namedMainModel } from "../lib/answer.agency"
 import { messageWasRewritten, setMessageRewritten } from "../lib/rewrittenMessage.agency"
 import { setInteractive } from "../lib/trace.agency"
 import {
@@ -200,6 +200,23 @@ node rewrittenMessageGetsNoRouter(): string {
   setMessageRewritten(true)
   const rewritten = cliSettings().routerModel
   return "${typed}|${rewritten}"
+}
+
+// A program the spawntest brain starts cannot see the ambient model, so
+// that brain alone is given the main model by name.
+node onlyTheSpawntestBrainGetsTheModelByName(): string {
+  applyResolved(
+    {
+      main: {
+        model: "main-model",
+        provider: "openai",
+        via: "test"
+      }
+    },
+  )
+  const named = namedMainModel("spawntest")
+  const ambient = namedMainModel("minimal")
+  return "${named.model}/${named.provider}|${ambient.model}/${ambient.provider}"
 }
 
 def styleMessages(): number {

@@ -1,7 +1,7 @@
 /** @module
   @summary The Agency agent as a program that does one task and exits.
 
-  The spawning brain starts it as a process of its own, once per task.
+  The spawntest brain starts it as a process of its own, once per task.
 
   ```
   agency run --detach task.log --wait-for-response task.agency -- "Summarize the README"
@@ -12,9 +12,10 @@
   program's host. Started with `--wait-for-response`, the program holds each
   one until a person answers it with `agency attach`.
 
-  The one question it answers itself is a budget that ran out. It ends the
-  agent there, with the reply it has so far.
+  The agent stops at `agencyAgent`'s own budget, $50 and 30 minutes, with
+  the reply it has so far.
 */
+import { registerLocalProvider } from "std::agency/local"
 import { agencyAgent } from "std::agents/agency"
 import { parseArgs } from "std::args"
 
@@ -41,6 +42,11 @@ node main() {
     return
   }
   print("Task: ${task}")
+  // A llama-cpp model runs inside the program that calls it, so this
+  // program loads the provider itself.
+  if (args.flags.provider == "llama-cpp") {
+    registerLocalProvider()
+  }
   let reply: Result<string> = failure("no reply")
   handle {
     reply = agencyAgent(
@@ -50,14 +56,8 @@ node main() {
       provider: args.flags.provider,
     )
   } with (intr) {
-    // Every other question is left for the person who attaches.
-    if (intr.effect != "std::guard") {
-      return pass()
-    }
-    // A budget ran out. Nobody is watching to grant more, so the agent
-    // stops with its best result.
-    print("The ${intr.data.dimension} budget ran out, so the agent was stopped.")
-    return reject()
+    // Every question is left for the person who attaches.
+    return pass()
   }
   if (reply is success(text)) {
     print(text)

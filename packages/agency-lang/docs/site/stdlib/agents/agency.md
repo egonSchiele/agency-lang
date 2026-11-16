@@ -50,7 +50,7 @@ Which brain answers.
 
 ```ts
 /** Which brain answers. */
-export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawning"
+export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest"
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L49))
@@ -137,7 +137,7 @@ A negative `maxCost` or `maxTime` means no limit. A model that is given
 |---|---|---|---|
 | task | `string` |  | What the user wants, as they would say it to an assistant |
 | context | `string` | "" | Extra text for the agent, such as the user's own instructions, or "" |
-| brain | [AgencyAgentBrain](#agencyagentbrain) | "coordinator" | Which brain answers: "coordinator", "minimal", "simple", or "spawning" |
+| brain | [AgencyAgentBrain](#agencyagentbrain) | "coordinator" | Which brain answers: "coordinator", "minimal", "simple", or "spawntest" |
 | maxCost | `number` | $50.00 | Cost budget in USD |
 | maxTime | `number` | 30m | Time budget in milliseconds |
 | model | `string` | "" | The main model, or "" for the ambient model |

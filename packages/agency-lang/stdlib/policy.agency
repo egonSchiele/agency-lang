@@ -855,12 +855,10 @@ def isPlainList(items: any[]): boolean {
   }
 }
 
-// A plain list on one line: `"--verbose", "my file.txt", 3`. A table with
-// a row for each item takes three lines an item, and inside another table
-// it is a box in a box. Each item is written as JSON, so the quotes show
-// where one text ends and the next begins, even when a text holds a comma.
-// JSON also writes a control character as an escape, and the strip removes
-// the few it leaves alone.
+// A plain list on one line: `"--verbose", "my file.txt", 3`. Each item is
+// written as JSON, so the quotes show where one item ends, even when it
+// holds a comma. JSON writes most control characters as escapes, and the
+// strip removes the few it leaves alone.
 def plainListLine(items: any[]): string {
   if (items.length == 0) {
     return "[]"
@@ -871,10 +869,9 @@ def plainListLine(items: any[]): string {
   return stripControlChars(written.join(", "))
 }
 
-// What one field of the data prints as, in its row of the table. A field
-// set to nothing prints as `null`, and an empty object as `{}`. Left
-// blank, the row reads as if the value had been lost, and the person
-// approving cannot tell "no limit" from "not shown".
+// What one field prints as in its row. Nothing prints as `null` and an
+// empty object as `{}`: a blank cell would not tell "no limit" from "not
+// shown".
 def fieldText(value: any): string {
   if (value == null) {
     return "null"

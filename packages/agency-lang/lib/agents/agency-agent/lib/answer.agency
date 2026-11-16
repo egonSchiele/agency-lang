@@ -6,7 +6,7 @@
   docs/dev/agents/agent-brains.md.
 */
 import { AgencyAgentBrain, agencyAgent } from "std::agents/agency"
-import { AgentSettings } from "std::agents/brains/settings"
+import { AgentSettings, ModelChoice } from "std::agents/brains/settings"
 import { now } from "std::date"
 import { Attachment, ensureSystemMessage } from "std::thread"
 
@@ -16,7 +16,13 @@ import { grounding } from "./grounding.agency"
 import { addJobsNote } from "./jobsNote.agency"
 import { messageWasRewritten } from "./rewrittenMessage.agency"
 import { isInteractive } from "./trace.agency"
-import { getRouterModel, getRouterProvider, getSlowModel, getSlowProvider } from "../shared.agency"
+import {
+  getResolvedSlots,
+  getRouterModel,
+  getRouterProvider,
+  getSlowModel,
+  getSlowProvider,
+} from "../shared.agency"
 
 // A negative budget is no limit. A whole-agent limit comes from --max-cost
 // and --max-time, which the runtime enforces as a root budget.
@@ -61,6 +67,17 @@ def routerModelFor(): string {
   return getRouterModel()
 }
 
+/** The main model by name, for a brain that starts other programs. A
+  started program cannot see this program's ambient model, so the brain
+  needs the name to pass on. Every other brain gets "", the ambient model. */
+export def namedMainModel(brainName: string): ModelChoice {
+  const main = getResolvedSlots()["main"]
+  if (brainName != "spawntest" || main == null) {
+    return { model: "", provider: "" }
+  }
+  return { model: main.model, provider: main.provider }
+}
+
 /** The text the user reads for a subagent's result. */
 export def replyText(name: string, result: Result<string>): string {
   if (isFailure(result)) {
@@ -95,12 +112,15 @@ export def answerTurn(
     addReplStyle()
     mainTools = cliTools(now(), settings)
   }
+  const main = namedMainModel(brainName)
   const result = agencyAgent(
     task: message,
     context: settings.context,
     brain: brainName as AgencyAgentBrain,
     maxCost: NO_LIMIT,
     maxTime: NO_LIMIT,
+    model: main.model,
+    provider: main.provider,
     reasoningModel: settings.reasoningModel,
     reasoningProvider: settings.reasoningProvider,
     routerModel: settings.routerModel,

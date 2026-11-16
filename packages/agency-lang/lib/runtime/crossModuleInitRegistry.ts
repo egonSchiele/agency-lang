@@ -160,11 +160,18 @@ export async function __initAllRegistered(run: Run): Promise<void> {
 }
 
 /**
- * Run every JS-loaded module's static init, and none of its global init.
- * A resume calls this: the checkpoint holds the globals but not the
- * statics, which live in module bindings, so a resume in a new process
- * has to compute them. Each module's `__initializeStatic` runs once per
- * process, so this costs nothing when the process already ran them.
+ * Run every JS-loaded module's static init. A resume calls this on a
+ * copy of the checkpoint's globals: the checkpoint holds the globals but
+ * not the statics, which live in module bindings, so a resume in a new
+ * process has to compute them. Each module's `__initializeStatic` runs
+ * once per process, so this costs nothing when the process already ran
+ * them.
+ *
+ * Global init runs first, and is a no-op for every module the copy marks
+ * initialized. A module the paused run never loaded is not marked, and
+ * gets its whole init the way a fresh run gives it. Going through global
+ * init marks the module before its statics run, so a static initializer
+ * can call a function in its own module without waiting on itself.
  *
  * Modules are visited in the order they registered, which is the order
  * they loaded. A module loads after the modules it imports, so a static
@@ -173,6 +180,7 @@ export async function __initAllRegistered(run: Run): Promise<void> {
  */
 export async function __initAllRegisteredStatics(run: Run): Promise<void> {
   for (const moduleId of Object.keys(staticInits)) {
+    await __awaitGlobalsInit(moduleId, run);
     await staticInits[moduleId](run);
   }
 }

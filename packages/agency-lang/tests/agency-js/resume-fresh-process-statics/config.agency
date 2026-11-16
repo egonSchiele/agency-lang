@@ -1,0 +1,5 @@
+let prefix = "<"
+
+export def getPrefix(): string {
+  return prefix
+}

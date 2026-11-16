@@ -169,6 +169,15 @@ rule to learn and a second number to explain. One simple rule, with the
 totalling left to the program that rewinds, is easier to understand and to
 keep correct.
 
+## Known consequence: a resume does not count recomputed statics
+
+A resume in a new process computes the program's statics again before it
+restores the checkpoint (`docs/dev/compiler/init-topsort.md`, "Statics on a
+resume"). If a static initializer calls an LLM, that call is charged, but the
+restore then sets every figure to what the checkpoint saved. The figures keep
+what the first process spent computing the statics, and leave out the second
+time. The root budget still caps the call.
+
 ## Known consequence: a cost guard rewinds too
 
 A loop that rewinds to a checkpoint taken inside a `guard(cost: ...)` also

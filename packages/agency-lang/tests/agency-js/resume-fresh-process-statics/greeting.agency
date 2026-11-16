@@ -1,12 +1,13 @@
-import { hello } from "./words.agency"
+import { middleHello, open } from "./middle.agency"
 
-// Calls a function in this module and one that reads another module's
-// static, so a resume has to set up statics in load order without
-// starting this module's global init.
-static const GREETING = bracket(hello())
+// `middleHello` reads a static in words.agency two calls away, so the
+// compiler adds no edge to it: only the order a resume visits modules
+// in sets it in time. `open` reads a global in config.agency two calls
+// away. `bracket` is a function in this module.
+static const GREETING = bracket(middleHello())
 
 def bracket(word: string): string {
-  return "<${word}>"
+  return "${open()}${word}>"
 }
 
 export def greet(name: string): string {

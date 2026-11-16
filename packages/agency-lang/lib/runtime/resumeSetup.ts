@@ -9,7 +9,7 @@ import { CheckpointEditError, CheckpointError, type RestoreSignal } from "./erro
 import type { Policy } from "./policy.js";
 import { loadConfiguredProviders } from "#platform";
 import { assertCodeUnchanged } from "./referencedModules.js";
-import { reinstallRootBudget } from "./rootBudget.js";
+import { installRootBudget, reinstallRootBudget } from "./rootBudget.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 import type { PendingArgOverrides, RuntimeContext } from "./state/context.js";
@@ -189,21 +189,32 @@ export function applyRestoreSignal(
  *  initializer calls pushes frames onto the stack, and the restored stack
  *  replays frames instead.
  *
- *  It runs on a store that says every module is initialized. A function
- *  called from a static initializer checks that flag first, and starts its
- *  module's global init when the flag is unset. On a resume the globals
- *  come from the checkpoint, so that init must not run. The store shares
- *  the run's token stats, so a static initializer's LLM call is counted. */
-async function initStaticsForResume(execCtx: RuntimeContext<GraphState>): Promise<void> {
+ *  It runs on a copy of the checkpoint's globals, which is thrown away
+ *  after. The copy marks the modules the paused run initialized, so a
+ *  function called from a static initializer does not rerun its module's
+ *  top-level code, and it reads a global's value at the pause. The copy
+ *  shares the run's token stats, so the per-model totals keep the call.
+ *  The usage meter does not: the restore sets it to the checkpoint's
+ *  spend (`docs/dev/runtime/cost-is-state.md`).
+ *
+ *  The root budget is installed for the pass, as on a fresh run, and
+ *  removed after: the restored stack brings its own. */
+async function initStaticsForResume(
+  execCtx: RuntimeContext<GraphState>,
+  checkpoint: Checkpoint,
+): Promise<void> {
   const runGlobals = execCtx.globals;
-  const staticGlobals = new GlobalStore();
-  staticGlobals.isInitialized = () => true;
+  const staticGlobals = GlobalStore.fromJSON(checkpoint.globals).clone();
   staticGlobals.restoreTokenStats(runGlobals.getTokenStats());
+  const stack = execCtx.stateStack;
+  const guardCount = stack.guards.length;
+  installRootBudget(stack, execCtx.host, execCtx.budget);
   execCtx.globals = staticGlobals;
   try {
     await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredStatics(run));
   } finally {
     execCtx.globals = runGlobals;
+    while (stack.guards.length > guardCount) stack.popGuard();
   }
 }
 
@@ -228,7 +239,7 @@ export async function restoreForResume(
   });
   request.afterCheckpointRestored?.();
 
-  await initStaticsForResume(execCtx);
+  await initStaticsForResume(execCtx, checkpoint);
   await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
   execCtx.restoreState(checkpoint);
   // A resume the attached debugger did not issue comes from outside, and

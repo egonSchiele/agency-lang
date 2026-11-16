@@ -451,23 +451,39 @@ await respondToInterrupts(load(), [approve("Ada")]);
 In process 2 every module is marked initialized by the checkpoint, so
 the lazy prelude never runs, and the first static read throws. So
 `restoreForResume` runs `__initAllRegisteredStatics` before it restores
-the checkpoint. Two rules keep this pass from doing harm:
+the checkpoint. These rules keep the pass from doing harm:
 
-  - It runs on a global store that says every module is initialized.
+  - It runs on a copy of the checkpoint's globals, thrown away after.
     A static initializer can call a function, and that function's lazy
-    prelude would otherwise start its module's global init. That init
-    would rerun top-level code the paused run already ran, and for the
-    module whose statics are being set it would wait on its own
-    pending static promise forever.
+    prelude checks whether its module is initialized. The copy marks
+    every module the paused run initialized, so the prelude does not
+    rerun that module's top-level code. A function that reads a global
+    gets the global's value at the pause. If the program changed the
+    global before pausing, the static differs from the one process 1
+    computed. The compiler refuses a static that reads a global
+    directly or through one call, so only a deeper read reaches this.
+  - For each module, global init runs first and static init second.
+    Global init is a no-op for a module the copy marks. A module the
+    paused run never loaded, such as the entry of a second program
+    resuming the first one's checkpoint, is not marked, so it gets its
+    whole init on the copy, the way a fresh run gives it. Its top-level
+    code runs again on the real store if the resumed run calls into it.
   - It runs before the checkpoint is restored. A function called from
     a static initializer pushes frames, and a restored stack replays
     frames instead of pushing them.
+  - The root budget is installed on the stack for the pass, and
+    removed after it, so an LLM call in a static initializer is capped
+    as it is on a fresh run. Its spend is not in the run's cost figures
+    afterwards, because the restore sets them to what the checkpoint
+    saved (`docs/dev/runtime/cost-is-state.md`).
 
-Without the global init, a static initializer that calls into another
-module relies on that module's statics being set already. Modules are
-visited in registration order, which is load order, and a module loads
-after the modules it imports, so they are. The regression test is
-`tests/agency-js/resume-fresh-process-statics`.
+A static initializer that calls into another module, through a module
+with no statics in between, has no compile-time edge to it. It relies
+on that module's statics being set already. Modules are visited in
+registration order, which is load order, and a module loads after the
+modules it imports, so they are. The regression test is
+`tests/agency-js/resume-fresh-process-statics`. It fails when the loop
+visits modules in reverse, and when the pass runs on an empty store.
 
 ## Bare top-level statements
 

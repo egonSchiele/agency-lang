@@ -472,7 +472,7 @@ async function runNodeCore({
       let threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
       // `agency run --messages`. A `run()` child inherits its parent's
       // environment, and must not be seeded with the parent's conversation.
-      const seed = isIpcMode(execCtx.host) ? null : takeSeedMessages(execCtx.host.settings);
+      const seed = isIpcMode(execCtx.host) ? null : takeSeedMessages();
       if (seed !== null) {
         seedFirstThread(threadStore, seed);
       }

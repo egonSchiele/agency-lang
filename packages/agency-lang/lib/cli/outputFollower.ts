@@ -43,6 +43,7 @@ export function outputFollower(
   const decoder = new StringDecoder("utf8");
   let position = 0;
   let stop: (() => void) | null = null;
+  let finished = false;
 
   const catchUp = (): void => {
     let descriptor: number;
@@ -64,7 +65,12 @@ export function outputFollower(
       fs.closeSync(descriptor);
     }
   };
+  // Does nothing while already polling, and after `finish`: a second
+  // timer would be lost and never stopped.
   const poll = (): void => {
+    if (finished || stop !== null) {
+      return;
+    }
     catchUp();
     stop = repeat(catchUp, OUTPUT_POLL_MS);
   };
@@ -79,6 +85,7 @@ export function outputFollower(
     finish: () => {
       halt();
       catchUp();
+      finished = true;
     },
   };
 }

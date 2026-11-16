@@ -26,9 +26,8 @@ import { loadProviderModules } from "./providerModules.js";
 import { _resolveLocalEmbeddingModel } from "../stdlib/localModels.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { onHeldChange } from "./heldQuestions.js";
-import { processSlot } from "./processSlot.js";
-import type { HostSettings } from "../host/host.js";
-import { AGENCY_OUTPUT_FILE, AGENCY_SEED_MESSAGES, SEED_FROM_STDIN } from "../constants.js";
+import { launchSettings, takeSeedSource } from "./launchSettings.js";
+import { SEED_FROM_STDIN } from "../constants.js";
 
 /** The file descriptor of standard input. */
 const STDIN = 0;
@@ -64,27 +63,22 @@ export function resolveLocalEmbeddingModel(provider: string, model: string): Pro
 }
 
 /** The record field for a detached program's output file, or nothing. */
-function outputFileOf(settings: HostSettings): { outputFile?: string } {
-  const outputFile = settings.read(AGENCY_OUTPUT_FILE);
-  return outputFile === null || outputFile === "" ? {} : { outputFile };
+function outputFileOf(): { outputFile?: string } {
+  const outputFile = launchSettings().outputFile;
+  return outputFile === null ? {} : { outputFile };
 }
-
-/** Whether this process has taken its seed. `runNode` runs for every node
- *  a process starts, including one a TypeScript helper starts, and only
- *  the first may be seeded. */
-const seedTaken = processSlot<boolean>("agency.seedMessagesTaken", () => false);
 
 /** The parsed seed a run was started with (`agency run --messages`), or
  *  null. Returns the seed the first time it is asked for in a process, and
- *  null every time after. A path is read and left where it is; `-` reads
- *  standard input to its end. Throws when the seed cannot be read or is
- *  not JSON. */
-export function takeSeedMessages(settings: HostSettings): unknown | null {
-  const source = settings.read(AGENCY_SEED_MESSAGES);
-  if (source === null || source === "" || seedTaken.get()) {
+ *  null every time after: `runNode` runs for every node a process starts,
+ *  including one a TypeScript helper starts, and only the first may be
+ *  seeded. A path is read and left where it is; `-` reads standard input
+ *  to its end. Throws when the seed cannot be read or is not JSON. */
+export function takeSeedMessages(): unknown | null {
+  const source = takeSeedSource();
+  if (source === null) {
     return null;
   }
-  seedTaken.set(true);
   const from = source === SEED_FROM_STDIN ? "standard input" : source;
   try {
     return JSON.parse(readFileSync(source === SEED_FROM_STDIN ? STDIN : source, "utf8"));
@@ -197,7 +191,7 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     // a suspend would look as if it started later than it did.
     startedAt: Math.round(performance.timeOrigin),
     // Where a detached program's output is saved, for `agency attach`.
-    ...outputFileOf(host.settings),
+    ...outputFileOf(),
   };
   try {
     writeRecord(dir, record);

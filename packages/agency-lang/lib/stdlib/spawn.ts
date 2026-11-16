@@ -5,6 +5,8 @@
 import path from "path";
 
 import { agencyCliPath } from "../agencyCliPath.js";
+import { parseTarget } from "../agentTarget.js";
+import { LEGAL_IDENTIFIER } from "../parsers/parsers.js";
 import { CONFIG_OVERRIDES_ENV, TRACE_ID_ENV } from "../config/config.js";
 import {
   AGENCY_SPAWN_DEPTH,
@@ -73,6 +75,28 @@ export function _spawnCount(): number {
   return ctx.spawnCount;
 }
 
+/** Why these arguments cannot start a program, or null when they can.
+ *  Checked before the interrupt, so nobody is asked to approve a start
+ *  that would fail. The node name matters most: the command's target is
+ *  `<file>:<node>`, and a node that is not a plain name would make the
+ *  command read a different file than the one the approver was shown. */
+export function _spawnProblem(
+  node: string,
+  maxCost: number | null,
+  maxTime: number | null,
+): string | null {
+  if (!LEGAL_IDENTIFIER.test(node)) {
+    return `"${node}" is not a node name.`;
+  }
+  if (maxCost !== null && !(Number.isFinite(maxCost) && maxCost >= 0)) {
+    return `maxCost must be zero or more dollars, and ${maxCost} is not.`;
+  }
+  if (maxTime !== null && !(Number.isFinite(maxTime) && maxTime >= 1)) {
+    return `maxTime must be at least one millisecond, and ${maxTime} is not.`;
+  }
+  return null;
+}
+
 /** The paths one spawned program will use. Creates nothing: this runs
  *  before the interrupt, so that the payload can show the output file, and
  *  a rejected start leaves nothing on disk. */
@@ -108,7 +132,15 @@ export function spawnCommand(
   const given = flags.flatMap(([flag, value]) =>
     value === null ? [] : value === "" ? [flag] : [flag, value],
   );
-  const target = `${path.join(question.dir, question.filename)}:${question.node}`;
+  const file = path.join(question.dir, question.filename);
+  const target = `${file}:${question.node}`;
+  // The command must read the target back as the file and the node that
+  // were approved. `_spawnProblem` refuses a bad node before the
+  // interrupt; this holds for any caller of this function.
+  const read = parseTarget(target);
+  if (read.filename !== file || read.nodeName !== question.node) {
+    throw new Error(`"${question.node}" is not a node name.`);
+  }
   return ["run", ...given, target, "--", ...question.args];
 }
 
@@ -195,6 +227,11 @@ export async function _spawn(
         input: seeded ? JSON.stringify(messages) : undefined,
       },
     );
+    if (result.timedOut) {
+      // The command may have started the program before it was stopped,
+      // so the start is counted. The count must never run low.
+      ctx.spawnCount += 1;
+    }
     if (result.exitCode !== 0) {
       const why = result.timedOut ? "it took too long to start\n" : "";
       throw new Error(
@@ -206,8 +243,9 @@ export async function _spawn(
     return { pid };
   } finally {
     // The launcher has read the policy by now, or never will.
+    // A removal that fails must not turn a start that worked into a failure.
     if (dir !== null && policyFile !== null) {
-      await host.files.remove(dir, policyFile);
+      await host.files.remove(dir, policyFile).catch(() => {});
     }
   }
 }

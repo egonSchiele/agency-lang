@@ -61,6 +61,9 @@ describe("the process title", () => {
     process.env[AGENCY_PROCESS_TITLE] = "agency run report";
     await start();
     expect(process.title).toBe("agency run report");
+    // Taken out of the environment, so a process this one starts does
+    // not inherit the title.
+    expect(process.env[AGENCY_PROCESS_TITLE]).toBeUndefined();
   });
 
   it("is left alone when the carrier is missing", async () => {

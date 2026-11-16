@@ -44,7 +44,6 @@ declare module "#platform" {
   import type { CoverageCollector } from "@/runtime/coverageCollector.js";
   import type { ProviderLoadingContext } from "@/runtime/platform.js";
   import type { RegisterAttachArgs } from "@/runtime/platform.js";
-  import type { HostSettings } from "@/host/host.js";
   /** The runtime hooks that differ by platform and are not the host's
    *  business. platform.node.ts loads provider modules from disk, makes a
    *  coverage collector, opens a log file, and resolves a local model;
@@ -59,7 +58,7 @@ declare module "#platform" {
   export function registerAttach(args: RegisterAttachArgs): void;
   /** The parsed seed messages of `agency run --messages`, the first time
    *  it is asked for in a process, and null after; in a browser, null. */
-  export function takeSeedMessages(settings: HostSettings): unknown | null;
+  export function takeSeedMessages(): unknown | null;
 }
 
 declare module "#default-host" {

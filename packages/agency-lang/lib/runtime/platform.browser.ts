@@ -5,7 +5,6 @@
 import type { CoverageCollector } from "./coverageCollector.js";
 import type { ProviderLoadingContext } from "./platform.js";
 import type { RegisterAttachArgs } from "./platform.js";
-import type { HostSettings } from "../host/host.js";
 
 export async function loadConfiguredProviders(execCtx: ProviderLoadingContext): Promise<void> {
   const configured = execCtx.providerModules ?? [];
@@ -37,6 +36,6 @@ export async function resolveLocalEmbeddingModel(provider: string, model: string
 export function registerAttach(_args: RegisterAttachArgs): void {}
 
 /** A page is not started from a command line, so it has no seed. */
-export function takeSeedMessages(_settings: HostSettings): unknown | null {
+export function takeSeedMessages(): unknown | null {
   return null;
 }

@@ -7,6 +7,7 @@ import * as browserPlatform from "./platform.browser.js";
 import { memoryHost } from "../host/memoryHost.js";
 import { nodeHost } from "../host/node/nodeHost.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
+import { takeLaunchSettings } from "./launchSettings.js";
 
 describe("#platform", () => {
   it("both files match the declaration in packageImports.d.ts", () => {
@@ -114,14 +115,19 @@ describe("#platform", () => {
     const file = path.join(dir, "seed.json");
     fs.writeFileSync(file, JSON.stringify([{ role: "user", content: "hello" }]));
     try {
-      const none = memoryHost().settings;
-      expect(nodePlatform.takeSeedMessages(none)).toBeNull();
-      const seeded = memoryHost({ variables: { AGENCY_SEED_MESSAGES: file } }).settings;
-      expect(nodePlatform.takeSeedMessages(seeded)).toEqual([{ role: "user", content: "hello" }]);
-      expect(nodePlatform.takeSeedMessages(seeded)).toBeNull();
+      expect(nodePlatform.takeSeedMessages()).toBeNull();
+      // What the command-line entry does at startup. The variable is taken
+      // out of the environment, so nothing this process starts inherits it.
+      process.env.AGENCY_SEED_MESSAGES = file;
+      takeLaunchSettings();
+      expect(process.env.AGENCY_SEED_MESSAGES).toBeUndefined();
+      expect(nodePlatform.takeSeedMessages()).toEqual([{ role: "user", content: "hello" }]);
+      expect(nodePlatform.takeSeedMessages()).toBeNull();
       expect(fs.existsSync(file)).toBe(true);
-      expect(browserPlatform.takeSeedMessages(seeded)).toBeNull();
+      expect(browserPlatform.takeSeedMessages()).toBeNull();
     } finally {
+      delete process.env.AGENCY_SEED_MESSAGES;
+      takeLaunchSettings();
       safeDeleteDirectoryWithin(os.tmpdir(), dir);
     }
   });

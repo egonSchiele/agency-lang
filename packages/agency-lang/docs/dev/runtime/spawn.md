@@ -130,6 +130,8 @@ The policy reaches the command in a file, `policy.json` in the program's folder,
 
 `--name`, `--messages`, and `--detach` travel from the command to the program as `AGENCY_PROCESS_TITLE`, `AGENCY_SEED_MESSAGES`, and `AGENCY_OUTPUT_FILE`. `withRootCarriers` in `lib/cli/childEnv.ts` holds them as rows in `TEXT_CARRIERS`, clears each one, and sets the ones given. `runLaunchFrom` in `lib/cli/runLaunch.ts` turns the three flags into one `RunLaunch` value for `run()`.
 
+The program takes the three out of its environment as soon as it starts (`takeLaunchSettings` in `lib/runtime/launchSettings.ts`, called by `runCliEntry`) and keeps them in a `processSlot`. Left in the environment, every process the program starts would inherit them. A shell job that ran a compiled Agency program would be seeded with this program's conversation, or would try to read a seed from its own standard input.
+
 `runCliEntry` sets `process.title` from the first, so every `agency run` shows in `ps` as `agency run <name>`, with the input file's name as the default.
 
 ### The environment a spawned program gets
@@ -140,7 +142,7 @@ The policy reaches the command in a file, `policy.json` in the program's folder,
 
 `agency run --messages <file>` puts a list of messages on the program's first thread. `spawn` passes `--messages -`, and the messages travel through the launcher's standard input to the program's. They are never written to a file on that path. A person who names their own file keeps it: Agency reads it and leaves it.
 
-`takeSeedMessages` in `lib/runtime/platform.node.ts` reads the seed, and `runNode` puts it on the thread with `seedFirstThread`. The seed is taken once per process, recorded in a `processSlot`, because `runNode` runs for every node a process starts. A `run()` child inherits its parent's environment and is not seeded.
+`takeSeedMessages` in `lib/runtime/platform.node.ts` reads the seed, and `runNode` puts it on the thread with `seedFirstThread`. The seed is taken once per process (`takeSeedSource` clears it), because `runNode` runs for every node a process starts. A `run()` child inherits its parent's environment and is not seeded.
 
 `seedFrom` in `lib/runtime/seedMessages.ts` drops every tool call in the last assistant message that has no result. A conversation looks like that at the moment a model starts a process by calling a tool, and a provider refuses it. `keepToolCalls` in `lib/runtime/threadRepair.ts` does the edit, and `dropHandoffToolCall` uses the same function.
 
@@ -158,7 +160,17 @@ A spawned program's default output file is `~/.agency/spawned/<id>/output.log`. 
 
 `restoreState` calls `adoptSpawnCount`, which keeps the larger of the live count and the saved one. A resume in a new process starts at zero and takes the saved count. A `restore()` inside a run that has started more programs since keeps its own count, because those processes were started and a restore does not un-start them. A run's spend behaves the other way: it is set back on a restore (`docs/dev/runtime/cost-is-state.md`). A count that followed spend would let a loop of `restore()` and `spawn` start processes without limit.
 
+The limit is close and not exact. Three cases let a run start a few more than 500:
+
+- Branches of a `fork` that call `spawn` at the same moment all pass the check before any of them has counted its start.
+- A debugger rewind builds a new context, which starts at zero and takes the count saved in the checkpoint it rewinds to. Programs started after that checkpoint are no longer counted.
+- A launch that times out is counted, since the command may have started the program before it was stopped. That errs the other way.
+
 `spawn` fails inside a `run()` subprocess, which is a sandbox tied to its parent.
+
+### What is checked before the interrupt
+
+`_spawnProblem` refuses a `node` that is not a plain name, and a limit that is negative or not a number, before anything is asked. The node check is a safety check. The command's target is `<file>:<node>`, and `parseTarget` treats the whole string as a filename when the text after the last colon is not a name. A node such as `x/../../other.agency` would then make the command run a file other than the one the approver was shown, and an "always approve when" rule pins only `dir` and `filename`. `spawnCommand` checks the same thing again: the target it built must read back as the approved file and node.
 
 ### The output cap
 

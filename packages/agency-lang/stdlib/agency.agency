@@ -22,7 +22,7 @@ import {
   _readTestFileSandbox,
  } from "agency-lang/stdlib-lib/agency.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
-import { _spawn, _spawnCount, _spawnDepth, _spawnPaths } from "agency-lang/stdlib-lib/spawn.js"
+import { _spawn, _spawnCount, _spawnDepth, _spawnPaths, _spawnProblem } from "agency-lang/stdlib-lib/spawn.js"
 import { _validatePolicy } from "agency-lang/stdlib-lib/policy.js"
 import {
   _loadTemplate,
@@ -561,6 +561,10 @@ export def spawn(
   const valid = _validatePolicy(policy)
   if (!valid.success) {
     return failure("Invalid policy: ${valid.error}")
+  }
+  const problem = _spawnProblem(node, maxCost, maxTime)
+  if (problem != null) {
+    return failure(problem)
   }
   const prepared = try _prepareContainedPath(dir, filename, "read")
   if (isFailure(prepared)) {

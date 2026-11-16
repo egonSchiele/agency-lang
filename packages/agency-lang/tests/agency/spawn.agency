@@ -77,6 +77,25 @@ export node invalidPolicyFailsBeforeAsking(): string {
   }
 }
 
+// The command's target is file:node. A node that is not a plain name could
+// make the command read a different file than the one shown for approval,
+// so it fails before anything is asked.
+export node nodeNameThatIsNotANameFails(): string {
+  seed()
+  handle {
+    const result = spawn(DIR, "child.agency", node: "x/../../other.agency")
+    if (result is failure(err)) {
+      if (err.includes("the handler was asked")) {
+        return "raised"
+      }
+      return err
+    }
+    return "started"
+  } with (intr) {
+    return reject("the handler was asked")
+  }
+}
+
 // A run() subprocess is a sandbox tied to its parent. It cannot start a
 // process that outlives both.
 export node refusedInsideRunSubprocess(): string {

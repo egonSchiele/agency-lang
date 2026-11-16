@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
 import type { Command, HostSubprocess, RunOptions, RunResult } from "../host/host.js";
 import { memoryHost, type MemoryHost } from "../host/memoryHost.js";
+import { builtinEffectSets } from "../runtime/effectSets.js";
 import {
   _spawn,
   _spawnCount,
   _spawnDepth,
   _spawnPaths,
+  _spawnProblem,
   spawnCommand,
   spawnEnvironment,
   type SpawnQuestion,
@@ -121,6 +123,45 @@ describe("spawnCommand", () => {
       "/work/scripts/report.agency:main",
       "--",
     ]);
+  });
+});
+
+// The target is `<file>:<node>`. A node that is not a plain name would
+// make the command read another file than the one that was approved.
+describe("a node name that would change the file", () => {
+  const TRICKS = ["x/../../../tmp/evil.agency", "x:main", "", "a b", "-x"];
+
+  it("is refused before the interrupt", () => {
+    for (const node of TRICKS) {
+      expect(_spawnProblem(node, null, null)).toContain("is not a node name");
+    }
+    expect(_spawnProblem("main", null, null)).toBeNull();
+  });
+
+  it("is refused by the command builder too", () => {
+    for (const node of TRICKS) {
+      expect(() => spawnCommand(question({ node }), null, false)).toThrow("is not a node name");
+    }
+  });
+});
+
+describe("the limits", () => {
+  it("are checked before the interrupt", () => {
+    expect(_spawnProblem("main", -1, null)).toContain("maxCost");
+    expect(_spawnProblem("main", Number.NaN, null)).toContain("maxCost");
+    expect(_spawnProblem("main", null, 0.2)).toContain("maxTime");
+    expect(_spawnProblem("main", null, -5)).toContain("maxTime");
+    expect(_spawnProblem("main", 0, 1)).toBeNull();
+  });
+});
+
+// A rule that approves a set, such as Shell, must not approve a spawn.
+describe("the effect sets", () => {
+  it("leave std::spawn out of every set", () => {
+    const sets = builtinEffectSets();
+    expect(Object.keys(sets).length).toBeGreaterThan(0);
+    expect(JSON.stringify(sets)).toContain("std::run");
+    expect(JSON.stringify(sets)).not.toContain("std::spawn");
   });
 });
 
@@ -245,6 +286,16 @@ describe("_spawn", () => {
     });
     expect(count).toBe(0);
     expect(Object.keys(host.state.files)).toEqual([]);
+  });
+
+  // The command may have started the program before it was stopped.
+  it("counts a start whose command timed out, and still fails", async () => {
+    const { host } = hostThatLaunches({ exitCode: null, timedOut: true });
+    const count = await withRun(host, async (ctx) => {
+      await expect(_spawn(question(), [], SPAWN_DIR)).rejects.toThrow("took too long");
+      return ctx.spawnCount;
+    });
+    expect(count).toBe(1);
   });
 
   it("throws when the command reports no pid", async () => {

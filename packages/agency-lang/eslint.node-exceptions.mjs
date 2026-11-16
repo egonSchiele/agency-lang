@@ -27,6 +27,8 @@ export const NODE_ONLY = {
   "lib/runtime/coverageCollector.ts": "tooling: writes coverage files",
   "lib/runtime/heldQuestions.ts":
     "the questions a command-line run holds for agency attach, one batch per process, kept alive by a timer",
+  "lib/runtime/launchSettings.ts":
+    "takes the title, seed, and output file out of the process environment at startup",
   "lib/runtime/outputCap.ts":
     "limits what a detached program saves, by wrapping the process's two output streams",
   "lib/runtime/processSlot.ts": "keeps a value on process, shared by every copy of the runtime",

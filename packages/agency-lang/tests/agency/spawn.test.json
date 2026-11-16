@@ -23,6 +23,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "nodeNameThatIsNotANameFails",
+      "description": "A node argument that is not a plain name fails before any interrupt",
+      "input": "",
+      "expectedOutput": "\"\\\"x/../../other.agency\\\" is not a node name.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "refusedInsideRunSubprocess",
       "description": "spawn fails inside a run() subprocess",
       "input": "",

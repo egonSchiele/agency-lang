@@ -77,6 +77,10 @@ export function startDetached(start: DetachedStart): void {
     return;
   }
   if (seed !== null) {
+    // A program that ends before it reads its seed closes the pipe, and
+    // the write fails. That is the program's failure, which its output
+    // file shows. It must not crash this command after the report.
+    child.stdin?.on("error", () => {});
     child.stdin?.end(seed);
   }
   child.unref();

@@ -73,6 +73,21 @@ describe("outputFollower", () => {
     expect(timer.running()).toBe(false);
   });
 
+  it("starts no second timer on a repeated resume, and none after finish", () => {
+    let started = 0;
+    const counting: Repeater = () => {
+      started++;
+      return () => {};
+    };
+    const follower = outputFollower(file, write, counting);
+    follower.start();
+    follower.resume();
+    expect(started).toBe(1);
+    follower.finish();
+    follower.resume();
+    expect(started).toBe(1);
+  });
+
   it("holds a character split across two reads until it is whole", () => {
     const timer = handTimer();
     const whole = Buffer.from("é");

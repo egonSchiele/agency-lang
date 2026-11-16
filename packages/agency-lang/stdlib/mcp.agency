@@ -3,14 +3,29 @@ import {
   _readProjectMcpConfig,
   _mergeMcpServers,
   _loadMcpTools,
-  _loadMcpToolsWithStatus
+  _loadMcpToolsWithStatus,
+  _mcpPackageProblem,
+  _connectMcpServers,
+  _mcpServerStates,
+  _startMcpLogin,
+  _finishMcpLogin,
+  _cancelMcpLogin,
+  _logoutMcpServer,
+  _reconnectMcpServer
 } from "agency-lang/stdlib-lib/mcp.js"
 
 /** @module
-  @summary Load MCP tools and report server connection status.
+  @summary Load MCP tools, report server connection status, and log in to servers.
   Read project server settings, merge them with global settings, and load
   tools for use in `llm()`. Calls to loaded tools raise `mcp::call` so handlers
   and policies can approve or reject them.
+
+  `connectMcpServers` connects servers without ever starting a login. A server
+  that needs one gets the status `needsLogin`. `startMcpLogin` and
+  `finishMcpLogin` log in to it in two steps, so the program can open the
+  login page with `openUrl` in between. `logoutMcpServer` deletes a saved
+  login and raises `mcp::logout`. These functions need `@agency-lang/mcp`
+  0.0.6 or newer; `mcpPackageProblem` says when the installed one is older.
 
   ```ts
   import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
@@ -68,4 +83,106 @@ export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?)
   @param merged - Server configurations, such as the output of mergeMcpServers.
   """
   return _loadMcpToolsWithStatus(merged, onOAuthRequired)
+}
+
+/** One MCP server's state. `message` is empty unless the status is "failed".
+  `tools` is empty unless the status is "connected". */
+export type McpServerState = {
+  name: string;
+  status: "connected" | "needsLogin" | "failed";
+  message: string;
+  tools: any[]
+}
+
+// Raised before a saved MCP login is deleted.
+@always(server)
+effect mcp::logout {
+  server: string
+}
+
+export def mcpPackageProblem(): string {
+  """
+  Return why the installed @agency-lang/mcp is too old for the server-state
+  functions, with the command to upgrade it. Returns an empty string when it
+  is new enough or not installed.
+  """
+  return _mcpPackageProblem()
+}
+
+@capabilities(fileRead, fileWrite, network, subprocess)
+export def connectMcpServers(merged: Record<string, any>): McpServerState[] {
+  """
+  Connect every server in `merged` and return each one's state. Never starts
+  a login: a server that needs one comes back with the status "needsLogin".
+
+  @param merged - Server configurations, such as the output of mergeMcpServers.
+  """
+  return _connectMcpServers(merged)
+}
+
+export def mcpServerStates(): McpServerState[] {
+  """
+  Return the current state of every MCP server connected so far, with the
+  tools of each connected one. Connects nothing.
+  """
+  return _mcpServerStates()
+}
+
+@capabilities(fileRead, fileWrite, network)
+export def startMcpLogin(merged: Record<string, any>, name: string): Result<string> {
+  """
+  Start a login to an MCP server and return the URL of its login page,
+  without waiting. Call finishMcpLogin to wait for the person to log in.
+
+  @param merged - Server configurations, such as the output of mergeMcpServers.
+  @param name - The server's name in the mcpServers config.
+  """
+  return _startMcpLogin(merged, name)
+}
+
+@capabilities(fileRead, fileWrite, network)
+export def finishMcpLogin(name: string): McpServerState {
+  """
+  Wait for the person to finish the login startMcpLogin began, then connect
+  to the server and return its state.
+
+  @param name - The server's name in the mcpServers config.
+  """
+  return _finishMcpLogin(name)
+}
+
+@capabilities(network)
+export def cancelMcpLogin(name: string) {
+  """
+  Stop a login to an MCP server that is in progress.
+
+  @param name - The server's name in the mcpServers config.
+  """
+  _cancelMcpLogin(name)
+}
+
+@capabilities(fileWrite, network)
+export def logoutMcpServer(name: string): Result raises <mcp::logout> {
+  """
+  Delete the saved login for an MCP server and disconnect from it.
+
+  @param name - The server's name in the mcpServers config.
+  """
+  return interrupt mcp::logout("Are you sure you want to log out of this MCP server?", {
+    server: name
+  })
+
+  return _logoutMcpServer(name)
+}
+
+@capabilities(fileRead, fileWrite, network, subprocess)
+export def reconnectMcpServer(merged: Record<string, any>, name: string): McpServerState {
+  """
+  Disconnect from an MCP server and connect again with its saved login.
+  Never starts a login.
+
+  @param merged - Server configurations, such as the output of mergeMcpServers.
+  @param name - The server's name in the mcpServers config.
+  """
+  return _reconnectMcpServer(merged, name)
 }

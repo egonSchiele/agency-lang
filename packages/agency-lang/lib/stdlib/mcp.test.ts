@@ -7,14 +7,36 @@ vi.mock("./mcpResolver.js", () => ({
 }));
 vi.mock("./mcpBridge.mjs", () => ({
   mcpRaw: vi.fn(),
-  packageVersion: vi.fn(async () => "0.0.1"),
+  packageVersion: vi.fn(async () => "0.0.6"),
   mcpToolToAgencyFunction: vi.fn(async (tool) => ({ name: tool.name })),
   readProjectMcpConfig: vi.fn(async () => ({})),
+  connectServer: vi.fn(),
+  serverStates: vi.fn(async () => ({})),
+  startLogin: vi.fn(),
+  finishLogin: vi.fn(),
+  cancelLogin: vi.fn(async () => {}),
+  logout: vi.fn(),
+  disconnectServer: vi.fn(async () => {}),
 }));
 
 import * as bridge from "./mcpBridge.mjs";
 import * as resolver from "./mcpResolver.js";
-import { _mergeMcpServers, _loadMcpTools, _loadMcpToolsWithStatus } from "./mcp.js";
+import {
+  _mergeMcpServers,
+  _loadMcpTools,
+  _loadMcpToolsWithStatus,
+  _mcpPackageProblem,
+  _connectMcpServers,
+  _mcpServerStates,
+  _startMcpLogin,
+  _finishMcpLogin,
+  _reconnectMcpServer,
+  _logoutMcpServer,
+} from "./mcp.js";
+import { runInTestContext } from "../runtime/asyncContext.js";
+import { RuntimeContext } from "../runtime/state/context.js";
+import { ThreadStore } from "../runtime/state/threadStore.js";
+import { AgencyCancelledError } from "../runtime/errors.js";
 
 const ok = (tools: any[]) => ({ success: true, value: { tools, callTool: async () => "r" } });
 const bad = (msg: string) => ({ success: false, error: msg });
@@ -80,5 +102,157 @@ describe("_loadMcpToolsWithStatus", () => {
   it("returns empty status when the package is unavailable", async () => {
     (resolver.isMcpAvailable as any).mockReturnValueOnce(false);
     expect(await _loadMcpToolsWithStatus({ s: {} } as any)).toEqual({ tools: [], status: {} });
+  });
+});
+
+const connected = (names: string[]) => ({
+  status: "connected",
+  tools: names.map((name) => ({ name })),
+  callTool: async () => "r",
+});
+
+describe("_mcpPackageProblem", () => {
+  it("is empty for 0.0.6", async () => {
+    expect(await _mcpPackageProblem()).toBe("");
+  });
+
+  it("names the version and the command for 0.0.5", async () => {
+    (bridge.packageVersion as any).mockResolvedValueOnce("0.0.5");
+    expect(await _mcpPackageProblem()).toBe(
+      "@agency-lang/mcp 0.0.5 is too old. Run: npm install -g @agency-lang/mcp@latest",
+    );
+  });
+
+  it("is empty when the package is not installed", async () => {
+    (resolver.isMcpAvailable as any).mockReturnValueOnce(false);
+    expect(await _mcpPackageProblem()).toBe("");
+  });
+});
+
+describe("_connectMcpServers", () => {
+  it("returns one state per server, in config order", async () => {
+    (bridge.connectServer as any).mockImplementation(async (name: string) =>
+      name === "a"
+        ? connected(["a__t"])
+        : name === "b"
+          ? { status: "needsLogin" }
+          : { status: "failed", message: "boom" },
+    );
+    const states = await _connectMcpServers({ a: {}, b: {}, c: {} } as any);
+    expect(states.map((s) => [s.name, s.status, s.message])).toEqual([
+      ["a", "connected", ""],
+      ["b", "needsLogin", ""],
+      ["c", "failed", "boom"],
+    ]);
+    expect(states[0].tools).toHaveLength(1);
+  });
+
+  it("gates a connected server's tools", async () => {
+    (bridge.connectServer as any).mockResolvedValue(connected(["a__t", "a__u"]));
+    await _connectMcpServers({ a: {} } as any);
+    expect(bridge.mcpToolToAgencyFunction).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns [] when the package is too old", async () => {
+    (bridge.packageVersion as any).mockResolvedValueOnce("0.0.5");
+    expect(await _connectMcpServers({ a: {} } as any)).toEqual([]);
+    expect(bridge.connectServer).not.toHaveBeenCalled();
+  });
+
+  it("returns [] when the package is not installed", async () => {
+    (resolver.isMcpAvailable as any).mockReturnValue(false);
+    try {
+      expect(await _connectMcpServers({ a: {} } as any)).toEqual([]);
+    } finally {
+      (resolver.isMcpAvailable as any).mockReturnValue(true);
+    }
+  });
+});
+
+describe("_mcpServerStates", () => {
+  it("returns one state per record, in key order", async () => {
+    (bridge.serverStates as any).mockResolvedValueOnce({ x: { status: "needsLogin" }, y: connected(["y__t"]) });
+    const states = await _mcpServerStates();
+    expect(states.map((s) => s.name)).toEqual(["x", "y"]);
+  });
+});
+
+describe("_startMcpLogin", () => {
+  it("returns success with the URL", async () => {
+    (bridge.startLogin as any).mockResolvedValueOnce({ status: "started", authUrl: "https://login" });
+    const result = await _startMcpLogin({ a: {} } as any, "a");
+    expect(result.success).toBe(true);
+    expect(result.success && result.value).toBe("https://login");
+  });
+
+  it("returns failure with the package's message", async () => {
+    (bridge.startLogin as any).mockResolvedValueOnce({ status: "failed", message: "nope" });
+    const result = await _startMcpLogin({ a: {} } as any, "a");
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toBe("nope");
+  });
+});
+
+function testContext(): RuntimeContext<any> {
+  return new RuntimeContext({
+    statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+    smoltalkDefaults: {},
+    dirname: process.cwd(),
+  });
+}
+
+describe("_finishMcpLogin", () => {
+  it("returns the connected state", async () => {
+    (bridge.finishLogin as any).mockResolvedValueOnce(connected(["a__t"]));
+    const ctx = testContext();
+    const state = await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => _finishMcpLogin("a"));
+    expect(state.status).toBe("connected");
+    expect(state.tools).toHaveLength(1);
+  });
+
+  it("cancels the login and throws the cancel error when the run is aborted", async () => {
+    let finish: (value: unknown) => void = () => {};
+    (bridge.finishLogin as any).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    (bridge.cancelLogin as any).mockImplementationOnce(async () => {
+      finish({ status: "failed", message: "login cancelled" });
+    });
+    const ctx = testContext();
+    const waiting = runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => _finishMcpLogin("a"));
+    await vi.waitFor(() => expect(bridge.finishLogin).toHaveBeenCalled());
+    ctx.abortController.abort();
+    await expect(waiting).rejects.toBeInstanceOf(AgencyCancelledError);
+    expect(bridge.cancelLogin).toHaveBeenCalledWith("a");
+  });
+});
+
+describe("_reconnectMcpServer", () => {
+  it("disconnects, then connects", async () => {
+    const order: string[] = [];
+    (bridge.disconnectServer as any).mockImplementationOnce(async () => {
+      order.push("disconnect");
+    });
+    (bridge.connectServer as any).mockImplementationOnce(async () => {
+      order.push("connect");
+      return { status: "needsLogin" };
+    });
+    const state = await _reconnectMcpServer({ a: {} } as any, "a");
+    expect(order).toEqual(["disconnect", "connect"]);
+    expect(state.status).toBe("needsLogin");
+  });
+});
+
+describe("_logoutMcpServer", () => {
+  it("returns success for loggedOut and failure for failed", async () => {
+    (bridge.logout as any).mockResolvedValueOnce({ status: "loggedOut" });
+    expect((await _logoutMcpServer("a")).success).toBe(true);
+    (bridge.logout as any).mockResolvedValueOnce({ status: "failed", message: "disk" });
+    const result = await _logoutMcpServer("a");
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toBe("disk");
   });
 });

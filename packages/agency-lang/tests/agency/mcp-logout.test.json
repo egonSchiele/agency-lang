@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "rejectedLogoutFails", "description": "a rejected mcp::logout makes logoutMcpServer fail", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "raisesTheLogoutEffect", "description": "logoutMcpServer raises mcp::logout with the server name", "input": "", "expectedOutput": "\"mcp::logout:linear\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

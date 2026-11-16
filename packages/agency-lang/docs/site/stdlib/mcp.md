@@ -1,6 +1,6 @@
 ---
 name: "mcp"
-description: "Load MCP tools and report server connection status."
+description: "Load MCP tools, report server connection status, and log in to servers."
 ---
 
 # mcp
@@ -8,6 +8,13 @@ description: "Load MCP tools and report server connection status."
 Read project server settings, merge them with global settings, and load
   tools for use in `llm()`. Calls to loaded tools raise `mcp::call` so handlers
   and policies can approve or reject them.
+
+  `connectMcpServers` connects servers without ever starting a login. A server
+  that needs one gets the status `needsLogin`. `startMcpLogin` and
+  `finishMcpLogin` log in to it in two steps, so the program can open the
+  login page with `openUrl` in between. `logoutMcpServer` deletes a saved
+  login and raises `mcp::logout`. These functions need `@agency-lang/mcp`
+  0.0.6 or newer; `mcpPackageProblem` says when the installed one is older.
 
   ```ts
   import { readProjectMcpConfig, loadMcpToolsWithStatus } from "std::mcp"
@@ -31,7 +38,25 @@ export type McpLoadResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
+
+### McpServerState
+
+One MCP server's state. `message` is empty unless the status is "failed".
+  `tools` is empty unless the status is "connected".
+
+```ts
+/** One MCP server's state. `message` is empty unless the status is "failed".
+  `tools` is empty unless the status is "connected". */
+export type McpServerState = {
+  name: string;
+  status: "connected" | "needsLogin" | "failed";
+  message: string;
+  tools: any[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L90))
 
 ## Effects
 
@@ -46,7 +71,18 @@ effect mcp::call {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L49))
+
+### mcp::logout
+
+```ts
+@always(server)
+effect mcp::logout {
+  server: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L99))
 
 ## Functions
 
@@ -60,7 +96,7 @@ True when the @agency-lang/mcp package is installed and reachable.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L55))
 
 ### readProjectMcpConfig
 
@@ -80,7 +116,7 @@ Read the mcpServers block from the project agency.json under `dir`.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L61))
 
 ### mergeMcpServers
 
@@ -102,7 +138,7 @@ Merge global and project mcpServers configs (project wins on collision).
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L66))
 
 ### loadMcpTools
 
@@ -124,7 +160,7 @@ Load gated MCP tools for every server in `merged`. Returns [] when the
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L72))
 
 ### loadMcpToolsWithStatus
 
@@ -148,4 +184,157 @@ Load MCP tools and report which servers connected.
 
 **Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L79))
+
+### mcpPackageProblem
+
+```ts
+mcpPackageProblem(): string
+```
+
+Return why the installed @agency-lang/mcp is too old for the server-state
+  functions, with the command to upgrade it. Returns an empty string when it
+  is new enough or not installed.
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L103))
+
+### connectMcpServers
+
+```ts
+connectMcpServers(merged: Record<string, any>): McpServerState[]
+```
+
+Connect every server in `merged` and return each one's state. Never starts
+  a login: a server that needs one comes back with the status "needsLogin".
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| merged | `Record<string, any>` |  | Server configurations, such as the output of mergeMcpServers. |
+
+**Returns:** `McpServerState[]`
+
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L113))
+
+### mcpServerStates
+
+```ts
+mcpServerStates(): McpServerState[]
+```
+
+Return the current state of every MCP server connected so far, with the
+  tools of each connected one. Connects nothing.
+
+**Returns:** `McpServerState[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L123))
+
+### startMcpLogin
+
+```ts
+startMcpLogin(merged: Record<string, any>, name: string): Result<string>
+```
+
+Start a login to an MCP server and return the URL of its login page,
+  without waiting. Call finishMcpLogin to wait for the person to log in.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| merged | `Record<string, any>` |  | Server configurations, such as the output of mergeMcpServers. |
+| name | `string` |  | The server's name in the mcpServers config. |
+
+**Returns:** `Result<string>`
+
+**Needs:** `fileRead`, `fileWrite`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L132))
+
+### finishMcpLogin
+
+```ts
+finishMcpLogin(name: string): McpServerState
+```
+
+Wait for the person to finish the login startMcpLogin began, then connect
+  to the server and return its state.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The server's name in the mcpServers config. |
+
+**Returns:** [McpServerState](#mcpserverstate)
+
+**Needs:** `fileRead`, `fileWrite`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L144))
+
+### cancelMcpLogin
+
+```ts
+cancelMcpLogin(name: string)
+```
+
+Stop a login to an MCP server that is in progress.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The server's name in the mcpServers config. |
+
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L155))
+
+### logoutMcpServer
+
+```ts
+logoutMcpServer(name: string): Result raises <mcp::logout>
+```
+
+Delete the saved login for an MCP server and disconnect from it.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| name | `string` |  | The server's name in the mcpServers config. |
+
+**Returns:** `Result`
+
+**Throws:** `mcp::logout`
+
+**Needs:** `fileWrite`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L165))
+
+### reconnectMcpServer
+
+```ts
+reconnectMcpServer(merged: Record<string, any>, name: string): McpServerState
+```
+
+Disconnect from an MCP server and connect again with its saved login.
+  Never starts a login.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| merged | `Record<string, any>` |  | Server configurations, such as the output of mergeMcpServers. |
+| name | `string` |  | The server's name in the mcpServers config. |
+
+**Returns:** [McpServerState](#mcpserverstate)
+
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L179))

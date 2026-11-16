@@ -77,7 +77,11 @@ describe("records", () => {
     expect(fs.statSync(recordPaths(dir, 4242).json).mode & 0o777).toBe(0o600);
     expect(readRecord(dir, 4242)).toEqual(record(4242));
     fs.writeFileSync(recordPaths(dir, 4242).sock, "");
+    // What a process killed between the write and the rename leaves.
+    const draft = `${recordPaths(dir, 4242).json}.draft`;
+    fs.writeFileSync(draft, "");
     removeRecord(dir, 4242);
+    expect(fs.existsSync(draft)).toBe(false);
     expect(readRecord(dir, 4242)).toBeNull();
     expect(fs.existsSync(recordPaths(dir, 4242).sock)).toBe(false);
   });

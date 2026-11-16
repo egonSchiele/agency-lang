@@ -315,7 +315,7 @@ describe("resolveCliInterrupts", () => {
       }),
     });
 
-    // The owner's rule: a process never approves or rejects on its own.
+    // A waiting process never approves or rejects on its own.
     it("holds the batch, answering nothing, until answerHeld accepts", async () => {
       await holding({}, async (_home, notices) => {
         const respond = vi.fn(async () => done);
@@ -348,7 +348,8 @@ describe("resolveCliInterrupts", () => {
     });
 
     it("saves the checkpoint while holding when the setting is on, and removes it after", async () => {
-      await holding({ [AGENCY_SAVE_HELD_CHECKPOINT]: AGENCY_CARRIER_ON }, async (home, notices) => {
+      const settings = { [AGENCY_SAVE_HELD_CHECKPOINT]: AGENCY_CARRIER_ON, AGENCY_MAX_COST: "2" };
+      await holding(settings, async (home, notices) => {
         const running = resolveCliInterrupts(
           { messages: {} as any, data: [withCheckpoint("myapp::foo")] },
           async () => done,
@@ -362,7 +363,9 @@ describe("resolveCliInterrupts", () => {
         expect(statSync(dir).mode & 0o777).toBe(0o700);
         const saved = Checkpoint.fromJSON(JSON.parse(readFileSync(file, "utf8")));
         expect(saved?.nodeId).toBe("main");
-        expect(notices.join("\n")).toContain(`agency resume ${realpathSync(file)}`);
+        expect(notices.join("\n")).toContain(
+          `agency resume ${realpathSync(file)} <program> --wait-for-response --max-cost 2`,
+        );
 
         answerHeld([{ interruptId: "id-myapp::foo", response: reject("no") }]);
         await running;

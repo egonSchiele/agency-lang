@@ -56,20 +56,27 @@ export function watch(options: WatchOptions): Promise<void> {
   // terminal.
   let answering: Promise<void> = Promise.resolve();
   const answer = async (questions: SerializedInterrupt[]): Promise<void> => {
-    // Another client answered this batch while an earlier prompt was open.
-    if (questions !== current) {
-      return;
-    }
+    // Another client can answer this batch while a prompt is open here, so
+    // the batch is checked before each prompt and before the answers go.
     const answers: HeldAnswer[] = [];
     // The program's output stops while a prompt has the terminal, and
     // catches up after.
     output?.pause();
     try {
       for (const question of questions) {
+        if (questions !== current) {
+          break;
+        }
         answers.push({ interruptId: question.interruptId, response: await decide(question) });
       }
     } finally {
       output?.resume();
+    }
+    if (questions !== current) {
+      if (answers.length > 0) {
+        out("Another client answered these questions first.");
+      }
+      return;
     }
     channel.send({ type: "answers", answers });
   };

@@ -138,8 +138,9 @@ export type HoldFacts = {
   pid: number;
   /** Whether the program registered for attach. */
   canAttach: boolean;
-  /** The file the batch's checkpoint was saved to, or null. */
-  checkpointFile: string | null;
+  /** The command that resumes from the batch's saved checkpoint, or null
+   *  when none was saved. */
+  resumeCommand: string | null;
 };
 
 /** How a person can answer, given whether anything can attach and whether
@@ -148,7 +149,7 @@ function howToAnswer(facts: HoldFacts): string {
   if (facts.canAttach) {
     return `Run: agency attach ${facts.pid}`;
   }
-  if (facts.checkpointFile !== null) {
+  if (facts.resumeCommand !== null) {
     return `Nothing can attach to this process. Stop it with: kill ${facts.pid}, then resume it.`;
   }
   return `Nothing can attach to this process, so nothing can answer. Stop it with: kill ${facts.pid}`;
@@ -160,10 +161,8 @@ export function holdNotice(facts: HoldFacts): string {
   const lines = [
     `[agency] Waiting for an answer to ${facts.questionCount} ${noun}. ${howToAnswer(facts)}`,
   ];
-  if (facts.checkpointFile !== null) {
-    lines.push(
-      `If this process stops, resume it with: agency resume ${facts.checkpointFile} <program> --wait-for-response`,
-    );
+  if (facts.resumeCommand !== null) {
+    lines.push(`If this process stops, resume it with: ${facts.resumeCommand}`);
   }
   return lines.join("\n");
 }

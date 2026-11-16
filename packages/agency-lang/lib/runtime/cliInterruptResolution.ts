@@ -17,7 +17,12 @@ import type { RunNodeCoreResult } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { hasRunPolicyMechanism, unansweredMode } from "./runPolicyHandler.js";
 import { holdForAnswers, holdNotice } from "./heldQuestions.js";
-import { removeHeldCheckpoint, saveHeldCheckpoint } from "./heldCheckpoint.js";
+import {
+  removeHeldCheckpoint,
+  resumeCommand,
+  saveHeldCheckpoint,
+  type HeldFiles,
+} from "./heldCheckpoint.js";
 import { isAttachable } from "./platform.node.js";
 import { defaultHost } from "#default-host";
 import type { Host } from "../host/host.js";
@@ -36,26 +41,26 @@ export type ResolveCliInterruptOptions = {
  */
 async function waitForResponse(interrupts: Interrupt[]): Promise<InterruptResponse[]> {
   const host = defaultHost();
-  const checkpointFile = await savedCheckpoint(interrupts, host);
+  const saved = await savedCheckpoint(interrupts, host);
   console.error(
     holdNotice({
       questionCount: interrupts.length,
       pid: host.system.processId(),
       canAttach: isAttachable(),
-      checkpointFile,
+      resumeCommand: saved === null ? null : resumeCommand(saved, host.settings),
     }),
   );
   try {
     return await holdForAnswers(interrupts);
   } finally {
-    await removeSaved(checkpointFile, host);
+    await removeSaved(saved, host);
   }
 }
 
-/** The file the batch's checkpoint was saved to, or null: the setting is
+/** The files the batch's checkpoint was saved to, or null: the setting is
  *  off, or the save failed. A failed save is reported and the batch is
  *  held without a file, since the file is only a copy. */
-async function savedCheckpoint(interrupts: Interrupt[], host: Host): Promise<string | null> {
+async function savedCheckpoint(interrupts: Interrupt[], host: Host): Promise<HeldFiles | null> {
   if (host.settings.read(AGENCY_SAVE_HELD_CHECKPOINT) !== AGENCY_CARRIER_ON) {
     return null;
   }
@@ -69,14 +74,14 @@ async function savedCheckpoint(interrupts: Interrupt[], host: Host): Promise<str
 
 /** Remove the saved checkpoint once the batch is answered. A failure is
  *  reported and the answers are kept: the person already gave them. */
-async function removeSaved(file: string | null, host: Host): Promise<void> {
-  if (file === null) {
+async function removeSaved(files: HeldFiles | null, host: Host): Promise<void> {
+  if (files === null) {
     return;
   }
   try {
-    await removeHeldCheckpoint(file, host);
+    await removeHeldCheckpoint(files, host);
   } catch (error) {
-    console.error(`[agency] Could not remove ${file}: ${errorText(error)}`);
+    console.error(`[agency] Could not remove ${files.checkpoint}: ${errorText(error)}`);
   }
 }
 

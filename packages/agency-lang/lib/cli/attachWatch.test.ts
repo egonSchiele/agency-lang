@@ -104,14 +104,14 @@ describe("agency attach", () => {
   it("skips a batch another client answered while a prompt was open", async () => {
     const asked: string[] = [];
     let release: () => void = () => {};
-    const { program, sent } = watching(async (interrupt) => {
+    const { program, sent, shown } = watching(async (interrupt) => {
       asked.push(interrupt.interruptId);
       if (interrupt.interruptId === "a") {
         await new Promise<void>((resolve) => (release = resolve));
       }
       return approve();
     });
-    program.send({ type: "held", questions: [question("a")] });
+    program.send({ type: "held", questions: [question("a"), question("a2")] });
     await delivered();
     // While "a" is being asked, another client answers it, the program
     // holds "b", another client answers that too, and it then holds "c".
@@ -123,8 +123,11 @@ describe("agency attach", () => {
     release();
     await delivered();
     await delivered();
+    // The second question of the answered batch is never asked, and the
+    // answer to the first is never sent.
     expect(asked).toEqual(["a", "c"]);
-    expect(sent.at(-1)).toMatchObject({ type: "answers", answers: [{ interruptId: "c" }] });
+    expect(sent.slice(1)).toMatchObject([{ type: "answers", answers: [{ interruptId: "c" }] }]);
+    expect(shown).toEqual(["Another client answered these questions first."]);
   });
 
   it("starts the program's output, stops it while a prompt is open, and finishes it at the end", async () => {

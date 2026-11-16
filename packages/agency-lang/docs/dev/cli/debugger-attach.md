@@ -38,9 +38,9 @@ The program's end while the hold has no visit is kept (`finished` in the state) 
 
 ## A watching client
 
-`agency attach` connects with the kind `watch` (`docs/dev/runtime/spawn.md`). A `watch` client answers the questions a program holds under `--wait-for-response`. It is not a party to a session. `admit` in `startAttachServer` hands it to `serveWatch` (`lib/debugger/attach/watch.ts`) before it looks at the session at all, so a `watch` connection never reaches `openSession`. That call installs a debugger driver, and the program would stop at its next step. `watch` is in `CLIENT_KINDS` and is left out of `PARTY_KINDS`.
+`agency attach` connects with the kind `watch` (`docs/dev/runtime/spawn.md`). A `watch` client answers the questions a program holds under `--wait-for-response`. It is not a party to a session. `admit` in `startAttachServer` hands it to `serveWatch` (`lib/debugger/attach/watch.ts`) before it looks at the session at all, so a `watch` connection never reaches `openSession`. That call installs a debugger driver, and the program would stop at its next step.
 
-Three messages serve it. `SerializedInterruptSchema` and `HeldAnswerSchema` in `protocol.ts` are tied to their types with `SameShape`, and an answer's response uses `InterruptResponseSchema`, the schema a guard trip's answer uses.
+Three messages serve it:
 
 - `held`, from the run: the questions it holds, each an interrupt without its checkpoint. An empty list means nothing is held. Sent when the client connects, and each time a batch starts or ends.
 - `answers`, from the client: one response for each held question, by interrupt id.
@@ -50,9 +50,9 @@ Several clients can watch one program. Each is sent the same `held`, and the fir
 
 A debugger and a watching client can be connected to one program at the same time. They share the socket and nothing else.
 
-The record has a second optional field, `outputFile`: the file a detached program's output is saved to, which `agency attach` prints from.
+The record has an optional field, `holding`, which is true while the program holds a question. `registerAttach` rewrites the record each time a batch starts or ends, and `formatListing` shows `waiting` for it in a `STATE` column. `writeRecord` writes a new file and renames it into place, so a reader never finds the record missing.
 
-The record gains an optional field, `holding`, which is true while the program holds a question. `registerAttach` rewrites the record from the copy it kept each time a batch starts or ends (`writeRecord` writes a new file and renames it into place, so a reader never finds the record missing), and `formatListing` shows `waiting` for it in a `STATE` column.
+The record has a second optional field, `outputFile`: the file a detached program's output is saved to, which `agency attach` prints from.
 
 ## Two parties, one answer
 

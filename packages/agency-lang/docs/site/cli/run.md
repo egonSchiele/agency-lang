@@ -91,10 +91,12 @@ With the setting on, the checkpoint goes under `~/.agency/held/`, in a file only
 
 ```
 [agency] Waiting for an answer to 1 question. Run: agency attach 48213
-If this process stops, resume it with: agency resume /home/me/.agency/held/Xq3f-48213.json <program> --wait-for-response
+If this process stops, resume it with: agency resume /home/me/.agency/held/Xq3f-48213.json <program> --wait-for-response --policy /home/me/.agency/held/Xq3f-48213.policy.json --max-cost 2
 ```
 
-Agency deletes the file once the question is answered. If the process dies first, the file stays. Resuming from it raises the same interrupt again, so the program's handlers and policy are consulted again, and the resumed program holds the question if they still do not answer it. Agency does not delete the file after a resume, so remove it when you no longer need it.
+A checkpoint does not hold the program's policy or its cost and time limits, so the command carries them. If you started the program with `--policy`, `--approve`, or `--reject`, Agency saves the resulting policy in a second file beside the checkpoint and names it in the command. Keep the flags when you resume: without them the program comes back with no rules and no limits.
+
+Agency deletes both files once the question is answered. If the process dies first, the files stay. Resuming raises the same interrupt again, so the program's handlers and policy are consulted again, and the resumed program holds the question if they still do not answer it. Agency does not delete the files after a resume, so remove them when you no longer need them.
 
 ## Running in the background
 

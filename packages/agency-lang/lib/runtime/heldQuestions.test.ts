@@ -146,7 +146,8 @@ describe("holding a batch", () => {
 });
 
 describe("holdNotice", () => {
-  const facts = { questionCount: 1, pid: 48213, canAttach: true, checkpointFile: null };
+  const facts = { questionCount: 1, pid: 48213, canAttach: true, resumeCommand: null };
+  const resumeCommand = "agency resume /h/held/t-1.json <program> --wait-for-response";
 
   it("names the attach command when the program can be attached to", () => {
     expect(holdNotice(facts)).toBe(
@@ -162,7 +163,7 @@ describe("holdNotice", () => {
   });
 
   it("says to stop and resume when nothing can attach and a checkpoint was saved", () => {
-    const text = holdNotice({ ...facts, canAttach: false, checkpointFile: "/h/held/t-1.json" });
+    const text = holdNotice({ ...facts, canAttach: false, resumeCommand });
     expect(text.split("\n")).toEqual([
       "[agency] Waiting for an answer to 1 question. Nothing can attach to this process. Stop it with: kill 48213, then resume it.",
       "If this process stops, resume it with: agency resume /h/held/t-1.json <program> --wait-for-response",
@@ -170,7 +171,7 @@ describe("holdNotice", () => {
   });
 
   it("adds the resume line whenever a checkpoint was saved", () => {
-    const text = holdNotice({ ...facts, checkpointFile: "/h/held/t-1.json" });
+    const text = holdNotice({ ...facts, resumeCommand });
     expect(text.split("\n")).toHaveLength(2);
     expect(text).toContain("agency attach 48213");
   });

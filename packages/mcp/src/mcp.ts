@@ -233,6 +233,29 @@ export function disconnectServer(serverName: string): Promise<void> {
   );
 }
 
+/** Store the server config without connecting anything. A caller that must
+ *  ask before it connects stores the config early and connects later. */
+export function configureServers(options: ConfigOption): void {
+  getManager(undefined, options.config);
+}
+
+/** The configured servers that have no state yet, with their configs. */
+export async function pendingServers(): Promise<Record<string, McpServerConfig>> {
+  return singleton?.pendingServers() ?? {};
+}
+
+/** Record a server as failed without connecting, for example when starting
+ *  it was not approved. */
+export function markServerFailed(serverName: string, message: string): Promise<void> {
+  return orElse(
+    `mark "${serverName}" as failed`,
+    async () => {
+      await getManager().markFailed(serverName, message);
+    },
+    () => undefined,
+  );
+}
+
 export { readMcpConfig, validateMcpServers } from "./configReader.js";
 export { mcpToolToAgencyFunction } from "./toolAdapter.js";
 

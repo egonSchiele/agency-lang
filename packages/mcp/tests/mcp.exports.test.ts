@@ -12,6 +12,9 @@ import {
   cancelLogin,
   logout,
   disconnectServer,
+  configureServers,
+  pendingServers,
+  markServerFailed,
 } from "../src/mcp.js";
 import { startFakeOAuthServer, completeLogin, oauthConfig, type FakeOAuthServer } from "./fakeOAuthServer.js";
 
@@ -121,6 +124,18 @@ describe("the 0.0.6 exports", () => {
     );
     expect((await connectServer("e7", { config: { e7: stdio } })).status).toBe("connected");
     await disconnectServer("e7");
+  });
+
+  it("configureServers stores the config, and pendingServers lists the servers with no record", async () => {
+    configureServers({ config: { p1: stdio, p2: stdio } });
+    expect(Object.keys(await pendingServers())).toEqual(["p1", "p2"]);
+    await connectServer("p1", { config: { p1: stdio, p2: stdio } });
+    await markServerFailed("p2", "not approved");
+    expect(await pendingServers()).toEqual({});
+    expect((await serverStates()).p2).toEqual({ status: "failed", message: "not approved" });
+    await disconnectServer("p1");
+    await disconnectServer("p2");
+    expect(Object.keys(await pendingServers())).toEqual(["p1", "p2"]);
   });
 
   it("mcpRaw without a config leaves the stored config alone", async () => {

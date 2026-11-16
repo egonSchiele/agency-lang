@@ -4798,7 +4798,11 @@ export class TypeScriptBuilder {
   private preprocess(): TsNode[] {
     const nodes: TsNode[] = [];
     this.compilationUnit.importedNodes.forEach((importNode) => {
-      const from = importNode.agencyFile.replace(".agency", ".js");
+      // SPIKE fix: a node imported from `std::` (a goto target in the
+      // stdlib) needs the same path rewrite as every other stdlib import.
+      const from = importNode.agencyFile.startsWith("std::")
+        ? toCompiledImportPath(importNode.agencyFile)
+        : importNode.agencyFile.replace(".agency", ".js");
       const defaultImportName = this.agencyFileToDefaultImportName(importNode.agencyFile);
       nodes.push(
         ts.importDecl({

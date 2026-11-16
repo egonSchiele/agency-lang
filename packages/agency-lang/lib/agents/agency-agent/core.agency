@@ -1,0 +1,12 @@
+// SPIKE: the terminal front-end of `agency agent --core`. Its setup runs
+// here, then the run moves to the shared session core for good, so no frame
+// of this file is on the stack at any pause. Driven by lib/cli/coreAgent.ts.
+import { agentSession } from "std::agents/session"
+import { disableMemory } from "std::memory"
+
+node main(cwd: string, model: string, provider: string) {
+  // Front-end setup. Memory stays off, as in `agency agent`: it slows every
+  // tool call down.
+  disableMemory() with approve
+  goto agentSession(cwd, model, provider)
+}

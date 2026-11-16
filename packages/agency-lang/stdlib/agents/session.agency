@@ -1,0 +1,53 @@
+/** @module
+  @summary A front-end-neutral agent session: the shared core that terminal,
+  app and engine front-ends `goto` into. SPIKE (branch spike/remote-agent).
+
+  A front-end does its own setup (flags, models, MCP, UI), then hands the
+  run to `agentSession` with `goto`, which is permanent. From then on every
+  pause is inside this module (plus the stdlib modules a turn is running),
+  so a checkpoint taken at any pause can be resumed by ANY program that
+  imports this module from the same agency-lang build. The front-end's own
+  code is not on the saved stack, so it may differ, and may change while a
+  session is paused.
+
+  What crosses the handoff is data only: the arguments below and whatever
+  the run's threads and globals hold. A function value a front-end passed in
+  would be saved by name and module and fail in a program that lacks it.
+
+  Everything a person answers raises out of the session:
+  - `agentSession::userMessage` asks for the next message. Answer it with
+    `approve(text)`. A front-end's policy must leave it to `propagate`.
+  - Every approval the run's policy leaves undecided (`std::read`, ...).
+
+  The session reports through `emit`: `agentSession.reply`,
+  `agentSession.error` and `agentSession.budgetStop`.
+*/
+import { agencyAgent } from "std::agents/agency"
+import { setLlmOptions } from "std::llm"
+import { emit } from "std::statelog"
+import { setAgentCwd } from "std::index"
+
+export node agentSession(cwd: string, model: string, provider: string) {
+  setLlmOptions({ model: model, provider: provider })
+  setAgentCwd(cwd)
+  while (true) {
+    const message: string = raise agentSession::userMessage("Waiting for the user", {})
+    let reply: Result<string> = failure("no reply")
+    handle {
+      reply = agencyAgent(message)
+    } with (intr) {
+      // A budget ran out: stop that subagent with its best result.
+      if (intr.effect != "std::guard") {
+        return pass()
+      }
+      const label = intr.data.label ?? "a subagent"
+      emit({ type: "agentSession.budgetStop", label: label, dimension: intr.data.dimension })
+      return reject()
+    }
+    if (reply is success(text)) {
+      emit({ type: "agentSession.reply", text: text })
+    } else if (reply is failure(err)) {
+      emit({ type: "agentSession.error", message: "${err}" })
+    }
+  }
+}

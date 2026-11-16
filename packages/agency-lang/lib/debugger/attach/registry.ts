@@ -98,7 +98,8 @@ export function writeRecord(dir: string, record: AttachRecord): void {
   fs.renameSync(draft, file);
 }
 
-/** Remove one run's record and socket. Paths are built here from the
+/** Remove one run's record and socket, and the draft a process killed in
+ *  the middle of `writeRecord` leaves. Paths are built here from the
  *  directory and a pid, never taken from outside, so this can only ever
  *  delete files a run wrote. */
 export function removeRecord(dir: string, pid: number): void {
@@ -108,6 +109,9 @@ export function removeRecord(dir: string, pid: number): void {
       continue;
     }
     fs.rmSync(file, { force: true });
+  }
+  if (RECORD_FILE.test(path.basename(paths.json))) {
+    fs.rmSync(`${paths.json}${DRAFT_SUFFIX}`, { force: true });
   }
 }
 

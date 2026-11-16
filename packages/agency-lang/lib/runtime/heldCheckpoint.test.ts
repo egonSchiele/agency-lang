@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { AGENCY_MAX_COST, AGENCY_MAX_TIME, AGENCY_RUN_POLICY } from "@/constants.js";
 import { memoryHost } from "@/host/memoryHost.js";
-import { removeHeldCheckpoint, saveHeldCheckpoint } from "./heldCheckpoint.js";
+import { removeHeldCheckpoint, resumeCommand, saveHeldCheckpoint } from "./heldCheckpoint.js";
 import { interrupt } from "./interrupts.js";
 import type { Interrupt } from "./interrupts.js";
+import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 
-function held(traceId?: string): Interrupt {
+function held(traceId?: string, other: Record<string, unknown> = {}): Interrupt {
   return {
     ...interrupt({ effect: "test::ask", message: "?", data: {}, origin: "t", runId: "r" }),
     checkpoint: new Checkpoint({
@@ -14,7 +16,7 @@ function held(traceId?: string): Interrupt {
       stack: {
         stack: [],
         mode: "serialize",
-        other: {},
+        other,
         deserializeStackLength: 0,
         nodesTraversed: [],
       },
@@ -24,21 +26,44 @@ function held(traceId?: string): Interrupt {
   };
 }
 
-const host = () => memoryHost({ variables: { AGENCY_HOME: "/home/me/.agency" } });
+const READ_OK = JSON.stringify({ "std::read": [{ action: "approve" }] });
+const host = (variables: Record<string, string> = {}) =>
+  memoryHost({ variables: { AGENCY_HOME: "/home/me/.agency", ...variables } });
+const text = (h: ReturnType<typeof host>, file: string) =>
+  new TextDecoder().decode(h.state.files[file]);
 
 describe("a held checkpoint's file", () => {
   it("is named for the trace and the process, and holds the checkpoint", async () => {
     const h = host();
-    const file = await saveHeldCheckpoint([held("trace-9")], h);
-    expect(file).toBe(`/home/me/.agency/held/trace-9-${h.system.processId()}.json`);
-    const text = new TextDecoder().decode(h.state.files[file]);
-    expect(Checkpoint.fromJSON(JSON.parse(text))?.traceId).toBe("trace-9");
+    const files = await saveHeldCheckpoint([held("trace-9")], h);
+    expect(files).toEqual({
+      checkpoint: `/home/me/.agency/held/trace-9-${h.system.processId()}.json`,
+      policy: null,
+    });
+    expect(Checkpoint.fromJSON(JSON.parse(text(h, files.checkpoint)))?.traceId).toBe("trace-9");
+  });
+
+  // A surfaced checkpoint has been through the copy `createReturnObject`
+  // makes, which leaves live values in it.
+  it("keeps a Date and a Set the program holds", async () => {
+    const h = host();
+    const when = new Date(86_400_000);
+    const surfaced = held("trace-9", { when, seen: new Set(["a"]) });
+    surfaced.checkpoint = JSON.parse(
+      JSON.stringify(surfaced.checkpoint, nativeTypeReplacer),
+      nativeTypeReviver,
+    );
+    const files = await saveHeldCheckpoint([surfaced], h);
+    const saved = Checkpoint.fromJSON(JSON.parse(text(h, files.checkpoint)));
+    const other = JSON.parse(JSON.stringify(saved?.stack.other), nativeTypeReviver);
+    expect(other.when).toEqual(when);
+    expect(other.seen).toEqual(new Set(["a"]));
   });
 
   it("gets a made-up name when the checkpoint has no trace id", async () => {
     const h = host();
-    const file = await saveHeldCheckpoint([held()], h);
-    expect(file).toMatch(/\/held\/.+-\d+\.json$/);
+    const files = await saveHeldCheckpoint([held()], h);
+    expect(files.checkpoint).toMatch(/\/held\/.+-\d+\.json$/);
   });
 
   it("is never written over: a second save under the same name fails", async () => {
@@ -52,20 +77,61 @@ describe("a held checkpoint's file", () => {
     await expect(saveHeldCheckpoint([bare], host())).rejects.toThrow("no checkpoint");
   });
 
-  it("is removed by removeHeldCheckpoint, which refuses a path outside the folder", async () => {
+  it("has the run's policy saved beside it when the policy has rules", async () => {
+    const h = host({ [AGENCY_RUN_POLICY]: READ_OK });
+    const files = await saveHeldCheckpoint([held("trace-9")], h);
+    expect(files.policy).toBe(`/home/me/.agency/held/trace-9-${h.system.processId()}.policy.json`);
+    expect(text(h, files.policy!)).toBe(READ_OK);
+  });
+
+  it("has no policy file for a policy with no rules", async () => {
+    const files = await saveHeldCheckpoint([held("trace-9")], host({ [AGENCY_RUN_POLICY]: "{}" }));
+    expect(files.policy).toBeNull();
+  });
+
+  it("is removed with its policy by removeHeldCheckpoint, which refuses a path outside the folder", async () => {
     const h = memoryHost({
-      variables: { AGENCY_HOME: "/home/me/.agency" },
+      variables: { AGENCY_HOME: "/home/me/.agency", [AGENCY_RUN_POLICY]: READ_OK },
       files: { "/home/me/notes.json": "keep" },
     });
-    const file = await saveHeldCheckpoint([held("trace-9")], h);
-    await expect(removeHeldCheckpoint("/home/me/notes.json", h)).rejects.toThrow(
-      "is not a file in",
-    );
-    await expect(removeHeldCheckpoint("/home/me/.agency/held/../../notes.json", h)).rejects.toThrow(
-      "is not a file in",
-    );
+    const files = await saveHeldCheckpoint([held("trace-9")], h);
+    for (const outside of ["/home/me/notes.json", "/home/me/.agency/held/../../notes.json"]) {
+      await expect(removeHeldCheckpoint({ ...files, policy: outside }, h)).rejects.toThrow(
+        "is not a file in",
+      );
+      await expect(removeHeldCheckpoint({ checkpoint: outside, policy: null }, h)).rejects.toThrow(
+        "is not a file in",
+      );
+    }
     expect(h.state.files["/home/me/notes.json"]).toBeDefined();
-    await removeHeldCheckpoint(file, h);
-    expect(h.state.files[file]).toBeUndefined();
+    expect(h.state.files[files.checkpoint]).toBeDefined();
+    await removeHeldCheckpoint(files, h);
+    expect(h.state.files[files.checkpoint]).toBeUndefined();
+    expect(h.state.files[files.policy!]).toBeUndefined();
+  });
+});
+
+describe("resumeCommand", () => {
+  const files = { checkpoint: "/h/held/t-1.json", policy: null };
+
+  it("names the checkpoint and keeps the program waiting", () => {
+    expect(resumeCommand(files, host().settings)).toBe(
+      "agency resume /h/held/t-1.json <program> --wait-for-response",
+    );
+  });
+
+  // A checkpoint holds neither, so a resume without the flags would run
+  // with no rules and no limits.
+  it("carries the policy and the limits the run was started with", () => {
+    const settings = host({ [AGENCY_MAX_COST]: "2", [AGENCY_MAX_TIME]: "600000" }).settings;
+    expect(resumeCommand({ ...files, policy: "/h/held/t-1.policy.json" }, settings)).toBe(
+      "agency resume /h/held/t-1.json <program> --wait-for-response " +
+        "--policy /h/held/t-1.policy.json --max-cost 2 --max-time 600000ms",
+    );
+  });
+
+  it("leaves out a limit that is switched off", () => {
+    const settings = host({ [AGENCY_MAX_COST]: "-1", [AGENCY_MAX_TIME]: "0" }).settings;
+    expect(resumeCommand(files, settings)).not.toContain("--max");
   });
 });

@@ -212,24 +212,28 @@ describe.skipIf(!existsSync(CLI))("agency run --wait-for-response (end-to-end)",
     "saves the held checkpoint when the setting is on, and a resume from it holds again",
     async () => {
       setUp({ "asks.agency": ASKS, "agency.json": SAVE_CHECKPOINTS });
-      const first = run(["run", "--wait-for-response", "asks.agency"]);
+      const limits = ["--approve", "std::read", "--max-cost", "2"];
+      const first = run(["run", "--wait-for-response", ...limits, "asks.agency"]);
       const before = await watching();
       await heldQuestion(before.client);
       const heldDir = path.join(home.dir, "held");
-      const saved = readdirSync(heldDir);
-      expect(saved).toHaveLength(1);
-      const checkpoint = path.join(heldDir, saved[0]!);
-      // The notice names the file by its real path (`/tmp` is a link on macOS).
-      const resumeLine = `agency resume ${realpathSync(checkpoint)}`;
+      const saved = readdirSync(heldDir).sort();
+      expect(saved).toHaveLength(2);
+      // The notice names the files by their real path (`/tmp` is a link on macOS).
+      const [checkpoint, policy] = saved.map((name) => realpathSync(path.join(heldDir, name)));
+      expect(policy).toMatch(/\.policy\.json$/);
+      // The line carries the policy and the limit, which the checkpoint does not hold.
+      const flags = ["--wait-for-response", "--policy", policy!, "--max-cost", "2"];
+      const resumeLine = `agency resume ${checkpoint} <program> ${flags.join(" ")}`;
       await waitFor(() => first.output().includes(resumeLine), START_MS, "the resume line");
 
-      // The process dies while holding. Its checkpoint file stays.
+      // The process dies while holding. Its files stay.
       before.client.close();
       first.stop();
       await first.exited;
-      expect(existsSync(checkpoint)).toBe(true);
+      expect(existsSync(checkpoint!)).toBe(true);
 
-      run(["resume", "--wait-for-response", checkpoint, "asks.agency"]);
+      run(["resume", checkpoint!, "asks.agency", ...flags]);
       const after = await watching([before.sock]);
       const question = await heldQuestion(after.client);
       expect(question.effect).toBe("test::ask");

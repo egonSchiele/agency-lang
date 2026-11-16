@@ -60,6 +60,24 @@ export class McpManager {
     return { ...this.serverRecords };
   }
 
+  /** The configured servers that have no record yet, with their configs. */
+  pendingServers(): Record<ServerName, McpServerConfig> {
+    const pending: Record<ServerName, McpServerConfig> = {};
+    for (const [name, config] of Object.entries(this.config)) {
+      if (!Object.hasOwn(this.serverRecords, name)) {
+        pending[name] = config;
+      }
+    }
+    return pending;
+  }
+
+  /** Record a server as failed without connecting, for example when the user
+   *  did not approve starting it. Closes any connection it has. */
+  async markFailed(serverName: string, message: string): Promise<void> {
+    this.markNeverLogin(serverName);
+    await this.replaceConnection(serverName, { status: "failed", message });
+  }
+
   /** Connect one server without ever starting a login. */
   async connectServer(serverName: string): Promise<ServerRecord> {
     this.markNeverLogin(serverName);

@@ -20,6 +20,8 @@ def describe(r: Result<string>): string {
 //   inferredWithKey     — a bare cataloged model: its provider, key set.
 //   inferredNoKey       — a bare cataloged model whose provider has no
 //                         key: fail at startup, not on the first call.
+//   inferredResponses   — a model the catalog lists under
+//                         openai-responses: checked as openai.
 //   planOpenai          — forced-provider defaults; slow uses the Responses API.
 //   planAnthropic       — auto-detected defaults; empty fastProvider.
 //   planCustom          — a custom model forced onto a custom provider.
@@ -32,6 +34,7 @@ node main(): any {
     customWithModel: describe(resolveDetected("my-model", "", "", "ollama")),
     inferredWithKey: describe(resolveDetected("claude-sonnet-5-5", "", "", "")),
     inferredNoKey: describe(resolveDetected("gemini-3.8-flash", "", "", "")),
+    inferredResponses: describe(resolveDetected("gpt-5.5-pro", "", "", "")),
     planOpenai: planModels("", "", "", "openai", "openai"),
     planAnthropic: planModels("", "", "", "", "anthropic"),
     planCustom: planModels("my-model", "", "", "ollama", "ollama")

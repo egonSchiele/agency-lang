@@ -50,6 +50,7 @@
     { "nodeName": "bareModelUsesCatalogProvider", "input": "", "expectedOutput": "\"anthropic\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "providerPrefixWins", "input": "", "expectedOutput": "\"openrouter\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "openaiModelStaysOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "responsesOnlyModelGetsThePublicName", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "uncatalogedModelHasNoProvider", "input": "", "expectedOutput": "\"\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "uncatalogedModelFallsBackToOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]

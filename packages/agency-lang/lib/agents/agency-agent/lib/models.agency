@@ -212,11 +212,16 @@ export def resolveDetected(
 }
 
 /** The provider the model catalog lists for a model, or "" when the
- *  catalog does not list it as a text model. */
+ *  catalog does not list it as a text model. The catalog lists some OpenAI
+ *  models under "openai-responses"; they get the public name "openai",
+ *  which has a key to check and which promoteAll promotes later. */
 export def catalogProvider(model: string): string {
   const info = hostedModelInfo(model)
   if (info == null) {
     return ""
+  }
+  if (info.provider == "openai-responses") {
+    return "openai"
   }
   return info.provider
 }

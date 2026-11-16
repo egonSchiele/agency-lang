@@ -330,8 +330,9 @@ the model name, so `openrouter/z-ai/glm-5.3` would name a model that does
 not exist. With a detected provider, a bare name is resolved again at
 the next start. A name the model catalog lists gets the same provider
 again, but a name it does not list takes whichever provider the API keys
-select then. So those slots carry their provider. Both chat slots are written, so neither falls back to a
-built-in default that depends on which keys are set.
+select then. So those slots carry their provider. Both chat slots are
+written, so neither falls back to a built-in default that depends on
+which keys are set.
 
 `flattenLayers` in `lib/resolution.agency` folds the `in-session`,
 `cli`, and `preset` layers into one layer that resolves every slot the

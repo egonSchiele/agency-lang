@@ -140,6 +140,11 @@ node openaiModelStaysOpenai(): string {
   return providerForModel("gpt-5.5")
 }
 
+// The catalog lists this one under "openai-responses".
+node responsesOnlyModelGetsThePublicName(): string {
+  return providerForModel("gpt-5.5-pro")
+}
+
 node uncatalogedModelHasNoProvider(): string {
   return providerForModel("my-private-finetune")
 }

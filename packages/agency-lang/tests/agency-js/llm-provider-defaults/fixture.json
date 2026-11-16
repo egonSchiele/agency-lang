@@ -6,6 +6,7 @@
   "customWithModel": "ollama",
   "inferredWithKey": "anthropic",
   "inferredNoKey": "FAIL:No API key for provider 'google'. Set GEMINI_API_KEY.",
+  "inferredResponses": "openai",
   "planOpenai": {
     "fastModel": "gpt-5.6-sol",
     "fastProvider": "openai-responses",

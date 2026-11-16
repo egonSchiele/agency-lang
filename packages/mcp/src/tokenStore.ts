@@ -69,9 +69,15 @@ export class TokenStore {
     return this.readJson(this.tokenPath(serverName));
   }
 
-  async deleteTokens(serverName: string): Promise<void> {
+  /** Delete the saved login, and keep the registration so the next login
+   *  does not register again. */
+  async deleteLogin(serverName: string): Promise<void> {
     const p = this.tokenPath(serverName);
     if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+
+  async deleteTokens(serverName: string): Promise<void> {
+    await this.deleteLogin(serverName);
     await this.deleteCodeVerifier(serverName);
     await this.deleteClientInfo(serverName);
   }

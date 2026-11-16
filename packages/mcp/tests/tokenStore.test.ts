@@ -36,6 +36,15 @@ describe("TokenStore", () => {
     expect(loaded?.access_token).toBe("new");
   });
 
+  it("deleteLogin deletes the login and keeps the registration", async () => {
+    const info = { client_id: "client-1", redirect_uris: ["http://127.0.0.1:19876/oauth/callback"] };
+    await store.saveTokens("linear", { access_token: "abc", token_type: "bearer" });
+    await store.saveClientInfo("linear", info);
+    await store.deleteLogin("linear");
+    expect(await store.loadTokens("linear")).toBeUndefined();
+    expect(await store.loadClientInfo("linear")).toEqual(info);
+  });
+
   it("should delete tokens", async () => {
     await store.saveTokens("github", { access_token: "abc", token_type: "bearer" });
     await store.deleteTokens("github");

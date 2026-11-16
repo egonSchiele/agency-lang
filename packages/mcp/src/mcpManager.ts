@@ -2,7 +2,7 @@ import { McpConnection } from "./mcpConnection.js";
 import { OAuthConnector } from "./oauthConnector.js";
 import { TokenStore } from "./tokenStore.js";
 import { isOAuthServer } from "./types.js";
-import { asNeedsLogin } from "./needsLogin.js";
+import { asNeedsLogin, NeedsLoginError } from "./needsLogin.js";
 import type { ServerName, McpServerConfig, McpHttpServerConfig, McpTool } from "./types.js";
 import { success, failure, type ResultValue } from "agency-lang/runtime";
 import type { LoginMode, OAuthRequiredData } from "./oauthProvider.js";
@@ -206,7 +206,7 @@ export class McpManager {
     args: Record<string, unknown>,
   ): Promise<string> {
     try {
-      const conn = this.connections[serverName] ?? (await this.reconnect(serverName));
+      const conn = this.connections[serverName] ?? (await this.connectionForCall(serverName));
       return await conn.callTool(toolName, args);
     } catch (error) {
       const needsLogin = asNeedsLogin(error);
@@ -263,6 +263,20 @@ export class McpManager {
       });
     }
     return new McpConnection(serverName, serverConfig);
+  }
+
+  /** The connection for a tool call on a server that has none. A server a
+   *  0.0.6 export touched is never reconnected here: its stored config may
+   *  have changed since its command was approved, so the caller reconnects
+   *  it on purpose. Other servers reconnect, as 0.0.5 did. */
+  private async connectionForCall(serverName: string): Promise<McpConnection> {
+    if (!this.neverLogin.includes(serverName)) {
+      return this.reconnect(serverName);
+    }
+    if (this.serverRecords[serverName]?.status === "needsLogin") {
+      throw new NeedsLoginError(serverName);
+    }
+    throw new Error(`MCP server "${serverName}" is not connected. Reconnect it first.`);
   }
 
   /** Build a connection for a tool call on a server that has none. */

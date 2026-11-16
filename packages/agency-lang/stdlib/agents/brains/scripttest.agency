@@ -1,0 +1,109 @@
+/** @module
+  @summary A trial brain: the coordinator, plus a tool that runs a short Agency program in place of a node or shell script.
+
+  A brain of the Agency agent. It is the coordinator brain with one more
+  tool, `runAgency`, the Agency docs tools, and a system message that tells
+  the model to write a quick check as an Agency program instead of
+  `node -e` or a shell script.
+
+  A program run this way runs in a separate process, and every file read,
+  file write, and command in it raises its own interrupt, which reaches the
+  same handlers as the agent's other tools. So the user approves what the
+  program does, and does not have to read the program first, as they would
+  for `node -e '<script>'`.
+*/
+import { TypeCheckDiagnostic, runCode, typecheck } from "std::agency"
+import { coordinatorBrain } from "std::agents/brains/coordinator"
+import { agencyTutorial } from "std::agents/brains/coordinator/code"
+import { AgentSettings } from "std::agents/brains/settings"
+import { agencyDocToolsBrief } from "std::agents/lib/toolkits"
+import { getAgentCwd } from "std::index"
+import { Attachment, ensureSystemMessage } from "std::thread"
+
+static const SCRIPT_RULES = """
+You can run Agency programs with the runAgency tool. When you need a short script to compute, parse, or check something, such as reading a JSON file and counting its entries, write it in Agency and run it with runAgency. Do not use `node -e`, `python -c`, or a shell script for it.
+
+A program run with runAgency asks the user about each file it reads or writes and each command it runs, through the same approval rules as your other tools. The user does not have to read the program to know what it will do. A node or shell script asks once, for the whole script, so the user has to read it.
+
+Use node, python, or the shell only when the question is about those programs themselves, such as how Node resolves a package, or when the standard library has no function for what you need.
+
+The program must have `export node main()`, and main must return the value you want to see. Printed output does not come back to you. When the program has type errors, runAgency returns them without running it. Fix them and call runAgency again.
+
+The tutorial below shows the language and the standard library. To look up a standard library function, such as which module reads a directory, use the agencyStdlib tool. For the language itself, use agencyGuide.
+
+<agency_tutorial>
+${agencyTutorial}
+</agency_tutorial>
+"""
+
+/** One diagnostic as a line the model can act on. */
+def diagnosticLine(diagnostic: TypeCheckDiagnostic): string {
+  if (diagnostic.loc == null) {
+    return "${diagnostic.code}: ${diagnostic.message}"
+  }
+  return "line ${diagnostic.loc.line}, column ${diagnostic.loc.col}: ${diagnostic.code}: ${diagnostic.message}"
+}
+
+export def runAgency(source: string): Result {
+  """
+  Type-check an Agency program and, when it has no errors, run it in a separate process and return the value its main node returns. Each file it reads or writes and each command it runs asks for approval as your other tools do. When the program has type errors, they are returned and nothing runs.
+
+  @param source - A complete Agency program with `export node main()`, which returns the value you want to see
+  """
+  // A strict check also reports the imports and JavaScript names the
+  // separate process refuses, so they come back as errors to fix rather
+  // than as a failed run.
+  const report = typecheck(source, strict: true)
+  if (report is failure(err)) {
+    return failure("Could not type-check the program: ${err}")
+  }
+  const errors = report.value.errors
+  if (errors.length > 0) {
+    const lines = [diagnosticLine(diagnostic) for diagnostic in errors]
+    return failure(
+      "The program was not run, because it has type errors:\n${lines.join("\n")}",
+    )
+  }
+  // The program's relative paths name files in the agent's working
+  // directory, as the agent's own file tools do.
+  return runCode(source, cwd: getAgentCwd())
+}
+
+/** runAgency, then the Agency docs tools, so a model writing a program can
+  look up a standard library function wherever it runs. */
+def scriptTools(): any[] {
+  return [runAgency, ...agencyDocToolsBrief()]
+}
+
+/** The settings with the script tools added to the coders' tools. A turn
+  the router sends to the coder never reaches the coordinator, and the
+  coordinator hands script work to the coder, so the coders need the tools
+  too. They see the rules already: they run on the same thread. */
+export def withScriptToolsForCoders(settings: AgentSettings): AgentSettings {
+  return {
+    ...settings,
+    coderTools: [...scriptTools(), ...settings.coderTools]
+  }
+}
+
+export def scripttestBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message with the coordinator brain, plus a tool that runs a
+  short Agency program in place of a node or shell script, and the Agency
+  docs tools. The coders get them too.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - Tools added to the coordinator's own
+  """
+  ensureSystemMessage(SCRIPT_RULES)
+  return coordinatorBrain(
+    prompt,
+    withScriptToolsForCoders(settings),
+    [...scriptTools(), ...extraTools],
+  )
+}

@@ -40,13 +40,14 @@ runtime callbacks, and through `onEmit`, which receives an event with
 import { AgentSettings } from "std::agents/brains/settings"
 import { coordinatorBrain } from "std::agents/brains/coordinator"
 import { minimalBrain } from "std::agents/brains/minimal"
+import { scripttestBrain } from "std::agents/brains/scripttest"
 import { simpleBrain } from "std::agents/brains/simple"
 import { spawntestBrain } from "std::agents/brains/spawntest"
 import { guarded } from "std::decorators"
 import { Attachment } from "std::thread"
 
 /** Which brain answers. */
-export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest"
+export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest" | "scripttest"
 
 /** Extra tools, one optional list per agent that can take them. */
 export type AgentExtraTools = {
@@ -84,7 +85,20 @@ export def agencyAgentBrains(): BrainInfo[] {
       name: "spawntest",
       description: "A trial: the minimal brain, plus a tool that starts another agent on a task as a separate process"
     },
+    {
+      name: "scripttest",
+      description: "A trial: the coordinator brain, plus a tool that runs a short Agency program in place of a node or shell script"
+    },
   ]
+}
+
+export def isCoordinatorBrain(brain: string): boolean {
+  """
+  Whether a brain is the coordinator or is built on it, and so has its subagents and takes the same tools from a caller.
+
+  @param brain - A brain's name
+  """
+  return brain == "coordinator" || brain == "scripttest"
 }
 
 /** A negative `maxCost` or `maxTime` means no limit. A model that is given
@@ -115,7 +129,7 @@ export def agencyAgent(
 
   @param task - What the user wants, as they would say it to an assistant
   @param context - Extra text for the agent, such as the user's own instructions, or ""
-  @param brain - Which brain answers: "coordinator", "minimal", "simple", or "spawntest"
+  @param brain - Which brain answers: "coordinator", "minimal", "simple", "spawntest", or "scripttest"
   @param maxCost - Cost budget in USD
   @param maxTime - Time budget in milliseconds
   @param model - The main model, or "" for the ambient model
@@ -143,6 +157,7 @@ export def agencyAgent(
     "minimal" => minimalBrain(message, settings, mainTools)
     "simple" => simpleBrain(message, settings, mainTools)
     "spawntest" => spawntestBrain(message, settings, mainTools)
+    "scripttest" => scripttestBrain(message, settings, mainTools)
     _ => coordinatorBrain(message, settings, mainTools)
   }
 }

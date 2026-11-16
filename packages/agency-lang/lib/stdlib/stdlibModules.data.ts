@@ -65,6 +65,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   ],
   "std::agents/agency": [
     "agencyAgentBrains",
+    "isCoordinatorBrain",
     "agencyAgent"
   ],
   "std::agents/agency/coding": [
@@ -129,6 +130,11 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   ],
   "std::agents/brains/minimal": [
     "minimalBrain"
+  ],
+  "std::agents/brains/scripttest": [
+    "runAgency",
+    "withScriptToolsForCoders",
+    "scripttestBrain"
   ],
   "std::agents/brains/settings": [
     "modelOptions",

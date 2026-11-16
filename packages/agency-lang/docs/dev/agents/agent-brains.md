@@ -42,7 +42,7 @@ export def agencyAgent(
 - `context` is extra text, such as the user's instructions. Each brain adds
   it as a system message that expires with the call, and each subagent
   wrapper passes it to its stdlib agent.
-- `brain` picks one of four brains (`stdlib/agents/brains/`):
+- `brain` picks one of five brains (`stdlib/agents/brains/`):
   - `coordinator`, the default: one model that answers itself or hands
     the turn to the code, Agency code, research, oracle, explorer, review,
     writing, and rewrite subagents.
@@ -51,6 +51,9 @@ export def agencyAgent(
   - `simple`: one LLM call with no tools of its own.
   - `spawntest`: a trial. The minimal brain, plus a tool that starts
     another agent as a process of its own. See "The spawntest brain" below.
+  - `scripttest`: a trial. The coordinator brain, plus a tool that runs a
+    short Agency program in place of a node or shell script. See "The
+    scripttest brain" below.
 
   `agencyAgentBrains()` lists them with a one-line description each.
 - `maxCost` and `maxTime` are the budget for the whole call. A negative
@@ -172,7 +175,8 @@ start target keeps its own project block the same way, in
 
 The `--agent` start targets (`code`, `agencyCode`, `research`, `oracle`,
 `explorer`, `review`, `writing`, `rewrite`) call one stdlib wrapper
-directly, through `runStartTarget`. Only the coordinator brain has them.
+directly, through `runStartTarget`. Only the coordinator brain, and the
+scripttest brain built on it, have them.
 
 The harness prints the subagent start line and the router failure line from
 an `onEmit` callback in `lib/trace.agency`.
@@ -289,6 +293,72 @@ the reply, and exits.
   with `sudo npm install -g`, the manifest is never saved, so every start
   tries to compile again and fails. The `task.js` the package ships is not
   used.
+
+## The scripttest brain
+
+A trial of having the agent write its quick checks in Agency. In one
+session, the coordinator ran five `node -e` scripts to read a JSON file
+and call a function. Each script asked one question for the whole script,
+so the user had to read the script to answer it. An Agency program asks
+about each file it reads or writes and each command it runs, through the
+same handlers as the agent's other tools, so the user answers questions
+about what the program does instead of reading it.
+
+`scripttestBrain` in `stdlib/agents/brains/scripttest.agency` is the
+coordinator brain with one more tool, `runAgency(source)`, and one system
+message. The message tells the model to write a short check in Agency
+instead of `node -e`, `python -c`, or a shell script, and to use those only
+when the question is about Node or Python themselves. The Agency tutorial
+(`stdlib/agents/prompts/agency-tutorial.md`, about 34 KB) follows it,
+because the coordinator otherwise knows no Agency. The message stays on the
+thread, so the provider caches it after the first turn.
+
+- **The check before the run.** `runAgency` type-checks the program with
+  `strict: true` first. With errors, it returns them as a failure and runs
+  nothing, so the model fixes the program and calls again. The strict check
+  also reports the imports and JavaScript names that the separate process
+  refuses, so those come back as errors rather than as a failed run.
+- **The run.** With no errors, it calls `runCode` with the agent working
+  directory as `cwd`, so a relative path names a file there. `runCode`
+  raises `std::run` to start the process. Every effect the program raises
+  goes to the session's handlers (`docs/dev/runtime/subprocess-ipc.md`).
+  The tool returns what `main` returns. Printed output does not come back
+  to the model.
+- **A handler inside the program approves nothing on its own.** Models
+  write `ls(dir) with approve` into these programs. The program's own
+  approval still sends the interrupt on to the session's handlers
+  (`docs/dev/runtime/subprocess-ipc.md`, "The distributed handler chain"),
+  and the agent's policy handler always answers: with a saved rule, with a
+  rejection in a one-shot run, or by asking the user
+  (`cliPolicyHandler` in `stdlib/policy.agency`). It never returns "no
+  answer", which is the one case where the program's approval would stand.
+- **A question inside the program.** The agent's handler asks the user
+  inside the handler, so the program waits for the answer and does not
+  pause. A host whose handlers leave an interrupt undecided gets the usual
+  subprocess pause: the child saves a checkpoint and exits, and resuming
+  runs it again from that point in a new process.
+- **Nothing forces the tool.** The model can still run `node -e`, because
+  some checks are about Node itself, such as how Node resolves a package.
+  Whether the model follows the message is the question the trial answers.
+- **The harness treats it as the coordinator.** `isCoordinatorBrain` in
+  `stdlib/agents/agency.agency` is true for `coordinator` and
+  `scripttest`. `agency agent` uses it to give this brain the CLI tools,
+  the REPL style line, the session facts rule, and the `--agent` start
+  targets.
+- **The docs tools.** The brief Agency docs tools (`agencyDocToolsBrief`)
+  come with `runAgency`, so a model that needs a standard library function
+  looks it up there. Without them it searched `stdlib/`, which only works
+  inside this repository.
+- **The coders get the tools too.** A turn the router sends to the coder
+  never reaches the coordinator, and the coordinator hands script work to
+  `codeAgent`, so `withScriptToolsForCoders` adds `runAgency` and the docs
+  tools to `settings.coderTools`. The coders already see the rules, because
+  they run on the same thread. Without the tool, a coder reads the rules,
+  finds no `runAgency`, and writes a shell script.
+- **No tool name twice.** The Agency coder already has the docs tools.
+  `runCoder` in `stdlib/agents/brains/coordinator/code.agency` drops a
+  caller's coder tool whose name a coder's own tools already use, because a
+  provider rejects two tools with one name.
 
 ## Adding a brain
 

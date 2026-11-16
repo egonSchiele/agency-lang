@@ -92,6 +92,14 @@ def agencyCodeExtras(): any[] {
   ]
 }
 
+// The caller's coder tools, less any whose name a coder's own tools already
+// use. A provider rejects two tools with one name, and the Agency coder
+// already has the docs tools a caller may pass.
+def callerToolsNotIn(extras: any[], callerTools: any[]): any[] {
+  const taken = [tool.name for tool in extras]
+  return [tool for tool in callerTools if !taken.includes(tool.name)]
+}
+
 // Both coders are the stdlib coding agent. They differ in the tools they
 // add.
 def runCoder(
@@ -108,7 +116,7 @@ def runCoder(
     maxTime: timeBudget(maxSeconds, CODE_MAX_TIME),
     model: settings.model,
     provider: settings.provider,
-    extraTools: [...extras, ...settings.coderTools],
+    extraTools: [...extras, ...callerToolsNotIn(extras, settings.coderTools)],
   )
 }
 

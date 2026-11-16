@@ -68,9 +68,11 @@ agency debug --attach
 lists the programs that can take a debugger, with their process ids:
 
 ```
-  PID    PROGRAM   NODE  STARTED
+  PID    PROGRAM   NODE  STARTED    STATE
   48213  agent.js  main  4m12s ago
 ```
+
+The `STATE` column reads `waiting` for a program that holds a question for [`agency attach`](./attach).
 
 and
 
@@ -82,7 +84,7 @@ opens the debugger on that program. The listing shows the compiled file the proc
 
 While the program runs, the status line names the model request or tool call it is in, with the time it has been there, and the source panel marks the `llm()` line (see the list above). Attaching in the middle of a long call shows that call at once, with how long it has already run. The time is the whole step's, which for a model request includes looking up memory before the request is sent. Nothing moves while the program is between slow calls: the status line names no wait and the panels keep the last stop.
 
-A program's own interrupts keep going wherever the program sends them: a policy, the `--approve` and `--reject` flags, or the program's terminal under `--interactive`. The debugger shows them going by and does not answer them. A question asked with `input()` goes to the program's terminal as well.
+A program's own interrupts keep going wherever the program sends them: a policy, the `--approve` and `--reject` flags, the program's terminal under `--interactive`, or [`agency attach`](./attach) under `--wait-for-response`. The debugger shows them going by and does not answer them. A question asked with `input()` goes to the program's terminal as well.
 
 How it works: a running program opens a private Unix socket under `~/.agency/debug-sessions` when it runs its first node, and `--attach` connects to it. The directory is readable by that user alone, and whoever can reach it can do what the program's owner can do, including changing a variable, so keep it yours. The socket never keeps a finished program alive. Set `AGENCY_NO_ATTACH=1` to start a program that opens no socket and cannot be attached to.
 

@@ -300,6 +300,30 @@ node flatKeepsALowerRouterUnderAPin(): boolean {
   )
 }
 
+// Each bare chat model goes to the provider that serves it, not to the
+// session's provider (CTX is anthropic).
+def providersOf(raw: RawLayer[], providerEstablished: boolean): string {
+  const layers = buildLayers(raw, PROVIDERS, providerEstablished)
+  const main = unwrapResolved(resolveSlot("main", layers, CTX))
+  const reasoning = unwrapResolved(resolveSlot("reasoning", layers, CTX))
+  return "${main.model}=${main.provider} ${reasoning.model}=${reasoning.provider}"
+}
+
+node mixedProviderSlotsEachGetTheirOwn(): string {
+  return providersOf(
+    [{ name: "cli", pin: "", slots: { main: "claude-opus-4-8", reasoning: "gpt-5.5" } }],
+    false,
+  )
+}
+
+node uncatalogedModelTakesTheSessionProvider(): string {
+  return providersOf([{ name: "cli", pin: "my-private-finetune", slots: {} }], false)
+}
+
+node establishedProviderIsNotReplaced(): string {
+  return providersOf([{ name: "cli", pin: "gpt-5.5", slots: {} }], true)
+}
+
 node flatKeepsTheFirstPin(): boolean {
   return sameAfterFlatten(
     [

@@ -13,6 +13,7 @@ import {
   Resolved,
   parseModelFlag,
   knownProviders,
+  providerForModel,
  } from "../lib/models.agency"
 
 static const KNOWN = ["openai", "anthropic", "google", "openrouter", "litellm"]
@@ -122,4 +123,37 @@ node localProvidersAreKnown(): string {
 
 node embeddingSpecWithLocalProvider(): ModelSpec {
   return parseModelSpec("mlx/mlx-community/Qwen3-Embedding-4B-4bit-DWQ", false, knownProviders())
+}
+
+// With no --provider, a model named by a flag picks the provider that
+// serves it. resolveDetected checks that provider's key, so the cases
+// that depend on keys are in tests/agency-js/llm-provider-defaults.
+node bareModelUsesCatalogProvider(): string {
+  return providerForModel("claude-sonnet-5-5")
+}
+
+node providerPrefixWins(): string {
+  return providerForModel("openrouter/anthropic/claude-sonnet-5-5")
+}
+
+node openaiModelStaysOpenai(): string {
+  return providerForModel("gpt-5.5")
+}
+
+// The catalog lists this one under "openai-responses".
+node responsesOnlyModelGetsThePublicName(): string {
+  return providerForModel("gpt-5.5-pro")
+}
+
+node uncatalogedModelHasNoProvider(): string {
+  return providerForModel("my-private-finetune")
+}
+
+// The fallback reads no key, so this does not depend on the environment.
+node uncatalogedModelFallsBackToOpenai(): string {
+  const r = resolveDetected("my-private-finetune", "", "", "")
+  if (r is failure(f)) {
+    return "ERR"
+  }
+  return r.value
 }

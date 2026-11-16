@@ -273,6 +273,7 @@ Other process docs:
 - `docs/dev/runtime/runBatch.md` — The one primitive that owns concurrent-interrupt orchestration for forks, parallel blocks, tool calls, and subprocesses.
 - `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.
 - `docs/dev/runtime/simplemachine.md` — The graph execution engine that runs compiled Agency programs.
+- `docs/dev/runtime/spawn.md` — `--wait-for-response`: how a run holds an interrupt nobody settled, and how `agency attach` answers it.
 - `docs/dev/runtime/subprocess-ipc.md` — How an agent runs Agency code in a subprocess, how the parent's handlers extend into it, and what the child inherits.
 - `docs/dev/runtime/threads.md` — How LLM conversation history accumulates and flows through thread and subthread blocks.
 - `docs/dev/runtime/expiring-messages.md` — Messages the runtime adds to a thread and later removes, who owns each one, and when it expires.

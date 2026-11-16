@@ -295,7 +295,7 @@ export function run(
   inputFile: string,
   outputFile?: string,
   resume?: ResumeCarrier,
-  runPolicy?: { policyJson: string; interactive: boolean },
+  runPolicy?: { policyJson: string; interactive: boolean; waitForResponse?: boolean },
   budget?: { maxCost?: string; maxTime?: string },
   /** Forwarded to the compiled program's argv (positions 2+), for the program
    *  itself to read — `std::args` is how. They are NOT mapped onto the entry
@@ -334,7 +334,13 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = withRootCarriers(process.env, { policy: runPolicy, budget, resume, entryNode });
+  const env = withRootCarriers(process.env, {
+    policy: runPolicy,
+    budget,
+    resume,
+    entryNode,
+    saveHeldCheckpoint: config.spawn?.interrupts?.preemptivelyCreateCheckpoint,
+  });
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
     runChildOverrides({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveInterrupts, buildDecider } from "./interruptResolution.js";
+import { resolveInterrupts, resolveInterruptBatches, buildDecider } from "./interruptResolution.js";
 import type { ResumeFn, DecideFn, InterruptResult } from "./interruptResolution.js";
 import type { PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 import { approve, reject } from "./interruptResponse.js";
@@ -91,6 +91,27 @@ describe("resolveInterrupts", () => {
     expect(calls).toHaveLength(2);
     expect(calls[0][0].interruptId).toBe("first");
     expect(calls[1][0].interruptId).toBe("second");
+  });
+});
+
+describe("resolveInterruptBatches", () => {
+  it("decides each batch with one call, and loops while the result has interrupts", async () => {
+    const script: InterruptResult[] = [{ data: [makeInterrupt("third")] }, { data: "done" }];
+    const batches: string[][] = [];
+    const respond: ResumeFn<InterruptResult> = async (_interrupts, responses) => {
+      expect(responses.every((response) => response.type === "approve")).toBe(true);
+      return script.shift()!;
+    };
+    const result = await resolveInterruptBatches(
+      { data: [makeInterrupt("first"), makeInterrupt("second")] },
+      respond,
+      async (interrupts) => {
+        batches.push(interrupts.map((interrupt) => interrupt.interruptId));
+        return interrupts.map(() => approve());
+      },
+    );
+    expect(result).toEqual({ data: "done" });
+    expect(batches).toEqual([["first", "second"], ["third"]]);
   });
 });
 

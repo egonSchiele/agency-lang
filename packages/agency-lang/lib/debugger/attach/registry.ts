@@ -29,6 +29,8 @@ export const AttachRecordSchema = z
      *  compares it with what `ps` reports before it signals a pid, so a
      *  stale record never sends a signal to the wrong process. */
     startedAt: z.number(),
+    /** Whether the program is holding a question for `agency attach`. */
+    holding: z.boolean().optional(),
   })
   .strict();
 

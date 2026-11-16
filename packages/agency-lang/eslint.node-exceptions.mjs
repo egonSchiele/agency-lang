@@ -25,6 +25,9 @@ export const NODE_ONLY = {
   "lib/runtime/cliInterruptResolution.ts":
     "the command line's endpoint for interrupts nothing handled",
   "lib/runtime/coverageCollector.ts": "tooling: writes coverage files",
+  "lib/runtime/heldQuestions.ts":
+    "the questions a command-line run holds for agency attach, one batch per process, kept alive by a timer",
+  "lib/runtime/processSlot.ts": "keeps a value on process, shared by every copy of the runtime",
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
   "lib/runtime/platform.node.ts":

@@ -18,11 +18,14 @@ import {
   parseValueAnswer,
   installRunPolicyHandler,
   formatInterruptPrompt,
+  unansweredMode,
 } from "./runPolicyHandler.js";
 import {
+  AGENCY_CARRIER_ON,
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
+  AGENCY_RUN_POLICY_WAIT,
 } from "@/constants.js";
 
 const intr = (effect: string, data: any = {}) => ({
@@ -273,6 +276,60 @@ describe("installRunPolicyHandler", () => {
       installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), ...hostAndDirs() });
       expect(pushed).toHaveLength(0);
     });
+  });
+});
+
+describe("unansweredMode", () => {
+  const read = (vars: Record<string, string>) => ({
+    read: (name: string) => vars[name] ?? null,
+    log: () => {},
+  });
+
+  it("rejects with neither flag, prompts under --interactive, waits under --wait-for-response", () => {
+    expect(unansweredMode(read({}))).toBe("reject");
+    expect(
+      unansweredMode(read({ [AGENCY_RUN_POLICY_INTERACTIVE]: AGENCY_RUN_POLICY_INTERACTIVE_ON })),
+    ).toBe("prompt");
+    expect(unansweredMode(read({ [AGENCY_RUN_POLICY_WAIT]: AGENCY_CARRIER_ON }))).toBe("wait");
+  });
+});
+
+describe("the root policy handler under --wait-for-response", () => {
+  const APPROVE_ALL = JSON.stringify({ "*": [{ action: "approve" }] });
+  const installed = () => {
+    const pushed: unknown[] = [];
+    installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), ...hostAndDirs() });
+    return pushed[0] as (i: unknown) => Promise<{ type: string } | undefined>;
+  };
+
+  // `agency attach` can supply the value, so the rule must not answer the
+  // raise with no value. Without the flag the same rule does.
+  it("leaves a raise that expects a value to the person, and approves one that does not", async () => {
+    const asking = { ...intr("std::question"), expectsValue: true };
+    await withEnv(
+      {
+        [AGENCY_RUN_POLICY]: APPROVE_ALL,
+        [AGENCY_RUN_POLICY_WAIT]: AGENCY_CARRIER_ON,
+        [AGENCY_RUN_POLICY_INTERACTIVE]: undefined,
+        AGENCY_IPC: undefined,
+      },
+      async () => {
+        const handler = installed();
+        expect(await handler(asking)).toBeUndefined();
+        expect((await handler(intr("std::read")))?.type).toBe("approve");
+      },
+    );
+    await withEnv(
+      {
+        [AGENCY_RUN_POLICY]: APPROVE_ALL,
+        [AGENCY_RUN_POLICY_WAIT]: undefined,
+        [AGENCY_RUN_POLICY_INTERACTIVE]: undefined,
+        AGENCY_IPC: undefined,
+      },
+      async () => {
+        expect((await installed()(asking))?.type).toBe("approve");
+      },
+    );
   });
 });
 

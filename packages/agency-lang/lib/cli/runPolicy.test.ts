@@ -91,6 +91,16 @@ describe("resolveRunPolicy", () => {
     expect(r!.interactive).toBe(true);
   });
 
+  // The empty policy is what installs the root handler, and so what keeps
+  // the endpoint from reporting the interrupt and exiting.
+  it("installs a handler for --wait-for-response alone (empty base)", () => {
+    const r = resolveRunPolicy({ waitForResponse: true, cwd: "/x" });
+    expect(r).not.toBeNull();
+    expect(JSON.parse(r!.policyJson)).toEqual({});
+    expect(r!.waitForResponse).toBe(true);
+    expect(r!.interactive).toBe(false);
+  });
+
   it("threads cwd into the 'with-writes' base scope", () => {
     const r = resolveRunPolicy({ policy: "with-writes", cwd: "/work" });
     const p = JSON.parse(r!.policyJson);

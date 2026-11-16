@@ -39,6 +39,18 @@ export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 /**
  * Configuration options for the Agency compiler
  */
+export type SpawnInterruptsConfig = {
+  /** Save a held question's checkpoint to disk, so a process that dies
+   *  while holding can be resumed. Off by default: a checkpoint holds
+   *  the program's whole state. */
+  preemptivelyCreateCheckpoint?: boolean;
+};
+
+/** Settings for a program run with `--wait-for-response`. */
+export type SpawnConfig = {
+  interrupts?: SpawnInterruptsConfig;
+};
+
 export interface AgencyConfig {
   verbose?: boolean;
 
@@ -360,6 +372,9 @@ export interface AgencyConfig {
      * Prevents infinite restore loops. Default: 100. */
     maxRestores?: number;
   };
+
+  /** Settings for a program run with `--wait-for-response`. */
+  spawn?: SpawnConfig;
 
   /** Maximum logical function-call nesting depth before the runaway-recursion
    * guard throws CallDepthExceededError. Catches unbounded recursion — most
@@ -732,6 +747,12 @@ export const AgencyConfigSchema = z
       .partial(),
     instrument: z.boolean(),
     checkpoints: z.object({ maxRestores: z.number() }).partial(),
+    spawn: z
+      .object({
+        interrupts: z.object({ preemptivelyCreateCheckpoint: z.boolean() }).partial().strict(),
+      })
+      .partial()
+      .strict(),
     // A positive integer. The guard trips when depth > limit and the first
     // call is depth 1, so a value < 1 (or a float/NaN) would make every call
     // throw — reject it at config-load rather than bricking the program.

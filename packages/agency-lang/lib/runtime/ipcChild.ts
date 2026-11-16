@@ -53,7 +53,15 @@ export type SerializedInterrupt = {
   message: string;
   data: any;
   origin: string;
+  /** True when whoever approves is expected to give a value. */
+  expectsValue?: boolean;
 };
+
+/** `interrupt` as data, with its two checkpoint fields left out. */
+export function withoutCheckpoint(interrupt: any): SerializedInterrupt {
+  const { checkpoint: _cp, checkpointId: _cpId, ...rest } = interrupt;
+  return rest as SerializedInterrupt;
+}
 
 /** Terminal message for a child that paused itself: its unresolved
  * interrupts plus the shared checkpoint they all resume from. A third
@@ -70,10 +78,7 @@ export type IpcInterruptedMessage = {
  * batch checkpoint (every interrupt in a batch carries the same one). */
 export function serializeInterruptsForIpc(interrupts: any[]): IpcInterruptedMessage {
   const checkpoint = interrupts[0]?.checkpoint;
-  const serialized = interrupts.map((intr) => {
-    const { checkpoint: _cp, checkpointId: _cpId, ...rest } = intr;
-    return rest as SerializedInterrupt;
-  });
+  const serialized = interrupts.map(withoutCheckpoint);
   return {
     type: "interrupted",
     interrupts: serialized,

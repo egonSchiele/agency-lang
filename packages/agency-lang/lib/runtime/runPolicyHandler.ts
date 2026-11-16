@@ -8,8 +8,23 @@ import {
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
+  AGENCY_RUN_POLICY_WAIT,
+  AGENCY_CARRIER_ON,
 } from "@/constants.js";
 import type { Intr } from "./interruptPrompts.js";
+
+/** How the run answers an interrupt nobody settled: reject it, prompt for
+ *  it at the terminal (`--interactive`), or hold it until `agency attach`
+ *  answers (`--wait-for-response`). */
+export type UnansweredMode = "reject" | "prompt" | "wait";
+
+export function unansweredMode(settings: HostSettings): UnansweredMode {
+  if (settings.read(AGENCY_RUN_POLICY_WAIT) === AGENCY_CARRIER_ON) return "wait";
+  if (settings.read(AGENCY_RUN_POLICY_INTERACTIVE) === AGENCY_RUN_POLICY_INTERACTIVE_ON) {
+    return "prompt";
+  }
+  return "reject";
+}
 
 // The terminal prompt mechanics now live in the cycle-free interruptPrompts
 // leaf. Re-export them so existing `… from "./runPolicyHandler.js"` imports and
@@ -104,15 +119,20 @@ export function installRunPolicyHandler(
   if (isIpcMode()) return;
   const effective = policy ?? loadEnvPolicy(execCtx.host.settings);
   if (!effective) return;
-  const interactive =
-    execCtx.host.settings.read(AGENCY_RUN_POLICY_INTERACTIVE) === AGENCY_RUN_POLICY_INTERACTIVE_ON;
+  // A person can supply a value at the terminal prompt or through `agency
+  // attach`, so in both modes an approve rule leaves a value raise alone.
+  const someoneCanAnswer = unansweredMode(execCtx.host.settings) !== "reject";
   // liveGuardIds: [] — explicit: the --policy handler registers at run
   // start, before any guard exists, and it is the outermost supervisory
   // layer; a policy answering an interrupt is never metered or gated by
   // user guards.
   // stack: null — the policy applies to every raise in the run, in every
   // branch (HandlerEntry.stack).
-  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs, interactive), [], null);
+  execCtx.pushHandler(
+    makeRunPolicyHandler(effective, execCtx.policyDirs, someoneCanAnswer),
+    [],
+    null,
+  );
 }
 
 // The CLI-driven run's user endpoint (`resolveCliInterrupts`) lives in

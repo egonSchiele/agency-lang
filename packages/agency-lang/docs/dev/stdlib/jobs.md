@@ -80,7 +80,9 @@ interrupt to its caller. After a resume, a rewind, or a restart the table is
 empty. A `restore(checkpoint)` inside a program is applied to the same
 context (`applyRestoreSignal` in `lib/runtime/node.ts`), so its jobs keep
 running. The interactive `agency agent` answers its interrupts in a
-handler, so it does not pause during a session.
+handler, so it does not pause during a session. A program run with
+`--wait-for-response` that holds a question has paused, so its jobs have
+stopped (`docs/dev/runtime/spawn.md`).
 
 Every branch of a run shares the run's table. A program started with
 `run()` from `std::agency` has its own context and its own table.

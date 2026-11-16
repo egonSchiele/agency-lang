@@ -1,0 +1,56 @@
+// How the approval prompt prints a list in an interrupt's data. A list of
+// plain values goes on one line. A list of objects is still a table.
+import test { prettyPrintInterruptData } from "std::policy"
+
+// One line, each item in quotes, so a text with a comma or a space in it
+// is still seen as one item.
+node plainListIsOneLine(): string {
+  return prettyPrintInterruptData(["--", "write a.txt, then b.txt", 3, true], cols: 80)
+}
+
+node emptyListIsBrackets(): string {
+  return prettyPrintInterruptData([], cols: 80)
+}
+
+// A control character in an item cannot reach the terminal.
+node controlCharactersAreEscaped(): boolean {
+  const line = prettyPrintInterruptData(["a\x1b[8mhidden"], cols: 80)
+  return !line.includes("\x1b") && line.includes("hidden")
+}
+
+// Inside an object, the list sits on its key's row, with no box of its own.
+node listInsideAnObjectHasNoBox(): string {
+  const body = prettyPrintInterruptData({ filename: "task.agency", args: ["--", "do it"] }, cols: 60)
+  const lines = body.split("\n")
+  const argsLines = [line for line in lines if line.includes("args")]
+  if (argsLines.length != 1) {
+    return "FAIL: ${argsLines.length} lines mention args"
+  }
+  if (!argsLines[0].includes("\"--\", \"do it\"")) {
+    return "FAIL: ${argsLines[0]}"
+  }
+  // The table's own top and bottom, and nothing drawn inside it.
+  const corners = [line for line in lines if line.includes("╭")]
+  return "pass, ${corners.length} box"
+}
+
+// A field set to nothing, and an empty object, are written out. A blank
+// cell would read as if the value were missing from the prompt.
+node emptyFieldsAreWrittenOut(): string {
+  const body = prettyPrintInterruptData({ maxCost: null, policy: {}, name: "" }, cols: 40)
+  const lines = body.split("\n")
+  const cost = [line for line in lines if line.includes("maxCost") && line.includes("null")]
+  const policy = [line for line in lines if line.includes("policy") && line.includes("{}")]
+  return "${cost.length} ${policy.length}"
+}
+
+// Data that is nothing at all still has no body.
+node noDataHasNoBody(): string {
+  return prettyPrintInterruptData(null) + prettyPrintInterruptData({})
+}
+
+// A list of objects keeps its table: one line cannot show it.
+node listOfObjectsIsStillATable(): boolean {
+  const body = prettyPrintInterruptData([{ oldText: "a", newText: "b" }], cols: 60)
+  return body.includes("oldText") && body.includes("╭")
+}

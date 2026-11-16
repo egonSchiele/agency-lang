@@ -41,11 +41,12 @@ import { AgentSettings } from "std::agents/brains/settings"
 import { coordinatorBrain } from "std::agents/brains/coordinator"
 import { minimalBrain } from "std::agents/brains/minimal"
 import { simpleBrain } from "std::agents/brains/simple"
+import { spawntestBrain } from "std::agents/brains/spawntest"
 import { guarded } from "std::decorators"
 import { Attachment } from "std::thread"
 
 /** Which brain answers. */
-export type AgencyAgentBrain = "coordinator" | "minimal" | "simple"
+export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest"
 
 /** Extra tools, one optional list per agent that can take them. */
 export type AgentExtraTools = {
@@ -79,6 +80,10 @@ export def agencyAgentBrains(): BrainInfo[] {
       name: "simple",
       description: "One tool-less LLM call per turn, in a single thread"
     },
+    {
+      name: "spawntest",
+      description: "A trial: the minimal brain, plus a tool that starts another agent on a task as a separate process"
+    },
   ]
 }
 
@@ -110,7 +115,7 @@ export def agencyAgent(
 
   @param task - What the user wants, as they would say it to an assistant
   @param context - Extra text for the agent, such as the user's own instructions, or ""
-  @param brain - Which brain answers: "coordinator", "minimal", or "simple"
+  @param brain - Which brain answers: "coordinator", "minimal", "simple", or "spawntest"
   @param maxCost - Cost budget in USD
   @param maxTime - Time budget in milliseconds
   @param model - The main model, or "" for the ambient model
@@ -137,6 +142,7 @@ export def agencyAgent(
   return match(brain) {
     "minimal" => minimalBrain(message, settings, mainTools)
     "simple" => simpleBrain(message, settings, mainTools)
+    "spawntest" => spawntestBrain(message, settings, mainTools)
     _ => coordinatorBrain(message, settings, mainTools)
   }
 }

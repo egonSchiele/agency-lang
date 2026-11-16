@@ -847,6 +847,41 @@ def printInterruptDiff(intr: any) {
   }
 }
 
+// True for a list whose items are all text, numbers, or true and false,
+// such as the arguments of a command. An empty list counts.
+def isPlainList(items: any[]): boolean {
+  return every(items) as item {
+    return typeof item == "string" || typeof item == "number" || typeof item == "boolean"
+  }
+}
+
+// A plain list on one line: `"--verbose", "my file.txt", 3`. Each item is
+// written as JSON, so the quotes show where one item ends, even when it
+// holds a comma. JSON writes most control characters as escapes, and the
+// strip removes the few it leaves alone.
+def plainListLine(items: any[]): string {
+  if (items.length == 0) {
+    return "[]"
+  }
+  const written = map(items) as item {
+    return JSON.stringify(item)
+  }
+  return stripControlChars(written.join(", "))
+}
+
+// What one field prints as in its row. Nothing prints as `null` and an
+// empty object as `{}`: a blank cell would not tell "no limit" from "not
+// shown".
+def fieldText(value: any): string {
+  if (value == null) {
+    return "null"
+  }
+  if (typeof value == "object" && !Array.isArray(value) && keys(value).length == 0) {
+    return "{}"
+  }
+  return prettyPrintInterruptData(value)
+}
+
 // Render the data of one interrupt for the approval prompt. `data` is the
 // interrupt's payload (`intr.data`); `effect` is `intr.effect`, used to
 // leave out the fields the effect prints above the prompt
@@ -873,10 +908,13 @@ def prettyPrintInterruptData(data: any, effect: string = "", cols: number = 0): 
   // `content.split is not a function`. Handle arrays explicitly, keyed
   // by index, recursing into each element.
   if (Array.isArray(data)) {
+    if (isPlainList(data)) {
+      return plainListLine(data)
+    }
     let i = 0
     const paramTable = table() as t {
       for (item in data) {
-        t.row(text("${i}", bold: true), text(prettyPrintInterruptData(item)))
+        t.row(text("${i}", bold: true), text(fieldText(item)))
         i = i + 1
       }
     }
@@ -932,7 +970,7 @@ def renderObjAsTable(
       if (skip.includes(key)) {
         continue
       }
-      t.row(text(key, bold: true), text(prettyPrintInterruptData(obj[key])))
+      t.row(text(key, bold: true), text(fieldText(obj[key])))
       rows = rows + 1
     }
   }

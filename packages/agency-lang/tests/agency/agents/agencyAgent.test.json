@@ -12,18 +12,22 @@
     },
     {
       "nodeName": "eachBrainAnswers",
-      "description": "The minimal and simple brains answer too.",
+      "description": "The minimal, simple, and spawntest brains answer too.",
       "input": "",
-      "expectedOutput": "\"from minimal|from simple\"",
+      "expectedOutput": "\"from minimal|from simple|from spawntest\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "from minimal" }, { "return": "from simple" }]
+      "llmMocks": [
+        { "return": "from minimal" },
+        { "return": "from simple" },
+        { "return": "from spawntest" }
+      ]
     },
     {
       "nodeName": "brainCount",
-      "description": "Three brains are listed.",
+      "description": "Four brains are listed.",
       "input": "",
-      "expectedOutput": "3",
+      "expectedOutput": "4",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

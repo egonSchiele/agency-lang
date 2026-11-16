@@ -115,10 +115,15 @@ export function loadManifest(manifestDir: string): BuildManifest {
 export function saveManifest(manifestDir: string, manifest: BuildManifest): void {
   const dir = path.join(manifestDir, MANIFEST_DIR_NAME);
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, MANIFEST_FILE);
-  // Atomic write: concurrent compiles get last-writer-wins, never a torn file.
+  writeFileAtomic(path.join(dir, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
+}
+
+/** Write `text` to `file` so a reader sees the old file or the new one,
+ *  never a half-written one. Two compiles of one file at the same moment
+ *  each write a name of their own, and the last rename wins. */
+export function writeFileAtomic(file: string, text: string): void {
   const tmpFile = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpFile, JSON.stringify(manifest, null, 2));
+  fs.writeFileSync(tmpFile, text, "utf-8");
   fs.renameSync(tmpFile, file);
 }
 

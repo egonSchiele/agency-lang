@@ -71,6 +71,15 @@ export function _agentPromptsDir(): string {
   return path.join(stdlibDir(), "agents", "prompts");
 }
 
+/**
+ * Absolute path to the Agency programs we ship for the stdlib agents to
+ * start as processes of their own, under `stdlib/agents/programs`.
+ * Resolved through the host for the same reason as _docsDir.
+ */
+export function _agentProgramsDir(): string {
+  return path.join(stdlibDir(), "agents", "programs");
+}
+
 // The characters Claude Code refuses in a skill name or folder name: control
 // characters, zero-width, invisible, and bidirectional-control characters,
 // private-use and tag characters, unusual blanks, and `<` and `>`.

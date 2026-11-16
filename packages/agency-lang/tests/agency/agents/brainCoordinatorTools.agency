@@ -57,7 +57,8 @@ node settingsAreHidden(): string {
   llm("Reply with ok.", { tools: coordinatorTools(plainSettings(), now()) })
   let leaked: string[] = []
   for (tool in calls[0].tools) {
-    const params = Object.keys(tool.schema.properties ?? {})
+    // A recorded tool's schema keeps its parameters under `def.shape`.
+    const params = Object.keys(tool.schema.def.shape)
     if (params.includes("settings") || params.includes("since")) {
       leaked.push(tool.name)
     }

@@ -42,13 +42,15 @@ export def agencyAgent(
 - `context` is extra text, such as the user's instructions. Each brain adds
   it as a system message that expires with the call, and each subagent
   wrapper passes it to its stdlib agent.
-- `brain` picks one of three brains (`stdlib/agents/brains/`):
+- `brain` picks one of four brains (`stdlib/agents/brains/`):
   - `coordinator`, the default: one model that answers itself or hands
     the turn to the code, Agency code, research, oracle, explorer, review,
     writing, and rewrite subagents.
   - `minimal`: one coder with four tools and a short prompt, for
     benchmarks and sandboxed runs.
   - `simple`: one LLM call with no tools of its own.
+  - `spawntest`: a trial. The minimal brain, plus a tool that starts
+    another agent as a process of its own. See "The spawntest brain" below.
 
   `agencyAgentBrains()` lists them with a one-line description each.
 - `maxCost` and `maxTime` are the budget for the whole call. A negative
@@ -249,6 +251,44 @@ handler wrapped in `approvingInstructionReads`: while `projectContextText`
 reads the instruction files, a `std::read` of `AGENTS.md` or `CLAUDE.md`
 that no rule decides is approved instead of asking the user. A `reject`
 rule still wins.
+
+## The spawntest brain
+
+A trial of starting agents from the agent. `spawntestBrain` in
+`stdlib/agents/brains/spawntest.agency` is the minimal brain with one more
+tool, `startAgent(task, name)`. The tool calls `spawn`
+(`docs/dev/runtime/spawn.md`) on `stdlib/agents/programs/task.agency`,
+which runs `agencyAgent` with the minimal brain on the one task, prints
+the reply, and exits.
+
+- **Approving a start.** `startAgent` raises `std::spawn` and installs no
+  handler, so the session's policy decides, or the user is asked. The
+  prompt shows `maxCost` and `maxTime` as `null`, yet the agent does stop:
+  `task.agency` passes no budget, so `agencyAgent`'s defaults of $50 and
+  30 minutes apply. `std::spawn` pins `dir` and `filename` in an "always
+  approve when" rule, and both are the same for every start, so that one
+  answer approves every later start, whatever its task.
+- **The started agent's rules.** `startAgent` passes no policy, and the
+  model cannot give one. Every question the started agent raises, a file
+  read included, waits for a person to answer with `agency attach`.
+- **The model.** A started program cannot see the ambient model of the
+  program that started it. `startAgent` passes `settings.model` and
+  `settings.provider` as flags, and `agency agent` fills those two in for
+  this brain only (`namedMainModel` in
+  `lib/agents/agency-agent/lib/answer.agency`). A caller that sets
+  neither gets the started program's own configured model.
+- **The context.** `settings.context` goes to the started agent as the
+  first message of its conversation, through `spawn`'s `messages`. It is
+  kept out of the arguments, which the process list shows to every user of
+  the machine. The task is in the arguments.
+- **Nothing comes back.** The tool returns the process id, the name, and
+  the output file, and the reply goes to that file.
+- **The install folder must be writable.** `agency run` compiles
+  `task.agency` next to its source and keeps its build manifest in the
+  package folder. In an install the user cannot write to, such as one made
+  with `sudo npm install -g`, the manifest is never saved, so every start
+  tries to compile again and fails. The `task.js` the package ships is not
+  used.
 
 ## Adding a brain
 

@@ -75,21 +75,9 @@ export function removeGgufFolder(dir: string, uri: string): boolean {
   return true;
 }
 
-/** Was the resolved file freshly downloaded (not already cached)? */
-export type FreshnessProbe = (resolved: string) => boolean;
-
-/** Snapshot a model folder, returning a probe that reports whether a
- *  resolved path is newly downloaded. node-llama-cpp stores a model's files
- *  FLAT in the folder it is given, with no subfolders (verified against its
- *  `buildHuggingFaceFilePrefix`), so matching by basename is correct. */
-export function snapshotFreshness(folder: string): FreshnessProbe {
-  const present = looseGgufFiles(folder).map((entry) => entry.name);
-  return (resolved) => !present.includes(path.basename(resolved));
-}
-
 /** Download `uri` into its folder under `dir` unless it is already on disk,
- *  and return the file to load. A fresh download is checked against
- *  `sha256` when there is one; `label` names the model in that error. */
+ *  and return the file to load. The file is checked against `sha256` when
+ *  there is one; `label` names the model in that error. */
 export async function downloadGgufModel(
   dir: string,
   uri: string,
@@ -102,12 +90,10 @@ export async function downloadGgufModel(
   }
   const folder = ggufModelDir(dir, uri);
   const mod = await loadLocalProvider();
-  // Snapshot freshness BEFORE resolving so we verify the bytes only once, right
-  // after a real download. A file a crashed run left in the folder is already
-  // there, so it is not checked again.
-  const wasFresh = snapshotFreshness(folder);
   const resolved = await mod.resolveModel(uri, folder);
-  if (sha256 !== undefined && wasFresh(resolved)) {
+  // A folder with a record returned above, so this file is either new or was
+  // never verified, such as one a run interrupted during its hash check.
+  if (sha256 !== undefined) {
     await verifyModelFile(resolved, sha256, label);
   }
   // Record-after-verify: a file that fails its hash check throws above, and

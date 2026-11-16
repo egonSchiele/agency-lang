@@ -243,19 +243,22 @@ We then verify integrity:
   `scripts/genModelHashes.ts` from Hugging Face's `X-Linked-ETag` header, which
   equals the file's content sha256. We verified that end to end against a real
   download.
-- After a **fresh** download (detected via a snapshot of the model's folder,
-  `snapshotFreshness` — we never re-hash an already-present file), we
-  stream-hash the file and compare it to the pin (`verifyModelFile`).
+- Before writing a folder's record, we stream-hash the file and compare it to
+  the pin (`verifyModelFile`). That includes a file already in a folder with
+  no record, such as one a run left when it was interrupted during the hash
+  check: only the record says a file was verified. A folder with a record is
+  never hashed again.
 - On a mismatch the file is renamed to `<file>.gguf.invalidSha` (kept for
   inspection, not loaded) and an error is thrown.
 - Verification is **opportunistic**. Models with no pin, meaning user aliases
   and raw URIs, are simply not verified. A user alias may opt in by setting its
   own `sha256` on the alias object. It never borrows a curated model's hash.
 
-Because we verify only freshly-downloaded files, a pin change (e.g. via
+Because a recorded model is never hashed again, a pin change (e.g. via
 `agency local refresh`) does **not** retroactively re-check a file you already
-have cached. Run `agency local remove <name> -f` to delete the file and force
-a fresh, verified re-download.
+have. Run `agency local remove <name> -f` to delete it and force a fresh,
+verified re-download. Files from before the model folders are never checked
+either.
 
 ### Updating the pins
 

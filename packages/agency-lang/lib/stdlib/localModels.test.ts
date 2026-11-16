@@ -485,13 +485,12 @@ describe("provider register + download (fake plugin module)", () => {
     }
   });
 
-  it("does NOT re-verify a file already in the folder (a crashed run's download)", async () => {
+  it("verifies a file a crashed run left in a folder with no record", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    // Pre-create the model file so it's in the before-snapshot → treated as cached.
+    // A run interrupted during its hash check leaves the file and no record.
     const folder = path.join(dir, "gguf", "org--x--Q4");
     fs.mkdirSync(folder, { recursive: true });
     fs.writeFileSync(path.join(folder, "model.gguf"), "pre-existing");
-    // A deliberately-wrong pin would fail IF it verified — it must be skipped.
     fs.writeFileSync(
       aliasFile,
       JSON.stringify({
@@ -505,8 +504,9 @@ describe("provider register + download (fake plugin module)", () => {
     const cwd = process.cwd();
     process.chdir(dir);
     try {
-      await expect(_downloadModel("mymodel", dir)).resolves.toBe(path.join(folder, "model.gguf"));
-      expect(fs.existsSync(path.join(folder, "model.gguf.invalidSha"))).toBe(false);
+      await expect(_downloadModel("mymodel", dir)).rejects.toThrow(/SHA-256 verification failed/);
+      expect(fs.existsSync(path.join(folder, "model.gguf.invalidSha"))).toBe(true);
+      expect(readGgufModelRecord(folder)).toBeNull();
     } finally {
       process.chdir(cwd);
     }

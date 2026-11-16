@@ -39,7 +39,6 @@ import {
   removeGgufFolder,
   removeLooseGgufFile,
 } from "./ggufModelFiles.js";
-export { snapshotFreshness, type FreshnessProbe } from "./ggufModelFiles.js";
 import { isGgufDownloadUri } from "./ggufModelDir.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {

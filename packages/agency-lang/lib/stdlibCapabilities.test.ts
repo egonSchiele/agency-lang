@@ -122,6 +122,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "coordinatorBrain",
     "minimalBrain",
     "simpleBrain",
+    "spawningBrain",
     "codeAgent",
     "agencyCodeAgent",
     "researchAgent",

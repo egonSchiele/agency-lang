@@ -281,9 +281,9 @@ node main(task: string): string {
 node main() {
   const args = parseArgs({
     programName: "greet",
-    flags: { name: { type: "string", default: "world" } },
+    flags: { who: { type: "string", default: "world" } },
   })
-  print("Hello, " + args.flags.name + "!")
+  print("Hello, " + args.flags.who + "!")
 }
 `);
   // The form the docs teach: a flag after the filename belongs to the program.
@@ -291,7 +291,7 @@ node main() {
   // does not claim them, and std::args parses them.
   const greeted = run(
     dir,
-    "./node_modules/.bin/agency run greet.agency --name alice",
+    "./node_modules/.bin/agency run greet.agency --who alice",
   );
   assertIncludes(greeted, "Hello, alice!");
 
@@ -301,14 +301,14 @@ node main() {
   // flags" and quietly fall back to the default.
   const greetedWithSeparator = run(
     dir,
-    "./node_modules/.bin/agency run greet.agency -- --name alice",
+    "./node_modules/.bin/agency run greet.agency -- --who alice",
   );
   assertIncludes(greetedWithSeparator, "Hello, alice!");
 
   // Agency's own flags still work, before the filename.
   const greetedWithAgencyFlag = run(
     dir,
-    "./node_modules/.bin/agency run --max-cost 5 greet.agency --name alice",
+    "./node_modules/.bin/agency run --max-cost 5 greet.agency --who alice",
   );
   assertIncludes(greetedWithAgencyFlag, "Hello, alice!");
 
@@ -317,7 +317,7 @@ node main() {
   // exactly this.
   const greetedWithRootFlag = run(
     dir,
-    "./node_modules/.bin/agency run -v greet.agency --name alice",
+    "./node_modules/.bin/agency run -v greet.agency --who alice",
   );
   assertIncludes(greetedWithRootFlag, "Hello, alice!");
 
@@ -327,7 +327,7 @@ node main() {
   for (const configFlag of ["-c custom.json", "-ccustom.json"]) {
     const greetedWithConfig = run(
       dir,
-      `./node_modules/.bin/agency run ${configFlag} greet.agency --name alice`,
+      `./node_modules/.bin/agency run ${configFlag} greet.agency --who alice`,
     );
     assertIncludes(greetedWithConfig, "Hello, alice!");
   }
@@ -363,7 +363,7 @@ node main() {
   // deliberately claimed with a separator.
   const quiet = run(
     dir,
-    "./node_modules/.bin/agency run greet.agency --name alice 2>&1",
+    "./node_modules/.bin/agency run greet.agency --who alice 2>&1",
   );
   if (quiet.includes("Warning:")) {
     throw new Error(`warned about a flag agency does not define: ${quiet}`);
@@ -434,18 +434,18 @@ node main() {
   // --- The shorthand behaves exactly like `agency run` ---
   // `agency greet.agency` is documented as shorthand for `agency run
   // greet.agency`, so every case above must hold with the word left out.
-  const shortGreeted = run(dir, "./node_modules/.bin/agency greet.agency --name alice");
+  const shortGreeted = run(dir, "./node_modules/.bin/agency greet.agency --who alice");
   assertIncludes(shortGreeted, "Hello, alice!");
 
   const shortWithAgencyFlag = run(
     dir,
-    "./node_modules/.bin/agency --max-cost 5 greet.agency --name alice",
+    "./node_modules/.bin/agency --max-cost 5 greet.agency --who alice",
   );
   assertIncludes(shortWithAgencyFlag, "Hello, alice!");
 
   const shortSeparator = run(
     dir,
-    "./node_modules/.bin/agency greet.agency -- --name alice",
+    "./node_modules/.bin/agency greet.agency -- --who alice",
   );
   assertIncludes(shortSeparator, "Hello, alice!");
 
@@ -488,7 +488,7 @@ node main() {
 
   // A bare model replaces the model AND drops the inherited provider, so
   // smoltalk infers one from the name.
-  const bareRun = run(dir, "./node_modules/.bin/agency run --model claude-opus-4-8 greet.agency --name alice");
+  const bareRun = run(dir, "./node_modules/.bin/agency run --model claude-opus-4-8 greet.agency --who alice");
   assertIncludes(bareRun, "Hello, alice!");
   const bareOut = readFileSync(join(dir, "greet.js"), "utf-8");
   assertIncludes(bareOut, 'model: "claude-opus-4-8"');
@@ -499,7 +499,7 @@ node main() {
   }
 
   // The shorthand takes the flag too, and a prefixed value sets both fields.
-  const prefixedRun = run(dir, "./node_modules/.bin/agency --model openrouter/anthropic/claude-sonnet-4 greet.agency --name alice");
+  const prefixedRun = run(dir, "./node_modules/.bin/agency --model openrouter/anthropic/claude-sonnet-4 greet.agency --who alice");
   assertIncludes(prefixedRun, "Hello, alice!");
   const prefixedOut = readFileSync(join(dir, "greet.js"), "utf-8");
   assertIncludes(prefixedOut, 'model: "anthropic/claude-sonnet-4"');
@@ -571,19 +571,19 @@ node main() {
   // The form the docs recommend for development: compile once, run with node.
   // A separate output path from pack, which inlines the whole package.
   run(dir, "./node_modules/.bin/agency compile greet.agency");
-  const compiledGreeting = run(dir, "node greet.js --name alice");
+  const compiledGreeting = run(dir, "node greet.js --who alice");
   assertIncludes(compiledGreeting, "Hello, alice!");
 
   run(dir, "./node_modules/.bin/agency pack greet.agency -o packed-greet.mjs");
   // No `--` here: node passes everything after the script through untouched.
-  const packedGreeting = run(dir, "node packed-greet.mjs --name alice");
+  const packedGreeting = run(dir, "node packed-greet.mjs --who alice");
   assertIncludes(packedGreeting, "Hello, alice!");
 
   // And `--` must NOT be carried over from the `agency run` form. std::args
   // reads it as "stop reading flags", so the flag silently becomes a positional
   // and the default wins. Documented, and pinned here because the failure is
   // quiet.
-  const packedWithSeparator = run(dir, "node packed-greet.mjs -- --name alice");
+  const packedWithSeparator = run(dir, "node packed-greet.mjs -- --who alice");
   assertIncludes(packedWithSeparator, "Hello, world!");
   console.log("Test 8c passed");
 
@@ -628,7 +628,7 @@ node main() {
   // A pre-input separator ends option parsing but the input is still agency's.
   const preInputSeparator = run(
     dir,
-    "./node_modules/.bin/agency run -- greet.agency --name alice",
+    "./node_modules/.bin/agency run -- greet.agency --who alice",
   );
   assertIncludes(preInputSeparator, "Hello, alice!");
 

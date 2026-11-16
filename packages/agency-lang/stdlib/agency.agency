@@ -22,7 +22,7 @@ import {
   _readTestFileSandbox,
  } from "agency-lang/stdlib-lib/agency.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
-import { _spawn, _spawnCount, _spawnDepth, _spawnPaths, _spawnProblem } from "agency-lang/stdlib-lib/spawn.js"
+import { _checkSpawnFile, _spawn, _spawnCount, _spawnDepth, _spawnPaths, _spawnProblem } from "agency-lang/stdlib-lib/spawn.js"
 import { _validatePolicy } from "agency-lang/stdlib-lib/policy.js"
 import {
   _loadTemplate,
@@ -519,7 +519,7 @@ type SpawnQuestion = {
 static const MAX_SPAWN_DEPTH = 5
 static const MAX_SPAWNS_PER_RUN = 500
 
-@capabilities(fileRead, fileWrite, subprocess)
+@capabilities(fileRead, fileWrite, subprocess, env)
 export def spawn(
   dir: string,
   filename: string,
@@ -569,6 +569,10 @@ export def spawn(
   const prepared = try _prepareContainedPath(dir, filename, "read")
   if (isFailure(prepared)) {
     return prepared
+  }
+  const found = try _checkSpawnFile(prepared.value.dir, prepared.value.filename)
+  if (isFailure(found)) {
+    return found
   }
   const paths = _spawnPaths(outputFile, cwd)
   const shownName = if name != "" then name else filename

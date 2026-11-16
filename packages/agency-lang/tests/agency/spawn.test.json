@@ -23,6 +23,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "missingFileFailsBeforeAsking",
+      "description": "A file that does not exist fails the call with no interrupt raised",
+      "input": "",
+      "expectedOutput": "\"not a file, nothing raised\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "nodeNameThatIsNotANameFails",
       "description": "A node argument that is not a plain name fails before any interrupt",
       "input": "",
@@ -45,7 +52,7 @@
     },
     {
       "nodeName": "payloadShowsWhatTheProgramGets",
-      "description": "The std::spawn payload has the policy, both limits, the message count, and the output file",
+      "description": "The std::spawn payload has the arguments, the policy, both limits, the message count, the folder, the working directory, and the output file",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]

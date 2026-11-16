@@ -4,7 +4,7 @@
 // program are in lib/cli/spawn.spawn.test.ts.
 import { compile, run, spawn } from "std::agency"
 import { mkdir } from "std::fs"
-import { dirname } from "std::path"
+import { dirname, isAbsolute } from "std::path"
 import { exists } from "std::shell"
 import { setEnv } from "std::system"
 
@@ -44,8 +44,13 @@ export node approvingRunDoesNotApproveSpawn(): string {
   seed()
   handle {
     const result = spawn(DIR, "child.agency")
-    if (isFailure(result)) {
-      return "not started"
+    if (result is failure(err)) {
+      // Any other failure means spawn stopped before it raised, and this
+      // test would say nothing about the handler.
+      if (err.includes("only std::run is approved here")) {
+        return "not started"
+      }
+      return err
     }
     return "started"
   } with (intr) {
@@ -87,6 +92,26 @@ export node nodeNameThatIsNotANameFails(): string {
     if (result is failure(err)) {
       if (err.includes("the handler was asked")) {
         return "raised"
+      }
+      return err
+    }
+    return "started"
+  } with (intr) {
+    return reject("the handler was asked")
+  }
+}
+
+// Nobody is asked to approve a file that is not there.
+export node missingFileFailsBeforeAsking(): string {
+  seed()
+  handle {
+    const result = spawn(DIR, "missing.agency")
+    if (result is failure(err)) {
+      if (err.includes("the handler was asked")) {
+        return "raised"
+      }
+      if (err.includes("missing.agency is not a file in")) {
+        return "not a file, nothing raised"
       }
       return err
     }
@@ -147,19 +172,24 @@ export node payloadShowsWhatTheProgramGets(): boolean {
     const result = spawn(
       DIR,
       "child.agency",
+      args: ["--verbose"],
       policy: { "test::ask": [{ action: "approve" }] },
       maxCost: 2,
       maxTime: 60s,
       messages: [{ role: "user", content: "hello" }],
     )
     if (result is failure(err)) {
-      const shown = err.includes("p={\"test::ask\":[{\"action\":\"approve\"}]}|c=2|t=60000|m=1|n=child.agency|f=child.agency|node=main|d=1|")
+      const shown = err.includes("a=[\"--verbose\"]|p={\"test::ask\":[{\"action\":\"approve\"}]}|c=2|t=60000|m=1|n=child.agency|f=child.agency|node=main|d=1|")
       const outputFile = err.split("o=")[1].split("|")[0]
-      return shown && outputFile.endsWith("/output.log")
+      // The folder and the working directory are shown as whole paths.
+      const dir = err.split("dir=")[1].split("|")[0]
+      const cwd = err.split("cwd=")[1].split("|")[0]
+      const paths = isAbsolute(cwd) && isAbsolute(dir) && dir.endsWith(".spawn-agency-test")
+      return shown && paths && outputFile.endsWith("/output.log")
     }
     return false
   } with (intr) {
     const d = intr.data
-    return reject("p=${JSON.stringify(d.policy)}|c=${d.maxCost}|t=${d.maxTime}|m=${d.messageCount}|n=${d.name}|f=${d.filename}|node=${d.node}|d=${d.depth}|o=${d.outputFile}|")
+    return reject("a=${JSON.stringify(d.args)}|p=${JSON.stringify(d.policy)}|c=${d.maxCost}|t=${d.maxTime}|m=${d.messageCount}|n=${d.name}|f=${d.filename}|node=${d.node}|d=${d.depth}|o=${d.outputFile}|dir=${d.dir}|cwd=${d.cwd}|")
   }
 }

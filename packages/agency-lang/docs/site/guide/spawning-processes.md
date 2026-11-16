@@ -78,6 +78,8 @@ With no limits, the process has none. Set them.
 
 `spawn` raises the interrupt `std::spawn` before it starts anything. If the interrupt is rejected, nothing is started and nothing is written to disk.
 
+A call that cannot work fails before the interrupt, so nobody is asked to approve it: a file that does not exist, a policy that is not valid, a limit below zero.
+
 The interrupt's data shows everything the process will be started with, so a handler, a policy rule, or a person at a prompt can judge it:
 
 | Field | What it holds |
@@ -136,6 +138,8 @@ Are you sure you want to write to this file?
 A process that waits has paused, so any [background jobs](/stdlib/jobs) it started have stopped.
 
 To avoid questions, give the process a policy that covers what it does.
+
+A waiting process that dies loses its question, unless you have turned on [saved checkpoints](/cli/run#saving-a-checkpoint-while-waiting). With that setting on, the process prints the command that resumes it, with the policy and the limits you gave `spawn`, into its output file.
 
 ## Output
 

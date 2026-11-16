@@ -97,6 +97,23 @@ export function _spawnProblem(
   return null;
 }
 
+/** Throws unless `filename` is a regular file in `dir`, with no link at
+ *  the folder or below it. `spawn` calls it before the interrupt, so
+ *  nobody is asked to approve a file that is not there. `_spawn` calls it
+ *  again after the approval: a person can take a while to answer, and the
+ *  file or a folder above it could be swapped for a link in that time.
+ *
+ *  The launcher is another process and reads the file a moment after the
+ *  second check. That last gap stays open. */
+export async function _checkSpawnFile(dir: string, filename: string): Promise<void> {
+  const { ctx } = currentRun();
+  const root = await ctx.host.files.fixedRoot(dir);
+  const stat = await ctx.host.files.stat(root, filename);
+  if (stat?.kind !== "file") {
+    throw new Error(`${filename} is not a file in ${dir}.`);
+  }
+}
+
 /** The paths one spawned program will use. Creates nothing: this runs
  *  before the interrupt, so that the payload can show the output file, and
  *  a rejected start leaves nothing on disk. */
@@ -199,6 +216,7 @@ export async function _spawn(
 ): Promise<{ pid: number }> {
   const { ctx } = currentRun();
   const host = ctx.host;
+  await _checkSpawnFile(question.dir, question.filename);
   const ownOutput = path.dirname(question.outputFile) === spawnDir;
   const needsDir = ownOutput || hasRules(question.policy);
   const dir = needsDir ? await makeSpawnDir(host, spawnDir) : null;

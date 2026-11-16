@@ -107,7 +107,7 @@ The prompt reads as the one `--interactive` shows, from `buildDecider({ interact
 
 The command refuses to attach when its standard input is not a terminal. The prompt rejects a question when there is no terminal, and an attach must not answer for the person.
 
-When the program has an output file, attach also prints the program's output: what the file holds, and then what is added to it. `outputFollower` in `lib/cli/outputFollower.ts` polls the file's size, since `fs.watch` behaves differently on each platform. `watch` pauses it while a prompt has the terminal and lets it catch up afterwards. The path comes from the record on disk, so a symbolic link there is refused.
+When the program has an output file, attach also prints the program's output: the last 64 KB of what the file holds (`START_TAIL_BYTES`), and then what is added to it. A detached program can have saved megabytes, and printing all of it would push the question off the screen. When earlier output was skipped, the first line says how much and names the file. `outputFollower` in `lib/cli/outputFollower.ts` polls the file's size, since `fs.watch` behaves differently on each platform. `watch` pauses it while a prompt has the terminal and lets it catch up afterwards. The path comes from the record on disk, so a symbolic link there is refused.
 
 ## `spawn` and how it differs from `run()`
 
@@ -183,6 +183,14 @@ The limit is close and not exact. Three cases let a run start a few more than 50
 ### What is checked before the interrupt
 
 `_spawnProblem` refuses a `node` that is not a plain name, and a limit that is negative or not a number, before anything is asked. The node check is a safety check. The command's target is `<file>:<node>`, and `parseTarget` treats the whole string as a filename when the text after the last colon is not a name. A node such as `x/../../other.agency` would then make the command run a file other than the one the approver was shown, and an "always approve when" rule pins only `dir` and `filename`. `spawnCommand` checks the same thing again: the target it built must read back as the approved file and node.
+
+`_checkSpawnFile` refuses a `filename` that is not a regular file in `dir`, so nobody is asked to approve a file that is not there. Whether the file declares the node is not checked. That would mean parsing the file before the approval, and the launcher reports a missing node in the program's output file.
+
+### What is checked after the approval
+
+A person can take a while to answer, and the file or a folder above it could be swapped for a symbolic link in that time. So `_spawn` calls `_checkSpawnFile` again before it launches. The check goes through `host.files.fixedRoot`, which refuses a link at any part of the approved folder's path, and a contained `stat`, which refuses one below it.
+
+The launcher is a separate process and reads the file a moment later, by its path. That last gap is not closed.
 
 ### The output cap
 

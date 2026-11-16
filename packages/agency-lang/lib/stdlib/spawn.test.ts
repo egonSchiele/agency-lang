@@ -16,6 +16,8 @@ import {
 
 const HOME = "/home/me/.agency";
 const SPAWN_DIR = `${HOME}/spawned/abc`;
+/** The file `question()` starts. */
+const PROGRAM = "/work/scripts/report.agency";
 
 function question(changes: Partial<SpawnQuestion> = {}): SpawnQuestion {
   return {
@@ -66,6 +68,7 @@ function hostThatLaunches(
   };
   const host = memoryHost({
     variables: { AGENCY_HOME: HOME, ...variables },
+    files: { [PROGRAM]: "node main() {}" },
     subprocess,
     cwd: "/work",
   });
@@ -261,7 +264,7 @@ describe("_spawn", () => {
   it("writes no policy file for a policy with no rules", async () => {
     const { host, launches } = hostThatLaunches({ stdout: STARTED });
     await withRun(host, () => _spawn(question(), [], SPAWN_DIR));
-    expect(launches[0]!.filesThen).toEqual([]);
+    expect(launches[0]!.filesThen).toEqual([PROGRAM]);
     expect(launches[0]!.command.kind === "program" && launches[0]!.command.args).not.toContain(
       "--policy",
     );
@@ -285,7 +288,19 @@ describe("_spawn", () => {
       return ctx.spawnCount;
     });
     expect(count).toBe(0);
-    expect(Object.keys(host.state.files)).toEqual([]);
+    expect(Object.keys(host.state.files)).toEqual([PROGRAM]);
+  });
+
+  // An approval can take a while. The file is checked again after it.
+  it("starts nothing when the approved file is gone by the time it is approved", async () => {
+    const { host, launches } = hostThatLaunches({ stdout: STARTED });
+    delete host.state.files[PROGRAM];
+    await withRun(host, async () => {
+      await expect(_spawn(question(), [], SPAWN_DIR)).rejects.toThrow(
+        "report.agency is not a file in /work/scripts.",
+      );
+    });
+    expect(launches).toEqual([]);
   });
 
   // The command may have started the program before it was stopped.

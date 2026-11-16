@@ -58,7 +58,7 @@ When several interrupts are raised at the same moment, the program holds them to
 
 ## Seeing the program's output
 
-A program started with [`--detach`](./run#running-in-the-background), or with [`spawn`](../guide/spawning-processes), saves what it prints to a file. When you attach to one, the command first prints what the file holds, and then prints what the program adds to it while you watch.
+A program started with [`--detach`](./run#running-in-the-background), or with [`spawn`](../guide/spawning-processes), saves what it prints to a file. When you attach to one, the command first prints the last part of what the file holds, up to 64 KB, and then prints what the program adds to it while you watch. If it skipped earlier output, its first line says so and names the file, where all of the output is.
 
 ```
 $ agency attach 48213

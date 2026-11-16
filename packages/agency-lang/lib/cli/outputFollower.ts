@@ -7,6 +7,37 @@ import { StringDecoder } from "string_decoder";
 /** How often the output file is checked for more. */
 export const OUTPUT_POLL_MS = 200;
 const READ_CHUNK_BYTES = 64 * 1024;
+/** How much of the output saved so far is printed at the start. A
+ *  detached program may have saved megabytes, and printing all of it
+ *  would push the question it is waiting on off the screen. */
+export const START_TAIL_BYTES = 64 * 1024;
+/** A UTF-8 character is at most this many bytes. */
+const LONGEST_CHARACTER_BYTES = 4;
+
+/** Where printing starts: the last `START_TAIL_BYTES` of `file`, moved
+ *  forward to the start of a character. Zero for a smaller file. */
+function startPosition(file: string): number {
+  let descriptor: number;
+  try {
+    descriptor = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  } catch {
+    // Removed since: there is nothing to print.
+    return 0;
+  }
+  try {
+    const tail = Math.max(0, fs.fstatSync(descriptor).size - START_TAIL_BYTES);
+    if (tail === 0) {
+      return 0;
+    }
+    const first = Buffer.alloc(LONGEST_CHARACTER_BYTES);
+    const read = fs.readSync(descriptor, first, 0, first.length, tail);
+    // A byte of the form 10xxxxxx continues a character that began earlier.
+    const continuing = [...first.subarray(0, read)].findIndex((byte) => (byte & 0xc0) !== 0x80);
+    return tail + (continuing === -1 ? read : continuing);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
 
 /** Runs `tick` every `ms` until the returned function is called. A test
  *  passes one it drives by hand. */
@@ -18,7 +49,8 @@ const everyInterval: Repeater = (tick, ms) => {
 };
 
 export type OutputFollower = {
-  /** Print what the file holds, then what is added to it. */
+  /** Print the last part of what the file holds, then what is added to
+   *  it. Says so when earlier output was skipped. */
   start(): void;
   /** Stop printing, while a prompt has the terminal. */
   pause(): void;
@@ -78,8 +110,18 @@ export function outputFollower(
     stop?.();
     stop = null;
   };
+  let started = false;
   return {
-    start: poll,
+    start: () => {
+      if (!started) {
+        started = true;
+        position = startPosition(file);
+        if (position > 0) {
+          write(`[agency] Skipped ${position} bytes of earlier output. All of it is in ${file}\n`);
+        }
+      }
+      poll();
+    },
     pause: halt,
     resume: poll,
     finish: () => {

@@ -2,6 +2,14 @@
  *  the first version that can connect without starting a login. */
 export const MIN_MCP_VERSION = "0.0.6";
 
+/** The one command every MCP message tells the user to run. The agent is
+ *  usually installed globally, so the package goes there too. */
+export const MCP_INSTALL_COMMAND = "npm install -g @agency-lang/mcp";
+
+export const MCP_NOT_INSTALLED = `@agency-lang/mcp is not installed. Run: ${MCP_INSTALL_COMMAND}`;
+
+export const MCP_VERSION_UNREADABLE = `could not read the installed @agency-lang/mcp version. Run: ${MCP_INSTALL_COMMAND}@latest`;
+
 /** The three dotted numbers at the start of a version, or null when it does
  *  not start with them. */
 function versionNumbers(version: string): number[] | null {
@@ -31,5 +39,5 @@ export function packageProblem(found: string): string {
   if (versionAtLeast(found, MIN_MCP_VERSION)) {
     return "";
   }
-  return `@agency-lang/mcp ${found} is too old. Run: npm install -g @agency-lang/mcp@latest`;
+  return `@agency-lang/mcp ${found} is too old. Run: ${MCP_INSTALL_COMMAND}@latest`;
 }

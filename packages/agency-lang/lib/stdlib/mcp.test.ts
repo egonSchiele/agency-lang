@@ -32,6 +32,7 @@ import {
   _finishMcpLogin,
   _reconnectMcpServer,
   _logoutMcpServer,
+  _disconnectMcpServer,
 } from "./mcp.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
@@ -126,6 +127,21 @@ describe("_mcpPackageProblem", () => {
   it("is empty when the package is not installed", async () => {
     (resolver.isMcpAvailable as any).mockReturnValueOnce(false);
     expect(await _mcpPackageProblem()).toBe("");
+  });
+
+  it("says the version could not be read, not that it is too old", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    (bridge.packageVersion as any).mockRejectedValueOnce(new Error("no version"));
+    expect(await _mcpPackageProblem()).toBe(
+      "could not read the installed @agency-lang/mcp version. Run: npm install -g @agency-lang/mcp@latest",
+    );
+  });
+});
+
+describe("_disconnectMcpServer", () => {
+  it("disconnects the server in the package", async () => {
+    await _disconnectMcpServer("gone");
+    expect(bridge.disconnectServer).toHaveBeenCalledWith("gone");
   });
 });
 

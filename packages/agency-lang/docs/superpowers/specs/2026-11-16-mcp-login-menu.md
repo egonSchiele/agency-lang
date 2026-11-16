@@ -103,7 +103,7 @@ MCP servers
 
 The list shows the servers in the config, which the menu reads each time it opens. Escape at the list leaves the menu. Choosing a server opens its screen. Escape on a server's screen goes back to the list.
 
-A server that was added to the config after the agent started has no connection yet. It shows as `○ not connected`, and its screen offers "Connect" and "Back". "Connect" does what "Reconnect" does. A server that was removed from the config after the agent started is not listed. Its connection and its tools stay until the agent restarts.
+A server that was added to the config after the agent started has no connection yet. It shows as `○ not connected`, and its screen offers "Connect" and "Back". "Connect" does what "Reconnect" does. A server that was removed from the config after the agent started is not listed. Opening `/mcp` disconnects it, so the model stops getting its tools. Until then, or until the agent restarts, its tools stay.
 
 ### A server that needs a login
 

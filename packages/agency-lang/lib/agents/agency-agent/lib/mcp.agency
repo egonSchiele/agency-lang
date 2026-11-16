@@ -26,11 +26,20 @@ export def mergedMcpServers(settings: Settings): Record<string, any> {
   return mergeMcpServers(getMcpServers(settings), readProjectMcpConfig(cwd()))
 }
 
+/** "1 tool" or "<n> tools". */
+export def toolCountText(count: number): string {
+  if (count == 1) {
+    return "1 tool"
+  }
+  return "${count} tools"
+}
+
 /** A server's state as one sentence. Startup, a finished login, and a
   reconnect all print it. */
 export def stateLine(state: McpServerState): string {
+  const tools = toolCountText(state.tools.length)
   return match(state.status) {
-    "connected" => "✔ ${state.name} connected · ${state.tools.length} tools. You can use them from your next message."
+    "connected" => "✔ ${state.name} connected · ${tools}. You can use them from your next message."
     "needsLogin" => "${state.name} needs you to log in."
     _ => "${state.name} failed to connect: ${state.message}"
   }

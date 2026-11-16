@@ -1,13 +1,16 @@
 /** @module The agent's `/mcp` menu: a list of the configured MCP servers with
   their status, and a screen for each one to log in, log out, reconnect, or
   see its tools. The list comes from the config each time the menu opens, and
-  the status comes from the @agency-lang/mcp package. */
+  the status comes from the @agency-lang/mcp package. Opening the menu
+  disconnects a server that was removed from the config. */
 
 import {
   McpServerState,
+  disconnectMcpServer,
   finishMcpLogin,
   isMcpAvailable,
   logoutMcpServer,
+  mcpNotInstalled,
   mcpPackageProblem,
   mcpServerStates,
   mergeMcpServers,
@@ -20,7 +23,7 @@ import { cwd, openUrl } from "std::system"
 import { ChoiceItem, chooseOption, pushMessage } from "std::ui/cli"
 
 import { SETTINGS_PATH } from "./config.agency"
-import { stateLine } from "./mcp.agency"
+import { stateLine, toolCountText } from "./mcp.agency"
 import { getMcpServers, loadSettings } from "./settings.agency"
 
 export type RowStatus =
@@ -141,7 +144,7 @@ export def serverRows(
 /** The status after a server's name in the list. */
 export def statusText(row: ServerRow): string {
   if (row.status == "connected") {
-    return "${STATUS_TEXT.connected} · ${row.tools.length} tools"
+    return "${STATUS_TEXT.connected} · ${toolCountText(row.tools.length)}"
   }
   return STATUS_TEXT[row.status]
 }
@@ -279,13 +282,22 @@ def serverScreen(
   }
 }
 
+/** Disconnect every server that is no longer in the config, so the model
+  stops getting the tools of a server the user removed. */
+export def disconnectRemoved(merged: Record<string, any>) {
+  const names = keys(merged)
+  for (state in mcpServerStates()) {
+    if (!names.includes(state.name)) {
+      disconnectMcpServer(state.name)
+    }
+  }
+}
+
 /** The `/mcp` slash command: the server list, then a server's screen, then
   back to the list. Escape at the list leaves the menu. */
 export def mcpSlashCommand(): boolean {
   if (!isMcpAvailable()) {
-    pushMessage(
-      color.yellow("MCP is not installed. Run: npm install @agency-lang/mcp"),
-    )
+    pushMessage(color.yellow(mcpNotInstalled()))
     return true
   }
   const globalServers = getMcpServers(loadSettings())
@@ -305,6 +317,7 @@ export def mcpSlashCommand(): boolean {
     pushMessage(color.yellow("MCP: ${problem}"))
     return true
   }
+  disconnectRemoved(merged)
   const projectFile = "${cwd()}/agency.json"
   while (true) {
     const rows = serverRows(globalServers, projectServers, mcpServerStates())

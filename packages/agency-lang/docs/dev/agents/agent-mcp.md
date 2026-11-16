@@ -59,7 +59,7 @@ Log out keeps `<server>.client.json`, the registration, so the next login does n
 
 ## The menu
 
-The `/mcp` list shows the servers in the config, which the menu reads each time it opens. A server's status comes from `mcpServerStates()`, matched by name. A server in the config with no record shows as "not connected" and offers "Connect". A record whose server is no longer in the config is not listed. Its connection stays until the agent restarts.
+The `/mcp` list shows the servers in the config, which the menu reads each time it opens. A server's status comes from `mcpServerStates()`, matched by name. A server in the config with no record shows as "not connected" and offers "Connect". A record whose server is no longer in the config is not listed. Opening the menu disconnects it (`disconnectRemoved`), so the model stops getting its tools. Until the user opens `/mcp` or restarts, the tools stay, because `getMcpTools()` does not read the config on every turn.
 
 The actions for each kind of row are one table, `ACTIONS` in `lib/mcpMenu.agency`, and `runAction` is the one place an action key becomes a call.
 

@@ -518,6 +518,8 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "startMcpLogin",
     "finishMcpLogin",
     "cancelMcpLogin",
+    "disconnectMcpServer",
+    "mcpNotInstalled",
     "logoutMcpServer",
     "reconnectMcpServer"
   ],

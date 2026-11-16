@@ -11,6 +11,7 @@ import {
   ServerRow,
   actionsFor,
   beginLogin,
+  disconnectRemoved,
   endLogin,
   logOut,
   reconnect,
@@ -264,4 +265,17 @@ node toolsSurviveARestore(): number {
     })
   }
   return count
+}
+
+// A server removed from the config while the agent runs loses its tools when
+// the menu opens.
+node menuDropsARemovedServer(): number {
+  useFakePackage()
+  connectMcpServers({
+    t11: {
+      command: "ok"
+    }
+  })
+  disconnectRemoved({})
+  return toolCount("t11")
 }

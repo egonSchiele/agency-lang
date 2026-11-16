@@ -4,7 +4,7 @@ import { isPlainObject } from "../utils/isPlainObject.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
-import { packageProblem } from "./mcpVersion.js";
+import { packageProblem, MCP_NOT_INSTALLED, MCP_VERSION_UNREADABLE } from "./mcpVersion.js";
 import { leafCancel } from "./abortable.js";
 import { currentRun } from "../runtime/asyncContext.js";
 import { success, failure, isFailure, type ResultValue } from "../runtime/index.js";
@@ -169,10 +169,8 @@ export type McpServerState = {
   tools: AgencyFunction[];
 };
 
-const NOT_INSTALLED = "@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp";
-
-/** The upgrade message when the installed package is too old, or "". Also ""
- *  when the package is not installed. */
+/** The upgrade message when the installed package is too old or its version
+ *  cannot be read, or "". Also "" when the package is not installed. */
 export async function _mcpPackageProblem(): Promise<string> {
   if (!isMcpAvailable()) {
     return "";
@@ -184,16 +182,21 @@ export async function _mcpPackageProblem(): Promise<string> {
     console.warn(
       `[mcp] could not read the @agency-lang/mcp version: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return packageProblem("");
+    return MCP_VERSION_UNREADABLE;
   }
 }
 
 /** Why the package cannot be used, or "" when it can: not installed, or too old. */
 async function unusable(): Promise<string> {
   if (!isMcpAvailable()) {
-    return NOT_INSTALLED;
+    return MCP_NOT_INSTALLED;
   }
   return _mcpPackageProblem();
+}
+
+/** The not-installed message, so the agent's menu says the same thing. */
+export function _mcpNotInstalled(): string {
+  return MCP_NOT_INSTALLED;
 }
 
 /** Run `action` when the package can be used. Otherwise return `whenUnusable(reason)`. */
@@ -307,6 +310,14 @@ export async function _cancelMcpLogin(name: string): Promise<void> {
   );
 }
 
+/** Close the server's connection and drop its tools. Never starts a login. */
+export async function _disconnectMcpServer(name: string): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.disconnectServer(name),
+  );
+}
+
 /** Delete the saved login and disconnect. */
 export async function _logoutMcpServer(name: string): Promise<ResultValue> {
   return withPackage(
@@ -346,7 +357,7 @@ function serversOf(raw: Record<string, unknown>): RawMcpServers {
  *  absent or too old to expose the validator. */
 export async function _validateMcpServers(servers: RawMcpServers): Promise<ResultValue> {
   if (!isMcpAvailable()) {
-    return failure("@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp");
+    return failure(MCP_NOT_INSTALLED);
   }
   exposeResolvedMcpPath();
   try {

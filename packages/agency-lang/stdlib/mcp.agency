@@ -10,7 +10,9 @@ import {
   _startMcpLogin,
   _finishMcpLogin,
   _cancelMcpLogin,
+  _disconnectMcpServer,
   _logoutMcpServer,
+  _mcpNotInstalled,
   _reconnectMcpServer
 } from "agency-lang/stdlib-lib/mcp.js"
 
@@ -159,6 +161,25 @@ export def cancelMcpLogin(name: string) {
   @param name - The server's name in the mcpServers config.
   """
   _cancelMcpLogin(name)
+}
+
+@capabilities(network)
+export def disconnectMcpServer(name: string) {
+  """
+  Close the connection to an MCP server and drop its tools. The saved login
+  stays, and nothing connects to the server again until it is reconnected.
+
+  @param name - The server's name in the mcpServers config.
+  """
+  _disconnectMcpServer(name)
+}
+
+export def mcpNotInstalled(): string {
+  """
+  Return the message that says @agency-lang/mcp is not installed, with the
+  command to install it.
+  """
+  return _mcpNotInstalled()
 }
 
 @capabilities(fileWrite, network)

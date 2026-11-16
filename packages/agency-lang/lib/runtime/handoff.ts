@@ -15,6 +15,7 @@ import type { StateStack, TurnMarks, TurnScope } from "./state/stateStack.js";
 import { isSuccess } from "./result.js";
 import { BUFFER_KEY } from "./replyAttachments.js";
 import { extractStructuredResponse } from "./utils.js";
+import { keepToolCalls } from "./threadRepair.js";
 
 export type { TurnMarks, TurnScope };
 
@@ -106,19 +107,7 @@ export function dropHandoffToolCall(
       `handoff: expected tool call ${call.index} of the last assistant message to be ${call.name} (${call.id})`,
     );
   }
-  const siblings = calls.filter((_, i) => i !== call.index);
-  if (siblings.length > 0) {
-    thread.replaceAt(index, smoltalk.AssistantMessage.fromJSON({ ...json, toolCalls: siblings }));
-    return;
-  }
-  const text = typeof carrier.content === "string" ? carrier.content.trim() : "";
-  if (text === "") {
-    thread.removeAt(index);
-    return;
-  }
-  // The reasoning that led to the text stays with it, so smoltalk can send
-  // it back to the model that made it.
-  thread.replaceAt(index, smoltalk.assistantMessage(text, { reasoning: carrier.reasoning }));
+  keepToolCalls(thread, index, (_, position) => position !== call.index);
 }
 
 /**

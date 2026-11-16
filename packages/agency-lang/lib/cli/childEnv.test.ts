@@ -78,6 +78,41 @@ describe("withRootCarriers", () => {
     });
   });
 
+  test("clears a stale title, seed, and output file, and sets each only when given", () => {
+    const inherited = {
+      AGENCY_PROCESS_TITLE: "stale",
+      AGENCY_SEED_MESSAGES: "/stale/seed.json",
+      AGENCY_OUTPUT_FILE: "/stale/out.log",
+      PATH: "/bin",
+    };
+
+    expect(withRootCarriers(inherited, {})).toEqual({ PATH: "/bin" });
+    expect(
+      withRootCarriers(inherited, {
+        title: "agency run report",
+        seedMessages: "-",
+        outputFile: "/new/out.log",
+      }),
+    ).toEqual({
+      PATH: "/bin",
+      AGENCY_PROCESS_TITLE: "agency run report",
+      AGENCY_SEED_MESSAGES: "-",
+      AGENCY_OUTPUT_FILE: "/new/out.log",
+    });
+    expect(withRootCarriers(inherited, { title: "agency run report" })).toEqual({
+      PATH: "/bin",
+      AGENCY_PROCESS_TITLE: "agency run report",
+    });
+  });
+
+  // The depth is meant to pass down, so that a chain of spawns is counted.
+  test("leaves the spawn depth as it was inherited", () => {
+    expect(withRootCarriers({ AGENCY_SPAWN_DEPTH: "2", PATH: "/bin" }, {})).toEqual({
+      AGENCY_SPAWN_DEPTH: "2",
+      PATH: "/bin",
+    });
+  });
+
   test("clears a stale entry node and sets it only when this run names one", () => {
     const inherited = { AGENCY_ENTRY_NODE: "stale", PATH: "/bin" };
 

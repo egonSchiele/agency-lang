@@ -180,6 +180,7 @@ export type CheckpointArgs = {
   moduleFingerprints?: Record<string, ModuleFingerprint>;
   usage?: unknown;
   traceId?: string;
+  spawnCount?: number;
   signature?: string;
 };
 
@@ -202,6 +203,9 @@ export type CheckpointJSON = {
   moduleFingerprints?: Record<string, ModuleFingerprint>;
   usage?: unknown;
   traceId?: string;
+  /** Present only when the run had started a program with `spawn`, so a
+   *  checkpoint of a run that never spawned keeps the bytes it had. */
+  spawnCount?: number;
   signature?: string;
 };
 
@@ -307,6 +311,9 @@ export class Checkpoint implements SourceLocation {
    *  taken, so a resume from a file can log into the same trace. Absent on
    *  checkpoints from before the field and on contexts with no run id. */
   public traceId?: string;
+  /** How many programs the run had started with `spawn` when this
+   *  checkpoint was taken. Absent when it had started none. */
+  public spawnCount?: number;
   /** HMAC checksum embedded at creation when a signing key is configured.
    *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
   public signature?: string;
@@ -326,6 +333,7 @@ export class Checkpoint implements SourceLocation {
     this.moduleFingerprints = args.moduleFingerprints;
     this.usage = args.usage;
     this.traceId = args.traceId;
+    this.spawnCount = args.spawnCount;
     this.signature = args.signature;
   }
 
@@ -781,6 +789,9 @@ export class Checkpoint implements SourceLocation {
     if (this.traceId !== undefined) {
       json.traceId = this.traceId;
     }
+    if (this.spawnCount !== undefined) {
+      json.spawnCount = this.spawnCount;
+    }
     if (this.signature !== undefined) {
       json.signature = this.signature;
     }
@@ -834,6 +845,9 @@ export class Checkpoint implements SourceLocation {
     };
     if (Object.keys(moduleFingerprints).length > 0) {
       args.moduleFingerprints = moduleFingerprints;
+    }
+    if (ctx.spawnCount > 0) {
+      args.spawnCount = ctx.spawnCount;
     }
     const checkpoint = new Checkpoint(args);
     // Keep this the last statement: the signature must cover every field,

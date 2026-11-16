@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { RuntimeContext } from "./context.js";
+import { Checkpoint } from "./checkpointStore.js";
 import { StateStack } from "./stateStack.js";
 import { AgencyCancelledError } from "../errors.js";
 import { _resetStoreRegistry, MemoryFrame } from "../memory/index.js";
@@ -256,5 +257,51 @@ describe("throwIfCancelled", () => {
     expect(() => ctx.throwIfCancelled()).not.toThrow();
     ctx.cancel("stop");
     expect(() => ctx.throwIfCancelled()).toThrow(AgencyCancelledError);
+  });
+});
+
+describe("the count of started programs", () => {
+  it("starts at zero, on a context and on the execution context made from it", async () => {
+    const ctx = makeMockCtx();
+    expect(ctx.spawnCount).toBe(0);
+    ctx.spawnCount = 4;
+    const execCtx = await ctx.createExecutionContext({ runId: "run-1" });
+    expect(execCtx.spawnCount).toBe(0);
+  });
+
+  // A resume in a new process: the context starts at zero.
+  it("takes a saved count that is larger than its own", () => {
+    const ctx = makeMockCtx();
+    ctx.adoptSpawnCount(3);
+    expect(ctx.spawnCount).toBe(3);
+  });
+
+  // A restore() after two more starts: those processes were still started.
+  it("keeps its own count when the saved one is smaller", () => {
+    const ctx = makeMockCtx();
+    ctx.spawnCount = 5;
+    ctx.adoptSpawnCount(3);
+    expect(ctx.spawnCount).toBe(5);
+  });
+
+  it("is carried by a checkpoint into the context that restores it", async () => {
+    const first = await makeMockCtx().createExecutionContext({ runId: "run-1" });
+    first.spawnCount = 3;
+    const checkpoint = Checkpoint.fromStateStack(first.stateStack, first, {
+      moduleId: "m",
+      scopeName: "main",
+      stepPath: "0",
+    });
+    const resumed = await makeMockCtx().createExecutionContext({ runId: "run-1" });
+    resumed.restoreState(checkpoint);
+    expect(resumed.spawnCount).toBe(3);
+  });
+
+  // A checkpoint from before the field.
+  it("is unchanged by a checkpoint that saved no count", () => {
+    const ctx = makeMockCtx();
+    ctx.spawnCount = 2;
+    ctx.adoptSpawnCount(undefined);
+    expect(ctx.spawnCount).toBe(2);
   });
 });

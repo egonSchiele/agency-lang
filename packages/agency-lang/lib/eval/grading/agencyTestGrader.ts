@@ -11,7 +11,7 @@ import * as path from "path";
 import { BaseGrader } from "./baseGrader.js";
 import type { Grade, GraderInput } from "./types.js";
 import { TestReportSchema, type TestReport } from "../../cli/testReport.js";
-import { getPackageRoot } from "../../importPaths.js";
+import { agencyCliPath } from "../../agencyCliPath.js";
 import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 import { harnessSha256 } from "./harnessSnapshot.js";
@@ -36,13 +36,6 @@ export type AgencyTestGraderOptions = {
 export type RunHarness = (args: { scratchDir: string; jsonFilename: string; maxCost: number }) => {
   stdout: string;
 };
-
-/** argv[1] inside `agency eval grade`; under vitest, the package's own CLI. */
-function agencyCliPath(): string {
-  const argv1 = process.argv[1] ?? "";
-  if (path.basename(argv1) === "agency.js") return argv1;
-  return path.join(getPackageRoot(), "dist", "scripts", "agency.js");
-}
 
 const spawnHarness: RunHarness = (args) => {
   const argv = [

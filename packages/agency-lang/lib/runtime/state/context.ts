@@ -134,6 +134,10 @@ export class RuntimeContext<T> {
   /** The run's background jobs. Not serialized: a process is not data.
    *  `cleanup()` stops them. See docs/dev/stdlib/jobs.md. */
   jobs: JobTable;
+  /** How many programs this run has started with `spawn`. Saved in every
+   *  checkpoint, and shared by every branch of the run. See
+   *  docs/dev/runtime/spawn.md. */
+  spawnCount: number;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
   /** Called before any checkpoint is built, from whichever stack. An
@@ -394,6 +398,7 @@ export class RuntimeContext<T> {
     this.lockWaiters = {};
     this.lockReleasers = {};
     this.jobs = newJobTable();
+    this.spawnCount = 0;
     // After a debugger rewind, the first debug step would write a duplicate
     // checkpoint to the trace (the user already saw the rewound checkpoint).
     // rewindFrom sets this flag so the first debugStep trace-write is skipped.
@@ -555,6 +560,7 @@ export class RuntimeContext<T> {
     execCtx.lockWaiters = {};
     execCtx.lockReleasers = {};
     execCtx.jobs = newJobTable();
+    execCtx.spawnCount = 0;
     execCtx._skipNextCheckpoint = false;
     execCtx.beforeCheckpoint = [];
     execCtx.pauseRequested = false;
@@ -880,6 +886,17 @@ export class RuntimeContext<T> {
     // Cost is state: it goes wherever the stack goes, so the meter, getCost()
     // and getTokens() agree after a restore as well as before one.
     this.invocationUsage.resumeFrom(checkpoint.usage);
+    this.adoptSpawnCount(checkpoint.spawnCount);
+  }
+
+  /** Take the count of started programs a checkpoint saved. The count is
+   *  of processes that were really started, and applying a checkpoint does
+   *  not un-start one, so the larger of the two is kept: a resume in a new
+   *  process takes the saved count, and a `restore()` in a run that has
+   *  started more since keeps its own. Spend is set back on a restore;
+   *  this is not. */
+  adoptSpawnCount(saved: number | undefined): void {
+    this.spawnCount = Math.max(this.spawnCount, saved ?? 0);
   }
 
   /** @deprecated Use checkpoints.create() instead */

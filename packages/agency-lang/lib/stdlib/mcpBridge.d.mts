@@ -27,3 +27,24 @@ import type { ResultValue } from "../runtime/index.js";
 export function validateMcpServers(
   servers: Record<string, unknown>,
 ): Promise<ResultValue>;
+
+export type BridgeCallTool = (server: string, tool: string, args: Record<string, unknown>) => Promise<string>;
+
+export type BridgeServerState =
+  | { status: "connected"; tools: { name: string; description?: string }[]; callTool: BridgeCallTool }
+  | { status: "needsLogin" }
+  | { status: "failed"; message: string };
+
+type ConfigOption = { config: Record<string, unknown> };
+type BridgeFailed = { status: "failed"; message: string };
+
+export function connectServer(serverName: string, options: ConfigOption): Promise<BridgeServerState>;
+export function serverStates(): Promise<Record<string, BridgeServerState>>;
+export function startLogin(
+  serverName: string,
+  options: ConfigOption,
+): Promise<{ status: "started"; authUrl: string } | BridgeFailed>;
+export function finishLogin(serverName: string): Promise<BridgeServerState>;
+export function cancelLogin(serverName: string): Promise<void>;
+export function logout(serverName: string): Promise<{ status: "loggedOut" } | BridgeFailed>;
+export function disconnectServer(serverName: string): Promise<void>;

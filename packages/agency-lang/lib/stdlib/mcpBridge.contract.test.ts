@@ -47,6 +47,32 @@ describe.skipIf(!BUILT)("mcpBridge <-> @agency-lang/mcp contract", () => {
     expect(res.success).toBe(false);
   });
 
+  it("serverStates returns an object", async () => {
+    expect(typeof (await bridge.serverStates())).toBe("object");
+  });
+
+  it("connectServer returns failed for a server that is not in the config", async () => {
+    const state = await bridge.connectServer("no-such-server", { config: {} });
+    expect(state.status).toBe("failed");
+  });
+
+  it("finishLogin with no login in progress returns the no-login failure", async () => {
+    expect(await bridge.finishLogin("linear")).toEqual({
+      status: "failed",
+      message: "no login in progress for linear",
+    });
+  });
+
+  it("startLogin returns failed for a server that is not in the config", async () => {
+    expect((await bridge.startLogin("no-such-server", { config: {} })).status).toBe("failed");
+  });
+
+  it("logout, cancelLogin, and disconnectServer are callable", async () => {
+    expect(typeof bridge.logout).toBe("function");
+    await bridge.cancelLogin("no-such-server");
+    await bridge.disconnectServer("no-such-server");
+  });
+
   it("mcpToolToAgencyFunction is callable and yields an AgencyFunction", async () => {
     const calls: string[] = [];
     const tool = {

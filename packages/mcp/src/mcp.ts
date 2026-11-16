@@ -147,13 +147,24 @@ function toServerState(manager: McpManager, record: ServerRecord): ServerState {
   return { ...record, callTool: (server, tool, args) => manager.callTool(server, tool, args) };
 }
 
+/** The manager, with `serverName`'s entry taken from `config`. The other
+ *  servers' entries stay as they were, so connecting one server never drops
+ *  the rest of the config. configureServers replaces the whole config. */
+function managerWithServer(serverName: string, config: Record<string, McpServerConfig>): McpManager {
+  if (singleton === null) {
+    return getManager(undefined, config);
+  }
+  singleton.setServerConfig(serverName, config[serverName]);
+  return singleton;
+}
+
 /** Connect one server. Never starts a login: a server that needs one comes
  *  back as `needsLogin`. */
 export function connectServer(serverName: string, options: ConfigOption): Promise<ServerState> {
   return orElse(
     `connect "${serverName}"`,
     async () => {
-      const manager = getManager(undefined, options.config);
+      const manager = managerWithServer(serverName, options.config);
       return toServerState(manager, await manager.connectServer(serverName));
     },
     failed,
@@ -180,7 +191,7 @@ export function startLogin(serverName: string, options: ConfigOption): Promise<L
     `start a login for "${serverName}"`,
     async () => ({
       status: "started",
-      authUrl: await getManager(undefined, options.config).startLogin(serverName),
+      authUrl: await managerWithServer(serverName, options.config).startLogin(serverName),
     }),
     failed,
   );

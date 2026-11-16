@@ -46,6 +46,11 @@
     { "nodeName": "modelFlagAliasFast", "input": "", "expectedOutput": "{\"slot\":\"main\",\"model\":\"gpt-4o\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "modelFlagUnifiedNoMissplit", "input": "", "expectedOutput": "{\"slot\":\"\",\"model\":\"anthropic/claude-opus-4-8\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "localProvidersAreKnown", "input": "", "expectedOutput": "\"true/true\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "embeddingSpecWithLocalProvider", "input": "", "expectedOutput": "{\"model\":\"mlx-community/Qwen3-Embedding-4B-4bit-DWQ\",\"provider\":\"mlx\"}", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "embeddingSpecWithLocalProvider", "input": "", "expectedOutput": "{\"model\":\"mlx-community/Qwen3-Embedding-4B-4bit-DWQ\",\"provider\":\"mlx\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "bareModelFlagUsesCatalogProvider", "input": "", "expectedOutput": "\"anthropic\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "mainSlotModelUsesCatalogProvider", "input": "", "expectedOutput": "\"anthropic\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "providerPrefixWins", "input": "", "expectedOutput": "\"openrouter\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "openaiModelStaysOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "uncatalogedModelFallsBackToOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

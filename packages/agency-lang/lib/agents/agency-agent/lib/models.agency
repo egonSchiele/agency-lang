@@ -11,7 +11,7 @@
  *   - `planModels` — given that provider, turn the four CLI flag values
  *     into the concrete fast/slow model + provider to apply.
  */
-import { pickProvider, envVarFor } from "std::llm"
+import { pickProvider, envVarFor, hostedModelInfo } from "std::llm"
 import { keys } from "std::object"
 import { env } from "std::system"
 
@@ -161,6 +161,9 @@ export type ModelPlan = {
  *  - With no `--provider`, fall back to env auto-detection
  *    (`pickProvider`, with openrouter as a last resort) whenever defaults
  *    are actually needed.
+ *  - With no `--provider` and every model named by a flag, use the
+ *    provider that serves the pinned (or main) model, so
+ *    `--model claude-sonnet-5-5` goes to anthropic.
  *
  *  Returns the provider name whose MODELS bucket should supply defaults,
  *  or a failure whose message is ready to print. */
@@ -194,8 +197,25 @@ export def resolveDetected(
     // still wins; it's only picked when it's the only key present.
     return pickProvider(["anthropic", "google", "openai", "openrouter"])
   }
-  // Everything came from --model; the defaults bucket is never read.
-  return success("openai")
+  // Everything came from --model, so the defaults bucket is never read. The
+  // provider still fills in every chat slot whose model names none, so it
+  // must be the one that serves the model.
+  const named = if model != "" then model else fast
+  return success(providerForModel(named))
+}
+
+/** The provider a model flag value names: its provider/ prefix, else the
+ *  model catalog's entry, else "openai" for a name the catalog lacks. */
+export def providerForModel(spec: string): string {
+  const parsed = parseModelSpec(spec, false, knownProviders())
+  if (parsed.provider != "") {
+    return parsed.provider
+  }
+  const info = hostedModelInfo(parsed.model)
+  if (info == null) {
+    return "openai"
+  }
+  return info.provider
 }
 
 /** Turn the four CLI flag values plus the resolved `detected` provider

@@ -13,6 +13,7 @@ import {
   Resolved,
   parseModelFlag,
   knownProviders,
+  providerForModel,
  } from "../lib/models.agency"
 
 static const KNOWN = ["openai", "anthropic", "google", "openrouter", "litellm"]
@@ -122,4 +123,33 @@ node localProvidersAreKnown(): string {
 
 node embeddingSpecWithLocalProvider(): ModelSpec {
   return parseModelSpec("mlx/mlx-community/Qwen3-Embedding-4B-4bit-DWQ", false, knownProviders())
+}
+
+// With no --provider, a model named by a flag picks the provider that
+// serves it, not openai.
+def detectedOrError(result: Result<string>): string {
+  if (result is failure(f)) {
+    return "ERR"
+  }
+  return result.value
+}
+
+node bareModelFlagUsesCatalogProvider(): string {
+  return detectedOrError(resolveDetected("claude-sonnet-5-5", "", "", ""))
+}
+
+node mainSlotModelUsesCatalogProvider(): string {
+  return detectedOrError(resolveDetected("", "claude-opus-4-8", "gpt-5.5", ""))
+}
+
+node providerPrefixWins(): string {
+  return providerForModel("openrouter/anthropic/claude-sonnet-5-5")
+}
+
+node openaiModelStaysOpenai(): string {
+  return providerForModel("gpt-5.5")
+}
+
+node uncatalogedModelFallsBackToOpenai(): string {
+  return providerForModel("my-private-finetune")
 }

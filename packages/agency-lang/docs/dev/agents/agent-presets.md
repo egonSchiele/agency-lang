@@ -317,10 +317,11 @@ The model fields depend on where the session's provider came from:
 The last two rows differ because of how a value is read at the next
 start. Under a fixed provider, `parseModelSpec` reads the whole value as
 the model name, so `openrouter/z-ai/glm-5.3` would name a model that does
-not exist. With a detected provider, a bare name is resolved again: a
-session that detected `anthropic` and ran `/model claude-opus-4-8` runs
-Opus on Anthropic, but a preset holding only `pin: "claude-opus-4-8"`
-starts on `openai` (see "Known limits"). So those slots carry their
+not exist. With a detected provider, a bare name is resolved again, and
+the answer can change. A preset holding only
+`slots.reasoning: "claude-opus-4-8"` still needs a main model, so the
+provider is detected from the API keys that are set, and with only an
+OpenAI key Opus would be sent to OpenAI. So those slots carry their
 provider. Both chat slots are written, so neither falls back to a
 built-in default that depends on which keys are set.
 
@@ -362,7 +363,8 @@ tool does not list a skill it should.
 
 ## Known limits
 
-- A `pin` with no `provider` resolves to `openai`, as `--model` does.
+- A `pin` with no `provider`, naming a model the catalog does not list,
+  resolves to `openai`, as `--model` does.
 - A preset named `save` cannot be reached with `/preset save`, which
   saves to the active preset. It still loads with `--preset save`.
 - The first save of a preset with no `provider` and a detected provider

@@ -15,6 +15,8 @@ import { processState } from "../../runDirectory/lock.js";
 const SESSIONS_DIR = "debug-sessions";
 /** Only files a run wrote are ever touched: `<pid>.json` and `<pid>.sock`. */
 const RECORD_FILE = /^\d+\.(json|sock)$/;
+/** What a record's file is called while it is being written. */
+const DRAFT_SUFFIX = ".draft";
 /** The bits another user could use: group and world. */
 const SHARED_BITS = 0o077;
 
@@ -84,12 +86,16 @@ export function ensureSessionsDir(dir: string): DirectoryRefusal | null {
   return null;
 }
 
-/** Write `<pid>.json`. The path is removed first and the file created
- *  anew (`wx`), so a symlink left at that name is replaced, not followed. */
+/** Write `<pid>.json`. The record is written to a new file beside it
+ *  (`wx`, after removing a leftover) and renamed into place, so a symlink
+ *  left at either name is replaced, not followed, and a reader never finds
+ *  the record missing or half written while a program rewrites its own. */
 export function writeRecord(dir: string, record: AttachRecord): void {
   const file = recordPaths(dir, record.pid).json;
-  fs.rmSync(file, { force: true });
-  fs.writeFileSync(file, JSON.stringify(record) + "\n", { mode: 0o600, flag: "wx" });
+  const draft = `${file}${DRAFT_SUFFIX}`;
+  fs.rmSync(draft, { force: true });
+  fs.writeFileSync(draft, JSON.stringify(record) + "\n", { mode: 0o600, flag: "wx" });
+  fs.renameSync(draft, file);
 }
 
 /** Remove one run's record and socket. Paths are built here from the

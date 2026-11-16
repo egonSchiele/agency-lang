@@ -20,6 +20,7 @@ import { holdForAnswers, holdNotice } from "./heldQuestions.js";
 import { removeHeldCheckpoint, saveHeldCheckpoint } from "./heldCheckpoint.js";
 import { isAttachable } from "./platform.node.js";
 import { defaultHost } from "#default-host";
+import type { Host } from "../host/host.js";
 import { AGENCY_CARRIER_ON, AGENCY_SAVE_HELD_CHECKPOINT } from "@/constants.js";
 import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
@@ -35,8 +36,7 @@ export type ResolveCliInterruptOptions = {
  */
 async function waitForResponse(interrupts: Interrupt[]): Promise<InterruptResponse[]> {
   const host = defaultHost();
-  const saving = host.settings.read(AGENCY_SAVE_HELD_CHECKPOINT) === AGENCY_CARRIER_ON;
-  const checkpointFile = saving ? await saveHeldCheckpoint(interrupts, host) : null;
+  const checkpointFile = await savedCheckpoint(interrupts, host);
   console.error(
     holdNotice({
       questionCount: interrupts.length,
@@ -48,10 +48,40 @@ async function waitForResponse(interrupts: Interrupt[]): Promise<InterruptRespon
   try {
     return await holdForAnswers(interrupts);
   } finally {
-    if (checkpointFile !== null) {
-      await removeHeldCheckpoint(checkpointFile, host);
-    }
+    await removeSaved(checkpointFile, host);
   }
+}
+
+/** The file the batch's checkpoint was saved to, or null: the setting is
+ *  off, or the save failed. A failed save is reported and the batch is
+ *  held without a file, since the file is only a copy. */
+async function savedCheckpoint(interrupts: Interrupt[], host: Host): Promise<string | null> {
+  if (host.settings.read(AGENCY_SAVE_HELD_CHECKPOINT) !== AGENCY_CARRIER_ON) {
+    return null;
+  }
+  try {
+    return await saveHeldCheckpoint(interrupts, host);
+  } catch (error) {
+    console.error(`[agency] Could not save the held checkpoint: ${errorText(error)}`);
+    return null;
+  }
+}
+
+/** Remove the saved checkpoint once the batch is answered. A failure is
+ *  reported and the answers are kept: the person already gave them. */
+async function removeSaved(file: string | null, host: Host): Promise<void> {
+  if (file === null) {
+    return;
+  }
+  try {
+    await removeHeldCheckpoint(file, host);
+  } catch (error) {
+    console.error(`[agency] Could not remove ${file}: ${errorText(error)}`);
+  }
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**

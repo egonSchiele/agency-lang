@@ -96,9 +96,11 @@ describe.skipIf(!existsSync(CLI))("agency run --wait-for-response (end-to-end)",
     return held.questions[0]!;
   }
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const client of clients) client.close();
     for (const cli of started) cli.stop();
+    // The folders go only once nothing is left to write into them.
+    await Promise.all(started.map((cli) => cli.exited));
     clients = [];
     started = [];
     fixture.remove();

@@ -60,14 +60,14 @@ describe("serving a watching client", () => {
     expect(received[2]).toEqual({ type: "held", questions: [] });
   });
 
-  it("refuses bad answers with the reason, repeats what is held, and keeps holding", async () => {
+  it("refuses bad answers with the reason, and keeps holding", async () => {
     const { channel, received } = client();
     void holdForAnswers([question("a")]);
     await delivered();
     channel.send({ type: "answers", answers: [{ interruptId: "z", response: approve() }] });
     await delivered();
     expect(received[2]).toMatchObject({ type: "answersRefused", reason: expect.any(String) });
-    expect(received[3]).toMatchObject({ type: "held", questions: [{ interruptId: "a" }] });
+    expect(received).toHaveLength(3);
     expect(heldQuestions()).toHaveLength(1);
   });
 
@@ -81,7 +81,11 @@ describe("serving a watching client", () => {
     expect(await waiting).toEqual([approve()]);
     await delivered();
     expect(second.received).toContainEqual({ type: "answersRefused", reason: "nothing is held" });
-    expect(second.received.at(-1)).toEqual({ type: "held", questions: [] });
+    // It was told the batch ended, and is told nothing more after the refusal.
+    expect(second.received.slice(2)).toEqual([
+      { type: "held", questions: [] },
+      { type: "answersRefused", reason: "nothing is held" },
+    ]);
   });
 
   it("stops telling a client that closed", async () => {

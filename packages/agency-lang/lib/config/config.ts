@@ -36,9 +36,6 @@ export const BUILTIN_VARIABLES = ["color", "__dirname"];
 export const MAX_REPLY_ATTACHMENTS_PER_CALL = 10;
 export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
-/**
- * Configuration options for the Agency compiler
- */
 export type SpawnInterruptsConfig = {
   /** Save a held question's checkpoint to disk, so a process that dies
    *  while holding can be resumed. Off by default: a checkpoint holds
@@ -51,6 +48,9 @@ export type SpawnConfig = {
   interrupts?: SpawnInterruptsConfig;
 };
 
+/**
+ * Configuration options for the Agency compiler
+ */
 export interface AgencyConfig {
   verbose?: boolean;
 

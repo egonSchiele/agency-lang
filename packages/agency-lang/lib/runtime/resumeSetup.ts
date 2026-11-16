@@ -1,6 +1,9 @@
 import { runInBootstrapFrame } from "./asyncContext.js";
 import type { HostSettings } from "../host/host.js";
-import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
+import {
+  __initAllRegisteredCallbacks,
+  __initAllRegisteredStatics,
+} from "./crossModuleInitRegistry.js";
 import { composeCallbacks, type AgencyCallbacks } from "./hooks.js";
 import { CheckpointEditError, CheckpointError, type RestoreSignal } from "./errors.js";
 import type { Policy } from "./policy.js";
@@ -10,7 +13,7 @@ import { reinstallRootBudget } from "./rootBudget.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 import type { PendingArgOverrides, RuntimeContext } from "./state/context.js";
-import type { GlobalStore } from "./state/globalStore.js";
+import { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { isAttachedResume, mintDebugRun } from "./debugRun.js";
@@ -176,6 +179,34 @@ export function applyRestoreSignal(
   return cp.nodeId;
 }
 
+/** Set up the static values of every loaded module before a resume. A
+ *  resume in a new process has never entered a node, and a node entry is
+ *  the only other place statics are set up. The checkpoint marks every
+ *  module initialized, so without this a static read after the resume
+ *  finds the value unset and throws.
+ *
+ *  It runs before the checkpoint is restored: a function a static
+ *  initializer calls pushes frames onto the stack, and the restored stack
+ *  replays frames instead.
+ *
+ *  It runs on a store that says every module is initialized. A function
+ *  called from a static initializer checks that flag first, and starts its
+ *  module's global init when the flag is unset. On a resume the globals
+ *  come from the checkpoint, so that init must not run. The store shares
+ *  the run's token stats, so a static initializer's LLM call is counted. */
+async function initStaticsForResume(execCtx: RuntimeContext<GraphState>): Promise<void> {
+  const runGlobals = execCtx.globals;
+  const staticGlobals = new GlobalStore();
+  staticGlobals.isInitialized = () => true;
+  staticGlobals.restoreTokenStats(runGlobals.getTokenStats());
+  execCtx.globals = staticGlobals;
+  try {
+    await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredStatics(run));
+  } finally {
+    execCtx.globals = runGlobals;
+  }
+}
+
 export async function restoreForResume(
   execCtx: RuntimeContext<GraphState>,
   request: ResumeRequest,
@@ -197,6 +228,7 @@ export async function restoreForResume(
   });
   request.afterCheckpointRestored?.();
 
+  await initStaticsForResume(execCtx);
   await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
   execCtx.restoreState(checkpoint);
   // A resume the attached debugger did not issue comes from outside, and

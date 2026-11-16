@@ -1,0 +1,8 @@
+import { greet } from "./greeting.agency"
+
+static const SUFFIX = "!"
+
+node main() {
+  const name: string = raise core::userMessage("Who should I greet?", {})
+  return "${greet(name)}${SUFFIX}"
+}

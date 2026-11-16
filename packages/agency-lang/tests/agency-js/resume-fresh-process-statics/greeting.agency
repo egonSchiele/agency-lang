@@ -1,0 +1,14 @@
+import { hello } from "./words.agency"
+
+// Calls a function in this module and one that reads another module's
+// static, so a resume has to set up statics in load order without
+// starting this module's global init.
+static const GREETING = bracket(hello())
+
+def bracket(word: string): string {
+  return "<${word}>"
+}
+
+export def greet(name: string): string {
+  return "${GREETING}, ${name}"
+}

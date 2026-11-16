@@ -414,6 +414,10 @@ The runtime side is small. Three registries keyed by moduleId
     `__initializeStatic` on purpose: `markInitialized` has to run before
     the static-init IIFE starts, or the per-function lazy prelude
     re-enters `__initializeGlobals` and awaits a still-pending promise.
+  - `__initAllRegisteredStatics(run)`, which runs every registered
+    module's `__initializeStatic` and no global init. Every resume calls
+    it, through `restoreForResume` in `lib/runtime/resumeSetup.ts`. See
+    "Statics on a resume" below.
   - `__initAllRegisteredCallbacks(ctx)`, which clears
     `ctx.topLevelCallbacks` once and then runs every registered module's
     `__registerTopLevelCallbacks`. The fresh-run, resume, and rewind
@@ -427,6 +431,43 @@ execution, well after all modules have loaded), every module's
 registration has already completed. Compile-time topsort guarantees
 no var-level cycles inside the init graph, so the await chain
 always terminates.
+
+### Statics on a resume
+
+A checkpoint holds the globals and the list of modules marked
+initialized. It does not hold the statics, which live in module
+bindings. A program can be paused in one process and resumed in
+another that never entered a node, for example:
+
+```
+// process 1
+const paused = await main();
+save(paused.data);
+
+// process 2: never calls main()
+await respondToInterrupts(load(), [approve("Ada")]);
+```
+
+In process 2 every module is marked initialized by the checkpoint, so
+the lazy prelude never runs, and the first static read throws. So
+`restoreForResume` runs `__initAllRegisteredStatics` before it restores
+the checkpoint. Two rules keep this pass from doing harm:
+
+  - It runs on a global store that says every module is initialized.
+    A static initializer can call a function, and that function's lazy
+    prelude would otherwise start its module's global init. That init
+    would rerun top-level code the paused run already ran, and for the
+    module whose statics are being set it would wait on its own
+    pending static promise forever.
+  - It runs before the checkpoint is restored. A function called from
+    a static initializer pushes frames, and a restored stack replays
+    frames instead of pushing them.
+
+Without the global init, a static initializer that calls into another
+module relies on that module's statics being set already. Modules are
+visited in registration order, which is load order, and a module loads
+after the modules it imports, so they are. The regression test is
+`tests/agency-js/resume-fresh-process-statics`.
 
 ## Bare top-level statements
 

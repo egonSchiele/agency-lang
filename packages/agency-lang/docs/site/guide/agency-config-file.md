@@ -189,6 +189,20 @@ Safety guards that stop a program from running away.
 | `maxToolCallRounds` | How many times the LLM can loop between calling tools and reacting to their output. Default `10`. At the cap, the pending tool calls are refused with a message telling the model to answer, and later requests offer no tools. A call's own `llm(..., { maxToolCallRounds })` and a `setLlmOptions` default from `std::llm` both override it; when both are set, the smaller wins. |
 | `checkpoints.maxRestores` | Cap on how often one checkpoint can be restored before it errors out. Default `100`. |
 
+## Programs that wait for an answer
+
+```json
+{
+  "spawn": {
+    "interrupts": { "preemptivelyCreateCheckpoint": true }
+  }
+}
+```
+
+| Option | Description |
+| --- | --- |
+| `spawn.interrupts.preemptivelyCreateCheckpoint` | Save a checkpoint under `~/.agency/held/` while a program run with `--wait-for-response` waits for an answer, so a process that dies while waiting can be resumed. Default `false`, because a checkpoint holds the program's whole state. See [waiting for an answer](../cli/run#waiting-for-an-answer). |
+
 ## Testing and coverage
 
 ```json

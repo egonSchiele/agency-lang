@@ -112,6 +112,16 @@ Notes:
 
 By default, any interrupts that aren't addressed by your policy, and aren't handled by your agent, will cause a crash. Run with the `--interactive` flag if you want to be prompted to approve or reject those interrupts instead.
 
+### The `--wait-for-response` flag
+
+`--interactive` needs a terminal. A program started in the background, or by a scheduler, has none. Run it with `--wait-for-response` and it keeps running and holds those interrupts until you answer them from another terminal with `agency attach`:
+
+```bash
+agency run --wait-for-response --policy recommended agent.agency
+```
+
+The policy still answers everything it has a rule for. The program never approves or rejects the rest by itself. See [waiting for an answer](/cli/run#waiting-for-an-answer) and [`agency attach`](/cli/attach).
+
 
 ## Literal values from TypeScript
 

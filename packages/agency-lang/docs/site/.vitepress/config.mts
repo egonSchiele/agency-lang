@@ -261,6 +261,7 @@ export default defineConfig({
           items: [
             { text: "Overview", link: "/cli/index" },
             { text: "agent", link: "/cli/agent" },
+            { text: "attach", link: "/cli/attach" },
             { text: "bundle", link: "/cli/trace-and-bundle" },
             { text: "compile", link: "/cli/compile" },
             { text: "config", link: "/cli/config" },

@@ -131,13 +131,12 @@ describe("_mcpPackageProblem", () => {
 
 describe("_connectMcpServers", () => {
   it("returns one state per server, in config order", async () => {
-    (bridge.connectServer as any).mockImplementation(async (name: string) =>
-      name === "a"
-        ? connected(["a__t"])
-        : name === "b"
-          ? { status: "needsLogin" }
-          : { status: "failed", message: "boom" },
-    );
+    const byName: Record<string, unknown> = {
+      a: connected(["a__t"]),
+      b: { status: "needsLogin" },
+      c: { status: "failed", message: "boom" },
+    };
+    (bridge.connectServer as any).mockImplementation(async (name: string) => byName[name]);
     const states = await _connectMcpServers({ a: {}, b: {}, c: {} } as any);
     expect(states.map((s) => [s.name, s.status, s.message])).toEqual([
       ["a", "connected", ""],
@@ -171,7 +170,10 @@ describe("_connectMcpServers", () => {
 
 describe("_mcpServerStates", () => {
   it("returns one state per record, in key order", async () => {
-    (bridge.serverStates as any).mockResolvedValueOnce({ x: { status: "needsLogin" }, y: connected(["y__t"]) });
+    (bridge.serverStates as any).mockResolvedValueOnce({
+      x: { status: "needsLogin" },
+      y: connected(["y__t"]),
+    });
     const states = await _mcpServerStates();
     expect(states.map((s) => s.name)).toEqual(["x", "y"]);
   });
@@ -179,7 +181,10 @@ describe("_mcpServerStates", () => {
 
 describe("_startMcpLogin", () => {
   it("returns success with the URL", async () => {
-    (bridge.startLogin as any).mockResolvedValueOnce({ status: "started", authUrl: "https://login" });
+    (bridge.startLogin as any).mockResolvedValueOnce({
+      status: "started",
+      authUrl: "https://login",
+    });
     const result = await _startMcpLogin({ a: {} } as any, "a");
     expect(result.success).toBe(true);
     expect(result.success && result.value).toBe("https://login");
@@ -205,7 +210,9 @@ describe("_finishMcpLogin", () => {
   it("returns the connected state", async () => {
     (bridge.finishLogin as any).mockResolvedValueOnce(connected(["a__t"]));
     const ctx = testContext();
-    const state = await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => _finishMcpLogin("a"));
+    const state = await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      _finishMcpLogin("a"),
+    );
     expect(state.status).toBe("connected");
     expect(state.tools).toHaveLength(1);
   });
@@ -222,7 +229,9 @@ describe("_finishMcpLogin", () => {
       finish({ status: "failed", message: "login cancelled" });
     });
     const ctx = testContext();
-    const waiting = runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => _finishMcpLogin("a"));
+    const waiting = runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      _finishMcpLogin("a"),
+    );
     await vi.waitFor(() => expect(bridge.finishLogin).toHaveBeenCalled());
     ctx.abortController.abort();
     await expect(waiting).rejects.toBeInstanceOf(AgencyCancelledError);

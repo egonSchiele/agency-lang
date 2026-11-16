@@ -197,7 +197,10 @@ async function unusable(): Promise<string> {
 }
 
 /** Run `action` when the package can be used. Otherwise return `whenUnusable(reason)`. */
-async function withPackage<T>(whenUnusable: (reason: string) => T, action: () => Promise<T>): Promise<T> {
+async function withPackage<T>(
+  whenUnusable: (reason: string) => T,
+  action: () => Promise<T>,
+): Promise<T> {
   const reason = await unusable();
   if (reason !== "") {
     return whenUnusable(reason);
@@ -212,7 +215,10 @@ function failedState(name: string, message: string): McpServerState {
 
 /** A package state as an Agency value. A connected server's tools are gated,
  *  so each call raises `mcp::call`. */
-async function toServerState(name: string, state: mcpBridge.BridgeServerState): Promise<McpServerState> {
+async function toServerState(
+  name: string,
+  state: mcpBridge.BridgeServerState,
+): Promise<McpServerState> {
   if (state.status === "failed") {
     return failedState(name, state.message);
   }
@@ -221,7 +227,9 @@ async function toServerState(name: string, state: mcpBridge.BridgeServerState): 
   }
   const gated = gate(state.callTool);
   const tools = await Promise.all(
-    state.tools.map((tool) => mcpBridge.mcpToolToAgencyFunction(tool, gated) as Promise<AgencyFunction>),
+    state.tools.map(
+      (tool) => mcpBridge.mcpToolToAgencyFunction(tool, gated) as Promise<AgencyFunction>,
+    ),
   );
   return { name, status: "connected", message: "", tools };
 }
@@ -311,7 +319,10 @@ export async function _logoutMcpServer(name: string): Promise<ResultValue> {
 }
 
 /** Disconnect and connect again with the saved login. Never starts a login. */
-export async function _reconnectMcpServer(merged: RawMcpServers, name: string): Promise<McpServerState> {
+export async function _reconnectMcpServer(
+  merged: RawMcpServers,
+  name: string,
+): Promise<McpServerState> {
   return withPackage(
     (reason) => failedState(name, reason),
     async () => {

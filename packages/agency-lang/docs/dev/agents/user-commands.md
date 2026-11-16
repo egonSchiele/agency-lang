@@ -118,6 +118,10 @@ listing it and a later `jobOutput` returns nothing. The note carries the
 output `stopJob` read. A job that had already ended gets a reply with its status and
 no note. See `docs/dev/stdlib/jobs.md`.
 
+## `/mcp`
+
+`/mcp` (`lib/mcpMenu.agency`) opens the MCP server menu, where the user logs in to a server, logs out, reconnects, or lists its tools. See `docs/dev/agents/agent-mcp.md`.
+
 ## Pending notes
 
 Neither `!command` nor `/image` calls the model. Each leaves a note in

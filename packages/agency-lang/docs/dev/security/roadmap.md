@@ -111,6 +111,18 @@ generator through the shell. Decide whether `--refuse-splices` becomes the
 default for anything that is not an explicit build, and whether generators
 run through `compileSandboxed`.
 
+### A4. `std::mcp` takes a server config as a value and raises no interrupt
+
+`loadMcpTools`, `loadMcpToolsWithStatus`, `connectMcpServers`,
+`reconnectMcpServer`, and `startMcpLogin` take the MCP server config as an
+argument. None of them raises an interrupt before it connects. A stdio
+server's config is a command, and connecting runs it. So a program that hands
+one of these functions to a model lets the model choose a command to run.
+The agent never does this: it reads the config from `settings.json` and
+`agency.json` and passes it itself. The fix is to raise an effect that names
+the command before a stdio server is started, or to take the config only
+from files. See `docs/dev/agents/agent-mcp.md`.
+
 ## B. The runner's handler is outermost and always present
 
 ### B1. Top-level `with approve` runs before the root policy exists (#966) — FIXED
@@ -393,6 +405,7 @@ it is what lets them become total denial rather than workdir-scoping.
 | A1 JS globals reachable | #971 | open |
 | A2 review `JS_GLOBALS` | #994 | open |
 | A3 splice execution in non-build commands | #995 | open |
+| A4 `std::mcp` server config as a value, no interrupt | none | open |
 | B1 top-level `with approve` before policy | #966 | fixed |
 | B2 raise-time host policy / checkpoint integrity | spec | policy shipped; integrity open |
 | B3 sandbox flags imply no policy | #970 | open |

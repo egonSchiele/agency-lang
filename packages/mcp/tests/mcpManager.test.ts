@@ -95,6 +95,21 @@ describe("McpManager", () => {
     const result = await manager.callTool("test", "add", { a: 10, b: 20 });
     expect(result).toContain("30");
   });
+
+  it("does not reconnect a disconnected server for a tool call, even after its config changed", async () => {
+    // The changed command would create this file if it ever ran.
+    const marker = path.join(os.tmpdir(), `mcp-reconnect-${process.pid}-${Date.now()}`);
+    manager = new McpManager({ test: { command: "node", args: [TEST_SERVER_PATH] } });
+    expect((await manager.connectServer("test")).status).toBe("connected");
+    await manager.disconnectServer("test");
+    manager.setConfig({
+      test: { command: "node", args: ["-e", `require("fs").writeFileSync(${JSON.stringify(marker)}, "")`] },
+    });
+    await expect(manager.callTool("test", "add", { a: 1, b: 2 })).rejects.toThrow(
+      'MCP server "test" is not connected. Reconnect it first.',
+    );
+    expect(fs.existsSync(marker)).toBe(false);
+  });
 });
 
 describe("McpManager records, login modes, and logins", () => {

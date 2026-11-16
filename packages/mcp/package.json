@@ -1,6 +1,6 @@
 {
   "name": "@agency-lang/mcp",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "MCP (Model Context Protocol) support for the Agency language",
   "type": "module",
   "agency": "./index.agency",

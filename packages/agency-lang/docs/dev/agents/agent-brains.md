@@ -283,6 +283,12 @@ the reply, and exits.
   the machine. The task is in the arguments.
 - **Nothing comes back.** The tool returns the process id, the name, and
   the output file, and the reply goes to that file.
+- **The install folder must be writable.** `agency run` compiles
+  `task.agency` next to its source and keeps its build manifest in the
+  package folder. In an install the user cannot write to, such as one made
+  with `sudo npm install -g`, the manifest is never saved, so every start
+  tries to compile again and fails. The `task.js` the package ships is not
+  used.
 
 ## Adding a brain
 

@@ -5,7 +5,7 @@ description: "The Agency agent as a program that does one task and exits."
 
 # task
 
-The spawntest brain starts it as a process of its own, once per task.
+The spawntest brain starts this program as a process of its own, once per task.
 
   ```
   agency run --detach task.log --wait-for-response task.agency -- "Summarize the README"

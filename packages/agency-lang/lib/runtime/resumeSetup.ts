@@ -1,7 +1,7 @@
 import { runInBootstrapFrame } from "./asyncContext.js";
 import type { HostSettings } from "../host/host.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
-import type { AgencyCallbacks } from "./hooks.js";
+import { composeCallbacks, type AgencyCallbacks } from "./hooks.js";
 import { CheckpointEditError, CheckpointError, type RestoreSignal } from "./errors.js";
 import type { Policy } from "./policy.js";
 import { loadConfiguredProviders } from "#platform";
@@ -29,6 +29,19 @@ export type { ResumeOverrides } from "./state/checkpointPatch/index.js";
 export type ResumeMetadata = {
   callbacks?: AgencyCallbacks;
 };
+
+/** The metadata of a resume whose caller gave `callbacks` at the top level
+ *  of its options, where a node call takes them. `metadata.callbacks` is
+ *  the older place for them. When a caller uses both, both sets fire. */
+export function withResumeCallbacks(
+  metadata: Record<string, any> | undefined,
+  callbacks: AgencyCallbacks | undefined,
+): Record<string, any> | undefined {
+  if (!callbacks) {
+    return metadata;
+  }
+  return { ...metadata, callbacks: composeCallbacks(metadata?.callbacks, callbacks) };
+}
 
 export type AfterCheckpointRestored = () => void;
 

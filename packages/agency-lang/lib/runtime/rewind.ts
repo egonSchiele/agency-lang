@@ -4,7 +4,13 @@ import type { Checkpoint } from "./state/checkpointStore.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { RestoreSignal } from "./errors.js";
-import { applyResumeEdits, applyRestoreSignal, restoreForResume } from "./resumeSetup.js";
+import type { AgencyCallbacks } from "./hooks.js";
+import {
+  applyResumeEdits,
+  applyRestoreSignal,
+  restoreForResume,
+  withResumeCallbacks,
+} from "./resumeSetup.js";
 import type { CheckpointEdit, StopAt } from "./state/checkpointPatch/index.js";
 import { RuntimeContext } from "./state/context.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
@@ -40,7 +46,7 @@ export function applyOverrides(
  *  caller's cancel and pause signals reach the replay, and an attached
  *  debugger answers the replay's debug stops before it returns
  *  (`settleStops`). */
-export async function rewindFrom(args: {
+export async function rewindFrom(given: {
   ctx: RuntimeContext<GraphState>;
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
@@ -49,6 +55,8 @@ export async function rewindFrom(args: {
   /** The stop the edits are made at, for a caller with a stop record. */
   at?: StopAt;
   metadata?: Record<string, any>;
+  /** The caller's callbacks for the replay, as on respondToInterrupts. */
+  callbacks?: AgencyCallbacks;
   /** The root policy and per-invocation config of the run being replayed,
    *  with the same contract as a resume: the caller that started the run
    *  with them passes them again, and the restore installs them. */
@@ -56,7 +64,8 @@ export async function rewindFrom(args: {
   abortSignal?: AbortSignal;
   pauseSignal?: AbortSignal;
 }): Promise<any> {
-  const { ctx, overrides, metadata = {} } = args;
+  const args = { ...given, metadata: withResumeCallbacks(given.metadata, given.callbacks) };
+  const { ctx, metadata = {} } = args;
   const signals = { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal };
   const outcome = await replayFrom(args, signals);
   if (isAttachedResume(metadata)) {

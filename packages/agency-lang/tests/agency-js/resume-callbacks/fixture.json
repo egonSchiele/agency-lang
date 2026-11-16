@@ -1,0 +1,50 @@
+{
+  "none": {
+    "result": "done",
+    "heard": {
+      "node": [
+        "before the interrupt"
+      ],
+      "topLevel": [],
+      "metadata": []
+    }
+  },
+  "topLevel": {
+    "result": "done",
+    "heard": {
+      "node": [
+        "before the interrupt"
+      ],
+      "topLevel": [
+        "after the interrupt"
+      ],
+      "metadata": []
+    }
+  },
+  "metadata": {
+    "result": "done",
+    "heard": {
+      "node": [
+        "before the interrupt"
+      ],
+      "topLevel": [],
+      "metadata": [
+        "after the interrupt"
+      ]
+    }
+  },
+  "both": {
+    "result": "done",
+    "heard": {
+      "node": [
+        "before the interrupt"
+      ],
+      "topLevel": [
+        "after the interrupt"
+      ],
+      "metadata": [
+        "after the interrupt"
+      ]
+    }
+  }
+}

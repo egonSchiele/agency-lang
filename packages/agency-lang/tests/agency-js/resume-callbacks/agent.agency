@@ -1,0 +1,10 @@
+import { emit } from "std::statelog"
+
+effect test::gate { step: number }
+
+node main(): string {
+  emit("before the interrupt")
+  raise test::gate("ok to continue?", { step: 1 })
+  emit("after the interrupt")
+  return "done"
+}

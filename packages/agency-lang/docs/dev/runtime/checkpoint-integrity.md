@@ -53,6 +53,13 @@ await), hex-encoded, over:
 "agency.checkpoint.v1" + "\n" + canonicalize(toJSON() minus the signature field)
 ```
 
+Before it is canonicalized, the JSON is copied through `nativeTypeReplacer`,
+which writes a live `Date`, `Set`, and the like in their tagged form. A
+checkpoint is signed while it holds live values and verified after a trip
+through a file or a request, where they are in the tagged form, so both must
+hash the same. Hashed as it is, a live `Set` would hash as `{}` whatever it
+holds.
+
 `canonicalize` (`lib/utils/canonicalize.ts`) key-sorts objects at every depth,
 so a checkpoint that was stored, parsed, and re-serialized with different key
 order hashes identically. The checksum covers the whole checkpoint, so new

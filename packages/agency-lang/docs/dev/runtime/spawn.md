@@ -87,7 +87,7 @@ A checkpoint does not hold the run's policy or its cost and time limits. The pol
 agency resume <file> <program> --wait-for-response --policy <policy file> --max-cost 2 --max-time 600000ms
 ```
 
-`resumeCommand` in `lib/runtime/heldCheckpoint.ts` builds the line from the run's own settings. The policy has to be a file, and the person who resumes may not have one: `spawn` deletes the policy file it launched with. So `saveHeldCheckpoint` writes the run's policy beside the checkpoint, as `<traceId>-<pid>.policy.json`, when the policy has rules. `removeHeldCheckpoint` deletes both files.
+`resumeCommand` in `lib/runtime/heldCheckpoint.ts` builds the line from the run's own settings. The policy has to be a file, and the person who resumes may not have one: `spawn` deletes the policy file it launched with. So `saveHeldCheckpoint` writes the run's policy beside the checkpoint, as `<traceId>-<pid>.policy.json`, when the policy has rules. The policy is written first, and removed again if the checkpoint write fails, so a save that fails half way leaves neither file. `removeHeldCheckpoint` deletes both files. The paths in the printed command are quoted for a shell when they need it.
 
 The resumed process raises the same interrupt and holds it again. It registers for attach the way a fresh run does: `resumeCliFromCheckpoint` in `lib/runtime/interrupts.ts` calls `registerAttach`.
 

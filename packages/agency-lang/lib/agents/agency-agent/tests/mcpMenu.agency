@@ -1,0 +1,267 @@
+// The /mcp menu and MCP startup, against a fake @agency-lang/mcp. Every test
+// that opens a login page rejects std::openUrl, so no browser opens. The fake
+// is loaded once per process, so each node uses its own server names.
+
+import { McpServerState, connectMcpServers } from "std::mcp"
+import { cwd, setEnv } from "std::system"
+
+import { getMcpTools, startupLines, stateLine } from "../lib/mcp.agency"
+import {
+  RowStatus,
+  ServerRow,
+  actionsFor,
+  beginLogin,
+  endLogin,
+  logOut,
+  reconnect,
+  runAction,
+  serverRows,
+ } from "../lib/mcpMenu.agency"
+
+// Point std::mcp at the fake package. Every node that reaches the package calls this first.
+def useFakePackage() {
+  setEnv(
+    "AGENCY_MCP_PATH",
+    "${cwd()}/lib/agents/agency-agent/tests/fakeMcpPackage.mjs",
+  ) with approve
+}
+
+// A config with one OAuth server.
+def oauthServer(name: string): Record<string, any> {
+  let servers: Record<string, any> = {}
+  servers[name] = {
+    type: "http",
+    url: "https://${name}.example/mcp",
+    auth: "oauth"
+  }
+  return servers
+}
+
+// Log in the way the menu does. The open is rejected, so no browser opens.
+def logIn(merged: Record<string, any>, name: string): string {
+  handle {
+    beginLogin(merged, name)
+  } with (intr) {
+    return reject()
+  }
+  return endLogin(name)
+}
+
+// How many of the session's MCP tools belong to one server.
+def toolCount(server: string): number {
+  let count = 0
+  for (tool in getMcpTools()) {
+    if (tool.name.startsWith("${server}__")) {
+      count = count + 1
+    }
+  }
+  return count
+}
+
+def stateOf(
+  name: string,
+  status: "connected" | "needsLogin" | "failed",
+  message: string,
+  tools: any[],
+): McpServerState {
+  return {
+    name: name,
+    status: status,
+    message: message,
+    tools: tools
+  }
+}
+
+def rowOf(status: RowStatus, config: Record<string, any>): ServerRow {
+  return {
+    name: "r",
+    config: config,
+    scope: "global",
+    status: status,
+    message: "",
+    tools: []
+  }
+}
+
+node startupLinesForEachStatus(): string {
+  const states: McpServerState[] = [
+    stateOf("ok", "connected", "", []),
+    stateOf("linear", "needsLogin", "", []),
+    stateOf("github", "failed", "connect ECONNREFUSED 127.0.0.1:3000", []),
+  ]
+  return startupLines("", states).join("|")
+}
+
+node startupLineForAnOldPackage(): string {
+  const problem = "@agency-lang/mcp 0.0.5 is too old. Run: npm install -g @agency-lang/mcp@latest"
+  return startupLines(problem, []).join("|")
+}
+
+node rowsMarkProjectAndNotConnected(): string {
+  const globalServers = {
+    g1: {
+      command: "ok"
+    },
+    g2: {
+      command: "ok"
+    }
+  }
+  const projectServers = {
+    g1: {
+      command: "ok"
+    }
+  }
+  const rows = serverRows(
+    globalServers,
+    projectServers,
+    [stateOf("g1", "connected", "", [])],
+  )
+  let parts: string[] = []
+  for (row in rows) {
+    parts.push("${row.scope}:${row.status}")
+  }
+  return parts.join(",")
+}
+
+node rowsSkipAStateWithNoConfig(): number {
+  return serverRows({}, {}, [stateOf("ghost", "connected", "", [])]).length
+}
+
+node stateLineForEachStatus(): string {
+  const lines = [
+    stateLine(stateOf("s", "connected", "", [1, 2])),
+    stateLine(stateOf("s", "needsLogin", "", [])),
+    stateLine(stateOf("s", "failed", "boom", [])),
+  ]
+  return lines.join("|")
+}
+
+node actionsForEachRow(): string {
+  const oauth = {
+    type: "http",
+    url: "https://x.example/mcp",
+    auth: "oauth"
+  }
+  const stdio = {
+    command: "ok"
+  }
+  const rows = [
+    rowOf("needsLogin", oauth),
+    rowOf("connected", oauth),
+    rowOf("connected", stdio),
+    rowOf("failed", stdio),
+    rowOf("notConnected", stdio),
+  ]
+  let kinds: string[] = []
+  for (row in rows) {
+    let keys: string[] = []
+    for (item in actionsFor(row)) {
+      keys.push(item.key)
+    }
+    kinds.push(keys.join(","))
+  }
+  return kinds.join("|")
+}
+
+node loginAddsTheTools(): number {
+  useFakePackage()
+  const merged = oauthServer("t1")
+  connectMcpServers(merged)
+  logIn(merged, "t1")
+  return toolCount("t1")
+}
+
+node rejectedOpenStillShowsTheUrl(): string {
+  useFakePackage()
+  const merged = oauthServer("t2")
+  let line = ""
+  handle {
+    const begun = beginLogin(merged, "t2")
+    if (begun is failure(f)) {
+      line = "failed: ${f}"
+    } else {
+      line = begun.value[1]
+    }
+  } with (intr) {
+    return reject()
+  }
+  return line
+}
+
+node logoutRemovesTheTools(): number {
+  useFakePackage()
+  const merged = oauthServer("t3")
+  logIn(merged, "t3")
+  logOut("t3") with approve
+  return toolCount("t3")
+}
+
+node rejectedLogoutKeepsTheTools(): number {
+  useFakePackage()
+  const merged = oauthServer("t4")
+  logIn(merged, "t4")
+  logOut("t4") with reject
+  return toolCount("t4")
+}
+
+node abandonedLoginDoesNotBlockTheNext(): boolean {
+  useFakePackage()
+  handle {
+    beginLogin(oauthServer("t5"), "t5")
+  } with (intr) {
+    return reject()
+  }
+  const line = logIn(oauthServer("t6"), "t6")
+  return line.startsWith("✔ t6 connected")
+}
+
+node connectsAServerWithNoState(): string {
+  useFakePackage()
+  return reconnect({
+    t7: {
+      command: "ok"
+    }
+  }, "t7")
+}
+
+node failedLoginStartSaysWhy(): string {
+  useFakePackage()
+  const merged = {
+    t10: {
+      command: "ok"
+    }
+  }
+  const row: ServerRow = {
+    name: "t10",
+    config: merged.t10,
+    scope: "global",
+    status: "notConnected",
+    message: "",
+    tools: []
+  }
+  return runAction("login", row, merged).join("|")
+}
+
+node failedServerSaysWhy(): string {
+  useFakePackage()
+  return reconnect({
+    t8: {
+      command: "missing"
+    }
+  }, "t8")
+}
+
+node toolsSurviveARestore(): number {
+  useFakePackage()
+  const merged = oauthServer("t9")
+  connectMcpServers(merged)
+  const cp = checkpoint()
+  const count = toolCount("t9")
+  if (count == 0) {
+    logIn(merged, "t9")
+    restore(cp, {
+      maxRestores: 1
+    })
+  }
+  return count
+}

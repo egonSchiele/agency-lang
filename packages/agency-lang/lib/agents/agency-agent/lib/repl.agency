@@ -27,7 +27,7 @@ import {
   contextStatus,
  } from "./compaction.agency"
 import { HISTORY_PATH } from "./config.agency"
-import { mcpSlashCommand } from "./mcp.agency"
+import { mcpSlashCommand } from "./mcpMenu.agency"
 import { filterHostedModels } from "./modelFilters.agency"
 import { noModelChoices } from "./modelRequest.agency"
 import { Resolved } from "./models.agency"

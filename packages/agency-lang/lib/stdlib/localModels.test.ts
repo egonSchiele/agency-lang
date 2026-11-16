@@ -95,8 +95,12 @@ describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, a kind, and tags", () => {
     const validKinds = new Set(["chat", "embedding", "speech", "image", "vision", "controlnet"]);
     const validTags = new Set(["coding", "reasoning", "writing", "science", "uncensored"]);
-    // Curated set is permissive-licensed only.
+    // Curated set is permissive-licensed only, except for the entries named
+    // here. A new non-permissive entry fails until someone adds it on purpose.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
+    const licenseExceptions: Record<string, string> = {
+      "qwen3.8-flash-next": "qwen-community-1.0",
+    };
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
       expect(info.uri, `${name}.uri`).toMatch(/^(hf|mlx|diffusers):/);
       expect(info.backend, `${name}.backend`).toBe(backendOfTarget(info.uri));
@@ -112,7 +116,11 @@ describe("curated catalog shape", () => {
       if (info.kind !== "chat") {
         expect(info.tags, `${name}.tags`).toEqual([]);
       }
-      expect(permissiveLicenses.has(info.license), `${name}.license=${info.license}`).toBe(true);
+      if (name in licenseExceptions) {
+        expect(info.license, `${name}.license`).toBe(licenseExceptions[name]);
+      } else {
+        expect(permissiveLicenses.has(info.license), `${name}.license=${info.license}`).toBe(true);
+      }
     }
   });
   it("smollm2-135m is present (integration suite depends on it)", () => {

@@ -235,9 +235,12 @@ snapshot.
 
 `node-llama-cpp` handles two multi-part layouts: GGUF-split keeps the parts as
 separate files; binary-split splices them into one combined file. Our pin is a
-single content sha256, which only applies to **single-file** models, and the
-entire curated Q4_K_M set is single-file. Sharded models therefore carry no pin
-and verification **skips** them. Extending coverage (per-part hashes for GGUF-split;
+single content sha256, which only applies to **single-file** models. The
+curated models of 100 GB or more (`glm-5.3-flash` and its 3-bit and 2-bit
+builds, `qwen3.8-flash-next`, `deepseek-v4-flash`) are split, so they carry no
+pin and verification **skips** them. node-llama-cpp loads a split model by its
+first part, `hf_<owner>_<repo>.<quant>-00001-of-0000N.gguf`, and
+`localSamplingFor` matches that name to the catalog entry. Extending coverage (per-part hashes for GGUF-split;
 compute-and-pin for binary-split) is tracked in
 [issue #348](https://github.com/egonSchiele/agency-lang/issues/348).
 

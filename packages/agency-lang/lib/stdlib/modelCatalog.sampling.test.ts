@@ -22,6 +22,16 @@ describe("localSamplingFor", () => {
     expect(localSamplingFor("/models/hf_unsloth_Qwen3.5-2B.Q8_0.gguf")).toBeUndefined();
   });
 
+  it("finds a GGUF split across several files by its first part", () => {
+    expect(
+      localSamplingFor("/models/hf_unsloth_Qwen3.8-Flash-Next.UD-Q4_K_XL-00001-of-00004.gguf"),
+    ).toEqual({ temperature: 1.0, topP: 0.95, topK: 20 });
+    // node-llama-cpp loads the first part, so no later part is a model name.
+    expect(
+      localSamplingFor("/models/hf_unsloth_Qwen3.8-Flash-Next.UD-Q4_K_XL-00002-of-00004.gguf"),
+    ).toBeUndefined();
+  });
+
   it("knows nothing about a model outside the catalog, or one whose entry names no sampling", () => {
     expect(localSamplingFor("/models/my-finetune.gguf")).toBeUndefined();
     expect(localSamplingFor("mlx-community/Qwen3-Embedding-4B-4bit-DWQ")).toBeUndefined();

@@ -86,6 +86,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "everyEntry",
     "someEntry",
     "isJsonObject",
+    "recordRule",
     "recordScopedRule",
     "askUserChoices",
     "docsToolFromEntries",

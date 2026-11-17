@@ -112,3 +112,27 @@ export function insertApproveRule(policy: Policy, effects: string[], rule: Polic
   }
   return next;
 }
+
+/**
+ * `policy` with the reject rule `rule` added under each of `effects`, in
+ * the last place where it still decides: ahead of the effect's first
+ * catch-all rule, or at the end when there is none. Every rule ahead of it
+ * keeps deciding what it decided, so a folder the user approved stays
+ * approved.
+ *
+ * An effect that already has the same rule is left as it is, and so is
+ * one whose catch-all already rejects.
+ */
+export function insertRejectRule(policy: Policy, effects: string[], rule: PolicyRule): Policy {
+  const next: Policy = { ...policy };
+  for (const effect of effects) {
+    const existing = policy[effect] ?? [];
+    const catchAll = existing.findIndex(isCatchAll);
+    if (existing.some((one) => sameRule(one, rule)) || existing[catchAll]?.action === "reject") {
+      continue;
+    }
+    const at = catchAll === -1 ? existing.length : catchAll;
+    next[effect] = [...existing.slice(0, at), rule, ...existing.slice(at)];
+  }
+  return next;
+}

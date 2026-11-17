@@ -5,7 +5,6 @@
   that happens before `agencyAgent` sees the message. See
   docs/dev/agents/agent-brains.md.
 */
-import { isCoordinatorBrain } from "std::agents/agency"
 import { map } from "std::array"
 import { cliPolicyHandler } from "std::policy"
 import { expandSlash } from "std::skills"
@@ -58,9 +57,9 @@ export def setPolicyArg(arg: string, approve: string = "", reject: string = "") 
 }
 
 /** The `--agent` values a brain accepts besides `main`. Only the
-  brains built on the coordinator have subagents to start. */
+  coordinator brain has subagents to start. */
 export def startTargetsFor(brainName: string): string[] {
-  if (isCoordinatorBrain(brainName)) {
+  if (brainName == "coordinator") {
     return START_TARGETS
   }
   return []

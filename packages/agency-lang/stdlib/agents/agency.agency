@@ -87,18 +87,9 @@ export def agencyAgentBrains(): BrainInfo[] {
     },
     {
       name: "scripttest",
-      description: "A trial: the coordinator brain, plus a tool that runs a short Agency program in place of a node or shell script"
+      description: "A trial: the minimal brain, plus a tool that runs a short Agency program in place of a node or shell script"
     },
   ]
-}
-
-export def isCoordinatorBrain(brain: string): boolean {
-  """
-  Whether a brain is the coordinator or is built on it, and so has its subagents and takes the same tools from a caller.
-
-  @param brain - A brain's name
-  """
-  return brain == "coordinator" || brain == "scripttest"
 }
 
 /** A negative `maxCost` or `maxTime` means no limit. A model that is given

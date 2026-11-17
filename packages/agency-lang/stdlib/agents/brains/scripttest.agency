@@ -1,10 +1,10 @@
 /** @module
-  @summary A trial brain: the coordinator, plus a tool that runs a short Agency program in place of a node or shell script.
+  @summary A trial brain: the minimal brain, plus a tool that runs a short Agency program in place of a node or shell script.
 
-  A brain of the Agency agent. It is the coordinator brain with one more
-  tool, `runAgency`, the Agency docs tools, and a system message that tells
-  the model to write a quick check as an Agency program instead of
-  `node -e` or a shell script.
+  A brain of the Agency agent. It is the minimal brain with one more tool,
+  `runAgency`, the Agency docs tools, and a system message that tells the
+  model to write a quick check as an Agency program instead of `node -e`
+  or a shell script.
 
   A program run this way runs in a separate process, and every file read,
   file write, and command in it raises its own interrupt, which reaches the
@@ -13,8 +13,8 @@
   for `node -e '<script>'`.
 */
 import { TypeCheckDiagnostic, runCode, typecheck } from "std::agency"
-import { coordinatorBrain } from "std::agents/brains/coordinator"
 import { agencyTutorial } from "std::agents/brains/coordinator/code"
+import { minimalBrain } from "std::agents/brains/minimal"
 import { AgentSettings } from "std::agents/brains/settings"
 import { agencyDocToolsBrief } from "std::agents/lib/toolkits"
 import { getAgentCwd } from "std::index"
@@ -75,35 +75,20 @@ def scriptTools(): any[] {
   return [runAgency, ...agencyDocToolsBrief()]
 }
 
-/** The settings with the script tools added to the coders' tools. A turn
-  the router sends to the coder never reaches the coordinator, and the
-  coordinator hands script work to the coder, so the coders need the tools
-  too. They see the rules already: they run on the same thread. */
-export def withScriptToolsForCoders(settings: AgentSettings): AgentSettings {
-  return {
-    ...settings,
-    coderTools: [...scriptTools(), ...settings.coderTools]
-  }
-}
-
 export def scripttestBrain(
   prompt: string | (string | Attachment)[],
   settings: AgentSettings,
   extraTools: any[],
 ): Result<string> {
   """
-  Answer one message with the coordinator brain, plus a tool that runs a
-  short Agency program in place of a node or shell script, and the Agency
-  docs tools. The coders get them too.
+  Answer one message with the minimal brain, plus a tool that runs a short
+  Agency program in place of a node or shell script, and the Agency docs
+  tools.
 
   @param prompt - The message, alone or followed by its attachments
   @param settings - The call's settings
-  @param extraTools - Tools added to the coordinator's own
+  @param extraTools - Tools added to the brain's own
   """
   ensureSystemMessage(SCRIPT_RULES)
-  return coordinatorBrain(
-    prompt,
-    withScriptToolsForCoders(settings),
-    [...scriptTools(), ...extraTools],
-  )
+  return minimalBrain(prompt, settings, [...scriptTools(), ...extraTools])
 }

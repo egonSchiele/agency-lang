@@ -1,14 +1,8 @@
 // The scripttest brain from std::agents/brains/scripttest, and its
 // runAgency tool. The brain cases use a scripted model. The runAgency cases
 // run a real program in a separate process, and need no model.
-import test { callerToolsNotIn } from "std::agents/brains/coordinator/code"
-import {
-  runAgency,
-  scripttestBrain,
-  withScriptToolsForCoders,
- } from "std::agents/brains/scripttest"
+import { runAgency, scripttestBrain } from "std::agents/brains/scripttest"
 import { AgentSettings } from "std::agents/brains/settings"
-import { agencyDocToolsBrief } from "std::agents/lib/toolkits"
 
 // Every model request, in order.
 let calls: any[] = []
@@ -40,38 +34,21 @@ def requestHasSystemText(call: any, text: string): boolean {
   return false
 }
 
-// The coordinator's tools are all there, with runAgency and the docs tools.
-node offersRunAgencyAndTheCoordinatorTools(): string {
-  scripttestBrain(["say hi"], emptySettings(), [])
-  const names = [tool.name for tool in calls[0].tools]
-  return "${names.includes("runAgency")}|${names.includes("agencyStdlib")}|${names.includes("codeAgent")}|${names.includes("agencyCodeAgent")}"
-}
-
-// The coders get runAgency and the docs tools ahead of the caller's coder
-// tools, which stay.
-node codersGetTheScriptTools(): string[] {
-  const settings = {
-    ...emptySettings(),
-    coderTools: [requestHasSystemText]
-  }
-  return [tool.name for tool in withScriptToolsForCoders(settings).coderTools]
-}
-
-// The Agency coder already has the docs tools, so the copies the brain
-// passes are dropped, and runAgency is kept.
-node agencyCoderGetsNoDuplicateNames(): string[] {
-  const coderTools = withScriptToolsForCoders(emptySettings()).coderTools
-  return [tool.name for tool in callerToolsNotIn(agencyDocToolsBrief(), coderTools)]
+// The minimal brain's four tools, then runAgency and the docs tools, then
+// the caller's.
+node offersTheFourToolsThenTheScriptTools(): string[] {
+  scripttestBrain(["say hi"], emptySettings(), [requestHasSystemText])
+  return [tool.name for tool in calls[0].tools]
 }
 
 // The model is told to use runAgency, gets the tutorial, and still gets the
-// coordinator's own prompt.
+// minimal brain's coding rules.
 node tellsTheModelToUseRunAgency(): string {
   scripttestBrain(["say hi"], emptySettings(), [])
   const rules = requestHasSystemText(calls[0], "runAgency tool")
   const tutorial = requestHasSystemText(calls[0], "<agency_tutorial>")
-  const coordinator = requestHasSystemText(calls[0], "codeAgent")
-  return "${rules}|${tutorial}|${coordinator}"
+  const codingRules = requestHasSystemText(calls[0], "You are a coding assistant")
+  return "${rules}|${tutorial}|${codingRules}"
 }
 
 // A program with a type error comes back with the error and its line, and

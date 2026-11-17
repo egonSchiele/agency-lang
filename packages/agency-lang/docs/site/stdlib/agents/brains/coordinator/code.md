@@ -109,7 +109,7 @@ Hand a coding task to the coder: reading, writing, and editing code,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L115))
 
 ### agencyCodeAgent
 
@@ -142,4 +142,4 @@ Hand a task about Agency code to the Agency coder: writing, editing,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/code.agency#L137))

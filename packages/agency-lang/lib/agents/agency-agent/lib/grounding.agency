@@ -4,7 +4,6 @@
   AGENTS.md. Harness-owned; brains only read it.
 */
 
-import { isCoordinatorBrain } from "std::agents/agency"
 import { demoteProvider, getResolvedSlots } from "../shared.agency"
 import { parseAgentArgs } from "./args.agency"
 import { Resolved } from "./models.agency"
@@ -50,7 +49,7 @@ export def sessionFactsText(
 static const FACTS_RULE = "\nThe `<session_facts>` block says what you are and which models this session runs on. When the user asks your name, model, or provider, answer from it. Never say you cannot know."
 
 def factsRule(brainName: string): string {
-  if (isCoordinatorBrain(brainName)) {
+  if (brainName == "coordinator") {
     return FACTS_RULE
   }
   return ""

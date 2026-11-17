@@ -51,7 +51,7 @@ export def agencyAgent(
   - `simple`: one LLM call with no tools of its own.
   - `spawntest`: a trial. The minimal brain, plus a tool that starts
     another agent as a process of its own. See "The spawntest brain" below.
-  - `scripttest`: a trial. The coordinator brain, plus a tool that runs a
+  - `scripttest`: a trial. The minimal brain, plus a tool that runs a
     short Agency program in place of a node or shell script. See "The
     scripttest brain" below.
 
@@ -175,8 +175,7 @@ start target keeps its own project block the same way, in
 
 The `--agent` start targets (`code`, `agencyCode`, `research`, `oracle`,
 `explorer`, `review`, `writing`, `rewrite`) call one stdlib wrapper
-directly, through `runStartTarget`. Only the coordinator brain, and the
-scripttest brain built on it, have them.
+directly, through `runStartTarget`. Only the coordinator brain has them.
 
 The harness prints the subagent start line and the router failure line from
 an `onEmit` callback in `lib/trace.agency`.
@@ -305,13 +304,18 @@ same handlers as the agent's other tools, so the user answers questions
 about what the program does instead of reading it.
 
 `scripttestBrain` in `stdlib/agents/brains/scripttest.agency` is the
-coordinator brain with one more tool, `runAgency(source)`, and one system
-message. The message tells the model to write a short check in Agency
-instead of `node -e`, `python -c`, or a shell script, and to use those only
-when the question is about Node or Python themselves. The Agency tutorial
+minimal brain with more tools and one system message. The tools are
+`runAgency(source)` and the brief Agency docs tools
+(`agencyDocToolsBrief`), after the minimal brain's four. The message
+tells the model to write a short check in Agency instead of `node -e`,
+`python -c`, or a shell script, and to use those only when the question is
+about Node or Python themselves. The Agency tutorial
 (`stdlib/agents/prompts/agency-tutorial.md`, about 34 KB) follows it,
-because the coordinator otherwise knows no Agency. The message stays on the
+because the model otherwise knows no Agency. The message stays on the
 thread, so the provider caches it after the first turn.
+
+It is built on the minimal brain so that it can be benchmarked against
+it: the two differ only in the added tools and message.
 
 - **The check before the run.** `runAgency` type-checks the program with
   `strict: true` first. With errors, it returns them as a failure and runs
@@ -340,25 +344,12 @@ thread, so the provider caches it after the first turn.
 - **Nothing forces the tool.** The model can still run `node -e`, because
   some checks are about Node itself, such as how Node resolves a package.
   Whether the model follows the message is the question the trial answers.
-- **The harness treats it as the coordinator.** `isCoordinatorBrain` in
-  `stdlib/agents/agency.agency` is true for `coordinator` and
-  `scripttest`. `agency agent` uses it to give this brain the CLI tools,
-  the REPL style line, the session facts rule, and the `--agent` start
-  targets.
-- **The docs tools.** The brief Agency docs tools (`agencyDocToolsBrief`)
-  come with `runAgency`, so a model that needs a standard library function
-  looks it up there. Without them it searched `stdlib/`, which only works
-  inside this repository.
-- **The coders get the tools too.** A turn the router sends to the coder
-  never reaches the coordinator, and the coordinator hands script work to
-  `codeAgent`, so `withScriptToolsForCoders` adds `runAgency` and the docs
-  tools to `settings.coderTools`. The coders already see the rules, because
-  they run on the same thread. Without the tool, a coder reads the rules,
-  finds no `runAgency`, and writes a shell script.
-- **No tool name twice.** The Agency coder already has the docs tools.
-  `runCoder` in `stdlib/agents/brains/coordinator/code.agency` drops a
-  caller's coder tool whose name a coder's own tools already use, because a
-  provider rejects two tools with one name.
+- **The docs tools.** A model that needs a standard library function looks
+  it up with `agencyStdlib`. Without the docs tools it searched `stdlib/`,
+  which only works inside this repository.
+- **The harness treats it as the minimal brain.** `agency agent` gives it
+  no CLI tools, no REPL style line, no session facts rule, and no
+  `--agent` start targets, as for `minimal`.
 
 ## Adding a brain
 

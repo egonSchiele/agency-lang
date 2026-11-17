@@ -2,31 +2,17 @@
   "sourceFile": "brainScripttest.agency",
   "tests": [
     {
-      "nodeName": "offersRunAgencyAndTheCoordinatorTools",
-      "description": "The scripttest brain offers runAgency and the docs tools along with the coordinator's tools.",
+      "nodeName": "offersTheFourToolsThenTheScriptTools",
+      "description": "The scripttest brain offers read, bash, edit, and write, then runAgency and the five docs tools, then the caller's tools.",
       "input": "",
-      "expectedOutput": "\"true|true|true|true\"",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"runAgency\",\"agencyGuide\",\"agencyCliDocs\",\"agencyDiagnostics\",\"agencyStdlib\",\"agencyAgent\",\"requestHasSystemText\"]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "hi" }]
     },
     {
-      "nodeName": "codersGetTheScriptTools",
-      "description": "The coders get runAgency and the docs tools, and the caller's coder tools stay after them.",
-      "input": "",
-      "expectedOutput": "[\"runAgency\",\"agencyGuide\",\"agencyCliDocs\",\"agencyDiagnostics\",\"agencyStdlib\",\"agencyAgent\",\"requestHasSystemText\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
-    },
-    {
-      "nodeName": "agencyCoderGetsNoDuplicateNames",
-      "description": "Against the Agency coder's own docs tools, only runAgency is left of what the brain passes.",
-      "input": "",
-      "expectedOutput": "[\"runAgency\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
-    },
-    {
       "nodeName": "tellsTheModelToUseRunAgency",
-      "description": "The system prompt says to use runAgency, holds the Agency tutorial, and keeps the coordinator's prompt.",
+      "description": "The system prompt says to use runAgency, holds the Agency tutorial, and keeps the minimal brain's coding rules.",
       "input": "",
       "expectedOutput": "\"true|true|true\"",
       "evaluationCriteria": [{ "type": "exact" }],

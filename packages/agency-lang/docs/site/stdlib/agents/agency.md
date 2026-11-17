@@ -105,24 +105,6 @@ Return the brains `agencyAgent` can run, each with a one-line description.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L67))
 
-### isCoordinatorBrain
-
-```ts
-isCoordinatorBrain(brain: string): boolean
-```
-
-Whether a brain is the coordinator or is built on it, and so has its subagents and takes the same tools from a caller.
-
-**Parameters:**
-
-| Name | Type | Default | Description |
-|---|---|---|---|
-| brain | `string` |  | A brain's name |
-
-**Returns:** `boolean`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L95))
-
 ### agencyAgent
 
 ```ts
@@ -176,4 +158,4 @@ A negative `maxCost` or `maxTime` means no limit. A model that is given
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L100))

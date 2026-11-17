@@ -5,7 +5,7 @@
   and the job tools when a person is at the REPL. See
   docs/dev/agents/agent-brains.md.
 */
-import { AgencyAgentBrain, agencyAgent, isCoordinatorBrain } from "std::agents/agency"
+import { AgencyAgentBrain, agencyAgent } from "std::agents/agency"
 import { AgentSettings, ModelChoice } from "std::agents/brains/settings"
 import { now } from "std::date"
 import { Attachment, ensureSystemMessage } from "std::thread"
@@ -108,7 +108,7 @@ export def answerTurn(
   let mainTools: any[] = []
   // The minimal and simple brains get neither: their prompts are kept as
   // short as they can be.
-  if (isCoordinatorBrain(brainName)) {
+  if (brainName == "coordinator") {
     addReplStyle()
     mainTools = cliTools(now(), settings)
   }

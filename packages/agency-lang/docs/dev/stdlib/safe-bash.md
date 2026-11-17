@@ -1641,7 +1641,9 @@ written. `cdOrExit` builds the guard.
 
 The guard depends on `exit 1` ending the whole script. Every shell line
 runs as `bash -c <text>` with nothing around the text, on the foreground
-path and on the job path. `guardEndsTheScript` fails if that changes.
+path and on the job path. `guardEndsTheScript` fails if that changes on
+the foreground path. No test covers the job path, so a change to how
+`addJob` starts its script has to keep the text unwrapped.
 
 A line where no command raises an effect is still broad. `cd x` alone
 and `cd x; echo hi` both ask `std::bash` and run the original text.

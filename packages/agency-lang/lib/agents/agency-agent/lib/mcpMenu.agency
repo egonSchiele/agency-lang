@@ -1,0 +1,349 @@
+/** @module The agent's `/mcp` menu: a list of the configured MCP servers with
+  their status, and a screen for each one to log in, log out, reconnect, or
+  see its tools. The list comes from the config each time the menu opens, and
+  the status comes from the @agency-lang/mcp package. Opening the menu
+  connects a server added to the config since startup, asking first for a
+  stdio server, and disconnects one that was removed. */
+
+import {
+  McpServerState,
+  configureMcpServers,
+  disconnectMcpServer,
+  finishMcpLogin,
+  isMcpAvailable,
+  logoutMcpServer,
+  mcpNotInstalled,
+  mcpPackageProblem,
+  mcpServerStates,
+  mergeMcpServers,
+  readProjectMcpConfig,
+  reconnectMcpServer,
+  startMcpLogin,
+ } from "std::mcp"
+import { keys } from "std::object"
+import { cwd, openUrl } from "std::system"
+import { ChoiceItem, chooseOption, pushMessage } from "std::ui/cli"
+
+import { SETTINGS_PATH } from "./config.agency"
+import { startPendingMcpServers, stateLine, toolCountText } from "./mcp.agency"
+import { getMcpServers, loadSettings } from "./settings.agency"
+
+export type RowStatus =
+  | "connected"
+  | "needsLogin"
+  | "failed"
+  | "notConnected"
+
+/** One server in the menu: its config, where the config came from, and its status. */
+export type ServerRow = {
+  name: string;
+  config: Record<string, any>;
+  scope: "project" | "global";
+  status: RowStatus;
+  message: string;
+  tools: any[]
+}
+
+const STATUS_TEXT: Record<string, string> = {
+  connected: "✔ connected",
+  needsLogin: "! needs login",
+  failed: "✘ failed",
+  notConnected: "○ not connected"
+}
+
+const BACK: ChoiceItem = {
+  key: "back",
+  label: "Back"
+}
+
+// The actions on a server's screen, by kind of row.
+const ACTIONS: Record<string, ChoiceItem[]> = {
+  needsLogin: [
+    {
+      key: "login",
+      label: "Log in"
+    },
+    {
+      key: "reconnect",
+      label: "Reconnect"
+    },
+    BACK,
+  ],
+  connectedOAuth: [
+    {
+      key: "tools",
+      label: "View tools"
+    },
+    {
+      key: "login",
+      label: "Log in again"
+    },
+    {
+      key: "logout",
+      label: "Log out"
+    },
+    {
+      key: "reconnect",
+      label: "Reconnect"
+    },
+    BACK,
+  ],
+  connected: [
+    {
+      key: "tools",
+      label: "View tools"
+    },
+    {
+      key: "reconnect",
+      label: "Reconnect"
+    },
+    BACK,
+  ],
+  failed: [{
+    key: "reconnect",
+    label: "Reconnect"
+  }, BACK],
+  notConnected: [{
+    key: "reconnect",
+    label: "Connect"
+  }, BACK]
+}
+
+/** One row per server in the merged config, in its key order. A server with
+  no state is "notConnected". A state with no server in the config gets no row. */
+export def serverRows(
+  globalServers: Record<string, any>,
+  projectServers: Record<string, any>,
+  states: McpServerState[],
+): ServerRow[] {
+  const merged = mergeMcpServers(globalServers, projectServers)
+  const projectNames = keys(projectServers)
+  let rows: ServerRow[] = []
+  for (name in keys(merged)) {
+    let row: ServerRow = {
+      name: name,
+      config: merged[name],
+      scope: "global",
+      status: "notConnected",
+      message: "",
+      tools: []
+    }
+    if (projectNames.includes(name)) {
+      row.scope = "project"
+    }
+    for (state in states) {
+      if (state.name == name) {
+        row.status = state.status
+        row.message = state.message
+        row.tools = state.tools
+      }
+    }
+    rows.push(row)
+  }
+  return rows
+}
+
+/** The status after a server's name in the list. */
+export def statusText(row: ServerRow): string {
+  if (row.status == "connected") {
+    return "${STATUS_TEXT.connected} · ${toolCountText(row.tools.length)}"
+  }
+  return STATUS_TEXT[row.status]
+}
+
+/** The lines above the actions on a server's screen. */
+export def detailLines(
+  row: ServerRow,
+  projectFile: string,
+  globalFile: string,
+): string[] {
+  let status = "Status:  ${statusText(row)}"
+  if (row.status == "failed") {
+    status = "${status}: ${row.message}"
+  }
+  let lines: string[] = [status]
+  if (row.config.url != null) {
+    lines.push("URL:     ${row.config.url}")
+  } else {
+    let command: string[] = [row.config.command]
+    if (row.config.args != null) {
+      command = [...command, ...row.config.args]
+    }
+    lines.push("Command: ${command.join(" ")}")
+  }
+  if (row.scope == "project") {
+    lines.push("Config:  ${projectFile} (project)")
+  } else {
+    lines.push("Config:  ${globalFile} (global)")
+  }
+  return lines
+}
+
+/** The actions for a row. Only an OAuth server can need a login, so only a
+  connected row needs the config checked. */
+export def actionsFor(row: ServerRow): ChoiceItem[] {
+  if (row.status == "connected" && row.config.auth == "oauth") {
+    return ACTIONS.connectedOAuth
+  }
+  return ACTIONS[row.status]
+}
+
+/** Start a login and open its page. Succeeds with the lines to show while
+  the user logs in. The open raises std::openUrl, which the user's policy
+  answers or the user is asked. When the open fails or is rejected, the URL
+  is still shown, so the user can open it themselves. */
+export def beginLogin(
+  merged: Record<string, any>,
+  name: string,
+): Result<string[]> {
+  const started = startMcpLogin(merged, name)
+  if (isFailure(started)) {
+    return started
+  }
+  const url = started.value
+  openUrl(url)
+  return success(
+    [
+      "Opening the ${name} login page in your browser.",
+      "If it doesn't open, visit: ${url}",
+      "Waiting for you to finish logging in. Press Escape to cancel.",
+    ],
+  )
+}
+
+/** Wait for the login to finish, and say how it went. */
+export def endLogin(name: string): string {
+  return stateLine(finishMcpLogin(name))
+}
+
+/** Delete the server's saved login. Raises mcp::logout. */
+export def logOut(name: string): string {
+  const result = logoutMcpServer(name)
+  if (result is failure(f)) {
+    return "${name}: ${f}"
+  }
+  return "${name} logged out."
+}
+
+/** Connect again with the saved login. Never starts a login. */
+export def reconnect(merged: Record<string, any>, name: string): string {
+  return stateLine(reconnectMcpServer(merged, name))
+}
+
+/** One line per tool: its name and the first line of its description. */
+export def toolLines(row: ServerRow): string[] {
+  let lines: string[] = []
+  for (tool in row.tools) {
+    const firstLine = tool.description.split("\n")[0]
+    lines.push("${tool.name}  ${firstLine}")
+  }
+  return lines
+}
+
+// A login shows its lines before it waits, so it pushes them itself.
+def loginLines(merged: Record<string, any>, name: string): string[] {
+  const begun = beginLogin(merged, name)
+  if (begun is failure(f)) {
+    return ["${name}: ${f}"]
+  }
+  for (line in begun.value) {
+    pushMessage(line)
+  }
+  return [endLogin(name)]
+}
+
+/** Run one action from a server's screen, and return the lines to show. */
+export def runAction(
+  key: string,
+  row: ServerRow,
+  merged: Record<string, any>,
+): string[] {
+  return match(key) {
+    "tools" => toolLines(row)
+    "login" => loginLines(merged, row.name)
+    "logout" => [logOut(row.name)]
+    "reconnect" => [reconnect(merged, row.name)]
+    _ => []
+  }
+}
+
+// Show one server's screen and run the action the user picks. Escape or
+// "Back" returns to the list.
+def serverScreen(
+  row: ServerRow,
+  merged: Record<string, any>,
+  projectFile: string,
+) {
+  const details = detailLines(row, projectFile, SETTINGS_PATH).join("\n")
+  const action = chooseOption(row.name, details, actionsFor(row), allowCancel: true)
+  if (action == "" || action == null || action == "back") {
+    return
+  }
+  for (line in runAction(action, row, merged)) {
+    pushMessage(line)
+  }
+}
+
+/** Make the package match the config as it is now. Stores it, so a server
+  added since startup is pending and the next turn connects it. Disconnects
+  every server that is no longer in it, so the model stops getting its tools. */
+export def applyConfig(merged: Record<string, any>) {
+  configureMcpServers(merged)
+  const names = keys(merged)
+  for (state in mcpServerStates()) {
+    if (!names.includes(state.name)) {
+      disconnectMcpServer(state.name)
+    }
+  }
+}
+
+/** The `/mcp` slash command: the server list, then a server's screen, then
+  back to the list. Escape at the list leaves the menu. */
+export def mcpSlashCommand(): boolean {
+  if (!isMcpAvailable()) {
+    pushMessage(color.yellow(mcpNotInstalled()))
+    return true
+  }
+  const globalServers = getMcpServers(loadSettings())
+  const projectServers = readProjectMcpConfig(cwd())
+  const merged = mergeMcpServers(globalServers, projectServers)
+  if (keys(merged).length == 0) {
+    pushMessage(
+      color.dim(
+        "No MCP servers configured. Add an mcpServers block to agency.json or settings.json.",
+      ),
+    )
+    pushMessage(color.dim("Or run: agency mcp add <name> --url <url>"))
+    return true
+  }
+  const problem = mcpPackageProblem()
+  if (problem != "") {
+    pushMessage(color.yellow("MCP: ${problem}"))
+    return true
+  }
+  applyConfig(merged)
+  startPendingMcpServers()
+  const projectFile = "${cwd()}/agency.json"
+  while (true) {
+    const rows = serverRows(globalServers, projectServers, mcpServerStates())
+    let items: ChoiceItem[] = []
+    for (row in rows) {
+      items.push(
+        {
+          key: row.name,
+          label: "${row.name}   ${statusText(row)}"
+        },
+      )
+    }
+    const picked = chooseOption("MCP servers", "", items, allowCancel: true)
+    if (picked == "" || picked == null) {
+      return true
+    }
+    for (row in rows) {
+      if (row.name == picked) {
+        serverScreen(row, merged, projectFile)
+      }
+    }
+  }
+  return true
+}

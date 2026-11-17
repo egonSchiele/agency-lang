@@ -1,0 +1,17 @@
+import { logoutMcpServer } from "std::mcp"
+
+node rejectedLogoutFails(): boolean {
+  const result = logoutMcpServer("linear") with reject
+  return isFailure(result)
+}
+
+node raisesTheLogoutEffect(): string {
+  let seen = ""
+  handle {
+    logoutMcpServer("linear")
+  } with (intr) {
+    seen = "${intr.effect}:${intr.data.server}"
+    return reject()
+  }
+  return seen
+}

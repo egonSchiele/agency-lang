@@ -4,6 +4,9 @@ import { isPlainObject } from "../utils/isPlainObject.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
+import { packageProblem, MCP_NOT_INSTALLED, MCP_VERSION_UNREADABLE } from "./mcpVersion.js";
+import { leafCancel } from "./abortable.js";
+import { currentRun } from "../runtime/asyncContext.js";
 import { success, failure, isFailure, type ResultValue } from "../runtime/index.js";
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
 
@@ -153,6 +156,249 @@ export async function _loadMcpTools(
   return (await _loadMcpToolsWithStatus(merged, onOAuthRequired)).tools;
 }
 
+// ── Server states and logins (the agent's /mcp menu) ───────────────────────
+// The package's manager holds each server's state. Nothing here keeps a copy,
+// so a restored checkpoint cannot bring back an old one.
+
+export type McpServerState = {
+  name: string;
+  status: "connected" | "needsLogin" | "failed";
+  /** "" unless status is "failed". */
+  message: string;
+  /** [] unless status is "connected". */
+  tools: AgencyFunction[];
+};
+
+// ── What the mcp::connect question shows ───────────────────────────────────
+// An "always approve when" answer pins these strings, so two configs that
+// start different processes must never produce the same text.
+
+/** A word as the question shows it: plain words as they are, anything else
+ *  in double quotes. A plain word has no spaces or quotes, so
+ *  ["-c", "echo hi"] and ["-c", "echo", "hi"] read differently. */
+function shownWord(word: string): string {
+  return /^[A-Za-z0-9_@%+=:,./-]+$/.test(word) ? word : JSON.stringify(word);
+}
+
+/** A stdio server's command and args, each word quoted when it needs it. */
+export function _mcpCommandLine(config: Record<string, unknown>): string {
+  const args = Array.isArray(config.args) ? config.args : [];
+  return [config.command, ...args].map((word) => shownWord(String(word))).join(" ");
+}
+
+/** A stdio server's environment as sorted KEY=value words, or "" when it has
+ *  none. It is part of the question because a variable such as NODE_OPTIONS
+ *  can decide what code the command runs. */
+export function _mcpEnvLine(config: Record<string, unknown>): string {
+  const env = config.env;
+  if (!isPlainObject(env)) {
+    return "";
+  }
+  return Object.keys(env)
+    .sort()
+    .map((key) => shownWord(`${key}=${String(env[key])}`))
+    .join(" ");
+}
+
+/** The upgrade message when the installed package is too old or its version
+ *  cannot be read, or "". Also "" when the package is not installed. */
+export async function _mcpPackageProblem(): Promise<string> {
+  if (!isMcpAvailable()) {
+    return "";
+  }
+  exposeResolvedMcpPath();
+  try {
+    return packageProblem(await mcpBridge.packageVersion());
+  } catch (error) {
+    console.warn(
+      `[mcp] could not read the @agency-lang/mcp version: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return MCP_VERSION_UNREADABLE;
+  }
+}
+
+/** Why the package cannot be used, or "" when it can: not installed, or too old. */
+async function unusable(): Promise<string> {
+  if (!isMcpAvailable()) {
+    return MCP_NOT_INSTALLED;
+  }
+  return _mcpPackageProblem();
+}
+
+/** The not-installed message, so the agent's menu says the same thing. */
+export function _mcpNotInstalled(): string {
+  return MCP_NOT_INSTALLED;
+}
+
+/** Run `action` when the package can be used. Otherwise return `whenUnusable(reason)`. */
+async function withPackage<T>(
+  whenUnusable: (reason: string) => T,
+  action: () => Promise<T>,
+): Promise<T> {
+  const reason = await unusable();
+  if (reason !== "") {
+    return whenUnusable(reason);
+  }
+  exposeResolvedMcpPath();
+  return action();
+}
+
+function failedState(name: string, message: string): McpServerState {
+  return { name, status: "failed", message, tools: [] };
+}
+
+/** A package state as an Agency value. A connected server's tools are gated,
+ *  so each call raises `mcp::call`. */
+async function toServerState(
+  name: string,
+  state: mcpBridge.BridgeServerState,
+): Promise<McpServerState> {
+  if (state.status === "failed") {
+    return failedState(name, state.message);
+  }
+  if (state.status === "needsLogin") {
+    return { name, status: "needsLogin", message: "", tools: [] };
+  }
+  const gated = gate(state.callTool);
+  const tools = await Promise.all(
+    state.tools.map(
+      (tool) => mcpBridge.mcpToolToAgencyFunction(tool, gated) as Promise<AgencyFunction>,
+    ),
+  );
+  return { name, status: "connected", message: "", tools };
+}
+
+/** Connect every server without starting a login, all at the same time. */
+export async function _connectMcpServers(merged: RawMcpServers): Promise<McpServerState[]> {
+  return withPackage(
+    () => [],
+    () =>
+      Promise.all(
+        Object.keys(merged).map(async (name) =>
+          toServerState(name, await mcpBridge.connectServer(name, { config: merged })),
+        ),
+      ),
+  );
+}
+
+/** The package's current state for each server. Connects nothing. */
+export async function _mcpServerStates(): Promise<McpServerState[]> {
+  return withPackage(
+    () => [],
+    async () => {
+      const states = await mcpBridge.serverStates();
+      return Promise.all(Object.entries(states).map(([name, state]) => toServerState(name, state)));
+    },
+  );
+}
+
+/** Start a login. Success holds the login page URL. */
+export async function _startMcpLogin(merged: RawMcpServers, name: string): Promise<ResultValue> {
+  return withPackage(
+    (reason) => failure(reason),
+    async () => {
+      const started = await mcpBridge.startLogin(name, { config: merged });
+      return started.status === "started" ? success(started.authUrl) : failure(started.message);
+    },
+  );
+}
+
+/** Wait for the login to finish, then connect. Cancelling the run cancels the
+ *  login. */
+export async function _finishMcpLogin(name: string): Promise<McpServerState> {
+  // The run is only current until this function's first await.
+  const run = currentRun();
+  const signal = run.ctx.getAbortSignal(run.stack);
+  return withPackage(
+    (reason) => failedState(name, reason),
+    async () => {
+      const cancel = () => {
+        void mcpBridge.cancelLogin(name);
+      };
+      if (signal.aborted) {
+        await mcpBridge.cancelLogin(name);
+        throw leafCancel("MCP login cancelled", signal);
+      }
+      signal.addEventListener("abort", cancel, { once: true });
+      let state: mcpBridge.BridgeServerState;
+      try {
+        state = await mcpBridge.finishLogin(name);
+      } finally {
+        signal.removeEventListener("abort", cancel);
+      }
+      if (signal.aborted) {
+        throw leafCancel("MCP login cancelled", signal);
+      }
+      return toServerState(name, state);
+    },
+  );
+}
+
+export async function _cancelMcpLogin(name: string): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.cancelLogin(name),
+  );
+}
+
+/** Close the server's connection and drop its tools. Never starts a login. */
+export async function _disconnectMcpServer(name: string): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.disconnectServer(name),
+  );
+}
+
+/** Store the server config in the package without connecting anything. */
+export async function _configureMcpServers(merged: RawMcpServers): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.configureServers({ config: merged }),
+  );
+}
+
+/** The configured servers the package has no state for yet. */
+export async function _pendingMcpServers(): Promise<RawMcpServers> {
+  return withPackage(
+    () => ({}),
+    async () => (await mcpBridge.pendingServers()) as RawMcpServers,
+  );
+}
+
+/** Record a server as failed without connecting, so it is not tried again
+ *  until the user reconnects it. */
+export async function _markMcpServerFailed(name: string, message: string): Promise<void> {
+  return withPackage(
+    () => undefined,
+    () => mcpBridge.markServerFailed(name, message),
+  );
+}
+
+/** Delete the saved login and disconnect. */
+export async function _logoutMcpServer(name: string): Promise<ResultValue> {
+  return withPackage(
+    (reason) => failure(reason),
+    async () => {
+      const result = await mcpBridge.logout(name);
+      return result.status === "loggedOut" ? success(name) : failure(result.message);
+    },
+  );
+}
+
+/** Disconnect and connect again with the saved login. Never starts a login. */
+export async function _reconnectMcpServer(
+  merged: RawMcpServers,
+  name: string,
+): Promise<McpServerState> {
+  return withPackage(
+    (reason) => failedState(name, reason),
+    async () => {
+      await mcpBridge.disconnectServer(name);
+      return toServerState(name, await mcpBridge.connectServer(name, { config: merged }));
+    },
+  );
+}
+
 // ── Config management (used by the `agency mcp` CLI) ───────────────────────
 // Scope-agnostic "how": callers pass the target file (project agency.json or
 // the agent-home settings.json). Every helper returns an Agency Result and the
@@ -167,7 +413,7 @@ function serversOf(raw: Record<string, unknown>): RawMcpServers {
  *  absent or too old to expose the validator. */
 export async function _validateMcpServers(servers: RawMcpServers): Promise<ResultValue> {
   if (!isMcpAvailable()) {
-    return failure("@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp");
+    return failure(MCP_NOT_INSTALLED);
   }
   exposeResolvedMcpPath();
   try {

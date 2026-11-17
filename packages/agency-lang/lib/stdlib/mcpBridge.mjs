@@ -33,7 +33,10 @@
 // # What it exposes
 //
 // Thin async pass-throughs to the package's real exports — mcpRaw,
-// readMcpConfig, mcpToolToAgencyFunction, MCP_PACKAGE_VERSION. The shapes are
+// readMcpConfig, mcpToolToAgencyFunction, MCP_PACKAGE_VERSION, and the 0.0.6
+// exports connectServer, serverStates, startLogin, finishLogin, cancelLogin,
+// logout, disconnectServer, configureServers, pendingServers, and
+// markServerFailed. The shapes are
 // pinned by mcpBridge.d.mts and guarded by mcpBridge.contract.test.ts so
 // signature drift between this bridge and the package is caught, not silent.
 import { pathToFileURL } from "node:url";
@@ -69,4 +72,45 @@ export async function packageVersion() {
 
 export async function validateMcpServers(servers) {
   return (await load()).validateMcpServers(servers);
+}
+
+// The 0.0.6 exports: connect without a login, a login in two steps, log out.
+export async function connectServer(serverName, options) {
+  return (await load()).connectServer(serverName, options);
+}
+
+export async function serverStates() {
+  return (await load()).serverStates();
+}
+
+export async function startLogin(serverName, options) {
+  return (await load()).startLogin(serverName, options);
+}
+
+export async function finishLogin(serverName) {
+  return (await load()).finishLogin(serverName);
+}
+
+export async function cancelLogin(serverName) {
+  return (await load()).cancelLogin(serverName);
+}
+
+export async function logout(serverName) {
+  return (await load()).logout(serverName);
+}
+
+export async function disconnectServer(serverName) {
+  return (await load()).disconnectServer(serverName);
+}
+
+export async function configureServers(options) {
+  return (await load()).configureServers(options);
+}
+
+export async function pendingServers() {
+  return (await load()).pendingServers();
+}
+
+export async function markServerFailed(serverName, message) {
+  return (await load()).markServerFailed(serverName, message);
 }

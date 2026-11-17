@@ -1,0 +1,24 @@
+{
+  "sourceFile": "mcpMenu.agency",
+  "tests": [
+    { "nodeName": "startupLinesForEachStatus", "description": "startup prints one line for a server that needs a login and one for a failed server, and none for a connected one", "input": "", "expectedOutput": "\"MCP: linear needs you to log in. Type /mcp to log in.|MCP: github failed to connect: connect ECONNREFUSED 127.0.0.1:3000\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "startupLineForAnOldPackage", "description": "an old package gives one startup line with the upgrade command", "input": "", "expectedOutput": "\"MCP: @agency-lang/mcp 0.0.5 is too old. Run: npm install -g @agency-lang/mcp@latest\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rowsMarkProjectAndNotConnected", "description": "a project server wins over a global one of the same name, and a server with no state is not connected", "input": "", "expectedOutput": "\"project:connected,global:notConnected\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rowsSkipAStateWithNoConfig", "description": "a state for a server that is no longer in the config gets no row", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "stateLineForEachStatus", "description": "each status becomes the sentence the user sees", "input": "", "expectedOutput": "\"✔ s connected · 2 tools. You can use them from your next message.|s needs you to log in.|s failed to connect: boom\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "actionsForEachRow", "description": "each kind of row offers its actions in order", "input": "", "expectedOutput": "\"login,reconnect,back|tools,login,logout,reconnect,back|tools,reconnect,back|reconnect,back|reconnect,back\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "loginAddsTheTools", "description": "a finished login adds the server's tools to the session", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rejectedOpenStillShowsTheUrl", "description": "when opening the browser is rejected, the login URL is still shown", "input": "", "expectedOutput": "\"If it doesn't open, visit: https://login.example/authorize?server=t2\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "logoutRemovesTheTools", "description": "an approved log out removes the server's tools", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rejectedLogoutKeepsTheTools", "description": "a rejected mcp::logout keeps the login and the tools", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "abandonedLoginDoesNotBlockTheNext", "description": "a login that is started and never finished does not block a login to another server", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "connectsAServerWithNoState", "description": "Connect on a server that was never connected connects it", "input": "", "expectedOutput": "\"✔ t7 connected · 1 tool. You can use them from your next message.\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "failedLoginStartSaysWhy", "description": "a login that cannot start says why and does not wait", "input": "", "expectedOutput": "\"t10: t10 is not an OAuth server\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "failedServerSaysWhy", "description": "a reconnect that fails gives the reason", "input": "", "expectedOutput": "\"t8 failed to connect: spawn missing ENOENT\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "menuDropsARemovedServer", "description": "opening the menu disconnects a server that is no longer in the config, and the next turn does not connect it again", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "menuConnectsAnAddedServer", "description": "a server added to the config since startup connects on the next turn", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "storedServerConnectsOnTheFirstTurn", "description": "startup only stores the config, and the first turn connects the stored servers", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "refusedServerIsAskedOnce", "description": "a stdio server whose start is refused is asked about once, not on every turn", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "toolsSurviveARestore", "description": "no Agency global holds the MCP tools, so a restore keeps the tools of a login made after the checkpoint", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

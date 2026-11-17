@@ -313,6 +313,7 @@ Other process docs:
 - `docs/dev/agents/herdr.md` — Reporting a `repl()` program's idle, working, and blocked states to Herdr, the terminal workspace manager.
 - `docs/dev/agents/claude-skills.md` — How `agency agent` finds and loads the user's Claude Code skills, and which frontmatter fields it supports.
 - `docs/dev/agents/agent-sessions.md` — Save, resume, and `/fork` for `agency agent` sessions, and the `searchSessions` tool.
+- `docs/dev/agents/agent-mcp.md` — How `agency agent` connects to MCP servers, the `/mcp` menu's login and log out, and where server state lives.
 - `docs/dev/agents/user-commands.md` — What the user can type at the agent prompt besides a message: slash commands, `!command`, `@file`, and `/image`.
 - `docs/dev/agents/agent-compaction.md` — Compaction in `agency agent`: when it runs, which part of the thread it summarizes, and what a failed summary does.
 - `docs/dev/agents/agent-presets.md` — Presets for `agency agent`: how startup, `/model`, and `/preset` pick a model, and how `/preset save` writes one.

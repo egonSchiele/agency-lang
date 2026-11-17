@@ -145,8 +145,8 @@ node main() {
   // before any handler/REPL is installed.
   disableMemory() with approve
 
-  // Connect configured MCP servers and hand their (policy-gated) tools to the
-  // coordinator. Must run before the first turn (mcpTools ordering contract).
+  // Store the configured MCP servers. They connect on the first turn, under
+  // the policy handler, which answers each stdio server's mcp::connect.
   maybeLoadMcp(loadSettings())
 
   setStartupLimitFlags(limitFlagsFromArgs(args))

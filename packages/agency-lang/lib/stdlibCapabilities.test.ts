@@ -227,6 +227,8 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "isMcpAvailable",
     "mergeMcpServers",
   ],
+  "MCP server state kept in the @agency-lang/mcp package's memory, and fixed messages about the package":
+    ["mcpPackageProblem", "mcpNotInstalled", "configureMcpServers", "mcpServerStates"],
   "terminal drawing that returns text and prints nothing": [
     "setSlashPalette",
     "clearHistory",

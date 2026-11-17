@@ -511,7 +511,19 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "readProjectMcpConfig",
     "mergeMcpServers",
     "loadMcpTools",
-    "loadMcpToolsWithStatus"
+    "loadMcpToolsWithStatus",
+    "mcpPackageProblem",
+    "connectMcpServers",
+    "configureMcpServers",
+    "connectPendingMcpServers",
+    "mcpServerStates",
+    "startMcpLogin",
+    "finishMcpLogin",
+    "cancelMcpLogin",
+    "disconnectMcpServer",
+    "mcpNotInstalled",
+    "logoutMcpServer",
+    "reconnectMcpServer"
   ],
   "std::memory": [
     "isMemoryActive",

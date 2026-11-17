@@ -118,6 +118,15 @@ const isAlive = (pid: number): boolean => {
   }
 };
 
+/** The pid a script printed. A script that printed nothing yet gives
+ *  `Number("")`, which is 0, and `process.kill(0, …)` signals this whole
+ *  process group: the vitest worker, vitest, and pnpm. */
+function printedPid(stdout: string): number {
+  const pid = Number(stdout.trim());
+  expect(Number.isInteger(pid) && pid > 0, `no pid in ${JSON.stringify(stdout)}`).toBe(true);
+  return pid;
+}
+
 async function waitUntilGone(pid: number): Promise<boolean> {
   for (let attempt = 0; attempt < 40 && isAlive(pid); attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -136,7 +145,7 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
     const { result, ms } = await timed(shell("sleep 30 & echo $!; wait", { timeoutMs: 200 }));
     expect(result.timedOut).toBe(true);
     expect(ms).toBeLessThan(1500);
-    expect(await waitUntilGone(Number(result.stdout.trim()))).toBe(true);
+    expect(await waitUntilGone(printedPid(result.stdout))).toBe(true);
   });
 
   it("an abort returns while a later command of the script is still to run", async () => {
@@ -159,11 +168,14 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
 
   it("returns when a process that left the group still holds the output pipe", async () => {
     const escape = `perl -MPOSIX -e '$| = 1; setsid(); print "$$\\n"; sleep 20' & wait`;
-    const { result, ms } = await timed(shell(escape, { timeoutMs: 300 }));
-    const escaped = Number(result.stdout.trim());
+    // Long enough for perl to start and print its pid on a busy CI runner.
+    const limitMs = 1000;
+    const { result, ms } = await timed(shell(escape, { timeoutMs: limitMs }));
+    // Read before the `try`, so a missing pid never reaches the kill below.
+    const escaped = printedPid(result.stdout);
     try {
       expect(result.timedOut).toBe(true);
-      expect(ms).toBeLessThan(2000);
+      expect(ms).toBeLessThan(limitMs + 1700);
       // Still running: the group kill did not reach it, so only the pipe
       // rule can have ended the call.
       expect(isAlive(escaped)).toBe(true);

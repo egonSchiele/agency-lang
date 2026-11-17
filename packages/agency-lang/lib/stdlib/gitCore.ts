@@ -166,12 +166,28 @@ export function logArgs(opts: {
   if (opts.ref) {
     args.push(hardenPositional(opts.ref, "ref"));
   }
+  // Always written, so git reads the ref as a revision and never as a path.
+  args.push("--");
   if (opts.path) {
-    args.push("--", hardenPositional(opts.path, "path"));
+    args.push(hardenPositional(opts.path, "path"));
   }
   return args;
 }
 
+/**
+ * Given exactly two words, one of them a path outside the repository,
+ * `git diff` compares the two files the way `git diff --no-index` does.
+ * So `ref: "/dev/null", ref2: "/home/me/.ssh/id_rsa"` would print the key.
+ * `gitRunImpl` happens to drop that output, because the comparison exits
+ * with code 1 when the files differ. That is a detail of git, not a guard.
+ *
+ * Two things stop that. The `--` after the refs makes git read each ref as
+ * a revision, and fail on one that is not. The pathspec after it is never
+ * left off: with one ref and no path, `git diff <ref> --` is two words
+ * again, and git compares <ref> with a file named `--` in the repository.
+ * The pathspec `:/` means the whole repository, which is what a diff with
+ * no path shows anyway, from any directory in it.
+ */
 export function diffArgs(opts: {
   ref: string;
   ref2: string;
@@ -189,9 +205,7 @@ export function diffArgs(opts: {
   if (opts.ref2) {
     args.push(hardenPositional(opts.ref2, "ref2"));
   }
-  if (opts.path) {
-    args.push("--", hardenPositional(opts.path, "path"));
-  }
+  args.push("--", opts.path ? hardenPositional(opts.path, "path") : ":/");
   return args;
 }
 
@@ -200,6 +214,8 @@ export function showArgs(opts: { ref: string }): string[] {
   if (opts.ref) {
     args.push(hardenPositional(opts.ref, "ref"));
   }
+  // Always written, so git reads the ref as a revision and never as a path.
+  args.push("--");
   return args;
 }
 

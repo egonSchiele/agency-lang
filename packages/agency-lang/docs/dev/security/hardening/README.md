@@ -177,6 +177,15 @@ child (`--permission`; see the roadmap).
 - **`@always` approve scopes** (#963) let an effect declaration mark scopes that
   are approved without prompting, as data on the effect rather than scattered in
   handlers. Depth: `docs/dev/language/effect-always-tag.md`.
+- **A git ref is never read as a path** (ADI-291). Given two words, one of
+  them a path outside the repository, `git diff` compares the two files. So
+  `gitDiff(ref: "/dev/null", ref2: "/home/me/.ssh/id_rsa")` could print a
+  key under an approval meant for a diff. `diffArgs` now always ends in `--`
+  and one pathspec (`:/`, the whole repository, when no path is given), and
+  `logArgs` and `showArgs` always write `--` after the ref. The comment on
+  `diffArgs` in `lib/stdlib/gitCore.ts` explains why the pathspec is never
+  left off. The test runs the built arguments through real git in
+  `lib/stdlib/git.test.ts`.
 
 ## How to keep this current
 

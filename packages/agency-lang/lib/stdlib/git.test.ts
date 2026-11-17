@@ -5,8 +5,10 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { nodeHost } from "../host/node/nodeHost.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 import {
   gitRunImpl,
+  _gitHardeningFlags,
   assertPathsContained,
   assertAllNotRestricted,
   statusArgs,
@@ -148,6 +150,98 @@ describe("format/parser round-trips against real git", () => {
     const show = parseDiff(await gitRunImpl(host, repo, showArgs({ ref: "HEAD" })));
     expect(show.files.length).toBeGreaterThanOrEqual(1); // regression: used to return []
     expect(show.patch).toContain("commit "); // full show output retained
+  });
+});
+
+describe("a ref is never read as a file outside the repository", () => {
+  const SECRET = "SECRET-CONTENT-OUTSIDE-REPO";
+  let root: string;
+  let repo: string;
+  let secret: string;
+
+  beforeAll(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "git-ref-path-"));
+    repo = path.join(root, "repo");
+    secret = path.join(root, "secret.txt");
+    await fs.writeFile(secret, `${SECRET}\n`);
+    await fs.mkdir(path.join(repo, "sub"), { recursive: true });
+    await pexec("git", ["init", "-q"], { cwd: repo });
+    await pexec("git", ["config", "user.email", "t@t.com"], { cwd: repo });
+    await pexec("git", ["config", "user.name", "t"], { cwd: repo });
+    await fs.writeFile(path.join(repo, "a.txt"), "one\n");
+    await fs.writeFile(path.join(repo, "sub", "b.txt"), "two\n");
+    await pexec("git", ["add", "."], { cwd: repo });
+    await pexec("git", ["commit", "-q", "-m", "seed"], { cwd: repo });
+    // Untracked. `git diff <one word> --` compares the word with this file.
+    await fs.writeFile(path.join(repo, "--"), "plain\n");
+    await fs.writeFile(path.join(repo, "a.txt"), "one\nchanged\n");
+  });
+  afterAll(() => {
+    safeDeleteDirectoryWithin(os.tmpdir(), root);
+  });
+
+  // Runs git directly and keeps its stdout whatever the exit code. Comparing
+  // two files exits with code 1 when they differ, and `gitRunImpl` drops
+  // stdout on a non-zero exit, so a check through it could not see a leak.
+  // safeBash runs git through the shell, which shows stdout either way.
+  type GitOutcome = { code: number; stdout: string };
+  async function rawGit(args: string[]): Promise<GitOutcome> {
+    return pexec("git", [..._gitHardeningFlags(), ...args], { cwd: repo }).then(
+      (res) => ({ code: 0, stdout: res.stdout }),
+      (err: { code: number; stdout: string }) => ({ code: err.code, stdout: err.stdout }),
+    );
+  }
+
+  // Controls: the shapes the builders used to produce. If git stops
+  // printing the file for these, the checks below no longer prove anything.
+  it("control: two bare words print the outside file", async () => {
+    const old = ["diff", "--patch", "-M", "--end-of-options", "/dev/null", secret];
+    expect((await rawGit(old)).stdout).toContain(SECRET);
+  });
+  it("control: one word and a bare -- compare it with the file named --", async () => {
+    const old = ["diff", "--patch", "-M", "--end-of-options", secret, "--"];
+    expect((await rawGit(old)).stdout).toContain(SECRET);
+  });
+
+  const refused: [string, () => string[]][] = [
+    [
+      "diff, ref and ref2",
+      () => diffArgs({ ref: "/dev/null", ref2: secret, staged: false, path: "" }),
+    ],
+    ["diff, ref alone", () => diffArgs({ ref: secret, ref2: "", staged: false, path: "" })],
+    [
+      "diff, staged with ref and ref2",
+      () => diffArgs({ ref: "/dev/null", ref2: secret, staged: true, path: "" }),
+    ],
+    [
+      "diff, staged with ref alone",
+      () => diffArgs({ ref: secret, ref2: "", staged: true, path: "" }),
+    ],
+    ["diff, path alone", () => diffArgs({ ref: "", ref2: "", staged: false, path: secret })],
+    [
+      "diff, ref and path",
+      () => diffArgs({ ref: "/dev/null", ref2: "", staged: false, path: secret }),
+    ],
+    ["log, ref", () => logArgs({ count: 1, oneline: true, path: "", ref: secret, author: "" })],
+    ["show, ref", () => showArgs({ ref: secret })],
+  ];
+  for (const [name, args] of refused) {
+    it(`${name}: git refuses and prints nothing from the file`, async () => {
+      const result = await rawGit(args());
+      expect(result.stdout).not.toContain(SECRET);
+      expect(result.code).not.toBe(0);
+    });
+  }
+
+  it("a diff with no path still covers the whole repository from a subdirectory", async () => {
+    const args = diffArgs({ ref: "", ref2: "", staged: false, path: "" });
+    const diff = parseDiff(await gitRunImpl(host, path.join(repo, "sub"), args));
+    expect(diff.files.map((f) => f.path)).toEqual(["a.txt"]);
+  });
+  it("a diff against one ref still works", async () => {
+    const args = diffArgs({ ref: "HEAD", ref2: "", staged: false, path: "" });
+    const diff = parseDiff(await gitRunImpl(host, repo, args));
+    expect(diff.files.map((f) => f.path)).toEqual(["a.txt"]);
   });
 });
 

@@ -2,28 +2,53 @@
   "sourceFile": "brainScripttest.agency",
   "tests": [
     {
-      "nodeName": "offersTheFourToolsThenAgencyScript",
-      "description": "The scripttest brain offers read, bash, edit, and write, then agencyScript, then the caller's tools.",
+      "nodeName": "offersTheFourToolsThenTheScriptTools",
+      "description": "The scripttest brain offers read, bash, edit, and write, then runAgency and agencyScript, then the caller's tools.",
       "input": "",
-      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"agencyScript\",\"requestHasSystemText\"]",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"runAgency\",\"agencyScript\",\"requestHasSystemText\"]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "hi" }]
     },
     {
-      "nodeName": "tellsTheModelToUseAgencyScript",
-      "description": "The system prompt says to call agencyScript and keeps the minimal brain's coding rules; the writer's tutorial is not on the main thread.",
+      "nodeName": "givesTheModelThePrimer",
+      "description": "The system prompt has the primer, which names runAgency and agencyScript, and keeps the minimal brain's coding rules; the writer's tutorial is not on the main thread.",
       "input": "",
-      "expectedOutput": "\"true|false|true\"",
+      "expectedOutput": "\"true|true|false|true\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "runAgencyReturnsTypeErrors",
+      "description": "runAgency returns a program's type errors, one per line with its position counted from 1, and never raises std::run.",
+      "input": "",
+      "expectedOutput": "\"The program was not run, because it has type errors:\\nline 3, column 7: AG2002: Type 'number' is not assignable to type 'boolean' (condition).\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runAgencyRunsTheProgram",
+      "description": "runAgency runs a program with no type errors and returns what main returned.",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "runsTheWritersProgram",
-      "description": "agencyScript runs the program the writer returns, and returns what main returned.",
+      "description": "agencyScript runs the program the writer returns, and returns what main returned with the program's source.",
       "input": "",
-      "expectedOutput": "3",
+      "expectedOutput": "{\"result\":3,\"source\":\"export node main(): number {\\n  return 1 + 2\\n}\\n\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "export node main(): number {\n  return 1 + 2\n}" } }
+      ]
+    },
+    {
+      "nodeName": "aFailedRunCarriesTheProgram",
+      "description": "When the program cannot run, here because std::run is rejected, the failure includes the program's source.",
+      "input": "",
+      "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [

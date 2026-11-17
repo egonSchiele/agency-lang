@@ -51,8 +51,8 @@ export def agencyAgent(
   - `simple`: one LLM call with no tools of its own.
   - `spawntest`: a trial. The minimal brain, plus a tool that starts
     another agent as a process of its own. See "The spawntest brain" below.
-  - `scripttest`: a trial. The minimal brain, plus a subagent that writes
-    and runs a short Agency program in place of a node or shell script.
+  - `scripttest`: a trial. The minimal brain, plus tools that write and
+    run a short Agency program in place of a node or shell script.
     See "The scripttest brain" below.
 
   `agencyAgentBrains()` lists them with a one-line description each.
@@ -304,29 +304,44 @@ same handlers as the agent's other tools, so the user answers questions
 about what the program does instead of reading it.
 
 `scripttestBrain` in `stdlib/agents/brains/scripttest.agency` is the
-minimal brain with one more tool, `agencyScript(task)`, and a short system
-message. The message tells the model to call `agencyScript` instead of
+minimal brain with two more tools and a short primer on Agency in its
+system message:
+
+- `runAgency(source)` type-checks a program the model wrote and runs it.
+- `agencyScript(task)` hands a task to the stdlib Agency writer, which
+  writes and checks the program, then runs it.
+
+The primer tells the model to write a quick check in Agency instead of
 `node -e`, `python -c`, or a shell script, and to use those only when the
-question is about Node or Python themselves.
+question is about Node or Python themselves. It holds one example program
+and a list of the mistakes models make most often in Agency, such as
+`if (count)` on a number or `readFile`. It is about 2 KB.
 
 It is built on the minimal brain so that it can be benchmarked against
-it: the two differ only in the one tool and the message.
+it: the two differ only in the two tools and the primer.
 
-- **A subagent, not a handoff.** `agencyScript` calls the stdlib Agency
-  writer, `agencyCodingAgent`, which writes and checks the program on a
-  thread of its own. The writer's tutorial and docs tools stay on that
-  thread, so on a call where the tool is not used they cost only its
-  description. An earlier version put the tutorial and the docs tools on
-  the main thread, about 16,000 tokens on every call, and the model used
-  them once in about 2,500 tool calls on SWE-bench. Because the writer
-  does not see the conversation, the task has to name every file and say
-  what to return.
-- **The writer's checks.** `strict: true` checks each draft against the
-  rules the separate process enforces, so a program the writer returns
-  also compiles there. If the writer gives up, its failure comes back and
-  nothing runs. Its budget is $1 and 5 minutes per script.
-- **The run.** `runCode` runs the program with the agent working directory
-  as `cwd`, so a relative path names a file there. It raises `std::run` to
+- **Why a primer and not the tutorial.** The full tutorial is about 34 KB,
+  and on the main thread it is sent with every model call, whether or not
+  the call writes Agency. Without any Agency in the main context, the model
+  writes Python every time it is free to choose. The primer is the
+  smallest text that still moves that choice. The tutorial stays in the
+  writer's own system prompt, where `agencyScript` uses it.
+- **runAgency checks first.** It runs `typecheck(strict: true)`, which also
+  reports the imports and JavaScript names the separate process refuses.
+  When the program has errors, they come back as one line each and nothing
+  runs. The strict check does not catch every undefined name: it accepts
+  `keys(x)` with no import of `keys`, which then fails at run time.
+- **agencyScript is a subagent, not a handoff.** The writer,
+  `agencyCodingAgent`, works on a thread of its own with `strict: true`
+  and a budget of $1 and 5 minutes. It does not see the conversation, so
+  the task has to name every file and say what to return. The tool returns
+  the result and the program's source, so the model can save the program
+  to a file. If the writer gives up, its failure comes back and nothing
+  runs.
+- **The run.** Both tools call `runCode` with the agent working directory
+  as `cwd` and as `dir`. So a relative path names a file there, and a
+  program can import an Agency file there, such as
+  `import { solve } from "./solve.agency"`. `runCode` raises `std::run` to
   start the process. Every effect the program raises goes to the session's
   handlers (`docs/dev/runtime/subprocess-ipc.md`). The tool returns what
   `main` returns. Printed output does not come back to the model.

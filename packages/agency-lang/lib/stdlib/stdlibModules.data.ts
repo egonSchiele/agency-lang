@@ -131,7 +131,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "minimalBrain"
   ],
   "std::agents/brains/scripttest": [
-    "runAgency",
+    "agencyScript",
     "scripttestBrain"
   ],
   "std::agents/brains/settings": [

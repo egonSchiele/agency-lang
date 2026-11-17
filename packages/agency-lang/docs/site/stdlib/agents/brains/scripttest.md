@@ -1,44 +1,47 @@
 ---
 name: "scripttest"
-description: "A trial brain: the minimal brain, plus a tool that runs a short Agency program in place of a node or shell script."
+description: "A trial brain: the minimal brain, plus a subagent that writes and runs a short Agency program in place of a node or shell script."
 ---
 
 # scripttest
 
 A brain of the Agency agent. It is the minimal brain with one more tool,
-  `runAgency`, the Agency docs tools, and a system message that tells the
-  model to write a quick check as an Agency program instead of `node -e`
-  or a shell script.
+  `agencyScript`, and a short system message that tells the model to use
+  it instead of `node -e` or a shell script.
 
-  A program run this way runs in a separate process, and every file read,
-  file write, and command in it raises its own interrupt, which reaches the
-  same handlers as the agent's other tools. So the user approves what the
-  program does, and does not have to read the program first, as they would
-  for `node -e '<script>'`.
+  `agencyScript` is a subagent. The stdlib Agency writer writes and checks
+  the program on a thread of its own, and the program then runs in a
+  separate process. The writer's tutorial and tools stay on its own
+  thread, so they cost nothing on the calls where the tool is not used.
+
+  Every file read, file write, and command in the program raises its own
+  interrupt, which reaches the same handlers as the agent's other tools.
+  So the user approves what the program does, and does not have to read
+  the program first, as they would for `node -e '<script>'`.
 
 ## Functions
 
-### runAgency
+### agencyScript
 
 ```ts
-runAgency(source: string): Result
+agencyScript(task: string): Result
 ```
 
-Type-check an Agency program and, when it has no errors, run it in a separate process and return the value its main node returns. Each file it reads or writes and each command it runs asks for approval as your other tools do. When the program has type errors, they are returned and nothing runs.
+Write and run a short Agency program for a task, and return what the program returns. Each file it reads or writes and each command it runs asks for approval as your other tools do. The writer does not see this conversation, so the task must name every file and say what result to return.
 
 **Parameters:**
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| source | `string` |  | A complete Agency program with `export node main()`, which returns the value you want to see |
+| task | `string` |  | What the program should do and return, with every file path it needs |
 
 **Returns:** `Result`
 
-**Throws:** `std::run`, `std::guard`
+**Throws:** `std::guard`, `std::run`
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/scripttest.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/scripttest.agency#L34))
 
 ### scripttestBrain
 
@@ -50,9 +53,8 @@ scripttestBrain(
 ): Result<string>
 ```
 
-Answer one message with the minimal brain, plus a tool that runs a short
-  Agency program in place of a node or shell script, and the Agency docs
-  tools.
+Answer one message with the minimal brain, plus a subagent that writes
+  and runs a short Agency program in place of a node or shell script.
 
 **Parameters:**
 
@@ -64,4 +66,8 @@ Answer one message with the minimal brain, plus a tool that runs a short
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/scripttest.agency#L78))
+**Throws:** `std::guard`, `std::run`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/scripttest.agency#L57))

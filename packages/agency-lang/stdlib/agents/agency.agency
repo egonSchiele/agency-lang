@@ -87,7 +87,7 @@ export def agencyAgentBrains(): BrainInfo[] {
     },
     {
       name: "scripttest",
-      description: "A trial: the minimal brain, plus a tool that runs a short Agency program in place of a node or shell script"
+      description: "A trial: the minimal brain, plus a subagent that writes and runs a short Agency program in place of a node or shell script"
     },
   ]
 }

@@ -2,43 +2,57 @@
   "sourceFile": "brainScripttest.agency",
   "tests": [
     {
-      "nodeName": "offersTheFourToolsThenTheScriptTools",
-      "description": "The scripttest brain offers read, bash, edit, and write, then runAgency and the five docs tools, then the caller's tools.",
+      "nodeName": "offersTheFourToolsThenAgencyScript",
+      "description": "The scripttest brain offers read, bash, edit, and write, then agencyScript, then the caller's tools.",
       "input": "",
-      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"runAgency\",\"agencyGuide\",\"agencyCliDocs\",\"agencyDiagnostics\",\"agencyStdlib\",\"agencyAgent\",\"requestHasSystemText\"]",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"agencyScript\",\"requestHasSystemText\"]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "hi" }]
     },
     {
-      "nodeName": "tellsTheModelToUseRunAgency",
-      "description": "The system prompt says to use runAgency, holds the Agency tutorial, and keeps the minimal brain's coding rules.",
+      "nodeName": "tellsTheModelToUseAgencyScript",
+      "description": "The system prompt says to call agencyScript and keeps the minimal brain's coding rules; the writer's tutorial is not on the main thread.",
       "input": "",
-      "expectedOutput": "\"true|true|true\"",
+      "expectedOutput": "\"true|false|true\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "hi" }]
     },
     {
-      "nodeName": "typeErrorsComeBackAndNothingRuns",
-      "description": "A program with a type error is not run, and the error comes back with its line and code.",
-      "input": "",
-      "expectedOutput": "\"true|true|true\"",
-      "evaluationCriteria": [{ "type": "exact" }]
-    },
-    {
-      "nodeName": "runsAndReturnsMainsValue",
-      "description": "A program with no errors runs, and runAgency returns what main returned.",
+      "nodeName": "runsTheWritersProgram",
+      "description": "agencyScript runs the program the writer returns, and returns what main returned.",
       "input": "",
       "expectedOutput": "3",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "export node main(): number {\n  return 1 + 2\n}" } }
+      ]
+    },
+    {
+      "nodeName": "writerFailureRunsNothing",
+      "description": "When every draft is broken, the writer's failure comes back and std::run is never raised.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "node main() {{{" } },
+        { "return": { "code": "node main() {{{" } },
+        { "return": { "code": "node main() {{{" } }
+      ]
     },
     {
       "nodeName": "theProgramsReadAsksThisHandler",
       "description": "Starting the program raises std::run, and the program's own read raises std::read to the same handler.",
       "input": "",
       "expectedOutput": "\"std::run,std::read\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "export node main(): string {\n  const text = read(\"package.json\")\n  return \"read\"\n}" } }
+      ]
     }
   ]
 }

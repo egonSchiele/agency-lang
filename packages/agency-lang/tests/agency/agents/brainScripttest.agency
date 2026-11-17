@@ -1,7 +1,7 @@
 // The scripttest brain from std::agents/brains/scripttest, and its
-// runAgency tool. The brain cases use a scripted model. The runAgency cases
-// run a real program in a separate process, and need no model.
-import { runAgency, scripttestBrain } from "std::agents/brains/scripttest"
+// agencyScript subagent. Every case uses a scripted model; the agencyScript
+// cases run the program it returns in a separate process.
+import { agencyScript, scripttestBrain } from "std::agents/brains/scripttest"
 import { AgentSettings } from "std::agents/brains/settings"
 
 // Every model request, in order.
@@ -34,41 +34,26 @@ def requestHasSystemText(call: any, text: string): boolean {
   return false
 }
 
-// The minimal brain's four tools, then runAgency and the docs tools, then
-// the caller's.
-node offersTheFourToolsThenTheScriptTools(): string[] {
+// The minimal brain's four tools, then agencyScript, then the caller's.
+node offersTheFourToolsThenAgencyScript(): string[] {
   scripttestBrain(["say hi"], emptySettings(), [requestHasSystemText])
   return [tool.name for tool in calls[0].tools]
 }
 
-// The model is told to use runAgency, gets the tutorial, and still gets the
-// minimal brain's coding rules.
-node tellsTheModelToUseRunAgency(): string {
+// The model is told to use agencyScript and keeps the minimal brain's
+// coding rules. The writer's tutorial is not on this thread.
+node tellsTheModelToUseAgencyScript(): string {
   scripttestBrain(["say hi"], emptySettings(), [])
-  const rules = requestHasSystemText(calls[0], "runAgency tool")
+  const rule = requestHasSystemText(calls[0], "call agencyScript")
   const tutorial = requestHasSystemText(calls[0], "<agency_tutorial>")
   const codingRules = requestHasSystemText(calls[0], "You are a coding assistant")
-  return "${rules}|${tutorial}|${codingRules}"
+  return "${rule}|${tutorial}|${codingRules}"
 }
 
-// A program with a type error comes back with the error and its line, and
-// nothing runs: the handler would reject std::run with a different message.
-node typeErrorsComeBackAndNothingRuns(): string {
+// The writer's program runs, and its main node's value comes back.
+node runsTheWritersProgram(): any {
   handle {
-    const result = runAgency("export node main(): number {\n  return \"three\"\n}")
-    if (result is failure(err)) {
-      return "${err.startsWith("The program was not run, because it has type errors:")}|${err.includes("line ")}|${err.includes("AG")}"
-    }
-    return "ran"
-  } with (intr) {
-    return reject("std::run was raised")
-  }
-}
-
-// A program with no errors runs, and its main node's value comes back.
-node runsAndReturnsMainsValue(): any {
-  handle {
-    const result = runAgency("export node main(): number {\n  return 1 + 2\n}")
+    const result = agencyScript("return three")
     if (result is success(value)) {
       return value
     }
@@ -76,14 +61,26 @@ node runsAndReturnsMainsValue(): any {
   } with approve
 }
 
+// When the writer gives up, the failure comes back and nothing runs: the
+// handler would reject std::run with a different message.
+node writerFailureRunsNothing(): boolean {
+  handle {
+    const result = agencyScript("return three")
+    if (result is failure(err)) {
+      return err.startsWith("The Agency writer could not write the program")
+    }
+    return false
+  } with (intr) {
+    return reject("std::run was raised")
+  }
+}
+
 // Every effect the program raises reaches this program's handler: first
 // std::run to start it, then the program's own file read.
 node theProgramsReadAsksThisHandler(): string {
   let seen: string[] = []
   handle {
-    runAgency(
-      "export node main(): string {\n  const text = read(\"package.json\")\n  return \"read\"\n}",
-    )
+    agencyScript("read package.json")
   } with (intr) {
     seen = [...seen, intr.effect]
     if (intr.effect == "std::run") {

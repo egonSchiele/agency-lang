@@ -59,7 +59,9 @@ jobs:
       # still shows the results from the others.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # DIAGNOSTIC, do not merge: shard 3 six times, to catch its hang.
+        shard: [3]
+        attempt: [1, 2, 3, 4, 5, 6]
 
     steps:
     - name: Checkout repository
@@ -102,7 +104,17 @@ jobs:
       # Call vitest directly via `pnpm exec`: `pnpm run test:run -- --shard`
       # passes the `--` through to vitest, which then reads `--shard` as a file
       # filter and silently runs the whole suite.
-      run: pnpm exec vitest run --shard=${{ matrix.shard }}/3
+      # DIAGNOSTIC, do not merge: a step limit keeps the log when it hangs,
+      # and the process list at 8 minutes shows what the stuck worker runs.
+      timeout-minutes: 10
+      run: |
+        set +e
+        ( sleep 480; echo "::group::processes after 8 minutes"; ps -eo pid,ppid,etimes,stat,args --forest; echo "::endgroup::" ) &
+        watcher=$!
+        pnpm exec vitest run --shard=${{ matrix.shard }}/3 --reporter=verbose
+        code=$?
+        kill $watcher
+        exit $code
     - name: Unit tests (sibling packages)
       # The sibling packages hold only a handful of tests each, so run them
       # once rather than per shard. `-r run` skips the workspace root, and the

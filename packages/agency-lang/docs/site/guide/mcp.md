@@ -177,6 +177,8 @@ You can also put `clientId` directly in the config file if you prefer (it's not 
 
 4. The first time your agent connects, the package opens your browser for authorization. After you approve, the token is stored at `~/.agency/tokens/<server-name>.json` and reused automatically on future runs.
 
+`agency agent` never opens a login on its own. It tells you which servers need one, and you log in from its `/mcp` menu. See [Using MCP servers with the agent](/agent/mcp.md).
+
 ### OAuth config options
 
 - `auth` (required): must be `"oauth"`
@@ -201,6 +203,29 @@ node main() {
 ```
 
 On the first run, your browser opens for authorization. On subsequent runs, the stored token is used.
+
+### Logging in when you choose
+
+To connect without ever starting a login, and to log in at a moment your program picks, use the functions in [`std::mcp`](/stdlib/mcp.md). They need `@agency-lang/mcp` 0.0.6 or newer. `connectMcpServers` connects servers and reports a server that needs a login as `needsLogin` instead of opening the browser. A login then runs in two steps, with your own code in between:
+
+```ts
+import { startMcpLogin, finishMcpLogin, readProjectMcpConfig } from "std::mcp"
+import { openUrl } from "std::system"
+
+node main() {
+  const servers = readProjectMcpConfig(".")
+  const started = startMcpLogin(servers, "github")
+  if (isFailure(started)) {
+    print("Could not start the login")
+    return
+  }
+  openUrl(started.value)
+  const state = finishMcpLogin("github")
+  print(state.status)
+}
+```
+
+`startMcpLogin` returns the login page URL without waiting. `finishMcpLogin` waits for the browser, saves the login, and connects. Opening the page with `openUrl` raises `std::openUrl`, so a handler or the user decides whether the browser opens.
 
 ### Using OAuth from TypeScript
 
@@ -244,7 +269,9 @@ npx @agency-lang/mcp auth --revoke github
 
 ## Interrupts and handlers
 
-MCP tools are external and cannot throw Agency interrupts. If you want safety checks on MCP tool usage, you'll need to filter out dangerous tools before passing them to `llm()`.
+The tools `mcp()` returns are external and cannot throw Agency interrupts. If you want safety checks on MCP tool usage, you'll need to filter out dangerous tools before passing them to `llm()`.
+
+The `std::mcp` functions are different. Every tool they hand out raises `mcp::call` before it runs, with the server, the tool, and its arguments, so a handler or policy can approve or reject each call. Starting a stdio server raises `mcp::connect` with the server's name, command line, and environment. Logging out raises `mcp::logout`.
 
 ## Turning an agent into an MCP server
 

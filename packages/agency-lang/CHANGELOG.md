@@ -1,3 +1,46 @@
+## Nov 17 2026 — v0.41.0
+
+Highlights:
+
+- `spawn` starts an Agency program as a new process
+- The Agency agent can now connect to MCP servers
+- Add support for `cd` to safebash.
+
+### Breaking
+
+### Spawn and attach
+
+- **New `spawn` in `std::agency` starts an Agency file as a separate process that outlives its caller.** It has its own policy, cost and time limits, and trace.
+- The spawned process runs in detached mode by default. You can attach to it using the new `agency attach <pid>` command.
+- **New `agency run` flags:** `--detach <file>` runs the program in the background and prints its pid, `--messages <file>` seeds its first thread, and `--name` sets the process title (useful for finding detached processes in `ps`).
+- A run can start at most 500 programs, five levels deep.
+
+### Agent
+
+- **New `/mcp` menu.** It lists each MCP server with its status, and lets you log in, log out, reconnect, and see its tools.
+- **Bugfix: `--model` picks the provider based on the model name.** This always worked for `agency run`, but not for `agency agent`... `agency agent --model claude-sonnet-5-5` used to send the request to OpenAI.
+
+### Safe Bash
+
+- **Add support for `cd`**. Many bash commands that an agent writes involve a `cd`, and they currently all get surfaced to the user for approval, leading to approvals galore. A `cd` now sets the agent cwd.
+
+### TypeScript API
+
+- **`promptOptions`, `resolvePromptOption`, and `promptContext` are exported from `agency-lang/runtime`,** so a TypeScript program can offer the same approval options as `agency agent` and save the same rules. Not to be confused with `respondToInterrupts`, and other built-in functions that are for responding to interrupts – These new functions are specifically useful if you are building a user-facing agent using agency, and want an easy way to display information about an interrupt for the user to respond to.
+- **`respondToInterrupts`, `resumeFromCheckpoint`, and `rewindFrom` take `callbacks` at the top level,** the same way a node call does. A resume that passes no callbacks still calls none.
+- **Bugfix: Generated modules import `RunNodeResult`,** so a TypeScript caller gets a typed result from a node instead of `any`.
+
+### Local models
+
+- **Fourteen new models in the local catalog,** including GLM-5.3 Flash, Qwen3.8-Flash-Next, DeepSeek-V4-Flash, Qwen3.8-27B, and Granite 4.2.
+- **Each GGUF model downloads into a folder of its own.** A model split across several files now lists as one row, and `agency local remove` deletes all of its files. Models downloaded before this version still load.
+
+### Fixes
+
+- **Security: `gitDiff` can no longer print a file outside the repository.**
+- **A resume in a new process sets up `static` values.** Before, the first read of a static after the resume threw an error.
+- **`agency agent` finds a global install of `@agency-lang/mcp`.** Before, `/mcp` said the package was not installed.
+
 ## Nov 15 2026 — v0.40.0
 
 Highlights: the Agency agent is now a stdlib function, `agencyAgent`. Also background jobs and a clearer approval prompt. Finally, the Agency coding agent uses fewer tokens.

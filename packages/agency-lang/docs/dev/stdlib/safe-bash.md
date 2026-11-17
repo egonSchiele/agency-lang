@@ -40,10 +40,11 @@ bash runs the original text.
   without adding information.
 - **Rebuilt text when narrow.** When every command was recognized, the
   text that runs is rendered from the tree that was classified
-  (`astToBash`), so a parser bug degrades to running what was read. Three
+  (`astToBash`), so a parser bug degrades to running what was read. Four
   commands in that tree are written by the classifier: a `cd` names the
-  folder it resolved, a git command is the one `gitCommand` built, and a
-  `gh` command is the one `ghCommand` built.
+  folder it resolved, the `exit 1` of a `cd` guard is added after it, a
+  git command is the one `gitCommand` built, and a `gh` command is the
+  one `ghCommand` built.
 - **Every shell spawn raises at least one effect.** A string of nothing
   but echoes still raises `std::bash` (`bashPlan` substitutes it for an
   empty effect list), so the effect log is a complete audit of shell
@@ -991,13 +992,13 @@ These stay broad, each for a reason:
 
 - **Bash builtins** (`BUILTIN_VERBS`, the `compgen -b` list). The exec
   tool can't run a builtin, so no payload of its shape describes one.
-  Some builtins also change what later commands do: `cd .. && cat
-  one.txt` reads the parent folder's file while the `std::read` names
-  the current one, `hash -p /tmp/x git` makes `git` run `/tmp/x`,
-  `enable -f` loads a shared object as a builtin, and `export
-  NODE_OPTIONS=...; pnpm test` is the leading-assignment case spread
-  over two commands. The message is "`cd` is a bash builtin, not a
-  program".
+  Some builtins also change what later commands do: `hash -p /tmp/x
+  git` makes `git` run `/tmp/x`, `enable -f` loads a shared object as a
+  builtin, and `export NODE_OPTIONS=...; pnpm test` is the
+  leading-assignment case spread over two commands. The message is
+  "`hash` is a bash builtin, not a program". A `cd` has its own rule
+  (see "`cd`"). It reaches this refusal only on the right of `&&` or
+  `||`, or in a pipeline.
 - **Programs that run other programs** (`NO_EXEC_PROGRAMS`). The
   wrappers (`sh`, `xargs`, `env`, `sudo`, ...) would put the wrapper in
   the payload while what runs is in its arguments. The package runners
@@ -1600,7 +1601,7 @@ under `recommended`: the coder (`std::agents/coding`), the verifier
 (`std::agents/verifier`), and the Agency verifier
 (`std::agents/agency/verifier`), all through `shellTools`.
 
-## `cd` on the left of `&&`
+## `cd`
 
 ```
 cd packages/agency-lang && pnpm test
@@ -1610,11 +1611,41 @@ This asks one `std::exec` whose `cwd` is the real `packages/agency-lang`.
 The `cd` raises nothing. Every path and every payload to its right is
 resolved against the new directory.
 
-The rule holds only for `&&`. When the `cd` fails, bash runs nothing to
-its right, so the commands there only ever run in the new directory, and
-a payload that names it is true. After `;` or `||` the next command runs
-whether or not the `cd` worked, in a directory that depends on which, so
-no payload for it would be true in both cases.
+The `&&` form needs no help from safeBash. When the `cd` fails, bash
+runs nothing to its right, so the commands there only ever run in the
+new directory, and a payload that names it is true. After `;` or a
+newline, bash runs the next command even when the `cd` failed, so
+safeBash adds a guard that ends the script instead. After `||` the next
+command runs only when the `cd` failed, so that line is broad.
+
+A `cd` that is a whole command of the top-level list runs behind a
+guard:
+
+```
+cd /Users/me/proj/packages/agency-lang
+sed -n 480,560p lib/importPaths.ts
+grep -n findPkgDir lib/importPaths.ts
+```
+
+runs as
+
+```
+cd '/Users/me/proj/packages/agency-lang' || exit 1; sed -n 480,560p lib/importPaths.ts; grep -n findPkgDir lib/importPaths.ts
+```
+
+The `cd` raises nothing. `classifyAll` classifies every command after it
+in the new directory. When the `cd` fails, `exit 1` ends the script, so
+a later command runs in the new directory or it does not run. Bash
+would run it in the old directory, so the line is stricter than it was
+written. `cdOrExit` builds the guard.
+
+`exit 1` ends the shell the guard runs in, so no command after it runs.
+That holds however the host wraps the text: inside a function, a sourced
+file, or a subshell. `guardEndsTheScript` checks that the command after
+the guard prints nothing and that the exit code is 1.
+
+A line where no command raises an effect is still broad. `cd x` alone
+and `cd x; echo hi` both ask `std::bash` and run the original text.
 
 `classifyAll` walks the command tree and carries the working directory
 with it. The refuse wall still reads the flat list from
@@ -1630,15 +1661,18 @@ with it. The refuse wall still reads the flat list from
 - **parentheses and pipeline stages**: each is a subshell, so the
   directory after one is the directory before it. `(cd x && a) && b`
   classifies `b` in the original directory.
-- **the top-level list**: a command that ends in another directory must
-  be the last one, so `cd x && a; b` is broad and `a; cd x && b` is not.
+- **the top-level list**: a `cd` that is a whole command moves every
+  command after it, behind the guard. Any other command that ends in
+  another directory must be the last one, so `cd x && a; b` is broad and
+  `a; cd x && b` is not.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
 exists. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
 an assignment is unrecognized. A `cd` in any other position is a simple
 command like any other, and `execEffects` refuses it as a builtin. That
-covers `cd x` alone, a `cd` on the right of `&&`, and `cd x && cd y && a`,
-where the second `cd` is the right side of the inner `&&`.
+covers a `cd` on the right of `&&` or `||`, a `cd` in a pipeline, and
+`cd x && cd y && a`, where the second `cd` is the right side of the inner
+`&&`.
 
 The rebuilt text does not keep the word the model wrote. Each recognized
 `cd` is rebuilt with the directory `cdTarget` resolved, as an absolute

@@ -2470,6 +2470,7 @@ def gitCheckoutRef(words: Word[], cwd: string, redirects: Redirect[]): Result<Si
 }
 
 static const GIT_WORD: LiteralWord = { tag: "literal", text: "git" }
+static const EXIT_WORD: LiteralWord = { tag: "literal", text: "exit" }
 static const END_OF_FLAGS_WORD: FlagWord = { tag: "flag", flagName: "--" }
 
 // The one place a git command is assembled. It returns the parser's own
@@ -4159,9 +4160,10 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
   }
   const narrow: Effect[] = classified.value.effects
   if (narrow.length == 0) {
-    // Everything recognized but nothing contributed an effect — a string
-    // of nothing but echoes. The audit rule makes this a std::bash
-    // question, so by the same rule it runs the original text.
+    // Everything recognized but nothing contributed an effect: a string
+    // of nothing but echoes, or a `cd` with nothing after it that asks a
+    // question. The audit rule makes this a std::bash question, so by
+    // the same rule it runs the original text.
     return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
   }
   // One line gets one lookup, so its payloads all come from one answer.
@@ -4196,8 +4198,18 @@ type ClassifiedAll = {
 }
 
 // Classify the whole string. This walks the command tree, where the refuse
-// wall reads the flat list, because a `cd` on the left of `&&` moves the
-// working directory for the commands to its right.
+// wall reads the flat list, because a `cd` moves the working directory for
+// the commands after it.
+//
+// A `cd` that is a whole command of the top-level list is run behind a
+// guard, and every command after it is classified in the new directory:
+//
+//   cd x
+//   a          =>   cd '/abs/x' || exit 1; a; b
+//   b
+//
+// When the `cd` fails, `exit 1` ends the script. Bash would otherwise run
+// `a` and `b` in the old directory, where their payloads would be false.
 @capabilities(fileRead)
 def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result<ClassifiedAll> {
   """
@@ -4205,11 +4217,20 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
+  // The directory the next command is classified in.
+  let dir = cwd
   for (command, index in commands) {
-    const classified = classify(command, cwd, origin, false)?
+    const cd = asCd(command)
+    if (cd != null) {
+      const moved = cdTarget(cd, dir)?
+      rewritten.push(cdOrExit(cd, moved))
+      dir = moved
+      continue
+    }
+    const classified = classify(command, dir, origin, false)?
     // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
     // payload for `b` would be true in both cases.
-    if (classified.cwd != cwd && index < commands.length - 1) {
+    if (classified.cwd != dir && index < commands.length - 1) {
       return failure("a command after `;` follows a `cd`, and its directory depends on whether the `cd` worked")
     }
     effects = [...effects, ...classified.effects]
@@ -4317,6 +4338,23 @@ def cdTo(command: SimpleCommand, dir: string): SimpleCommand {
   Rewrite a cd command to name a resolved directory.
   """
   return { ...command, args: [{ tag: "singleQuoted", text: dir }] }
+}
+
+// The guard for a `cd` that is a whole command: `cd '/abs' || exit 1`.
+// safeBash writes the `exit` itself, after classification, so it never
+// reaches `execEffects`, which refuses a builtin the model wrote.
+def cdOrExit(command: SimpleCommand, dir: string): Command {
+  """
+  Rewrite a cd command to name a resolved directory and to end the script when it fails.
+  """
+  const exit: SimpleCommand = {
+    tag: "simpleCommand",
+    assignments: [],
+    command: EXIT_WORD,
+    args: [literalWordOf("1")],
+    redirects: []
+  }
+  return { tag: "or", left: cdTo(command, dir), right: exit }
 }
 
 def asCd(command: Command): SimpleCommand | null {

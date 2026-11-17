@@ -356,17 +356,28 @@ node removeAfterCd() {
   const folder = parts[parts.length - 1]
   const out = planFor("cd .. && rm -rf ${folder}", launch)
   const inside = planFor("cd tests && rm -rf no-such-folder-xyz", launch)
-  let saysWhy = false
-  if (out.broadReason != null) {
-    saysWhy = out.broadReason.detail.includes("refused from this folder")
-  }
+  // The same two lines with the `cd` on a line of its own.
+  const outOnItsOwnLine = planFor("cd ..\nrm -rf ${folder}", launch)
+  const insideOnItsOwnLine = planFor("cd tests\nrm -rf no-such-folder-xyz", launch)
   return [
     outcomeOf(out),
     [e.name for e in out.effects],
-    saysWhy,
+    saysRefused(out),
     outcomeOf(inside),
     [e.name for e in inside.effects],
+    outcomeOf(outOnItsOwnLine),
+    [e.name for e in outOnItsOwnLine.effects],
+    saysRefused(outOnItsOwnLine),
+    outcomeOf(insideOnItsOwnLine),
+    [e.name for e in insideOnItsOwnLine.effects],
   ]
+}
+
+def saysRefused(plan: any): boolean {
+  if (plan.broadReason == null) {
+    return false
+  }
+  return plan.broadReason.detail.includes("refused from this folder")
 }
 
 // The handler records the question and rejects it, so nothing is deleted.
@@ -1495,21 +1506,60 @@ node cdMovesTheRestOfAnAndChain() {
     cdSummary("cd grep-fixtures && ls | head"),
     cdSummary("cd ./grep-fixtures/ && ls"),
     cdSummary("ls && cd grep-fixtures && ls"),
-    rebuiltCdNamesTheResolvedFolder("cd grep-fixtures && ls"),
+    rebuiltEndsWith("cd grep-fixtures && ls", "/stdlib/grep-fixtures' && ls"),
   ]
 }
 
-// The rebuilt `cd` names the absolute folder in single quotes. The path
-// differs by machine, so check its two ends.
-def rebuiltCdNamesTheResolvedFolder(source: string): boolean {
+// A `cd` that is a whole command moves every command after it. It runs
+// behind a guard, `cd '/abs' || exit 1`, so a later command runs in the
+// new folder or not at all.
+node cdOnItsOwnLineMovesTheRest() {
+  return [
+    cdSummary("cd grep-fixtures; ls"),
+    cdSummary("cd grep-fixtures\nls\ncat one.txt"),
+    cdSummary("ls\ncd grep-fixtures\nls"),
+    cdSummary("cd grep-fixtures\nls\ncd ../read-fixtures\nls"),
+    cdSummary("cd grep-fixtures\ncd ../read-fixtures\nls"),
+    cdSummary("cd grep-fixtures\nls || cat one.txt"),
+    cdSummary("cd grep-fixtures; cd ../read-fixtures && ls"),
+    cdSummary("cd grep-fixtures\n(cd ../read-fixtures && ls)\nls"),
+    cdSummary("cd grep-fixtures\nls\ncd .."),
+    rebuiltEndsWith("cd grep-fixtures\nls\ncat one.txt", "/stdlib/grep-fixtures' || exit 1; ls; cat one.txt"),
+    rebuiltEndsWith("cd grep-fixtures\nls || cat one.txt", "/stdlib/grep-fixtures' || exit 1; ls || cat one.txt"),
+  ]
+}
+
+// The rebuilt text holds one `cd`, at the front, and ends with the given
+// text. The folder's path differs by machine, so only the end is compared.
+// On a mismatch the text itself comes back, so the test output shows it.
+def rebuiltEndsWith(source: string, ending: string): any {
   const command: string = executionCommandIn(source, STDLIB_TESTS)
-  return command.startsWith("cd '/") && command.endsWith("/stdlib/grep-fixtures' && ls")
+  const oneCd = command.split("cd '/").length == 2
+  if (command.startsWith("cd '/") && oneCd && command.endsWith(ending)) {
+    return true
+  }
+  return command
+}
+
+// Lines that still ask std::bash: a `cd` that names no folder safeBash
+// can resolve, whether it comes first or last, a later command that
+// moves again and is not last, a line
+// where no command raises an effect, and `cd x && a; b`.
+node cdOnItsOwnLineStaysStrict() {
+  return [
+    cdSummary("cd missing\nls"),
+    cdSummary("cd -\nls"),
+    cdSummary("cd $HOME\nls"),
+    cdSummary("cd grep-fixtures\ncd ../read-fixtures && ls\nls"),
+    cdSummary("cd grep-fixtures\necho hi"),
+    cdSummary("cd grep-fixtures && ls; cat one.txt"),
+    cdSummary("ls\ncd missing"),
+  ]
 }
 
 node cdAnywhereElseIsBroad() {
   return [
     cdSummary("cd grep-fixtures"),
-    cdSummary("cd grep-fixtures; ls"),
     cdSummary("cd grep-fixtures || ls"),
     cdSummary("ls && cd grep-fixtures"),
     cdSummary("cd grep-fixtures | ls"),
@@ -1591,6 +1641,23 @@ node cdRunsInTheNewFolder() {
     return "FAILED: ${why}"
   }
   return result.value.trim() != ""
+}
+
+node cdOnItsOwnLineRunsInTheNewFolder() {
+  // Approved by the test file: one std::read for one.txt in grep-fixtures.
+  const result = safeBash("cd grep-fixtures\ncat one.txt | head -1", cwd: STDLIB_TESTS)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.trim() == "hello world"
+}
+
+// `exit 1` ends the shell the guard runs in, so no command after it runs.
+// This holds inside a function, a sourced file, and a subshell. The exit
+// code check fails if the host ever adds a command after the script.
+node guardEndsTheScript() {
+  const result = bash("cd '/no-such-folder-xyz' || exit 1; echo ran", cwd: STDLIB_TESTS) with approve
+  return [result.stdout.includes("ran"), result.exitCode]
 }
 
 node listingsAskStdLs() {

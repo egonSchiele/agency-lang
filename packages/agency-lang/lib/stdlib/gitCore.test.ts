@@ -86,6 +86,8 @@ describe("scrubEnv", () => {
       "GIT_COMMON_DIR",
       "GIT_NAMESPACE",
       "GIT_CEILING_DIRECTORIES",
+      // pathspec meaning
+      "GIT_LITERAL_PATHSPECS",
     ];
     const base: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
     for (const k of dangerous) {
@@ -150,6 +152,19 @@ describe("argv builders — reads", () => {
     expect(args.indexOf("A")).toBeGreaterThan(args.indexOf("--end-of-options"));
     expect(args.indexOf("B")).toBeGreaterThan(args.indexOf("A"));
   });
+  it("diffArgs always ends in -- and exactly one pathspec", () => {
+    const tail = (opts: { ref: string; ref2: string; path: string }) =>
+      diffArgs({ ...opts, staged: false }).slice(4);
+    expect(tail({ ref: "", ref2: "", path: "" })).toEqual(["--", ":/"]);
+    expect(tail({ ref: "A", ref2: "", path: "" })).toEqual(["A", "--", ":/"]);
+    expect(tail({ ref: "A", ref2: "B", path: "" })).toEqual(["A", "B", "--", ":/"]);
+    expect(tail({ ref: "A", ref2: "", path: "x.ts" })).toEqual(["A", "--", "x.ts"]);
+    expect(tail({ ref: "A", ref2: "B", path: "x.ts" })).toEqual(["A", "B", "--", "x.ts"]);
+  });
+  it("logArgs always writes -- after the ref", () => {
+    const args = logArgs({ count: 0, oneline: true, path: "", ref: "HEAD", author: "" });
+    expect(args.slice(-2)).toEqual(["HEAD", "--"]);
+  });
   it("showArgs", () => {
     expect(showArgs({ ref: "HEAD" })).toEqual([
       "show",
@@ -157,6 +172,7 @@ describe("argv builders — reads", () => {
       "-M",
       "--end-of-options",
       "HEAD",
+      "--",
     ]);
   });
   it("blameArgs uses --line-porcelain, hardens path/ref, no --end-of-options (git blame rejects it before --)", () => {

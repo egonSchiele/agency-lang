@@ -177,6 +177,12 @@ child (`--permission`; see the roadmap).
 - **`@always` approve scopes** (#963) let an effect declaration mark scopes that
   are approved without prompting, as data on the effect rather than scattered in
   handlers. Depth: `docs/dev/language/effect-always-tag.md`.
+- **A git ref is never read as a path.** Given two words, one of them a path
+  outside the repository, `git diff` compares the two files, so a `gitDiff`
+  ref like `/dev/null` could print any file under an approval meant for a
+  diff. `diffArgs` ends every diff in `--` and one pathspec, and `scrubEnv`
+  removes `GIT_LITERAL_PATHSPECS` so the `:/` pathspec keeps its meaning.
+  Depth: the comment on `diffArgs` in `lib/stdlib/gitCore.ts`.
 
 ## How to keep this current
 

@@ -13,6 +13,7 @@ import {
   beginLogin,
   applyConfig,
   endLogin,
+  listItems,
   logOut,
   reconnect,
   runAction,
@@ -140,6 +141,19 @@ node stateLineForEachStatus(): string {
     stateLine(stateOf("s", "failed", "boom", [])),
   ]
   return lines.join("|")
+}
+
+node listStartsWithBackAndShowsEachStatus(): string {
+  const oauth = {
+    type: "http",
+    url: "https://x.example/mcp",
+    auth: "oauth"
+  }
+  let parts: string[] = []
+  for (item in listItems([rowOf("needsLogin", oauth)])) {
+    parts.push("${item.key}=${item.label}")
+  }
+  return parts.join("|")
 }
 
 node actionsForEachRow(): string {

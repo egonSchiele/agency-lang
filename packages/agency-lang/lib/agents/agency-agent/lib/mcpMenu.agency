@@ -8,6 +8,7 @@
 import {
   McpServerState,
   configureMcpServers,
+  connectPendingMcpServers,
   disconnectMcpServer,
   finishMcpLogin,
   isMcpAvailable,
@@ -25,7 +26,7 @@ import { cwd, openUrl } from "std::system"
 import { ChoiceItem, chooseOption, pushMessage } from "std::ui/cli"
 
 import { SETTINGS_PATH } from "./config.agency"
-import { startPendingMcpServers, stateLine, toolCountText } from "./mcp.agency"
+import { stateLine, toolCountText } from "./mcp.agency"
 import { getMcpServers, loadSettings } from "./settings.agency"
 
 export type RowStatus =
@@ -267,15 +268,21 @@ export def runAction(
   }
 }
 
-// Show one server's screen and run the action the user picks. Escape or
-// "Back" returns to the list.
+// Show one server's screen and run the action the user picks. "Back" returns
+// to the list. Escape cancels, which leaves the whole menu.
 def serverScreen(
   row: ServerRow,
   merged: Record<string, any>,
   projectFile: string,
 ) {
   const details = detailLines(row, projectFile, SETTINGS_PATH).join("\n")
-  const action = chooseOption(row.name, details, actionsFor(row), allowCancel: true)
+  const action = chooseOption(
+    row.name,
+    details,
+    actionsFor(row),
+    allowCancel: true,
+    question: "Pick an action",
+  )
   if (action == "" || action == null || action == "back") {
     return
   }
@@ -297,8 +304,22 @@ export def applyConfig(merged: Record<string, any>) {
   }
 }
 
+/** The server list's choices: "Back" first, then one per server. The picker
+  shows each choice as "key - label", so a server's label is its status alone
+  and the name is not shown twice. */
+export def listItems(rows: ServerRow[]): ChoiceItem[] {
+  let items: ChoiceItem[] = [BACK]
+  for (row in rows) {
+    items.push({
+      key: row.name,
+      label: statusText(row)
+    })
+  }
+  return items
+}
+
 /** The `/mcp` slash command: the server list, then a server's screen, then
-  back to the list. Escape at the list leaves the menu. */
+  back to the list. "Back" at the list, or Escape anywhere, leaves the menu. */
 export def mcpSlashCommand(): boolean {
   if (!isMcpAvailable()) {
     pushMessage(color.yellow(mcpNotInstalled()))
@@ -322,21 +343,20 @@ export def mcpSlashCommand(): boolean {
     return true
   }
   applyConfig(merged)
-  startPendingMcpServers()
+  // The list shows each server's status, so the startup lines would only
+  // repeat it ("Type /mcp to log in" while /mcp is open).
+  connectPendingMcpServers()
   const projectFile = "${cwd()}/agency.json"
   while (true) {
     const rows = serverRows(globalServers, projectServers, mcpServerStates())
-    let items: ChoiceItem[] = []
-    for (row in rows) {
-      items.push(
-        {
-          key: row.name,
-          label: "${row.name}   ${statusText(row)}"
-        },
-      )
-    }
-    const picked = chooseOption("MCP servers", "", items, allowCancel: true)
-    if (picked == "" || picked == null) {
+    const picked = chooseOption(
+      "",
+      "",
+      listItems(rows),
+      allowCancel: true,
+      question: "MCP servers",
+    )
+    if (picked == "" || picked == null || picked == BACK.key) {
       return true
     }
     for (row in rows) {

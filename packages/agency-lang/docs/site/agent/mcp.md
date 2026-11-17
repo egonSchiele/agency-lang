@@ -191,26 +191,28 @@ In the interactive REPL, `/mcp` opens a menu. It first lists every configured
 server with its status:
 
 ```
-MCP servers
-
-❯ 1. linear   ! needs login
-  2. filesystem   ✔ connected · 14 tools
-  3. github   ✘ failed
-  4. notes   ○ not connected
+? MCP servers ›
+❯   back - Back
+    linear - ! needs login
+    filesystem - ✔ connected · 14 tools
+    github - ✘ failed
+    notes - ○ not connected
 ```
 
-Pick a server to see its details and what you can do with it:
+Pick a server to see its details and what you can do with it. You can also type
+part of a name to narrow the list.
 
 ```
 linear
 
-Status:  ! needs login
-URL:     https://mcp.linear.app/mcp
-Config:  ~/.agency-agent/settings.json (global)
+  Status:  ! needs login
+  URL:     https://mcp.linear.app/mcp
+  Config:  ~/.agency-agent/settings.json (global)
 
-❯ 1. Log in
-  2. Reconnect
-  3. Back
+? Pick an action ›
+❯   login - Log in
+    reconnect - Reconnect
+    back - Back
 ```
 
 The actions depend on the server's status:
@@ -223,9 +225,9 @@ The actions depend on the server's status:
 | Failed | Reconnect |
 | Not connected | Connect |
 
-Every server's screen also has "Back". "Reconnect" connects again with the saved
-login, and never starts a new one. Escape on a server's screen goes back to the
-list, and Escape at the list leaves the menu.
+Every server's screen also has "Back", which returns to the list. "Back" at the
+top of the list leaves the menu. Escape leaves the menu from either screen.
+"Reconnect" connects again with the saved login, and never starts a new one.
 
 When no servers are configured, `/mcp` says how to add one. When the package is
 not installed or too old, it prints the command to install or upgrade it.

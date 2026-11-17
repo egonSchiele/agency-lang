@@ -337,6 +337,7 @@ chooseOption(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   allowCancel: boolean = false,
+  question: string = "Do you want to continue?",
 ): string
 ```
 
@@ -358,6 +359,7 @@ std::policy uses it for its approve/reject menus.
 | items | `ChoiceItem[]` |  |  |
 | allowFreeText | `boolean` | false | Accept a non-empty answer that matches no item key |
 | allowCancel | `boolean` | false | In a terminal, let Escape cancel the request instead of asking again |
+| question | `string` | "Do you want to continue?" | The line the user types on, above the choices, such as "Pick a server" |
 
 **Returns:** `string`
 
@@ -377,7 +379,7 @@ The width, in columns, that the approval prompt wraps its body to. Render a tabl
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L380))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L382))
 
 ### interruptChoice
 
@@ -414,4 +416,4 @@ to `chooseOption`, including its plain-input fallback.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L393))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L395))

@@ -88,6 +88,8 @@ The `/mcp` list shows the servers in the config, which the menu reads each time 
 
 The actions for each kind of row are one table, `ACTIONS` in `lib/mcpMenu.agency`, and `runAction` is the one place an action key becomes a call.
 
+The picker (`chooseOption` in `std::ui/cli`) draws each choice as `key - label`, and the user narrows the list by typing part of a key. So a server's choice has the server name as its key and only the status as its label (`listItems`), and the list starts with "Back". The menu passes its own `question` ("MCP servers", "Pick an action") for the line the user types on. `chooseOption`'s default question, "Do you want to continue?", belongs to the approval prompt. Opening the menu connects pending servers with `connectPendingMcpServers` directly, without the startup lines, because the list already shows each status.
+
 ## The version check
 
 The agent needs `@agency-lang/mcp` 0.0.6 or newer. `mcpPackageProblem()` returns the upgrade message for an older one, and an empty string otherwise, including when the package is not installed. With an old package, startup connects no servers and prints the message, and `/mcp` prints it too. The other functions return an empty list or a failure.

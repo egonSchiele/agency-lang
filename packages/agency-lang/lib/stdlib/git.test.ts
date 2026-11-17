@@ -183,7 +183,6 @@ describe("a ref is never read as a file outside the repository", () => {
   // Runs git directly and keeps its stdout whatever the exit code. Comparing
   // two files exits with code 1 when they differ, and `gitRunImpl` drops
   // stdout on a non-zero exit, so a check through it could not see a leak.
-  // safeBash runs git through the shell, which shows stdout either way.
   type GitOutcome = { code: number; stdout: string };
   async function rawGit(args: string[]): Promise<GitOutcome> {
     return pexec("git", [..._gitHardeningFlags(), ...args], { cwd: repo }).then(
@@ -236,6 +235,12 @@ describe("a ref is never read as a file outside the repository", () => {
   it("a diff with no path still covers the whole repository from a subdirectory", async () => {
     const args = diffArgs({ ref: "", ref2: "", staged: false, path: "" });
     const diff = parseDiff(await gitRunImpl(host, path.join(repo, "sub"), args));
+    expect(diff.files.map((f) => f.path)).toEqual(["a.txt"]);
+  });
+  it("a diff with no path still works when the environment turns pathspec magic off", async () => {
+    const args = diffArgs({ ref: "", ref2: "", staged: false, path: "" });
+    const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1" };
+    const diff = parseDiff(await gitRunImpl(host, repo, args, { env }));
     expect(diff.files.map((f) => f.path)).toEqual(["a.txt"]);
   });
   it("a diff against one ref still works", async () => {

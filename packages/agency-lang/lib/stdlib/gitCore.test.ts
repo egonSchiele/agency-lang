@@ -86,6 +86,8 @@ describe("scrubEnv", () => {
       "GIT_COMMON_DIR",
       "GIT_NAMESPACE",
       "GIT_CEILING_DIRECTORIES",
+      // pathspec meaning
+      "GIT_LITERAL_PATHSPECS",
     ];
     const base: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
     for (const k of dangerous) {
@@ -150,9 +152,6 @@ describe("argv builders — reads", () => {
     expect(args.indexOf("A")).toBeGreaterThan(args.indexOf("--end-of-options"));
     expect(args.indexOf("B")).toBeGreaterThan(args.indexOf("A"));
   });
-  // Git compares two files when it gets exactly two words and one is a path
-  // outside the repository. Each shape ends in `--` and one pathspec, so the
-  // refs are read as revisions and the word count is never two.
   it("diffArgs always ends in -- and exactly one pathspec", () => {
     const tail = (opts: { ref: string; ref2: string; path: string }) =>
       diffArgs({ ...opts, staged: false }).slice(4);

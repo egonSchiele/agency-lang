@@ -1,5 +1,5 @@
 /** The environment variables that change what a `git` command does. The
- *  git tools remove all three lists before they run git
+ *  git tools remove every list here before they run git
  *  (`lib/stdlib/gitCore.ts`). A shell script loses the first two
  *  (`lib/host/node/nodeSubprocess.ts`). Both read these lists, so the two
  *  cannot drift apart. A trailing `*` matches every name with that prefix. */
@@ -33,6 +33,12 @@ export const GIT_CODE_ENV: string[] = [
  *  one on purpose, so that `git push` uses a particular key. The git tools
  *  remove these too. A shell script keeps them. */
 export const GIT_SSH_ENV: string[] = ["GIT_SSH_COMMAND", "GIT_SSH", "GIT_PROXY_COMMAND"];
+
+/** Change what a pathspec means. With `GIT_LITERAL_PATHSPECS=1`, the `:/`
+ *  that `gitDiff` passes for the whole repository names a file called `:/`,
+ *  and the diff comes back empty. The git tools remove it. A shell script
+ *  keeps it, because its git commands write their own pathspecs. */
+export const GIT_PATHSPEC_ENV: string[] = ["GIT_LITERAL_PATHSPECS"];
 
 /** True when `key` is named by a list, exactly or by a `*` prefix. */
 export function namedBy(rules: string[], key: string): boolean {

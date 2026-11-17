@@ -1,16 +1,19 @@
 import { runInBootstrapFrame } from "./asyncContext.js";
 import type { HostSettings } from "../host/host.js";
-import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
+import {
+  __initAllRegisteredCallbacks,
+  __initAllRegisteredStatics,
+} from "./crossModuleInitRegistry.js";
 import { composeCallbacks, type AgencyCallbacks } from "./hooks.js";
 import { CheckpointEditError, CheckpointError, type RestoreSignal } from "./errors.js";
 import type { Policy } from "./policy.js";
 import { loadConfiguredProviders } from "#platform";
 import { assertCodeUnchanged } from "./referencedModules.js";
-import { reinstallRootBudget } from "./rootBudget.js";
+import { installRootBudget, reinstallRootBudget } from "./rootBudget.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 import type { PendingArgOverrides, RuntimeContext } from "./state/context.js";
-import type { GlobalStore } from "./state/globalStore.js";
+import { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { isAttachedResume, mintDebugRun } from "./debugRun.js";
@@ -176,6 +179,45 @@ export function applyRestoreSignal(
   return cp.nodeId;
 }
 
+/** Set up the static values of every loaded module before a resume. A
+ *  resume in a new process has never entered a node, and a node entry is
+ *  the only other place statics are set up. The checkpoint marks every
+ *  module initialized, so without this a static read after the resume
+ *  finds the value unset and throws.
+ *
+ *  It runs before the checkpoint is restored: a function a static
+ *  initializer calls pushes frames onto the stack, and the restored stack
+ *  replays frames instead.
+ *
+ *  It runs on a copy of the checkpoint's globals, which is thrown away
+ *  after. The copy marks the modules the paused run initialized, so a
+ *  function called from a static initializer does not rerun its module's
+ *  top-level code, and it reads a global's value at the pause. The copy
+ *  shares the run's token stats, so the per-model totals keep the call.
+ *  The usage meter does not: the restore sets it to the checkpoint's
+ *  spend (`docs/dev/runtime/cost-is-state.md`).
+ *
+ *  The root budget is installed for the pass, as on a fresh run, and
+ *  removed after: the restored stack brings its own. */
+async function initStaticsForResume(
+  execCtx: RuntimeContext<GraphState>,
+  checkpoint: Checkpoint,
+): Promise<void> {
+  const runGlobals = execCtx.globals;
+  const staticGlobals = GlobalStore.fromJSON(checkpoint.globals).clone();
+  staticGlobals.restoreTokenStats(runGlobals.getTokenStats());
+  const stack = execCtx.stateStack;
+  const guardCount = stack.guards.length;
+  installRootBudget(stack, execCtx.host, execCtx.budget);
+  execCtx.globals = staticGlobals;
+  try {
+    await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredStatics(run));
+  } finally {
+    execCtx.globals = runGlobals;
+    while (stack.guards.length > guardCount) stack.popGuard();
+  }
+}
+
 export async function restoreForResume(
   execCtx: RuntimeContext<GraphState>,
   request: ResumeRequest,
@@ -197,6 +239,7 @@ export async function restoreForResume(
   });
   request.afterCheckpointRestored?.();
 
+  await initStaticsForResume(execCtx, checkpoint);
   await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
   execCtx.restoreState(checkpoint);
   // A resume the attached debugger did not issue comes from outside, and

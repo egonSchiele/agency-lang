@@ -1,0 +1,5 @@
+static const HELLO = "hello"
+
+export def hello(): string {
+  return HELLO
+}

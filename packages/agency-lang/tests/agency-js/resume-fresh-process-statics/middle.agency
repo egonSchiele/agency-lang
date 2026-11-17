@@ -1,0 +1,10 @@
+import { hello } from "./words.agency"
+import { getPrefix } from "./config.agency"
+
+export def middleHello(): string {
+  return hello()
+}
+
+export def open(): string {
+  return getPrefix()
+}

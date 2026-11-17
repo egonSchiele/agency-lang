@@ -34,6 +34,7 @@ import {
   runtimeFailure,
   isFailure,
   stampFailureBoundary,
+  __paramSchema,
   __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
@@ -41,10 +42,12 @@ import {
   withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   createLogger as __createLogger,
-  defaultHost as __defaultHost
+  defaultHost as __defaultHost,
+  path
 } from "agency-lang/runtime";
 const __host = __defaultHost();
 const __dirname = __host.system.moduleDir(import.meta.url);
+const __sourceFile = path.join(__dirname, "index.agency");
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "",
@@ -93,9 +96,9 @@ function propagate() {
 function pass() {
   return { type: "pass" };
 }
-const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, edits: opts?.edits, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, callbacks: opts?.callbacks, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, edits: opts?.edits, metadata: opts?.metadata, callbacks: opts?.callbacks, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, callbacks: opts?.callbacks, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
 const __resumeFromCheckpoint = (checkpoint2, overrides, edits) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, edits });
 const patchCheckpoint = (checkpoint2, edits) => _patchCheckpoint(checkpoint2, edits, __globalCtx.host.settings);
 const __invokeFunction = (fn, namedArgs) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals });
@@ -133,7 +136,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "24ce751e19e9a6b7474896b0c5702a397bb3fff38dff693febf8a23238539b25");
+__registerModuleFingerprint("index.agency", "e036eb73995697e0b9dab8d7672d7ee77f3a81c5cde89b750d36558e0bac3429");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -264,7 +267,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
       args: __stack.args
     });
   } finally {
-    __run.stack.pop();
+    __run.stack.release(__stack);
     if (__functionCompleted) {
       await callHook(__run, {
         name: "onFunctionEnd",
@@ -279,6 +282,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
 const mcp = __AgencyFunction.create({
   name: "mcp",
   module: "index.agency",
+  sourceFile: __sourceFile,
   fn: __mcp_impl,
   params: [{
     name: "serverName",
@@ -298,7 +302,7 @@ const mcp = __AgencyFunction.create({
   toolDefinition: {
     name: "mcp",
     description: "No description provided.",
-    schema: z.object({ "serverName": z.string(), "onOAuthRequired": z.string().nullable().describe("Default: null") })
+    schema: z.object({ "serverName": z.string(), "onOAuthRequired": __paramSchema(z.string(), null, "null", true) })
   },
   exported: true
 }, __toolRegistry);

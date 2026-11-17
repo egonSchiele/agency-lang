@@ -9,13 +9,19 @@ policy, so a side-effectful call cannot happen without your say-so.
 
 ## Install
 
-MCP support ships as a separate package. Install it alongside `agency-lang`:
+MCP support ships as a separate package. Install it globally, next to `agency-lang`:
 
 ```bash
-npm install @agency-lang/mcp
+npm install -g @agency-lang/mcp
 ```
 
 When the package is not installed, the agent runs normally with zero MCP tools.
+
+The agent needs `@agency-lang/mcp` 0.0.6 or newer. With an older version it connects no servers, and prints this at startup:
+
+```
+MCP: @agency-lang/mcp 0.0.5 is too old. Run: npm install -g @agency-lang/mcp@latest
+```
 
 ## Declare servers
 
@@ -42,11 +48,19 @@ On a name collision the **project** entry wins.
 }
 ```
 
-The agent connects to each server at startup, discovers its tools, and hands them
-to the coordinator. Tool names are prefixed with the server name — `read_file`
-from the `filesystem` server appears to the model as `filesystem__read_file`. A
-server that fails to connect is skipped with a warning; the agent and the other
-servers keep working.
+The agent connects to your servers when you send your first message. Before it
+starts a stdio server, it asks you to approve the command (see
+[Approvals](#approvals)). It never starts a login on its own. After connecting,
+it prints one line for each server that is not ready, and keeps going with the
+rest:
+
+```
+MCP: linear needs you to log in. Type /mcp to log in.
+MCP: github failed to connect: connect ECONNREFUSED 127.0.0.1:3000
+```
+
+Tool names are prefixed with the server name: `read_file` from the `filesystem`
+server appears to the model as `filesystem__read_file`.
 
 ## Managing servers (`agency mcp add` / `remove` / `list`)
 
@@ -70,9 +84,9 @@ agency mcp list          # shows each server with its source (project/global)
 `--oauth` only sets `auth: "oauth"`; OAuth client credentials are never written to
 config — supply them via the environment (see below).
 
-In the REPL, `/mcp` lists the servers loaded this session. (Adding/removing
-servers from inside the REPL is not yet supported — use `agency mcp add`, then
-they load on the next launch.)
+You can run these while the agent is open. The next time you type `/mcp`, the
+agent reads the config again. A server you added connects right away (a stdio
+server asks first). A server you removed is disconnected, and its tools go away.
 
 ## Approvals
 
@@ -89,8 +103,8 @@ yourself, add rules to your policy file. Rules match on the **server** and the
 }
 ```
 
-You can also choose "always" at a prompt; the agent remembers it for that exact
-`server` + `tool`.
+You can also answer "always approve when" at a prompt. The agent then remembers
+the answer for that exact `server` and `tool`.
 
 Policy-file rules **cannot** match on a tool's *arguments* (they are a nested,
 per-tool object). For argument-level control, write a `handle mcp::call` block:
@@ -105,26 +119,116 @@ handle mcp::call {
 }
 ```
 
+### Starting a stdio server
+
+A stdio server is a command on your machine, so the agent asks before it starts
+one ("Are you sure you want to start this MCP server?"). The question shows the
+server's name, its command line, and its environment variables. A word with a
+space in it is shown in quotes, so you can see exactly what will run. For
+example, `{ "command": "sh", "args": ["-c", "echo hi"] }` shows as
+`sh -c "echo hi"`.
+
+"Always approve when" remembers all three, so a changed command or a changed
+environment asks again. A policy rule can approve a server up front:
+
+```json
+{
+  "mcp::connect": [
+    { "match": { "server": "filesystem" }, "action": "approve" }
+  ]
+}
+```
+
+If you reject a server, it is not started. It shows as failed in `/mcp`, and the
+agent does not ask again until you pick "Reconnect" there. HTTP servers start no
+process, so they never ask.
+
+### Logging out
+
+Logging out deletes a saved login, so the agent asks before it does that too
+(the effect is `mcp::logout`). A rule that approves `mcp::logout` skips the
+question.
+
 ## OAuth servers
 
-For a server that requires signing in, add `"auth": "oauth"`. On first use your
-browser opens for authorization; the token is cached at `~/.agency/tokens/` and
-reused automatically afterward.
+For a server that requires signing in, add `"auth": "oauth"`, or pass `--oauth`
+to `agency mcp add`. The agent never opens a login on its own. When a server
+needs one, startup says so:
+
+```
+MCP: linear needs you to log in. Type /mcp to log in.
+```
+
+To log in:
+
+1. Type `/mcp`, pick the server, and pick "Log in".
+2. The agent asks before it opens the login page in your browser. It also
+   prints the URL, so you can open it yourself if you say no, or if the browser
+   does not open. Opening the browser works on macOS only today.
+3. Log in in the browser. The agent waits up to 5 minutes. Press Escape to stop
+   waiting.
+
+When the login finishes, the server's tools work from your next message. You do
+not need to restart. The login is saved in `~/.agency/tokens/` and reused on
+later runs.
+
+When a saved login expires, the agent refreshes it on its own. If the server
+refuses the refresh, the tool call fails with
+`MCP server "linear" needs a new login.`, and you log in again from `/mcp`.
 
 Limitations:
 
-- **Interactive only.** In `--print` / one-shot mode there is no browser prompt,
-  so an unauthorized OAuth server reports a clear error. Authorize once
-  interactively; the cached token then works everywhere.
-- **Browser auto-open is macOS-only** today. On other systems the agent prints
-  the authorization URL for you to open.
+- **Logging in is interactive.** In `--print` / one-shot mode there is no menu.
+  Log in once in the REPL. The saved login then works everywhere.
+- **One login at a time.** Every login uses port 19876 on your machine for the
+  browser to return to. If another agency process is in the middle of a login,
+  yours fails with `another login is in progress (port 19876 is in use)`.
 - OAuth requires an HTTPS URL (localhost excepted).
 
 ## `/mcp`
 
-In the interactive REPL, `/mcp` lists your configured servers and the number of
-MCP tools loaded this session. When the package is not installed it points you at
-the install command.
+In the interactive REPL, `/mcp` opens a menu. It first lists every configured
+server with its status:
+
+```
+MCP servers
+
+❯ 1. linear   ! needs login
+  2. filesystem   ✔ connected · 14 tools
+  3. github   ✘ failed
+  4. notes   ○ not connected
+```
+
+Pick a server to see its details and what you can do with it:
+
+```
+linear
+
+Status:  ! needs login
+URL:     https://mcp.linear.app/mcp
+Config:  ~/.agency-agent/settings.json (global)
+
+❯ 1. Log in
+  2. Reconnect
+  3. Back
+```
+
+The actions depend on the server's status:
+
+| Status | Actions |
+|---|---|
+| Needs login | Log in, Reconnect |
+| Connected (OAuth) | View tools, Log in again, Log out, Reconnect |
+| Connected (other) | View tools, Reconnect |
+| Failed | Reconnect |
+| Not connected | Connect |
+
+Every server's screen also has "Back". "Reconnect" connects again with the saved
+login, and never starts a new one. Escape on a server's screen goes back to the
+list, and Escape at the list leaves the menu.
+
+When no servers are configured, `/mcp` says how to add one. When the package is
+not installed or too old, it prints the command to install or upgrade it.
 
 ## Advanced: `AGENCY_MCP_PATH`
 

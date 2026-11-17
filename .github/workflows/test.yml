@@ -109,10 +109,12 @@ jobs:
       timeout-minutes: 10
       run: |
         set +e
-        ( sleep 480; echo "::group::processes after 8 minutes"; ps -eo pid,ppid,etimes,stat,args --forest; echo "::endgroup::" ) &
+        ( while true; do sleep 20; echo "--- $(date -u +%H:%M:%S) $(free -m | awk 'NR==2{print "mem used " $3 " of " $2 " MB, avail " $7}') $(free -m | awk 'NR==3{print "swap used " $3}')"; ps -eo rss,etimes,args --sort=-rss | head -6 | cut -c1-200; done ) &
         watcher=$!
-        pnpm exec vitest run --shard=${{ matrix.shard }}/3
+        timeout -k 15 420 pnpm exec vitest run --shard=${{ matrix.shard }}/3
         code=$?
+        echo "vitest exit code $code"
+        if [ "$code" = "124" ] || [ "$code" = "137" ]; then ps -eo pid,ppid,etimes,stat,rss,args --forest | cut -c1-250; fi
         kill $watcher
         exit $code
     - name: Unit tests (sibling packages)

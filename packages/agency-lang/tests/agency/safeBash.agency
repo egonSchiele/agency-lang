@@ -1542,7 +1542,8 @@ def rebuiltEndsWith(source: string, ending: string): any {
 }
 
 // Lines that still ask std::bash: a `cd` that names no folder safeBash
-// can resolve, a later command that moves again and is not last, a line
+// can resolve, whether it comes first or last, a later command that
+// moves again and is not last, a line
 // where no command raises an effect, and `cd x && a; b`.
 node cdOnItsOwnLineStaysStrict() {
   return [
@@ -1552,6 +1553,7 @@ node cdOnItsOwnLineStaysStrict() {
     cdSummary("cd grep-fixtures\ncd ../read-fixtures && ls\nls"),
     cdSummary("cd grep-fixtures\necho hi"),
     cdSummary("cd grep-fixtures && ls; cat one.txt"),
+    cdSummary("ls\ncd missing"),
   ]
 }
 
@@ -1650,10 +1652,9 @@ node cdOnItsOwnLineRunsInTheNewFolder() {
   return result.value.trim() == "hello world"
 }
 
-// The guard depends on `exit 1` ending the whole script. Bash always does
-// that for a `bash -c` script, so this test is about the host. It fails
-// if the host ever runs a script inside a function, sources it, or adds
-// text after it, because then `ran` would print.
+// `exit 1` ends the shell the guard runs in, so no command after it runs.
+// This holds inside a function, a sourced file, and a subshell. The exit
+// code check fails if the host ever adds a command after the script.
 node guardEndsTheScript() {
   const result = bash("cd '/no-such-folder-xyz' || exit 1; echo ran", cwd: STDLIB_TESTS) with approve
   return [result.stdout.includes("ran"), result.exitCode]

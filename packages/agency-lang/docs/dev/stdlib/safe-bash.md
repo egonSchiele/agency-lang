@@ -992,13 +992,13 @@ These stay broad, each for a reason:
 
 - **Bash builtins** (`BUILTIN_VERBS`, the `compgen -b` list). The exec
   tool can't run a builtin, so no payload of its shape describes one.
-  Some builtins also change what later commands do: `cd .. && cat
-  one.txt` reads the parent folder's file while the `std::read` names
-  the current one, `hash -p /tmp/x git` makes `git` run `/tmp/x`,
-  `enable -f` loads a shared object as a builtin, and `export
-  NODE_OPTIONS=...; pnpm test` is the leading-assignment case spread
-  over two commands. The message is "`cd` is a bash builtin, not a
-  program".
+  Some builtins also change what later commands do: `hash -p /tmp/x
+  git` makes `git` run `/tmp/x`, `enable -f` loads a shared object as a
+  builtin, and `export NODE_OPTIONS=...; pnpm test` is the
+  leading-assignment case spread over two commands. The message is
+  "`hash` is a bash builtin, not a program". A `cd` has its own rule
+  (see "`cd`"). It reaches this refusal only on the right of `&&` or
+  `||`, or in a pipeline.
 - **Programs that run other programs** (`NO_EXEC_PROGRAMS`). The
   wrappers (`sh`, `xargs`, `env`, `sudo`, ...) would put the wrapper in
   the payload while what runs is in its arguments. The package runners
@@ -1639,11 +1639,10 @@ a later command runs in the new directory or it does not run. Bash
 would run it in the old directory, so the line is stricter than it was
 written. `cdOrExit` builds the guard.
 
-The guard depends on `exit 1` ending the whole script. Every shell line
-runs as `bash -c <text>` with nothing around the text, on the foreground
-path and on the job path. `guardEndsTheScript` fails if that changes on
-the foreground path. No test covers the job path, so a change to how
-`addJob` starts its script has to keep the text unwrapped.
+`exit 1` ends the shell the guard runs in, so no command after it runs.
+That holds however the host wraps the text: inside a function, a sourced
+file, or a subshell. `guardEndsTheScript` checks that the command after
+the guard prints nothing and that the exit code is 1.
 
 A line where no command raises an effect is still broad. `cd x` alone
 and `cd x; echo hi` both ask `std::bash` and run the original text.

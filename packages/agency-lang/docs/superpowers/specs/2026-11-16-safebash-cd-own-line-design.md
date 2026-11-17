@@ -296,22 +296,28 @@ today, and that scope does not change.
   `rm -rf usr` asks `std::bash` instead of being refused. This is true
   of `cd / && rm -rf usr` today.
 
-## Why `exit 1` ends the script on both paths
+## Why no command runs after a failed guard
 
-The guard works only if `exit 1` ends the whole script. It does on the
-foreground path and on the job path, because both hand the text to the
-host as a shell script with nothing around it:
+`exit 1` ends the shell the guard runs in, so no command after it runs.
+That holds however the host wraps the text:
 
-- The foreground path: `runBash` calls `_bash`, which calls
-  `abortableShell` (`lib/stdlib/abortable.ts:123`).
-- The job path: `_startJob` calls `addJob`, which calls
-  `host.subprocess.start` (`lib/runtime/jobs/jobTable.ts:104`).
-- Both end at `spawn(bash, ["-c", command.script])`
-  (`lib/host/node/nodeSubprocess.ts:158`).
+```
+bash -c 'f() { cd /no-such-folder-xyz || exit 1; echo ran; }; f; echo after'   # prints nothing, exit 1
+bash -c 'source ./guard-script.sh; echo after'                                 # prints nothing, exit 1
+bash -c '(cd /no-such-folder-xyz || exit 1; echo ran); echo after'             # prints "after", exit 0
+```
 
-The text is never wrapped in a function and never sourced.
+Inside a function or a sourced file, `exit` ends the whole shell.
+Inside a subshell it ends only the subshell, so `ran` still does not
+print. Only a command the host put after the subshell would run, and the
+exit code would change.
 
-A function named `exit` cannot replace the builtin either. The host
+Today the host adds nothing. The foreground path (`runBash`, `_bash`,
+`abortableShell`) and the job path (`_startJob`, `addJob`,
+`host.subprocess.start`) both end at `spawn(bash, ["-c",
+command.script])` (`lib/host/node/nodeSubprocess.ts:158`).
+
+A function named `exit` cannot replace the builtin. The host
 removes `BASH_ENV` and every `BASH_FUNC_*` variable before bash starts.
 The rewritten `cd` relies on the same removal today.
 
@@ -345,11 +351,10 @@ All in `tests/agency/safeBash.agency`, and all but two only plan.
    missing folder, so the test writes it by hand. The `bash` tool raises
    `std::bash`, so the test approves it.
 
-   Test 8 checks the executor. Bash itself always passes it. The test
-   fails if someone later changes how the host runs a script, for
-   example by wrapping the text in a function, sourcing it, or adding
-   text after a subshell. In each of those, `exit 1` would stop ending
-   the script and `ran` would print. The test's comment says this.
+   `ran` does not print however the host wraps the text, so that check
+   cannot fail. The exit code check fails if the host ever runs the
+   script in a subshell and adds a command after it. The test's comment
+   says this.
 
 ## How to test
 

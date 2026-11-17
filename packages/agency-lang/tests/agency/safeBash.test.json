@@ -1094,9 +1094,9 @@
     },
     {
       "nodeName": "cdOnItsOwnLineStaysStrict",
-      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, a later command that moves again and is not last, a cd followed only by an echo, which raises no effect, and cd x && a; b.",
+      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, a later command that moves again and is not last, a cd followed only by an echo, which raises no effect, cd x && a; b, and an ls followed by a trailing cd to a missing folder.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

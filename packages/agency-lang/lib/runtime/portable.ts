@@ -152,6 +152,19 @@ export type { ResumeCliFromCheckpointArgs, ResumeFromCheckpointArgs } from "./in
 
 export { checkPolicy, checkPolicyExplicit, validatePolicy, escapeGlob } from "./policy.js";
 
+// For a program that shows an interrupt to a person on its own screen:
+// what to show, and what a pick means. These do not respond to an
+// interrupt; `approve`, `reject` and `respondToInterrupts` do.
+export { promptOptions, resolvePromptOption } from "./interruptPromptOptions.js";
+export type {
+  PromptContext,
+  PromptOption,
+  PromptScope,
+  ResolvedPromptOption,
+} from "./interruptPromptOptions.js";
+export { promptContext } from "./interruptPromptContext.js";
+export type { PromptDecision } from "./interruptPromptTable.js";
+
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 
 export { runPrompt } from "./prompt.js";

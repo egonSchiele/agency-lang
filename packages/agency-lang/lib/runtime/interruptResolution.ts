@@ -12,6 +12,7 @@ import { checkPolicyExplicit } from "./policy.js";
 import { resolvePolicyDirs } from "./policyDirs.js";
 import { defaultHost } from "#default-host";
 import type { Policy } from "./policy.js";
+import { decisionApproves, decisionIsRemembered } from "./interruptPromptTable.js";
 import { terminalPrompt, terminalValuePrompt } from "./interruptPrompts.js";
 import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
@@ -116,10 +117,8 @@ export function buildDecider(options: BuildDeciderOptions): DecideFn {
     let action = remembered[interrupt.effect];
     if (!action && options.interactive) {
       const answer = await prompt(interrupt);
-      const approves = answer === "approve" || answer === "approve-always";
-      action = approves ? "approve" : "reject";
-      const remember = answer === "approve-always" || answer === "reject-always";
-      if (remember) {
+      action = decisionApproves(answer) ? "approve" : "reject";
+      if (decisionIsRemembered(answer)) {
         remembered[interrupt.effect] = action;
       }
     }

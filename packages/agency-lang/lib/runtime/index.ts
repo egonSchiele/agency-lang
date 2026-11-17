@@ -16,5 +16,9 @@ export { TraceReader } from "./trace/traceReader.js";
 export { resolveCliInterrupts } from "./cliInterruptResolution.js";
 export { runCliEntry } from "./cliEntry.js";
 export { _run, _runFor } from "./ipc.js";
+// An interrupt without its checkpoint, for a program that sends interrupts
+// to a client and keeps the checkpoint to itself.
+export { withoutCheckpoint } from "./ipcChild.js";
+export type { SerializedInterrupt } from "./ipcChild.js";
 export { DebuggerState } from "../debugger/debuggerState.js";
 export { CoverageCollector } from "./coverageCollector.js";

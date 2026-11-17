@@ -414,8 +414,14 @@ override: an entry replaces the declared scope for that effect, and an
 empty list turns the option off. Interrupts that expect a value (a
 question, a review) get no "always" answers at all.
 
-The answers are one table, `ANSWERS` in `stdlib/policy.agency`. The menu,
-the reading of a typed key, and the handler's approve check all read it.
+The answers are one table, `PROMPT_OPTION_ROWS` in
+`lib/runtime/interruptPromptTable.ts`. The menu, the reading of a typed
+key, and the handler's approve check all read it, and so does the runtime's
+own prompt for `agency run --interactive`, which offers the four rows that
+need only the effect's name. Which rows an interrupt gets, and the rule
+each one saves, are in `lib/runtime/interruptPromptOptions.ts`; the
+functions in `stdlib/policy.agency` call into it with the handler's
+`fields:` overrides (see "Showing an interrupt from TypeScript" below).
 Each answer is on its own line, with a dim third column that says what it
 covers. `describeScope` (`lib/runtime/alwaysChoices.ts`) writes that column
 from the scope: `@always(x)` prints as `x = value`, and `@alwaysUnder(x)`
@@ -522,8 +528,54 @@ folder step existed. At most eight folders are listed. `b` goes back to
 the first prompt.
 
 A rule saved for a folder from that list, picked or the only one, sets
-`matchDotFolders` only for an effect in a listed set. `recordPromptRule` checks both conditions, the
+`matchDotFolders` only for an effect in a listed set. `withScopedRule`
+(`lib/runtime/interruptPromptOptions.ts`) checks both conditions, the
 folder and the set, so the flag stays tied to effects that only read.
+
+## Showing an interrupt from TypeScript
+
+A program with its own screen, such as an app that got an interrupt back
+from `respondToInterrupts`, shows the same options and saves the same rules
+through two functions exported from `agency-lang/runtime`:
+
+```ts
+const context = promptContext({ cwd });
+
+// What to show.
+const options = promptOptions(interrupt, context);
+
+// What a pick means.
+const resolved = resolvePromptOption({ intr: interrupt, key: "ap", scope: "/p", policy, context });
+if (resolved.success) {
+  await respondToInterrupts([interrupt], [resolved.value.response], {
+    invocation: { policy: resolved.value.policy },
+  });
+}
+```
+
+**These functions do not respond to an interrupt.** `approve()`, `reject()`
+and `respondToInterrupts` do that, as before. `promptOptions` is the data a
+prompt needs first, and `resolvePromptOption` turns a pick into the
+response to give and the policy to carry on with.
+
+- **An option carries its `scopes`**: the widths its rule can have,
+  narrowest first. For a file read they are the folders of the folder step.
+  A front-end asks a second question when an option has two or more, and
+  sends the picked scope's `id` back. One folder is no choice, so it is not
+  listed and is used without asking. A new kind of widening is a new
+  producer of scopes in this file, not a new function.
+- **A key or a scope that was not offered is a failure.** Both can come
+  from a client. A key is checked against the options for that interrupt,
+  so `aa` is refused for a raise that expects a value. A scope is checked
+  against that option's list, so the home directory, which is never
+  offered, can never be granted.
+- **The terminal menu is one caller.** `askUserChoices` turns each option
+  into a `ChoiceItem`: `response` becomes `tone`, and "two or more scopes"
+  becomes `followUp`. `recordAnswer` calls `policyAfterDecision`, which is
+  what `resolvePromptOption` calls after its checks.
+- **`recordAnswer` marks the policy for saving only when it changed.** A
+  repeated "always" answer that would save a rule the policy already has
+  writes nothing.
 
 The folder step is a second `interruptChoice` call, so the log shows two
 prompt waits (`_logPromptWait`) for one interrupt.

@@ -1,14 +1,19 @@
 // Terminal prompt mechanics for deciding a surfaced interrupt, in a leaf that
-// imports only the response API (interruptResponse.ts), never the runtime
-// interrupt machinery. This keeps the runtime dependency graph one-way:
-// interruptResponse ◀ interruptPrompts ◀ interruptResolution, with
+// imports only the response API (interruptResponse.ts) and the table of
+// prompt options (interruptPromptTable.ts, which imports nothing), never the
+// runtime interrupt machinery. This keeps the runtime dependency graph
+// one-way: interruptResponse ◀ interruptPrompts ◀ interruptResolution, with
 // runPolicyHandler also depending on this leaf. runPolicyHandler re-exports
 // these names so existing imports keep resolving.
 
 import { defaultHost } from "#default-host";
 import { color } from "@/utils/termcolors.js";
+import { EFFECT_WIDE_ROWS } from "./interruptPromptTable.js";
+import type { PromptDecision, PromptOptionRow } from "./interruptPromptTable.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptResponse } from "./interruptResponse.js";
+
+export type { PromptDecision } from "./interruptPromptTable.js";
 
 /** The interrupt fields a prompt reads. A full runtime `Interrupt` satisfies it. */
 export type Intr = {
@@ -19,8 +24,6 @@ export type Intr = {
   expectsValue?: boolean;
 };
 
-export type PromptDecision = "approve" | "reject" | "approve-always" | "reject-always";
-
 export type PromptFn = (intr: Intr) => Promise<PromptDecision>;
 
 // Prompt for a value-expecting interrupt (`const x = raise …`): returns the
@@ -30,13 +33,21 @@ export type ValuePromptFn = (intr: Intr) => Promise<InterruptResponse>;
 // Map a raw terminal answer to a decision. Accepts the short forms shown in the
 // prompt (a / r / aa / rr) and the spelled-out words; anything unrecognized is a
 // safe reject (fail-closed). Pure and exported so the four cases are unit-tested
-// without readline plumbing.
+// without readline plumbing. This prompt offers the options that need only
+// the effect's name (EFFECT_WIDE_ROWS); the keys and words come from the
+// shared table.
 export function parsePromptAnswer(raw: string): PromptDecision {
   const choice = raw.trim().toLowerCase();
-  if (choice === "aa" || choice === "approve-always") return "approve-always";
-  if (choice === "rr" || choice === "reject-always") return "reject-always";
-  if (choice === "a" || choice === "approve") return "approve";
-  return "reject";
+  const row = EFFECT_WIDE_ROWS.find((one) => one.key === choice || one.decision === choice);
+  return row?.decision ?? "reject";
+}
+
+// An option as the one-line question shows it: "(a)pprove" when the word
+// starts with its key, "(aa) approve-always" when it does not.
+function inlineOption(row: PromptOptionRow): string {
+  return row.decision.startsWith(row.key)
+    ? `(${row.key})${row.decision.slice(row.key.length)}`
+    : `(${row.key}) ${row.decision}`;
 }
 
 // Terminal prompts share ONE physical stdin, so concurrent interrupts (fork /
@@ -68,10 +79,7 @@ export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
 
 /** The text of the approve/reject question for `intr`. */
 export function approvalQuestion(intr: Intr): string {
-  return (
-    formatInterruptPrompt(intr) +
-    `(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: `
-  );
+  return formatInterruptPrompt(intr) + `${EFFECT_WIDE_ROWS.map(inlineOption).join(" / ")}: `;
 }
 
 /** The text of the question for an interrupt that expects a value. */

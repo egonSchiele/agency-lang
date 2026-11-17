@@ -21,18 +21,24 @@ import {
   _recommendedAutoApprovePolicy,
   _withWritesPolicy,
   _approveAllPolicy,
-  _escapeGlob,
   _alwaysScopeFor,
   _allAlwaysScopes,
   _missingPolicyRules,
   _appendPolicyRules,
-  _insertApproveRule,
-  _describeScope,
   _folderChoices,
-  _sharedApprovalSet,
-  _inSharedApprovalSet,
   _effectRisk,
   _riskColored,
+  _buildScopedMatch,
+  _recordRule,
+  _stripControlChars,
+  _folderField,
+  _folderOptions,
+  _sharedSetFor,
+  _unrejectedEffects,
+  _promptMenuItems,
+  _offeredDecision,
+  _decisionApproves,
+  _policyAfterDecision,
  } from "agency-lang/stdlib-lib/policy.js"
 import { describeProblem } from "agency-lang/stdlib-lib/workflow/index.js"
 
@@ -290,17 +296,6 @@ export def defaultScopedFields(): ScopedRuleFields {
   return _allAlwaysScopes()
 }
 
-// The one resolution rule: an explicit entry wins (an empty list
-// suppresses the option); otherwise the effect's declared scope.
-def scopedFieldsFor(effect: string, fields: ScopedRuleFields): ScopedField[] {
-  // Own keys only: `effect` is a user-controlled string, and a plain `{}`
-  // override must not resolve `constructor` or `toString` from the prototype.
-  if (keys(fields).includes(effect)) {
-    return fields[effect]
-  }
-  return _alwaysScopeFor(effect)
-}
-
 /**
 Use this to preview a scoped rule in a custom approval UI:
 
@@ -326,21 +321,7 @@ export def buildScopedMatch(
 
   @param fields - Per-effect scope overrides, with unlisted effects using their declared scopes.
   """
-  const specs = scopedFieldsFor(intr.effect, fields)
-  let match: Record<string, string> = {}
-  for (spec in specs) {
-    const value = intr.data[spec.field]
-    if (value == null) {
-      return {}
-    }
-    const literal = _escapeGlob("${value}")
-    if (spec.matchSubpaths) {
-      match[spec.field] = "{${literal},${literal}/**}"
-    } else {
-      match[spec.field] = literal
-    }
-  }
-  return match
+  return _buildScopedMatch(intr, fields)
 }
 
 /**
@@ -361,14 +342,7 @@ export def recordRule(
   """
   Append an effect-wide approval or rejection rule and return a new policy.
   """
-  const existing = policy[effect] || []
-  const next: Policy = {
-    ...policy,
-    [effect]: [...existing, {
-      action: action
-    }]
-  }
-  return next
+  return _recordRule(policy, effect, action)
 }
 
 /**
@@ -637,19 +611,6 @@ export def flushPolicy() raises <std::write> {
   maybeFlush()
 }
 
-// The scope a scoped rule would pin, in words ("dir = /x and below"), shown
-// beside the (ap) and (as) answers so the user sees what they approve
-// before they say yes. "" when there is nothing to pin, which is also when
-// neither answer is offered: an empty match would approve every interrupt
-// of the effect. The values come from interrupt data, so they are stripped.
-def describeScopedMatch(intr: any): string {
-  if (keys(buildScopedMatch(intr, globalCliPolicyOpts.fields)).length == 0) {
-    return ""
-  }
-  const fields = scopedFieldsFor(intr.effect, globalCliPolicyOpts.fields)
-  return stripControlChars(_describeScope(fields, intr.data))
-}
-
 /**
  Result returned by `askUser`. When the user picks a known key,
  `action` is the corresponding `Decision` and `reason` is null.
@@ -669,22 +630,11 @@ type AskUserResult = {
 }
 
 // Text a model wrote, on its way to a terminal the user is reading in
-// order to decide whether to approve it. Three groups come out:
-//
-//   - Control characters. An escape sequence moves the cursor or clears
-//     the screen; C1 codes do the same on terminals that decode them.
-//   - A lone carriage return, which returns the cursor to the start of
-//     the line so that whatever follows overwrites what came before it.
-//     `diff` splits on newlines, so a CR stays inside a rendered line.
-//     CRLF is normalized to LF first, leaving a Windows file readable.
-//   - The bidi overrides and zero-width characters behind trojan source,
-//     which make code read as something other than what it runs as.
-//
-// Tabs and newlines stay, because they are part of the code.
+// order to decide whether to approve it. The patterns and what each one
+// guards against are in lib/runtime/interruptPromptOptions.ts, which the
+// prompt's options use too.
 def stripControlChars(text: string): string {
-  const unixEndings = (text || "").replace(re/\r\n/g, "\n")
-  const noControls = unixEndings.replace(re/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "")
-  return noControls.replace(re/[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
+  return _stripControlChars(text)
 }
 
 // A change to code, as a header line and a syntax-highlighted unified
@@ -980,31 +930,11 @@ def renderObjAsTable(
   return render(paramTable, cols: cols)
 }
 
-/** One answer at the approval prompt. */
-type AnswerRow = {
-  key: string;
-  action: Decision;
-  tone: "approve" | "reject";
-  label: string;
-  /** What a rule saved by this answer covers: nothing (a one-time answer),
-    the whole effect, the scope in the interrupt, or that scope under
-    every effect of a shared set. Only the "nothing" answers are offered
-    to a raise that expects a value. */
-  covers: "nothing" | "effect" | "scope" | "set"
-}
-
-// Every answer the prompt can offer, in the order it lists them. The menu,
-// the reading of a typed key, and the handler's approve check all read this
-// table, so a new answer is one row here and its case in `recordAnswer`.
-static const ANSWERS: AnswerRow[] = [
-  { key: "a", action: "approve", tone: "approve", label: "approve once", covers: "nothing" },
-  { key: "aa", action: "approve-always", tone: "approve", label: "always approve", covers: "effect" },
-  { key: "ap", action: "approve-always-here", tone: "approve", label: "always approve when", covers: "scope" },
-  // The label gets the set's phrase and "in" added: "always approve all reads in".
-  { key: "as", action: "approve-always-set", tone: "approve", label: "always approve", covers: "set" },
-  { key: "r", action: "reject", tone: "reject", label: "reject once", covers: "nothing" },
-  { key: "rr", action: "reject-always", tone: "reject", label: "always reject", covers: "effect" }
-]
+// The options the prompt offers, which of them an interrupt gets, and the
+// rule each one saves are in TypeScript: lib/runtime/interruptPromptTable.ts
+// and interruptPromptOptions.ts. A program that shows interrupts on its own
+// screen reads the same table. The functions below are this module's calls
+// into it, with this handler's `fields:` overrides.
 
 // The answer at the folder step that goes back to the first prompt.
 static const BACK_KEY = "b"
@@ -1021,15 +951,7 @@ type SharedSet = {
 // does not apply: the effect is in no shared set, or its resolved scope
 // does not have exactly one subpath field.
 def folderField(intr: any): string {
-  if (!_inSharedApprovalSet(intr.effect)) {
-    return ""
-  }
-  const fields = scopedFieldsFor(intr.effect, globalCliPolicyOpts.fields)
-  const subpaths = filter(fields, \spec -> spec.matchSubpaths)
-  if (subpaths.length != 1) {
-    return ""
-  }
-  return subpaths[0].field
+  return _folderField(intr, globalCliPolicyOpts.fields)
 }
 
 // The folders the folder step would offer for this interrupt. Empty when
@@ -1037,11 +959,7 @@ def folderField(intr: any): string {
 // offers: the home directory, the agent home, a folder holding either, or
 // a filesystem root.
 def folderOptions(intr: any): any[] {
-  const field = folderField(intr)
-  if (field == "") {
-    return []
-  }
-  return _folderChoices("${intr.data[field]}")
+  return _folderOptions(intr, globalCliPolicyOpts.fields)
 }
 
 // The set an (as) answer would cover. Each member's scope is resolved with
@@ -1050,59 +968,17 @@ def folderOptions(intr: any): any[] {
 // step applies but has no folder to offer: the rule would then cover one
 // of the folders that step never offers, for every member.
 def sharedSetFor(intr: any): SharedSet {
-  const set: SharedSet = _sharedApprovalSet(intr.effect, globalCliPolicyOpts.fields)
-  if (folderField(intr) != "" && folderOptions(intr).length == 0) {
-    return { name: "", phrase: "", members: [] }
-  }
-  return set
+  return _sharedSetFor(intr, globalCliPolicyOpts.fields)
 }
 
-def answerOffered(row: AnswerRow, intr: any, scope: string, set: SharedSet): boolean {
-  if (row.covers == "nothing") {
-    return true
-  }
-  if (intr.expectsValue == true) {
-    return false
-  }
-  if (row.covers == "effect") {
-    return true
-  }
-  // An empty scope would save a catch-all approve rule.
-  if (row.covers == "scope") {
-    return scope != ""
-  }
-  return scope != "" && set.members.length > 0
-}
-
-def answerItem(row: AnswerRow, intr: any, scope: string, set: SharedSet): ChoiceItem {
-  if (row.covers == "effect") {
-    return { key: row.key, label: row.label, tone: row.tone, detail: "every ${stripControlChars(intr.effect)}" }
-  }
-  // The (ap) and (as) rows end with "›" when the folder step will follow,
-  // so the user knows a second question is coming.
-  const followUp = folderOptions(intr).length > 1
-  if (row.covers == "scope") {
-    return { key: row.key, label: row.label, tone: row.tone, detail: scope, followUp: followUp }
-  }
-  // "always approve all reads in   /x and below". The folder alone reads
-  // after "in"; the field name would not.
-  if (row.covers == "set") {
-    const field = folderField(intr)
-    const where = if field == "" then scope else stripControlChars("${intr.data[field]} and below")
-    return { key: row.key, label: "${row.label} ${set.phrase} in", tone: row.tone, detail: where, followUp: followUp }
-  }
-  return { key: row.key, label: row.label, tone: row.tone }
-}
-
+// The (ap) and (as) rows end with "›" when the folder step will follow, so
+// the user knows a second question is coming.
 @hidden
 export def askUserChoices(intr: any): ChoiceItem[] {
   """
   List the approval choices appropriate for an interrupt.
   """
-  const scope = describeScopedMatch(intr)
-  const set = sharedSetFor(intr)
-  const offered = filter(ANSWERS, \row -> answerOffered(row, intr, scope, set))
-  return map(offered, \row -> answerItem(row, intr, scope, set))
+  return _promptMenuItems(intr, globalCliPolicyOpts.fields)
 }
 
 // The effects among `effects` the (as) answer saves a rule under: those the
@@ -1111,7 +987,7 @@ export def askUserChoices(intr: any): ChoiceItem[] {
 // never decide anything, and the folder step, which names the effects the
 // rule covers, would list one the answer does not approve.
 def unrejectedEffects(policy: Policy, intr: any, effects: string[]): string[] {
-  return filter(effects, \effect -> checkPolicy(policy, { ...intr, effect: effect }).type != "reject")
+  return _unrejectedEffects(policy, intr, effects)
 }
 
 // The folder step: which folder the rule should cover. Returns the folder
@@ -1166,7 +1042,7 @@ def askFolderFor(intr: any, answer: AskUserResult): string | null {
 }
 
 // Present the approval menu for one interrupt and return the user's
-// choice as an `AskUserResult`. The answers come from `ANSWERS`. An (ap) or
+// choice as an `AskUserResult`. The answers come from `askUserChoices`. An (ap) or
 // (as) answer on a file-reading effect goes on to the folder step, whose
 // "back" shows the menu again.
 // Renders as a modal over the active repl(); falls back to plain print
@@ -1256,66 +1132,38 @@ def recordAnswer(intr: any, answer: AskUserResult) {
   if (rules == null || intr.expectsValue == true) {
     return
   }
-  if (answer.action == "approve-always") {
-    _policy = recordRule(rules, intr.effect, "approve")
+  // The rule each "always" answer saves, and where it goes among the rules
+  // already there, is `policyAfterDecision` in
+  // lib/runtime/interruptPromptOptions.ts. `recordScopedRule`, which
+  // programs with their own approval UI call, differs on purpose: it puts
+  // its rule first and never matches dot folders.
+  const after = _policyAfterDecision(
+    rules,
+    intr,
+    answer.action,
+    answer.folder ?? "",
+    globalCliPolicyOpts.fields,
+  )
+  if (after.changed) {
+    _policy = after.policy
     _pendingSave = true
   }
-  const folder = answer.folder ?? ""
-  if (answer.action == "approve-always-here") {
-    _policy = recordPromptRule(rules, intr, [intr.effect], folder)
-    _pendingSave = true
-  }
-  if (answer.action == "approve-always-set") {
-    const members = unrejectedEffects(rules, intr, sharedSetFor(intr).members)
-    _policy = recordPromptRule(rules, intr, members, folder)
-    _pendingSave = true
-  }
-  if (answer.action == "reject-always") {
-    _policy = recordRule(rules, intr.effect, "reject")
-    _pendingSave = true
-  }
-}
-
-// Save one scoped approve rule under each of `effects`, just after each
-// effect's reject rules, so no reject the user saved is overturned by a
-// grant for a folder that holds it. When the folder step ran, the rule
-// covers the folder picked there in place of the one in the interrupt.
-// `intr` itself is not changed, since the handler still uses it.
-// `recordScopedRule`, which programs with their own approval UI call, puts
-// its rule first and never matches dot folders.
-//
-// The rule matches dot folders only for an effect in a shared set
-// (`SHARED_APPROVAL_SETS`): those effects only read, and the folder step
-// never offers the home directory. Both conditions are written out so the
-// flag does not spread to another effect if the folder step ever does.
-def recordPromptRule(policy: Policy, intr: any, effects: string[], folder: string): Policy {
-  const subject = if folder == "" then intr else { ...intr, data: { ...intr.data, [folderField(intr)]: folder } }
-  const match = buildScopedMatch(subject, globalCliPolicyOpts.fields)
-  if (keys(match).length == 0) {
-    return policy
-  }
-  let rule: PolicyRule = { match: match, action: "approve" }
-  if (folder != "" && _inSharedApprovalSet(intr.effect)) {
-    rule.matchDotFolders = true
-  }
-  return _insertApproveRule(policy, effects, rule)
 }
 
 // The user's keystroke, or the text they typed, as a decision. Only a key
 // the menu offered is a keystroke. A question offers "a" and "r" alone,
 // so "aa" typed at one is the user's answer.
 def choiceResult(answer: string, offered: ChoiceItem[]): AskUserResult {
-  const isOffered = filter(offered, \item -> item.key == answer).length > 0
-  const rows = filter(ANSWERS, \row -> row.key == answer)
-  if (!isOffered || rows.length == 0) {
+  const action = _offeredDecision(answer, map(offered, \item -> item.key))
+  if (action == "") {
     return { action: "reject", reason: answer }
   }
-  return { action: rows[0].action, reason: null }
+  return { action: action, reason: null }
 }
 
 // Whether an answer approves the interrupt in front of the user.
 def approves(action: Decision): boolean {
-  return filter(ANSWERS, \row -> row.action == action && row.tone == "approve").length > 0
+  return _decisionApproves(action)
 }
 
 // The payload fields that say what an interrupt is about, as opposed to

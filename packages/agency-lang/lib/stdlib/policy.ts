@@ -30,6 +30,127 @@ export {
 } from "@/runtime/alwaysScope.js";
 export { describeScope as _describeScope } from "@/runtime/alwaysChoices.js";
 import type { Policy } from "@/runtime/policy.js";
+import {
+  buildScopedMatch,
+  decisionForOfferedKey,
+  folderField,
+  folderOptions,
+  policyAfterDecision,
+  promptOptions,
+  sharedSetFor,
+  unrejectedEffects,
+  type PromptContext,
+  type PromptOption,
+  type SharedSet,
+} from "@/runtime/interruptPromptOptions.js";
+import {
+  decisionApproves,
+  PROMPT_OPTION_ROWS,
+  type PromptDecision,
+} from "@/runtime/interruptPromptTable.js";
+import type { Intr } from "@/runtime/interruptPrompts.js";
+export {
+  recordRule as _recordRule,
+  stripControlChars as _stripControlChars,
+} from "@/runtime/interruptPromptOptions.js";
+
+// std::policy's side of lib/runtime/interruptPromptOptions.ts. Each
+// function below is that file's function of the same name, with the
+// context taken from the current run and `fields` as the caller's
+// per-effect scope overrides (`cliPolicyHandler`'s `fields:`).
+
+function runPromptContext(fields: Record<string, ScopedField[]>): PromptContext {
+  const { ctx } = currentRun();
+  return {
+    overrides: fields,
+    registered: allAlwaysScopes(),
+    sets: builtinEffectSets(),
+    dirs: ctx.policyDirs,
+  };
+}
+
+export function _buildScopedMatch(
+  intr: Intr,
+  fields: Record<string, ScopedField[]>,
+): Record<string, string> {
+  return buildScopedMatch(intr, runPromptContext(fields));
+}
+
+export function _folderField(intr: Intr, fields: Record<string, ScopedField[]>): string {
+  return folderField(intr, runPromptContext(fields));
+}
+
+export function _folderOptions(intr: Intr, fields: Record<string, ScopedField[]>): FolderChoice[] {
+  return folderOptions(intr, runPromptContext(fields));
+}
+
+export function _sharedSetFor(intr: Intr, fields: Record<string, ScopedField[]>): SharedSet {
+  return sharedSetFor(intr, runPromptContext(fields));
+}
+
+export function _unrejectedEffects(policy: Policy, intr: Intr, effects: string[]): string[] {
+  const { ctx } = currentRun();
+  return unrejectedEffects({ policy, intr, effects, dirs: ctx.policyDirs });
+}
+
+/** A row of the terminal menu, the shape of `ChoiceItem` in std::ui/cli. */
+type MenuItem = {
+  key: string;
+  label: string;
+  tone: "approve" | "reject";
+  detail?: string;
+  followUp?: boolean;
+};
+
+// The menu draws `tone` as the key's color and `followUp` as a "›" that
+// says a second question is coming. A row whose rule has a scope always
+// carries `followUp`, true or false.
+function menuItem(option: PromptOption): MenuItem {
+  const { key, label, response, detail, scopes } = option;
+  const row = PROMPT_OPTION_ROWS.find((one) => one.key === key);
+  const hasScope = row?.covers === "scope" || row?.covers === "set";
+  return {
+    key,
+    label,
+    tone: response,
+    ...(detail === undefined ? {} : { detail }),
+    ...(hasScope ? { followUp: scopes.length > 1 } : {}),
+  };
+}
+
+/** The options to show for `intr`, as rows of the terminal menu. */
+export function _promptMenuItems(intr: Intr, fields: Record<string, ScopedField[]>): MenuItem[] {
+  return promptOptions(intr, runPromptContext(fields)).map(menuItem);
+}
+
+/** The decision `key` stands for, or "" when it is not one of
+ *  `offeredKeys`. */
+export function _offeredDecision(key: string, offeredKeys: string[]): PromptDecision | "" {
+  return decisionForOfferedKey(key, offeredKeys) ?? "";
+}
+
+export function _decisionApproves(decision: PromptDecision): boolean {
+  return decisionApproves(decision);
+}
+
+/** The policy after `decision`, and whether it differs from `policy`, so
+ *  the caller knows whether there is anything to save. */
+export function _policyAfterDecision(
+  policy: Policy,
+  intr: Intr,
+  decision: PromptDecision,
+  folder: string,
+  fields: Record<string, ScopedField[]>,
+): { policy: Policy; changed: boolean } {
+  const next = policyAfterDecision({
+    policy,
+    intr,
+    decision,
+    folder,
+    context: runPromptContext(fields),
+  });
+  return { policy: next, changed: JSON.stringify(next) !== JSON.stringify(policy) };
+}
 
 /** The folders the prompt's folder step offers for `value`, measured
  *  against the directories the run resolved when its context was built. */

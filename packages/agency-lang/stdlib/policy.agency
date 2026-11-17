@@ -32,7 +32,7 @@ import {
   _recordRule,
   _stripControlChars,
   _folderField,
-  _folderOptions,
+  _folderWithoutAsking,
   _sharedSetFor,
   _unrejectedEffects,
   _promptMenuItems,
@@ -954,14 +954,6 @@ def folderField(intr: any): string {
   return _folderField(intr, globalCliPolicyOpts.fields)
 }
 
-// The folders the folder step would offer for this interrupt. Empty when
-// the step does not apply, and also when the folder is one the step never
-// offers: the home directory, the agent home, a folder holding either, or
-// a filesystem root.
-def folderOptions(intr: any): any[] {
-  return _folderOptions(intr, globalCliPolicyOpts.fields)
-}
-
 // The set an (as) answer would cover. Each member's scope is resolved with
 // the caller's `fields:` overrides, so the answer is not offered when an
 // override makes one member differ. It is also not offered when the folder
@@ -1020,16 +1012,13 @@ def askFolder(value: string, subject: string, risk: string): string | null {
 
 // The folder step for an answer, when it applies. Returns the folder
 // picked, "" when the step does not apply to this answer, or null when the
-// user went back to the first prompt. With one folder to offer there is no
-// choice to make, so that folder is returned without asking.
+// user went back to the first prompt. Whether there is anything to ask is
+// `folderWithoutAsking` in lib/runtime/interruptPromptOptions.ts, so this
+// menu and a TypeScript host save the same rule for the same answer.
 def askFolderFor(intr: any, answer: AskUserResult): string | null {
-  const scoped = answer.action == "approve-always-here" || answer.action == "approve-always-set"
-  const options = folderOptions(intr)
-  if (!scoped || options.length == 0) {
-    return ""
-  }
-  if (options.length == 1) {
-    return options[0].path
+  const known = _folderWithoutAsking(intr, answer.action, globalCliPolicyOpts.fields)
+  if (known != null) {
+    return known
   }
   const value = "${intr.data[folderField(intr)]}"
   const risk = _effectRisk(intr.effect)

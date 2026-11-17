@@ -532,6 +532,9 @@ A rule saved for a folder from that list, picked or the only one, sets
 (`lib/runtime/interruptPromptOptions.ts`) checks both conditions, the
 folder and the set, so the flag stays tied to effects that only read.
 
+The folder step is a second `interruptChoice` call, so the log shows two
+prompt waits (`_logPromptWait`) for one interrupt.
+
 ## Showing an interrupt from TypeScript
 
 A program with its own screen, such as an app that got an interrupt back
@@ -554,31 +557,42 @@ if (resolved.success) {
 ```
 
 **These functions do not respond to an interrupt.** `approve()`, `reject()`
-and `respondToInterrupts` do that, as before. `promptOptions` is the data a
-prompt needs first, and `resolvePromptOption` turns a pick into the
-response to give and the policy to carry on with.
+and `respondToInterrupts` do that. `promptOptions` is the data a prompt
+needs first, and `resolvePromptOption` turns a pick into the response to
+give and the policy to carry on with.
 
+- **`intr` must be the host's own copy of the interrupt.** The rule saved
+  is built from `intr.data`, and `resolvePromptOption` trusts it. A host
+  that sent the interrupt to a client (with `withoutCheckpoint`) looks its
+  own copy up by the `interruptId` the client sends back. It never passes
+  in an interrupt a client sent. A client that could supply `data` could
+  send `{ effect: "std::read", data: { dir: "/somewhere/else" } }` with
+  `key: "ap"` and have an approve rule saved for that folder.
 - **An option carries its `scopes`**: the widths its rule can have,
   narrowest first. For a file read they are the folders of the folder step.
   A front-end asks a second question when an option has two or more, and
   sends the picked scope's `id` back. One folder is no choice, so it is not
-  listed and is used without asking. A new kind of widening is a new
-  producer of scopes in this file, not a new function.
+  listed and is used without asking. `folderWithoutAsking` holds that
+  rule, and the terminal's folder step asks it too.
 - **A key or a scope that was not offered is a failure.** Both can come
   from a client. A key is checked against the options for that interrupt,
   so `aa` is refused for a raise that expects a value. A scope is checked
-  against that option's list, so the home directory, which is never
-  offered, can never be granted.
+  against that option's list, so a pick can never widen a rule to a folder
+  the list leaves out, such as the home directory. A read whose own folder
+  is the home directory can still be granted with `ap`, for that folder
+  and without dot folders.
 - **The terminal menu is one caller.** `askUserChoices` turns each option
   into a `ChoiceItem`: `response` becomes `tone`, and "two or more scopes"
   becomes `followUp`. `recordAnswer` calls `policyAfterDecision`, which is
   what `resolvePromptOption` calls after its checks.
-- **`recordAnswer` marks the policy for saving only when it changed.** A
-  repeated "always" answer that would save a rule the policy already has
-  writes nothing.
-
-The folder step is a second `interruptChoice` call, so the log shows two
-prompt waits (`_logPromptWait`) for one interrupt.
+- **Every "always" rule goes where it decides, and is saved once.**
+  `policyAfterDecision` places an approve rule with `insertApproveRule` and
+  an effect-wide reject with `insertRejectRule` (both in
+  `lib/runtime/policyUpdate.ts`): ahead of a catch-all `propagate` or
+  `approve`, which would hide a rule appended after it. An effect that
+  already has the rule is left alone, so `recordAnswer` finds the policy
+  unchanged and writes nothing. The stdlib's `recordRule` is a different
+  function: it appends.
 
 ## Effects that carry their own bookkeeping
 

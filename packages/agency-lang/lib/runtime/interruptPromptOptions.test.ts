@@ -3,6 +3,7 @@ import type { ScopedField } from "./alwaysScope.js";
 import { builtinEffectSets } from "./effectSets.js";
 import {
   decisionForOfferedKey,
+  folderWithoutAsking,
   promptOptions,
   resolvePromptOption,
   stripControlChars,
@@ -146,7 +147,7 @@ describe("promptOptions", () => {
   });
 
   it("removes control characters from the text it shows", () => {
-    const sneaky = interrupt("std::exec", { command: "ls‮", subcommand: "\x1b[8mx" });
+    const sneaky = interrupt("std::exec", { command: "ls\u{202e}", subcommand: "\x1b[8mx" });
     expect(promptOptions(sneaky, context)[2].detail).toBe("command = ls, subcommand = [8mx");
   });
 });
@@ -169,6 +170,21 @@ describe("resolvePromptOption", () => {
       response: { type: "reject" },
       policy: { "std::exec": [{ action: "reject" }] },
     });
+  });
+
+  it("puts an always-approve rule ahead of a catch-all, and saves it once", () => {
+    const policy: Policy = { "std::read": [{ action: "propagate" }] };
+    const once = resolved({ intr: readInProject, key: "aa", policy }).policy;
+    expect(once["std::read"]).toEqual([{ action: "approve" }, { action: "propagate" }]);
+    expect(resolved({ intr: readInProject, key: "aa", policy: once }).policy).toEqual(once);
+  });
+
+  it("puts an always-reject rule ahead of a catch-all and behind the rules before it", () => {
+    const approved = { match: { dir: `{${PROJECT},${PROJECT}/**}` }, action: "approve" as const };
+    const policy: Policy = { "std::read": [approved, { action: "propagate" }] };
+    const once = resolved({ intr: readInProject, key: "rr", policy }).policy;
+    expect(once["std::read"]).toEqual([approved, { action: "reject" }, { action: "propagate" }]);
+    expect(resolved({ intr: readInProject, key: "rr", policy: once }).policy).toEqual(once);
   });
 
   it("saves a rule for the scope picked", () => {
@@ -230,7 +246,7 @@ describe("resolvePromptOption", () => {
   });
 
   it("refuses a scope the option does not offer", () => {
-    // The home directory is never offered, so it can never be granted.
+    // The home directory is not in the list, so a pick can't widen to it.
     expect(refusal({ intr: readInProject, key: "ap", scope: "/Users/me" })).toContain(
       "not one of the scopes",
     );
@@ -239,6 +255,21 @@ describe("resolvePromptOption", () => {
     expect(refusal({ intr: readInProject, key: "a", scope: PROJECT })).toContain(
       "no scope to pick",
     );
+  });
+});
+
+describe("folderWithoutAsking", () => {
+  it("is null only when there are several folders to pick from", () => {
+    expect(folderWithoutAsking(readInProject, "approve-always-here", context)).toBeNull();
+    expect(folderWithoutAsking(readInProject, "approve-always-set", context)).toBeNull();
+    // An option whose rule has no folder never asks.
+    expect(folderWithoutAsking(readInProject, "approve-always", context)).toBe("");
+    expect(folderWithoutAsking(readInProject, "approve", context)).toBe("");
+    // One folder is no choice.
+    const inEtc = interrupt("std::read", { dir: "/etc" });
+    expect(folderWithoutAsking(inEtc, "approve-always-here", context)).toBe("/etc");
+    // No folder to widen to.
+    expect(folderWithoutAsking(gitStatus, "approve-always-here", context)).toBe("");
   });
 });
 
@@ -255,7 +286,7 @@ describe("stripControlChars", () => {
     expect(stripControlChars("a\tb\r\nc\rd")).toBe("a\tb\ncd");
   });
   it("removes escape codes, bidi overrides and zero-width characters", () => {
-    expect(stripControlChars("x\x1b[2Jy‮z​w﻿")).toBe("x[2Jyzw");
+    expect(stripControlChars("x\x1b[2Jy\u{202e}z\u{200b}w\u{feff}")).toBe("x[2Jyzw");
   });
 });
 

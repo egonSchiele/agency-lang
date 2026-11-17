@@ -34,7 +34,7 @@ import {
   buildScopedMatch,
   decisionForOfferedKey,
   folderField,
-  folderOptions,
+  folderWithoutAsking,
   policyAfterDecision,
   promptOptions,
   sharedSetFor,
@@ -43,11 +43,8 @@ import {
   type PromptOption,
   type SharedSet,
 } from "@/runtime/interruptPromptOptions.js";
-import {
-  decisionApproves,
-  PROMPT_OPTION_ROWS,
-  type PromptDecision,
-} from "@/runtime/interruptPromptTable.js";
+import { PROMPT_OPTION_ROWS, type PromptDecision } from "@/runtime/interruptPromptTable.js";
+export { decisionApproves as _decisionApproves } from "@/runtime/interruptPromptTable.js";
 import type { Intr } from "@/runtime/interruptPrompts.js";
 export {
   recordRule as _recordRule,
@@ -78,10 +75,6 @@ export function _buildScopedMatch(
 
 export function _folderField(intr: Intr, fields: Record<string, ScopedField[]>): string {
   return folderField(intr, runPromptContext(fields));
-}
-
-export function _folderOptions(intr: Intr, fields: Record<string, ScopedField[]>): FolderChoice[] {
-  return folderOptions(intr, runPromptContext(fields));
 }
 
 export function _sharedSetFor(intr: Intr, fields: Record<string, ScopedField[]>): SharedSet {
@@ -129,8 +122,14 @@ export function _offeredDecision(key: string, offeredKeys: string[]): PromptDeci
   return decisionForOfferedKey(key, offeredKeys) ?? "";
 }
 
-export function _decisionApproves(decision: PromptDecision): boolean {
-  return decisionApproves(decision);
+/** The folder to use with no question asked, or null when the person must
+ *  pick one. */
+export function _folderWithoutAsking(
+  intr: Intr,
+  decision: PromptDecision,
+  fields: Record<string, ScopedField[]>,
+): string | null {
+  return folderWithoutAsking(intr, decision, runPromptContext(fields));
 }
 
 /** The policy after `decision`, and whether it differs from `policy`, so

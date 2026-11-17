@@ -24,7 +24,7 @@ import { approve, reject } from "./interruptResponse.js";
 import type { InterruptResponse } from "./interruptResponse.js";
 import { checkPolicy, escapeGlob } from "./policy.js";
 import type { Policy, PolicyDirs, PolicyRule } from "./policy.js";
-import { insertApproveRule } from "./policyUpdate.js";
+import { insertApproveRule, insertRejectRule } from "./policyUpdate.js";
 import { failure, success } from "./result.js";
 import type { ResultFailure } from "./result.js";
 
@@ -92,7 +92,7 @@ export function stripControlChars(text: string): string {
   return (text || "")
     .replace(/\r\n/g, "\n")
     .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "")
-    .replace(/[؜​-‏‪-‮⁦-⁩﻿]/g, "");
+    .replace(/[\u{61c}\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}\u{feff}]/gu, "");
 }
 
 /** The fields a rule for `effect` pins. The one resolution rule: an
@@ -194,7 +194,7 @@ function isOffered(row: PromptOptionRow, intr: Intr, offer: Offer): boolean {
 }
 
 /** The widths to ask about. One folder is no choice, so it is not listed:
- *  `folderFor` uses it without asking. */
+ *  `folderWithoutAsking` returns it. */
 function scopesOf(folders: FolderChoice[]): PromptScope[] {
   if (folders.length < 2) {
     return [];
@@ -252,7 +252,9 @@ export function decisionForOfferedKey(key: string, offeredKeys: string[]): Promp
   return PROMPT_OPTION_ROWS.find((row) => row.key === key)?.decision ?? null;
 }
 
-/** `policy` with an effect-wide rule appended. */
+/** `policy` with an effect-wide rule appended. This is std::policy's
+ *  `recordRule`. The prompt's "always" options do not use it: see
+ *  `policyAfterDecision`. */
 export function recordRule(policy: Policy, effect: string, action: "approve" | "reject"): Policy {
   return { ...policy, [effect]: [...(policy[effect] ?? []), { action }] };
 }
@@ -323,10 +325,13 @@ export function policyAfterDecision(args: {
     case "approve":
     case "reject":
       return policy;
+    // An effect-wide rule appended after a catch-all would never decide,
+    // and the same pick would append it again each time. These two place
+    // it where it decides and save it once.
     case "approve-always":
-      return recordRule(policy, intr.effect, "approve");
+      return insertApproveRule(policy, [intr.effect], { action: "approve" });
     case "reject-always":
-      return recordRule(policy, intr.effect, "reject");
+      return insertRejectRule(policy, [intr.effect], { action: "reject" });
     case "approve-always-here":
       return withScopedRule({ policy, intr, effects: [intr.effect], folder, context });
     case "approve-always-set": {
@@ -341,26 +346,48 @@ export function policyAfterDecision(args: {
   }
 }
 
-/** The folder a scoped rule covers. With no folder to widen to it is "",
- *  with one it is that one, and with more the caller must name one of
- *  them. */
+/** The folder the rule `decision` saves covers, when there is nothing to
+ *  ask: "" when no wider folder applies, and the folder when there is
+ *  exactly one. null when there are several and the person must pick one.
+ *  This is the one place that rule lives. The terminal's folder step and
+ *  `resolvePromptOption` both ask it, so they save the same rule for the
+ *  same pick. */
+export function folderWithoutAsking(
+  intr: Intr,
+  decision: PromptDecision,
+  context: PromptContext,
+): string | null {
+  const { covers } = rowForDecision(decision);
+  if (covers !== "scope" && covers !== "set") {
+    return "";
+  }
+  const folders = folderOptions(intr, context);
+  if (folders.length > 1) {
+    return null;
+  }
+  return folders.length === 1 ? folders[0].path : "";
+}
+
+/** The folder a scoped rule covers, given the scope a caller sent. A
+ *  caller must send one exactly when the person had to pick, and it must
+ *  be one of the folders offered. */
 function folderFor(args: {
+  intr: Intr;
   row: PromptOptionRow;
-  folders: FolderChoice[];
   scope: string | undefined;
+  context: PromptContext;
 }): string | ResultFailure {
-  const { row, folders, scope } = args;
-  const widens = row.covers === "scope" || row.covers === "set";
-  const offered = widens && folders.length > 1 ? folders.map((folder) => folder.path) : [];
-  if (offered.length === 0) {
-    if (scope !== undefined) {
-      return failure(`The option "${row.key}" has no scope to pick, but one was given.`);
-    }
-    return widens && folders.length === 1 ? folders[0].path : "";
+  const { intr, row, scope, context } = args;
+  const known = folderWithoutAsking(intr, row.decision, context);
+  if (known !== null) {
+    return scope === undefined
+      ? known
+      : failure(`The option "${row.key}" has no scope to pick, but one was given.`);
   }
   if (scope === undefined) {
     return failure(`The option "${row.key}" needs one of its scopes.`);
   }
+  const offered = folderOptions(intr, context).map((folder) => folder.path);
   if (!offered.includes(scope)) {
     return failure(`"${scope}" is not one of the scopes the option "${row.key}" offers.`);
   }
@@ -378,6 +405,12 @@ export type ResolvedPromptOptionResult =
  *  an option this interrupt offers, or `scope` is not one of that option's
  *  scopes: both may come from a client, so neither is trusted.
  *
+ *  `intr` IS trusted, and the rule saved is built from `intr.data`. It
+ *  must be the host's own copy of the interrupt, looked up by the
+ *  `interruptId` the client sent, and never an interrupt a client sent
+ *  back. A client that could supply `data` could name any folder and have
+ *  an approve rule saved for it.
+ *
  *  This does not respond to the interrupt. */
 export function resolvePromptOption(args: {
   intr: Intr;
@@ -394,7 +427,7 @@ export function resolvePromptOption(args: {
     return failure(`"${key}" is not one of the options this interrupt offers.`);
   }
   const row = rowForDecision(decision);
-  const folder = folderFor({ row, folders: folderOptions(intr, context), scope });
+  const folder = folderFor({ intr, row, scope, context });
   if (typeof folder !== "string") {
     return folder;
   }

@@ -197,8 +197,8 @@ export def beginLogin(
   name: string,
 ): Result<string[]> {
   const started = startMcpLogin(merged, name)
-  if (started is failure(f)) {
-    return failure(f)
+  if (isFailure(started)) {
+    return started
   }
   const url = started.value
   openUrl(url)

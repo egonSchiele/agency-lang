@@ -4,7 +4,7 @@
 
 Paths are relative to `packages/agency-lang`.
 
-This spec replaces the background jobs design in `docs/superpowers/specs/2026-11-15-background-agency-jobs.md` on the branch `adit/agent-messaging`. The section "What we keep from the background jobs design" says which of its ideas carry over.
+This spec replaces the background jobs design in `docs/superpowers/specs/2026-11-15-background-agency-jobs.md`. The section "What we keep from the background jobs design" says which of its ideas carry over.
 
 ## The problem
 

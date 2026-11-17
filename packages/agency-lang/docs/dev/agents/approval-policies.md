@@ -781,7 +781,8 @@ The save and review gates (`std::skills::save`, `std::skills::review`,
 built-in but `approve-all`. They prompt.
 
 All four read rules, and the `std::mkdir` rule, are placeholders, not paths. `.` expands to the
-process cwd, `<agency>` to the directory the agency package is installed
+run's working folder (the process's, unless the run's host was given one),
+`<agency>` to the directory the agency package is installed
 in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `substituteInstallDir`,
 `getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or
 `~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `substituteAgentHome`,
@@ -864,12 +865,22 @@ Three semantics to keep straight:
    by the time the policy sees it. A relative pattern in a policy file
    therefore never matches an agent's dir — except via the dot rule below.
 2. **`.` in a `dir` pattern means the launch directory.** A `dir` pattern
-   gets a second match attempt with `.` resolved against `process.cwd()` —
+   gets a second match attempt with `.` resolved against the run's working
+   folder, `host.system.cwd()` —
    standing alone (`"."`), as a prefix (`"./sub/**"`), or as a brace
    alternative (`"{.,./**}"`). This lets a static policy say "wherever the
    agent is running" instead of hard-coding an absolute path. The raw
    pattern is always tried first, so no existing match is taken away. Only
    the `dir` field resolves; `command` and the rest match raw.
+
+   That folder is the process's, `process.cwd()`, for `agency run` and
+   `agency agent`. A program that runs several runs in one process, each
+   in its own project, gives each run a host with its own folder:
+   `nodeHost({ cwd })` (see "The working folder" in
+   `docs/dev/runtime/host.md`). It is fixed before the run starts. Nothing
+   inside a run can move it, and `setAgentCwd` does not: the agent cwd is
+   something a model can change, and this rule is what says which folder
+   needs no approval.
 3. **`**` never matches a dot-led segment.** picomatch's dot rule: a glob
    `base/**` does not reach `base/.staging/x`. Dot segments in the
    *literal* prefix are fine — a launch directory whose own path contains

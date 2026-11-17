@@ -277,10 +277,9 @@ function registerFileTests(name: string, open: () => Workspace): void {
 
     it("a host without fileWrite refuses a write and still reads", () =>
       withWorkspace(async ({ dir }) => {
-        const readOnly =
-          name === "nodeHost"
-            ? nodeHost({ capabilities: ["fileRead"] })
-            : memoryHost({ capabilities: ["fileRead"], files: { [`${dir}/r.txt`]: "ro" } });
+        const readOnly = name.startsWith("nodeHost")
+          ? nodeHost({ capabilities: ["fileRead"] })
+          : memoryHost({ capabilities: ["fileRead"], files: { [`${dir}/r.txt`]: "ro" } });
         const root = await readOnly.files.root(dir);
         // A refusal throws when the function is called, before any promise
         // exists; an `await` in an async caller turns that into a rejection.
@@ -298,6 +297,17 @@ registerFileTests("nodeHost", () => {
   const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), "host-files-")));
   return {
     host: nodeHost(),
+    dir,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+});
+
+// A host given a working folder passes the same battery. Relative paths
+// against that folder are in node/nodeHost.cwd.test.ts.
+registerFileTests("nodeHost with a working folder", () => {
+  const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), "host-files-")));
+  return {
+    host: nodeHost({ cwd: dir }),
     dir,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };

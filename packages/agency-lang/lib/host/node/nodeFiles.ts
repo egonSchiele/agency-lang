@@ -32,11 +32,16 @@ import type { Root } from "../roots.js";
  *  that is never followed. */
 export type Located = { root: Root; target: string };
 
-export function root(dir: string): Root {
+// `base`, on each function below that takes one, is the folder a relative
+// path is resolved against: the working folder of the host that is asking.
+// A caller with no host (the compiler, the local-model code) leaves it out
+// and gets the process's folder.
+
+export function root(dir: string, base: string = process.cwd()): Root {
   if (dir === undefined || dir === null || dir.trim() === "") {
     throw new Error('dir must not be empty. Use "." for the current directory.');
   }
-  const lexical = path.resolve(process.cwd(), expandPath(dir, os.homedir()));
+  const lexical = path.resolve(base, expandPath(dir, os.homedir()));
   return { real: walkSpelling(lexical) };
 }
 
@@ -134,11 +139,11 @@ function escapeError(target: string, realRoot: string, landed: string): Error {
  *  because a link planted at the approved path while the prompt was
  *  pending would otherwise become the new root. Components that do not
  *  exist yet are kept as written. */
-export function fixedRoot(real: string): Root {
+export function fixedRoot(real: string, base: string = process.cwd()): Root {
   if (real === undefined || real === null || real.trim() === "") {
     throw new Error('dir must not be empty. Use "." for the current directory.');
   }
-  const lexical = path.resolve(process.cwd(), expandPath(real, os.homedir()));
+  const lexical = path.resolve(base, expandPath(real, os.homedir()));
   const parsed = path.parse(lexical);
   const segments = lexical
     .slice(parsed.root.length)
@@ -167,11 +172,11 @@ export function fixedRoot(real: string): Root {
 
 /** The whole-path twin of `fixedRoot`: the real parent the approver saw,
  *  checked to still be spelled without links, plus the final name. */
-export function fixedPath(p: string): Located {
+export function fixedPath(p: string, base: string = process.cwd()): Located {
   if (p === undefined || p === null || p.trim() === "") {
     throw new Error("path must not be empty.");
   }
-  const lexical = path.resolve(process.cwd(), expandPath(p, os.homedir()));
+  const lexical = path.resolve(base, expandPath(p, os.homedir()));
   return { root: fixedRoot(path.dirname(lexical)), target: path.basename(lexical) };
 }
 
@@ -179,11 +184,11 @@ export function fixedPath(p: string): Located {
  *  `remove`, `copy`, `move`, and output files use this: the interrupt
  *  named the whole path, the parent is the root, and the final name is
  *  one component that is never followed. */
-export function wholePath(p: string): Located {
+export function wholePath(p: string, base: string = process.cwd()): Located {
   if (p === undefined || p === null || p.trim() === "") {
     throw new Error("path must not be empty.");
   }
-  const lexical = path.resolve(process.cwd(), expandPath(p, os.homedir()));
+  const lexical = path.resolve(base, expandPath(p, os.homedir()));
   return { root: root(path.dirname(lexical)), target: path.basename(lexical) };
 }
 
@@ -201,6 +206,7 @@ export function locateSync(
   filename: string,
   operation: "read" | "write",
   dirMayBeMissing: boolean = false,
+  base: string = process.cwd(),
 ): { dir: string; filename: string } {
   if (dir.trim() === "") {
     throw new Error(`${operation} refused: dir must not be empty.`);
@@ -210,9 +216,9 @@ export function locateSync(
   // where a folder would go. They run ahead of `root` and `resolveUnder`,
   // which would report the same thing as a bare ENOTDIR.
   if (dirMayBeMissing) {
-    refuseFileOnTheWay(path.resolve(process.cwd(), expandPath(dir, os.homedir())), operation);
+    refuseFileOnTheWay(path.resolve(base, expandPath(dir, os.homedir())), operation);
   }
-  const realRoot = root(dir);
+  const realRoot = root(dir, base);
   if (!dirMayBeMissing && stat(realRoot, ".") === null) {
     throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
   }
@@ -245,13 +251,13 @@ function teachEscape(operation: "read" | "write", message: string): string {
 }
 
 /** The real spelling of a directory, for an interrupt payload. */
-export function _realDir(dir: string): string {
-  return root(dir).real;
+export function _realDir(dir: string, base: string = process.cwd()): string {
+  return root(dir, base).real;
 }
 
 /** The real spelling of a whole path, for an interrupt payload. */
-export function _realTarget(p: string): string {
-  const located = wholePath(p);
+export function _realTarget(p: string, base: string = process.cwd()): string {
+  const located = wholePath(p, base);
   return path.join(located.root.real, located.target);
 }
 

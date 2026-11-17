@@ -526,7 +526,7 @@ Run a compiled program in a child process. Parent handlers and guards
 | ipcPayload | `number \| null` | null | The limit per IPC message in bytes, up to 1gb, or null for the default. |
 | stdout | `number \| null` | null | The combined stdout and stderr limit in bytes, up to 100mb, or null for the default. |
 | logFile | `string \| null` | null | An optional statelog JSONL destination for this child run. |
-| cwd | `string \| null` | null | The child working directory, or empty to inherit the caller's process directory. |
+| cwd | `string \| null` | null | The child working directory, or empty for this run's working directory. |
 | maxDepth | `number \| null` | null | The subprocess nesting cap, up to ten, also bounded by ancestor caps. |
 | maxCost | `number \| null` | null | The child's LLM spend limit in dollars, or null for no additional cost cap. |
 
@@ -844,7 +844,7 @@ Use this when an LLM supplies source code to execute. It combines
 | ipcPayload | `number` | 100mb | A positive byte limit per IPC message, up to 1gb. |
 | stdout | `number` | 1mb | A positive combined stdout and stderr byte limit, up to 100mb. |
 | maxCost | `number \| null` | null | The child's LLM spend limit in dollars, or null for no additional cost cap. |
-| cwd | `string` | "" | The runtime working directory. Empty inherits the caller's process directory, which may not be where you want files; pass the agent working directory so the program's file writes land there. |
+| cwd | `string` | "" | The runtime working directory. Empty means this run's working directory, which may not be where you want files; pass the agent working directory so the program's file writes land there. |
 | dir | `string` | "" | Resolve and confine local imports within this directory, or leave empty to disallow them. |
 
 **Returns:** `Result`

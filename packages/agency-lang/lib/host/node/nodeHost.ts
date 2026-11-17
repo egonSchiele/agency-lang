@@ -25,6 +25,7 @@ import {
   type HostNetwork,
   type HostRandom,
   type HostSettings,
+  type HostSubprocess,
   type HostSystem,
   type HostTerminal,
   type MakeHostArgs,
@@ -41,23 +42,36 @@ export type NodeHostOptions = {
   network?: HostNetwork;
   /** Defaults to the real clock. A test passes a `FakeClock`. */
   clock?: Clock;
+  /** The working folder of every run on this host: what `cwd()` returns,
+   *  what a relative path and a policy's `.` are measured against, and
+   *  where a command given no folder runs. An absolute path. It is fixed
+   *  here, before any run starts, and nothing can change it afterwards: a
+   *  policy's `.` says "this folder needs no approval", so code inside a
+   *  run must not be able to move it. Left out, it is the process's folder
+   *  at the time of each call. For a program that runs several runs in
+   *  one process, each in its own folder. */
+  cwd?: string;
   onUse?: MakeHostArgs["onUse"];
   onCallable?: MakeHostArgs["onCallable"];
 };
 
 export function nodeHost(options: NodeHostOptions = {}): Host {
+  const { cwd } = options;
+  if (cwd !== undefined && !path.isAbsolute(cwd)) {
+    throw new Error(`nodeHost: cwd must be an absolute path, and "${cwd}" is not.`);
+  }
   return makeHost({
     name: "node",
     capabilities: options.capabilities ?? PLATFORM_CAPABILITIES.node,
     onUse: options.onUse,
     onCallable: options.onCallable,
     parts: {
-      files: nodeFilesPart(options.files),
+      files: nodeFilesPart({ ...options.files, cwd }),
       network: options.network ?? nodeNetwork,
-      subprocess: nodeSubprocess,
+      subprocess: cwd === undefined ? nodeSubprocess : subprocessIn(cwd),
       env: nodeEnv,
       terminal: nodeTerminal,
-      system: nodeSystem,
+      system: cwd === undefined ? nodeSystem : systemIn(cwd),
       settings: nodeSettings,
       clock: options.clock ?? realClock,
       random: nodeRandom,
@@ -267,6 +281,32 @@ const nodeSystem: HostSystem = {
     process.on("exit", fn);
   },
 };
+
+/** `nodeSystem` for a host whose working folder is `cwd`. */
+function systemIn(cwd: string): HostSystem {
+  return {
+    ...nodeSystem,
+    cwd: () => cwd,
+    realDir: (dir) => {
+      try {
+        return rootPath(root(dir, cwd));
+      } catch {
+        return dir;
+      }
+    },
+  };
+}
+
+/** `nodeSubprocess` for a host whose working folder is `cwd`: a command
+ *  given no folder runs there, where it would otherwise run in the
+ *  process's folder. */
+function subprocessIn(cwd: string): HostSubprocess {
+  return {
+    ...nodeSubprocess,
+    run: (command, options = {}) => nodeSubprocess.run(command, { cwd, ...options }),
+    start: (command, options = {}) => nodeSubprocess.start(command, { cwd, ...options }),
+  };
+}
 
 const nodeRandom: HostRandom = {
   id: () => nanoid(),

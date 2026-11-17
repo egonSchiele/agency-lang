@@ -1,0 +1,48 @@
+// Two runs in one process, each on a host with its own working folder.
+// Each node below must see its own run's folder: for `cwd()`, for a
+// relative path in a plain function call, and for the `.` in the policy
+// the test passes.
+import { runCode } from "std::agency"
+import { cwd } from "std::system"
+
+def contentOf(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+export node whereAmI(): string {
+  return cwd()
+}
+
+// A relative path, called as a function and not as an agent's tool.
+export node readNotes(): string {
+  return contentOf(read("notes.txt"))
+}
+
+// A program run in a child process gets a default host of its own. It is
+// started in this run's folder, so it sees the same one.
+export node whereIsMyChild(): string {
+  const source = """
+import { cwd } from "std::system"
+export node main(): string {
+  return cwd()
+}
+"""
+  handle {
+    const result = runCode(source: source, node: "main")
+    if (result is failure(err)) {
+      return "runCode failed: ${err}"
+    }
+    if (result is success(value)) {
+      return value
+    }
+  } with approve
+  return "unreachable"
+}
+
+// A read in a folder the test names: the other run's folder.
+export node readNotesIn(dir: string): string {
+  return contentOf(read("notes.txt", dir))
+}

@@ -40,10 +40,11 @@ bash runs the original text.
   without adding information.
 - **Rebuilt text when narrow.** When every command was recognized, the
   text that runs is rendered from the tree that was classified
-  (`astToBash`), so a parser bug degrades to running what was read. Three
+  (`astToBash`), so a parser bug degrades to running what was read. Four
   commands in that tree are written by the classifier: a `cd` names the
-  folder it resolved, a git command is the one `gitCommand` built, and a
-  `gh` command is the one `ghCommand` built.
+  folder it resolved, the `exit 1` of a `cd` guard is added after it, a
+  git command is the one `gitCommand` built, and a `gh` command is the
+  one `ghCommand` built.
 - **Every shell spawn raises at least one effect.** A string of nothing
   but echoes still raises `std::bash` (`bashPlan` substitutes it for an
   empty effect list), so the effect log is a complete audit of shell
@@ -1600,7 +1601,7 @@ under `recommended`: the coder (`std::agents/coding`), the verifier
 (`std::agents/verifier`), and the Agency verifier
 (`std::agents/agency/verifier`), all through `shellTools`.
 
-## `cd` on the left of `&&`
+## `cd`
 
 ```
 cd packages/agency-lang && pnpm test
@@ -1610,14 +1611,15 @@ This asks one `std::exec` whose `cwd` is the real `packages/agency-lang`.
 The `cd` raises nothing. Every path and every payload to its right is
 resolved against the new directory.
 
-The rule rests on `&&`. When the `cd` fails, bash runs nothing to its
-right, so the commands there only ever run in the new directory, and a
-payload that names it is true. After `;` or `||` the next command runs
-whether or not the `cd` worked, in a directory that depends on which, so
-no payload for it would be true in both cases.
+The `&&` form needs no help from safeBash. When the `cd` fails, bash
+runs nothing to its right, so the commands there only ever run in the
+new directory, and a payload that names it is true. After `;` or a
+newline, bash runs the next command even when the `cd` failed, so
+safeBash adds a guard that ends the script instead. After `||` the next
+command runs only when the `cd` failed, so that line is broad.
 
-A `cd` alone before `;` or a newline is turned into the `&&` form. Models
-often write a line like this:
+A `cd` that is a whole command of the top-level list runs behind a
+guard:
 
 ```
 cd /Users/me/proj/packages/agency-lang
@@ -1625,20 +1627,24 @@ sed -n 480,560p lib/importPaths.ts
 grep -n findPkgDir lib/importPaths.ts
 ```
 
-`classifyAll` puts a copy of the `cd` in front of every command after it,
-and that is the text that runs:
+runs as
 
 ```
-cd '/Users/me/proj/packages/agency-lang' && sed -n 480,560p lib/importPaths.ts; cd '/Users/me/proj/packages/agency-lang' && grep -n findPkgDir lib/importPaths.ts
+cd '/Users/me/proj/packages/agency-lang' || exit 1; sed -n 480,560p lib/importPaths.ts; grep -n findPkgDir lib/importPaths.ts
 ```
 
-Each command runs in the new directory or not at all. Bash would run them
-in the old directory after a `cd` that failed, so this is stricter than
-the line as written. The copy names the absolute directory, so it moves to
-the same place whether or not the shell is already there. A second `cd`
-alone on a later line is resolved from the first and replaces it as the
-copy. The `rm` check that runs from the moved folder (see "rm and rmdir")
-sees the same folder, because the commands are classified there.
+The `cd` raises nothing. `classifyAll` classifies every command after it
+in the new directory. When the `cd` fails, `exit 1` ends the script, so
+a later command runs in the new directory or it does not run. Bash
+would run it in the old directory, so the line is stricter than it was
+written. `cdOrExit` builds the guard.
+
+The guard depends on `exit 1` ending the whole script. Every shell line
+runs as `bash -c <text>` with nothing around the text, on the foreground
+path and on the job path. `guardEndsTheScript` fails if that changes.
+
+A line where no command raises an effect is still broad. `cd x` alone
+and `cd x; echo hi` both ask `std::bash` and run the original text.
 
 `classifyAll` walks the command tree and carries the working directory
 with it. The refuse wall still reads the flat list from
@@ -1654,18 +1660,18 @@ with it. The refuse wall still reads the flat list from
 - **parentheses and pipeline stages**: each is a subshell, so the
   directory after one is the directory before it. `(cd x && a) && b`
   classifies `b` in the original directory.
-- **the top-level list**: a `cd` alone that is not last moves every
-  command after it, as above. Any other command that ends in another
-  directory must be the last one, so `cd x && a; b` is broad and
+- **the top-level list**: a `cd` that is a whole command moves every
+  command after it, behind the guard. Any other command that ends in
+  another directory must be the last one, so `cd x && a; b` is broad and
   `a; cd x && b` is not.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
 exists. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
 an assignment is unrecognized. A `cd` in any other position is a simple
 command like any other, and `execEffects` refuses it as a builtin. That
-covers `cd x` alone as the whole line or its last command, a `cd` on the
-right of `&&`, and `cd x && cd y && a`, where the second `cd` is the right
-side of the inner `&&`.
+covers a `cd` on the right of `&&` or `||`, a `cd` in a pipeline, and
+`cd x && cd y && a`, where the second `cd` is the right side of the inner
+`&&`.
 
 The rebuilt text does not keep the word the model wrote. Each recognized
 `cd` is rebuilt with the directory `cdTarget` resolved, as an absolute

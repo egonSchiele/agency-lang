@@ -1506,53 +1506,52 @@ node cdMovesTheRestOfAnAndChain() {
     cdSummary("cd grep-fixtures && ls | head"),
     cdSummary("cd ./grep-fixtures/ && ls"),
     cdSummary("ls && cd grep-fixtures && ls"),
-    rebuiltCdNamesTheResolvedFolder("cd grep-fixtures && ls"),
+    rebuiltEndsWith("cd grep-fixtures && ls", "/stdlib/grep-fixtures' && ls"),
   ]
 }
 
-// The rebuilt `cd` names the absolute folder in single quotes. The path
-// differs by machine, so check its two ends.
-def rebuiltCdNamesTheResolvedFolder(source: string): boolean {
-  const command: string = executionCommandIn(source, STDLIB_TESTS)
-  return command.startsWith("cd '/") && command.endsWith("/stdlib/grep-fixtures' && ls")
-}
-
-// A `cd` alone before `;` or a newline moves every command after it, and
-// each of those runs behind a copy of the `cd`, so it runs in the new
-// folder or not at all. A second `cd` on its own line moves on from the
-// first.
+// A `cd` that is a whole command moves every command after it. It runs
+// behind a guard, `cd '/abs' || exit 1`, so a later command runs in the
+// new folder or not at all.
 node cdOnItsOwnLineMovesTheRest() {
   return [
     cdSummary("cd grep-fixtures; ls"),
     cdSummary("cd grep-fixtures\nls\ncat one.txt"),
-    cdSummary("cd grep-fixtures\ncd ../read-fixtures\nls"),
     cdSummary("ls\ncd grep-fixtures\nls"),
-    rebuiltCdRunsBeforeEachCommand("cd grep-fixtures\nls\ncat one.txt"),
+    cdSummary("cd grep-fixtures\nls\ncd ../read-fixtures\nls"),
+    cdSummary("cd grep-fixtures\ncd ../read-fixtures\nls"),
+    cdSummary("cd grep-fixtures\nls || cat one.txt"),
+    cdSummary("cd grep-fixtures; cd ../read-fixtures && ls"),
+    cdSummary("cd grep-fixtures\n(cd ../read-fixtures && ls)\nls"),
+    cdSummary("cd grep-fixtures\nls\ncd .."),
+    rebuiltEndsWith("cd grep-fixtures\nls\ncat one.txt", "/stdlib/grep-fixtures' || exit 1; ls; cat one.txt"),
+    rebuiltEndsWith("cd grep-fixtures\nls || cat one.txt", "/stdlib/grep-fixtures' || exit 1; ls || cat one.txt"),
   ]
 }
 
-// Each rebuilt command starts with the resolved `cd` and `&&`. The path
-// differs by machine, so check the pieces around it.
-def rebuiltCdRunsBeforeEachCommand(source: string): boolean {
+// The rebuilt text holds one `cd`, at the front, and ends with the given
+// text. The folder's path differs by machine, so only the end is compared.
+// On a mismatch the text itself comes back, so the test output shows it.
+def rebuiltEndsWith(source: string, ending: string): any {
   const command: string = executionCommandIn(source, STDLIB_TESTS)
-  const parts = command.split("; ")
-  if (parts.length != 2) {
-    return false
+  const oneCd = command.split("cd '/").length == 2
+  if (command.startsWith("cd '/") && oneCd && command.endsWith(ending)) {
+    return true
   }
-  const cdFirst = parts[0].startsWith("cd '/") && parts[1].startsWith("cd '/")
-  const listsThere = parts[0].endsWith("/stdlib/grep-fixtures' && ls")
-  const readsThere = parts[1].endsWith("/stdlib/grep-fixtures' && cat one.txt")
-  return cdFirst && listsThere && readsThere
+  return command
 }
 
-// A `cd` on its own line still has to name one folder that exists, and a
-// command after it that moves again is still broad unless it comes last.
+// Lines that still ask std::bash: a `cd` that names no folder safeBash
+// can resolve, a later command that moves again and is not last, a line
+// where no command raises an effect, and `cd x && a; b`.
 node cdOnItsOwnLineStaysStrict() {
   return [
     cdSummary("cd missing\nls"),
     cdSummary("cd -\nls"),
     cdSummary("cd $HOME\nls"),
     cdSummary("cd grep-fixtures\ncd ../read-fixtures && ls\nls"),
+    cdSummary("cd grep-fixtures\necho hi"),
+    cdSummary("cd grep-fixtures && ls; cat one.txt"),
   ]
 }
 
@@ -1640,6 +1639,24 @@ node cdRunsInTheNewFolder() {
     return "FAILED: ${why}"
   }
   return result.value.trim() != ""
+}
+
+node cdOnItsOwnLineRunsInTheNewFolder() {
+  // Approved by the test file: one std::read for one.txt in grep-fixtures.
+  const result = safeBash("cd grep-fixtures\ncat one.txt | head -1", cwd: STDLIB_TESTS)
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value.trim() == "hello world"
+}
+
+// The guard depends on `exit 1` ending the whole script. Bash always does
+// that for a `bash -c` script, so this test is about the host. It fails
+// if the host ever runs a script inside a function, sources it, or adds
+// text after it, because then `ran` would print.
+node guardEndsTheScript() {
+  const result = bash("cd '/no-such-folder-xyz' || exit 1; echo ran", cwd: STDLIB_TESTS) with approve
+  return [result.stdout.includes("ran"), result.exitCode]
 }
 
 node listingsAskStdLs() {

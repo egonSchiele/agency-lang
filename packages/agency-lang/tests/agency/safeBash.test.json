@@ -1083,9 +1083,9 @@
     },
     {
       "nodeName": "cdOnItsOwnLineMovesTheRest",
-      "description": "A cd alone before ; or a newline moves every command after it: a listing, a listing and a read, a second cd that moves on from the first, and a cd after a command. Each rebuilt command runs behind the resolved cd and &&.",
+      "description": "A cd that is a whole command moves every command after it: first on the line, after a command, twice, last on the line, before an || chain, before a cd && chain, and before a subshell. The rebuilt text holds one cd behind `|| exit 1`, and the later commands are rendered as written.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]],true]",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"read-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"],[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],true,true]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1094,9 +1094,9 @@
     },
     {
       "nodeName": "cdOnItsOwnLineStaysStrict",
-      "description": "A cd on its own line to a missing folder, with -, or with a variable asks std::bash, and so does a later command that moves again and is not last.",
+      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, a later command that moves again and is not last, a cd followed only by an echo, which raises no effect, and cd x && a; b.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1147,6 +1147,34 @@
           "expectedMessage": "Are you sure you want to read this file?"
         }
       ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdOnItsOwnLineRunsInTheNewFolder",
+      "description": "A cd on its own line runs behind its guard, so the read on the next line happens in the folder the approval named and prints the file's first line. One std::read is asked and no shell question.",
+      "input": "",
+      "expectedOutput": "true",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read this file?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "guardEndsTheScript",
+      "description": "The host runs a script so that `exit 1` after a failed cd ends it: the command after the guard prints nothing, and the exit code is 1.",
+      "input": "",
+      "expectedOutput": "[false,1]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1316,9 +1344,9 @@
     },
     {
       "nodeName": "programsAskStdExec",
-      "description": "A program safeBash has no rule for asks std::exec, the question the exec tool asks. A verb a rule owns (git, find, tail) keeps its own answer, a bash builtin or a program that runs other programs asks std::bash, and so does a program fed by a pipe or an input redirect, and a `which` in a chain, which a lone line refuses.",
+      "description": "A program safeBash has no rule for asks std::exec, the question the exec tool asks. A verb a rule owns (git, find, tail) keeps its own answer, a bash builtin or a program that runs other programs asks std::bash, and so does a program fed by a pipe or an input redirect, and a `which` in a chain, which a lone line refuses. A lone `cd ..` asks std::bash because the line raises no effect.",
       "input": "",
-      "expectedOutput": "[[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\",\"std::write\"],null],[[\"std::exec\"],null],[[\"std::git::status\",\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `git push`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sh`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `env`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sudo`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a leading assignment changes what the command does\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the pnpm arguments are not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the command word is not a literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`python3` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads an input redirect, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `agency`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`cd` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`hash` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`export` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`true` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `npx`\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `which`\"}]]",
+      "expectedOutput": "[[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\",\"std::write\"],null],[[\"std::exec\"],null],[[\"std::git::status\",\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `git push`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sh`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `env`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sudo`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a leading assignment changes what the command does\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the pnpm arguments are not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the command word is not a literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`python3` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads an input redirect, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `agency`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`hash` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`export` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`true` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `npx`\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `which`\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"

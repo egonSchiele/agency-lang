@@ -193,7 +193,7 @@ server with its status:
 ```
 ? MCP servers ›
 ❯   back - Back
-    linear - ! needs login
+    linear - !needs login
     filesystem - ✔ connected · 14 tools
     github - ✘ failed
     notes - ○ not connected
@@ -205,7 +205,7 @@ part of a name to narrow the list.
 ```
 linear
 
-  Status:  ! needs login
+  Status:  !needs login
   URL:     https://mcp.linear.app/mcp
   Config:  ~/.agency-agent/settings.json (global)
 

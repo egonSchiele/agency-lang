@@ -47,7 +47,7 @@ export type ServerRow = {
 
 const STATUS_TEXT: Record<string, string> = {
   connected: "✔ connected",
-  needsLogin: "! needs login",
+  needsLogin: "!needs login",
   failed: "✘ failed",
   notConnected: "○ not connected"
 }

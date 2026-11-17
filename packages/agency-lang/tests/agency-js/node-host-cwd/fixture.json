@@ -1,0 +1,11 @@
+{
+  "aCommandOfBRunsInBsFolder": true,
+  "aChildProcessOfASeesAsFolder": true,
+  "aSeesItsOwnFolder": true,
+  "bSeesItsOwnFolder": true,
+  "aReadsARelativePath": "notes of A",
+  "bReadsARelativePath": "notes of B",
+  "aReadsInBsFolder": "asked for approval",
+  "bReadsInAsFolder": "asked for approval",
+  "withNoHostItIsTheProcessFolder": true
+}

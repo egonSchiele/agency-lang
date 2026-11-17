@@ -90,7 +90,29 @@ Agency turns an error thrown inside a function into a failure result, so a progr
 | `browserHost` | `lib/host/browserHost.ts` | `network`, `env`, `terminal`, `llm` | the page's `fetch` and `crypto`, the real clock, and what the app passed: variables, a terminal, a working directory; the console without |
 | `memoryHost` | `lib/host/memoryHost.ts` | whatever the test asks for; all seven by default | an object of files, recorded output, scripted input lines, an object of variables, `FakeClock` |
 
-Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses. `browserHost` takes `{ capabilities, variables, terminal, fetch, cwd, onUse }`, all optional; its `terminal.readLine` refuses, since a page has no line to read, and `system.exit` throws, since a page cannot end its process. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, installDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
+Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, cwd, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses, and `cwd` is "The working folder" below. `browserHost` takes `{ capabilities, variables, terminal, fetch, cwd, onUse }`, all optional; its `terminal.readLine` refuses, since a page has no line to read, and `system.exit` throws, since a page cannot end its process. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, installDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
+
+### The working folder
+
+`system.cwd()` is the run's working folder: where the program was run. Agency's `cwd()` returns it, a relative path in a function call is resolved against it, a policy's `.` means it, and a command given no folder runs in it.
+
+On the Node host it is the process's folder, read at each call. A program that runs several runs in one process, each in its own project, gives each run a host with its own:
+
+```ts
+const host = nodeHost({ cwd: "/Users/me/blog" });
+const result = await main({ host, policy });
+await respondToInterrupts(interrupts, responses, { invocation: { host, policy } });
+```
+
+- **It is fixed when the host is built.** A host has no function that changes it, and there is no `setCwd()` in Agency. A policy's `.` says "this folder needs no approval", so code inside a run, which a model can steer, must not be able to move it. The agent cwd (`setAgentCwd`) is the folder a run can move, and nothing about approvals reads it.
+- **It must be an absolute path.** `nodeHost` throws on anything else.
+- **Three parts of the Node host follow it.** `system.cwd()` and `system.realDir`; the file part, which passes it to the five functions in `nodeFiles.ts` that resolve a relative folder (`root`, `fixedRoot`, `fixedPath`, `wholePath`, `locateSync`); and the subprocess part, which starts a command given no folder there. "No folder" includes `cwd: undefined`, which is what `exec`, `bash` and a background job pass when their caller named none. Everything else reads `host.system.cwd()` already.
+- **A caller of `nodeFiles.ts` with no host gets the process's folder.** The compiler and the local-model code call it that way.
+- **A program run in a child process is started in the run's folder** (`_runFor` in `lib/runtime/ipc.ts`). The child builds a default host of its own, so its process's folder is what makes its `cwd()` agree with the parent's.
+- **Some readers stay on the process's folder on purpose**, because they are about the process and not a run: loading provider modules, the log file a subprocess inherits, the local model provider, and the search for `agency.json` by the local-model commands.
+- **A resume has to be given the same host**, like any host. With none, the run goes on in the process's folder, and a policy's `.` means a different folder than it did before the pause.
+
+`lib/host/node/nodeHost.cwd.test.ts` covers the host, and `tests/agency-js/node-host-cwd` runs two runs at once in one process, each in its own folder.
 
 ### The file part
 

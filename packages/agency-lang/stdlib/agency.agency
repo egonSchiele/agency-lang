@@ -239,7 +239,7 @@ export def run(
   @param ipcPayload - The limit per IPC message in bytes, up to 1gb, or null for the default.
   @param stdout - The combined stdout and stderr limit in bytes, up to 100mb, or null for the default.
   @param logFile - An optional statelog JSONL destination for this child run.
-  @param cwd - The child working directory, or empty to inherit the caller's process directory.
+  @param cwd - The child working directory, or empty for this run's working directory.
   @param maxDepth - The subprocess nesting cap, up to ten, also bounded by ancestor caps.
   @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
   """
@@ -925,7 +925,7 @@ export def runCode(
   @param ipcPayload - A positive byte limit per IPC message, up to 1gb.
   @param stdout - A positive combined stdout and stderr byte limit, up to 100mb.
   @param maxCost - The child's LLM spend limit in dollars, or null for no additional cost cap.
-  @param cwd - The runtime working directory. Empty inherits the caller's process directory, which may not be where you want files; pass the agent working directory so the program's file writes land there.
+  @param cwd - The runtime working directory. Empty means this run's working directory, which may not be where you want files; pass the agent working directory so the program's file writes land there.
   @param dir - Resolve and confine local imports within this directory, or leave empty to disallow them.
   """
   const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)

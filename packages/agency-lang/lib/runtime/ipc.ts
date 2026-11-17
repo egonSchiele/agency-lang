@@ -1431,7 +1431,13 @@ export async function _runFor(
               nodeArgs: args,
               limits,
               configOverrides: mergedConfigOverrides,
-              cwd,
+              // The child gets a default host of its own, whose folder is
+              // the one its process starts in. So it is started in this
+              // run's folder, or in the folder the caller named, measured
+              // from this run's folder. That keeps `cwd()` and a policy's
+              // `.` the same on both sides when this run's host was given
+              // a folder. No folder arrives as "" or as nothing.
+              cwd: path.resolve(ctx.host.system.cwd(), cwd ?? ""),
               abortSignal,
               spanId,
               childDepth,

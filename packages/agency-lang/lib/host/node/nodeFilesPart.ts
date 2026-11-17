@@ -19,7 +19,9 @@ function fileStat(info: fs.Stats): FileStat {
   return { kind, size: info.size, modifiedMs: info.mtimeMs };
 }
 
-export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
+/** `cwd` is the host's working folder, which a relative path is resolved
+ *  against. Left out, it is the process's folder at the time of each call. */
+export function nodeFilesPart(options: NodeFilesOptions = {}, cwd?: string): HostFiles {
   const seams = options.seams ?? {};
   const withSeams = (writeOptions: WriteOptions | undefined): files.WriteOptions => ({
     ...writeOptions,
@@ -28,16 +30,18 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
   // One lock per path. A caller that holds it waits for the one before.
   const locks: Record<string, Promise<void>> = {};
 
+  const base = (): string => cwd ?? process.cwd();
+
   return {
-    root: async (dir) => files.root(dir),
-    fixedRoot: async (dir) => files.fixedRoot(dir),
-    realDir: async (dir) => files._realDir(dir),
-    wholePath: async (p) => files.wholePath(p),
-    fixedPath: async (p) => files.fixedPath(p),
-    realPath: async (p) => files._realTarget(p),
+    root: async (dir) => files.root(dir, base()),
+    fixedRoot: async (dir) => files.fixedRoot(dir, base()),
+    realDir: async (dir) => files._realDir(dir, base()),
+    wholePath: async (p) => files.wholePath(p, base()),
+    fixedPath: async (p) => files.fixedPath(p, base()),
+    realPath: async (p) => files._realTarget(p, base()),
     resolvePath: async (root, target) => files.resolveUnder(root, target),
     locate: async (dir, filename, operation, dirMayBeMissing) =>
-      files.locateSync(dir, filename, operation, dirMayBeMissing),
+      files.locateSync(dir, filename, operation, dirMayBeMissing, base()),
     withLock: async (root, target, work) => {
       const key = files.resolveUnder(root, target);
       const previous = locks[key] ?? Promise.resolve();

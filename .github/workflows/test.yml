@@ -111,7 +111,7 @@ jobs:
         set +e
         ( sleep 480; echo "::group::processes after 8 minutes"; ps -eo pid,ppid,etimes,stat,args --forest; echo "::endgroup::" ) &
         watcher=$!
-        pnpm exec vitest run --shard=${{ matrix.shard }}/3 --reporter=verbose
+        pnpm exec vitest run --shard=${{ matrix.shard }}/3
         code=$?
         kill $watcher
         exit $code

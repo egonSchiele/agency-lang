@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AgencyOAuthProvider } from "../src/oauthProvider.js";
 import { TokenStore } from "../src/tokenStore.js";
+import { NeedsLoginError } from "../src/needsLogin.js";
+import { freePort } from "./fakeOAuthServer.js";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -110,34 +112,26 @@ describe("AgencyOAuthProvider", () => {
     await expect(provider.codeVerifier()).rejects.toThrow(/No PKCE code verifier/);
   });
 
-  it("should have correct client metadata after prepare()", async () => {
-    const provider = new AgencyOAuthProvider("github", store, { port: 0 });
-    await provider.prepare();
+  it("has a redirect URL on the default port with nothing started", () => {
+    const provider = new AgencyOAuthProvider("github", store);
+    expect(provider.redirectUrl).toBe("http://127.0.0.1:19876/oauth/callback");
     const meta = provider.clientMetadata;
     expect(meta.client_name).toBe("agency-github");
-    expect(meta.redirect_uris).toBeDefined();
-    expect(meta.redirect_uris.length).toBe(1);
-    await provider.cleanup();
+    expect(meta.redirect_uris).toEqual(["http://127.0.0.1:19876/oauth/callback"]);
   });
 
-  it("should throw from redirectUrl before prepare()", () => {
+  it("creates a new state value on each call", () => {
     const provider = new AgencyOAuthProvider("github", store);
-    expect(() => provider.redirectUrl).toThrow(/call prepare/);
-  });
-
-  it("should have a real redirectUrl after prepare()", async () => {
-    const provider = new AgencyOAuthProvider("github", store, { port: 0 });
-    await provider.prepare();
-    expect(provider.redirectUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/oauth\/callback$/);
-    expect(provider.redirectUrl).not.toContain(":0/");
-    await provider.cleanup();
+    expect(provider.state()).not.toBe(provider.state());
   });
 
   it("should call onOAuthRequired callback instead of opening browser when provided", async () => {
     const onOAuthRequired = vi.fn();
     const provider = new AgencyOAuthProvider("github", store, {
       onOAuthRequired,
+      port: await freePort(),
     });
+    provider.state();
 
     const authUrl = new URL("https://example.com/authorize?code=123");
     await provider.redirectToAuthorization(authUrl);
@@ -148,19 +142,44 @@ describe("AgencyOAuthProvider", () => {
         authUrl: authUrl.toString(),
       }),
     );
+    await provider.cleanup();
   });
 
-  it("should expose waitForAuthCode() that resolves when callback arrives", async () => {
-    const provider = new AgencyOAuthProvider("github", store, { port: 0 });
-    await provider.prepare();
+  it("never mode: redirectToAuthorization throws NeedsLoginError", async () => {
+    const provider = new AgencyOAuthProvider("github", store, { loginMode: "never" });
+    await expect(provider.redirectToAuthorization(new URL("https://example.com/authorize"))).rejects.toBeInstanceOf(
+      NeedsLoginError,
+    );
+  });
 
-    const callbackUrl = provider.redirectUrl;
-    const state = provider.state();
-    const codePromise = provider.waitForAuthCode();
-    await fetch(`${callbackUrl}?code=test-code&state=${state}`);
-    const code = await codePromise;
-    expect(code).toBe("test-code");
+  it("keeps a newer login when an older refresh token is rejected", async () => {
+    await store.saveTokens("linear", { access_token: "a1", token_type: "bearer", refresh_token: "r1" });
+    const provider = new AgencyOAuthProvider("linear", store, { loginMode: "never" });
+    await provider.tokens(); // both calls read r1
+    await provider.saveTokens({ access_token: "a2", token_type: "bearer", refresh_token: "r2" }); // call A refreshed
+    await provider.tokens(); // call A builds its header
+    provider.noteRejectedRefreshToken("r1"); // call B was refused
+    await provider.invalidateCredentials("tokens");
+    expect((await store.loadTokens("linear"))?.refresh_token).toBe("r2");
+  });
 
-    await provider.cleanup();
+  it("deletes the login when its own refresh token is rejected", async () => {
+    const info = { client_id: "c1", redirect_uris: ["http://127.0.0.1:19876/oauth/callback"] };
+    await store.saveTokens("linear", { access_token: "a1", token_type: "bearer", refresh_token: "r1" });
+    await store.saveClientInfo("linear", info);
+    const provider = new AgencyOAuthProvider("linear", store, { loginMode: "never" });
+    provider.noteRejectedRefreshToken("r1");
+    await provider.invalidateCredentials("tokens");
+    expect(await store.loadTokens("linear")).toBeUndefined();
+    expect(await store.loadClientInfo("linear")).toEqual(info);
+  });
+
+  it("invalidateCredentials('all') also deletes the registration", async () => {
+    await store.saveTokens("linear", { access_token: "a1", token_type: "bearer" });
+    await store.saveClientInfo("linear", { client_id: "c1" });
+    const provider = new AgencyOAuthProvider("linear", store);
+    await provider.invalidateCredentials("all");
+    expect(await store.loadTokens("linear")).toBeUndefined();
+    expect(await store.loadClientInfo("linear")).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import { whereAmI, whereIsMyChild, readNotes, readNotesIn, hasInterrupts } from "./agent.js";
+import { whereAmI, whereIsMyChild, whereDoCommandsRun, readNotes, readNotesIn, hasInterrupts } from "./agent.js";
 import { nodeHost } from "agency-lang/runtime";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -34,7 +34,10 @@ try {
     whereAmI(),
   ]);
   const childOfA = await whereIsMyChild({ host: hostA });
+  const commandOfB = await whereDoCommandsRun({ host: hostB });
   result = {
+    aCommandOfBRunsInBsFolder:
+      commandOfB.data === dirB ? true : `expected ${dirB}, got ${JSON.stringify(commandOfB.data)}`,
     aChildProcessOfASeesAsFolder:
       childOfA.data === dirA ? true : `expected ${dirA}, got ${JSON.stringify(childOfA.data)}`,
     aSeesItsOwnFolder: cwdA.data === dirA,

@@ -873,14 +873,11 @@ Three semantics to keep straight:
    pattern is always tried first, so no existing match is taken away. Only
    the `dir` field resolves; `command` and the rest match raw.
 
-   That folder is the process's, `process.cwd()`, for `agency run` and
-   `agency agent`. A program that runs several runs in one process, each
-   in its own project, gives each run a host with its own folder:
-   `nodeHost({ cwd })` (see "The working folder" in
-   `docs/dev/runtime/host.md`). It is fixed before the run starts. Nothing
-   inside a run can move it, and `setAgentCwd` does not: the agent cwd is
-   something a model can change, and this rule is what says which folder
-   needs no approval.
+   That folder is the process's unless the run's host was given one with
+   `nodeHost({ cwd })`. Nothing inside a run can move it, and
+   `setAgentCwd` does not: a model can change the agent cwd, and this rule
+   says which folder needs no approval. See "The working folder" in
+   `docs/dev/runtime/host.md`.
 3. **`**` never matches a dot-led segment.** picomatch's dot rule: a glob
    `base/**` does not reach `base/.staging/x`. Dot segments in the
    *literal* prefix are fine — a launch directory whose own path contains

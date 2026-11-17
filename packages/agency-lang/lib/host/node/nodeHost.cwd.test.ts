@@ -82,6 +82,17 @@ describe("nodeHost with a working folder", () => {
     expect((await started.wait()).stdout.trim()).toBe(work);
   });
 
+  // How the stdlib calls it: `exec`, `bash` and a background job always
+  // pass a `cwd` key, set to undefined when the caller named no folder.
+  it("runs a command in it when the folder is passed as undefined", async () => {
+    const { subprocess } = nodeHost({ cwd: work });
+    const options = { cwd: undefined, timeoutMs: 10_000 };
+    const ran = await subprocess.run({ kind: "shell", script: "pwd -P" }, options);
+    expect(ran.stdout.trim()).toBe(work);
+    const started = await subprocess.start({ kind: "shell", script: "pwd -P" }, options);
+    expect((await started.wait()).stdout.trim()).toBe(work);
+  });
+
   it("is the folder a policy's `.` means", () => {
     const dirs = resolvePolicyDirs(nodeHost({ cwd: work }));
     expect(dirs.cwd).toBe(work);

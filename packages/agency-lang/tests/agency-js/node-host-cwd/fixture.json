@@ -1,4 +1,5 @@
 {
+  "aCommandOfBRunsInBsFolder": true,
   "aChildProcessOfASeesAsFolder": true,
   "aSeesItsOwnFolder": true,
   "bSeesItsOwnFolder": true,

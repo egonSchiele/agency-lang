@@ -3,6 +3,7 @@
 // relative path in a plain function call, and for the `.` in the policy
 // the test passes.
 import { runCode } from "std::agency"
+import { exec } from "std::shell"
 import { cwd } from "std::system"
 
 def contentOf(result: Result<string>): string {
@@ -40,6 +41,12 @@ export node main(): string {
     }
   } with approve
   return "unreachable"
+}
+
+// A command given no folder runs in the run's folder.
+export node whereDoCommandsRun(): string {
+  const ran = exec("pwd", ["-P"]) with approve
+  return ran.stdout.trim()
 }
 
 // A read in a folder the test names: the other run's folder.

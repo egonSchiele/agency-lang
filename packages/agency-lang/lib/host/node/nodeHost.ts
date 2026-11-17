@@ -66,7 +66,7 @@ export function nodeHost(options: NodeHostOptions = {}): Host {
     onUse: options.onUse,
     onCallable: options.onCallable,
     parts: {
-      files: nodeFilesPart({ ...options.files, cwd }),
+      files: nodeFilesPart(options.files, cwd),
       network: options.network ?? nodeNetwork,
       subprocess: cwd === undefined ? nodeSubprocess : subprocessIn(cwd),
       env: nodeEnv,
@@ -303,8 +303,12 @@ function systemIn(cwd: string): HostSystem {
 function subprocessIn(cwd: string): HostSubprocess {
   return {
     ...nodeSubprocess,
-    run: (command, options = {}) => nodeSubprocess.run(command, { cwd, ...options }),
-    start: (command, options = {}) => nodeSubprocess.start(command, { cwd, ...options }),
+    // `??` and not a spread: the stdlib passes `cwd: undefined` when the
+    // caller named no folder, and a spread would let that key win.
+    run: (command, options = {}) =>
+      nodeSubprocess.run(command, { ...options, cwd: options.cwd ?? cwd }),
+    start: (command, options = {}) =>
+      nodeSubprocess.start(command, { ...options, cwd: options.cwd ?? cwd }),
   };
 }
 

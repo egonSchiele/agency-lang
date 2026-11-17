@@ -12,9 +12,6 @@ export type NodeFilesOptions = {
    *  descriptor, where a concurrent swap would land. The symlink tests
    *  build their host with it. */
   seams?: Seams;
-  /** The folder a relative path is resolved against: the host's working
-   *  folder. Left out, it is the process's folder at the time of each call. */
-  cwd?: string;
 };
 
 function fileStat(info: fs.Stats): FileStat {
@@ -22,7 +19,9 @@ function fileStat(info: fs.Stats): FileStat {
   return { kind, size: info.size, modifiedMs: info.mtimeMs };
 }
 
-export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
+/** `cwd` is the host's working folder, which a relative path is resolved
+ *  against. Left out, it is the process's folder at the time of each call. */
+export function nodeFilesPart(options: NodeFilesOptions = {}, cwd?: string): HostFiles {
   const seams = options.seams ?? {};
   const withSeams = (writeOptions: WriteOptions | undefined): files.WriteOptions => ({
     ...writeOptions,
@@ -31,7 +30,7 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
   // One lock per path. A caller that holds it waits for the one before.
   const locks: Record<string, Promise<void>> = {};
 
-  const base = (): string => options.cwd ?? process.cwd();
+  const base = (): string => cwd ?? process.cwd();
 
   return {
     root: async (dir) => files.root(dir, base()),

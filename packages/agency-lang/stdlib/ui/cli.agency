@@ -284,6 +284,7 @@ export def chooseOption(
   items: ChoiceItem[],
   allowFreeText: boolean = false,
   allowCancel: boolean = false,
+  question: string = "Do you want to continue?",
 ): string {
   """
   Ask the user to select a key, using a terminal picker or a plain input prompt.
@@ -292,6 +293,7 @@ export def chooseOption(
   @param body - Additional context shown above the choices; empty omits it
   @param allowFreeText - Accept a non-empty answer that matches no item key
   @param allowCancel - In a terminal, let Escape cancel the request instead of asking again
+  @param question - The line the user types on, above the choices, such as "Pick a server"
   """
   // Non-TTY fallback: `autocomplete` throws when stdout isn't a TTY
   // (e.g. piped output, agency-js tests that script answers through
@@ -304,6 +306,9 @@ export def chooseOption(
     }
     if (body != "") {
       print(body)
+    }
+    if (question != "") {
+      print(question)
     }
     const validKeys = map(items, _entryKey)
     while (true) {
@@ -343,7 +348,7 @@ export def chooseOption(
     // (it never returns failure("cancelled") here), so the re-prompt loop
     // below only runs for the must-answer callers.
     const result = autocomplete(
-      message: "Do you want to continue?",
+      message: question,
       items: items,
       allowFreeText: allowFreeText,
       hint: cancelHint,

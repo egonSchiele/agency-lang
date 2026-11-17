@@ -69,7 +69,7 @@ export def builtinPalette(): Record<string, string> {
     "/policy": "Add the rules of the built-in recommended policy that your policy file lacks",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
-    "/mcp": "List configured MCP servers and their tools",
+    "/mcp": "See your MCP servers, log in to them, and view their tools",
     "/image": "Attach the image on the clipboard (macOS)",
     "/jobs": "List background jobs, or stop one with /jobs stop <id>",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",

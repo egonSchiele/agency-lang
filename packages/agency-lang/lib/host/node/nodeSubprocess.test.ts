@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { definedVariables, nodeSubprocess, shellEnvironment } from "./nodeSubprocess.js";
-import { TERM_GRACE_MS, killTrackedChildren } from "./processGroups.js";
+import { PIPE_GRACE_MS, TERM_GRACE_MS, killTrackedChildren } from "./processGroups.js";
 import type { RunOptions } from "../host.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
@@ -118,6 +118,27 @@ const isAlive = (pid: number): boolean => {
   }
 };
 
+/** The pid a script printed. A script that printed nothing yet gives
+ *  `Number("")`, which is 0, and `process.kill(0, …)` signals this whole
+ *  process group: the vitest worker, vitest, and pnpm. */
+function printedPid(stdout: string): number {
+  const pid = Number(stdout.trim());
+  expect(Number.isInteger(pid) && pid > 0, `no pid in ${JSON.stringify(stdout)}`).toBe(true);
+  return pid;
+}
+
+/** The pid a script wrote to `file`, once the whole line is there. */
+async function pidFromFile(file: string): Promise<number> {
+  for (let attempt = 0; attempt < 250; attempt++) {
+    const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    if (text.endsWith("\n")) {
+      return printedPid(text);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`no pid written to ${file} after 5 seconds`);
+}
+
 async function waitUntilGone(pid: number): Promise<boolean> {
   for (let attempt = 0; attempt < 40 && isAlive(pid); attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -136,7 +157,7 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
     const { result, ms } = await timed(shell("sleep 30 & echo $!; wait", { timeoutMs: 200 }));
     expect(result.timedOut).toBe(true);
     expect(ms).toBeLessThan(1500);
-    expect(await waitUntilGone(Number(result.stdout.trim()))).toBe(true);
+    expect(await waitUntilGone(printedPid(result.stdout))).toBe(true);
   });
 
   it("an abort returns while a later command of the script is still to run", async () => {
@@ -157,20 +178,32 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
     expect(ms).toBeLessThan(TERM_GRACE_MS + 2000);
   });
 
-  it("returns when a process that left the group still holds the output pipe", async () => {
-    const escape = `perl -MPOSIX -e '$| = 1; setsid(); print "$$\\n"; sleep 20' & wait`;
-    const { result, ms } = await timed(shell(escape, { timeoutMs: 300 }));
-    const escaped = Number(result.stdout.trim());
-    try {
-      expect(result.timedOut).toBe(true);
-      expect(ms).toBeLessThan(2000);
-      // Still running: the group kill did not reach it, so only the pipe
-      // rule can have ended the call.
-      expect(isAlive(escaped)).toBe(true);
-    } finally {
-      process.kill(escaped, "SIGKILL");
-    }
-  });
+  it("returns when a process that left the group still holds the output pipe", () =>
+    withTempDir(async (dir) => {
+      const pidFile = path.join(dir, "pid");
+      // perl leaves the group with setsid(), then writes its pid. It keeps
+      // the shell's output pipe open while it sleeps.
+      const escape = `perl -MPOSIX -e 'setsid(); open(my $f, ">", $ENV{PID_FILE}) or die; print $f "$$\\n"; close($f); sleep 20' & wait`;
+      const controller = new AbortController();
+      const call = shell(escape, {
+        env: { ...parentEnv(), PID_FILE: pidFile },
+        signal: controller.signal,
+      });
+      // Stop the call only once perl is out of the group, so the test does
+      // not depend on how fast perl starts. The pid is checked before the
+      // `try`, so a missing one never reaches the kill below.
+      const escaped = await pidFromFile(pidFile).finally(() => controller.abort());
+      const { result, ms } = await timed(call);
+      try {
+        expect(result.aborted).toBe(true);
+        expect(ms).toBeLessThan(PIPE_GRACE_MS + 1500);
+        // Still running: the group kill did not reach it, so only the pipe
+        // rule can have ended the call.
+        expect(isAlive(escaped)).toBe(true);
+      } finally {
+        process.kill(escaped, "SIGKILL");
+      }
+    }));
 
   it("killing the tracked children, as the exit hook does, stops a running command", () =>
     withTempDir(async (dir) => {
@@ -179,12 +212,10 @@ describe.skipIf(process.platform === "win32")("stopping a command", () => {
         kind: "shell",
         script: `sleep 30 & echo $! > ${pidFile}; wait`,
       });
-      while (!fs.existsSync(pidFile) || fs.readFileSync(pidFile, "utf8").trim() === "") {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
+      const pid = await pidFromFile(pidFile);
       killTrackedChildren();
       await running.wait();
-      expect(await waitUntilGone(Number(fs.readFileSync(pidFile, "utf8").trim()))).toBe(true);
+      expect(await waitUntilGone(pid)).toBe(true);
     }));
 
   it("leaves an exit signal to a handler the program registered with once", async () => {

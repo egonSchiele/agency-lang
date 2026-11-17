@@ -304,11 +304,29 @@ export def applyConfig(merged: Record<string, any>) {
   }
 }
 
+/** The key of the list's "Back" choice: "back", with "_" added until no
+  server has that name. Server names come straight from the config, so a
+  server may be called "back". */
+export def backKey(rows: ServerRow[]): string {
+  let names: string[] = []
+  for (row in rows) {
+    names.push(row.name)
+  }
+  let key = BACK.key
+  while (names.includes(key)) {
+    key = "${key}_"
+  }
+  return key
+}
+
 /** The server list's choices: "Back" first, then one per server. The picker
   shows each choice as "key - label", so a server's label is its status alone
   and the name is not shown twice. */
 export def listItems(rows: ServerRow[]): ChoiceItem[] {
-  let items: ChoiceItem[] = [BACK]
+  let items: ChoiceItem[] = [{
+    key: backKey(rows),
+    label: BACK.label
+  }]
   for (row in rows) {
     items.push({
       key: row.name,
@@ -356,7 +374,7 @@ export def mcpSlashCommand(): boolean {
       allowCancel: true,
       question: "MCP servers",
     )
-    if (picked == "" || picked == null || picked == BACK.key) {
+    if (picked == "" || picked == null || picked == backKey(rows)) {
       return true
     }
     for (row in rows) {

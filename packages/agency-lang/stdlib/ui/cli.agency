@@ -307,6 +307,9 @@ export def chooseOption(
     if (body != "") {
       print(body)
     }
+    if (question != "") {
+      print(question)
+    }
     const validKeys = map(items, _entryKey)
     while (true) {
       const answer = input("> ").trim()

@@ -191,6 +191,9 @@ In the interactive REPL, `/mcp` opens a menu. It first lists every configured
 server with its status:
 
 ```
+────────────────────────────────────────
+
+
 ? MCP servers ›
 ❯   back - Back
     linear - !needs login
@@ -203,11 +206,13 @@ Pick a server to see its details and what you can do with it. You can also type
 part of a name to narrow the list.
 
 ```
+────────────────────────────────────────
 linear
 
-  Status:  !needs login
-  URL:     https://mcp.linear.app/mcp
-  Config:  ~/.agency-agent/settings.json (global)
+    Status:  !needs login
+    URL:     https://mcp.linear.app/mcp
+    Config:  ~/.agency-agent/settings.json (global)
+
 
 ? Pick an action ›
 ❯   login - Log in

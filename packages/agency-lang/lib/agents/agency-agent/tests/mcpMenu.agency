@@ -156,6 +156,19 @@ node listStartsWithBackAndShowsEachStatus(): string {
   return parts.join("|")
 }
 
+// A server named "back" keeps its own key, and Back gets another one.
+node serverNamedBackCanBeOpened(): string {
+  let row = rowOf("connected", {
+    command: "ok"
+  })
+  row.name = "back"
+  let keys: string[] = []
+  for (item in listItems([row])) {
+    keys.push(item.key)
+  }
+  return keys.join(",")
+}
+
 node actionsForEachRow(): string {
   const oauth = {
     type: "http",

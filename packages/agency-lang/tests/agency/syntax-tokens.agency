@@ -1,0 +1,9 @@
+import { highlightTokens, diffTokens } from "std::syntax"
+
+node highlighted() {
+  return highlightTokens("const a = 1", language: "typescript")
+}
+
+node diffed() {
+  return diffTokens("let a = 1", "let a = 2", language: "typescript")
+}

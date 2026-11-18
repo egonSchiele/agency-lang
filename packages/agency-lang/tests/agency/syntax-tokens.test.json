@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "highlighted",
+      "input": "",
+      "expectedOutput": "[{\"text\":\"const\",\"scope\":\"keyword\"},{\"text\":\" a = \",\"scope\":null},{\"text\":\"1\",\"scope\":\"number\"}]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "diffed",
+      "input": "",
+      "expectedOutput": "[{\"oldStart\":1,\"oldLines\":1,\"newStart\":1,\"newLines\":1,\"lines\":[{\"kind\":\"delete\",\"oldNumber\":1,\"newNumber\":null,\"tokens\":[{\"text\":\"let\",\"scope\":\"keyword\",\"changed\":false},{\"text\":\" a = \",\"scope\":null,\"changed\":false},{\"text\":\"1\",\"scope\":\"number\",\"changed\":true}]},{\"kind\":\"insert\",\"oldNumber\":null,\"newNumber\":1,\"tokens\":[{\"text\":\"let\",\"scope\":\"keyword\",\"changed\":false},{\"text\":\" a = \",\"scope\":null,\"changed\":false},{\"text\":\"2\",\"scope\":\"number\",\"changed\":true}]}]}]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

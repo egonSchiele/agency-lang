@@ -1,11 +1,12 @@
 import { highlight } from "cli-highlight";
 import type { Theme } from "cli-highlight";
-import hljs from "highlight.js";
 import { color } from "@/utils/termcolors.js";
 import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { resolveTheme } from "./syntax-themes.js";
+import { detectLanguage, hljsLanguage } from "./syntaxTokens.js";
 export { BUILTIN_THEME_NAMES } from "./syntax-themes.js";
+export { detectLanguage, _highlightTokens, _diffTokens } from "./syntaxTokens.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
@@ -46,14 +47,6 @@ function diffBody(
   return tinted + padding + ANSI_RESET;
 }
 
-// Auto-detect a language name from `code` via highlight.js. Used for the diff
-// "auto" path, where the language is detected once on the whole text so every
-// line is highlighted consistently (per-line auto-detection would be flaky).
-// Detection is heuristic and can be wrong on short/ambiguous snippets.
-export function detectLanguage(code: string): string {
-  return hljs.highlightAuto(code).language ?? "plaintext";
-}
-
 export function highlightWithTheme(code: string, _language: string, theme: Theme): string {
   if (_language === "markdown" || _language === "md") {
     return highlightMarkdown(code);
@@ -63,8 +56,7 @@ export function highlightWithTheme(code: string, _language: string, theme: Theme
     if (_language === "auto") {
       return highlight(code, { ignoreIllegals: true, theme });
     }
-    const language = _language === "agency" ? "ts" : _language;
-    return highlight(code, { language, ignoreIllegals: true, theme });
+    return highlight(code, { language: hljsLanguage(_language), ignoreIllegals: true, theme });
   } catch (error) {
     console.error(`Error highlighting code: ${error}`);
     return code; // genuine highlight failure -> unhighlighted; theme errors throw before here

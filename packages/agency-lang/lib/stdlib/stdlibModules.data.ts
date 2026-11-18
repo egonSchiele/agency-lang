@@ -708,7 +708,9 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::syntax": [
     "detectLanguage",
     "highlight",
+    "highlightTokens",
     "diff",
+    "diffTokens",
     "patch"
   ],
   "std::system": [

@@ -3,13 +3,18 @@ import {
   detectLanguage as _detectLanguage,
   _diff,
   _patch,
+  _highlightTokens,
+  _diffTokens,
   BUILTIN_THEME_NAMES as _builtinThemeNames,
  } from "agency-lang/stdlib-lib/syntax.js"
 
 /** @module
-  @summary Highlight code and produce terminal diffs or unified patches.
+  @summary Highlight code and produce terminal diffs, unified patches, or tokens to draw yourself.
   Highlight code and compare versions of text. Use `diff` for terminal
-  display or `patch` to produce a unified diff for `git apply`.
+  display or `patch` to produce a unified diff for `git apply`. A program
+  that draws code itself, such as a GUI or a web page, uses
+  `highlightTokens` and `diffTokens`: they return the same results as data,
+  so the program picks its own colors.
 
   ```ts
   import { highlight } from "std::syntax"
@@ -133,6 +138,36 @@ Use for displaying changes to a person. With `language` and color enabled,
 changed lines use syntax highlighting on red or green backgrounds. Background
 padding is limited to the terminal width. Use `patch` for output to apply with Git.
 */
+/**
+  One piece of highlighted code. `scope` is the kind of syntax it is, named
+  like the fields of `ColorScheme` (for example "keyword", "string" or
+  "builtIn"), or null for plain text.
+*/
+export type CodeToken = {
+  text: string;
+  scope: string | null
+}
+
+/**
+  Returns the code as tokens instead of terminal text, for a program that
+  draws code itself. Joining every token's `text` gives back `code`. A
+  language highlight.js does not know gives one plain token.
+
+  ```ts
+  for (token in highlightTokens("const x = 1", language: "typescript")) {
+    print("${token.scope}: ${token.text}")
+  }
+  ```
+*/
+export def highlightTokens(code: string, language: string = "plaintext"): CodeToken[] {
+  """
+  Split code into tokens, each tagged with the kind of syntax it is.
+
+  @param language - A highlight.js language name, or "auto" to guess.
+  """
+  return _highlightTokens(code, language)
+}
+
 @capabilities(terminal)
 export def diff(
   oldText: string,
@@ -175,6 +210,64 @@ export def diff(
     language,
     theme,
   )
+}
+
+/**
+  One piece of one line of a diff. `scope` is as in `CodeToken`. `changed` is
+  true for a word that differs from the line this one replaced.
+*/
+export type DiffToken = {
+  text: string;
+  scope: string | null;
+  changed: boolean
+}
+
+/**
+  One line of a diff. `kind` says whether it is unchanged ("context"),
+  removed ("delete") or added ("insert"). A line has a number on each side
+  it exists on, counting from 1.
+*/
+export type DiffLine = {
+  kind: "context" | "delete" | "insert";
+  oldNumber: number | null;
+  newNumber: number | null;
+  tokens: DiffToken[]
+}
+
+/**
+  A run of changed lines and the unchanged lines around them, with where the
+  run starts and how many lines it covers on each side.
+*/
+export type DiffHunk = {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[]
+}
+
+/**
+  Returns the same comparison as `diff`, as data instead of terminal text, for
+  a program that draws diffs itself. Each side is highlighted as a whole, so a
+  comment that spans several lines is a comment on every one of them. A
+  removed line followed by the line that replaced it has the changed words
+  marked on both, as `diff` colors them.
+*/
+export def diffTokens(
+  oldText: string,
+  newText: string,
+  context: number = -1,
+  ignoreWhitespace: boolean = false,
+  language: string = "",
+): DiffHunk[] {
+  """
+  Compare two texts and return the changes as lines of tokens.
+
+  @param context - Unchanged lines around each change, or -1 for the full text.
+  @param ignoreWhitespace - Treat whitespace-only changes as equal.
+  @param language - Tag tokens with their syntax for this language, or "auto" to guess.
+  """
+  return _diffTokens(oldText, newText, context, ignoreWhitespace, language)
 }
 
 /**

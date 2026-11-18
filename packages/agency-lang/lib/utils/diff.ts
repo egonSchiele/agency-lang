@@ -180,6 +180,39 @@ export function computeHunks(
   return hunks;
 }
 
+/** A stretch of a line's text, by character offset: `start` is included, `end` is not. */
+export type TextRange = { start: number; end: number };
+
+/**
+ * The words that differ between a deleted line and the line that replaced
+ * it, as ranges in each line. It uses the same word diff as the terminal's
+ * changed-word coloring, so both mark the same words.
+ */
+export function wordChanges(
+  oldLine: string,
+  newLine: string,
+): { deleted: TextRange[]; inserted: TextRange[] } {
+  const wordDiffs = dmp.diff_main(oldLine, newLine) as Diff[];
+  dmp.diff_cleanupSemantic(wordDiffs);
+  const deleted: TextRange[] = [];
+  const inserted: TextRange[] = [];
+  let oldOffset = 0;
+  let newOffset = 0;
+  for (const [op, text] of wordDiffs) {
+    if (op === DIFF_DELETE) {
+      deleted.push({ start: oldOffset, end: oldOffset + text.length });
+      oldOffset += text.length;
+    } else if (op === DIFF_INSERT) {
+      inserted.push({ start: newOffset, end: newOffset + text.length });
+      newOffset += text.length;
+    } else {
+      oldOffset += text.length;
+      newOffset += text.length;
+    }
+  }
+  return { deleted, inserted };
+}
+
 // Render one side of a replacement with the changed words highlighted.
 function highlightLine(oldLine: string, newLine: string, side: number): string {
   const prefix = side === DIFF_DELETE ? "- " : "+ ";

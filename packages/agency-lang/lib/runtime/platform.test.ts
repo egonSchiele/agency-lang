@@ -131,4 +131,34 @@ describe("#platform", () => {
       safeDeleteDirectoryWithin(os.tmpdir(), dir);
     }
   });
+
+  // `agency.json` is the same file wherever the program is started, so a
+  // log that belongs in the home is named with `~`.
+  it("opens a log file named with ~ in the user's home directory", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "line-sink-home-"));
+    const realHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      nodePlatform.openLineSink("~/logs/events.jsonl")("one");
+      expect(fs.readFileSync(path.join(home, "logs", "events.jsonl"), "utf-8")).toBe("one\n");
+    } finally {
+      process.env.HOME = realHome;
+      safeDeleteDirectoryWithin(os.tmpdir(), home);
+    }
+  });
+
+  it("opens any other path as it is written", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "line-sink-"));
+    try {
+      const file = path.join(dir, "a~b", "events.jsonl");
+      nodePlatform.openLineSink(file)("one");
+      expect(fs.readFileSync(file, "utf-8")).toBe("one\n");
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+  });
+
+  it("refuses another user's home, which it cannot name", () => {
+    expect(() => nodePlatform.openLineSink("~root/events.jsonl")).toThrow("~user");
+  });
 });

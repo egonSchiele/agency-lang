@@ -7,6 +7,7 @@
 // type there.
 
 import { appendFileSync, mkdirSync, readFileSync } from "fs";
+import { homedir } from "os";
 import path from "path";
 import { isMainThread } from "worker_threads";
 import {
@@ -23,6 +24,7 @@ import { CoverageCollector } from "./coverageCollector.js";
 import type { AttachFunctions } from "./attachedDebugger.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { loadProviderModules } from "./providerModules.js";
+import { expandPath } from "../stdlib/expandPath.js";
 import { _resolveLocalEmbeddingModel } from "../stdlib/localModels.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { onHeldChange } from "./heldQuestions.js";
@@ -48,11 +50,16 @@ export function newCoverageCollector(): CoverageCollector {
 
 /** A function that appends one line to the file at `filePath`,
  *  synchronously, making the parent directory first. For the statelog
- *  client's log file, which a test reads right after an awaited event. */
+ *  client's log file, which a test reads right after an awaited event.
+ *
+ *  A leading `~` is the user's home directory, so `agency.json` can name a
+ *  file that is the same wherever the program is started. Any other
+ *  relative path is opened against the process's working directory. */
 export function openLineSink(filePath: string): (line: string) => void {
-  mkdirSync(path.dirname(filePath), { recursive: true });
+  const file = expandPath(filePath, homedir());
+  mkdirSync(path.dirname(file), { recursive: true });
   return (line) => {
-    appendFileSync(filePath, line + "\n");
+    appendFileSync(file, line + "\n");
   };
 }
 

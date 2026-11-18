@@ -54,6 +54,13 @@ describe("_highlightTokens", () => {
     expect(scopeOf(tokens, "def")).toBe("keyword");
   });
 
+  it("returns plain text when highlight.js loses some of the code", () => {
+    // highlight.js 10 drops the newline inside this CSS attribute selector.
+    expect(_highlightTokens("a[\nhref] {}", "css")).toEqual([
+      { text: "a[\nhref] {}", scope: null },
+    ]);
+  });
+
   it("returns no tokens for empty code", () => {
     expect(_highlightTokens("", "typescript")).toEqual([]);
   });
@@ -120,7 +127,21 @@ describe("_diffTokens", () => {
     ]);
   });
 
-  it("returns no hunks for identical texts or two empty texts", () => {
+  it("returns no hunks for two empty texts", () => {
     expect(_diffTokens("", "", -1, false, "typescript")).toEqual([]);
+  });
+
+  it("returns one hunk of unchanged lines for identical texts with full context", () => {
+    const hunks = _diffTokens("a\nb", "a\nb", -1, false, "");
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].lines.map((line) => line.kind)).toEqual(["context", "context"]);
+  });
+
+  it("keeps every line in place when highlight.js drops a character", () => {
+    // highlight.js 10 loses the newline inside this CSS attribute selector.
+    const before = "a[\nhref] {}\nb {}";
+    const after = "a[\nhref] {}\nb { color: red; }";
+    const lines = _diffTokens(before, after, -1, false, "css")[0].lines;
+    expect(lines.map(lineText)).toEqual(["a[", "href] {}", "b {}", "b { color: red; }"]);
   });
 });

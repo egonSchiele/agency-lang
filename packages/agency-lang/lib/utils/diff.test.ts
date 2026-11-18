@@ -266,3 +266,28 @@ describe("renderDiff highlighted path", () => {
     );
   });
 });
+
+describe("formatDiff pairing of replaced lines", () => {
+  // Exact output, so a change to how deleted and inserted lines pair (or to
+  // the word diff) shows here. Only paired lines get changed-word coloring;
+  // the rest of an uneven run is colored whole.
+  it("pairs deleted and inserted lines in order and colors the rest whole", () => {
+    const cases: [string, string, string][] = [
+      [
+        "a\nold one\nold two\nold three\nz",
+        "a\nnew one\nz",
+        "\u001b[2m  a\u001b[0m\n\u001b[31m- \u001b[0m\u001b[31mold\u001b[0m\u001b[2m one\u001b[0m\n\u001b[31m- old two\u001b[0m\n\u001b[31m- old three\u001b[0m\n\u001b[32m+ \u001b[0m\u001b[32mnew\u001b[0m\u001b[2m one\u001b[0m\n\u001b[2m  z\u001b[0m",
+      ],
+      [
+        "a\nx\nz",
+        "a\nnew one\nnew two\nnew three\nz",
+        "\u001b[2m  a\u001b[0m\n\u001b[31m- \u001b[0m\u001b[31mx\u001b[0m\n\u001b[32m+ \u001b[0m\u001b[32mnew one\u001b[0m\n\u001b[32m+ new two\u001b[0m\n\u001b[32m+ new three\u001b[0m\n\u001b[2m  z\u001b[0m",
+      ],
+      ["only\ngone", "only", "\u001b[2m  only\u001b[0m\n\u001b[31m- gone\u001b[0m"],
+      ["", "added\nlines", "\u001b[32m+ added\u001b[0m\n\u001b[32m+ lines\u001b[0m"],
+    ];
+    for (const [before, after, expected] of cases) {
+      expect(formatDiff(before, after)).toBe(expected);
+    }
+  });
+});

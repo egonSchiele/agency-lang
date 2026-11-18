@@ -184,21 +184,26 @@ export function computeHunks(
 export type TextRange = { start: number; end: number };
 
 /**
- * The words that differ between a deleted line and the line that replaced
- * it, as ranges in each line. It uses the same word diff as the terminal's
- * changed-word coloring, so both mark the same words.
+ * The word diff between a deleted line and the line that replaced it. The
+ * terminal's changed-word coloring and `wordChanges` both read it, so the
+ * terminal diff and the token diff mark the same words.
  */
+function wordDiff(oldLine: string, newLine: string): Diff[] {
+  const wordDiffs = dmp.diff_main(oldLine, newLine) as Diff[];
+  dmp.diff_cleanupSemantic(wordDiffs);
+  return wordDiffs;
+}
+
+/** The words that differ between a deleted line and the line that replaced it, as ranges in each line. */
 export function wordChanges(
   oldLine: string,
   newLine: string,
 ): { deleted: TextRange[]; inserted: TextRange[] } {
-  const wordDiffs = dmp.diff_main(oldLine, newLine) as Diff[];
-  dmp.diff_cleanupSemantic(wordDiffs);
   const deleted: TextRange[] = [];
   const inserted: TextRange[] = [];
   let oldOffset = 0;
   let newOffset = 0;
-  for (const [op, text] of wordDiffs) {
+  for (const [op, text] of wordDiff(oldLine, newLine)) {
     if (op === DIFF_DELETE) {
       deleted.push({ start: oldOffset, end: oldOffset + text.length });
       oldOffset += text.length;
@@ -213,47 +218,69 @@ export function wordChanges(
   return { deleted, inserted };
 }
 
+/**
+ * Which deleted and inserted lines of a hunk replace each other. In a run of
+ * deleted lines followed by inserted lines, the first deleted line pairs with
+ * the first inserted line, and so on; lines left over have no partner.
+ * Returns each paired line's partner, by position in `lines`, on both sides.
+ */
+export function replacementPartners(lines: DiffLine[]): Record<number, number> {
+  const partners: Record<number, number> = {};
+  let position = 0;
+  while (position < lines.length) {
+    if (lines[position].kind !== "delete") {
+      position++;
+      continue;
+    }
+    const insertsStart = endOfRun(lines, position, "delete");
+    const insertsEnd = endOfRun(lines, insertsStart, "insert");
+    const pairs = Math.min(insertsStart - position, insertsEnd - insertsStart);
+    for (let offset = 0; offset < pairs; offset++) {
+      partners[position + offset] = insertsStart + offset;
+      partners[insertsStart + offset] = position + offset;
+    }
+    position = insertsEnd;
+  }
+  return partners;
+}
+
+/** The position after a run of lines of one kind that starts at `start`. */
+function endOfRun(lines: DiffLine[], start: number, kind: DiffLine["kind"]): number {
+  let end = start;
+  while (end < lines.length && lines[end].kind === kind) {
+    end++;
+  }
+  return end;
+}
+
 // Render one side of a replacement with the changed words highlighted.
 function highlightLine(oldLine: string, newLine: string, side: number): string {
   const prefix = side === DIFF_DELETE ? "- " : "+ ";
   const sideColor = side === DIFF_DELETE ? color.red : color.green;
-  const wordDiffs = dmp.diff_main(oldLine, newLine) as Diff[];
-  dmp.diff_cleanupSemantic(wordDiffs);
-
   let body = "";
-  for (const [op, text] of wordDiffs) {
+  for (const [op, text] of wordDiff(oldLine, newLine)) {
     if (op === DIFF_EQUAL) body += color.dim(text);
     else if (op === side) body += sideColor(text);
   }
   return sideColor(prefix) + body;
 }
 
-function renderReplacement(
-  dels: DiffLine[],
-  inss: DiffLine[],
-  out: string[],
-  colored: boolean,
-  gutter: (l: DiffLine) => string,
-): void {
-  const paired = Math.min(dels.length, inss.length);
-  for (let k = 0; k < dels.length; k++) {
-    const body =
-      colored && k < paired
-        ? highlightLine(dels[k].text, inss[k].text, DIFF_DELETE)
-        : colored
-          ? color.red(`- ${dels[k].text}`)
-          : `- ${dels[k].text}`;
-    out.push(gutter(dels[k]) + body);
+/** One line of the inline diff. A line with a partner colors only its changed words. */
+function inlineLine(line: DiffLine, partner: DiffLine | undefined, colored: boolean): string {
+  if (line.kind === "context") {
+    return colored ? color.dim(`  ${line.text}`) : `  ${line.text}`;
   }
-  for (let k = 0; k < inss.length; k++) {
-    const body =
-      colored && k < paired
-        ? highlightLine(dels[k].text, inss[k].text, DIFF_INSERT)
-        : colored
-          ? color.green(`+ ${inss[k].text}`)
-          : `+ ${inss[k].text}`;
-    out.push(gutter(inss[k]) + body);
+  const marker = line.kind === "delete" ? "- " : "+ ";
+  if (!colored) {
+    return `${marker}${line.text}`;
   }
+  if (partner) {
+    return line.kind === "delete"
+      ? highlightLine(line.text, partner.text, DIFF_DELETE)
+      : highlightLine(partner.text, line.text, DIFF_INSERT);
+  }
+  const sideColor = line.kind === "delete" ? color.red : color.green;
+  return sideColor(`${marker}${line.text}`);
 }
 
 function renderHunkBody(
@@ -262,25 +289,11 @@ function renderHunkBody(
   colored: boolean,
   gutter: (l: DiffLine) => string,
 ): void {
-  const paint = (fn: (t: string) => string, t: string) => (colored ? fn(t) : t);
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line.kind === "context") {
-      out.push(gutter(line) + paint(color.dim, `  ${line.text}`));
-      i++;
-    } else if (line.kind === "delete") {
-      let d = i;
-      while (d < lines.length && lines[d].kind === "delete") d++;
-      let n = d;
-      while (n < lines.length && lines[n].kind === "insert") n++;
-      renderReplacement(lines.slice(i, d), lines.slice(d, n), out, colored, gutter);
-      i = n;
-    } else {
-      out.push(gutter(line) + paint(color.green, `+ ${line.text}`));
-      i++;
-    }
-  }
+  const partners = replacementPartners(lines);
+  lines.forEach((line, position) => {
+    const partner = position in partners ? lines[partners[position]] : undefined;
+    out.push(gutter(line) + inlineLine(line, partner, colored));
+  });
 }
 
 function gutterWidth(hunks: Hunk[]): number {

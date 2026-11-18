@@ -134,11 +134,6 @@ export def highlight(
 }
 
 /**
-Use for displaying changes to a person. With `language` and color enabled,
-changed lines use syntax highlighting on red or green backgrounds. Background
-padding is limited to the terminal width. Use `patch` for output to apply with Git.
-*/
-/**
   One piece of highlighted code. `scope` is the kind of syntax it is, named
   like the fields of `ColorScheme` (for example "keyword", "string" or
   "builtIn"), or null for plain text.
@@ -168,6 +163,11 @@ export def highlightTokens(code: string, language: string = "plaintext"): CodeTo
   return _highlightTokens(code, language)
 }
 
+/**
+Use for displaying changes to a person. With `language` and color enabled,
+changed lines use syntax highlighting on red or green backgrounds. Background
+padding is limited to the terminal width. Use `patch` for output to apply with Git.
+*/
 @capabilities(terminal)
 export def diff(
   oldText: string,
@@ -227,7 +227,7 @@ export type DiffToken = {
   removed ("delete") or added ("insert"). A line has a number on each side
   it exists on, counting from 1.
 */
-export type DiffLine = {
+export type DiffTokenLine = {
   kind: "context" | "delete" | "insert";
   oldNumber: number | null;
   newNumber: number | null;
@@ -238,12 +238,12 @@ export type DiffLine = {
   A run of changed lines and the unchanged lines around them, with where the
   run starts and how many lines it covers on each side.
 */
-export type DiffHunk = {
+export type DiffTokenHunk = {
   oldStart: number;
   oldLines: number;
   newStart: number;
   newLines: number;
-  lines: DiffLine[]
+  lines: DiffTokenLine[]
 }
 
 /**
@@ -259,7 +259,7 @@ export def diffTokens(
   context: number = -1,
   ignoreWhitespace: boolean = false,
   language: string = "",
-): DiffHunk[] {
+): DiffTokenHunk[] {
   """
   Compare two texts and return the changes as lines of tokens.
 

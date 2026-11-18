@@ -3,7 +3,7 @@
 // same highlight.js output into ANSI text; these functions return the tokens
 // instead, so the caller picks the colors.
 import hljs from "highlight.js";
-import { computeHunks, wordChanges } from "@/utils/diff.js";
+import { computeHunks, replacementPartners, wordChanges } from "@/utils/diff.js";
 import type { DiffLine, Hunk, TextRange } from "@/utils/diff.js";
 
 /**
@@ -55,11 +55,17 @@ export function _highlightTokens(code: string, language: string): CodeToken[] {
   if (code === "") {
     return [];
   }
+  const plain = [{ text: code, scope: null }];
   const tree = tokenTree(code, hljsLanguage(language));
   if (tree === null) {
-    return [{ text: code, scope: null }];
+    return plain;
   }
-  return joinNeighbors(flatten(tree, null));
+  const tokens = joinNeighbors(flatten(tree, null));
+  // highlight.js 10 sometimes drops characters (a newline inside a CSS
+  // attribute selector), and returns a partial tree when it catches an
+  // internal error. Tokens must give back the code exactly, or a diff's lines
+  // would shift, so anything else is plain text.
+  return tokens.map((token) => token.text).join("") === code ? tokens : plain;
 }
 
 /**
@@ -197,40 +203,21 @@ function tokensOf(line: DiffLine, sides: Sides): CodeToken[] {
 }
 
 /**
- * The changed words of each line, by position in `lines`. A run of deleted
- * lines followed by inserted lines pairs them in order, as the terminal diff
- * does; a line with no partner has no changed words.
+ * The changed words of each line, by position in `lines`. Lines pair up as
+ * the terminal diff pairs them; a line with no partner has no changed words.
  */
 function changedRanges(lines: DiffLine[]): Record<number, TextRange[]> {
   const ranges: Record<number, TextRange[]> = {};
-  let position = 0;
-  while (position < lines.length) {
-    if (lines[position].kind !== "delete") {
-      position++;
+  for (const [key, partner] of Object.entries(replacementPartners(lines))) {
+    const removed = Number(key);
+    if (lines[removed].kind !== "delete") {
       continue;
     }
-    const insertsStart = endOfRun(lines, position, "delete");
-    const insertsEnd = endOfRun(lines, insertsStart, "insert");
-    const pairs = Math.min(insertsStart - position, insertsEnd - insertsStart);
-    for (let offset = 0; offset < pairs; offset++) {
-      const removed = position + offset;
-      const added = insertsStart + offset;
-      const words = wordChanges(lines[removed].text, lines[added].text);
-      ranges[removed] = words.deleted;
-      ranges[added] = words.inserted;
-    }
-    position = Math.max(insertsEnd, position + 1);
+    const words = wordChanges(lines[removed].text, lines[partner].text);
+    ranges[removed] = words.deleted;
+    ranges[partner] = words.inserted;
   }
   return ranges;
-}
-
-/** The position after a run of lines of one kind that starts at `start`. */
-function endOfRun(lines: DiffLine[], start: number, kind: DiffLine["kind"]): number {
-  let end = start;
-  while (end < lines.length && lines[end].kind === kind) {
-    end++;
-  }
-  return end;
 }
 
 /** Splits tokens where a changed range starts or ends, and marks the pieces inside one. */

@@ -153,7 +153,7 @@ export type CodeToken = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L141))
 
 ### DiffToken
 
@@ -174,7 +174,7 @@ export type DiffToken = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L219))
 
-### DiffLine
+### DiffTokenLine
 
 One line of a diff. `kind` says whether it is unchanged ("context"),
   removed ("delete") or added ("insert"). A line has a number on each side
@@ -186,7 +186,7 @@ One line of a diff. `kind` says whether it is unchanged ("context"),
   removed ("delete") or added ("insert"). A line has a number on each side
   it exists on, counting from 1.
 */
-export type DiffLine = {
+export type DiffTokenLine = {
   kind: "context" | "delete" | "insert";
   oldNumber?: number;
   newNumber?: number;
@@ -196,7 +196,7 @@ export type DiffLine = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L230))
 
-### DiffHunk
+### DiffTokenHunk
 
 A run of changed lines and the unchanged lines around them, with where the
   run starts and how many lines it covers on each side.
@@ -206,12 +206,12 @@ A run of changed lines and the unchanged lines around them, with where the
   A run of changed lines and the unchanged lines around them, with where the
   run starts and how many lines it covers on each side.
 */
-export type DiffHunk = {
+export type DiffTokenHunk = {
   oldStart: number;
   oldLines: number;
   newStart: number;
   newLines: number;
-  lines: DiffLine[]
+  lines: DiffTokenLine[]
 }
 ```
 
@@ -308,7 +308,7 @@ Returns the code as tokens instead of terminal text, for a program that
 
 **Returns:** `CodeToken[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L157))
 
 ### diff
 
@@ -330,6 +330,10 @@ diff(
 ```
 
 Compare two texts for terminal display, highlighting changed words.
+
+Use for displaying changes to a person. With `language` and color enabled,
+changed lines use syntax highlighting on red or green backgrounds. Background
+padding is limited to the terminal width. Use `patch` for output to apply with Git.
 
 **Parameters:**
 
@@ -363,7 +367,7 @@ diffTokens(
   context: number = -1,
   ignoreWhitespace: boolean = false,
   language: string = "",
-): DiffHunk[]
+): DiffTokenHunk[]
 ```
 
 Compare two texts and return the changes as lines of tokens.
@@ -384,7 +388,7 @@ Returns the same comparison as `diff`, as data instead of terminal text, for
 | ignoreWhitespace | `boolean` | false | Treat whitespace-only changes as equal. |
 | language | `string` | "" | Tag tokens with their syntax for this language, or "auto" to guess. |
 
-**Returns:** `DiffHunk[]`
+**Returns:** `DiffTokenHunk[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L256))
 

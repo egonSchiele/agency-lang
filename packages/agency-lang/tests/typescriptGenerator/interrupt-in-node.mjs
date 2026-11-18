@@ -619,7 +619,7 @@ await callHook(__run, {
   });
 })
 graph.conditionalEdge("sayHi", ["foo2"])
-export async function foo2(name: string, age: number, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function foo2(name: string, age: number, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo2",
@@ -634,7 +634,8 @@ export async function foo2(name: string, age: number, { messages: __invocationMe
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
       host: __invocationHost,
-      inputOverride: __invocationInputOverride
+      inputOverride: __invocationInputOverride,
+      logFile: __invocationLogFile
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,
@@ -643,7 +644,7 @@ export async function foo2(name: string, age: number, { messages: __invocationMe
   });
 }
 export const __foo2NodeParams = ["name", "age"];
-export async function sayHi(name: any, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function sayHi(name: any, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",
@@ -657,7 +658,8 @@ export async function sayHi(name: any, { messages: __invocationMessages, callbac
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
       host: __invocationHost,
-      inputOverride: __invocationInputOverride
+      inputOverride: __invocationInputOverride,
+      logFile: __invocationLogFile
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,

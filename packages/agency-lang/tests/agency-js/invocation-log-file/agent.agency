@@ -1,0 +1,7 @@
+// A program whose caller names the file its log events go to. The node
+// pauses once, so the test can check the file on the first leg and on a
+// resume.
+export node main(): string {
+  const answer: string = raise test::ask("What should I say?", {})
+  return "said ${answer}"
+}

@@ -36,6 +36,17 @@ export type InvocationOptions = {
    *  the answer. Per execution: a resume does not remember it, so the
    *  caller passes it again. */
   inputOverride?: (prompt: string) => Promise<string>;
+  /** The file this run's log events are appended to, in place of
+   *  `log.logFile` in `agency.json`. For a program that knows where its
+   *  logs belong only once it is running, such as in a folder the user
+   *  chose. It takes effect when `observability` is on, and a resume does
+   *  not remember it, so the caller passes it again.
+   *
+   *  This is not `config.log.logFile`, which stays inert: `config` may be
+   *  built from a request, and a path a caller chose is a way to write any
+   *  file. Only the program that starts the run sets this option. A host
+   *  that serves requests must never copy a request's field into it. */
+  logFile?: string;
 };
 
 /**
@@ -98,6 +109,8 @@ export type ResolvedInvocation = {
   policy?: Policy;
   /** The host for this invocation, when the caller sent one. */
   host?: Host;
+  /** The log file for this invocation, when the caller named one. */
+  logFile?: string;
   /** The `input()` override for this invocation, when the caller sent one. */
   inputOverride?: (prompt: string) => Promise<string>;
 };
@@ -205,9 +218,10 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   const policy = validateInvocationPolicy(request.options?.policy);
   const host = request.options?.host;
   const inputOverride = request.options?.inputOverride;
+  const logFile = request.options?.logFile;
 
   if (request.kind === "resume") {
-    return { runId: request.runId, contextOverride, policy, host, inputOverride };
+    return { runId: request.runId, contextOverride, policy, host, logFile, inputOverride };
   }
 
   const runId =
@@ -219,7 +233,7 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }
-  return { runId, contextOverride, policy, host, inputOverride };
+  return { runId, contextOverride, policy, host, logFile, inputOverride };
 }
 
 /**

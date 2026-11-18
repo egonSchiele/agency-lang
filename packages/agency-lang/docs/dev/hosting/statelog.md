@@ -44,7 +44,16 @@ the top-level `observability` master switch:
   `STATELOG_API_KEY` env var by `getStatelogClient`.
 - **`logFile`** — append every event as one JSON line to this path (local dev
   and tests). Compatible with `host`/`stdout` — all configured sinks receive
-  every event.
+  every event. The path is written into the generated code when the program
+  is compiled, and is opened by `openLineSink` in `lib/runtime/platform.node.ts`:
+  - A leading `~` is the user's home directory, so `"~/.myapp/log.jsonl"` is
+    the same file wherever the program is started. `~user` is refused.
+  - Any other relative path is opened against the process's working
+    directory. `logTraces()` reads it back against the host's working
+    directory, so the two differ for a run whose host has its own `cwd`.
+  - `logFile` in a run's invocation options replaces this one for that run,
+    and is made absolute against the run's host. See "The log file a
+    program names" in `docs/dev/hosting/per-invocation-config.md`.
 - **`debugMode`** — extra console diagnostics.
 - **`requestTimeoutMs`** — per-request timeout for the remote POST (`DEFAULT_REQUEST_TIMEOUT_MS`,
   1500ms) so a slow or unreachable host can't wedge end-of-run cleanup.

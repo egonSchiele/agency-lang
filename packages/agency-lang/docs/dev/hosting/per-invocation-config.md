@@ -85,6 +85,32 @@ the invocation's override is applied.
 The projection returns `undefined` when the caller supplied nothing on the
 allow-list, so an all-inert override adds no object at all.
 
+## The log file a program names
+
+`InvocationOptions.logFile` is the file one run's events are appended to, in
+place of `log.logFile` from `agency.json`:
+
+```ts
+const options = { logFile: path.join(appHome, "log.jsonl") };
+const result = await main({ ...options });
+await respondToInterrupts(interrupts, responses, { invocation: options });
+```
+
+- **It is not `config.log.logFile`.** That field stays inert, as above.
+  `config` may be built from a request, and a path a caller chose is a way to
+  write any file. `logFile` sits beside `policy` and `host`: the options only
+  the program that starts the run sets. A host that serves requests must never
+  copy a request's field into it.
+- **`observability` still decides whether anything is logged.** With it off,
+  naming a file writes nothing.
+- **A resume does not remember it.** The caller passes it again, like the
+  host and the policy. A resume with none logs to the config's file.
+- **It becomes one absolute path** in `createExecutionContext`
+  (`absoluteLogFile`): a leading `~` is the host's home directory, and any
+  other relative path is under the host's working directory. The writer,
+  `logTraces()` and a subprocess (through `getStatelogSink`) then open the
+  same file, also when the run's host has its own `cwd`.
+
 ## Host responsibilities (not enforced here)
 
 - **Budget is a request.** A host clamps a caller's budget to its platform cap

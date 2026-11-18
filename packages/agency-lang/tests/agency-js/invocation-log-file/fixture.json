@@ -1,0 +1,8 @@
+{
+  "theRunPaused": true,
+  "theStartWroteToTheNamedFile": true,
+  "theResumeWroteMoreToIt": true,
+  "theResumeFinished": "said hello",
+  "aPathInConfigIsNotOpened": true,
+  "aResumeThatNamesNoFileWritesNothingToIt": true
+}

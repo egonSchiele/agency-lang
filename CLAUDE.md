@@ -16,7 +16,7 @@ Always create worktrees inside the agency-lang directory. Never create worktrees
 
 ## Guidance on writing commit messages and PR descriptions
 
-If you try to write commit messages with apostrophes right on the command line, you will get an error. I'm telling you this now because you do this every time. Same with PR descriptions. Instead you need to write the commit message or PR description in a file, and then pass that in to the git command.
+Write every commit message and PR description in a file, then pass the file to the command (`git commit -F <file>`, `gh pr create --body-file <file>`). Writing them inline on the command line fails when the text contains an apostrophe.
 
 ## General code guidelines
 

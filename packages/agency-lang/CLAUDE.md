@@ -7,7 +7,7 @@ Read the guide at `docs/site/guide/` to get up to speed on the language.
 ## Key Commands
 
 ```bash
-make                    # build everything (ALWAYS use this when changing stdlib files)
+make                    # build everything; use it after changing stdlib files, because `pnpm run build` (`make build`) does not compile the stdlib
 pnpm test               # Run vitest in watch mode
 pnpm test:run           # Run vitest once
 pnpm run agency <file>  # Compile and run an .agency file
@@ -60,14 +60,14 @@ Interrupts are the most important feature of this language. Every task that touc
 
 ### The four words
 
-- **Effect**: the name of a kind of permission, declared with `effect std::env { name: string }` (`stdlib/system.agency:33`). Effects are what handlers and policies match on.
+- **Effect**: the name of a kind of permission, declared with `effect std::env { name: string }` (in `stdlib/system.agency`). Effects are what handlers and policies match on.
 - **Interrupt**: one raise of an effect, with a message and data: `interrupt std::env("Are you sure…?", { name: name })`. It pauses the program until someone answers approve or reject.
 - **Handler**: code that answers a raise. `handle { … } with approve`, `handle { … } with (intr) { … }`, or `someCall() with approve`.
 - **Policy**: a JSON rule set (`lib/runtime/policy.ts`) that matches interrupts by effect and data globs. A policy can be used inside any handler, as a programmatic way to respond to interrupts. The benefit of policies is they allow you to specify how to respond to interrupts in a way that can be saved as pure data. You can save a policy as a JSON file and then use `agency run --policy <file>` to run some code with a specific policy.
 
 ### The lifecycle of one raise
 
-Follow `env("FOO")` through `stdlib/system.agency:109-113`:
+Follow `env("FOO")` through `requestEnvRead` in `stdlib/system.agency`:
 
 ```
 def requestEnvRead(name: string): string | null {
@@ -163,29 +163,21 @@ We have a lot more documentation containing implementation details in docs/dev/:
 - The `with approve` shorthand is `docs/dev/language/with-approve.md`.
 - How effects propagate through function signatures is `docs/dev/compiler/effect-propagation.md`.
 
-## VERY IMPORTANT: Agency syntax rules
+## Agency syntax rules
 
-When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `docs/site/guide/basic-syntax.md` and existing test fixtures when unsure.
+Write Agency code in plans, specs, tests, and examples with the syntax below. Verify against `docs/site/guide/basic-syntax.md` and existing test fixtures when unsure.
 
 **Correct syntax:**
 
 - Functions use `def`, curly braces, and optional `: ReturnType` after params: `def foo(x: number): string { ... }`
 - Nodes use `node`, parentheses for params, and curly braces: `node main() { ... }`
-- `if`, `while`, and `for` statements REQUIRE parentheses around the condition AND curly braces for the body: `if (x > 5) { ... }`
-- Variables must be declared with `let` or `const` before use. Bare assignment (`x = 5`) is NOT allowed without a prior declaration.
+- `if`, `while`, and `for` statements require parentheses around the condition and curly braces for the body: `if (x > 5) { ... }`
+- Variables must be declared with `let` or `const` before use. Bare assignment (`x = 5`) is not allowed without a prior declaration.
 - `for` loops use `in`: `for (item in items) { ... }`
-
-**Common mistakes to NEVER make:**
-
-- `function foo() -> ReturnType:` — WRONG. Use `def foo(): ReturnType { ... }`
-- `node main -> end:` — WRONG. Use `node main() { ... }`
-- `if condition:` / `if condition {` — WRONG. Use `if (condition) { ... }`
-- `result = foo()` without `let`/`const` — WRONG unless already declared.
-- Using Python-style colon+indentation for blocks — WRONG. Always use `{ ... }`
 
 **When writing plans or specs:** Always verify Agency code snippets by checking `docs/site/guide/basic-syntax.md` and existing test fixtures (`tests/agency/`, `tests/typescriptGenerator/`). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
 
-## Things that often confuse you
+## Terms and environment facts
 
 Tools and functions are the same thing in the agency. Functions are tools. So there is no point in treating tools and functions separately because they're the same thing.
 

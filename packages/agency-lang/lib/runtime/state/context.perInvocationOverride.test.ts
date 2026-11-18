@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 import { RuntimeContext } from "./context.js";
 
 // The per-invocation override reaches a run through createExecutionContext: the
@@ -144,6 +145,40 @@ describe("createExecutionContext log file", () => {
     } finally {
       safeDeleteDirectoryWithin(os.tmpdir(), dir);
     }
+  });
+
+  it("puts a relative name under the folder of the run's host, where the run reads it back", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "invocation-log-")));
+    try {
+      const host = nodeHost({ cwd: dir });
+      const execCtx = await parentThatLogs().createExecutionContext({
+        runId: "run",
+        host,
+        logFile: "log.jsonl",
+      });
+
+      await execCtx.statelogClient.debug("hello", {});
+
+      const written = path.join(dir, "log.jsonl");
+      expect(linesIn(written)).toHaveLength(1);
+      expect(execCtx.getStatelogSink().logFile).toBe(written);
+      expect(await host.files.realPath("log.jsonl")).toBe(written);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+  });
+
+  it("reads a leading ~ as the home directory of the run's host", async () => {
+    const host = nodeHost();
+    const execCtx = await makeParent().createExecutionContext({
+      runId: "run",
+      host,
+      logFile: "~/.myapp/log.jsonl",
+    });
+
+    expect(execCtx.getStatelogSink().logFile).toBe(
+      path.join(host.system.homeDir(), ".myapp", "log.jsonl"),
+    );
   });
 
   it("gives a run that names no file the config's file, and another run its own", async () => {

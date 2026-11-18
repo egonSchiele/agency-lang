@@ -49,11 +49,11 @@ the top-level `observability` master switch:
   - A leading `~` is the user's home directory, so `"~/.myapp/log.jsonl"` is
     the same file wherever the program is started. `~user` is refused.
   - Any other relative path is opened against the process's working
-    directory.
-  - A program that knows where its log belongs only once it is running
-    passes `logFile` in its invocation options, which replaces this one for
-    that run. See "The log file a program names" in
-    `docs/dev/hosting/per-invocation-config.md`.
+    directory. `logTraces()` reads it back against the host's working
+    directory, so the two differ for a run whose host has its own `cwd`.
+  - `logFile` in a run's invocation options replaces this one for that run,
+    and is made absolute against the run's host. See "The log file a
+    program names" in `docs/dev/hosting/per-invocation-config.md`.
 - **`debugMode`** — extra console diagnostics.
 - **`requestTimeoutMs`** — per-request timeout for the remote POST (`DEFAULT_REQUEST_TIMEOUT_MS`,
   1500ms) so a slow or unreachable host can't wedge end-of-run cleanup.

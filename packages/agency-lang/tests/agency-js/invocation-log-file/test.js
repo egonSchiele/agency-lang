@@ -1,7 +1,8 @@
 import { main, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { safeDeleteDirectoryWithin } from "../../../dist/lib/utils.js";
 
 // The folder does not exist under the temp folder until the run makes it.
 const dir = mkdtempSync(join(tmpdir(), "invocation-log-file-"));
@@ -45,7 +46,7 @@ try {
     aResumeThatNamesNoFileWritesNothingToIt: events(logFile) === afterResume,
   };
 } finally {
-  rmSync(dir, { recursive: true, force: true });
+  safeDeleteDirectoryWithin(tmpdir(), dir);
 }
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));

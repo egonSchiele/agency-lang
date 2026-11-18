@@ -96,9 +96,6 @@ const result = await main({ ...options });
 await respondToInterrupts(interrupts, responses, { invocation: options });
 ```
 
-It is for a program that learns where its log belongs only when it runs, such
-as an app whose home folder can be moved.
-
 - **It is not `config.log.logFile`.** That field stays inert, as above.
   `config` may be built from a request, and a path a caller chose is a way to
   write any file. `logFile` sits beside `policy` and `host`: the options only
@@ -108,11 +105,11 @@ as an app whose home folder can be moved.
   naming a file writes nothing.
 - **A resume does not remember it.** The caller passes it again, like the
   host and the policy. A resume with none logs to the config's file.
-- **A subprocess the run starts inherits it**, through `getStatelogSink`.
-- **A leading `~` is the home directory**, as in `agency.json`.
-
-`resolveInvocation` carries it to `ResolvedInvocation.logFile`, and
-`createExecutionContext` puts it in that run's statelog config.
+- **It becomes one absolute path** in `createExecutionContext`
+  (`absoluteLogFile`): a leading `~` is the host's home directory, and any
+  other relative path is under the host's working directory. The writer,
+  `logTraces()` and a subprocess (through `getStatelogSink`) then open the
+  same file, also when the run's host has its own `cwd`.
 
 ## Host responsibilities (not enforced here)
 

@@ -1,4 +1,6 @@
+import path from "#path";
 import { nanoid } from "nanoid";
+import { expandPath } from "../../stdlib/expandPath.js";
 import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { LogLevel } from "../../logger.js";
@@ -48,6 +50,14 @@ import { reportWaits, type OpenWait } from "../waits.js";
 /** See `RuntimeContext.debugSlot`. `waits` is what the module's runs are
  *  waiting on right now, kept with or without a debugger (`waits.ts`). */
 export type DebugSlot = { state: DebuggerState | null; waits: OpenWait[] };
+
+/** The log file an invocation named, as one absolute path: a leading `~`
+ *  is the host's home directory, and any other relative path is under the
+ *  host's working directory, which is where the run's own file reads
+ *  resolve it. */
+function absoluteLogFile(logFile: string, host: Host): string {
+  return path.resolve(host.system.cwd(), expandPath(logFile, host.system.homeDir()));
+}
 
 /**
  * Process-wide singleton CoverageCollector used when AGENCY_COVERAGE is set.
@@ -527,12 +537,15 @@ export class RuntimeContext<T> {
     execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
     // A log file the program named for this invocation replaces the one in
-    // the config. It is kept on the context so a subprocess inherits it
-    // (`getStatelogSink`).
+    // the config. It is made absolute against the run's host, so the writer,
+    // `logTraces()` and a subprocess (`getStatelogSink`) all open one file.
     execCtx.statelogConfig =
       invocation.logFile === undefined
         ? effective.statelogConfig
-        : { ...effective.statelogConfig, logFile: invocation.logFile };
+        : {
+            ...effective.statelogConfig,
+            logFile: absoluteLogFile(invocation.logFile, invocation.host ?? this.host),
+          };
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;

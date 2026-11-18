@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.41.1",
+  "version": "0.41.2",
   "description": "The Agency language",
   "main": "./dist/lib/index.js",
   "scripts": {

@@ -56,12 +56,13 @@ export function nodeWrapperParams(
   // is deliberately not `input`: nodes often have a parameter of that name,
   // and `main(input, { input } = {})` would read as the same value twice.
   // `abortSignal` and `pauseSignal` are the caller's cancel and pause handles,
-  // passed straight through to `runNode`. `policy`, `host`, and `inputOverride`
-  // are the other InvocationOptions: the root policy, the host this run uses
-  // in place of the platform's default (an app in a browser passes its own),
-  // and the function that answers `input()` in place of the terminal.
+  // passed straight through to `runNode`. `policy`, `host`, `inputOverride`,
+  // and `logFile` are the other InvocationOptions: the root policy, the host
+  // this run uses in place of the platform's default (an app in a browser
+  // passes its own), the function that answers `input()` in place of the
+  // terminal, and the file this run's log events go to.
   params.push({
-    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }",
+    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }",
     typeAnnotation:
       "({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions)",
     defaultValue: ts.obj({}),

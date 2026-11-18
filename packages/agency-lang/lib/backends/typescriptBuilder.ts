@@ -281,6 +281,7 @@ function invocationFromWrapperOptions(): TsNode {
     policy: ts.id("__invocationPolicy"),
     host: ts.id("__invocationHost"),
     inputOverride: ts.id("__invocationInputOverride"),
+    logFile: ts.id("__invocationLogFile"),
   });
 }
 

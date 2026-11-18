@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
 import { RuntimeContext } from "./context.js";
 
 // The per-invocation override reaches a run through createExecutionContext: the
@@ -95,5 +99,83 @@ describe("createExecutionContext per-invocation override", () => {
     expect(sink.apiKey).toBe("");
     // the frozen base credential must NOT leak through
     expect(sink.apiKey).not.toBe("base-key");
+  });
+});
+
+// A program that starts a run may name the file its events go to. That
+// arrives as `logFile` on the resolved invocation, beside the host and the
+// policy, and never through `contextOverride`, which may come from a request.
+describe("createExecutionContext log file", () => {
+  function parentThatLogs(logFile?: string) {
+    return new RuntimeContext({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "p",
+        debugMode: false,
+        observability: true,
+        ...(logFile === undefined ? {} : { logFile }),
+      },
+      smoltalkDefaults: {},
+      dirname: "/project",
+    });
+  }
+
+  function linesIn(file: string): string[] {
+    return fs.existsSync(file) ? fs.readFileSync(file, "utf-8").trim().split("\n") : [];
+  }
+
+  it("writes this run's events to the file the invocation names, not the config's", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "invocation-log-"));
+    try {
+      const fromConfig = path.join(dir, "config.jsonl");
+      const fromProgram = path.join(dir, "home", "program.jsonl");
+      const execCtx = await parentThatLogs(fromConfig).createExecutionContext({
+        runId: "run",
+        logFile: fromProgram,
+      });
+
+      await execCtx.statelogClient.debug("hello", {});
+
+      expect(linesIn(fromProgram)).toHaveLength(1);
+      expect(linesIn(fromConfig)).toEqual([]);
+      // A subprocess of this run inherits the same file.
+      expect(execCtx.getStatelogSink().logFile).toBe(fromProgram);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+  });
+
+  it("gives a run that names no file the config's file, and another run its own", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "invocation-log-"));
+    try {
+      const fromConfig = path.join(dir, "config.jsonl");
+      const parent = parentThatLogs(fromConfig);
+      const plain = await parent.createExecutionContext({ runId: "plain" });
+      const named = await parent.createExecutionContext({
+        runId: "named",
+        logFile: path.join(dir, "named.jsonl"),
+      });
+
+      expect(plain.getStatelogSink().logFile).toBe(fromConfig);
+      expect(named.getStatelogSink().logFile).toBe(path.join(dir, "named.jsonl"));
+      expect(parent.getStatelogSink().logFile).toBe(fromConfig);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+  });
+
+  it("writes nothing when observability is off, whatever file is named", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "invocation-log-"));
+    try {
+      const file = path.join(dir, "quiet.jsonl");
+      const execCtx = await makeParent().createExecutionContext({ runId: "run", logFile: file });
+
+      await execCtx.statelogClient.debug("hello", {});
+
+      expect(fs.existsSync(file)).toBe(false);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
   });
 });

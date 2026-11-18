@@ -526,7 +526,13 @@ export class RuntimeContext<T> {
     execCtx.trustedModules = this.trustedModules;
     execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
-    execCtx.statelogConfig = effective.statelogConfig;
+    // A log file the program named for this invocation replaces the one in
+    // the config. It is kept on the context so a subprocess inherits it
+    // (`getStatelogSink`).
+    execCtx.statelogConfig =
+      invocation.logFile === undefined
+        ? effective.statelogConfig
+        : { ...effective.statelogConfig, logFile: invocation.logFile };
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;
@@ -580,7 +586,7 @@ export class RuntimeContext<T> {
     execCtx.logLevel = this.logLevel;
     execCtx.abortController = new AbortController();
     execCtx.statelogClient = new StatelogClient({
-      ...effective.statelogConfig,
+      ...execCtx.statelogConfig,
       traceId: runId,
     });
     // Out-of-frame posts (e.g. agentEnd) redact against the CURRENT top-level

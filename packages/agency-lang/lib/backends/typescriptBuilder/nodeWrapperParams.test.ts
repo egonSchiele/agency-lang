@@ -19,7 +19,7 @@ describe("node wrapper per-invocation options", () => {
 
   it("destructures the options into hidden aliases", () => {
     expect(ts).toContain(
-      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }",
+      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }",
     );
   });
 
@@ -36,6 +36,10 @@ describe("node wrapper per-invocation options", () => {
 
   it("forwards the input override as part of the runNode invocation", () => {
     expect(ts).toMatch(/invocation: \{[^}]*inputOverride: __invocationInputOverride/);
+  });
+
+  it("forwards the log file as part of the runNode invocation", () => {
+    expect(ts).toMatch(/invocation: \{[^}]*logFile: __invocationLogFile/);
   });
 
   it("types the options object with InvocationOptions", () => {

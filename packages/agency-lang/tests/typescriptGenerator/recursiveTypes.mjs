@@ -392,7 +392,7 @@ await callHook(__run, {
     };
   });
 })
-export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -404,7 +404,8 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
       host: __invocationHost,
-      inputOverride: __invocationInputOverride
+      inputOverride: __invocationInputOverride,
+      logFile: __invocationLogFile
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,
@@ -413,7 +414,7 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
   });
 }
 export const __mainNodeParams = [];
-export async function llmTree({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function llmTree({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "llmTree",
@@ -425,7 +426,8 @@ export async function llmTree({ messages: __invocationMessages, callbacks: __inv
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
       host: __invocationHost,
-      inputOverride: __invocationInputOverride
+      inputOverride: __invocationInputOverride,
+      logFile: __invocationLogFile
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,

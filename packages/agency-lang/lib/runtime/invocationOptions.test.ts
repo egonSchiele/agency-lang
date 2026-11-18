@@ -154,6 +154,27 @@ describe("resolveInvocation — config projection", () => {
   });
 });
 
+describe("resolveInvocation — log file", () => {
+  it("carries the file the program named, on a fresh run and on a resume", () => {
+    const options = { logFile: "/home/me/.app/log.jsonl" };
+    expect(resolveInvocation({ kind: "fresh", options }).logFile).toBe(options.logFile);
+    expect(resolveInvocation({ kind: "resume", runId: "run", options }).logFile).toBe(
+      options.logFile,
+    );
+  });
+
+  // `config` may be built from a request, so a path in it must never
+  // become the run's log file.
+  it("does not take a log file from the config override", () => {
+    const resolved = resolveInvocation({
+      kind: "fresh",
+      options: { config: { log: { logFile: "/etc/passwd" } } },
+    });
+    expect(resolved.logFile).toBeUndefined();
+    expect(resolved.contextOverride).toBeUndefined();
+  });
+});
+
 describe("resolveInvocation — policy", () => {
   const policy = { "std::env": [{ match: { name: "A" }, action: "approve" as const }] };
 

@@ -1,3 +1,7 @@
+## Nov 17 2026 — v0.41.1
+
+You can now set a cwd for a node when running it thru TS, by modifying the host.
+
 ## Nov 17 2026 — v0.41.0
 
 Highlights:

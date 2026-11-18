@@ -1,3 +1,7 @@
+## Nov 17 2026 — v0.41.3
+
+Add highlightTokens and diffTokens to std::syntax.
+
 ## Nov 17 2026 — v0.41.2
 
 Specify log file location when running the node thru TypeScript.

@@ -614,9 +614,20 @@ const rules = currentPolicy()
   file (`session-driver.md`). `askAbout` makes them the handler's state
   first (`useRunPolicy`), after saving any answer still pending to the
   old file. So the check, the prompt's re-check, the new rule and its
-  save all use them, and so does the handler at its own next interrupt.
+  save all use them, and so does the handler at its own next interrupt:
+  the terminal's own later prompts are decided by the run's policy, and
+  their "always" answers go to the run's file. That is intended.
   After an "always" answer, `currentPolicy()` is `runPolicy` with the new
   rule. Pass that the next time, or the rule is lost from memory.
+- **The policy that decides is not the policy that is saved.**
+  `runPolicy` holds rules its file must not get: the flags given at
+  resume, and for a session with a policy of its own, the saved policy's
+  rejects. So once `useRunPolicy` has run, an "always" answer is applied
+  twice with `_policyAfterDecision`: to `runPolicy` in memory, and, when
+  `maybeFlush` saves, to what the file holds then (an empty policy when
+  there is no file). Nothing else from `runPolicy` is written. A file that
+  is there but can't be read or is not a valid policy is not overwritten:
+  the save fails and the answer stays pending.
 - **One decision.** `_handler` and `askAbout` both go through
   `answerByPolicy`: a reject rule decides any raise, an approve rule
   decides a raise that wants no value, and otherwise the person is asked
@@ -624,7 +635,8 @@ const rules = currentPolicy()
   the raise gets the non-interactive reject. So `askAbout` is safe to
   call on any interrupt.
 - **One writer.** An "always" answer is recorded by `recordAnswer` and
-  written by `maybeFlush` before `askAbout` returns. The handler would
+  written by `maybeFlush` (through `policyToSave`) before `askAbout`
+  returns. The handler would
   otherwise write it at its next interrupt, and there may be none.
 - **The handler comes first.** Before `cliPolicyHandler` is called there is
   no handler state, so `askAbout` prints an error and rejects.

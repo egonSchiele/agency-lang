@@ -244,6 +244,19 @@ let _internalIoDir: string = ""
 // Whether the last save of pending "always" answers failed, so the warning
 // prints once and not on every retry.
 let _saveFailing: boolean = false
+// Set by `useRunPolicy`. The policy in memory is then a run's policy, which
+// can hold rules its file must not get (the flags given at resume, the
+// saved policy's rejects), so a save applies only the new "always" answers
+// to what the file holds now.
+let _saveAnswersOnly: boolean = false
+// The "always" answers not yet saved, in the order they were given.
+let _pendingAnswers: PendingAnswer[] = []
+
+type PendingAnswer = {
+  intr: any;
+  action: Decision;
+  folder: string
+}
 
 /**
 ```ts
@@ -538,17 +551,27 @@ def maybeLoadPolicy() {
 // interrupt tries again, and prints a warning once.
 def maybeFlush() {
   if (_pendingSave) {
-    // Clear before writing so re-entry cannot repeat the flush.
+    // Clear before writing so re-entry cannot repeat the flush. An answer
+    // given while the save is under way is left for the next flush.
     _pendingSave = false
+    const answers = _pendingAnswers
+    _pendingAnswers = []
     // `_pendingSave` is only set after a decision is recorded, which also
     // sets `_policy` — but if that invariant ever breaks, skip the write
     // rather than clobber the policy file with `null`.
     if (_policy != null) {
-      beginOwnIo("std::write")
-      const written = writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      endOwnIo()
+      const toSave = policyToSave(answers)
+      let written: Result = success(null)
+      if (toSave is failure(unreadable)) {
+        written = failure(unreadable)
+      } else if (toSave.value != null) {
+        beginOwnIo("std::write")
+        written = writePolicyFile(globalCliPolicyOpts.file, toSave.value, []) with approve
+        endOwnIo()
+      }
       if (written is failure(why)) {
         _pendingSave = true
+        _pendingAnswers = [...answers, ..._pendingAnswers]
         if (!_saveFailing) {
           print("Warning: could not save your new approval rules to ${globalCliPolicyOpts.file}: ${why}. They apply for the rest of this session, and the next prompt tries to save them again.")
         }
@@ -558,6 +581,47 @@ def maybeFlush() {
       }
     }
   }
+}
+
+// What a flush writes: the policy in memory, or, once `useRunPolicy` has
+// run, what the file holds now with `answers` applied, the same way
+// `recordAnswer` applied them in memory. Null when the file already has
+// every rule. A file that is there but can't be read or is not a valid
+// policy is a failure, so it is not overwritten.
+@capabilities(fileRead)
+def policyToSave(answers: PendingAnswer[]): Result<Policy | null> {
+  if (!_saveAnswersOnly) {
+    return success(_policy)
+  }
+  beginOwnIo("std::read")
+  const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
+  endOwnIo()
+  let saved: Policy = {}
+  if (loaded is failure(why)) {
+    if (loaded.data.status != "doesnt-exist") {
+      return failure(why)
+    }
+  } else {
+    saved = loaded.value
+  }
+  let changed = false
+  for (answer in answers) {
+    const after = _policyAfterDecision(
+      saved,
+      answer.intr,
+      answer.action,
+      answer.folder,
+      globalCliPolicyOpts.fields,
+    )
+    if (after.changed) {
+      saved = after.policy
+      changed = true
+    }
+  }
+  if (!changed) {
+    return success(null)
+  }
+  return success(saved)
 }
 
 /**
@@ -606,7 +670,7 @@ decision. Automatic flushing happens at the next interrupt, so the final
 decision can otherwise remain unsaved. Does nothing without pending changes.
 If a handler refuses the save, the answers stay pending and a warning prints.
 */
-export def flushPolicy() raises <std::write> {
+export def flushPolicy() raises <std::read, std::write> {
   """Write any pending always-rule additions to the policy file now."""
   maybeFlush()
 }
@@ -1135,6 +1199,11 @@ def recordAnswer(intr: any, answer: AskUserResult) {
   )
   if (after.changed) {
     _policy = after.policy
+    _pendingAnswers = [..._pendingAnswers, {
+      intr: intr,
+      action: answer.action,
+      folder: answer.folder ?? ""
+    }]
     _pendingSave = true
   }
 }
@@ -1336,9 +1405,14 @@ def askPerson(intr: any): any {
 // Make `policy` and `file` the handler's, so the check, the prompt, an
 // "always" rule and its save all use them, and so does the handler at its
 // next interrupt. An answer still waiting to be saved goes to the old file
-// first.
+// first; one the old file refused is dropped rather than saved to the new
+// one. From here on a save writes only the new answers into `file`.
 def useRunPolicy(policy: Policy, file: string) {
   maybeFlush()
+  if (file != globalCliPolicyOpts.file) {
+    _pendingSave = false
+    _pendingAnswers = []
+  }
   globalCliPolicyOpts = {
     file: file,
     fields: globalCliPolicyOpts.fields
@@ -1346,6 +1420,7 @@ def useRunPolicy(policy: Policy, file: string) {
   _policy = policy
   _policyLoaded = true
   _saveFailing = false
+  _saveAnswersOnly = true
 }
 
 /**
@@ -1353,16 +1428,17 @@ Answer an interrupt another run raised, as the CLI handler answers its own:
 a rule in `policy` decides it if one can, and otherwise the user is asked
 (or, with no one at a terminal, it is rejected). Safe to call on any
 interrupt. `policy` is the policy that run uses, and `file` is where an
-"always" answer is saved. After one, `currentPolicy()` is that policy with
-the new rule: pass it the next time.
+"always" answer is saved. Only the new rule is added to what `file` holds;
+the rest of `policy` is never written. After one, `currentPolicy()` is
+`policy` with the new rule: pass it the next time.
 */
 @hidden
 export def askAbout(intr: any, policy: Policy, file: string): any {
   """
   Answer an interrupt passed as data the way the CLI handler would, under
   `policy`, and return the response. Call `cliPolicyHandler` first. An
-  "always" answer is added to `policy` and saved to `file` before this
-  returns.
+  "always" answer's rule is added to `policy` in memory and to what `file`
+  holds, which is saved before this returns.
   """
   if (globalCliPolicyOpts.file == "") {
     const message = "askAbout was called before cliPolicyHandler, so there is no policy to use. Rejecting by default. Call cliPolicyHandler first."
@@ -1485,5 +1561,7 @@ export def cliPolicyHandler(
     _policyLoaded = false
   }
   _pendingSave = false
+  _pendingAnswers = []
+  _saveAnswersOnly = false
   return _handler
 }

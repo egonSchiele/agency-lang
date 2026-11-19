@@ -170,8 +170,10 @@ await resumeRun({ agent, callbacks, policy: policy.value, interrupts: pause, res
 
 "Always" answers given in a session with a policy of its own are saved
 to its policy file, approvals and rejections both, so they follow the
-session to any front-end. The terminal does this by passing that file to
-`askAbout` (`approval-policies.md`).
+session to any front-end. Only the answer's rule is added to the file;
+the flags given at resume and the saved policy's rejects stay out of it.
+The terminal does this by passing that file to `askAbout`
+(`approval-policies.md`).
 
 `sessionRunPolicy` does not pin the pause. `startRun` and `resumeRun` pin
 whatever policy they are given.

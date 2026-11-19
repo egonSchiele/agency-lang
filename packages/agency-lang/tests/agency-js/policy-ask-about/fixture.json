@@ -19,16 +19,45 @@
       "action": "approve"
     }
   ],
-  "runFileRead": [
+  "policyKeepsBash": [
     {
       "action": "approve"
     }
   ],
-  "runFileBash": [
+  "policyKeepsQuestion": [
     {
       "action": "reject"
     }
   ],
+  "runFileAfterApprove": {
+    "std::ls": [
+      {
+        "action": "approve"
+      }
+    ],
+    "std::read": [
+      {
+        "action": "approve"
+      }
+    ]
+  },
+  "runFileAtEnd": {
+    "std::ls": [
+      {
+        "action": "approve"
+      }
+    ],
+    "std::read": [
+      {
+        "action": "approve"
+      }
+    ],
+    "std::glob": [
+      {
+        "action": "approve"
+      }
+    ]
+  },
   "handlerFileRead": [
     {
       "action": "approve"
@@ -40,6 +69,7 @@
     }
   ],
   "ownRead": "approved",
+  "ownGlob": "approved",
   "question": "reject",
   "rejected": "reject",
   "rejectReason": "The user rejected this call and wrote you this message:\nuse staging",

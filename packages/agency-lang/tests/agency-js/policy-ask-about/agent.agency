@@ -1,4 +1,4 @@
-import { cliPolicyHandler, askAbout, currentPolicy, parsePolicyFile } from "std::policy"
+import { cliPolicyHandler, askAbout, currentPolicy, parsePolicyFile, flushPolicy } from "std::policy"
 
 // Interrupts another run raised, as they reach this program: as data.
 def readInterrupt(root: string): any {
@@ -38,6 +38,14 @@ def rulesIn(file: string, effect: string): any {
   return "unreadable"
 }
 
+def fileContents(file: string): any {
+  const onDisk = parsePolicyFile(file)
+  if (onDisk is success(saved)) {
+    return saved
+  }
+  return "unreadable"
+}
+
 // Asked before `cliPolicyHandler` was called: rejected, and no prompt.
 node withoutHandler(args: { root: string, runFile: string }): any {
   const response = askAbout(readInterrupt(args.root), {}, args.runFile)
@@ -67,17 +75,22 @@ node approvedByPolicy(args: { policyFile: string, root: string, runFile: string 
 
 // The handler's file approves every read. The run's policy does not, so
 // the read is asked about, and the "always" answer goes to the run's file.
+// The run's file holds an ls rule. The run's policy is that file plus a
+// bash approve (a flag given at resume) and a question reject (copied
+// from the saved policy), neither of which belongs in the file.
 node main(args: { policyFile: string, root: string, runFile: string }): any {
   const handler = cliPolicyHandler(file: args.policyFile)
   const runPolicy = {
-    "std::bash": [{ action: "reject" }],
+    "std::ls": [{ action: "approve" }],
+    "std::bash": [{ action: "approve" }],
     "myapp::question": [{ action: "reject" }]
   }
 
   // Answered "always approve": the rule is in the policy and on disk
-  // before askAbout returns.
+  // before askAbout returns, and only that rule was added on disk.
   const approved = askAbout(readInterrupt(args.root), runPolicy, args.runFile)
   const afterApprove = currentPolicy()
+  const runFileAfterApprove = fileContents(args.runFile)
 
   // The program's own read of the same kind: the rule just saved
   // approves it, so no prompt.
@@ -86,6 +99,16 @@ node main(args: { policyFile: string, root: string, runFile: string }): any {
     interrupt std::read("Read another file", { dir: "${args.root}/x", filename: "g" })
     ownRead = "approved"
   } with handler
+
+  // The program's own glob, answered "always approve" at the handler's
+  // prompt: the handler is on the run's policy and file now, and it too
+  // adds only the new rule to the file.
+  let ownGlob = "rejected"
+  handle {
+    interrupt std::glob("List files", { dir: "${args.root}/x", pattern: "*" })
+    ownGlob = "approved"
+  } with handler
+  flushPolicy()
 
   // A reject rule decides a raise that wants a value, with no prompt.
   const question = askAbout(questionInterrupt(), currentPolicy(), args.runFile)
@@ -99,11 +122,14 @@ node main(args: { policyFile: string, root: string, runFile: string }): any {
   return {
     approved: approved.type,
     policyRule: afterApprove["std::read"],
-    runFileRead: rulesIn(args.runFile, "std::read"),
-    runFileBash: rulesIn(args.runFile, "std::bash"),
+    policyKeepsBash: afterApprove["std::bash"],
+    policyKeepsQuestion: afterApprove["myapp::question"],
+    runFileAfterApprove: runFileAfterApprove,
+    runFileAtEnd: fileContents(args.runFile),
     handlerFileRead: rulesIn(args.policyFile, "std::read"),
     handlerFileWrite: rulesIn(args.policyFile, "std::write"),
     ownRead: ownRead,
+    ownGlob: ownGlob,
     question: question.type,
     rejected: rejected.type,
     rejectReason: rejected.value,

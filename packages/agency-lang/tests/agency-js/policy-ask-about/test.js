@@ -13,10 +13,11 @@ writeFileSync(
 );
 const runFile = join(dir, "run-policy.json");
 
-// Scripted answers, used in order: "aa" approves std::read always, "r"
-// rejects the deploy once, and the last is the follow-up message. A prompt
-// past these throws, so an extra prompt fails the test instead of hanging.
-const answers = ["aa", "r", "use staging"];
+// Scripted answers, used in order: "aa" approves std::read always, "aa"
+// approves the program's own std::glob always, "r" rejects the deploy
+// once, and the last is the follow-up message. A prompt past these throws,
+// so an extra prompt fails the test instead of hanging.
+const answers = ["aa", "aa", "r", "use staging"];
 const inputOverride = async () => {
   const answer = answers.shift();
   if (answer === undefined) throw new Error("Unexpected extra input() call");
@@ -41,6 +42,8 @@ try {
     { policyFile: join(dir, "other-policy.json"), root: dir, runFile: join(dir, "other-run.json") },
     { inputOverride: noInput },
   );
+  // The run's own file, before main's answers add to it.
+  writeFileSync(runFile, JSON.stringify({ "std::ls": [{ action: "approve" }] }));
   const result = await main({ policyFile, root: dir, runFile }, { inputOverride });
   writeFileSync(
     "__result.json",

@@ -6,7 +6,12 @@ import type { Policy } from "../../runtime/policy.js";
 import { failure, success } from "../../types/result.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 import { sessionRunPolicy } from "./policy.js";
-import { POLICY_UNREADABLE, readCarriedPolicy, saveCarriedPolicy } from "./sessionPolicy.js";
+import {
+  copyCarriedPolicy,
+  POLICY_UNREADABLE,
+  readCarriedPolicy,
+  saveCarriedPolicy,
+} from "./sessionPolicy.js";
 
 async function withHome(fn: (home: string) => Promise<void>): Promise<void> {
   const home = fs.mkdtempSync(path.join(process.cwd(), ".session-policy-test-"));
@@ -66,6 +71,33 @@ describe("the session's policy file", () => {
       for (const id of ["broken", "odd"]) {
         expect(await readCarriedPolicy({ home, id })).toEqual(failure(POLICY_UNREADABLE));
       }
+    });
+  });
+
+  it("is copied to a fork", async () => {
+    await withHome(async (home) => {
+      await saveCarriedPolicy({ home, id: "s1", policy: minimalAutoApprovePolicy });
+      expect(await copyCarriedPolicy({ home, from: "s1", to: "s2" })).toEqual(success(null));
+      expect(await readCarriedPolicy({ home, id: "s2" })).toEqual(
+        success(minimalAutoApprovePolicy),
+      );
+    });
+  });
+
+  it("copies nothing to a fork of a session that has none", async () => {
+    await withHome(async (home) => {
+      expect(await copyCarriedPolicy({ home, from: "s1", to: "s2" })).toEqual(success(null));
+      expect(fs.existsSync(path.join(home, "session-policies"))).toBe(false);
+    });
+  });
+
+  it("fails to copy one that can't be read, and writes nothing", async () => {
+    await withHome(async (home) => {
+      writePolicyFile(home, "broken", "{ not json");
+      expect(await copyCarriedPolicy({ home, from: "broken", to: "s2" })).toEqual(
+        failure(POLICY_UNREADABLE),
+      );
+      expect(fs.existsSync(path.join(home, "session-policies", "s2.json"))).toBe(false);
     });
   });
 

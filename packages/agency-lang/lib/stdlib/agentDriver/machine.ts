@@ -59,6 +59,9 @@ export type Happened =
   // An approval answered without asking. `by` says what answered it.
   | { type: "settled"; interrupt: Interrupt; response: InterruptResponse; by: "rule" }
   | { type: "answered"; before: PauseData | null; after: PauseData | null }
+  // A settings answer (a `fork`) gave the session a new `record.id`. The
+  // front-end carries the session's own policy to it (`copyCarriedPolicy`).
+  | { type: "forked"; from: string; to: string }
   // A loaded session runs under a policy of its own (`restoredPhase`).
   // The front-end shows what it approves before the first leg.
   | { type: "carriedPolicy"; policy: Policy };
@@ -147,6 +150,16 @@ function unexpected(result: Result<AgentStep>): string {
   return result.success ? `unexpected ${result.value.kind}` : result.error;
 }
 
+/** `forked` when the session's record id changed across an answer. */
+function forkedHappened(before: PauseData | null, after: PauseData | null): Happened[] {
+  const from = before?.record?.id ?? null;
+  const to = after?.record?.id ?? null;
+  if (from === null || to === null || from === to) {
+    return [];
+  }
+  return [{ type: "forked", from, to }];
+}
+
 /** The run came back from a settings change. When it paused again, the
  *  front-end is told what it reported before and after, and shows what
  *  changed. When the core refused the change it reports the same, and it
@@ -155,9 +168,11 @@ function answerFinished(phase: AnsweringPhase, result: Result<AgentStep>): Drive
   const dropped = droppedOf(phase);
   if (result.success && result.value.kind === "waitingForUser") {
     const pause = result.value.interrupts;
+    const before = pauseData(phase.pause);
+    const after = pauseData(pause);
     return {
       phase: { kind: "waitingForUser", pause, ...dropped },
-      happened: [{ type: "answered", before: pauseData(phase.pause), after: pauseData(pause) }],
+      happened: [{ type: "answered", before, after }, ...forkedHappened(before, after)],
     };
   }
   const waiting: WaitingPhase = { kind: "waitingForUser", pause: phase.pause, ...dropped };

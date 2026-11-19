@@ -32,8 +32,8 @@ function messageOf(error: unknown): string {
 }
 
 /** Saves the policy session `id` runs under. A front-end calls it when it
- *  starts a session with policy flags, and after a `fork` answer for the
- *  new id. A policy that is not valid is refused, and nothing is written. */
+ *  starts a session with policy flags. A policy that is not valid is
+ *  refused, and nothing is written. */
 export async function saveCarriedPolicy(args: {
   home: string;
   id: string;
@@ -84,4 +84,24 @@ export async function readCarriedPolicy(args: {
   } catch {
     return failure(POLICY_UNREADABLE);
   }
+}
+
+/** Carries session `from`'s policy to its fork `to`. A front-end calls it
+ *  on the driver's `forked` event. Without it a session started with
+ *  `--policy minimal` would run its fork under the saved policy. No file
+ *  at `from` copies nothing; one that can't be read is a failure. */
+export async function copyCarriedPolicy(args: {
+  home: string;
+  from: string;
+  to: string;
+}): Promise<Result<null>> {
+  const { home, from, to } = args;
+  const carried = await readCarriedPolicy({ home, id: from });
+  if (!carried.success) {
+    return carried;
+  }
+  if (carried.value === null) {
+    return success(null);
+  }
+  return saveCarriedPolicy({ home, id: to, policy: carried.value });
 }

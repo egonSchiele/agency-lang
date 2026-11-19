@@ -95,7 +95,8 @@ export type MessageAnswer = { kind: "message"; text: string; notes: string[]; ta
  *  - `fork`: from here on the session is a copy with a new `record.id`,
  *    and `record.forkedFrom` names the original. The front-end uses the
  *    new id for every later save, `stillHeld` and `takeHold`, and keys
- *    the session by it.
+ *    the session by it. The driver reports `forked`, on which the
+ *    front-end calls `copyCarriedPolicy`.
  *  - `search`: switch the web search backend, and save it to settings.json.
  *  - `savePreset`: save the session's models and options to a preset, ""
  *    for the active one. */

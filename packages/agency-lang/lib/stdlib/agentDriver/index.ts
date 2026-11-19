@@ -19,7 +19,12 @@ export {
   type TurnBudget,
 } from "./interface.js";
 export { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
-export { POLICY_UNREADABLE, readCarriedPolicy, saveCarriedPolicy } from "./sessionPolicy.js";
+export {
+  copyCarriedPolicy,
+  POLICY_UNREADABLE,
+  readCarriedPolicy,
+  saveCarriedPolicy,
+} from "./sessionPolicy.js";
 export {
   PAUSE_WITH_OTHER_INTERRUPTS_ERROR,
   RUN_ENDED_ERROR,

@@ -14,6 +14,7 @@ import {
   type Leg,
 } from "./machine.js";
 import { withCancelNote, type AgentStep } from "./run.js";
+import type { SessionRecord } from "../agentSessions.js";
 
 function interrupt(effect: string, id: string): Interrupt {
   return {
@@ -229,6 +230,47 @@ describe("a settings answer", () => {
     expect(happened).toEqual([
       { type: "answered", before: reported("sonnet"), after: reported("opus") },
     ]);
+  });
+
+  it("reports a fork when the record id changes", () => {
+    const record = (id: string): SessionRecord => ({
+      id,
+      cwd: "/work",
+      brain: "simple",
+      created: 1,
+      lastActive: 1,
+      turns: 0,
+      title: "",
+    });
+    const withRecord = (id: string, pauseId: string): Interrupt[] => [
+      {
+        ...interrupt("agent::sessionInput", pauseId),
+        data: { ...reported("sonnet"), record: record(id) },
+      },
+    ];
+    const FORK: SettingsAnswer = { kind: "fork" };
+    const from: DriverPhase = {
+      kind: "waitingForUser",
+      pause: withRecord("s1", "pause-1"),
+      cancelledTexts: [],
+    };
+    const asked = run([{ type: "answered", answer: FORK }], from).phase;
+    const forked = run(
+      [step({ kind: "waitingForUser", interrupts: withRecord("s2", "p2") })],
+      asked,
+    );
+    expect(forked.happened).toEqual([
+      expect.objectContaining({ type: "answered" }),
+      { type: "forked", from: "s1", to: "s2" },
+    ]);
+    // The same id, or a pause with no record, is no fork.
+    const same = run([step({ kind: "waitingForUser", interrupts: withRecord("s1", "p2") })], asked);
+    expect(same.happened.map((event) => event.type)).toEqual(["answered"]);
+    const none = run(
+      [step({ kind: "waitingForUser", interrupts: pauseWith("sonnet", "p2") })],
+      asked,
+    );
+    expect(none.happened.map((event) => event.type)).toEqual(["answered"]);
   });
 
   it("that fails goes back to the same pause with the error", () => {

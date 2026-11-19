@@ -126,8 +126,13 @@ to, wherever it is resumed. That policy is a file of the session's own,
 
 - The front-end that starts the session writes it with
   `saveCarriedPolicy({ home, id, policy })`, which refuses a policy that
-  is not valid. After a `fork` answer it saves the policy the session
-  runs under for the new id.
+  is not valid.
+- When a settings answer gives the session a new `record.id` (a `fork`),
+  `reduceDriver` reports `{ type: "forked", from, to }` after `answered`.
+  A front-end handles it by calling `copyCarriedPolicy({ home, from, to
+  })`. Without the copy, a session started with `--policy minimal` would
+  run its fork under the saved policy. No file at `from` copies nothing;
+  one that can't be read is a failure.
 - A front-end that resumes the session reads it with
   `readCarriedPolicy({ home, id })`: null when there is no file.
 

@@ -1,4 +1,4 @@
-import { main, withoutHandler } from "./agent.js";
+import { main, nonInteractive, withoutHandler } from "./agent.js";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -16,14 +16,24 @@ const inputOverride = async () => {
   return answer;
 };
 
+// The non-interactive run gets no answers: any prompt throws.
+const noInput = async () => {
+  throw new Error("Unexpected input() call in a non-interactive run");
+};
+
 try {
   const unhandled = await withoutHandler({ root: dir }, { inputOverride });
+  const headless = await nonInteractive(
+    { policyFile: join(dir, "headless-policy.json"), root: dir },
+    { inputOverride: noInput },
+  );
   const result = await main({ policyFile, root: dir }, { inputOverride });
   writeFileSync(
     "__result.json",
     JSON.stringify(
       {
         withoutHandler: unhandled.data,
+        nonInteractive: headless.data,
         ...result.data,
         remainingAnswers: answers.length,
       },

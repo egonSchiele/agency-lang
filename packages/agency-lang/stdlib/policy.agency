@@ -1263,17 +1263,24 @@ def _handler(intr: any): any {
   // reads it looking for a policy bug. `--policy approve-all` is the
   // usual way to arrive here.
   if (!_interactive) {
-    if (ruleApproves) {
-      return reject(
-        "\"${intr.effect}\" was rejected automatically: a policy rule approves this effect, but this raise asks for a value and an approval from a rule carries none, so only a person can answer it. This is a non-interactive run. Take an approach that does not need an answer, or re-run interactively.",
-      )
-    }
-    return reject(
-      "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
-    )
+    return nonInteractiveReject(intr, ruleApproves)
   }
 
   return askPerson(intr)
+}
+
+// The answer when no one is at a terminal to ask. `ruleApproves` says a
+// rule approves the effect but could not be used, because the raise asks
+// for a value.
+def nonInteractiveReject(intr: any, ruleApproves: boolean): any {
+  if (ruleApproves) {
+    return reject(
+      "\"${intr.effect}\" was rejected automatically: a policy rule approves this effect, but this raise asks for a value and an approval from a rule carries none, so only a person can answer it. This is a non-interactive run. Take an approach that does not need an answer, or re-run interactively.",
+    )
+  }
+  return reject(
+    "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
+  )
 }
 
 // Ask the person at the terminal about one interrupt and turn the answer
@@ -1337,8 +1344,20 @@ export def askAbout(intr: any): any {
   }
   maybeLoadPolicy()
   maybeFlush()
+  // Defensive: maybeLoadPolicy always sets a policy.
   if (_policy == null) {
     return rejectWithoutPolicy()
+  }
+  // No one is at a terminal, and a prompt nobody answers starves the event
+  // loop. Decide as `_handler` does: by a rule if one can, and otherwise
+  // with the reason a non-interactive run gives.
+  if (!_interactive) {
+    const decision = checkPolicy(_policy, intr)
+    const ruleApproves = decision.type == "approve"
+    if (decision.type == "reject" || (ruleApproves && intr.expectsValue != true)) {
+      return applyRule(intr, decision)
+    }
+    return nonInteractiveReject(intr, ruleApproves)
   }
   const response = askPerson(intr)
   // The handler saves an "always" answer at its next interrupt. There may
@@ -1349,7 +1368,8 @@ export def askAbout(intr: any): any {
 
 /**
 The policy this program's handler is using now. An empty policy when
-`cliPolicyHandler` has not loaded one yet.
+`cliPolicyHandler` has not loaded one yet. It is the handler's live
+policy: read it, do not change it.
 */
 @hidden
 export def currentPolicy(): Policy {

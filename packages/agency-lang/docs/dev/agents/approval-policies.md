@@ -620,8 +620,17 @@ const rules = currentPolicy()
   no file, so `askAbout` prints an error and rejects.
 - **Esc is not caught.** The cancellation the prompt raises leaves
   `askAbout` unchanged.
-- **`askAbout` does not check `interactive`.** The caller decided a person
-  should be asked. Its rule check is the one `askUser` runs under the lock.
+- **A non-interactive handler draws no prompt.** With
+  `cliPolicyHandler(..., interactive: false)`, `askAbout` decides as
+  `_handler` does: by a rule if one can, and otherwise with the reject
+  reason a non-interactive run gives (`nonInteractiveReject`). A prompt
+  nobody answers would starve the event loop.
+- **Check the policy before calling `askAbout`.** When a rule decides the
+  interrupt inside `askAbout`, the terminal prints "Approved … by the rule
+  just saved", which is true only for a rule a sibling saved while this
+  one waited. The caller's check must apply a reject rule even to a raise
+  that expects a value, as `_handler` does. Only an approve rule is
+  withheld from such a raise.
 - **`intr` must be the host's own copy**, as for `resolvePromptOption`
   above: an "always" answer saves a rule built from `intr.data`.
 

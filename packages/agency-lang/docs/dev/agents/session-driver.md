@@ -42,6 +42,10 @@ next. It is pure.
 | `answering`      | A settings answer (a model, an effort) is on its way into the run.         |
 | `ended`          | The run could not start, or it cannot be continued. `reason` says why.     |
 
+`toStep` reads a pause as `waitingForUser` only when `agent::sessionInput`
+is the one interrupt in it. If it comes with others, `toStep` fails, since
+one answer cannot serve them all.
+
 An action that does not fit the phase changes nothing and reports
 nothing. A second Enter while a turn runs is harmless.
 

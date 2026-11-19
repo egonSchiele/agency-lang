@@ -7,6 +7,7 @@ import type { Policy } from "../../runtime/policy.js";
 import { failure as runFailure } from "../../runtime/result.js";
 import type { RunNodeResult } from "../../runtime/types.js";
 import {
+  PAUSE_WITH_OTHER_INTERRUPTS_ERROR,
   RUN_ENDED_ERROR,
   resumeRun,
   startRun,
@@ -98,6 +99,14 @@ describe("toStep", () => {
     expect(toStep(resultWith(asked))).toEqual({
       success: true,
       value: { kind: "needsApproval", interrupts: asked },
+    });
+  });
+
+  it("fails when the pause comes with other interrupts", () => {
+    const mixed = [...PAUSE, interrupt("std::bash")];
+    expect(toStep(resultWith(mixed))).toEqual({
+      success: false,
+      error: PAUSE_WITH_OTHER_INTERRUPTS_ERROR,
     });
   });
 

@@ -13,6 +13,8 @@ import { SESSION_INPUT_EFFECT } from "./interface.js";
 import { withPauseLeftAlone } from "./policy.js";
 
 export const RUN_ENDED_ERROR = "The agent run ended unexpectedly.";
+export const PAUSE_WITH_OTHER_INTERRUPTS_ERROR =
+  "The session's pause came with other interrupts.";
 
 // `policy` is the run's policy: it answers the approvals a rule matches,
 // inside the run. `host` is what the run takes from its platform, its
@@ -73,6 +75,9 @@ export function toStep(result: RunNodeResult<unknown>): Result<AgentStep> {
   }
   const interrupts: Interrupt[] = data;
   const wantsMessage = interrupts.some((interrupt) => interrupt.effect === SESSION_INPUT_EFFECT);
+  if (wantsMessage && interrupts.length > 1) {
+    return failure(PAUSE_WITH_OTHER_INTERRUPTS_ERROR);
+  }
   if (wantsMessage) {
     return success({ kind: "waitingForUser", interrupts });
   }

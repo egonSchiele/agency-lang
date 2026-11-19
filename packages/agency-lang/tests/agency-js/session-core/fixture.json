@@ -123,5 +123,11 @@
     "fixedProvider": "anthropic",
     "model": "openai/gpt-4o",
     "provider": "anthropic"
+  },
+  "slashModelOnOpenRouter": {
+    "fixedProvider": "",
+    "model": "z-ai/glm-5.2",
+    "provider": "openrouter",
+    "errors": 0
   }
 }

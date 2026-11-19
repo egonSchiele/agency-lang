@@ -383,5 +383,31 @@ result.specUnderAFixedProvider = {
 };
 rmSync(settingsFile);
 
+// A provider found from its API key fixes nothing. OpenRouter's own model
+// names hold a slash, so on an OpenRouter session `z-ai/glm-5.2` is one of
+// its models, not an unknown provider. (`groq/llama-3` on the anthropic
+// session above is still refused.)
+const keysBefore = {};
+for (const name of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"]) {
+  keysBefore[name] = process.env[name];
+  delete process.env[name];
+}
+process.env.OPENROUTER_API_KEY = "test-key";
+const routed = await startSession({ models: noModelFlags });
+const noticesBeforeSlash = eventsOf(routed, "session.notice").length;
+await routed.answer({ kind: "model", spec: "z-ai/glm-5.2" });
+result.slashModelOnOpenRouter = {
+  fixedProvider: pauseData(routed).fixedProvider,
+  model: pauseData(routed).models.main?.model,
+  provider: pauseData(routed).models.main?.provider,
+  errors: eventsOf(routed, "session.notice")
+    .slice(noticesBeforeSlash)
+    .filter((notice) => notice.level === "error").length,
+};
+delete process.env.OPENROUTER_API_KEY;
+for (const [name, value] of Object.entries(keysBefore)) {
+  if (value !== undefined) process.env[name] = value;
+}
+
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

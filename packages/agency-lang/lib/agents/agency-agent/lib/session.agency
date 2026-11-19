@@ -43,6 +43,7 @@ import {
   lacksProviderForm,
   missingProviderEnvVar,
   Resolved,
+  takesSlashModelNames,
  } from "./models.agency"
 import { activePreset, activePresetName, editPresets, findPreset, setActivePreset } from "./presets.agency"
 import { checkPreset, Preset } from "./presetRules.agency"
@@ -407,11 +408,17 @@ export def setModelChoices(choices: ModelChoices) {
   _choices = choices
 }
 
-/** The part of a spec before its first `/`, when no provider is fixed and
-  it is not a provider the agent knows, else "". `reasoning=openai/gpt-4o`
-  names its provider after the slot. A spec with no `/` names no provider. */
+/** The part of a spec before its first `/`, when it is not a provider the
+  agent knows and the spec is no model of the session's provider, else "".
+  With a provider fixed, the spec is read whole, as its model. So it is
+  under a provider whose model names hold a `/`: on an OpenRouter session
+  `z-ai/glm-5.2` is one of its models. `reasoning=openai/gpt-4o` names its
+  provider after the slot. A spec with no `/` names no provider. */
 def unknownProvider(spec: string): string {
   if (fixedProvider() != "") {
+    return ""
+  }
+  if (takesSlashModelNames(demoteProvider(currentProvider()))) {
     return ""
   }
   const model = parseModelFlag(spec).model

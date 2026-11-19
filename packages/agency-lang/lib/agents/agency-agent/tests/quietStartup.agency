@@ -1,0 +1,58 @@
+/*
+ * Startup and /model, for a caller that is not a terminal: a failure
+ * comes back as a value. Nothing is printed and the process is not ended,
+ * so the session core can run them inside an app's engine.
+ */
+import { setEnv } from "std::system"
+
+import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
+import { startPresetQuiet } from "../lib/presets.agency"
+import {
+  applyModelRequest,
+  applyModelSpec,
+  currentModelRequest,
+  modelChoices,
+  setStartupModelFlags,
+ } from "../lib/session.agency"
+import { getResolvedSlots } from "../shared.agency"
+
+// The models as a session has them after startup, with no real key.
+def startOnSonnet(): boolean {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags({ ...noModelFlags(), pin: "claude-sonnet-4-6" }, {})
+  return isSuccess(applyModelRequest(currentModelRequest(noModelChoices()), {}))
+}
+
+def mainModel(): string {
+  const main = getResolvedSlots()["main"]
+  if (main == null) {
+    return "(none)"
+  }
+  return main.model
+}
+
+node unusablePresetIsAFailure(): boolean {
+  return isFailure(startPresetQuiet("no-such-preset", {}))
+}
+
+node mainSlotIsSetAfterStartup(): string {
+  const started = startOnSonnet()
+  return "${started}|${mainModel()}"
+}
+
+node specChangesTheMainSlot(): string {
+  startOnSonnet()
+  const switched = applyModelSpec("claude-opus-4-8")
+  return "${isSuccess(switched)}|${mainModel()}|${modelChoices().pin}"
+}
+
+node badSpecChangesNothing(): string {
+  startOnSonnet()
+  const switched = applyModelSpec("resoning=opus")
+  let reason = ""
+  if (switched is failure(why)) {
+    reason = "${why}"
+  }
+  const choicesKept = JSON.stringify(modelChoices()) == JSON.stringify(noModelChoices())
+  return "${isFailure(switched)}|${mainModel()}|${choicesKept}|${reason.startsWith("Unknown model slot 'resoning'")}"
+}

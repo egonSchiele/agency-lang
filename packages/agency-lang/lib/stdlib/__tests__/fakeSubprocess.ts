@@ -3,7 +3,7 @@
 // lib/host/node/nodeSubprocess.ts with `vi.mock` and then reads what was run
 // and scripts what it answers through these.
 import { vi } from "vitest";
-import type { Command, Host, OperatingSystem, RunResult } from "../../host/host.js";
+import type { Command, Host, HostSubprocess, OperatingSystem, RunResult } from "../../host/host.js";
 import { nodeHost } from "../../host/node/nodeHost.js";
 
 /** The operating system `hostOn` and `testDefaultHost` report. A test that
@@ -25,6 +25,26 @@ export function testDefaultHost(): Host {
 }
 
 type MockFn = ReturnType<typeof vi.fn>;
+
+/** The functions of a subprocess part that a fake which only runs
+ *  commands does not have. Spread into the fake; each throws. */
+export const noDetachedProcesses: Pick<
+  HostSubprocess,
+  "startDetached" | "processState" | "processStartedAt" | "stopGroup"
+> = {
+  startDetached: async () => {
+    throw new Error("This fake starts no detached process.");
+  },
+  processState: () => {
+    throw new Error("This fake knows no process.");
+  },
+  processStartedAt: () => {
+    throw new Error("This fake knows no process.");
+  },
+  stopGroup: async () => {
+    throw new Error("This fake stops no process.");
+  },
+};
 
 /** A child that exited with 0 and printed `stdout`. */
 export function exited(stdout = "", stderr = ""): RunResult {

@@ -317,6 +317,10 @@ export type RunResult = {
 
 /** A child that was started and is still running. */
 export type RunningProcess = {
+  /** The child's pid, which is also its process group. Null when the
+   *  platform gave none because the child never started; `wait()` then
+   *  rejects with the reason. */
+  pid: number | null;
   kill(signal?: "SIGTERM" | "SIGKILL"): void;
   /** Resolves when the child ends. */
   wait(): Promise<RunResult>;
@@ -335,6 +339,31 @@ export type HostSubprocess = {
   run(command: Command, options?: RunOptions): Promise<RunResult>;
   start(command: Command, options?: RunOptions): Promise<RunningProcess>;
   locate(program: string): Promise<string | null>;
+  /** Starts the command in its own process group with its three standard
+   *  streams ignored, and resolves once it has started. This process does
+   *  not wait for it, and its end does not stop it. Background jobs use
+   *  it (docs/dev/stdlib/jobs.md). */
+  startDetached(command: Command, options?: DetachedOptions): Promise<{ pid: number }>;
+  /** Whether a process with this pid exists. "unknown" when the platform
+   *  could not say. */
+  processState(pid: number): "alive" | "gone" | "unknown";
+  /** When the process started, in milliseconds, or null when it cannot be
+   *  read: the process is gone, or the platform has no `ps -o lstart`. A
+   *  caller compares it with a time it saved, so a pid the system has
+   *  given to another process is not taken for the one it started. */
+  processStartedAt(pid: number): number | null;
+  /** SIGTERM to the process group `pid` leads, then SIGKILL after the
+   *  host's grace period. Resolves when the group is gone, or when it
+   *  has given up waiting. */
+  stopGroup(pid: number): Promise<void>;
+};
+
+/** Where and with what a detached command starts. */
+export type DetachedOptions = {
+  /** The working directory; the host's own when left out. */
+  cwd?: string;
+  /** The command's whole environment; the host's own when left out. */
+  env?: Record<string, string>;
 };
 
 /** The network, as the platform's own `fetch`: the same arguments and the

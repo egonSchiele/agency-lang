@@ -544,7 +544,23 @@ function memorySubprocess(options: MemoryHostOptions): HostSubprocess {
       }
       return options.subprocess.locate(program);
     },
+    startDetached: async (command, detachedOptions) => {
+      if (options.subprocess === undefined) {
+        throw refuse(command);
+      }
+      return options.subprocess.startDetached(command, detachedOptions);
+    },
+    processState: (pid) => given(pid).processState(pid),
+    processStartedAt: (pid) => given(pid).processStartedAt(pid),
+    stopGroup: async (pid) => given(pid).stopGroup(pid),
   };
+
+  function given(pid: number): HostSubprocess {
+    if (options.subprocess === undefined) {
+      throw new Error(`The memory host has no subprocesses, so it knows no process ${pid}.`);
+    }
+    return options.subprocess;
+  }
 }
 
 function memoryEnv(state: MemoryHostState): HostEnv {

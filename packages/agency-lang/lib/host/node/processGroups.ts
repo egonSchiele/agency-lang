@@ -25,19 +25,7 @@ export function signalGroup(child: ChildProcess, signal: GroupSignal): void {
   if (pid === undefined) {
     return;
   }
-  if (IS_WINDOWS) {
-    const taskkill = spawn("taskkill", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore" });
-    taskkill.on("error", () => child.kill());
-    return;
-  }
-  try {
-    process.kill(-pid, signal);
-  } catch (err) {
-    // ESRCH: every process in the group has ended.
-    if ((err as NodeJS.ErrnoException).code !== "ESRCH") {
-      child.kill(signal === "SIGSTOP" ? "SIGKILL" : signal);
-    }
-  }
+  signalGroupOf(pid, signal, () => child.kill(signal === "SIGSTOP" ? "SIGKILL" : signal));
 }
 
 /** Kill the group with a signal no process can catch. The stop comes
@@ -48,6 +36,53 @@ export function killGroup(child: ChildProcess): void {
     signalGroup(child, "SIGSTOP");
   }
   signalGroup(child, "SIGKILL");
+}
+
+/** The smallest pid that names one process group. 0 is this process's own
+ *  group and 1 is init, and a negative pid of either reaches far more than
+ *  one job, so a pid read from a file is checked against this first. */
+export const MIN_GROUP_PID = 2;
+
+/** `signalGroup` for a group this process did not start, named by the pid
+ *  of its leader: a job's command, whose runner has died. */
+export function signalGroupById(pid: number, signal: GroupSignal): void {
+  if (!Number.isInteger(pid) || pid < MIN_GROUP_PID) {
+    throw new Error(`${pid} is not the pid of a process group.`);
+  }
+  signalGroupOf(pid, signal, () => {
+    try {
+      process.kill(pid, signal === "SIGSTOP" ? "SIGKILL" : signal);
+    } catch {
+      // The leader is gone too.
+    }
+  });
+}
+
+/** Whether any process is left in the group `pid` leads. On Windows,
+ *  which has no groups, whether the leader is left. */
+export function groupAlive(pid: number): boolean {
+  try {
+    process.kill(IS_WINDOWS ? pid : -pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function signalGroupOf(pid: number, signal: GroupSignal, fallback: () => void): void {
+  if (IS_WINDOWS) {
+    const taskkill = spawn("taskkill", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore" });
+    taskkill.on("error", fallback);
+    return;
+  }
+  try {
+    process.kill(-pid, signal);
+  } catch (err) {
+    // ESRCH: every process in the group has ended.
+    if ((err as NodeJS.ErrnoException).code !== "ESRCH") {
+      fallback();
+    }
+  }
 }
 
 const EXIT_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;

@@ -5,6 +5,7 @@ import path from "path";
 import { nodeHost } from "../../host/node/nodeHost.js";
 import { memoryHost } from "../../host/memoryHost.js";
 import type { HostSubprocess } from "../../host/host.js";
+import { noDetachedProcesses } from "../../stdlib/__tests__/fakeSubprocess.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 import {
   MAX_RUNNING_JOBS,
@@ -242,10 +243,12 @@ describe("a job whose process fails after it started", () => {
       },
       locate: async () => null,
       start: async () => ({
+        pid: null,
         kill: () => {},
         wait: () => Promise.reject(new Error("spawn bash ENOENT")),
         output: () => ({ stdout: "", stderr: "" }),
       }),
+      ...noDetachedProcesses,
     };
     const jobs = table();
     const ended: JobSummary[] = [];
@@ -284,6 +287,7 @@ function fakeSubprocess() {
         finish = resolve;
       });
       return {
+        pid: null,
         kill: () => {},
         wait: async () => {
           await ended;
@@ -303,6 +307,7 @@ function fakeSubprocess() {
         },
       };
     },
+    ...noDetachedProcesses,
   };
   return {
     host: memoryHost({ subprocess }),

@@ -194,7 +194,12 @@ export node session(start: SessionStart) {
             addNote(note)
           }
           setTurnBudget(budget.maxCost, budget.maxTime)
-          const reply = try runTurn(target, withPendingNotes(text))
+          // The message is worked out on its own line. A call inside the
+          // argument of a `try` call is run again when a paused turn is
+          // resumed, and takes the saved frame of the turn (a compiler bug:
+          // "Resume desync").
+          const message = withPendingNotes(text)
+          const reply = try runTurn(target, message)
           if (reply is success(replyText)) {
             emit({ type: "session.reply", text: replyText })
           } else if (reply is failure(err)) {

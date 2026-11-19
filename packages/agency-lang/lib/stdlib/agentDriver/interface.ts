@@ -100,7 +100,9 @@ export type MessageAnswer = { kind: "message"; text: string; notes: string[]; ta
  *    summary must keep, or "".
  *  - `rename`: the session's new title.
  *  - `fork`: from here on the session is a copy with a new `record.id`,
- *    and `record.forkedFrom` names the original.
+ *    and `record.forkedFrom` names the original. The front-end uses the
+ *    new id for every later save, `stillHeld` and `takeHold`, and keys
+ *    the session by it.
  *  - `search`: switch the web search backend, and save it to settings.json.
  *  - `savePreset`: save the session's models and options to a preset, ""
  *    for the active one. */

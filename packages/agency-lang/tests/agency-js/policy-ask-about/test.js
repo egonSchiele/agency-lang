@@ -1,4 +1,4 @@
-import { main, nonInteractive, withoutHandler } from "./agent.js";
+import { main, nonInteractive, savedRulesFirst, withoutHandler } from "./agent.js";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -27,6 +27,9 @@ try {
     { policyFile: join(dir, "headless-policy.json"), root: dir },
     { inputOverride: noInput },
   );
+  const savedPolicyFile = join(dir, "saved-policy.json");
+  writeFileSync(savedPolicyFile, JSON.stringify({ "std::write": [{ action: "reject" }] }));
+  const saved = await savedRulesFirst({ policyFile: savedPolicyFile }, { inputOverride: noInput });
   const result = await main({ policyFile, root: dir }, { inputOverride });
   writeFileSync(
     "__result.json",
@@ -34,6 +37,7 @@ try {
       {
         withoutHandler: unhandled.data,
         nonInteractive: headless.data,
+        savedRulesFirst: saved.data,
         ...result.data,
         remainingAnswers: answers.length,
       },

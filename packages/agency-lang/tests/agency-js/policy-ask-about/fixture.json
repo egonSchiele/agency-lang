@@ -7,6 +7,11 @@
     "type": "reject",
     "reason": "\"std::read\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"std::read\"."
   },
+  "savedRulesFirst": [
+    {
+      "action": "reject"
+    }
+  ],
   "approved": "approve",
   "policyRule": [
     {

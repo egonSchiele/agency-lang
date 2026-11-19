@@ -1367,15 +1367,20 @@ export def askAbout(intr: any): any {
 }
 
 /**
-The policy this program's handler is using now. An empty policy when
-`cliPolicyHandler` has not loaded one yet. It is the handler's live
-policy: read it, do not change it.
+The policy this program's handler is using now. It loads the handler's
+policy file first, if nothing has yet, so the rules saved there count
+from the first call. An empty policy when `cliPolicyHandler` was not
+called. It is the handler's live policy: read it, do not change it.
 */
 @hidden
 export def currentPolicy(): Policy {
   """
   Return the CLI handler's active policy, or an empty one when none is loaded.
   """
+  if (globalCliPolicyOpts.file != "") {
+    maybeLoadPolicy()
+    maybeFlush()
+  }
   return _policy ?? {}
 }
 

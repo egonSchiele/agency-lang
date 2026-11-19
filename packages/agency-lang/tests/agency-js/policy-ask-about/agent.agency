@@ -25,6 +25,12 @@ node withoutHandler(args: { root: string }): any {
   return { type: response.type, policy: currentPolicy() }
 }
 
+// The rules already in the handler's file count before anything is asked.
+node savedRulesFirst(args: { policyFile: string }): any {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  return currentPolicy()["std::write"]
+}
+
 // A handler with no one at the terminal: an undecided interrupt is
 // rejected with the non-interactive reason, and no prompt is drawn.
 node nonInteractive(args: { policyFile: string, root: string }): any {

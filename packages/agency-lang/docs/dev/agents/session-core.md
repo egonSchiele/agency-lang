@@ -110,7 +110,9 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
   notices, and the terminal its own lines
   (`lib/slashCommands/session.agency`). After a fork the pause's record
   has the new id and `forkedFrom`. A front-end saves the session under the
-  new id, and the original stays as it was last saved.
+  new id, and the original stays as it was last saved. The hold moves too:
+  every later `stillHeld` and `takeHold` uses the new id, and a front-end
+  that keeps sessions by id (Perry's engine) keys this one by it.
 - **`search`** refuses a name that is no backend, and a backend this
   session cannot use: `hosted` on a local model, `tavily` or `brave`
   without its key. The choice is saved to `settings.json`, as `/search`

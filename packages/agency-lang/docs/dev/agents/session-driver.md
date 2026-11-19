@@ -228,6 +228,10 @@ one user on one machine.
   differs.
 - A session with no record yet, or one no one has taken hold of, is
   still held.
+- After a `fork` answer the session has a new `record.id`. Every later
+  save, `stillHeld` and `takeHold` uses that id. Checking the old one
+  would watch the original session and miss another front-end taking
+  the fork.
 - `saveRun` checks the holder too, so a front-end that forgets
   `stillHeld` does not overwrite newer work. Nothing is locked: two saves
   at the same moment can still cross. Each reads the record, then
